@@ -10,8 +10,8 @@ from game.assets import load_catalog, SurfaceCache
 from game.choreography import bind_choreography
 from game.combat import BoundCast
 from game.directed_media import directed_draw_commands
-from game.player_facts import LifeFact, ObjectDestroyedFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import LifeFact, ObjectDestroyedFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
 from game.world_animation import sample_world_transitions
 from tests.game.directed_spell_scenarios import directed_spell_history

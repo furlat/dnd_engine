@@ -22,10 +22,10 @@ from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography, sample_motion
 from game.condition_animation import resolve_condition_appearance
 from game.condition_media_lifetime import register_condition_lifetimes, sample_condition_lifetimes
-from game.player_facts import SpellFact, TurnFact
-from game.player_reduction import reduce_lineage
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.facts import SpellFact, TurnFact
+from dnd.player.reduction import reduce_lineage
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 from tests.game.player_helpers import player_history
 
 

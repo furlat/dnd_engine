@@ -13,8 +13,8 @@ from game.animation_draw import action_media_draw_commands
 from game.animation_types import ParticleMediaAsset
 from game.choreography import bind_choreography
 from game.particle_media import sample_particles, sample_vapor
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from game.residue_media import landing_point, landing_template, particle_schedule, target_cell
 from tests.game.spell_handoff_scenarios import spell_handoff_history

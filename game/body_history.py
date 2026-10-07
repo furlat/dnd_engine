@@ -14,7 +14,7 @@ from game.body_pose_types import BodyTrailPose
 from game.choreography import BoundChoreography, MotionTimeline
 from game.combat import actor_is_visible
 from game.condition_animation import ConditionAppearance
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.visual_position import VisualPosition
 
 

@@ -26,14 +26,14 @@ from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media
 from game.device_art import DeviceEmission, device_bank, load_device_art
 from game.device_draw import device_draw_command, device_wreck_draw_command
-from game.event_record import decode_event, encode_event
+from dnd.player.event_record import decode_event, encode_event
 from game.playback_frame import sample_playback_frame
-from game.player_facts import ObjectDamageFact, ObjectDestroyedFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import capture_interval, capture_lineages
+from dnd.player.facts import ObjectDamageFact, ObjectDestroyedFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import capture_interval, capture_lineages
 from game.projection import Camera, project_screen
-from game.replay import RecordedSequence
+from dnd.player.recorded import RecordedSequence
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors
 from tests.game.web_scenarios import web_history

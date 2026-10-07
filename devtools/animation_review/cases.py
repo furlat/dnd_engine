@@ -20,7 +20,7 @@ from devtools.animation_review.weather_solar_cases import WeatherSolarCase
 from devtools.animation_review.holy_cases import HolyCase
 from devtools.animation_review.class_cases import ClassFeatureCase
 from dnd.core.equipment_types import WeaponSlot
-from game.player_facts import PlayerLineage, PlayerState
+from dnd.player.facts import PlayerLineage, PlayerState
 
 
 class AttackCase(BaseModel):

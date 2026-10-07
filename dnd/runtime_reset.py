@@ -9,6 +9,7 @@ from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
 from dnd.core.content.runtime import reset_runtime_behavior_context
 from dnd.core.events import EventQueue
+from dnd.core.dice import Dice, DiceRoll
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
@@ -48,6 +49,8 @@ def reset_engine_runtime(
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
+    Dice._registry.clear()
+    DiceRoll._registry.clear()
     Entity._entity_registry.clear()
     Controller.clear_registry()
     Encounter.clear_registry()

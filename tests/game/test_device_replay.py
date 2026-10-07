@@ -14,10 +14,10 @@ from dnd.entity import Entity
 from game.animation_data import load_animation_data
 from game.combat import bind_cast
 from game.choreography import bind_choreography, sample_choreography
-from game.player_facts import DamageFact, ItemChargeFact, MovementFact, ObjectDestroyedFact, SpellFact, StepFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.replay import RecordedSequence
+from dnd.player.facts import DamageFact, ItemChargeFact, MovementFact, ObjectDestroyedFact, SpellFact, StepFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import RecordedSequence
 
 
 CASES = tuple(case for case in load_cases() if isinstance(case.scenario, DeviceCase))

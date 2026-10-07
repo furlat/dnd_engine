@@ -26,12 +26,12 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.evocation import Fireball
 from dnd.types.world import CardinalDirection
-from game.event_record import decode_event, encode_event
-from game.player_facts import SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import capture_interval, capture_lineage, reduce_interval
-from game.replay import RecordedSequence, ObserverCapture, capture_history
+from dnd.player.event_record import decode_event, encode_event
+from dnd.player.facts import SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import capture_interval, capture_lineage, reduce_interval
+from dnd.player.recorded import RecordedSequence, ObserverCapture, capture_history
 
 
 def _record_area(*, doorway: bool):

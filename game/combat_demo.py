@@ -33,10 +33,10 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.evocation import FireBolt, MagicMissile
 from dnd.types.senses import SenseMode, SensesType
-from game.presentation import (
+from dnd.player.capture import (
     CompletedLineage, IntervalEnvelope, capture_interval, capture_lineage, reduce_interval,
 )
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 BATTLEFIELD_ID = "battlefield.visual_vertical_seam"

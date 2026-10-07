@@ -19,7 +19,7 @@ from dnd.types.world import CardinalDirection, LightLevel
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.demo import build_demo_intervals
-from game.presentation import reduce_interval
+from dnd.player.capture import reduce_interval
 from game.projection import Camera, camera_pose
 from game.surface_residue import ResidueSurfaceCache, ground_residue_image
 

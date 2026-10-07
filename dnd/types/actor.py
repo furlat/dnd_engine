@@ -1,5 +1,7 @@
 """Recorded actor values shared by native producers and event consumers."""
 
+from dnd.core.condition_types import ConditionDurationSummary
+
 from uuid import UUID
 from typing import Literal
 from dataclasses import dataclass
@@ -48,6 +50,8 @@ class ConditionState(BaseModel):
     """Committed condition semantics without its executable runtime owner."""
 
     model_config = ConfigDict(frozen=True)
+    duration: ConditionDurationSummary | None = None
+
 
     condition_uuid: UUID
     name: str

@@ -9,10 +9,10 @@ from devtools.animation_review.control_cases import control_spell_history
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, bind_motion
 from game.condition_media_lifetime import register_condition_lifetimes
-from game.player_facts import SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.replay import RecordedSequence
+from dnd.player.facts import SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import RecordedSequence
 
 
 @pytest.fixture(scope="module")

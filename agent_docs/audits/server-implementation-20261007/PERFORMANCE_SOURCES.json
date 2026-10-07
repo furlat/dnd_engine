@@ -1,0 +1,233 @@
+{
+  "status": "Final 1000-command ordinary HTTP cohort completed: consumed p95 62.45 ms, p99 73.64 ms, max 109.08 ms. Production pre-Start graph-freeze policy explicitly measured; runtime GC enabled, thresholds unchanged, value/object registries flat, runtime cycles collectible. Windows/WSL TCP and revised startup target remain unproved.",
+  "schema_sha256": "ec447f31521ef25eab9e4ce1c708eef7fed764f2794578f6315dd9a597e80eab",
+  "protocol_identity": {
+    "protocol_version": 1,
+    "player_schema_version": 4,
+    "schema_digest": "0b99402cf980671394c96bb2afb9b7afd74cbfaeddb66f6367ac31f78b325cf7"
+  },
+  "http_baseline_source_sha256": {
+    "dnd/core/events.py": "524fe6793ec6ae7fb8c3d9e152329018fd884b49c1ec401a7584c429124f6b75",
+    "dnd/player/capture.py": "803a5c84d89c824e6da5e616ca6e32b13e5433425ab8ba5b6854db89f869c99e",
+    "dnd/player/application.py": "7137bd40a0db85578a2e135bec4a39a93f6fd4543ec3937fd2025d8c2a0cfcc5",
+    "player_server/worker.py": "c86ffc9d324026df6cd8763799c1622ccd16df502c87db504818f0a30a9a1005",
+    "player_server/host.py": "c70373b5a215b3df5b5cd0788f5cdd2edf6296c9a30f509d4e4ba5cef60852ac",
+    "player_server/app.py": "afbf205f36240af61535a9084a4720aec2db45e9af58195b2bbc74be38608915",
+    "uv.lock": "5f23f828d828d4770b1ce09c9962135e3f0a995b7ead83ff281be635e7633892"
+  },
+  "capture_fixed_source_sha256": {
+    "uv.lock": "5f23f828d828d4770b1ce09c9962135e3f0a995b7ead83ff281be635e7633892",
+    "pyproject.toml": "cc6a64b43b445529ebf5d67b7bf9ae849cbd49c23c4ec783f04e1aa577b8d439",
+    "player_server/worker.py": "c86ffc9d324026df6cd8763799c1622ccd16df502c87db504818f0a30a9a1005",
+    "dnd/player/session.py": "be164d05641eea779e4acda851a8687ad15416f9828d33657669c096640739d4",
+    "dnd/player/capture.py": "803a5c84d89c824e6da5e616ca6e32b13e5433425ab8ba5b6854db89f869c99e",
+    "dnd/player/application.py": "7137bd40a0db85578a2e135bec4a39a93f6fd4543ec3937fd2025d8c2a0cfcc5",
+    "dnd/player/facts.py": "bebf907f3ffe363180ead4d931bdfef0bfe309509b1c5d098fb1ad74ec6ca72c",
+    "dnd/player/projection.py": "bf6df51ef975d1e77de2e1b2e447a7a89a9df3974918630c7602fa7684dfca9a",
+    "dnd/player/reduction.py": "cc712a4cfcbf1b1b8cfd45d648be66d571bdec083a7c110303f8b1a2293269ae",
+    "dnd/core/events.py": "524fe6793ec6ae7fb8c3d9e152329018fd884b49c1ec401a7584c429124f6b75",
+    "dnd/core/action_types.py": "1f5cc07f916a18d22d0fb24771dd779f6cda9eb0aabcb951797fa4bfcad831ae",
+    "dnd/core/base_actions.py": "063c1240d1a04936da4a26cd9d5aca8b11f526a74cb25d22f8312e251371b429"
+  },
+  "content_patch_sources": {
+    "note": "Before sources reconstructed exactly by reversing only the just-applied two-block patch; compare hashes with live baseline import capture when available",
+    "files": {
+      "dnd/player/content_composition.py": {
+        "before_sha256": "b5608ec7f327d371b6b3d5a18116a1ff44cb2578db935896f406b39a77926d20",
+        "after_sha256": "d5fe68f2af30c2993d8d36c9caf8a16e238e62774c5350fb7fba558c6ea6839f"
+      },
+      "dnd/player/reduction.py": {
+        "before_sha256": "fa0af618f9a1c5a9d2bb893c8f0da27028378bc6ba4ce58b5978f9cd3dde67b5",
+        "after_sha256": "e77d17bd058b31f4c3e249fb2ef0bc24da4ef34ba53f896c0678980cdec38c4a"
+      }
+    }
+  },
+  "receipts": {
+    "history-grouped-20261007": ".runtime/server-recovery/history-grouped-20261007",
+    "history-per-entity-20261007": ".runtime/server-recovery/history-per-entity-20261007",
+    "history-grouped-fixed-20261007": ".runtime/server-recovery/history-grouped-fixed-20261007",
+    "history-per-entity-fixed-20261007": ".runtime/server-recovery/history-per-entity-fixed-20261007",
+    "startups-grouped-fixed-20261007": ".runtime/server-recovery/startups-grouped-fixed-20261007",
+    "startups-per-entity-fixed-20261007": ".runtime/server-recovery/startups-per-entity-fixed-20261007",
+    "windows-crypt-startups-20261007": ".runtime/server-recovery/windows-crypt-startups-20261007",
+    "retention-20261007": ".runtime/server-recovery/retention-20261007",
+    "throughput-grouped-fixed-20261007": ".runtime/server-recovery/throughput-grouped-fixed-20261007",
+    "throughput-mixed-fixed-20261007": ".runtime/server-recovery/throughput-mixed-fixed-20261007",
+    "paths-grouped-fixed-20261007": ".runtime/server-recovery/paths-grouped-fixed-20261007",
+    "native-fixtures-complete-20261007": ".runtime/server-recovery/native-fixtures-complete-20261007",
+    "native-summons-20261007": ".runtime/server-recovery/native-summons-20261007",
+    "wsl-http-final-20261007": ".runtime/server-recovery/wsl-http-final-20261007",
+    "windows-native-http-smoke-20261007": ".runtime/server-recovery/windows-native-http-smoke-20261007",
+    "windows-wsl-connectivity.json": ".runtime/server-recovery/windows-wsl-connectivity.json",
+    "http-cold-prefix.json": ".runtime/server-recovery/http-cold-prefix.json",
+    "http-allocation-before-20261007": ".runtime/server-recovery/http-allocation-before-20261007",
+    "http-allocation-after-20261007": ".runtime/server-recovery/http-allocation-after-20261007",
+    "http-allocation-comparison.json": ".runtime/server-recovery/http-allocation-comparison.json",
+    "http-long-after-20261007": ".runtime/server-recovery/http-long-after-20261007",
+    "http-long-profile-after-20261007": ".runtime/server-recovery/http-long-profile-after-20261007",
+    "http-after-cold-prefix.json": ".runtime/server-recovery/http-after-cold-prefix.json",
+    "transient-value-registration-before.json": ".runtime/server-implementation-20261007/transient-value-registration-before.json",
+    "transient-value-registration-after.json": ".runtime/server-implementation-20261007/transient-value-registration-after.json",
+    "http-long-process-policy-20261007": ".runtime/server-recovery/http-long-process-policy-20261007",
+    "http-long-process-policy-profile-20261007": ".runtime/server-recovery/http-long-process-policy-profile-20261007",
+    "http-process-policy-cold-prefix.json": ".runtime/server-recovery/http-process-policy-cold-prefix.json",
+    "import-graph-probe.json": ".runtime/server-recovery/import-graph-probe.json"
+  },
+  "allocation_fixed_source_sha256": {
+    "dnd/core/events.py": "524fe6793ec6ae7fb8c3d9e152329018fd884b49c1ec401a7584c429124f6b75",
+    "dnd/player/capture.py": "803a5c84d89c824e6da5e616ca6e32b13e5433425ab8ba5b6854db89f869c99e",
+    "dnd/player/application.py": "7137bd40a0db85578a2e135bec4a39a93f6fd4543ec3937fd2025d8c2a0cfcc5",
+    "dnd/player/content_composition.py": "d5fe68f2af30c2993d8d36c9caf8a16e238e62774c5350fb7fba558c6ea6839f",
+    "dnd/player/reduction.py": "e77d17bd058b31f4c3e249fb2ef0bc24da4ef34ba53f896c0678980cdec38c4a",
+    "dnd/entity.py": "c17697f90560cdebaebed989ebb58725ebec70b4e2acbcd0a7af039fd1228adf",
+    "dnd/core/values.py": "d4e5a648170017fa3c59ab51d26b3741244678301c5520dc57994e394396e8c4",
+    "dnd/blocks/health.py": "5cbe773ec647fc11a24d650d7d503c4370cbe8aaa90a3149be9d7a9d6bf590b1",
+    "dnd/blocks/abilities.py": "0488bcae4bf71958441aad44eb7a78cd0ebb224f9088c4bed005ef0c2fc1a489",
+    "dnd/blocks/equipment.py": "9583ecb708549cdc399744148225d874388af2e858ca515f2e10abdeef4a39e6",
+    "dnd/player/projection.py": "614fbcf89cc937420044377a76918d90eff326fe93a30349e8b104cb52d88e02",
+    "player_server/worker.py": "c86ffc9d324026df6cd8763799c1622ccd16df502c87db504818f0a30a9a1005",
+    "player_server/host.py": "c70373b5a215b3df5b5cd0788f5cdd2edf6296c9a30f509d4e4ba5cef60852ac",
+    "player_server/app.py": "afbf205f36240af61535a9084a4720aec2db45e9af58195b2bbc74be38608915",
+    "uv.lock": "5f23f828d828d4770b1ce09c9962135e3f0a995b7ead83ff281be635e7633892"
+  },
+  "allocation_fixed_loaded_worker_source_sha256": {
+    "dnd/player/content_composition.py": "d5fe68f2af30c2993d8d36c9caf8a16e238e62774c5350fb7fba558c6ea6839f",
+    "dnd/player/reduction.py": "e77d17bd058b31f4c3e249fb2ef0bc24da4ef34ba53f896c0678980cdec38c4a",
+    "dnd/player/capture.py": "803a5c84d89c824e6da5e616ca6e32b13e5433425ab8ba5b6854db89f869c99e",
+    "dnd/player/application.py": "7137bd40a0db85578a2e135bec4a39a93f6fd4543ec3937fd2025d8c2a0cfcc5",
+    "dnd/entity.py": "c17697f90560cdebaebed989ebb58725ebec70b4e2acbcd0a7af039fd1228adf",
+    "dnd/core/values.py": "d4e5a648170017fa3c59ab51d26b3741244678301c5520dc57994e394396e8c4",
+    "dnd/blocks/health.py": "5cbe773ec647fc11a24d650d7d503c4370cbe8aaa90a3149be9d7a9d6bf590b1",
+    "dnd/blocks/abilities.py": "0488bcae4bf71958441aad44eb7a78cd0ebb224f9088c4bed005ef0c2fc1a489",
+    "dnd/blocks/equipment.py": "9583ecb708549cdc399744148225d874388af2e858ca515f2e10abdeef4a39e6",
+    "dnd/player/projection.py": "614fbcf89cc937420044377a76918d90eff326fe93a30349e8b104cb52d88e02",
+    "player_server/worker.py": "c86ffc9d324026df6cd8763799c1622ccd16df502c87db504818f0a30a9a1005",
+    "uv.lock": "5f23f828d828d4770b1ce09c9962135e3f0a995b7ead83ff281be635e7633892"
+  },
+  "final_production_source_sha256": {
+    "dnd/core/events.py": "524fe6793ec6ae7fb8c3d9e152329018fd884b49c1ec401a7584c429124f6b75",
+    "dnd/player/capture.py": "803a5c84d89c824e6da5e616ca6e32b13e5433425ab8ba5b6854db89f869c99e",
+    "dnd/player/application.py": "7137bd40a0db85578a2e135bec4a39a93f6fd4543ec3937fd2025d8c2a0cfcc5",
+    "dnd/player/content_composition.py": "d5fe68f2af30c2993d8d36c9caf8a16e238e62774c5350fb7fba558c6ea6839f",
+    "dnd/player/reduction.py": "e77d17bd058b31f4c3e249fb2ef0bc24da4ef34ba53f896c0678980cdec38c4a",
+    "dnd/entity.py": "c17697f90560cdebaebed989ebb58725ebec70b4e2acbcd0a7af039fd1228adf",
+    "dnd/core/values.py": "d4e5a648170017fa3c59ab51d26b3741244678301c5520dc57994e394396e8c4",
+    "dnd/blocks/health.py": "5cbe773ec647fc11a24d650d7d503c4370cbe8aaa90a3149be9d7a9d6bf590b1",
+    "dnd/blocks/abilities.py": "0488bcae4bf71958441aad44eb7a78cd0ebb224f9088c4bed005ef0c2fc1a489",
+    "dnd/blocks/equipment.py": "9583ecb708549cdc399744148225d874388af2e858ca515f2e10abdeef4a39e6",
+    "dnd/player/projection.py": "614fbcf89cc937420044377a76918d90eff326fe93a30349e8b104cb52d88e02",
+    "player_server/worker.py": "c4156e09f3e814722891582034da48932f6b1c76bfab21465f2dcb9217d2249f",
+    "dnd/controller.py": "d2184558e30dba9b38ed497ac63f9ead807f07428d660ee55c6d49a4b9d11cb0",
+    "dnd/encounter.py": "b99b75c9c2c7a381da3036b0ff143a00fbcc908baf5b2c8efa6d56472793bf19",
+    "dnd/core/base_object.py": "d0d1e33f832277d206e8a28b68d04cc4c67e6a586dce18aed1875151e20e25a4",
+    "player_server/host.py": "c70373b5a215b3df5b5cd0788f5cdd2edf6296c9a30f509d4e4ba5cef60852ac",
+    "player_server/app.py": "afbf205f36240af61535a9084a4720aec2db45e9af58195b2bbc74be38608915",
+    "uv.lock": "5f23f828d828d4770b1ce09c9962135e3f0a995b7ead83ff281be635e7633892"
+  },
+  "final_loaded_worker_source_sha256": {
+    "dnd/player/content_composition.py": "d5fe68f2af30c2993d8d36c9caf8a16e238e62774c5350fb7fba558c6ea6839f",
+    "dnd/player/reduction.py": "e77d17bd058b31f4c3e249fb2ef0bc24da4ef34ba53f896c0678980cdec38c4a",
+    "dnd/player/capture.py": "803a5c84d89c824e6da5e616ca6e32b13e5433425ab8ba5b6854db89f869c99e",
+    "dnd/player/application.py": "7137bd40a0db85578a2e135bec4a39a93f6fd4543ec3937fd2025d8c2a0cfcc5",
+    "dnd/entity.py": "c17697f90560cdebaebed989ebb58725ebec70b4e2acbcd0a7af039fd1228adf",
+    "dnd/core/values.py": "d4e5a648170017fa3c59ab51d26b3741244678301c5520dc57994e394396e8c4",
+    "dnd/blocks/health.py": "5cbe773ec647fc11a24d650d7d503c4370cbe8aaa90a3149be9d7a9d6bf590b1",
+    "dnd/blocks/abilities.py": "0488bcae4bf71958441aad44eb7a78cd0ebb224f9088c4bed005ef0c2fc1a489",
+    "dnd/blocks/equipment.py": "9583ecb708549cdc399744148225d874388af2e858ca515f2e10abdeef4a39e6",
+    "dnd/player/projection.py": "614fbcf89cc937420044377a76918d90eff326fe93a30349e8b104cb52d88e02",
+    "dnd/controller.py": "d2184558e30dba9b38ed497ac63f9ead807f07428d660ee55c6d49a4b9d11cb0",
+    "dnd/encounter.py": "b99b75c9c2c7a381da3036b0ff143a00fbcc908baf5b2c8efa6d56472793bf19",
+    "dnd/core/base_object.py": "d0d1e33f832277d206e8a28b68d04cc4c67e6a586dce18aed1875151e20e25a4",
+    "player_server/worker.py": "c4156e09f3e814722891582034da48932f6b1c76bfab21465f2dcb9217d2249f",
+    "uv.lock": "5f23f828d828d4770b1ce09c9962135e3f0a995b7ead83ff281be635e7633892"
+  },
+  "final_probe_source_sha256": {
+    "devtools/player_server_acceptance/http_run.py": "a56d24784bb6610be4d441330cca972efb3f2ae06ac0e661ed63861b35dd1117",
+    "devtools/player_server_acceptance/http_performance.py": "ad5e5e94c2932cdce36c348dfa6e9923048043dc7684c0b2ae01166adaf8f503",
+    "devtools/player_server_acceptance/test_host.py": "1d2c883cd69122f9273bf6d522ecbe03a042fcca79db9e1d046e535edd9f75fd",
+    "devtools/player_server_acceptance/gc_worker.py": "187d76a7b28f61149bb633b651701c999492be50be7c03d2c521591c23b4d20f",
+    "devtools/player_server_acceptance/http_replay.py": "d66c16e503417775f191cc70efa940e9acc92599d82314f29cf8345374559fae",
+    "devtools/player_server_acceptance/replay.py": "3ec2c74ac3101ce8be22de637d8a2c2571c951a54cea0149e402591f3b217163",
+    "devtools/player_server_acceptance/performance.py": "b6ed0950a5bfec5e9137354af5f5648bd4ed1f287301bcf32cdcc7bc17d4b4b1",
+    "devtools/player_server_acceptance/performance_spells.py": "e97aee14cc2b21fb8aed926e2f33e7081da0bc90c8e37a355f40a13a5942779e",
+    "devtools/player_server_acceptance/startup.py": "80ae7ca47331ad298ab04492c621315074590dd272ab4ea92799f2f166a270fc"
+  },
+  "final_schema_files_sha256": {
+    "sdk/protocol/player-api-v1.schema.json": "ec447f31521ef25eab9e4ce1c708eef7fed764f2794578f6315dd9a597e80eab",
+    "sdk/python/src/dnd_player/player-api-v1.schema.json": "ec447f31521ef25eab9e4ce1c708eef7fed764f2794578f6315dd9a597e80eab",
+    "sdk/player-typescript/src/player-api-v1.schema.json": "ec447f31521ef25eab9e4ce1c708eef7fed764f2794578f6315dd9a597e80eab"
+  },
+  "final_measurement_summary": {
+    "ordinary_http_commands": 1000,
+    "commands_per_seat": 500,
+    "records_per_seat": 2002,
+    "consumed_p95_ms": 62.45123800181318,
+    "consumed_p99_ms": 73.64214300105232,
+    "consumed_max_ms": 109.07884200059925,
+    "worker_returncode": 0,
+    "profile_worker_returncode": 0,
+    "cold_replay_records": 8008,
+    "runtime_gc_enabled_before_after": [
+      true,
+      true
+    ],
+    "runtime_gc_threshold_before_after": [
+      [
+        2000,
+        10,
+        10
+      ],
+      [
+        2000,
+        10,
+        10
+      ]
+    ]
+  },
+  "gate_b_followup_source_sha256": {
+    "dnd/core/events.py": "524fe6793ec6ae7fb8c3d9e152329018fd884b49c1ec401a7584c429124f6b75",
+    "dnd/core/aoe.py": "17f1df9ba2f4535e8abbf83dd0a18b09cb4066d093fffaf7d482fd0f49b756fa",
+    "dnd/player/capture.py": "803a5c84d89c824e6da5e616ca6e32b13e5433425ab8ba5b6854db89f869c99e",
+    "dnd/player/application.py": "56a84f4a294c7b824d0976d008693c7ab0ca89cffebf87e1cd2160497da25fb1",
+    "dnd/player/session.py": "2654e27e00eae3ee48a97295c54540303dabd544140030dded2e306a7e51ed91",
+    "dnd/player/content_composition.py": "d5fe68f2af30c2993d8d36c9caf8a16e238e62774c5350fb7fba558c6ea6839f",
+    "dnd/player/reduction.py": "e77d17bd058b31f4c3e249fb2ef0bc24da4ef34ba53f896c0678980cdec38c4a",
+    "dnd/entity.py": "07dfe4d9b23a64486d7f2bd8bd11e00afeb2183daa22fce3e4d75a6dc580edda",
+    "dnd/core/values.py": "cc3a785b0136ebc58e9ea0c900b11f81a63bccff1fcee27f4adf0945c90f49d4",
+    "dnd/blocks/health.py": "5cbe773ec647fc11a24d650d7d503c4370cbe8aaa90a3149be9d7a9d6bf590b1",
+    "dnd/blocks/abilities.py": "0488bcae4bf71958441aad44eb7a78cd0ebb224f9088c4bed005ef0c2fc1a489",
+    "dnd/blocks/equipment.py": "9583ecb708549cdc399744148225d874388af2e858ca515f2e10abdeef4a39e6",
+    "dnd/player/projection.py": "614fbcf89cc937420044377a76918d90eff326fe93a30349e8b104cb52d88e02",
+    "player_server/worker.py": "c4156e09f3e814722891582034da48932f6b1c76bfab21465f2dcb9217d2249f",
+    "dnd/controller.py": "d2184558e30dba9b38ed497ac63f9ead807f07428d660ee55c6d49a4b9d11cb0",
+    "dnd/encounter.py": "b99b75c9c2c7a381da3036b0ff143a00fbcc908baf5b2c8efa6d56472793bf19",
+    "dnd/core/base_object.py": "d0d1e33f832277d206e8a28b68d04cc4c67e6a586dce18aed1875151e20e25a4",
+    "dnd/core/gridmap.py": "f7c102f1ad5b9883d1ca2e8fe17003addc9b12fa6947869dcfb3e004d2ae4723",
+    "dnd/blocks/sensory.py": "999d764462c73f3e92b6898156742e8a1b63837e870af04c8ab4b714cc70915b",
+    "player_server/protocol.py": "52146af4ac7745e04f808b75f8ba43a0f830f0c661218040b314bbc35d0a840b",
+    "player_server/host.py": "c70373b5a215b3df5b5cd0788f5cdd2edf6296c9a30f509d4e4ba5cef60852ac",
+    "player_server/app.py": "afbf205f36240af61535a9084a4720aec2db45e9af58195b2bbc74be38608915",
+    "sdk/python/src/dnd_player/transport.py": "28af64b5a2a761be9ccde3918ce408948d2f40601248ac3a1a21b948b569e2c3",
+    "sdk/python/pyproject.toml": "2241dcb8c62fbca92c1f82f775981cd7a0fadc8c3506b1f7b936dfb129fbbbd9",
+    "uv.lock": "5f23f828d828d4770b1ce09c9962135e3f0a995b7ead83ff281be635e7633892"
+  },
+  "gate_b_followup_probe_source_sha256": {
+    "devtools/player_server_acceptance/http_run.py": "377d72f8d83c67736b637a11b41225499fa5dcd838fd1455bd56e3b8842cf3ac",
+    "devtools/player_server_acceptance/http_performance.py": "b51de426a9c187e52324a0471ae625322d4a3113b2e1d4377d84853d2b173b03",
+    "devtools/player_server_acceptance/test_host.py": "2abf8777b0d4138da1de02a7868565a12b77d8778a900a44f8235366484d9469",
+    "devtools/player_server_acceptance/http_replay.py": "fbfba5825c51225ac38f5a2f8662c0278856f71a6e953be8c4feb1b90779cd33"
+  },
+  "gate_b_followup_receipts": {
+    "navigation-owner-before-20261007": ".runtime/server-recovery/navigation-owner-before-20261007",
+    "navigation-owner-after-20261007": ".runtime/server-recovery/navigation-owner-after-20261007",
+    "native-command-owner-comparison-20261007.json": ".runtime/server-recovery/native-command-owner-comparison-20261007.json",
+    "discovery-grid-owner-repair-20261007/comparison.json": ".runtime/server-recovery/discovery-grid-owner-repair-20261007/comparison.json",
+    "sdk-choice-profile-20261007": ".runtime/server-recovery/sdk-choice-profile-20261007",
+    "query-final-conjure-20261007": ".runtime/server-recovery/query-final-conjure-20261007",
+    "query-detached-final-conjure-20261007": ".runtime/server-recovery/query-detached-final-conjure-20261007",
+    "combat-http-20261007": ".runtime/server-recovery/combat-http-20261007",
+    "combat-after-spatial-20261007": ".runtime/server-recovery/combat-after-spatial-20261007",
+    "windows-wsl-sdk-20261007": ".runtime/server-recovery/windows-wsl-sdk-20261007",
+    "startup-complete-comparison-20261007.json": ".runtime/server-recovery/startup-complete-comparison-20261007.json"
+  }
+}

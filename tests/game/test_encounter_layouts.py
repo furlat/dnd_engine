@@ -15,7 +15,7 @@ from dnd.core.events import EventType
 from dnd.core.life_types import LifeState
 from game.controls import ActionSelection, EndTurn
 from game.encounter_play import GameSummary, run
-from game.player_facts import DamageFact, MovementFact, PlayerState, SpellFact, TurnFact
+from dnd.player.facts import DamageFact, MovementFact, PlayerState, SpellFact, TurnFact
 
 
 def check_layout(

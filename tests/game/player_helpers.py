@@ -2,11 +2,11 @@
 
 from game.animation import ActorContact, BodySample
 from game.motion import MotionSample
-from game.player_facts import PlayerLineage, PlayerState
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence
-from game.presentation import CompletedLineage, IntervalEnvelope
-from game.replay import CapturedHistory, RecordedSequence
+from dnd.player.facts import PlayerLineage, PlayerState
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence
+from dnd.player.capture import CompletedLineage, IntervalEnvelope
+from dnd.player.recorded import CapturedHistory, RecordedSequence
 
 
 def player_inputs(initialization: IntervalEnvelope, lineages: tuple[CompletedLineage, ...]) -> tuple[PlayerState, tuple[PlayerLineage, ...]]:

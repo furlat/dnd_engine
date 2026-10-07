@@ -915,7 +915,6 @@ class SpatialSensesSystem:
                                               for row in previous.suppressions)})
             return
         grid = get_map()
-        has_hazards = grid.has_any_hazards()
         candidates: Dict[UUID, Tuple[SpatialConditionOwner, Set[Tuple[int, int]]]] = {}
         for position in positions | surfaces:
             for condition in grid.get_spatial_conditions_at(position):
@@ -935,6 +934,7 @@ class SpatialSensesSystem:
             if observation is not None:
                 observations[condition.uuid] = observation.model_copy(update={
                     "owner_revision": condition.observation_revision,
+                    "duration": condition.snapshot_duration(),
                     "positions": tuple(sorted(set(observation.positions) | volume_positions)),
                     "visible_volume_positions": tuple(sorted(volume_positions)),
                     "upper_volume_surfaces": upper.get(condition.uuid, ()),
@@ -981,9 +981,7 @@ class SpatialSensesSystem:
                 senses.spatial_effects.pop(identity)
         senses.spatial_effects.update(observations)
         for x, y in positions:
-            senses.hazardous_cells[(x, y)] = (
-                grid.is_position_hazardous_for(x, y, observer_uuid) if has_hazards else False
-            )
+            senses.hazardous_cells[(x, y)] = grid.is_position_hazardous_for(x, y, observer_uuid)
 
     @classmethod
     def _visible_volume_geometry(cls, origin: Tuple[int, int], candidates: Set[Tuple[int, int]],

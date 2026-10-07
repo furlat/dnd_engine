@@ -9,9 +9,10 @@ sequence of spell demonstrations.** Working branch: **codex/recovery-design**,
 based on **codex/july-reconstruction at 16a6bfe**. The human committed the
 validated recovery implementation as **58b0946** (`visio nextraction working`).
 
-**Current objective (October 7):** plan the direct networked NeuroClient/PixiJS
-recovery described below, preserving the native engine and accepted authored data.
-Implementation of the previous pygame/OpenGL destination is paused for this design.
+**Current objective (October 7):** implement the reviewed server-only plan and
+then measure engine performance, preserving native ownership and authored data.
+The human authorized implementation after settling all four control configurations.
+Implementation of the previous pygame/OpenGL destination remains paused.
 The earlier objective was a playable in-process encounter through Python/Pygame.
 Complete subjective lineages reduce
 independently of historical playback. The engine already owns the rules; the
@@ -30,16 +31,116 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+
+**October 7 — server functionality and cross-game worker reuse complete.**
+A long-lived service now leases one native worker per active game and reuses it only
+after epoch-acknowledged cleanup. Content/compiled schemas survive; native worlds,
+dice and AI game caches do not. Old authorized recordings remain readable.
+The final production-service cohorts run 32 games, with warm ordinary readiness
+averaging **217.77 ms Windows / 208.27 ms WSL**, plus **32.38 / 30.92 ms** retirement.
+Readiness excludes host imports; full cold-service figures remain below. Cancellation,
+failed Start, recording expiry, concurrent games and old credentials have targeted
+real-worker checks. See [server phase closure](agent_docs/audits/server-implementation-20261007/WARM_WORKERS.md)
+for exact features, verification and scope. The player protocol and SDK schema are
+unchanged. **The new client can use this server foundation.** Largest-map and dense
+spell/native-AI performance distributions remain explicit engine work; this is not
+an all-targets Gate B or graphics-performance claim. No client implementation started.
+
+**October 7 — approved first startup fix implemented and independently accepted.** Only the existing BaseAction/BaseCondition configurations now defer Pydantic schema compilation until needed. Native fields, validation, static imports, registration, public schema and SDKs are unchanged. Ten complete fresh starts per platform measure human-ready mean **3.92→2.76s on Windows** and **6.27→5.00s on WSL** (new maxima 3.39/5.51s); SDK-consumed means are 2.86/5.18s. First selected spell commands show possible 4–14 ms additional end-to-end costs in single samples, recorded separately rather than hidden in startup. The 1,000-command ordinary run has consumed p95/max **37.50/56.91 ms**; a separate natural-GC run retains collectible post-Start cycles, unchanged enabled GC/thresholds and flat native registries. Runtime full GC is 31.26 ms. Retained native history still grows.
+
+**This closes the bounded §14 first solution, not broad engine performance.** The human approved this narrow approach after the exact startup diagnosis. Verification includes 212 tests, 17 native scenarios/40 subjective views, 25 owned host/worker exits, and separate-process replay of 50 prefixes/8,623 records/2,150 commands. Both final anti-slop and ECS/DAG reviews approve it. No SDK regeneration, frontend work or further import restructuring was added. See [current measurements and limits](agent_docs/audits/server-implementation-20261007/PERFORMANCE.md#approved-first-startup-fix--behavior-schema-deferral). WSL startup variation, roughly 448 ms six-target Fireball worker execution, larger-map/native-AI scaling and graphics FPS remain outside this bounded completion.
+
+**Earlier startup diagnosis.** Static imports define 1,059 Pydantic model classes and repeatedly prepare inherited field/schema machinery; they do not materialize every creature/spell. Explicit catalog registration/check/digest takes 11.29 ms. The detailed receipt retains the corrected class/schema/GC measurements and disposable experiments that motivated §14. The earlier four-second Windows baseline was rejected by the human; the implementation above reports full readiness and first-use/GC cost together.
+
+**October 7 — server and scoped performance follow-up delivered.** The human's spatial-spell concern was measured and repaired in existing owners: unique-cell hazard work, shared revision-invalidated propagation queries, empty-boundary fast paths, and isolated typed choice copies. Fireball discovery median falls 66.52→19.54 ms; large Conjure HTTP/SDK warm-query p95 is 98.89 ms over 100 queries. Compiled Python validation retains the same schema and strictness. The follow-up adds 197 commands / 601 cold-replayed records, then 70 commands / 215 cold-replayed records across the three affected spell fights. Native Windows hosting with Python and TypeScript clients in WSL completes 47 commands / 110 records, also cold-replayed. Both independent source reviews approve the final spatial/detachment work. See the receipts below for stages, counts and limitations.
+
+The earlier eager-policy baseline used ten complete fresh starts per platform on the same fixture. Its Windows human-ready mean/max was 3.92/4.05s; WSL is 6.27/6.76s. WSL still misses the five-second target, while native Windows meets it. Largest-map scaling, dense-spell/native-AI percentiles and graphics FPS are not declared solved. Keep the delivered API/shared types; do not restart SDK generation or automatically start frontend migration. Gate B's strict all-targets/all-environments claim remains unmade; the remaining measured limits are explicit in the performance receipt.
+
+**October 7 — server implementation and measured capture repair.**
+The new `player_server` hosts the existing native engine through the extracted
+`dnd/player` application, also used by the desktop and saved replay. HTTP/SSE,
+private seat grants, exact recording, attachment/ACK/receipt recovery and standalone
+Python/TypeScript SDKs are implemented. All four requested ownership/AI setups
+ran through independent SDK clients; seven complete matches produced 16 streams
+and 728 records, all cold-replayed. The real crypt completed 36 SDK commands,
+including exploration, loot, trap, potion, lever, doors and native goblin combat.
+The serialization corpus covers all 28 exported fact variants.
+
+**October 7 latency follow-up:** the human rejected the 316 ms worst-case command
+latency. The follow-up removes temporary stat-calculation and turn-result registry
+retention, reuses admitted immutable content, and avoids a full-history after-value
+boundary scan. A longer run still exposed a 308 ms full-GC pause. The dedicated
+single-game worker now prepares and freezes its pre-Start import graph once, with
+ordinary runtime GC left enabled and thresholds unchanged. This is an explicit
+production process-lifetime policy, not a benchmark-only GC change. Frozen cycles
+can remain until worker exit; startup cost and total memory remain in the receipt.
+The final 1,000 ordinary End Turn commands measure 62.45 ms consumed p95 and
+109.08 ms maximum, with native command maximum 52.43 ms. Instrumentation confirms
+post-Start cycles remain collectible and full runtime GC takes 43.57 ms in the
+observed long-run collection. Both native registries stay flat across the run;
+recorded native history and its memory still grow. These are End Turn/automatic
+turn-advancement measurements, not all-spell or movement latency guarantees.
+
+The [implementation receipt](agent_docs/audits/server-implementation-20261007/IMPLEMENTATION.md)
+is the current feature/test/review record. Its linked anti-slop and ECS/DAG reviews
+approved the bounded source work. The
+[performance receipt](agent_docs/audits/server-implementation-20261007/PERFORMANCE.md)
+separates native/capture/HTTP timings and remaining costs. Repeated full-history
+capture scans were removed using the native event index and one current capture
+checkpoint per audience. The original 200-command HTTP result (62 ms consumed p95,
+316 ms maximum) is superseded by the longer latency follow-up above. Windows local launch and subsequent native Windows hosting for both WSL SDK clients pass; the earlier wrong-interface timeouts are superseded by the explicit WSL-adapter binding.
+Remaining runtime-history retention and WSL import time stay explicitly measured; graphics FPS, durable
+whole-world save/load across server restarts and the future NeuroClient are not
+claimed complete. Existing unrelated graphics/native-door/old-omniserver test
+failures remain explicitly recorded. No assets or client UI were added in this phase.
+
+The server planning paragraphs below describe the earlier design baseline, not
+additional unfinished SDK-generation work. Follow the implementation receipt for
+actual completion and limits.
+
 **October 7 — server-only practical plan, then independent engine-speed work.**
 The human narrowed the active study to the backend server. The
 [server implementation and engine performance plan](agent_docs/SERVER_IMPLEMENTATION_AND_ENGINE_PERFORMANCE_PLAN_2026-10-07.md)
 specifies native/application/transport ownership, finite API and lifecycle, command
-admission/retry/revisions, exact public recording and a client-free test harness.
+admission/retry/revisions, exact public recording and a frontend-free test harness.
+The second pass is on the human's clean `feature/server-is-coming-back` branch
+(initial HEAD `40eb37b9b4cac72ea75d00d7b1545a4e48a5d2a2`). Its required
+[stream/SDK contract](agent_docs/SERVER_STREAM_AND_SDK_CONTRACT_2026-10-07.md)
+adds standalone Python and TypeScript SDKs, subjective-only HTTP/SSE, consumed
+cursor following, retry-safe attachment, atomic replay/live handover and H41–H56.
+The human then required general seat assignment with no arbitrary player-count cap:
+one seat may own a group, or each externally controllable entity may have its own
+seat. One native encounter serves the independent authorized streams. Acceptance
+includes opposing Python and TS SDK scripts in that same encounter, languages
+swapped, three-plus seats and one seat per eligible entity. Default crypt grouping
+is configuration, not a single-seat server restriction.
 Gate A is a complete server and full headless encounter with independently reviewed
 correctness. Gate B then profiles and repairs measured engine/capture/transport
 costs. Baselines are collected during construction; speculative optimization does
-not precede a working shape. No frontend, UI, Studio, graphics or artwork work is
-part of this server-only phase. This request remains planning, not implementation.
+not precede a working shape. SDK transport is included; no frontend UI, Studio, graphics or artwork work is
+part of this server-only phase. Implementation is now authorized; the planning
+receipts below describe the baseline, not completed runtime work.
+
+**October 7 — concrete server schema and upstream log contract.**
+The human required field-level API authoring before server implementation, reuse of
+existing types, and no repeated SDK regeneration/validation workstream. The
+[contract package](agent_docs/server-api-v1/README.md) now contains the proposed
+protocol-1/player-schema-4 JSON Schema/OpenAPI, 314 definitions, 1,612 field rows,
+owner-local deltas and labelled current/proposed examples. A single native capture
+pass completed 872/873 existing scenarios and observed all 28 fact variants; the
+cloud-door fixture's out-of-reach failure is recorded. Bounded Python/JS shape
+checks passed; these are not runtime privacy/SDK acceptance. No production code
+changed in this pass.
+The upstream repair types `CombatLogEntry.data` at its existing owner and adapts
+its one subjective projector/formatter; it adds no parallel API log family.
+Explicit regression: observed lethal opportunity attack at a doorway must retain
+known identity at turn-end after sight loss, without disclosing an unseen destination
+or death. One authorized audience/seat uses one SSE stream for all its controlled
+units; body selection never changes that audience. Native action legality remains
+per actor. Reviews and their concrete corrections are in the existing server review
+receipt. Implement those owner changes/shared application before the thin host/SDK;
+generate declarations once from final owner exports, retire the design overlays,
+and use targeted checks after real changes. No SDK or HTTP runtime was built here.
 
 **October 7 — direct network server/NeuroClient/Studio design; planning only.**
 The human reconsidered the pygame/OpenGL destination and requests a deep shared

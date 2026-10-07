@@ -140,7 +140,7 @@ class CounterspellReactionEvent(ActionEvent):
             compact=compact,
             verbose=compact,
             detailed=compact,
-            data=data.model_dump(mode="json"),
+            data=data,
             success=self.succeeded,
         )
 

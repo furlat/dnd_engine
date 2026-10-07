@@ -37,8 +37,8 @@ from dnd.spells.evocation import FireBolt, MagicMissile, RayOfFrost, Shatter, Sh
 from dnd.spells.illusion import Blur, MirrorImage
 from dnd.spells.transmutation import EnlargeReduce, SpikeGrowth
 from dnd.types.world import CardinalDirection
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 PersistentProgram = Literal['mage_armor', 'shield', 'grease', 'spike_growth', 'fog_cloud', 'cloudkill',

@@ -13,9 +13,9 @@ from game.animation_draw import action_media_draw_commands
 from game.animation_types import ParticleMediaAsset
 from game.choreography import bind_choreography
 from game.combat import BoundCast
-from game.player_facts import DamageFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import DamageFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from tests.game.area_spell_scenarios import area_spell_history
 from tests.game.body_residue_scenarios import body_residue_history

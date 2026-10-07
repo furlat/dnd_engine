@@ -6,8 +6,8 @@ import pytest
 
 from game.animation_data import load_animation_data
 from game.choreography import bind_motion, sample_motion, MotionLeg, motion_leg_contact
-from game.player_facts import MovementFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import MovementFact
+from dnd.player.reduction import reduce_lineage
 from tests.game.movement_scenarios import movement_history
 from tests.game.player_helpers import player_history
 from tests.game.scenarios import movement_with_paralysis

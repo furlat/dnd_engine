@@ -11,7 +11,12 @@ it to a Linux filesystem is not a prerequisite. Frontend development lives in WS
 [practical server-only plan](SERVER_IMPLEMENTATION_AND_ENGINE_PERFORMANCE_PLAN_2026-10-07.md)
 now elaborates and governs §§4–6 where more specific. It closes server shape and
 headless correctness before engine-speed iteration. Its finite API/status/admission
-and revision details supersede this high-level outline. Frontend/UI/Studio work is
+and revision details supersede this high-level outline. Its mandatory
+[stream and SDK contract](SERVER_STREAM_AND_SDK_CONTRACT_2026-10-07.md) includes
+both standalone SDKs, audience-local stream order, consumer cursor following and
+reconnect/ACK behavior in the server gate. The general-seat amendment includes
+opposing SDK clients in one encounter with no arbitrary seat-count cap; one seat
+can control a group or one entity. Frontend/UI/Studio work is
 outside that current phase; none is a prerequisite for testing the server.
 
 ## 1. Decisions and scope
@@ -37,14 +42,18 @@ outside that current phase; none is a prerequisite for testing the server.
   Packing/readiness and the separate too-fast playback audit remain mandatory.
 - No new spells, rule expansion, narrative renderer, account platform, lobby,
   AI provider control plane, distributed worker scheduler or general plugin engine.
-- First playable scope remains the authored crypt with Fighter/Sorcerer as one
-  controlling party. Network contracts account for ownership and reconnect; this
-  phase does not claim finished simultaneous multi-party multiplayer or save/load.
+- The default playable configuration remains the authored crypt with Fighter/Sorcerer
+  grouped under one seat. The server phase now also supports configured independent
+  seats up to one per controllable entity, without an arbitrary player cap, and must
+  prove opposing Python/TS clients in one encounter. Lobby/join/account UI and
+  save/load remain separate; native controllers and initiative keep their owners.
 
 ## 2. Evidence and preserved baseline
 
-Engine source is on `codex/recovery-design` with pre-existing uncommitted recovery
-work. Preserve that entire state. NeuroClient reference is
+The initial study used `codex/recovery-design` with pre-existing recovery changes.
+The human subsequently committed that state and created `feature/server-is-coming-back`
+at `40eb37b9b4cac72ea75d00d7b1545a4e48a5d2a2`; the SDK planning pass began clean.
+Preserve the committed recovery work. NeuroClient reference is
 `/home/tommaso/Dev/NeuroClient`, branch `maybecursed`, commit
 `d274f2d62ca9c1c5ed62a77841cacf6cc0347491`; its status was clean during this study.
 
@@ -84,7 +93,7 @@ Specific source issues influencing this design:
 | `game/runtime_worker.py` captures each operation before another mutation | Preserve this ordering; a successful mutation with failed capture is not a safe rejection/retry |
 | Same worker imports `game.controls.selection_target_pool` | Extract neutral target-selection resolution; server must not import UI controls |
 | Pipe Start includes test seed/positions; caller issues Advance/Close; EOF destroys session | New public protocol must not expose this trusted-parent lifecycle |
-| Single native discovery cache per session | First phase has one controlling seat/tab; reconnect replaces connection without creating a second competing discovery owner |
+| Single native discovery cache per session | Bind to the current external actor's seat/revision/mode; other seats cannot replace it; reconnect replaces only that seat's attachment |
 | `server/event_server.py` computes AoE and filters targets itself | Do not reuse; native preview is the only mechanical preview owner |
 | `game/presentation.py: capture_lineages` scans retained event history | Profile and bound incremental capture costs; moving transport does not fix growth |
 | `PlayerSequence` is version 3; exporter filename says v2 | Export actual schemas/versions; do not freeze the stale filename into the new API |
@@ -122,11 +131,11 @@ dnd/player/
   recorded.py, compatibility.py                  private replay and boundary upgrades
 
 player_server/
-  app.py, protocol.py                            thin HTTP/SSE endpoints + envelopes
+  app.py, protocol.py                            thin HTTP/SSE endpoints + public envelopes
   host.py                                       process/seat lifetime + serialized admission
-  worker.py                                     engine application execution/capture
-  delivery.py                                   bounded ordered envelopes/command receipts
-  __main__.py                                   explicit CLI composition/configuration
+  worker.py, worker_protocol.py, connection.py   private engine dispatch/IPC
+  recording.py                                  exact public spool and delivery index
+  __main__.py, config.py                         explicit CLI composition/configuration
 
 devtools/studio_server.py                        separate local authoring-only service
 ```
@@ -168,178 +177,79 @@ rendering is on Windows. TLS/reverse-proxy deployment can later preserve this AP
 
 ### 5.2 Finite endpoint set
 
-| Endpoint | Input | Output/authority |
-|---|---|---|
-| `GET /api/v1/bootstrap` | authenticated controlling seat | Protocol/schema versions, fixed game identity/epoch, audience, content/media revision references, resume metadata |
-| `POST /api/v1/games/{id}/attachment` | seat credential; explicit attach/replace | New writable attachment epoch, next monotonic command number, pending command identities; admitted work survives replacement |
-| `GET /api/v1/games/{id}/initialization` | bound seat | Retained authorized initialization and sequence zero; never raw objective scene |
-| `GET /api/v1/games/{id}/events?after=...` | epoch + explicit application-owned last reduced sequence | Ordered complete operation envelopes, heartbeat or explicit resume-unavailable; query position is authoritative, never browser Last-Event-ID |
-| `POST /api/v1/games/{id}/ack` | attachment epoch + greatest contiguous safely reduced/retained sequence | Release live-delivery credit; never claims animation completion |
-| `POST /api/v1/games/{id}/choices` | actor, mode such as force-attack, correlation ID | Detached native choices, discovery generation, state revision |
-| `POST /api/v1/games/{id}/preview` | actor/discovery/revision + exact ordered selection prefix | Native route/AoE/cost/next-selection/confirmation result with exact request echo |
-| `POST /api/v1/games/{id}/commands` | command identity + revision + finite intent | Recorded acceptance/rejection and operation sequence reference; operation stream owns state application |
-| `GET /api/v1/games/{id}/commands/{id}` | bound seat + command identity | Pending, completed/rejected, expired or explicit unknown outcome |
-| `GET /media/{release}/{path}` | immutable installed manifest resource | Static binary/JSON; no game worker, no export-on-request |
+The [server-only plan](SERVER_IMPLEMENTATION_AND_ENGINE_PERFORMANCE_PLAN_2026-10-07.md)
+and its [stream/SDK contract](SERVER_STREAM_AND_SDK_CONTRACT_2026-10-07.md)
+own the complete API/schema, credential, attachment, status and error definitions.
+Keep one specification rather than another endpoint table here. The frontend uses
+the production TS SDK for bootstrap, attachment, initialization, status, choices,
+preview, commands/receipts, content, ACK and the subjective SSE stream. Static
+media and the separate local Studio authoring API remain client-phase concerns.
 
-No route per spell, item, attack or native event class. Intent union initially
-contains execute-selection, end-turn, equip, unequip and toggle-reaction-handler.
-Execute-selection preserves ordered target indices, repeated targets and ordered
-positions. Upcast/form/material/weapon choices resolve existing native choices;
-the client sends no damage formula, executable template or client-authored geometry.
-
-Start/close/test-seed/map setup are host CLI or private test tooling operations.
-Bootstrap attaches to a preconfigured authored encounter. A production browser
-cannot reset the map, choose observers arbitrarily, advance the enemy or reset dice.
-
-Local host creates a random seat credential. Dev proxy forwards configured host
-credentials without hardcoding them in public bundles; a browser session uses an
-HttpOnly same-origin cookie and validated Origin for mutations. Restrict allowed
-origins, body sizes and tool roots; no credentials in URL queries/logs. This is a
-bounded local development binding, not an account/login platform. Public deployment
-requires its own access provisioning before exposure beyond the intended user.
+Intent records preserve native ordered/repeated selections and authored variants.
+No per-spell endpoints, client damage formula or client-authored rules geometry.
+Start/close/test seeds/map setup are private host composition operations. Credentials
+are supplied at runtime using Authorization headers and fetch streaming; no cookie
+platform or credentials embedded in bundles, URLs or logs. Browser provisioning is
+future UI composition; the server phase supplies independent headless SDK callers.
 
 ### 5.3 Versioned data, not two competing state feeds
 
-Generate TypeScript types and runtime validators from the actual finite public
-schema; test Python-produced JSON in TypeScript. Use a discriminator for every
-sum type. Protocol version, player schema, presentation schema and media revision
-are distinct. Reject mismatches clearly instead of silently taking old SDK shapes.
-Generated structural validation is supplemented by the inventoried pure semantic
-validators and shared accepted/rejected fixtures described in the authoring companion.
-Python's cross-field model validators do not automatically become JSON Schema rules.
+One operation carries authorized causal lineages, structured original log appends,
+HUD after-values, admitted content additions and the permitted boundary state.
+All public ordering is audience-local, including nested version/log coordinates;
+private native counters and hidden-operation pulses are excluded. Same-seat party
+knowledge is shared without exposing other seats' controlled sheets or unseen actors.
 
-An operation envelope contains:
-
-```text
-gameEpoch, audienceId, sequence, resultingStateRevision,
-commandId? (only if authorized for this viewer),
-lineages[], hud?, combatLogAppends[], nativeBoundaryStatus
-```
-
-Retain actual native causal/version identities inside admitted facts. An operation
-with no visible lineage may still carry resources, boundary status or log facts;
-do not drop it. Do not broadcast entirely private native operations to other
-audiences merely to expose their count. Delivery sequence counts published
-envelopes, not EventQueue rows. Public contract/privacy audit covers nested names,
-condition/item details, geometry and diagnostic fields, not only actor IDs.
-
-Wire data contains semantic observed changes and authored content references,
-never per-frame draw commands, Surface/NumPy values, native templates, private
-RecordedSequence/CompletedLineage or full objective event queues. Authoring catalog
-and media are downloaded by revision independently of the operation stream.
+Wire data carries semantic observed changes and authored content references, never
+per-frame drawing instructions, pixels or executable native objects. The server
+schema completeness gate covers every current fact family and consumer requirement.
+The later client uses one TS reducer in live play, replay and Studio. The Python
+server, probe and cold replay use the same existing Python reduction functions;
+SDK packages transport/validate records without duplicating game mechanics.
 
 ### 5.4 Command execution, retries and errors
 
-One controlling seat and one active writable browser tab initially. A new attachment
-replaces the old connection's right to submit new commands; already admitted work
-finishes. This avoids the current single discovery cache being invalidated by two
-tabs. Game/seat state outlives a network socket. Other-party discovery/control is
-not accidentally promised by this phase.
+Configured seats may own groups or individual externally controlled entities, with
+no arbitrary seat-count cap. All share one native encounter. Each seat has one
+writable attachment, its own receipt/command-number namespace and its authorized
+stream. The single active-turn discovery cache is bound to the owning seat/actor;
+other seats cannot replace it. Native controllers still own turns, AI and reactions.
 
-The server issues a writable attachment epoch, distinct from the shared cookie.
-Choices, preview, ACK and new commands carry it; stale attachments cannot mutate
-the discovery cache or admit work. A transient stream reconnect retains the same
-epoch. A page reload attaches/replaces and receives the next command number and
-pending identities. The host serializes replacement against admissions; it does
-not cancel an already executing command. Receipt lookup remains seat-authorized
-and returns the result of that seat's earlier command across attachment replacement.
-
-Command identity is `(gameEpoch, seatId, monotonicCommandNumber)`. Authenticate
-the seat/game first, then look up identity and exact payload before current action
-revision checks. Existing pending/completed/rejected identities return their status;
-a changed payload conflicts. Only a new identity checks the writable attachment,
-expected next number, actor authority and current retained discovery/revision.
-
-For a new valid mutation: reserve identity and exact payload -> execute through native APIs -> capture
-all roots and projected HUD/log values -> append one immutable operation envelope ->
-store terminal command receipt -> reply/publish. No subsequent mutation can run
-between execution and capture. Expected rejection is valid only before mutation;
-an exception after native mutation fails the session visibly with diagnostic IDs.
-Never turn it into a successful empty operation or automatically retry it.
-
-Same command ID and identical payload returns the retained receipt without spending
-again. Same ID/different payload conflicts. Expired receipt IDs cannot become new
-commands: retain a monotonic per-seat command watermark and reject old IDs whose
-details were evicted. On timeout the client asks command status or retransmits the
-same identity; it never invents a new ID as an automatic retry. No promise of
-exactly-once execution across a server process crash without durable transactions.
-
-Initial limits are explicit configuration: one in-flight mutation; coalesced unsent
-preview per seat; bounded incoming requests; retained receipts and operation buffers
-limited by bytes as well as entries. First protocol sends whole atomic SSE operation
-envelopes, with a 64 MiB decoded-envelope ceiling matching the current pipe ceiling;
-S0/S1 must prove every selected scenario fits and measure browser parse/reduction
-latency. No fragmentation framework is planned. A post-commit oversize result fails
-the session visibly and retains diagnostic data; never send a partial operation or
-claim success. Revise the explicit cap/representation before release if a real case
-exceeds it. Metadata/command requests have a separate much smaller measured cap.
+The server-only contract specifies admission, retry identity, worker revalidation
+and complete per-audience publication. Mutation stays serial. Capture common private
+evidence once, apply the same audience admission/projection functions separately,
+and publish participating audience results only after the complete batch is staged.
+A post-mutation failure fails the game; no rollback, automatic retry or fake success.
+A different seat's attachment, reconnect or inactive catch-up does not cancel work.
 
 ### 5.5 Reconnect, history and memory
 
-Network receipt/reduction, displayed cursor and native revision are different.
-Discard duplicate envelopes before public reduction; detect gaps/epoch changes.
-SSE reconnect resumes from the last fully reduced sequence, not browser delivery
-state or the last animation shown. On transport error the client closes EventSource
-and opens a new one with explicit `after=lastReduced`; that query overrides any
-Last-Event-ID header. Browser last-event ID advances before handler completion and
-is not an acknowledgment. Validate and apply each envelope atomically/in order.
-Validation/reduction failure stops playback/input and reports the failing sequence;
-never acknowledge it, skip it or enter an automatic retry loop over broken data.
+Published, received, consumed, acknowledged and displayed positions are distinct.
+SDK recovery follows the last safely consumed operation, after the awaited consumer
+finishes, rather than browser delivery or animation completion. The normative
+contract specifies initialization ACK(0), atomic backlog/live handover, cursor waits,
+terminal-prefix draining and failure behavior for both SDKs.
 
-Keep three memory/storage classes separate:
-
-- A byte-bounded live delivery window, released by ACK of the greatest contiguous
-  envelope successfully validated/reduced and retained in the client's bounded
-  playback history. ACK does not discard history still needed for animation.
-- A record-once per-audience spool of the exact published initialization/envelopes,
-  outside public Git, with a configured total byte/age budget. This is the existing
-  public-recording responsibility adapted to incremental output, not another native
-  event executor or alternate world state. It permits full page refresh to replay
-  from initialization without keeping the whole delivery history in host RAM.
-- Native EventQueue/recorded history, reported separately from working memory.
-  This migration does not promise constant native retained-history size.
-
-The live window reserves room for one maximum operation before admitting another
-native decision. ACK frees that credit and resumes scheduling. Disconnect/slow
-consumer pauses scheduling once the window is full, at a native decision boundary.
-Client history also has a byte budget; it stops acknowledging additional envelopes
-before exhausting that budget rather than accumulating an unlimited animation queue.
-Choose and record window/spool/client-history limits from the full encounter cases
-in S0/S1. The spool budget must cover the acceptance encounter and resume tests.
-
-A connected client retains pending historical playback across reconnect. A new
-page rebuilds known state from retained public initialization/envelopes, then samples
-the selected replay position; never inspect the objective world. Spool expiry means
-explicit `resume-unavailable`, not an invented checkpoint or partial replay. No
-checkpoint/fragmentation/save-game subsystem is added in this phase. Before total
-spool quota is exhausted, stop native scheduling with a clear capacity diagnostic;
-retain the existing record. ACK resolves live-window pressure, not disk-quota pressure.
-Durable restoration of running mechanics after host failure remains out of scope.
-
-At encounter end preserve pending operation records until clients can finish or
-reconnect under the retention policy. Explicit host close ends the worker; tab
-refresh or stream EOF does not. Worker failure reports session failure and prevents
-further commands. Host restart is not advertised as a saved-game resume.
+Retain the exact public bytes once per audience, with bounded aggregate delivery
+cache and explicit recording capacity. A slow socket suspends its reader or evicts
+spool-backed cache copies; it must not hold the shared workspace or stop other seats.
+Native scheduling pauses for actual recording exhaustion, or for the currently
+required external controller, not merely because another seat has not caught up.
+Refresh replays retained public initialization/operations, never objective state.
+Durable restoration of running mechanics after a host crash remains out of scope.
 
 ### 5.6 Native scheduling and asynchronous presentation
 
-The host calls the existing native `advance_one_controller_action_boundary`, one
-decision at a time, until a human input/terminal boundary. It yields between decisions
-to service networking and publish each completed operation. Native controller owns
-who acts and whether a zero-HP actor has a decision. No duplicate server turn loop.
+The host calls existing native controller advancement one decision at a time,
+services networking between decisions, and captures/publishes the complete authorized
+results. Native initiative and life state determine who can act. No copied server
+turn loop or presentation-completion dependency is added.
 
-This intentionally removes the current pygame loop's one-operation visual-lookahead
-throttle. Rendering/media completion is never a rules prerequisite. Bound generated
-backlog by unacknowledged delivery bytes/operations; stop scheduling at a native boundary when the
-live-delivery budget is exhausted and resume when ACK releases credit, without
-discarding history. A paused client can keep
-receiving within its budget. There is no unbounded AI simulation while nobody can
-consume it. Network acknowledgments do not mean animation completion.
-
-Preview/discovery reads share the worker's serialized native state. Coalesce obsolete
-hover requests before execution. Never cancel or reorder admitted mutations. Echo
-actor, discovery, action, target/position prefix and correlation ID in every preview;
-ignore late replies. Camera/pan/zoom/ordinary hover rendering remains entirely local.
+Queries echo their seat's actor/discovery/revision/prefix/correlation. The SDK and
+client ignore superseded replies within that seat; they cannot cancel another's
+request. Camera/pan/zoom/ordinary hover rendering remains local. The server phase
+must prove opposing Python/TS scripts in one encounter, three-plus seats and one
+seat per eligible entity before the frontend depends on this API.
 
 ## 6. Backend performance is its own deliverable
 
@@ -796,8 +706,10 @@ compound transparency/picking proof in S0. Exact document-source mapping and com
 wire privacy/version audit are enumerated S0/S1 work, not permission to discover a
 different architecture halfway through. If a current material cannot be expressed
 by the chosen primitive, update its concrete operator row and review the change;
-do not invent a hidden per-spell path. Durable game saves and simultaneous controlling
-seats remain separate requested features, not implied completion of this migration.
+do not invent a hidden per-spell path. Durable game saves remain outside this phase.
+General configured seats and both standalone SDKs are now required by the separately
+reviewed server-only plan; lobby/account UI is not included. The original review of
+this parent document does not itself certify those later additions.
 
 ## References
 

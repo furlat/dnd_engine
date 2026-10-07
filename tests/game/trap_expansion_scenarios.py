@@ -26,8 +26,8 @@ from dnd.spatial.mechanisms import FiniteTrap, LaneGeometry, materialize_finite_
 from dnd.spatial.triggers import materialize_pressure_plate, materialize_tripwire
 from dnd.types.controls import ActivationLink
 from dnd.types.traps import TrapState
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def trap_expansion_history(*, program: Literal["jaw", "gas", "tripwire"],

@@ -11,8 +11,8 @@ from game.choreography import bind_choreography
 from game.condition_animation import resolve_condition_appearance
 from game.concentration_media import register_concentration_lifetimes
 from game.concentration_draw import concentration_media_draw_commands
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from tests.game.hypnotic_scenarios import hypnotic_history
 

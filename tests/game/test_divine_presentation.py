@@ -8,7 +8,7 @@ import pygame
 import pytest
 
 from dnd.core.condition_types import ConditionCategory
-from game.actor_facts import ConditionFact
+from dnd.player.actor_facts import ConditionFact
 from game.animation import ActorContact, feedback_identity, sample_cast
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
@@ -20,9 +20,9 @@ from game.condition_draw import compose_condition_layers
 from game.condition_animation import resolve_condition_appearance
 from game.condition_media_lifetime import ConditionMediaLifetime, sample_condition_lifetimes
 from game.condition_sampling import sample_condition_media
-from game.player_projection import project_sequence
-from game.player_facts import SensoryFact, VersionRow
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.facts import SensoryFact, VersionRow
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from tests.game.divine_scenarios import divine_history
 
 

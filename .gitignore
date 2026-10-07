@@ -16,6 +16,8 @@ htmlcov/
 /build/
 /dist/
 /sdk/typescript/dist/
+/sdk/player-typescript/dist/
+/sdk/python/dist/
 *.egg-info/
 
 .vscode/settings.json

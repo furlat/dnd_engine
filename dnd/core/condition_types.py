@@ -59,6 +59,18 @@ class DurationType(str, Enum):
     ON_CONDITION = "on_condition"
 
 
+@dataclass(frozen=True, slots=True)
+class ConditionDurationSummary:
+    """Recorded native duration; clients never advance a separate clock."""
+
+    duration_type: DurationType
+    remaining_rounds: int | None
+
+    def __post_init__(self) -> None:
+        if (self.duration_type is DurationType.ROUNDS) != (self.remaining_rounds is not None):
+            raise ValueError("Only round durations have remaining_rounds")
+
+
 class SustainLossPolicy(str, Enum):
     """Whether involuntary loss must release this exact sustained branch."""
 

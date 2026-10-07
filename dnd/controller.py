@@ -52,6 +52,9 @@ class TurnContext(BaseObject):
         visible_allies: Visible ally UUIDs mapped to positions.
     """
 
+    use_register: bool = Field(default=False,
+        description="Transient controller input; register only when explicitly requested.")
+
     entity_uuid: UUID = Field(description="UUID of the entity whose turn it is.")
     round_number: int = Field(default=1, description="Current encounter round number.")
     turn_index: int = Field(default=0, description="Position in initiative order.")

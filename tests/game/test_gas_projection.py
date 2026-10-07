@@ -14,11 +14,11 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spatial.gas_traps import GasCloudSpec, materialize_gas_vent
 from dnd.types.senses import OpticalObscurement
-from game.player_facts import MechanismActivationFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence
-from game.presentation import capture_interval, reduce_interval
-from game.replay import ObserverCapture, RecordedSequence, capture_history
+from dnd.player.facts import MechanismActivationFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import ObserverCapture, RecordedSequence, capture_history
 
 
 def record_release(*, hidden_origin: bool = False, blinded_child: bool = False):

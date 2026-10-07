@@ -9,7 +9,7 @@ from game.animation_data import load_animation_data
 from game.condition_animation import resolve_condition_appearance
 from game.condition_media import ResolvedConditionLayer
 from game.condition_sampling import select_condition_markers
-from game.actor_facts import ConditionFact
+from dnd.player.actor_facts import ConditionFact
 from dnd.core.condition_types import ConditionCategory
 
 

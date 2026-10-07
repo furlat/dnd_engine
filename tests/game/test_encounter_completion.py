@@ -13,7 +13,7 @@ from dnd.core.events import EventType
 from dnd.core.life_types import LifeState
 from game.controls import ActionSelection, EndTurn
 from game.encounter_play import GameSummary, run
-from game.player_facts import ConditionChangeFact, DamageFact, MovementFact, PlayerState, SpellFact, TurnFact
+from dnd.player.facts import ConditionChangeFact, DamageFact, MovementFact, PlayerState, SpellFact, TurnFact
 
 
 def check_encounter_completion(*, capture_dir: Path | None = None) -> GameSummary:

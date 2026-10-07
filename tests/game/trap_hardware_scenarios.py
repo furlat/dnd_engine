@@ -19,11 +19,11 @@ from dnd.spatial.mechanisms import TrapSave
 from dnd.spatial.triggers import materialize_pressure_plate
 from dnd.types.controls import ActivationLink
 from dnd.types.traps import TrapState
-from game.player_facts import MechanismActivationFact, ObjectDamageFact, ObjectDestroyedFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, RecordedSequence, capture_history
+from dnd.player.facts import MechanismActivationFact, ObjectDamageFact, ObjectDestroyedFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, RecordedSequence, capture_history
 from tests.game.door_destruction_scenarios import attack_item, review_actor, take_turn, walk
 
 

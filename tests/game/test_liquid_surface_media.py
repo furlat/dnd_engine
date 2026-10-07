@@ -18,11 +18,11 @@ from dnd.spatial.environmental_conditions import OilSurface, WetSurface
 from dnd.types.spatial_effects import SpatialEffectInteractionIntensity, SpatialEffectInteractionOperation
 from game.app import FrameEvidence, draw_frame
 from game.assets import AssetCatalog, SurfaceCache, load_catalog
-from game.player_facts import ObjectDestroyedFact, PlayerState
-from game.player_reduction import reduce_lineage
-from game.presentation import capture_interval, reduce_interval
+from dnd.player.facts import ObjectDestroyedFact, PlayerState
+from dnd.player.reduction import reduce_lineage
+from dnd.player.capture import capture_interval, reduce_interval
 from game.projection import Camera, TILE_HEIGHT, TILE_WIDTH
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 from game.surface_residue import ResidueSurfaceCache, liquid_surface_image
 from tests.game.door_destruction_scenarios import review_actor, walk
 from tests.game.liquid_barrel_scenarios import Liquid, liquid_barrel_history

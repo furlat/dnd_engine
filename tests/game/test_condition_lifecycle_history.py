@@ -13,7 +13,7 @@ from dnd.actions import AttackEvent, JumpEvent, MovementEvent
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import EventPhase, EventQueue, EventType, SavingThrowEvent, StepMovementEvent
 from dnd.core.life_types import LifeState
-from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage
+from dnd.player.capture import CompletedLineage, PresentationTarget, reduce_lineage
 from tests.game.scenarios import dodge_expiry_history, paralysis_lifecycle
 
 

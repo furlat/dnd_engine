@@ -23,8 +23,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spatial.environmental_conditions import SpikeTrap
 from dnd.types.senses import SenseMode, SensesType
 from dnd.types.traps import TrapState
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def environment_history(

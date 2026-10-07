@@ -16,7 +16,7 @@ from dnd.core.life_types import LifeState
 from dnd.core.presentation_geometry import AoEPresentationGeometry, LinePresentationGeometry, WallAssemblyPresentationGeometry
 from dnd.types.summoning import SummonManifestation
 from dnd.core.effect_types import ResolutionRef, EffectPropagationLink
-from game.player_facts import PlayerNode
+from dnd.player.facts import PlayerNode
 from game.timing_evidence import (TimingEvidence, TimingOperand, CompiledTimingReference, TimingMeasurement, record_timing)
 from dnd.core.condition_types import ConditionTag
 from dnd.types.senses import PerceivedSpatialEffect

@@ -13,8 +13,8 @@ import pygame
 
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from game.choreography import BoundChoreography, MotionTimeline
-from game.player_facts import CombatLogAppend, PlayerNode, PlayerState
-from game.player_reduction import index_player_lineage
+from dnd.player.facts import CombatLogAppend, PlayerNode, PlayerState
+from dnd.player.reduction import index_player_lineage
 from game.presentation_group import PresentationGroup
 from game.presentation_timing import presentation_milestones, presentation_dependencies
 from game.ui.layout import UILayout
@@ -105,9 +105,9 @@ def group_log_rows(group: PresentationGroup, *, choreography: BoundChoreography 
         if dependency.owner_uuid is not None:
             dependencies.setdefault(dependency.owner_uuid, []).extend((row.reason, row.at_ms) for row in dependency.evidence)
     result = []
-    primary_key = (LogKey(group.primary.generation, group.primary.observer_uuid, 'event', str(group.primary.root.uuid))
-                   if group.primary.root.combat_log is not None else None)
-    reactions = {lineage.root.uuid for lineage in group.reactions}
+    primary_key = (LogKey(group.primary.generation, group.primary.observer_uuid, 'event', str(group.primary.group_uuid))
+                   if group.primary.root is not None and group.primary.root.combat_log is not None else None)
+    reactions = {lineage.group_uuid for lineage in group.reactions}
     for lineage in group.lineages:
         index = index_player_lineage(lineage)
         versions = {row.event_uuid: row.lineage_uuid for row in lineage.version_rows}
@@ -193,8 +193,8 @@ def group_log_rows(group: PresentationGroup, *, choreography: BoundChoreography 
             assert node.combat_log is not None
             result.append(LogRow(LogKey(lineage.generation, lineage.observer_uuid, 'event', str(node.uuid)),
                 node.combat_log, LogKey(lineage.generation, lineage.observer_uuid, 'event', str(ancestor.uuid)) if ancestor else None,
-                node.turn_execution_id, group.primary.root.uuid,
-                primary_key if lineage.root.uuid in reactions and ancestor is None else None,
+                node.turn_execution_id, group.primary.group_uuid,
+                primary_key if lineage.group_uuid in reactions and ancestor is None else None,
                 index.source_order[node.uuid], start_ms + at, 'group_completion' if fallback else 'presentation',
                 actor_condition=node.fact is not None and node.fact.kind=='condition'))
     return tuple(result)

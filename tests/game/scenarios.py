@@ -36,12 +36,12 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.enchantment import SleepEffect
 from dnd.spells.transmutation import Fly
-from game.presentation import (
+from dnd.player.capture import (
     CompletedLineage, PresentationTarget, capture_interval, capture_lineage,
     reduce_interval, reduce_lineage,
 )
 
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def attack_history(

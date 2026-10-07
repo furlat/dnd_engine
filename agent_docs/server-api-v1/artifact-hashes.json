@@ -1,0 +1,18 @@
+{
+  "COMBAT_LOG_CONTRACT.md": "863d0eac82d93927ec9a6ba587f8f90900b11458045857703731052576bce6ee",
+  "README.md": "97c2e39a3a9676db1eea4ded9db3d530df63762eee59a6955cb35cb20968c0bc",
+  "capability-captures.json": "8bcd8a617d01ebfd2172a653588590da9069c1772f44b9b7603621ec2e8b718e",
+  "contract_source.py": "c8e057867a11043bde05b554c7ae8aea0c09a17bc576952da416395485d64b60",
+  "current-captured-examples.json": "08df361f9800053ef8f459b2fbde1178f1ad0d687c739c2d1186178b6a69d904",
+  "current-initialization.json": "fe68908867c5135c8c0ffdb01ced26cad1503a277d003cc00370e322a9feecb8",
+  "export_contract.py": "9f9cd0aff33a5b566d4b5707faed87eea72774160266221f07521224ba47a0ee",
+  "field-ledger.json": "5f115b1dfcf4794bd7ea3fced81c19fd0773cab1da04ac7f0da87a30f0501aea",
+  "openapi.json": "a0137ed332aa4209ebea67a4275875c5b5d4c318bf4c7cc7de8e5ba4d8c10128",
+  "owner-deltas.json": "ede05afc1e01f90d95dde1ce0b8b8d7c78f37b89cde31d4328d3a9336a32d818",
+  "player-api-v1.schema.json": "3835f249c40abfcff6ac67e131a081e49cc462dc64cb94ef7e1f39c5638f89aa",
+  "proposed-shape-examples.json": "71743bae57f1692df3f6e0b6a748e0fc9270f7f9d5e6eba3ab83d8ce513617f4",
+  "semantic-contract.md": "5dc8b5a0b8ceda31ad3d8d4da37b606bed37584f99e54f74a002c2808a524cb3",
+  "source-parity.json": "0ffb8d885e4b1cba67171d8cb6e1a5cc12a5926852d3b43d69573a166c17d3e7",
+  "source-validators.json": "f296763fb9c27505c4c31eef69dec03c6a4db78f10396eae7de018f99ee83c5c",
+  "verification.json": "7b8918f5f403bac8f619cb6ffa28c6fa35a34bcae8d714ed6e1e69818216303c"
+}

@@ -24,8 +24,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.abjuration import BeaconOfHope
 from dnd.spells.conjuration import Daylight
 from dnd.spells.evocation import MassHealingWord, DivineWord, FlameStrike
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 DivineProgram = Literal["beacon_of_hope", "daylight", "mass_healing_word", "divine_word", "flame_strike"]

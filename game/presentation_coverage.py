@@ -17,11 +17,11 @@ from game.choreography import BoundChoreography, FACT_PRESENTATION, MotionTimeli
 from game.condition_animation import persistent_limitations, transition_limitations
 from game.environment_art import EnvironmentArt
 from game.stationary_media import stationary_media_limitations
-from game.player_facts import (
+from dnd.player.facts import (
     ActionFact, AttackFact, ConditionChangeFact, PlayerFact, PlayerLineage,
     ShoveFact, SpellFact,
 )
-from game.player_reduction import STATE_PRESENTATION_KINDS
+from dnd.player.reduction import STATE_PRESENTATION_KINDS
 
 
 def _row(family: str, identity: str, owner: str, representation: str,
@@ -175,11 +175,11 @@ def lineage_coverage(lineage: PlayerLineage, *, group: BoundChoreography | None 
     if group is not None:
         visit_group(group)
     if motion is not None:
-        owners[lineage.root.uuid] = "movement"
+        owners[lineage.group_uuid] = "movement"
         visit_motion(motion)
     events = {event.lineage_uuid: event for event in lineage.events}
     result: list[dict[str, Any]] = [
-        {"root_uuid": str(lineage.root.uuid), "event_uuid": None, "owner": "world_animation",
+        {"root_uuid": str(lineage.group_uuid), "event_uuid": None, "owner": "world_animation",
          "observed": "bound", "issues": [], "family": "world", "identity": identity}
         for identity in sorted(world)
     ]
@@ -208,7 +208,7 @@ def lineage_coverage(lineage: PlayerLineage, *, group: BoundChoreography | None 
                     else "state_only" if state_only else "received")
         declared_owner = ("player_reduction" if state_only
                           else FACT_PRESENTATION.get(fact.kind, ("unassessed", ""))[0])
-        evidence = {"root_uuid": str(lineage.root.uuid), "event_uuid": str(event.uuid),
+        evidence = {"root_uuid": str(lineage.group_uuid), "event_uuid": str(event.uuid),
                     "owner": (owner or parent_owner) if parent_owned else (owner or declared_owner),
                     "observed": observed,
                     "issues": [{"code": "binding_gap", "detail": detail}

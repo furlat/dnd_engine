@@ -28,7 +28,7 @@ def main() -> None:
             max_frames=args.frames or (120 if args.headless else None),
             capture_dir=args.capture_dir, quadrant=args.quadrant, fullscreen=args.fullscreen,
         )
-        print(f"commands={game.player_commands} lineages={len(game.lineages)} "
+        print(f"commands={dnd.player.commands} lineages={len(game.lineages)} "
               f"historical_matches_latest={game.latest == game.historical}")
         if not game.restart_requested:
             break

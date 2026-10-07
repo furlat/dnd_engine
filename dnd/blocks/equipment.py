@@ -1,4 +1,6 @@
 from dnd.types.materials import Material
+from dnd.core.condition_types import ConditionDurationSummary, DurationType
+
 from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, WeaponAttackOverride
 """Equipment, armor, weapon, and shield models for entity combat gear."""
 
@@ -487,6 +489,7 @@ class Weapon(EquippableItem):
         owned = {effect.contribution_uuid for effect in state.item_effects}
         effects = (*state.item_effects, *(ItemEffectPresentationState(
             effect_uuid=bonus.uuid, contribution_uuid=bonus.uuid,
+            duration=ConditionDurationSummary(DurationType.PERMANENT, None),
             behavior_id="item.property.additional_damage", damage_type=damage_type,
             display_name=bonus.name,
             suppression_provider_uuids=tuple(sorted(self.suppression_provider_uuids, key=str)) if self.is_magical else (),
@@ -1460,7 +1463,7 @@ class Equipment(BaseBlock):
             total += sum(
                 ability_block.get_ability(
                     ability_name
-                ).get_combined_values().normalized_score
+                ).get_combined_values(use_register=False).normalized_score
                 for ability_name in candidate.ability_names
             )
             if (
@@ -1493,6 +1496,7 @@ class Equipment(BaseBlock):
     def get_unarmored_ac_values(
         self,
         candidate: Optional[ArmorClassFormulaCandidate] = None,
+        *, use_register: bool = True,
     ) -> List[ModifiableValue]:
         """Return modifiable values that contribute to unarmored AC."""
         values = [self.ac_bonus]
@@ -1507,7 +1511,8 @@ class Equipment(BaseBlock):
             base_delta = candidate.base_ac - current_base
             if base_delta:
                 temporary_value.self_static.add_value_modifier(
-                    NumericalModifier.create(
+                    NumericalModifier(
+                        use_register=use_register,
                         source_entity_uuid=self.source_entity_uuid,
                         name="armor_class_formula_base",
                         value=base_delta,
@@ -1515,7 +1520,7 @@ class Equipment(BaseBlock):
                 )
             values.append(temporary_value)
         elif self.unarmored_ac_type in [UnarmoredAc.DRACONIC_SORCERER, UnarmoredAc.MAGIC_ARMOR]:
-            unarmored_ac_static_modifier = NumericalModifier.create(source_entity_uuid=self.source_entity_uuid, name="unarmored_ac_bonus", value=3)
+            unarmored_ac_static_modifier = NumericalModifier(source_entity_uuid=self.source_entity_uuid, name="unarmored_ac_bonus", value=3, use_register=use_register)
             temporary_value = copy.deepcopy(self.unarmored_ac)
             temporary_value.self_static.add_value_modifier(unarmored_ac_static_modifier)
             values.append(temporary_value)

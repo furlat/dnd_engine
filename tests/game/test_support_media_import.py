@@ -9,7 +9,7 @@ import pytest
 
 from devtools.import_support_media import WEAPON_CHARGE_SHEETS, import_bundle
 from dnd.core.condition_types import ConditionCategory
-from game.actor_facts import ConditionFact
+from dnd.player.actor_facts import ConditionFact
 from game.animation_data import load_animation_data
 from game.condition_animation import resolve_condition_appearance
 from game.condition_types import load_condition_recipes

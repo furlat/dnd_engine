@@ -10,8 +10,8 @@ from game.choreography import bind_choreography
 from game.combat import BoundCast
 from game.construction_media import construction_media_draw_commands
 from game.construction_media_lifetime import register_construction_lifetimes
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from game.world_animation import WorldTransitionSample
 from tests.game.construction_scenarios import construction_history

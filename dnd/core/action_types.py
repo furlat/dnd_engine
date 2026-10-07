@@ -1,8 +1,8 @@
 """Dependency-neutral action meaning and restricted-budget types.
 
 These values describe stable engine meaning carried by cold event facts. The
-module intentionally imports no other project package so actions, items,
-servers, and replay tooling can depend on it without reversing ownership.
+module imports only passive identity values so actions, items, servers, and
+replay tooling can depend on it without reversing ownership.
 """
 
 from dataclasses import dataclass
@@ -10,7 +10,31 @@ from enum import Enum
 from typing import Annotated, Literal, Protocol, TypeAlias, Union, runtime_checkable
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from dnd.core.content.identities import validate_namespaced_id
+
+
+class AvailableHandlerInfo(BaseModel):
+    """Player-toggleable event handler exposed with available actions."""
+
+    name: str = Field(description="Handler display name.")
+    behavior_id: str = Field(description="Primitive handler-rule identity.")
+    provided_by_id: str = Field(description="Primitive direct-provider identity.")
+    origin_root_id: str | None = Field(
+        default=None,
+        description="Optional durable primitive root of the provider chain.",
+    )
+    uuid: UUID = Field(description="Stable handler UUID.")
+    enabled: bool = Field(description="Whether the handler is currently enabled.")
+    trigger_event: str = Field(description="Primary trigger event type, when declared.")
+
+    @field_validator("behavior_id", "provided_by_id", "origin_root_id")
+    @classmethod
+    def _validate_behavior_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_namespaced_id(value, "discovered handler identity")
 
 
 class SinglePositionSelection(BaseModel):
@@ -145,6 +169,7 @@ class RestrictedActionGrantProvider(Protocol):
 
 
 __all__ = [
+    "AvailableHandlerInfo",
     "ActionEconomyCostType",
     "ActionPresentationKind",
     "EntityTargetPerception",

@@ -133,8 +133,11 @@ class Ability(BaseBlock):
         """
         return ability_score_normalizer(self.ability_score.score) + self.modifier_bonus.normalized_score
 
-    def get_combined_values(self) -> ModifiableValue:
+    def get_combined_values(self, *, use_register: bool = True) -> ModifiableValue:
         """Build a modifiable value representing this ability's modifier.
+
+        Args:
+            use_register: Register the returned value and its temporary components.
 
         Returns:
             Modifiable value whose normalized score is derived from the raw
@@ -148,9 +151,10 @@ class Ability(BaseBlock):
             base_value=self.ability_score.score,
             value_name=f"{self.name} Ability Modifier",
             score_normalizer=ability_score_normalizer,
+            use_register=use_register,
         )
         ability_modifier.generated_from.append(self.ability_score.uuid)
-        return ability_modifier.combine_values([self.modifier_bonus])
+        return ability_modifier.combine_values([self.modifier_bonus], use_register=use_register)
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,

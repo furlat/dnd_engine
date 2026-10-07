@@ -3,7 +3,7 @@
 from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
 from dnd.core.dice import DiceRoll
 from dnd.core.events import EventQueue, EventType
-from game.replay import RecordedSequence, encode_sequence
+from dnd.player.recorded import RecordedSequence, encode_sequence
 from tests.game.scenarios import movement_with_paralysis
 
 

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from game.animation import ActorContact, BodySample, body_clip, body_context, resolve_body_context, context_frame
 from game.animation_types import AnimationData, SaveHop, BodyContext, ContentBodyQualifier, RoleDefault
-from game.player_facts import ForcedMovementFact, MechanismActivationFact, PlayerNode, SavingThrowFact
+from dnd.player.facts import ForcedMovementFact, MechanismActivationFact, PlayerNode, SavingThrowFact
 
 
 @dataclass(frozen=True, slots=True)

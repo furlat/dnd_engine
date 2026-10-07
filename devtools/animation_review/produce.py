@@ -6,7 +6,7 @@ from devtools.animation_review.flight_cases import fly_lifetime_history
 from devtools.animation_review.creature_spell_cases import creature_spell_history
 from devtools.animation_review.control_cases import control_spell_history
 from game.combat_demo import capture_combat_demo
-from game.replay import CapturedHistory
+from dnd.player.recorded import CapturedHistory
 from tests.game.curse_scenarios import curse_history
 from devtools.animation_review.curse_cases import CurseCase
 from devtools.animation_review.divine_cases import DivineCase
@@ -86,7 +86,7 @@ from tests.game.damage_resolution_scenarios import resolution_history, unseen_so
 from tests.game.construction_scenarios import construction_history
 from tests.game.surface_ignition_scenarios import surface_ignition_history
 from tests.game.movement_scenarios import flight_history
-from game.presentation import reduce_interval
+from dnd.player.capture import reduce_interval
 
 from devtools.animation_review.cases import (
     ConeOfColdCase, WindInterceptionCase, SummoningCase, AreaSpellCase, CallLightningCase, CantripCase, AttackCase, DamageResolutionCase, ConstructionCase, SurfaceIgnitionCase, FlightCase, ItemPowerCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DeviceCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,

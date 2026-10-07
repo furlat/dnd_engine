@@ -12,7 +12,7 @@ from dnd.core.item_types import ItemResourceChange
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
-from game.event_record import decode_event, encode_event
+from dnd.player.event_record import decode_event, encode_event
 
 
 @pytest.fixture

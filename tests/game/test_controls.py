@@ -12,7 +12,7 @@ from dnd.world_authoring import project_world_tile
 from game.controls import ActionSelection, begin_targeting, append_target, confirm_targeting, undo_targeting, targeting_values
 from game.ui.targeting import draw_selection_preview
 from game.projection import Camera, TILE_WIDTH, project_screen
-from game.session import advance_controller, close_session, create_session, discover_player_actions, preview_player_selection
+from dnd.player.session import advance_controller, close_session, create_session, discover_player_actions, preview_player_selection
 
 
 @pytest.fixture(scope='module')

@@ -16,8 +16,8 @@ from game.assets import SurfaceCache, load_catalog, prop_animation_frame
 from game.combat import actor_contact
 from game.draw_commands import DrawCommand
 from game.fixture_depth import FixtureDepthSample, split_actor_fixtures
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, camera_axis_vectors, camera_pose, project_screen
 from game.world_animation import WorldTransition, WorldTransitionSample
 from tests.game.mechanism_scenarios import mechanism_history

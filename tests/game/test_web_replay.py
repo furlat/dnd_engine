@@ -7,10 +7,10 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY, BaseObject
 from dnd.core.events import EventPhase, EventQueue, SavingThrowEvent, SkillCheckEvent, TakeDamageEvent
 from dnd.core.item_types import ItemIntegrity
 from dnd.entity import Entity
-from game.player_facts import ActionFact, SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.replay import RecordedSequence
+from dnd.player.facts import ActionFact, SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import RecordedSequence
 from tests.game.web_scenarios import web_history
 
 

@@ -25,8 +25,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.divination import SeeInvisibility, TrueSeeing
 from dnd.spells.evocation import FireBolt
 from dnd.spells.illusion import GreaterInvisibility, Invisibility
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 ConcealmentProgram = Literal["invisibility", "greater-invisibility", "see-invisibility", "sight-expiry", "doorway", "hide-bright", "hide-dim", "stacked"]

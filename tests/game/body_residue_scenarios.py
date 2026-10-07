@@ -31,8 +31,8 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spatial.environmental_conditions import materialize_spike_trap_condition
 from dnd.types.traps import TrapState
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 BODY_PROFILES = {"blood": BLOOD_BODY_RESPONSE, "bone": BONE_BODY_RESPONSE,

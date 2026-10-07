@@ -8,7 +8,7 @@ from uuid import UUID
 from dnd.types.senses import PerceivedSpatialEffect
 from game.animation import ActorContact, facing_for_delta
 from game.animation_types import AnimationData, DirectedSpatialResponse, MediaTimePoint, StudioMediaTrack
-from game.player_facts import DamageRequestFact, DamageResultFact, PlayerState
+from dnd.player.facts import DamageRequestFact, DamageResultFact, PlayerState
 from game.stationary_media import StationaryMediaCue
 
 

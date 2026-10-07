@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import pygame
 
 from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult
-from game.player_facts import PlayerActor
+from dnd.player.facts import PlayerActor
 from game.ui.layout import UILayout
 from game.ui.media import UIPresentationCatalog, UIReference, action_reference, item_reference, ui_image
 from game.ui.primitives import UIFonts, GOLD, MUTED, text, icon_control

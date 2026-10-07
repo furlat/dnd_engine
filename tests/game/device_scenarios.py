@@ -28,8 +28,8 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.enchantment import Sleep
 from dnd.spells.evocation import Fireball, FireBolt
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 DeviceProgram = Literal["mixed-spells", "sleep-area", "normal-sleep", "reposition", "break-cannon", "break-projector", "break-fireball"]

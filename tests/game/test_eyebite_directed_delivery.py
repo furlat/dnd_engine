@@ -8,7 +8,7 @@ from game.choreography import bind_choreography
 from game.combat import BoundCast
 from game.directed_media import directed_draw_commands
 from game.condition_animation import resolve_condition_appearance
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
 from tests.game.directed_spell_scenarios import directed_spell_history
 from tests.game.player_helpers import player_history

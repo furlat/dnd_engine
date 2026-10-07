@@ -457,7 +457,9 @@ class StaticValue(BaseValue):
         Returns:
             Final score after minimum and maximum constraints are applied.
         """
-        modifier_sum = self.additive_score(normalized) * self.arithmetic_factor()
+        modifier_sum: int | Fraction = self.additive_score(normalized)
+        if self.factor_modifiers:
+            modifier_sum *= self.arithmetic_factor()
         if self.max is not None and self.min is not None:
             return int(max(self.min, min(modifier_sum, self.max)))
         elif self.max is not None:
@@ -651,13 +653,15 @@ class StaticValue(BaseValue):
                 resistance[damage_type] = ResistanceStatus.VULNERABILITY
         return resistance
 
-    def combine_values(self, others: List['StaticValue'], naming_callable: Optional[naming_callable] = None) -> 'StaticValue':
+    def combine_values(self, others: List['StaticValue'], naming_callable: Optional[naming_callable] = None,
+                       *, use_register: bool = True) -> 'StaticValue':
         """Combine this value with other static values.
 
         Args:
             others: Static values to merge with this value.
             naming_callable: Optional function that names the combined value
                 from the source value names.
+            use_register: Register the newly combined value.
 
         Returns:
             New static value containing all modifier buckets from each source.
@@ -672,6 +676,7 @@ class StaticValue(BaseValue):
             self.validate_source_id(other.source_entity_uuid)
 
         return StaticValue(
+            use_register=use_register,
             name=naming_callable([self.name] + [other.name for other in others]),
             factor_modifiers={**self.factor_modifiers, **{k: v for other in others for k, v in other.factor_modifiers.items()}},
             value_modifiers={**self.value_modifiers, **{k: v for other in others for k, v in other.value_modifiers.items()}},
@@ -1283,13 +1288,15 @@ class ContextualValue(BaseValue):
         self.remove_damage_type_modifier(uuid)
         self.remove_resistance_modifier(uuid)
 
-    def combine_values(self, others: List['ContextualValue'], naming_callable: Optional[naming_callable] = None) -> 'ContextualValue':
+    def combine_values(self, others: List['ContextualValue'], naming_callable: Optional[naming_callable] = None,
+                       *, use_register: bool = True) -> 'ContextualValue':
         """Combine this value with other contextual values.
 
         Args:
             others: Contextual values to merge with this value.
             naming_callable: Optional function that names the combined value
                 from the source value names.
+            use_register: Register the newly combined value.
 
         Returns:
             New contextual value containing all modifier buckets from each
@@ -1308,6 +1315,7 @@ class ContextualValue(BaseValue):
             return {k: v for d in dicts for k, v in d.items()}
 
         return ContextualValue(
+            use_register=use_register,
             name=naming_callable([self.name] + [other.name for other in others]),
             value_modifiers=merge_dicts(self.value_modifiers, *(other.value_modifiers for other in others)),
             min_constraints=merge_dicts(self.min_constraints, *(other.min_constraints for other in others)),
@@ -1445,7 +1453,8 @@ class ModifiableValue(BaseValue):
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,
                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                base_value: int = 0, value_name: str = "Value", score_normalizer: Optional[Callable[[int], int]] = None,
-               global_normalizer: bool = True, identity_uuid: Optional[UUID] = None) -> 'ModifiableValue':
+               global_normalizer: bool = True, identity_uuid: Optional[UUID] = None,
+               *, use_register: bool = True) -> 'ModifiableValue':
         """Create a value whose primary channels share source metadata.
 
         Args:
@@ -1462,6 +1471,7 @@ class ModifiableValue(BaseValue):
             identity_uuid: Optional stable identity root. When supplied, the
                 value, its four locally owned channels, and its base modifier
                 receive identities derived from this UUID.
+            use_register: Register the new value, its channels and base modifier.
 
         Returns:
             New modifiable value with initialized self and outgoing channels.
@@ -1474,6 +1484,7 @@ class ModifiableValue(BaseValue):
             return uuid5(identity_uuid, name)
 
         base_modifier = NumericalModifier(
+            use_register=use_register,
             uuid=owned_uuid("base_modifier"),
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=source_entity_uuid,
@@ -1483,11 +1494,13 @@ class ModifiableValue(BaseValue):
         )
 
         obj = cls(
+            use_register=use_register,
             uuid=identity_uuid or uuid4(),
             name=value_name,
             source_entity_uuid=source_entity_uuid,
             source_entity_name=source_entity_name,
             self_static=StaticValue(
+                use_register=use_register,
                 uuid=owned_uuid("self_static"),
                 source_entity_uuid=source_entity_uuid,
                 source_entity_name=source_entity_name,
@@ -1496,6 +1509,7 @@ class ModifiableValue(BaseValue):
                 global_normalizer=global_normalizer
             ),
             to_target_static=StaticValue(
+                use_register=use_register,
                 uuid=owned_uuid("to_target_static"),
                 source_entity_uuid=source_entity_uuid,
                 source_entity_name=source_entity_name,
@@ -1504,6 +1518,7 @@ class ModifiableValue(BaseValue):
                 global_normalizer=global_normalizer
             ),
             self_contextual=ContextualValue(
+                use_register=use_register,
                 uuid=owned_uuid("self_contextual"),
                 source_entity_uuid=source_entity_uuid,
                 source_entity_name=source_entity_name,
@@ -1511,6 +1526,7 @@ class ModifiableValue(BaseValue):
                 global_normalizer=global_normalizer
             ),
             to_target_contextual=ContextualValue(
+                use_register=use_register,
                 uuid=owned_uuid("to_target_contextual"),
                 source_entity_uuid=source_entity_uuid,
                 source_entity_name=source_entity_name,
@@ -1589,11 +1605,11 @@ class ModifiableValue(BaseValue):
     def _score(self, normalized: bool = False, excluded: frozenset[UUID] = frozenset()) -> int:
         """Sum all channels, multiply exactly once, then bound and normalize."""
         channels = self.get_typed_modifiers()
-        factors = tuple(channel.arithmetic_factor(excluded) for channel in channels)
         has_factors = bool(set(self.self_static.factor_modifiers) - excluded) or (
             self.from_target_static is not None
             and bool(set(self.from_target_static.factor_modifiers) - excluded))
         if has_factors:
+            factors = tuple(channel.arithmetic_factor(excluded) for channel in channels)
             total = sum(channel.additive_score(normalized, excluded) for channel in channels) * prod(factors)
         else:
             # Preserve established channel bounds for values without factors.
@@ -1935,13 +1951,15 @@ class ModifiableValue(BaseValue):
             self.from_target_contextual.event_lineage_uuid = None
         self.to_target_contextual.event_lineage_uuid = None
 
-    def combine_values(self, others: List['ModifiableValue'], naming_callable: Optional[naming_callable] = None) -> 'ModifiableValue':
+    def combine_values(self, others: List['ModifiableValue'], naming_callable: Optional[naming_callable] = None,
+                       *, use_register: bool = True) -> 'ModifiableValue':
         """Combine this value with other modifiable values.
 
         Args:
             others: Modifiable values to merge with this value.
             naming_callable: Optional function that names the combined value
                 from the source value names.
+            use_register: Register the newly combined value and its channels.
 
         Returns:
             New modifiable value containing merged component channels.
@@ -1958,16 +1976,16 @@ class ModifiableValue(BaseValue):
         other_from_target_static_values = [other.from_target_static for other in others if other.from_target_static is not None]
         other_from_target_contextual_values = [other.from_target_contextual for other in others if other.from_target_contextual is not None]
         if self.from_target_static is not None:
-            new_from_target_static = self.from_target_static.combine_values(other_from_target_static_values)
+            new_from_target_static = self.from_target_static.combine_values(other_from_target_static_values, use_register=use_register)
         elif len(other_from_target_static_values) > 0:
-            new_from_target_static = other_from_target_static_values[0].combine_values(other_from_target_static_values[1:])
+            new_from_target_static = other_from_target_static_values[0].combine_values(other_from_target_static_values[1:], use_register=use_register)
         else:
             new_from_target_static = None
 
         if self.from_target_contextual is not None:
-            new_from_target_contextual = self.from_target_contextual.combine_values(other_from_target_contextual_values)
+            new_from_target_contextual = self.from_target_contextual.combine_values(other_from_target_contextual_values, use_register=use_register)
         elif len(other_from_target_contextual_values) > 0:
-            new_from_target_contextual = other_from_target_contextual_values[0].combine_values(other_from_target_contextual_values[1:])
+            new_from_target_contextual = other_from_target_contextual_values[0].combine_values(other_from_target_contextual_values[1:], use_register=use_register)
         else:
             new_from_target_contextual = None
         if new_from_target_static is not None:
@@ -1976,11 +1994,12 @@ class ModifiableValue(BaseValue):
             new_from_target_contextual.set_target_entity(self.source_entity_uuid, self.source_entity_name)
 
         new_value= ModifiableValue(
+            use_register=use_register,
             name=naming_callable([self.name] + [other.name for other in others]),
-            self_static=self.self_static.combine_values([other.self_static for other in others]),
-            to_target_static=self.to_target_static.combine_values([other.to_target_static for other in others]),
-            self_contextual=self.self_contextual.combine_values([other.self_contextual for other in others]),
-            to_target_contextual=self.to_target_contextual.combine_values([other.to_target_contextual for other in others]),
+            self_static=self.self_static.combine_values([other.self_static for other in others], use_register=use_register),
+            to_target_static=self.to_target_static.combine_values([other.to_target_static for other in others], use_register=use_register),
+            self_contextual=self.self_contextual.combine_values([other.self_contextual for other in others], use_register=use_register),
+            to_target_contextual=self.to_target_contextual.combine_values([other.to_target_contextual for other in others], use_register=use_register),
             from_target_static=new_from_target_static,
             from_target_contextual=new_from_target_contextual,
             generated_from=[self.uuid] + [other.uuid for other in others],

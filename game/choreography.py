@@ -6,7 +6,7 @@ Technical event nodes preserve ancestry without becoming extra animations.
 """
 
 from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference, CompiledTimingReference, PresentationDependencies, TimingMeasurement, TimingReason, record_timing, translate_timing_evidence
-from game.player_reduction import index_player_lineage
+from dnd.player.reduction import index_player_lineage
 from dataclasses import dataclass, replace
 from math import hypot
 from typing import Iterator, Literal, Mapping, cast
@@ -52,7 +52,7 @@ from game.forced_movement import (
     ForcedMovementCue, ShoveCue, bind_forced_movement, bind_shove,
     forced_contact, sample_forced_body, sample_shove,
 )
-from game.player_facts import (
+from dnd.player.facts import (
     ActionFact, AreaReachFact, AttackFact, ConditionChangeFact, ItemEffectChangeFact, DamageFact, DeathSaveFact, EquipmentFact, ForcedMovementFact,
     HealFact, ItemChargeFact, LifeFact, MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerObject, PlayerActor, PlayerFact, PlayerLineage, PlayerNode, PlayerObservation, PlayerState,
     SensoryFact, ShoveFact, SpellFact, SpatialEffectStateFact, MechanismActivationFact, PortalTransferFact, SavingThrowFact, SpatialFact, StepFact, TemporaryHitPointsFact, TurnFact, FactionFact, VersionRow,
@@ -65,7 +65,7 @@ from game.device_art import device_bank
 from game.environment_art import load_environment_art
 from game.environment_animation import remnant_bank
 from game.entity_lifecycle import EntityLifecycleCue, bind_entity_lifecycle, lifecycle_phase
-from game.player_reduction import copy_target, lineage_branch, reduce_lineage, reduce_nodes, observe_actors, stage_actors, stage_lineage, state_before_event as _before_event
+from dnd.player.reduction import copy_target, lineage_branch, reduce_lineage, reduce_nodes, observe_actors, stage_actors, stage_lineage, state_before_event as _before_event
 from game.stationary_media import StationaryMediaCue
 from game.finite_material import BodyMaterialCue
 from game.spatial_response import SpatialResponseCue, damage_spatial_owner, bind_spatial_response
@@ -384,12 +384,14 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
         for identity in event.children_lineages:
             index_destruction(by_lineage[identity], owner)
 
-    index_destruction(lineage.root)
+    disclosed_roots = tuple(node for node in lineage.events if node.parent_lineage not in by_lineage)
+    for node in disclosed_roots:
+        index_destruction(node)
     observations: list[tuple[float, PlayerObservation]] = []
     arrival_observations: dict[UUID, float] = {}
     arrival_snapshots: dict[tuple[UUID, UUID], tuple[UUID, float]] = {}
     entry_actors: set[UUID] = set()
-    root_fact = lineage.root.fact
+    root_fact = (lineage.root.fact if lineage.root is not None else None)
     if (isinstance(root_fact, (AttackFact, SpellFact))
             or isinstance(root_fact, ActionFact) and root_fact.behavior_id in data.drafts):
         # NeuroClient stages newly after-visible referenced action actors before
@@ -454,7 +456,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                     and result.stage == "applied" and result.target_entity_uuid == target_uuid)
         floor = max((source.at_ms for source in sources), default=0.)
         record_timing(timing_evidence, TimingReference('event', event.uuid, 'prior_hp_floor'), 'hp_callback',
-            sources or (TimingOperand(TimingReference('event', lineage.root.uuid, 'group_origin'), 0.),), floor, 'maximum')
+            sources or (TimingOperand(TimingReference('event', lineage.group_uuid, 'group_origin'), 0.),), floor, 'maximum')
         return floor
     commit_milestones: dict[UUID, float] = {}
     turn_starts: list[tuple[float, UUID, UUID]] = []
@@ -482,14 +484,15 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
 
     def join_reactions(event: PlayerNode, effect_ms: float,
                        incoming: BoundCast | BodyActionCue | None = None, cutoff_ms: float = 0.) -> float:
-        if event.uuid != lineage.root.uuid or not reactions:
+        if event.uuid != lineage.group_uuid or not reactions:
             return 0.
         cues = []
         for reaction in reactions:
+            assert reaction.root is not None
             cue = bind_body_action(before, reaction.root, data, start_ms=0.,
                 facings=facings or {}, contacts=contacts or {})
             if cue is None:
-                gaps.append((reaction.root.uuid, "Disclosed reaction has no authored body"))
+                gaps.append((reaction.group_uuid, "Disclosed reaction has no authored body"))
             else:
                 cues.append(cue)
                 gaps.extend((cue.event_uuid, detail) for detail in cue.gaps)
@@ -505,7 +508,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 body_end_ms=cue.body_end_ms + offset, join_ms=cue.join_ms + offset,
                 complete_ms=cue.complete_ms + offset,
                 timing_evidence=translate_timing_evidence(cue.timing_evidence, offset)))
-            reaction = next(root.root.fact for root in reactions if root.root.uuid == cue.event_uuid)
+            reaction = next(root.root.fact for root in reactions if root.root is not None and root.group_uuid == cue.event_uuid)
             assert isinstance(reaction, ActionFact) and reaction.reaction is not None
             media = data.interruptions.reactions.get(reaction.behavior_id or "")
             if media is not None and incoming is not None:
@@ -961,7 +964,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             if motion is not None:
                 movements.append(MotionCue(event.uuid, at, motion, data))
                 return at + motion.complete_ms
-        if (event.uuid == lineage.root.uuid and isinstance(fact, SpatialFact)
+        if (event.uuid == lineage.group_uuid and isinstance(fact, SpatialFact)
                 and fact.change_type is SpatialChangeType.ENTITY_ENTERED):
             state_at_effect = at
         if isinstance(fact, SpatialFact) and fact.change_type is SpatialChangeType.ENTITY_ENTERED:
@@ -1308,7 +1311,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                              if rule.actionEconomySpent and "execution" in rule.phases), None)
                 if reactions and rule is not None:
                     reaction_id = next((reaction.root.fact.behavior_id for reaction in reactions
-                        if isinstance(reaction.root.fact,ActionFact)),None)
+                        if reaction.root is not None and isinstance(reaction.root.fact,ActionFact)),None)
                     cutoff = interruption_ms(bound, rule, reaction_id=reaction_id)
                     at += join_reactions(event, at + cutoff,
                         bound if isinstance(bound, BoundCast) else None, cutoff)
@@ -1622,7 +1625,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             end = max(end, child_end)
         return end
 
-    complete = visit(lineage.root, 0)
+    complete = max((visit(node, 0) for node in disclosed_roots), default=0.)
     for index, node in enumerate(nodes):
         if not isinstance(node.bound, BoundCast) or not node.bound.staged_area:
             continue
@@ -1664,7 +1667,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     # Compile state once at the existing causal anchors. Frame sampling selects
     # a retained value; it never folds event streams or invokes native mechanics.
     for reaction in reactions:
-        cue = next((cue for cue in external_reactions if cue.event_uuid == reaction.root.uuid), None)
+        cue = next((cue for cue in external_reactions if cue.event_uuid == reaction.group_uuid), None)
         observations.extend((cue.start_ms if cue is not None else 0., row) for row in reaction.observations)
     # Artwork and spatial admission/clearance have separate authored dates.
     # Keep each received world/sensory update indivisible and downstream of
@@ -2028,7 +2031,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     complete = max(complete, max((cue.complete_ms for cue in external_reactions), default=0.))
     complete = max(complete, max((cue.complete_ms for cue in reaction_media), default=0.))
     complete = max(complete, max((cue.end_ms for cue in contact_media), default=0.))
-    return BoundChoreography(lineage.root.uuid, displayed_before, after,
+    return BoundChoreography(lineage.group_uuid, displayed_before, after,
                              tuple(nodes), tuple(conditions), complete, tuple(gaps), tuple(healing),
                              tuple(lifecycle), tuple(equipment), tuple(shoves), tuple(forced_movement), tuple(damage),
                              tuple(observations), tuple(body_actions), tuple(states),
@@ -2482,7 +2485,7 @@ def _bind_jump(target: PlayerState, lineage: PlayerLineage, jump: MovementFact,
             reactions.append(MotionReaction(group, held, source, elapsed, elapsed + group.complete_ms,
                                             held.body_lift_px, event.fact.name))
             elapsed += group.complete_ms
-            _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
+            _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
             working = group.after
             launch_state = working
             launch_sources = list(working_sources)
@@ -2554,7 +2557,7 @@ def _bind_jump(target: PlayerState, lineage: PlayerLineage, jump: MovementFact,
             if track.role == "takeoff" and set(track.whenConditions) <= members
             and not set(track.unlessConditions) & members), default=0)
         elapsed += anticipation_ms
-        _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, anticipation_ms, 'motion_span', 'jumpMedia.takeoff.contactFrame/fps')
+        _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, anticipation_ms, 'motion_span', 'jumpMedia.takeoff.contactFrame/fps')
         distance = hypot(arrival[0] - jump.start_position[0],
                          arrival[1] - jump.start_position[1])
         duration = min(context.jumpMaxDurationMs, max(context.jumpMinDurationMs,
@@ -2567,7 +2570,7 @@ def _bind_jump(target: PlayerState, lineage: PlayerLineage, jump: MovementFact,
         provenance.append(MotionStateProvenance(len(states), elapsed, "jump_launch", tuple(launch_sources)))
         states.append((elapsed, launch_state))
         elapsed += duration
-        _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, duration, 'motion_span',
+        _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, duration, 'motion_span',
             'movement.jump.duration', steps[-1].uuid, (
                 TimingMeasurement('distance_cells', distance),
                 TimingMeasurement('jumpBaseDurationMs', context.jumpBaseDurationMs),
@@ -2601,14 +2604,14 @@ def _bind_jump(target: PlayerState, lineage: PlayerLineage, jump: MovementFact,
                 states.append((elapsed, prior))
                 reactions.append(MotionReaction(group, landing_contact, None, elapsed, elapsed + group.complete_ms))
                 elapsed += group.complete_ms
-                _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
+                _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
             else:
                 contact_media.extend(replace(cue, start_ms=elapsed+cue.start_ms) for cue in group.contact_media)
     # Later movement within the same native action starts from the completed
     # incoming jump. Its own retained Steps own subsequent travel and reactions.
     for event in lineage.events:
         if (not isinstance(event.fact, MovementFact)
-                or event.parent_lineage != lineage.root.lineage_uuid):
+                or event.parent_lineage != lineage.lineage_uuid):
             continue
         prior = _before_event(target, lineage, event)
         held = _visible_contact(prior, jump.source_entity_uuid, data, facing)
@@ -2618,7 +2621,7 @@ def _bind_jump(target: PlayerState, lineage: PlayerLineage, jump: MovementFact,
         if held is not None and group.complete_ms > 0:
             reactions.append(MotionReaction(group, held, None, elapsed, elapsed + group.complete_ms, held.body_lift_px))
             elapsed += group.complete_ms
-            _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
+            _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
     provenance.append(MotionStateProvenance(len(states), elapsed, "root_reconciliation", (_motion_reduction_source(lineage),)))
     states.append((elapsed, final))
     transitions = merge_world_transitions(world_transitions(target, states), launch_transitions,
@@ -2627,7 +2630,7 @@ def _bind_jump(target: PlayerState, lineage: PlayerLineage, jump: MovementFact,
     return _resolve_motion_body(MotionTimeline(launch, legs, context.jumpClip, 1, arc, elapsed,
                           tuple(reactions), settled, target, target.actors[jump.source_entity_uuid],
                           settled_lift_px=settled.body_lift_px if settled is not None else 0, body_loops=False,
-                          states=tuple(states), state_provenance=tuple(provenance), root_uuid=lineage.root.uuid, timing_evidence=tuple(motion_evidence), world_transitions=transitions,
+                          states=tuple(states), state_provenance=tuple(provenance), root_uuid=lineage.group_uuid, timing_evidence=tuple(motion_evidence), world_transitions=transitions,
                           residue_reveals=tuple(replace(change,
                               start_ms=change.start_ms + reaction.start_ms,
                               end_ms=change.end_ms + reaction.start_ms)
@@ -2688,8 +2691,8 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
     followed by reacquisition has one authored step of spacing; an isolated
     visible contact has the same dwell. Neither interval invents an edge.
     """
-    root = lineage.root.fact
-    if not isinstance(root, MovementFact):
+    root = (lineage.root.fact if lineage.root is not None else None)
+    if lineage.root is None or not isinstance(root, MovementFact):
         return None
     by_lineage = {event.lineage_uuid: event for event in lineage.events}
     children = tuple(by_lineage[identity] for identity in lineage.root.children_lineages)
@@ -2705,7 +2708,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
         reference = _visible_contact(staged, root.source_entity_uuid, data)
         assert reference is not None
     root_versions = {row.event_uuid for row in lineage.version_rows
-                     if row.lineage_uuid == lineage.root.lineage_uuid}
+                     if row.lineage_uuid == lineage.lineage_uuid}
     target = stage_actors(target, tuple(row for row in lineage.observations if row.event_uuid in root_versions))
     contacts = contacts or {}
     actor = contacts.get(reference.actor_uuid, reference)
@@ -2753,7 +2756,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
             if group.complete_ms > 0:
                 if hidden_transition:
                     elapsed += context.walkStepDurationMs
-                    _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, context.walkStepDurationMs, 'motion_dwell', 'movement.walkStepDurationMs')
+                    _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, context.walkStepDurationMs, 'motion_dwell', 'movement.walkStepDurationMs')
                     hidden_transition = False
                 source = None
                 label = None
@@ -2770,7 +2773,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
                 reactions.append(MotionReaction(group, held, source, elapsed,
                     elapsed + group.complete_ms, held.body_lift_px if held is not None else 0, label))
                 elapsed += group.complete_ms
-                _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
+                _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
                 isolated_point = False
                 body_start = elapsed
             else:
@@ -2793,14 +2796,14 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
             if previous is not None and (seen is None or seen.grid != previous.grid):
                 if isolated_point and not partial_jump:
                     elapsed += context.walkStepDurationMs
-                    _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, context.walkStepDurationMs, 'motion_dwell', 'movement.walkStepDurationMs')
+                    _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, context.walkStepDurationMs, 'motion_dwell', 'movement.walkStepDurationMs')
                 isolated_point = False
                 hidden_transition = seen is None
                 uninterrupted = False
             if seen is not None and (previous is None or seen.grid != previous.grid):
                 if hidden_transition:
                     elapsed += context.walkStepDurationMs
-                    _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, context.walkStepDurationMs, 'motion_dwell', 'movement.walkStepDurationMs')
+                    _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, context.walkStepDurationMs, 'motion_dwell', 'movement.walkStepDurationMs')
                     hidden_transition = False
                 isolated_point = True
                 body_start = elapsed
@@ -2816,7 +2819,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
             continue
         if hidden_transition:
             elapsed += context.walkStepDurationMs
-            _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, context.walkStepDurationMs, 'motion_dwell', 'movement.walkStepDurationMs')
+            _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, context.walkStepDurationMs, 'motion_dwell', 'movement.walkStepDurationMs')
             hidden_transition = False
         # Both endpoints are explicit player facts. The projection has already
         # applied native identity and per-endpoint grants; no root path is used.
@@ -2886,7 +2889,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
                                   lift_phase_edges=lift_phase_edges,
                                   support_riser=(abs(end_height-height)*HEIGHT_STEP_PIXELS*data.rig.TILE_W/TILE_WIDTH, 0., fraction) if flight is not None else None))
             elapsed = lead_end
-            _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, ((duration*fraction if flight is not None else reaction_context.movementLeadInMs) if fraction else 0), 'motion_span', 'movement_reaction.lead_in', node.uuid)
+            _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, ((duration*fraction if flight is not None else reaction_context.movementLeadInMs) if fraction else 0), 'motion_span', 'movement_reaction.lead_in', node.uuid)
             facing = facing_for_delta(delta, data)
             for attack_node in attacks:
                 attack = attack_node.fact
@@ -2907,7 +2910,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
                 reactions.append(MotionReaction(group, held, source, elapsed, elapsed + group.complete_ms,
                                                 held.body_lift_px, attack.name))
                 elapsed += group.complete_ms
-                _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
+                _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
                 working = group.after
             body_start = elapsed
             duration *= 1 - fraction
@@ -2921,7 +2924,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
                                   lift_phase_edges=lift_phase_edges,
                                   support_riser=(abs(end_height-height)*HEIGHT_STEP_PIXELS*data.rig.TILE_W/TILE_WIDTH, fraction, 1.) if flight is not None else None))
             elapsed += duration
-            _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, duration, 'motion_span',
+            _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, duration, 'motion_span',
                 'movement.connector.durationMs' if connector_profile is not None else 'movement.walkStepDurationMs*distance/speed_scale',
                 node.uuid, (TimingMeasurement('distance_cells', distance), TimingMeasurement('speed_scale', speed_scale),
                     TimingMeasurement('remaining_fraction', 1-fraction),
@@ -2948,7 +2951,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
                 if group.complete_ms > 0:
                     reactions.append(MotionReaction(group, held, None, elapsed, elapsed + group.complete_ms, held.body_lift_px))
                     elapsed += group.complete_ms
-                    _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
+                    _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, group.complete_ms, 'motion_span', 'group.complete_ms', group.root_uuid)
                     body_start = elapsed
                 else:
                     contact_media.extend(replace(cue, start_ms=elapsed+cue.start_ms) for cue in group.contact_media)
@@ -2969,7 +2972,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
             break
     if isolated_point and not partial_jump:
         elapsed += context.walkStepDurationMs
-        _record_motion_span(motion_evidence, lineage.root.uuid, elapsed, context.walkStepDurationMs, 'motion_dwell', 'movement.walkStepDurationMs')
+        _record_motion_span(motion_evidence, lineage.group_uuid, elapsed, context.walkStepDurationMs, 'motion_dwell', 'movement.walkStepDurationMs')
     # Root completion can carry ordinary state without a direct child payload.
     working = reduce_lineage(working, lineage)
     provenance.append(MotionStateProvenance(len(states), elapsed, "root_reconciliation", (_motion_reduction_source(lineage),)))
@@ -2985,7 +2988,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
     return _resolve_motion_body(MotionTimeline(actor, tuple(legs), connector_profile.bodyClip if connector_profile is not None else context.walkClip,
                           1 if connector_profile is not None else context.walkPlaybackSpeed,
                           arc_height, elapsed, tuple(reactions), settled, target,
-                          staged.actors[root.source_entity_uuid], settled_lift, body_loops=connector_profile.bodyLoops if connector_profile is not None else True, states=tuple(states), state_provenance=tuple(provenance), root_uuid=lineage.root.uuid, timing_evidence=tuple(motion_evidence),
+                          staged.actors[root.source_entity_uuid], settled_lift, body_loops=connector_profile.bodyLoops if connector_profile is not None else True, states=tuple(states), state_provenance=tuple(provenance), root_uuid=lineage.group_uuid, timing_evidence=tuple(motion_evidence),
                           world_transitions=transitions,
                           residue_reveals=tuple(replace(change,
                               start_ms=change.start_ms + reaction.start_ms,

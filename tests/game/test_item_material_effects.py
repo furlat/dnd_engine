@@ -14,7 +14,7 @@ from game.animation_draw import actor_draw_commands
 from game.item_appearance import item_source_palettes
 from game.item_draw import item_ground_commands
 from game.item_effects import item_material
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors

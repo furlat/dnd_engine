@@ -12,8 +12,8 @@ from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media
 from game.condition_animation import condition_body_pose
 from game.motion_media import choreography_motion_media
-from game.player_projection import project_sequence
-from game.player_reduction import reduce_initialization, reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import reduce_initialization, reduce_lineage
 from game.scene_actors import scene_actors
 from game.projection import Camera
 from tests.game.test_summoning_presentation import summon_history

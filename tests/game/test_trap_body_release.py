@@ -8,10 +8,10 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.creature_types import DamageType
 from dnd.core.events import DamageAppliedEvent, EventQueue
 from dnd.entity import Entity
-from game.player_facts import DamageResultFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.replay import RecordedSequence
+from dnd.player.facts import DamageResultFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import RecordedSequence
 from tests.game.ground_contact_scenarios import ground_contact_history
 from tests.game.mechanism_scenarios import mechanism_history
 from tests.game.trap_expansion_scenarios import trap_expansion_history

@@ -38,11 +38,11 @@ from dnd.game import Game
 from dnd.monsters.configured_srd_creatures import CONFIGURED_SRD_CREATURE_RECIPES_BY_ID
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from game.player_facts import AttackFact, MovementFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import PresentationTarget, capture_interval, reduce_interval
-from game.replay import ObserverCapture, RecordedSequence, capture_history
+from dnd.player.facts import AttackFact, MovementFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import PresentationTarget, capture_interval, reduce_interval
+from dnd.player.recorded import ObserverCapture, RecordedSequence, capture_history
 from server.external_ai_protocol import ExternalAIAssignmentOpenRequest, ExternalAIProtocolIdentity
 from server.registered_ai_controller import RegisteredAIController
 from server.registered_ai_provider import RegisteredAIProviderCatalog

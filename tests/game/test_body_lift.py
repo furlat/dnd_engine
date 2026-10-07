@@ -20,8 +20,8 @@ from game.animation_types import AnimationData
 from game.attack import BoundAttack, attack_projectile_contact, bind_attack, project_attack_projectile, sample_attack
 from game.combat import BoundCast, actor_contact, bind_cast
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, IntervalEnvelope
-from game.player_facts import AttackFact, PlayerLineage, PlayerState
+from dnd.player.capture import CompletedLineage, IntervalEnvelope
+from dnd.player.facts import AttackFact, PlayerLineage, PlayerState
 from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_WIDTH
 from tests.game.scenarios import attack_history
 from tests.game.player_helpers import player_history, player_inputs

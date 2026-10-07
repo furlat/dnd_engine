@@ -8,6 +8,7 @@ from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.attack_types import AttackSourceMetadata
 from dnd.core.creature_types import DamageType
 from dnd.core.action_types import (
+    AvailableHandlerInfo,
     ActionPresentationKind,
     ActionAffordance,
     ActionVariantFacet,
@@ -866,7 +867,7 @@ class ActionEvent(Event):
             compact=compact,
             verbose=verbose,
             detailed=detailed,
-            data=data.model_dump(),
+            data=data,
             success=True
         )
 
@@ -905,7 +906,7 @@ class ActionEvent(Event):
             compact=summary,
             verbose=summary,
             detailed=summary,
-            data=data.model_dump(),
+            data=data,
             success=n_targets > 0
         )
 
@@ -1145,7 +1146,9 @@ class BaseAction(BaseObject):
     alt_target_count: Optional[int] = Field(default=None, description="Temporary multi-target count override.")
     alt_skip_slot: bool = Field(default=False, description="Whether temporary overrides skip spell-slot costs.")
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    # Compile a behavior's validation schema when it is first used, not merely
+    # because the built-in catalog imports its definition.
+    model_config = ConfigDict(arbitrary_types_allowed=True, defer_build=True)
 
     def model_post_init(self, __context: Any) -> None:
         """Capture an item source before the action can outlive that item."""
@@ -2818,6 +2821,18 @@ class AvailableActionInfo(BaseModel):
         self._execution_template = template
 
 
+class SelectedRoute(BaseModel):
+    """The native route choice reused by preview and command execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    path: tuple[tuple[int, int], ...] = Field(min_length=1)
+    cost_feet: float
+    affordable_endpoint: tuple[int, int]
+    policy: Literal["normal", "safe"]
+    opportunity_attack_exposures: tuple[OpportunityAttackExposure, ...]
+    is_hazardous: bool
+
+
 class AvailableSelectionPreview(BaseModel):
     """Detached result of inspecting one admitted ordered selection prefix."""
 
@@ -2829,6 +2844,7 @@ class AvailableSelectionPreview(BaseModel):
     next_positions: tuple[tuple[int, int], ...] = ()
     geometry: AoEPresentationGeometry | None = None
     affected_positions: tuple[tuple[int, int], ...] = ()
+    selected_route: SelectedRoute | None = None
 
 
 class AvailableWorldInteraction(BaseModel):
@@ -2846,28 +2862,6 @@ class AvailableWorldInteraction(BaseModel):
     configured_action_ref: ContentRef | None = None
     variant_facets: tuple[ActionVariantFacet, ...] = ()
     reason: str | None = None
-
-
-class AvailableHandlerInfo(BaseModel):
-    """Player-toggleable event handler exposed with available actions."""
-
-    name: str = Field(description="Handler display name.")
-    behavior_id: str = Field(description="Primitive handler-rule identity.")
-    provided_by_id: str = Field(description="Primitive direct-provider identity.")
-    origin_root_id: Optional[str] = Field(
-        default=None,
-        description="Optional durable primitive root of the provider chain.",
-    )
-    uuid: UUID = Field(description="Stable handler UUID.")
-    enabled: bool = Field(description="Whether the handler is currently enabled.")
-    trigger_event: str = Field(description="Primary trigger event type, when declared.")
-
-    @field_validator("behavior_id", "provided_by_id", "origin_root_id")
-    @classmethod
-    def _validate_behavior_id(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return validate_namespaced_id(value, "discovered handler identity")
 
 
 class AvailableActionsResult(BaseModel):

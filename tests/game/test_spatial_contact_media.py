@@ -19,8 +19,8 @@ from dnd.types.world import OccupancyLayer
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, bind_motion
 from game.motion_media import bind_motion_media, choreography_motion_media, motion_media_draw_commands
-from game.player_facts import DamageFact, SavingThrowFact, SpatialFact
-from game.player_reduction import decode_player_sequence, reduce_lineage
+from dnd.player.facts import DamageFact, SavingThrowFact, SpatialFact
+from dnd.player.reduction import decode_player_sequence, reduce_lineage
 from game.projection import Camera
 from game.spatial_contact_media import bind_spatial_contacts
 from tests.game.test_spell14_native_facts import actors, saved_views

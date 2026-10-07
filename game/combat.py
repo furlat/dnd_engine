@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from game.player_reduction import PlayerCausalIndex, index_player_lineage
+from dnd.player.reduction import PlayerCausalIndex, index_player_lineage
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Mapping
@@ -21,10 +21,10 @@ from game.animation import (
 )
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, Facing8, RigLayer, StudioSpellDraft
-from game.player_facts import (
+from dnd.player.facts import (
     ActionFact, AreaReachFact, ConditionChangeFact, DamageResultFact, EquipmentFact, LifeFact, ObjectDamageFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SavingThrowFact, SpellFact, SensoryFact, SpatialEffectStateFact,
 )
-from game.player_reduction import reduce_lineage, state_before_event
+from dnd.player.reduction import reduce_lineage, state_before_event
 from game.device_art import DeviceEmission, device_bank
 from game.condition_animation import resolve_condition_appearance
 from game.animation_rates import action_playback_rate

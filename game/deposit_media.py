@@ -13,7 +13,7 @@ from dnd.types.material_deposits import MaterialDepositSource
 from game.animation_types import AnimationData
 from game.choreography import BoundChoreography, MotionTimeline
 from game.environment_art import load_environment_art
-from game.player_facts import ObjectDestroyedFact, PlayerLineage, PlayerState
+from dnd.player.facts import ObjectDestroyedFact, PlayerLineage, PlayerState
 
 
 @dataclass(frozen=True, slots=True)

@@ -8,10 +8,10 @@ import pytest
 from dnd.core.events import EventQueue
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
-from game.player_facts import DamageFact
-from game.player_facts import SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import DamageFact
+from dnd.player.facts import SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, project_screen
 from game.spatial_contact_media import bind_damage_sweep
 from game.stationary_draw import stationary_media_draw_commands

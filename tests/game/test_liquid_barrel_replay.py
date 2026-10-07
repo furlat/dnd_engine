@@ -6,8 +6,8 @@ from dnd.core.creature_types import DamageType
 from dnd.core.events import EventQueue
 from dnd.core.item_types import ItemIntegrity
 from dnd.entity import Entity
-from game.player_facts import ConditionChangeFact, DamageFact, ObjectDestroyedFact, SavingThrowFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ConditionChangeFact, DamageFact, ObjectDestroyedFact, SavingThrowFact
+from dnd.player.reduction import reduce_lineage
 from tests.game.liquid_barrel_scenarios import liquid_barrel_history
 from tests.game.test_environment_presentation import _saved
 

@@ -1784,12 +1784,13 @@ def test_eb_15_017_hold_person_successful_initial_save_has_truthful_synced_log()
     ]
     assert len(saving_throw_logs) == 1
     nested_save_log = saving_throw_logs[0]
-    parent_roll = event.combat_log.data["save_roll"]
-    nested_roll = nested_save_log.data["roll"]
-    assert parent_roll["results"] == nested_roll["results"]
-    assert parent_roll["bonus"] == nested_roll["bonus"]
-    assert parent_roll["total"] == nested_roll["total"]
-    assert event.combat_log.data["save_success"] == nested_save_log.data["success"]
+    parent_roll = event.combat_log.data.save_roll
+    nested_roll = nested_save_log.data.roll
+    assert parent_roll is not None
+    assert parent_roll.results == nested_roll.results
+    assert parent_roll.bonus == nested_roll.bonus
+    assert parent_roll.total == nested_roll.total
+    assert event.combat_log.data.save_success == nested_save_log.data.success
 
 
 def test_eb_15_018_hold_monster_excludes_undead_and_repeats_cleanup() -> None:
@@ -1873,12 +1874,13 @@ def test_eb_15_018_hold_monster_successful_initial_save_has_synced_log() -> None
     ]
     assert len(saving_throw_logs) == 1
     nested_save_log = saving_throw_logs[0]
-    parent_roll = spell_save_log.data["save_roll"]
-    nested_roll = nested_save_log.data["roll"]
-    assert parent_roll["results"] == nested_roll["results"]
-    assert parent_roll["bonus"] == nested_roll["bonus"]
-    assert parent_roll["total"] == nested_roll["total"]
-    assert spell_save_log.data["save_success"] == nested_save_log.data["success"]
+    parent_roll = spell_save_log.data.save_roll
+    nested_roll = nested_save_log.data.roll
+    assert parent_roll is not None
+    assert parent_roll.results == nested_roll.results
+    assert parent_roll.bonus == nested_roll.bonus
+    assert parent_roll.total == nested_roll.total
+    assert spell_save_log.data.save_success == nested_save_log.data.success
 
 
 def test_eb_15_019_mirror_image_duplicates_absorb_missed_attacks() -> None:

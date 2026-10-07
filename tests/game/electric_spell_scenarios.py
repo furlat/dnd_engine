@@ -22,8 +22,8 @@ from dnd.spells.evocation import LightningBolt, ChainLightning
 from dnd.spells.abjuration import AntimagicField
 from dnd.spells.divination import SeeInvisibilityEffect
 from dnd.conditions import Invisible
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 from tests.manual.spell_regression_support import force_save_result
 
 ElectricProgram = Literal['lightning_bolt', 'chain_lightning']

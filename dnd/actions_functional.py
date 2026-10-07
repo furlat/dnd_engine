@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 
 from dnd.core.base_actions import (
     BaseAction, TargetType, AvailableTarget, AvailableActionInfo,
-    AvailableActionsResult, AvailableSelectionPreview, SPELL_SLOT_TEMPLATE_SEPARATOR, prefers_safe_movement_path,
+    AvailableActionsResult, AvailableSelectionPreview, SelectedRoute, SPELL_SLOT_TEMPLATE_SEPARATOR, prefers_safe_movement_path,
 )
 from dnd.core.events import (
     Event,
@@ -352,12 +352,12 @@ def _bind_executable_action(action: BaseAction, **overrides) -> BaseAction:
     return action.model_copy(deep=True, update=update_dict)
 
 
-def _disclosed_movement_path(
+def _selected_movement_route(
     entity: Entity,
     target: AvailableTarget,
     *,
     prefer_safe: bool,
-) -> Optional[List[Tuple[int, int]]]:
+) -> SelectedRoute | None:
     """Choose an affordable path from the selected discovery target.
 
     Args:
@@ -371,9 +371,16 @@ def _disclosed_movement_path(
     movement_remaining = entity.action_economy.movement_remaining()
     if prefers_safe_movement_path(target, movement_remaining, prefer_safe=prefer_safe):
         assert target.safe_path is not None
-        return list(target.safe_path)
+        assert target.safe_path_cost is not None
+        return SelectedRoute(path=tuple(target.safe_path), cost_feet=target.safe_path_cost,
+            affordable_endpoint=target.safe_path[-1], policy="safe", is_hazardous=False,
+            opportunity_attack_exposures=tuple(target.safe_path_opportunity_attack_exposures))
     if target.path is not None:
-        return list(target.path)
+        if target.path_cost is None:
+            raise ValueError("Disclosed movement route has no native cost")
+        return SelectedRoute(path=tuple(target.path), cost_feet=target.path_cost,
+            affordable_endpoint=target.path[-1], policy="normal", is_hazardous=target.is_path_hazardous,
+            opportunity_attack_exposures=tuple(target.opportunity_attack_exposures))
     return None
 
 
@@ -451,13 +458,13 @@ def _execute_bound_action(
             "extra_target_positions": extra_target_positions or [],
         }
         if isinstance(template, Move):
-            disclosed_path = _disclosed_movement_path(
+            route = _selected_movement_route(
                 entity,
                 target,
                 prefer_safe=prefer_safe,
             )
-            if disclosed_path is not None:
-                position_overrides["path"] = disclosed_path
+            if route is not None:
+                position_overrides["path"] = list(route.path)
         instance = _bind_executable_action(template, **position_overrides)
 
     elif eff_tt == TargetType.OBJECT:
@@ -588,7 +595,8 @@ def execute_available_action(
 def preview_available_selection(
     entity: Entity, action_info: AvailableActionInfo,
     selected_targets: tuple[AvailableTarget, ...] = (),
-    extra_target_positions: tuple[Tuple[int, int], ...] = (),
+    extra_target_positions: tuple[Tuple[int, int], ...] = (), *,
+    prefer_safe: bool = True,
 ) -> AvailableSelectionPreview:
     """Inspect an ordered discovery prefix without instantiation or events.
 
@@ -643,6 +651,8 @@ def preview_available_selection(
                           if selection is not None and selection.kind in ("path", "entity_destination") else ())
         identities = tuple(bound.get_all_targets()) if primary.target_uuid is not None else ()
         return AvailableSelectionPreview(can_confirm=reason is None, reason=reason,
+            selected_route=(_selected_movement_route(entity, primary, prefer_safe=prefer_safe)
+                if isinstance(template, Move) else None),
             effective_target_uuids=identities, next_targets=tuple(next_targets),
             next_positions=next_positions, geometry=bound.get_selection_geometry(),
             affected_positions=tuple(primary.affected_positions or ()))

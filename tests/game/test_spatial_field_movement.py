@@ -27,7 +27,7 @@ from game.assets import SurfaceCache, load_catalog
 from game.area_media import BoundarySprite
 from game.choreography import bind_choreography, sample_choreography
 from game.maintained_media import maintained_media_alpha, maintained_media_frame
-from game.player_reduction import decode_player_sequence, reduce_lineage
+from dnd.player.reduction import decode_player_sequence, reduce_lineage
 from game.projection import Camera, TILE_WIDTH
 from game.registered_media import registered_media_samples
 from game.volume_media import compose_volume

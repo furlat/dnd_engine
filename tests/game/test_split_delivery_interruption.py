@@ -6,7 +6,7 @@ from game.animation import ActorContact, CastApplication, CastInput, compile_cas
 from game.animation_data import load_animation_data
 from game.combat import BoundCast
 from game.interruption import interrupt_delivery, interrupt_sample, interruption_ms
-from game.player_facts import PlayerState, PlayerWorld
+from dnd.player.facts import PlayerState, PlayerWorld
 
 
 def test_split_magic_missile_interrupts_before_every_target_contact() -> None:

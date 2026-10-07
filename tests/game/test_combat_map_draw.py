@@ -17,7 +17,7 @@ from game.app import draw_frame
 from game.assets import AssetCatalog, SurfaceCache, load_catalog
 from game.combat import BoundCast, bind_cast
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, IntervalEnvelope, PresentationTarget, reduce_interval
+from dnd.player.capture import CompletedLineage, IntervalEnvelope, PresentationTarget, reduce_interval
 from tests.game.player_helpers import player_inputs
 from game.projection import Camera, camera_pose, project_screen
 

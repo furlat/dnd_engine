@@ -12,7 +12,7 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
-from game.event_record import decode_event, encode_event
+from dnd.player.event_record import decode_event, encode_event
 
 
 def actor() -> Entity:

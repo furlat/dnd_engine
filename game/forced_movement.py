@@ -20,8 +20,8 @@ from game.animation import (
 from game.animation_types import (AnimationData, LifecycleFeedback, BodyContext, ActionFrameAnchor,
                                   ContentBodyQualifier, RoleDefault, MovementBodyQualifier, FlightMovementProfile)
 from game.combat import actor_contact
-from game.player_facts import ForcedMovementFact, PlayerLineage, PlayerNode, PlayerState, ShoveFact, SpatialFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ForcedMovementFact, PlayerLineage, PlayerNode, PlayerState, ShoveFact, SpatialFact
+from dnd.player.reduction import reduce_lineage
 from game.condition_media import ResolvedConditionLayer
 from game.condition_types import ConditionLayer
 from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference, TimingMeasurement, record_timing

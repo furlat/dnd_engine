@@ -430,7 +430,7 @@ class _WeaponCoatCondition(BaseCondition):
     def snapshot_item_effect(self) -> ItemEffectPresentationState | None:
         if self.damage_contribution_uuid is None:
             return None
-        return ItemEffectPresentationState(
+        return ItemEffectPresentationState(duration=self.duration.snapshot_summary(),
             effect_uuid=self.uuid, contribution_uuid=self.damage_contribution_uuid,
             behavior_id=self.get_semantic_key(), damage_type=self.coat_damage_type,
             display_name=self.name, description=self.description,

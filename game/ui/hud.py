@@ -6,7 +6,7 @@ import pygame
 
 from dnd.core.base_actions import AvailableActionsResult, AvailableSelectionPreview
 from game.controls import MenuState, targeting_values
-from game.player_facts import PlayerState, PlayerHUDSnapshot
+from dnd.player.facts import PlayerState, PlayerHUDSnapshot
 from game.ui.action_bar import ActionFamily, draw_action_bar
 from game.ui.layout import UILayout
 from game.ui.media import UIPresentationCatalog, UIReference, actor_portrait_reference, ui_image

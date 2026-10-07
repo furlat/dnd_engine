@@ -16,8 +16,8 @@ from game.choreography_draw import load_choreography_media
 from game.combat import BoundCast
 from game.damage import bind_damage, sample_damage
 from game.playback_frame import sample_playback_frame
-from game.player_facts import DamageFact, LifeFact
-from game.player_reduction import lineage_branch
+from dnd.player.facts import DamageFact, LifeFact
+from dnd.player.reduction import lineage_branch
 from game.projection import Camera
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors

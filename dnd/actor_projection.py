@@ -177,10 +177,12 @@ def condition_fact(event: Event, *, source_index: int | None = None) -> Conditio
     return ConditionFact(
         event_uuid=event.uuid, condition_uuid=state.condition_uuid, name=state.name,
         category=state.category, behavior_id=event.behavior_id,
-        resulting_max_hp=event.resulting_stats.maximum_hp if isinstance(event, ConditionStateChangedEvent) else event.resulting_max_hp,
-        resulting_ac=event.resulting_stats.armor_class if isinstance(event, ConditionStateChangedEvent) else event.resulting_ac,
+        resulting_max_hp=(event.resulting_stats.maximum_hp if event.resulting_stats is not None else None)
+            if isinstance(event, ConditionStateChangedEvent) else event.resulting_max_hp,
+        resulting_ac=(event.resulting_stats.armor_class if event.resulting_stats is not None else None)
+            if isinstance(event, ConditionStateChangedEvent) else event.resulting_ac,
         state=state, resulting_stats=event.resulting_stats,
-        resulting_tile=None if isinstance(event, ConditionStateChangedEvent) else event.resulting_tile,
-        resulting_item=None if isinstance(event, ConditionStateChangedEvent) else event.resulting_item,
+        resulting_tile=event.resulting_tile,
+        resulting_item=event.resulting_item,
         consumed=isinstance(event, ConditionRemovalEvent) and event.consumed,
     )

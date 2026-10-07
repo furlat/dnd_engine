@@ -10,7 +10,7 @@ from game.choreography import bind_choreography, sample_choreography
 from game.choreography_draw import choreography_draw_commands, load_choreography_media
 from game.combat import BoundCast
 from game.interruption_draw import reaction_media_draw_commands
-from game.player_facts import SpellFact
+from dnd.player.facts import SpellFact
 from game.presentation_group import presentation_groups, reduce_presentation_group
 from game.projection import Camera
 from tests.game.interruption_scenarios import interruption_history

@@ -10,7 +10,7 @@ from game.animation_types import AnimationData, Facing8, StudioMediaTrack
 from game.attack import BoundAttack
 from game.body_action import BodyActionCue, bind_body_action
 from game.combat import BoundCast, actor_contact, actor_is_visible
-from game.player_facts import AttackFact, ConditionChangeFact, DamageRequestFact, PlayerLineage, PlayerState, SpellFact
+from dnd.player.facts import AttackFact, ConditionChangeFact, DamageRequestFact, PlayerLineage, PlayerState, SpellFact
 from game.stationary_media import StationaryMediaCue
 
 
@@ -23,9 +23,9 @@ class _Interception:
 
 
 def _interceptions(lineage: PlayerLineage, bound: BoundAttack | BoundCast) -> tuple[_Interception, ...]:
-    root = lineage.root.fact
+    root = (lineage.root.fact if lineage.root is not None else None)
     if isinstance(root, AttackFact) and isinstance(bound, BoundAttack):
-        return ((_Interception(lineage.root.uuid, root.intercepted_by_condition_uuid,
+        return ((_Interception(lineage.group_uuid, root.intercepted_by_condition_uuid,
                                root.target_entity_uuid, bound.timeline.contact_ms),)
                 if root.intercepted_by_condition_uuid is not None else ())
     result = []
@@ -55,7 +55,7 @@ def bind_condition_reaction_bodies(
     reaction start delays its entry; both body tracks then run at authored speed.
     Maintained shield contacts have no new application and replay no gesture.
     """
-    root = lineage.root.fact
+    root = (lineage.root.fact if lineage.root is not None else None)
     if not isinstance(root, (AttackFact, SpellFact)):
         return 0., ()
     contacts_by_owner: dict[UUID, float] = {}
@@ -94,7 +94,7 @@ def bind_condition_interception_media(
     data: AnimationData, *, start_ms: float, contacts: Mapping[str, ActorContact],
 ) -> tuple[StationaryMediaCue, ...]:
     """Separate actual incoming bearing from the authored camera atlas basis."""
-    root = lineage.root.fact
+    root = (lineage.root.fact if lineage.root is not None else None)
     if not isinstance(root, (AttackFact, SpellFact)):
         return ()
     source = before.actors.get(root.source_entity_uuid)

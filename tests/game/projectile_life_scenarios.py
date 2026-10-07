@@ -20,8 +20,8 @@ from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.evocation import FireBolt, MagicMissile
-from game.presentation import capture_interval, capture_lineage, reduce_interval, reduce_lineage
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, capture_lineage, reduce_interval, reduce_lineage
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def projectile_life_history(initial: LifeState = LifeState.ALIVE, *, repeated: bool = False,

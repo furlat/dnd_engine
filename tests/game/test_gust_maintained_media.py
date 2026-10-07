@@ -14,8 +14,8 @@ from game.animation import facing_for_delta, view_facing
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.maintained_media import maintained_media_frame
-from game.player_facts import SpellFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import SpellFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera, TILE_WIDTH, project_screen
 from game.registered_media import registered_media_samples
 from game.spatial_field import line_field_supports

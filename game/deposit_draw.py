@@ -11,7 +11,7 @@ from game.animation_types import AnimationData
 from game.deposit_media import DepositStart, ObservedMaterialDeposit
 from game.draw_commands import DrawCommand
 from game.maintained_media import maintained_media_frame
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.projection import Camera, TILE_WIDTH, camera_axis_vectors, painter_key, project_screen
 from game.registered_media import registered_media_samples
 from game.spatial_field import field_cell

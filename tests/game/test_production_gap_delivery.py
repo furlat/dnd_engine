@@ -20,8 +20,8 @@ from game.combat import BoundCast
 from game.condition_draw import condition_body_ramp
 from game.directed_media import directed_draw_commands
 from game.draw_commands import DrawCommand
-from game.player_facts import AttackFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import AttackFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera, project_screen, project_world
 from game.spatial_media_lifetime import register_spatial_lifetimes
 from game.wall_assembly_media import assembly_media_draw_commands, assembly_media_limitation

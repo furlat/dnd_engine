@@ -15,8 +15,8 @@ from game.choreography import BoundChoreography
 from game.combat import actor_contact, actor_is_visible
 from game.forced_movement import forced_contact
 from game.motion import MotionTimeline
-from game.player_facts import HealFact
-from game.player_reduction import observe_actors
+from dnd.player.facts import HealFact
+from dnd.player.reduction import observe_actors
 
 
 @dataclass(frozen=True, slots=True)

@@ -9,12 +9,12 @@ from uuid import UUID
 import numpy as np
 import pygame
 
-from game.actor_facts import PresentationTarget
+from dnd.player.actor_facts import PresentationTarget
 from game.animation_types import Facing8
 from game.assets import AssetCatalog, SurfaceCache
 from game.device_art import DeviceEmission, device_muzzle_offset
 from game.draw_commands import DrawCommand
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_HEIGHT, TILE_WIDTH, painter_key, project_screen
 
 

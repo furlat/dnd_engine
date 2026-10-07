@@ -9,9 +9,9 @@ from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.construction_media import construction_media_draw_commands
 from game.construction_media_lifetime import register_construction_lifetimes
-from game.player_projection import project_sequence
-from game.player_facts import ObjectDamageFact, ObjectDestroyedFact
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.facts import ObjectDamageFact, ObjectDestroyedFact
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from tests.game.construction_scenarios import ConstructionAttackUnavailable, construction_history
 

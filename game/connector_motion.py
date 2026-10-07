@@ -3,7 +3,7 @@
 from dnd.core.item_types import ItemIntegrity
 from dnd.types.world import CardinalDirection
 from game.environment_art import load_environment_art
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 
 
 def passage_point(state: PlayerState, start: tuple[float, float], end: tuple[float, float]

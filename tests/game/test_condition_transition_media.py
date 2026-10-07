@@ -10,7 +10,7 @@ from game.choreography import bind_choreography, bind_motion
 from game.condition_animation import resolve_condition_appearance
 from game.condition_media_lifetime import register_condition_lifetimes, sample_condition_lifetimes
 from game.condition_sampling import sample_condition_media
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from tests.game.player_helpers import player_history
 
 

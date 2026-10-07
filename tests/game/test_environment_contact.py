@@ -6,8 +6,8 @@ import pytest
 
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
-from game.player_facts import ActionFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ActionFact
+from dnd.player.reduction import reduce_lineage
 from tests.game.environment_scenarios import environment_history
 from tests.game.player_helpers import player_history
 

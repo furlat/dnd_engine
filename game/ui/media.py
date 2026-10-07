@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from dnd.core.content.descriptors import ContentDescriptor, ContentPresentation
 from dnd.core.content.identities import ContentRef
-from game.player_facts import PlayerActor
+from dnd.player.facts import PlayerActor
 from game.asset_types import AssetSpec, image_resources
 from game.assets import ASSET_ROOT, DATA_ROOT
 

@@ -17,8 +17,8 @@ from game.area_media import AreaMedia
 from game.choreography import bind_choreography
 from game.combat import BoundCast
 from game.condition_animation import resolve_condition_appearance
-from game.player_reduction import reduce_lineage
-from game.player_facts import SpellFact
+from dnd.player.reduction import reduce_lineage
+from dnd.player.facts import SpellFact
 from game.projection import Camera, rotate_position
 from game.presentation_coverage import lineage_coverage, missing_observed_bindings, presentation_inventory
 from game.registered_media import registered_media_samples

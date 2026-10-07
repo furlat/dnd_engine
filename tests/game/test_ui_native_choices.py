@@ -11,7 +11,7 @@ from dnd.content.characters.premades import PREMADE_CHARACTER_BUILDS, SORCERER_P
 from dnd.core.dice import fixed_dice_faces
 from dnd.actions_functional import register_spell
 from dnd.spells.walls import WallOfFire
-from game.session import create_session, close_session, advance_controller, discover_player_actions, execute_player_action
+from dnd.player.session import create_session, close_session, advance_controller, discover_player_actions, execute_player_action
 from game.ui.action_bar import action_families, default_shortcuts, shortcut_indices, action_blocks, block_counts, draw_action_bar
 from game.ui.layout import layout
 from game.ui.primitives import fonts
@@ -20,10 +20,10 @@ from game.ui.hud import draw_hud
 from game.ui.types import UIFocus
 from game.controls import MenuState
 from game.ui_composition import compose_ui_media
-from game.presentation import capture_interval
-from game.player_projection import project_sequence
-from game.player_reduction import reduce_initialization
-from game.replay import RecordedSequence
+from dnd.player.capture import capture_interval
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import reduce_initialization
+from dnd.player.recorded import RecordedSequence
 from dnd.core.events import EventQueue
 from game.ui.variants import initial_variant, variant_choices, variant_values
 from game.ui.world_interaction import main_attack

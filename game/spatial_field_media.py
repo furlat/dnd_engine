@@ -16,7 +16,7 @@ from game.animation import view_facing
 from game.animation_types import AnimationData, SpatialMediaBinding, SpatialMediaLayer
 from game.area_media import AreaMedia
 from game.draw_commands import DrawCommand
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.projection import Camera, TILE_WIDTH, camera_axis_vectors, inverse_rotate_position, painter_key, project_screen
 from game.registered_media import registered_media_samples
 from game.spatial_field import field_cell, sphere_field_owners

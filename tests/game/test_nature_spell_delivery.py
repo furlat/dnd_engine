@@ -8,7 +8,7 @@ from game.choreography import BoundChoreography, bind_choreography, walk_bound_t
 from game.condition_animation import resolve_condition_appearance
 from game.condition_draw import condition_body_ramp
 from game.combat import BoundCast
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from game.spell_palette import palette_noise
 from tests.game.nature_spell_scenarios import nature_spell_history
 from tests.game.player_helpers import player_history

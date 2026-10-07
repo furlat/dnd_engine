@@ -20,9 +20,9 @@ from game.attack import BoundAttack, sample_attack
 from game.choreography import bind_choreography, sample_choreography
 from game.choreography_draw import load_choreography_media
 from game.playback_frame import sample_playback_frame
-from game.presentation import reduce_lineage
-from game.replay import CapturedHistory
-from game.player_reduction import reduce_lineage as reduce_player_lineage
+from dnd.player.capture import reduce_lineage
+from dnd.player.recorded import CapturedHistory
+from dnd.player.reduction import reduce_lineage as reduce_player_lineage
 from tests.game.player_helpers import player_history
 from game.projection import Camera
 from game.scene import load_scene_media

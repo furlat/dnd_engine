@@ -26,8 +26,8 @@ from game.ui.world_interaction import target_at
 from game.interaction_types import WorldHit
 from game.environment_draw import pick_environment_target
 from game.item_draw import item_ground_commands
-from game.player_facts import AttackFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import AttackFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
 from tests.game.item_appearance_scenarios import item_transfer_history, inventory_transfer_history
 from tests.game.player_helpers import player_history

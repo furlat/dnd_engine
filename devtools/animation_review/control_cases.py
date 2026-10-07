@@ -25,8 +25,8 @@ from dnd.spells.enchantment import CharmPerson, Command, Sleep
 from dnd.spells.evocation import FireBolt
 from dnd.spells.illusion import ColorSpray, Silence
 from dnd.spells.necromancy import BlindnessDeafness
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 ControlProgram = Literal[

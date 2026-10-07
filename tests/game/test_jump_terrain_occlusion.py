@@ -18,8 +18,8 @@ from game.app import draw_frame
 from game.assets import AssetCatalog, SurfaceCache, load_catalog
 from game.motion import MotionTimeline, bind_motion, sample_motion
 from game.playback_frame import sample_playback_frame
-from game.player_facts import PlayerState
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import PlayerState
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera, painter_key, project_screen
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors

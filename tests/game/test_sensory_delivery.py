@@ -5,7 +5,7 @@ import pytest
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, bind_motion
 from game.condition_media_lifetime import register_condition_lifetimes
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from tests.game.player_helpers import player_history
 from tests.game.support_conditions_scenarios import support_condition_history
 

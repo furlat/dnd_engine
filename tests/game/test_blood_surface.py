@@ -16,8 +16,8 @@ from dnd.types.residues import ResidueContribution, ResidueEllipse, TileResidueS
 from game.animation_data import load_animation_data
 from game.animation_types import ParticleMediaAsset
 from game.choreography import bind_choreography
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from game.residue_media import (
     ResidueReveal, ResidueRevealSample, landing_template, particle_schedule, sample_residue_reveals,

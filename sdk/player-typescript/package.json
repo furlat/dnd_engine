@@ -1,0 +1,12 @@
+{
+  "name": "@neurodragon/player-sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}},
+  "files": ["dist/*.js", "dist/*.d.ts", "dist/*.json"],
+  "scripts": {"build": "tsc -p tsconfig.json", "test": "npm run build && node --test dist/tests/*.test.js"},
+  "dependencies": {"ajv": "8.17.1", "ajv-formats": "3.0.1"},
+  "devDependencies": {"typescript": "5.8.3", "@types/node": "22.15.3", "json-schema-to-typescript": "15.0.4"}
+}

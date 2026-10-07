@@ -19,7 +19,7 @@ from dnd.types.summoning import SummonOrigin
 class ConditionFact:
     """A condition's presentation facts, without its live rules/ownership graph."""
 
-    event_uuid: UUID
+    event_uuid: UUID | None
     condition_uuid: UUID
     name: str
     category: ConditionCategory

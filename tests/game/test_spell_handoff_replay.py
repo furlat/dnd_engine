@@ -9,10 +9,10 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
-from game.player_facts import SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.replay import RecordedSequence
+from dnd.player.facts import SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import RecordedSequence
 
 
 CASES = tuple(case for case in load_cases() if isinstance(case.scenario, SpellHandoffCase))

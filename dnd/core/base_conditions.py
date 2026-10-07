@@ -1,6 +1,9 @@
 from uuid import UUID, uuid4
+from dnd.core.condition_types import ConditionDurationSummary
+
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     SerializerFunctionWrapHandler,
     computed_field,
@@ -15,6 +18,7 @@ from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
 from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue, SpatialChangeEvent, WorldTileState
+from dnd.core.combat_log import ConditionRemovedLogData, EmptyLogData
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.content.runtime import (
     BehaviorBinding,
@@ -83,6 +87,12 @@ class Duration(BaseObject):
         if callable(value):
             return "conditional"
         return value
+
+    def snapshot_summary(self) -> ConditionDurationSummary:
+        if self.duration_type is DurationType.ROUNDS:
+            assert isinstance(self.duration, int)  # Validated by this owner.
+            return ConditionDurationSummary(self.duration_type, self.duration)
+        return ConditionDurationSummary(self.duration_type, None)
 
     def set_owned_by_condition(self, condition_uuid: UUID) -> None:
         """Record the owning condition UUID.
@@ -200,7 +210,7 @@ class ConditionApplicationEvent(Event):
         if self.source_entity_uuid != self.target_entity_uuid and source_name != target_name:
             verbose = compact + f" from {{yellow:{source_name}}}"
 
-        return CombatLogEntry(
+        return CombatLogEntry(data=EmptyLogData(),
             entry_type=CombatLogEntryType.CONDITION_APPLIED,
             source_name=source_name,
             source_uuid=str(self.source_entity_uuid),
@@ -218,7 +228,9 @@ class ConditionStateChangedEvent(Event):
 
     event_type: EventType = EventType.CONDITION_STATE_CHANGED
     condition_state: ConditionState
-    resulting_stats: EntityStatsState
+    resulting_stats: EntityStatsState | None = None
+    resulting_tile: WorldTileState | None = None
+    resulting_item: ItemPresentationState | None = None
     behavior_id: str | None = None
 
 
@@ -282,15 +294,15 @@ class ConditionRemovalEvent(Event):
             verbose=verbose,
             detailed=verbose,
             success=True,
-            data={
-                "condition_name": condition_name,
-                "reveals_target": cond.obscures_perceivability,
-            },
+            data=ConditionRemovedLogData(condition_name=condition_name, reveals_target=cond.obscures_perceivability),
         )
 
 
 class BaseCondition(BaseObject):
     """Base state package for modifiers, handlers, subconditions, and cleanup."""
+
+    # Catalog registration needs the fields, not every behavior's compiled schema.
+    model_config = ConfigDict(defer_build=True)
 
     requires_intact_item: bool = True
 
@@ -773,6 +785,9 @@ class BaseCondition(BaseObject):
         self.target_entity_uuid = target_entity_uuid
         self.duration.target_entity_uuid = target_entity_uuid
 
+    def snapshot_duration(self) -> ConditionDurationSummary:
+        return self.duration.snapshot_summary()
+
     def snapshot_item_effect(self) -> ItemEffectPresentationState | None:
         """Only conditions with an accepted item effect expose this membership."""
         return None
@@ -780,6 +795,7 @@ class BaseCondition(BaseObject):
     def snapshot_state(self) -> ConditionState:
         """Record the current semantics without retaining an executable condition."""
         return ConditionState(
+            duration=self.duration.snapshot_summary(),
             condition_uuid=self.uuid, name=self.get_display_name(),
             category=self.condition_category, semantic_key=self.get_semantic_key(),
             behavior_id=self.behavior_binding.behavior_id if self.behavior_binding is not None else None,

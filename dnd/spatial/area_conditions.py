@@ -953,13 +953,21 @@ class SpatialCondition(BaseCondition):
             allow_detached=allow_detached,
         )
 
-    def progress_spatial_duration(
-        self,
-        *,
-        parent_event: Optional[Event] = None,
-    ) -> bool:
+    def progress_duration_state(self, *, parent_event: Optional[Event] = None) -> bool:
+        """Advance the native clock and publish a surviving owner's changed state."""
+        before = self.snapshot_duration()
+        expired = self.progress()
+        if not expired and before != self.snapshot_duration():
+            change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
+                previous_positions=set(self.affected_positions), affected_positions=set(self.affected_positions),
+                parent_event=parent_event)
+            spatial_senses_system(change)
+            self._complete_change(change)
+        return expired
+
+    def progress_spatial_duration(self, *, parent_event: Optional[Event] = None) -> bool:
         """Advance inherited duration and deactivate on expiry."""
-        if not self.progress():
+        if not self.progress_duration_state(parent_event=parent_event):
             return False
         return self.deactivate(expire=True, parent_event=parent_event)
 

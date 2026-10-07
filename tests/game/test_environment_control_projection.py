@@ -10,10 +10,10 @@ from dnd.entity import Entity
 from game.animation_data import load_animation_data
 from game.animation_types import AnimationData
 from game.choreography import bind_choreography, sample_choreography
-from game.player_facts import ActionFact, PlayerLineage, PlayerState
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.replay import CapturedHistory
+from dnd.player.facts import ActionFact, PlayerLineage, PlayerState
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import CapturedHistory
 from tests.game.environment_control_scenarios import control_history
 
 

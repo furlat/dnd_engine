@@ -1,0 +1,40 @@
+{
+  "source_head": "40eb37b9b4cac72ea75d00d7b1545a4e48a5d2a2",
+  "scope": "preimplementation contract and source examples; not API/privacy/SDK runtime acceptance",
+  "native_capture": {
+    "cases": 873,
+    "completed": 872,
+    "failed": 1,
+    "fact_variants": 28,
+    "log_shapes": 49,
+    "failed_case": "cloud-door-lifecycle",
+    "failure": "ValueError: Item is out of reach"
+  },
+  "python_initial_shape_pass": {
+    "checked": 131,
+    "failures": []
+  },
+  "js_initial_shape_pass": {
+    "runtime": "Node v22.23.1",
+    "validator": "Ajv 8.17.1 / ajv-formats 3.0.1",
+    "checked": 131,
+    "failures": []
+  },
+  "python_added_roots": {
+    "targeted_new_roots": 3,
+    "required_log_payload": true,
+    "failures": []
+  },
+  "js_added_roots": {
+    "targeted_new_roots": 3,
+    "failures": []
+  },
+  "sdk_types_generated": false,
+  "server_implemented": false,
+  "runtime_source_changed": false,
+  "notes": [
+    "No broad rerun after independent review. Required log data and distinct child indices corrected in schema.",
+    "Shape examples explicitly distinguish unmodified current captures from authored/adapted future contracts.",
+    "All native scenario checks used production projection/reduction. No renderer output extracted."
+  ]
+}

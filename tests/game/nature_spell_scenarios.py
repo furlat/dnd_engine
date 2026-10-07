@@ -22,8 +22,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.conjuration import ProduceFlame
 from dnd.spells.evocation import FireShield
 from dnd.spells.transmutation import Barkskin, Shillelagh
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 NatureProgram = Literal['shillelagh', 'barkskin', 'warm', 'chill', 'produce_hit', 'produce_miss', 'produce_initial', 'produce_recast', 'coexist']
 

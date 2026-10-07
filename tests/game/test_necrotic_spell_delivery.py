@@ -9,7 +9,7 @@ from game.cast_media import sample_cast_body_materials
 from game.choreography import bind_choreography
 from game.combat import BoundCast
 from game.condition_draw import condition_body_ramp
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from game.spell_palette import palette_noise
 from tests.game.necrotic_spell_scenarios import necrotic_spell_history
 from tests.game.player_helpers import player_history

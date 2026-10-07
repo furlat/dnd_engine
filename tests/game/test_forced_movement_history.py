@@ -11,7 +11,7 @@ from dnd.core.base_actions import ActionEvent
 from dnd.core.events import EventPhase, EventQueue, ForcedMovementEvent, SpatialChangeEvent, SpatialChangeType, StepMovementEvent, TakeDamageEvent
 from dnd.core.life_types import LifeState
 from dnd.types.world import OccupancyLayer
-from game.presentation import reduce_lineage
+from dnd.player.capture import reduce_lineage
 
 
 @pytest.mark.parametrize(("case_id", "expected_end", "distance", "blocked", "damage"), [

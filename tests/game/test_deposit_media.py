@@ -29,12 +29,12 @@ from game.deposit_media import DepositStart, observed_deposits, register_deposit
 from game.timing_evidence import validate_timing_evidence
 from game.environment_art import load_environment_art
 from game.maintained_media import maintained_media_frame
-from game.player_facts import ObjectDestroyedFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ObjectDestroyedFact
+from dnd.player.reduction import reduce_lineage
 from game.playback_frame import sample_playback_frame
-from game.presentation import capture_interval, reduce_interval
+from dnd.player.capture import capture_interval, reduce_interval
 from game.projection import Camera, HEIGHT_STEP_PIXELS
-from game.replay import ObserverCapture, capture_history
+from dnd.player.recorded import ObserverCapture, capture_history
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors
 from tests.game.door_destruction_scenarios import attack_item, review_actor

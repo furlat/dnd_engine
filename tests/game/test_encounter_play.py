@@ -8,7 +8,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 
-from game.player_facts import ActionFact, AttackFact, MovementFact
+from dnd.player.facts import ActionFact, AttackFact, MovementFact
 from game.controls import ActionSelection, EndTurn
 from game.encounter_play import run
 

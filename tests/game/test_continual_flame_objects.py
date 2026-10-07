@@ -25,10 +25,10 @@ from game.app import draw_frame
 from game.assets import load_catalog, SurfaceCache
 from game.choreography import bind_choreography
 from game.item_attachment_lifetime import register_item_attachment_starts
-from game.player_reduction import reduce_lineage
-from game.presentation import capture_interval, reduce_interval
+from dnd.player.reduction import reduce_lineage
+from dnd.player.capture import capture_interval, reduce_interval
 from game.projection import Camera
-from game.replay import capture_history, ObserverCapture
+from dnd.player.recorded import capture_history, ObserverCapture
 from tests.game.player_helpers import player_history
 
 

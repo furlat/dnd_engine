@@ -1,6 +1,6 @@
 """SDL startup adapter for current native content descriptors."""
 
-from game.ui_content_composition import ui_content_manifest
+from dnd.player.content_composition import ui_content_manifest
 from game.ui.media import UIPresentationCatalog, load_ui_media
 
 

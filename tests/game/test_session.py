@@ -17,8 +17,8 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
 from dnd.items.environment import DirectionalDoor
 from dnd.spells.walls import WallOfFire
-from game.player_commands import CommandRejected
-from game.session import (
+from dnd.player.commands import CommandRejected
+from dnd.player.session import (
     Operation, Session, advance_controller, close_session, create_session,
     discover_player_actions, end_player_turn, execute_player_action,
     player_position_options, equip_player_item, unequip_player_item,
@@ -150,12 +150,13 @@ def test_two_players_move_spend_actions_and_receive_native_enemy_turns(session: 
     assert returned is actor and session.encounter.round_number == 2
 
     roots = tuple(root for operation in operations for root in operation.roots)
-    enemy_uuids = set(session.enemy_controller.controlled_entity_uuids)
+    enemy_uuids = set(session.ai_controllers[0].controlled_entity_uuids)
     assert {root.source_entity_uuid for root in roots if isinstance(root, AttackEvent)} == enemy_uuids
     assert any(isinstance(root, RoundStartEvent) for root in roots)
-    assert any(isinstance(root, ConditionRemovalEvent) for root in roots)
+    assert any(isinstance(event, ConditionRemovalEvent) and event.parent_lineage in {root.lineage_uuid for root in roots}
+               for _, event in EventQueue.iter_events_since(start))
     # The application receives every independently terminal root, including the
-    # expiry emitted alongside the next turn. Descendants remain in their own
+    # expiry belongs to the next turn rather than a second root. Descendants remain in their own
     # parent's lineage rather than becoming extra root deliveries.
     expected = tuple(event.uuid for _, event in EventQueue.iter_events_since(start)
                      if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
@@ -171,13 +172,13 @@ def test_explicit_arrangement_uses_the_same_public_composition() -> None:
     try:
         assert tuple(session.game.entities[identity].position for identity in session.player_uuids) == players
         assert tuple(session.game.entities[identity].position
-                     for identity in session.enemy_controller.controlled_entity_uuids) == enemies
+                     for identity in session.ai_controllers[0].controlled_entity_uuids) == enemies
         assert session.battlefield.definition.battlefield_id == "battlefield.open_floor_bright"
         assert session.encounter.turn_state is TurnState.NOT_STARTED
         for player_uuid in session.player_uuids:
             actor = session.game.entities[player_uuid]
             assert all(actor.senses.entities[enemy_uuid].visual
-                       for enemy_uuid in session.enemy_controller.controlled_entity_uuids)
+                       for enemy_uuid in session.ai_controllers[0].controlled_entity_uuids)
     finally:
         close_session(session)
         random.setstate(random_state)

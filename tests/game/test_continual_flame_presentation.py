@@ -15,8 +15,8 @@ from game.combat import actor_contact
 from game.item_attachment_lifetime import item_attachment_members, register_item_attachment_starts
 from game.item_draw import item_ground_commands
 from game.maintained_media import maintained_media_frame
-from game.player_facts import ItemEffectChangeFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ItemEffectChangeFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
 from tests.game.continual_flame_scenarios import continual_flame_history
 from tests.game.player_helpers import player_history

@@ -24,9 +24,9 @@ from game.combat_demo import iter_combat_demo
 from game.feedback import choreography_feedback, motion_feedback, sample_feedback
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
-from game.player_facts import LifeFact, PlayerLineage, PlayerState
-from game.player_reduction import reduce_lineage
-from game.presentation import CompletedLineage, IntervalEnvelope
+from dnd.player.facts import LifeFact, PlayerLineage, PlayerState
+from dnd.player.reduction import reduce_lineage
+from dnd.player.capture import CompletedLineage, IntervalEnvelope
 from game.projection import Camera
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors

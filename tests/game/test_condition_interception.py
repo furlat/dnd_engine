@@ -10,9 +10,9 @@ from game.attack import BoundAttack
 from game.choreography import bind_choreography, sample_choreography
 from game.combat import BoundCast, actor_contact
 from game.motion_media import choreography_motion_media
-from game.player_facts import AttackFact, ConditionChangeFact, DamageRequestFact, SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import AttackFact, ConditionChangeFact, DamageRequestFact, SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from tests.game.persistent_spell_scenarios import persistent_spell_history
 
 

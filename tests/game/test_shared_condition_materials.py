@@ -15,7 +15,7 @@ from game.choreography import bind_choreography
 from game.condition_animation import condition_body_pose, resolve_condition_appearance
 from game.condition_draw import condition_body_ramp
 from game.condition_media_lifetime import ConditionMediaLifetime, register_condition_lifetimes, sample_condition_lifetimes
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from game.spell_palette import palette_noise
 from tests.game.player_helpers import player_history
 from tests.game.shared_condition_scenarios import shared_condition_history

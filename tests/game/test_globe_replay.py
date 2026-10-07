@@ -5,7 +5,7 @@ import pytest
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography
 from game.combat import BoundCast
-from game.player_facts import SpellFact
+from dnd.player.facts import SpellFact
 from game.presentation_group import presentation_groups, reduce_presentation_group
 from game.spatial_media_draw import spatial_media_draw_commands
 from game.projection import Camera

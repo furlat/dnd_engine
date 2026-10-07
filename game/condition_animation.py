@@ -24,7 +24,7 @@ from game.condition_types import (Activity, ConditionBodyColor, ConditionLabel, 
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer, supported_layer
 from dnd.types.actor_facts import ConditionFact
 from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference, record_timing
-from game.player_facts import ConditionChangeFact, DamageFact, HealFact, PlayerActor, PlayerNode
+from dnd.player.facts import ConditionChangeFact, DamageFact, HealFact, PlayerActor, PlayerNode
 
 
 @dataclass(frozen=True, slots=True)

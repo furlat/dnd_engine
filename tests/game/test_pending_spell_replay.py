@@ -5,10 +5,10 @@ import pytest
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
-from game.player_facts import ActionFact, DamageResultFact, MovementFact, SpellFact, StepFact, TemporaryHitPointsFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.replay import RecordedSequence
+from dnd.player.facts import ActionFact, DamageResultFact, MovementFact, SpellFact, StepFact, TemporaryHitPointsFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import RecordedSequence
 from tests.game.pending_spell_scenarios import pending_spell_history
 
 

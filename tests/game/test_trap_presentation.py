@@ -16,8 +16,8 @@ from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media, load_motion_media
 from game.motion import bind_motion
 from game.playback_frame import sample_playback_frame
-from game.player_facts import ActionFact, MovementFact, SpatialEffectStateFact
-from game.player_reduction import reduce_lineage, stage_lineage
+from dnd.player.facts import ActionFact, MovementFact, SpatialEffectStateFact
+from dnd.player.reduction import reduce_lineage, stage_lineage
 from game.projection import Camera, camera_pose
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors

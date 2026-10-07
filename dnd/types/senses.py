@@ -1,5 +1,7 @@
 """Dependency-neutral values shared by perception components and events."""
 
+from dnd.core.condition_types import ConditionDurationSummary
+
 from collections.abc import Mapping, Sequence, Set
 from dataclasses import dataclass, field
 from enum import Enum
@@ -76,6 +78,8 @@ class PerceivedSpatialEffect(BaseModel):
     """Last observed spatial effect and only its discovered footprint cells."""
 
     model_config = ConfigDict(frozen=True)
+    duration: ConditionDurationSummary | None = None
+
 
     content_ref: ContentRef
     name: str

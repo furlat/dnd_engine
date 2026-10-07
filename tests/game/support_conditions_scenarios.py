@@ -28,8 +28,8 @@ from dnd.spells.abjuration import DeathWard, FreedomOfMovement, ProtectionFromPo
 from dnd.spells.necromancy import AbilityCurseEffect
 from dnd.spells.transmutation import EnhanceAbility, Regenerate, DarkvisionSpell, Longstrider
 from dnd.spells.divination import SeeInvisibility, TrueSeeing
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 SupportConditionProgram = Literal["death_ward", "stoneskin", "protection_from_poison",

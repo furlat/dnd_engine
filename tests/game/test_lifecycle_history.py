@@ -10,7 +10,7 @@ from dnd.core.events import (
     LifeStateChangeEvent, ReviveEvent, StepMovementEvent,
 )
 from dnd.core.life_types import LifeState, LifeStateChangeReason
-from game.presentation import reduce_lineage
+from dnd.player.capture import reduce_lineage
 from tests.game.scenarios import attack_history, lifecycle_history
 
 

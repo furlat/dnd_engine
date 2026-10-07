@@ -17,7 +17,7 @@ from game.animation_types import SpatialMediaBinding, SpatialMediaLayer
 from game.area_media import AreaMedia
 from game.animation_types import AreaSolid
 from game.maintained_media import maintained_media_alpha, maintained_media_frame, maintained_removal_duration
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera, HEIGHT_STEP_PIXELS, inverse_rotate_position
 from game.spatial_field_media import field_media_commands
 from game.spatial_media_draw import spatial_media_draw_commands

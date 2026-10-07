@@ -57,6 +57,7 @@ from dnd.ai.contracts.semantics import (
     clear_action_semantics_ref_cache,
 )
 from dnd.ai.runtime.action_semantics import (
+    clear_action_semantics_cache,
     action_semantics_for_available_action,
     end_turn_action_semantics,
 )
@@ -123,6 +124,7 @@ def clear_epoch_value_caches() -> None:
     _capability_value_cache.clear()
     _row_descriptor_cache.clear()
     clear_action_semantics_ref_cache()
+    clear_action_semantics_cache()
 
 
 def build_decision_epoch(

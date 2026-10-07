@@ -17,7 +17,7 @@ from dnd.content.items.environment_item_builders import build_spell_device
 from dnd.actions import SpellEvent
 from dnd.core.dice import fixed_dice_faces
 from dnd.spells.transmutation import EnhanceAbility, EnlargeReduce
-from game.session import (advance_controller, close_session, create_session,
+from dnd.player.session import (advance_controller, close_session, create_session,
                           discover_player_actions, execute_player_action, end_player_turn,
                           preview_player_selection)
 
@@ -49,7 +49,8 @@ def test_view_has_no_executors_and_stale_selection_cannot_spend(human_session):
     assert row.execution_template is None
     assert choices.registered_action_variants == ()
     assert choices.inventory_use_action_sources == ()
-    discover_player_actions(session, actor.uuid)
+    assert discover_player_actions(session, actor.uuid).discovery_generation == choices.discovery_generation
+    discover_player_actions(session, actor.uuid, force_attack=True)
     before = EventQueue.event_cursor(), actor.action_economy.actions.normalized_score
     with pytest.raises(ValueError, match="stale"):
         execute_player_action(session, actor.uuid, row, row.valid_targets[0])
@@ -117,6 +118,15 @@ def test_preview_and_command_resolve_authoritative_target_handles(human_session)
     assert preview_player_selection(human_session, actor.uuid, move).next_targets[0].position != (99, 99)
     target.position = (99, 99)
     target.path = [(99, 99)]
+    cached = discover_player_actions(human_session, actor.uuid)
+    cached_move = cached.all_actions[move.discovery_index]
+    cached_target = next(row for row in cached_move.valid_targets if row.index == target.index)
+    assert cached_target.position == admitted
+    assert cached_target.path != [(99, 99)]
+    cached_target.position = (98, 98)
+    cached_move.valid_targets.clear()
+    again = discover_player_actions(human_session, actor.uuid)
+    assert any(row.position == admitted for row in again.all_actions[move.discovery_index].valid_targets)
     execute_player_action(human_session, actor.uuid, move, target)
     assert actor.position == admitted
 

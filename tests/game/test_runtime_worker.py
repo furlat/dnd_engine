@@ -3,9 +3,9 @@
 import os
 from uuid import uuid4
 
-from game.player_commands import ActionSelection
-from game.player_facts import StepFact
-from game.player_reduction import reduce_initialization, reduce_lineage
+from dnd.player.commands import ActionSelection
+from dnd.player.facts import StepFact
+from dnd.player.reduction import reduce_initialization, reduce_lineage
 from game.runtime_connection import launch_runtime, submit_request, poll_reply, close_runtime, RuntimeFailure
 from game.runtime_protocol import (
     StartRequest, StartedReply, AdvanceRequest, OperationReply, DiscoverRequest, DiscoveryReply,

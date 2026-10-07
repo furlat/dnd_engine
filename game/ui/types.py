@@ -10,7 +10,7 @@ from dnd.core.base_actions import AvailableWorldInteraction
 from dnd.core.content.identities import ContentRef
 from dnd.core.equipment_types import EquipmentSlot
 from game.interaction_types import WorldHit
-from game.player_commands import EquipItem as EquipItem, UnequipItem as UnequipItem, ToggleHandler as ToggleHandler
+from dnd.player.commands import EquipItem as EquipItem, UnequipItem as UnequipItem, ToggleHandler as ToggleHandler
 
 
 UIVerb: TypeAlias = Literal['surface','bar_label','equipment_slot','family','variant','world','confirm','cancel','end','panel','inspect','focus','close','page','menu','attack_mode','all_here','scale','fullscreen','retry','quit','log','log_row','log_expand','log_row_detail','log_text','log_scrollbar','log_detail','log_filter','log_actor','log_follow','log_copy','pin','variant_pick','equip','unequip','use_item','drop_item','handler','inventory_item','library_filter']

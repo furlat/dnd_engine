@@ -25,11 +25,11 @@ from game.choreography_draw import choreography_draw_commands, load_choreography
 from game.combat import BoundCast
 from game.environment_animation import remnant_bank
 from game.environment_art import load_environment_art
-from game.player_facts import AreaReachFact, ObjectDestroyedFact, SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import reduce_initialization
-from game.presentation import capture_interval, capture_lineage
-from game.replay import RecordedSequence
+from dnd.player.facts import AreaReachFact, ObjectDestroyedFact, SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import reduce_initialization
+from dnd.player.capture import capture_interval, capture_lineage
+from dnd.player.recorded import RecordedSequence
 from game.projection import Camera
 from tests.manual.spell_regression_support import create_spell_regression_actor
 

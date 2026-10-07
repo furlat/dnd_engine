@@ -33,8 +33,9 @@ from game.controls import (ActionSelection, EndTurn, MenuState, selection_target
     begin_targeting, targeting_values, append_target, append_position, undo_targeting, confirm_targeting)
 from game.motion import MotionTimeline
 from game.playback_frame import sample_playback_frame
-from game.player_facts import AttackFact, MovementFact, PlayerLineage, PlayerState, PlayerHUDSnapshot, StepFact, CombatLogAppend
-from game.player_reduction import reduce_initialization, reduce_lineage
+from dnd.player.facts import AttackFact, MovementFact, PlayerLineage, PlayerState, PlayerUpdate, PlayerHUDSnapshot, StepFact, CombatLogAppend
+from dnd.player.reduction import reduce_initialization, reduce_operation
+from types import MappingProxyType
 from game.presentation_group import (PresentationGroup, presentation_groups,
     reduce_presentation_group, stage_presentation_group, bind_presentation_group)
 from game.projection import Camera, ZOOM_LEVELS
@@ -149,7 +150,8 @@ async def _run(
             catalog, data = metadata.result()
         assert startup is not None
         pygame.display.set_caption(f"D&D Engine — {startup.encounter_name}")
-        baseline = reduce_initialization(startup.initialization)
+        baseline = reduce_initialization(startup.initialization,
+            content_additions=tuple(descriptor for _, descriptor in startup.ui_content.content))
         latest = historical = baseline
         observer_uuid = baseline.observer_uuid
         audience = baseline.viewing_audience
@@ -238,10 +240,15 @@ async def _run(
             capture_dir.mkdir(parents=True, exist_ok=True)
 
         def receive(operation: OperationReply) -> None:
-            nonlocal latest
-            for lineage in operation.lineages:
-                latest = reduce_lineage(latest, lineage)
-                retained.append(lineage)
+            nonlocal latest, media
+            latest = reduce_operation(latest, PlayerUpdate(audience=latest.viewing_audience,
+                lineages=operation.lineages, hud=operation.hud,
+                combat_log_appends=operation.combat_log_appends, content_additions=operation.content_additions))
+            if operation.content_additions:
+                admitted = {descriptor.ref: descriptor for descriptor in latest.content}
+                media = replace(media, content=MappingProxyType(admitted), content_refs=MappingProxyType({
+                    key: ref for ref in admitted for key in (ref.content_id, ref.identity_key)}))
+            retained.extend(operation.lineages)
             gaps.extend(operation.gaps)
             groups = presentation_groups(operation.lineages)
             if operation.lineages:
@@ -252,9 +259,9 @@ async def _run(
             pending.extend(groups)
             appends = operation.combat_log_appends
             if appends:
-                log_pending.append((appends, groups[-1].primary.root.uuid if groups else
-                    pending[-1].primary.root.uuid if pending else
-                    active_group.primary.root.uuid if active_group is not None else None))
+                log_pending.append((appends, groups[-1].primary.group_uuid if groups else
+                    pending[-1].primary.group_uuid if pending else
+                    active_group.primary.group_uuid if active_group is not None else None))
 
         def selection() -> ActionSelection:
             return ActionSelection(menu.selected_action, menu.selected_targets, menu.selected_positions)
@@ -871,11 +878,11 @@ async def _run(
                         gaps.extend(group.gaps)
                     feedback.extend(motion_feedback(motion, data, presentation_ms))
                 else:
-                    if isinstance(active.root.fact, MovementFact) and any(
+                    if active.root is not None and isinstance(active.root.fact, MovementFact) and any(
                         isinstance(event.fact, AttackFact) or (isinstance(event.fact, StepFact) and event.fact.committed)
                         for event in active.events
                     ):
-                        gaps.append((active.root.uuid, "Movement reaction choreography is not bound"))
+                        gaps.append((active.group_uuid, "Movement reaction choreography is not bound"))
                     assert isinstance(bound, BoundChoreography)
                     choreography = bound
                     choreography_media = load_choreography_media(choreography, body_rows=body_media)
@@ -1097,7 +1104,7 @@ async def _run(
             if collect_frames:
                 frames.append(GameFrame(
                     frame, observer_uuid, latest.reducer_cursor, historical.reducer_cursor, len(pending),
-                    active.root.uuid if active is not None else None, elapsed_ms, paused, ready and not paused,
+                    active.group_uuid if active is not None else None, elapsed_ms, paused, ready and not paused,
                     tuple((actor.contact.actor_uuid, actor.contact.grid) for actor in actors),
                     tuple((actor.contact.actor_uuid, shown_hp.get(actor.contact.actor_uuid, actor.contact.hp)) for actor in actors),
                 ))
@@ -1108,10 +1115,10 @@ async def _run(
                 while operation_markers and operation_markers[0] <= historical.reducer_cursor:
                     operation_markers.popleft()
                 assert active_group is not None
-                settled = tuple(row for rows, owner in log_pending if owner == active_group.primary.root.uuid for row in rows)
+                settled = tuple(row for rows, owner in log_pending if owner == active_group.primary.group_uuid for row in rows)
                 if settled:
                     log_history=retain_logs(log_history,append_log_rows(settled,reveal_ms=presentation_ms))
-                    log_pending[:] = [(rows, owner) for rows, owner in log_pending if owner != active_group.primary.root.uuid]
+                    log_pending[:] = [(rows, owner) for rows, owner in log_pending if owner != active_group.primary.group_uuid]
                 active = None
                 active_group = None
                 choreography = None

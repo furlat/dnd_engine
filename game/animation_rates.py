@@ -1,7 +1,7 @@
 """Authored actor cadence selected from retained condition membership."""
 
 from game.animation_types import AnimationData
-from game.player_facts import PlayerActor
+from dnd.player.facts import PlayerActor
 
 
 def action_playback_rate(data: AnimationData, actor: PlayerActor) -> float:

@@ -17,8 +17,8 @@ from game.condition_animation import ConditionAppearance, resolve_condition_appe
 from game.condition_draw import compose_condition_layers, load_condition_layers
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer
 from game.playback_frame import sample_playback_frame
-from game.player_facts import ActionFact, SpellFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ActionFact, SpellFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors

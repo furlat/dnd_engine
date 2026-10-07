@@ -19,7 +19,7 @@ from game.condition_animation import ConditionTimeline, ConditionResponseCue
 from game.damage import DamageCue
 from game.forced_movement import ForcedMovementCue, ShoveCue
 from game.motion import MotionLeg, MotionTimeline
-from game.player_facts import PlayerLineage, PlayerState
+from dnd.player.facts import PlayerLineage, PlayerState
 from game.world_animation import WorldTransition
 from game.stationary_media import StationaryMediaCue
 from game.finite_material import BodyMaterialCue

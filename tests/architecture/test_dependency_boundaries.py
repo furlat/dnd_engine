@@ -76,12 +76,14 @@ SAFE_LEAF_MODULES = frozenset({
 # Shared observations compose passive identities and state values. These exact
 # edges do not permit a leaf to import registries, entities or gameplay owners.
 NEUTRAL_VALUE_DEPENDENCIES = {
+    "dnd.core.action_types": frozenset({"dnd.core.content.identities"}),
     "dnd.core.presentation_geometry": frozenset({"dnd.core.effect_types"}),
     "dnd.types.senses": frozenset({
         "dnd.types.world", "dnd.core.content.identities", "dnd.types.traps",
         "dnd.core.presentation_geometry", "dnd.types.material_deposits",
         "dnd.types.spell_suppression", "dnd.types.spatial_effects", "dnd.core.creature_types",
         "dnd.types.class_features",
+        "dnd.core.condition_types",
     }),
     "dnd.types.traps": frozenset({"dnd.core.creature_types", "dnd.types.abilities"}),
 }

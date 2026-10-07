@@ -31,7 +31,7 @@ from game.animation_types import (
 from game.condition_types import load_condition_recipes
 from game.condition_media import load_condition_media
 from game.authoring_conversion import explicit_attachments, explicit_composition, explicit_spatial_composition, validate_composition, validate_wall_modules, validate_contact_sweeps, validate_cell_modules
-from game.player_facts import PlayerActor, VisualItem
+from dnd.player.facts import PlayerActor, VisualItem
 from game.item_appearance import hand_appearance
 from game.world_animation import prop_animation
 from game.world_binding_types import WorldBindingsSource

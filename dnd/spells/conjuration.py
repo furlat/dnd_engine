@@ -4540,7 +4540,7 @@ class GuardianOfFaithZone(AreaCondition):
             and self.affects_occupancy_layer(occupancy_layer))
 
     def progress_spatial_duration(self, *, parent_event: Event | None = None) -> bool:
-        if not self.progress():
+        if not self.progress_duration_state(parent_event=parent_event):
             return False
         guardian = BaseItem.get(self.anchor_uuid)
         if isinstance(guardian, GuardianOfFaithObject) and not guardian.retire(parent_event=parent_event):
@@ -4994,7 +4994,7 @@ class HeroesFeastLifetime(SpatialCondition):
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
 
     def progress_spatial_duration(self, *, parent_event: Event | None = None) -> bool:
-        if not self.progress():
+        if not self.progress_duration_state(parent_event=parent_event):
             return False
         feast = BaseItem.get(self.anchor_uuid)
         if isinstance(feast, HeroesFeastObject) and not feast.retire(parent_event=parent_event):

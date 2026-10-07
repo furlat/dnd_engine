@@ -23,8 +23,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.conjuration import SleetStorm
 from dnd.spells.abjuration import register_counterspell_reaction
 from dnd.spells.evocation import IceStorm, Sunbeam, Sunburst
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 from tests.manual.spell_regression_support import force_save_result
 
 WeatherSolarProgram = Literal['ice_storm', 'sleet_storm', 'sunbeam', 'sunburst']

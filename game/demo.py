@@ -19,7 +19,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from game.app import BACKGROUND, WINDOW_SIZE, FrameEvidence, draw_frame
 from game.assets import SurfaceCache, load_catalog
-from game.presentation import (
+from dnd.player.capture import (
     Disposition, IntervalEnvelope, IntervalTerminal, PresentationTarget, ReducedInterval,
     capture_interval, reduce_interval, settle_dispositions,
 )

@@ -8,7 +8,7 @@ import pygame
 
 from game.animation_types import AnimationData
 from game.draw_commands import DrawCommand
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.portal_animation import PortalTransferCue, portal_departure_contact, portal_arrival_contact
 from game.portal_art import PortalBank, PortalHatch, PortalArt, DoorwayArt, portal_frame
 from game.animation import view_facing

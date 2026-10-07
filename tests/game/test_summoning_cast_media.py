@@ -11,8 +11,8 @@ from game.animation_data import load_animation_data
 from game.cast_media import cast_media_draw_commands, cast_media_placement
 from game.choreography import bind_choreography
 from game.combat import BoundCast, actor_contact
-from game.player_facts import SpellFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import SpellFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera, TILE_WIDTH, project_screen
 from tests.game.player_helpers import player_history
 from tests.game.test_summoning_presentation import summon_history

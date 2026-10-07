@@ -14,7 +14,7 @@ from game.animation_draw import (
 from game.animation_types import AnimationData
 from game.condition_animation import ConditionAppearance, condition_body_pose
 from game.condition_draw import load_condition_layers
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.projection import Camera, project_screen
 
 

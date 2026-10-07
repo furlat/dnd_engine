@@ -15,12 +15,12 @@ from game.condition_types import Activity
 from game.condition_media_lifetime import (
     extra_media_members, register_condition_lifetimes, sample_condition_lifetimes,
 )
-from game.player_facts import ConditionChangeFact, SpellFact, TemporaryHitPointsFact
+from dnd.player.facts import ConditionChangeFact, SpellFact, TemporaryHitPointsFact
 from game.playback_frame import sample_playback_frame
 from game.projection import Camera
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from tests.game.pending_spell_scenarios import pending_spell_history
 from tests.game.player_helpers import player_history
 

@@ -8,9 +8,9 @@ import pytest
 from game.animation import ActorContact, CastApplication, CastInput, ProjectileSample, cast_deliveries, compile_cast, delivery_identity, project_projectile, sample_cast
 from game.animation_data import load_animation_data
 from game.combat import bind_cast
-from game.player_facts import SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import TILE_WIDTH, project_world
 from tests.game.device_scenarios import device_history
 

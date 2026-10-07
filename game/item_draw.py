@@ -18,7 +18,7 @@ from game.item_effects import item_condition_recipes, item_material
 from game.animation_types import AnimationData, Facing8, ItemAttachmentStart
 from game.maintained_media import maintained_media_frame
 from game.registered_media import registered_media_blits
-from game.player_facts import FloorItem, PlayerObject
+from dnd.player.facts import FloorItem, PlayerObject
 from game.projection import TILE_WIDTH, Camera, painter_key, project_screen
 
 

@@ -22,7 +22,7 @@ from game.choreography_draw import load_choreography_media, load_motion_media
 from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from tests.game.player_helpers import player_history
 from game.projection import Camera
 from game.scene import load_scene_media

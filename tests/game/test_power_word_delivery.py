@@ -7,8 +7,8 @@ from game.animation import media_target_applies, media_phase_anchor_ms
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography
 from game.combat import BoundCast
-from game.player_facts import DamageResultFact, LifeFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import DamageResultFact, LifeFact
+from dnd.player.reduction import reduce_lineage
 from tests.game.player_helpers import player_history
 from tests.game.power_word_scenarios import power_word_history
 

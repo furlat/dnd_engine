@@ -12,7 +12,7 @@ from game.choreography import bind_choreography
 from game.condition_animation import resolve_condition_appearance
 from game.condition_media_lifetime import register_condition_lifetimes, sample_condition_lifetimes
 from game.condition_types import ConditionRecipe
-from game.player_reduction import decode_player_sequence, reduce_lineage
+from dnd.player.reduction import decode_player_sequence, reduce_lineage
 from tests.game.test_spell14_native_facts import actors, saved_views
 
 

@@ -9,7 +9,7 @@ from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.event_facts import SpatialChangeType
 from game.animation_types import AnimationData, ConstructionMediaBinding
 from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, WallDome, WallSegment
-from game.player_facts import PlayerObject, PlayerLineage, PlayerState, SpatialEffectStateFact, SpatialFact
+from dnd.player.facts import PlayerObject, PlayerLineage, PlayerState, SpatialEffectStateFact, SpatialFact
 from game.world_animation import WorldTransition
 
 

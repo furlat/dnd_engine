@@ -16,9 +16,9 @@ from game.assets import AssetSpec, SurfaceCache, load_catalog
 from game.choreography import bind_choreography, sample_choreography
 from game.combat import BoundCast
 from game.draw_commands import DrawCommand
-from game.player_facts import SpatialEffectStateFact, SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import SpatialEffectStateFact, SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, TILE_HEIGHT, TILE_WIDTH, painter_key, project_screen
 from game.world_animation import prop_animation, sample_world_transitions, world_transition_end
 from tests.game.web_scenarios import web_history

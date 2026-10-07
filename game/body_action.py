@@ -18,7 +18,7 @@ from game.animation_types import (ActionFeedback, AnimationData, BodyActionRecip
                                   StudioActorLayer, StudioCondition, StudioRecovery, StudioSpellDraft)
 from game.animation_types import BodyContext, ContentBodyQualifier, ActionFrameAnchor
 from game.combat import actor_contact, actor_is_visible, received_cast_palette
-from game.player_facts import (ActionFact, AttackFact, ConditionChangeFact, DamageRequestFact,
+from dnd.player.facts import (ActionFact, AttackFact, ConditionChangeFact, DamageRequestFact,
     SavingThrowFact, PlayerNode, PlayerState, SpellFact, PlayerLineage)
 from game.animation_rates import action_playback_rate
 

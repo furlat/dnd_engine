@@ -8,7 +8,7 @@ from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference,
 from game.animation_types import AnimationData
 from game.choreography import BoundChoreography, MotionTimeline, walk_bound_timelines
 from game.construction_transitions import ConstructionMediaLifetime, construction_duration
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 
 
 def _timing(record: ConstructionMediaLifetime, anchor: TimingAnchor, at: float,

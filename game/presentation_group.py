@@ -11,8 +11,8 @@ from uuid import UUID
 from game.animation import ActorContact
 from game.animation_types import AnimationData, Facing8
 from game.choreography import BoundChoreography, MotionTimeline, bind_choreography, bind_motion
-from game.player_facts import ActionFact, PlayerLineage, PlayerState
-from game.player_reduction import reduce_lineage, stage_lineage
+from dnd.player.facts import ActionFact, PlayerLineage, PlayerState
+from dnd.player.reduction import reduce_lineage, stage_lineage
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,13 +27,13 @@ def presentation_groups(lineages: tuple[PlayerLineage, ...]) -> tuple[Presentati
     result: list[PresentationGroup] = []
     pending: list[PlayerLineage] = []
     for lineage in lineages:
-        fact = lineage.root.fact
+        fact = (lineage.root.fact if lineage.root is not None else None)
         if isinstance(fact, ActionFact) and fact.reaction is not None:
             pending.append(lineage)
             continue
-        if pending and all(isinstance(reaction.root.fact, ActionFact)
+        if pending and all(reaction.root is not None and isinstance(reaction.root.fact, ActionFact)
                 and reaction.root.fact.reaction is not None
-                and reaction.root.fact.reaction.triggered_lineage_uuid == lineage.root.lineage_uuid
+                and reaction.root.fact.reaction.triggered_lineage_uuid == lineage.lineage_uuid
                 for reaction in pending):
             reactions = tuple(pending)
             result.append(PresentationGroup(lineage, (*reactions, lineage), reactions))

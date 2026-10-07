@@ -8,7 +8,7 @@ from dnd.entity import Entity
 from dnd.spatial.environmental_conditions import materialize_spike_trap_condition
 from dnd.types.senses import reduce_senses_snapshot
 from dnd.types.traps import TrapState
-from game.event_record import decode_event, encode_event
+from dnd.player.event_record import decode_event, encode_event
 from tests.engine.test_senses_light_stealth import (
     PerceptionModifierCondition, create_skeleton, reset_senses_state,
 )

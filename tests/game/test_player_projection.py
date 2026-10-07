@@ -19,13 +19,13 @@ from dnd.game import Game
 from dnd.items.environment import CloseDirectionalDoorAction, OpenDirectionalDoorAction
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from game.player_facts import DamageFact, EquipmentFact, MovementFact, ObjectDestroyedFact, SensoryFact, SpellFact, StepFact
+from dnd.player.facts import DamageFact, EquipmentFact, MovementFact, ObjectDestroyedFact, SensoryFact, SpellFact, StepFact
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import capture_interval, capture_lineage, reduce_interval
-from game.replay import ObserverCapture, RecordedSequence, capture_history
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import capture_interval, capture_lineage, reduce_interval
+from dnd.player.recorded import ObserverCapture, RecordedSequence, capture_history
 from tests.game.damage_resolution_scenarios import unseen_source_damage
 from tests.game.visibility_scenarios import visibility_history
 from tests.game.concealment_scenarios import concealment_history
@@ -102,10 +102,13 @@ def test_one_native_doorway_crossing_produces_two_distinct_player_packets() -> N
     root, = observer_roots
     assert isinstance(root.root.fact, MovementFact)
     assert root.root.fact.path == () and root.root.fact.start_position is None
-    # Losing sight at the endpoint does not erase the complete causal root.
+    # Keep the witnessed action, but never transmit headers for its hidden steps.
     source = history.views["observer"].lineages[0]
-    assert [(node.uuid, node.lineage_uuid, node.parent_lineage, node.children_lineages) for node in root.events] == [
-        (event.uuid, event.lineage_uuid, event.parent_lineage, tuple(event.children_lineages)) for event in source.events]
+    admitted = {node.lineage_uuid for node in root.events}
+    assert len(root.events) < len(source.events)
+    assert all(node.parent_lineage is None or node.parent_lineage in admitted for node in root.events)
+    assert all(set(node.children_lineages) <= admitted for node in root.events)
+    assert [row.source_index for row in root.version_rows] == list(range(root.start_cursor, root.end_cursor))
     native_updates = [event for event in source.events if isinstance(event, SensoryUpdateEvent)
                       and event.observer_uuid == observer.observer_uuid]
     delivered_updates = [node.fact for node in root.events if isinstance(node.fact, SensoryFact)]
@@ -227,7 +230,7 @@ def test_door_after_value_is_observed_causally_and_remembered_while_unseen() -> 
     assert state.objects[door_uuid].item.boundary_structure == before.objects[door_uuid].item.boundary_structure
     assert original_tiles < set(states[0].tiles)
     assert set(states[0].tiles) == set(states[1].tiles)
-    assert views["observer"].lineages[2].root.uuid not in {root.root.uuid for root in roots}
+    assert views["observer"].lineages[2].root.uuid not in {root.root.uuid for root in roots if root.root is not None}
     assert before.senses is not None and state.senses is not None
     assert before.senses.seen < state.senses.seen
     assert (8, 7) not in state.senses.visible and (8, 7) in state.senses.seen
@@ -258,7 +261,10 @@ def test_predeployment_trait_does_not_apply_to_an_unadmitted_actor() -> None:
     native = RecordedSequence(initialization=history.initialization, lineages=history.lineages)
     _, before, (root,) = _saved_public(native)
     reactor = before.actors[before.observer_uuid]
-    assert reactor.conditions == history.before.actors[before.observer_uuid].conditions
+    expected = history.before.actors[before.observer_uuid].conditions
+    assert [(row.condition_uuid, row.name, row.category, row.behavior_id) for row in reactor.conditions] == [
+        (row.condition_uuid, row.name, row.category, row.behavior_id) for row in expected]
+    assert all(row.event_uuid is None for row in reactor.conditions), "unwitnessed predeployment is not public history"
     assert native.initialization.conditions, "the real source trait was installed before deployment"
     after = reduce_lineage(before, root)
     mover = next(actor for actor in after.actors.values() if actor.uuid != before.observer_uuid)

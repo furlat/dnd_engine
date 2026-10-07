@@ -9,9 +9,9 @@ from dnd.core.presentation_geometry import WallPresentationGeometry, WallRing, W
 from game.animation_data import load_animation_data
 from game.authoring_conversion import validate_wall_modules
 from game.choreography import bind_choreography, sample_choreography
-from game.player_facts import DamageFact, SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import DamageFact, SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, project_screen
 from game.spatial_media_draw import spatial_media_draw_commands
 from game.spatial_media_lifetime import register_spatial_lifetimes

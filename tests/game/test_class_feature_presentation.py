@@ -13,8 +13,8 @@ import pytest
 from game.animation_data import load_animation_data
 from dnd.types.class_features import IndomitableReroll,RelentlessRageIntervention
 from game.choreography import bind_choreography
-from game.player_reduction import reduce_lineage
-from game.player_facts import SavingThrowFact,DamageRequestFact,ActionFact,ConditionChangeFact
+from dnd.player.reduction import reduce_lineage
+from dnd.player.facts import SavingThrowFact,DamageRequestFact,ActionFact,ConditionChangeFact
 from tests.game.player_helpers import player_history
 from tests.game.class_feature_scenarios import class_feature_history
 

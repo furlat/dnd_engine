@@ -14,7 +14,7 @@ from dnd.core.presentation_geometry import (
     CylinderPresentationGeometry, SpherePresentationGeometry,
     ConePresentationGeometry, LinePresentationGeometry,
 )
-from game.player_facts import PlayerObject, PlayerState, WorldUpdate
+from dnd.player.facts import PlayerObject, PlayerState, WorldUpdate
 from game.animation_types import HitFlash, MechanismProjectileArt, PropAnimation, PropDepth, SaveHop, SurfaceReveal
 from game.device_art import DeviceFacing
 from game.mechanism_projectile import MechanismProjectileCue

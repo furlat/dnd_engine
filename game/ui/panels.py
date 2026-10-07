@@ -6,7 +6,7 @@ import pygame
 
 from dnd.core.base_actions import AvailableActionsResult
 from dnd.core.equipment_types import BodyPart, WeaponSlot, RingSlot, EquipmentSlot
-from game.player_facts import PlayerState, PlayerHUDSnapshot, PlayerActor, PlayerCharacterSheet
+from dnd.player.facts import PlayerState, PlayerHUDSnapshot, PlayerActor, PlayerCharacterSheet
 from game.ui.action_bar import ActionFamily, ActionFamilyKey, cost_label
 from game.ui.layout import UILayout
 from game.ui.media import UIPresentationCatalog, action_reference, item_reference, reference_label, actor_portrait_reference, ui_image

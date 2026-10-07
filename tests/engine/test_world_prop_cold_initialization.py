@@ -19,8 +19,8 @@ from dnd.scenarios import battlefield_catalog
 from dnd.types.actor_facts import ConditionFact
 from dnd.types.world import MovementMode
 from dnd.world_facts import WorldFacts, apply_world_fact
-from game.event_record import RecordedEvent
-from game.presentation import _retained_event
+from dnd.player.event_record import RecordedEvent
+from dnd.player.capture import _retained_event
 
 
 ROWS = TypeAdapter(list[tuple[RecordedEvent, ConditionFact | None]])

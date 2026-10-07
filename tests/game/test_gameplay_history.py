@@ -31,11 +31,11 @@ from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from game.presentation import (
+from dnd.player.capture import (
     CompletedLineage, PresentationTarget, capture_interval, capture_lineage,
     reduce_interval, reduce_lineage, seed_actors,
 )
-from game.session import (
+from dnd.player.session import (
     Operation, advance_controller, close_session, create_session, discover_player_actions,
     end_player_turn, execute_player_action,
 )

@@ -5,7 +5,7 @@ import pytest
 from dnd.core.events import SpatialChangeType
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
-from game.player_facts import SpatialFact, SpellFact
+from dnd.player.facts import SpatialFact, SpellFact
 from game.presentation_group import presentation_groups, reduce_presentation_group
 from tests.game.interruption_scenarios import interruption_history
 from tests.game.player_helpers import player_history

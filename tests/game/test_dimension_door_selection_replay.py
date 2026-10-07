@@ -16,13 +16,13 @@ from game.controls import ActionSelection, confirm_targeting
 from tests.game.ui_selection_helpers import selected_prefix
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
-from game.player_facts import PortalTransferFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import PortalTransferFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.portal_draw import portal_draw_commands
-from game.presentation import capture_interval, reduce_interval
+from dnd.player.capture import capture_interval, reduce_interval
 from game.projection import Camera
-from game.replay import ObserverCapture, capture_history
+from dnd.player.recorded import ObserverCapture, capture_history
 from tests.engine.test_banishment_dimension_door import scene as scene
 from tests.manual.spell_regression_support import create_spell_regression_actor
 

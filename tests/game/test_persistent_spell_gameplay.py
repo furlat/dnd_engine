@@ -9,8 +9,8 @@ from dnd.core.events import EventType
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media
-from game.player_facts import AttackFact, ConditionChangeFact, DamageFact, EquipmentFact, SpellFact, TurnFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import AttackFact, ConditionChangeFact, DamageFact, EquipmentFact, SpellFact, TurnFact
+from dnd.player.reduction import reduce_lineage
 from game.playback_frame import sample_playback_frame
 from game.projection import Camera
 from game.scene import load_scene_media

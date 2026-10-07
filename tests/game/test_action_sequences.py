@@ -32,10 +32,10 @@ from game.body_presentation import sample_body_presentation
 from game.choreography import bind_choreography, sample_choreography
 from game.combat import actor_contact, actor_is_visible
 from game.condition_types import ConditionRecipe
-from game.player_facts import ActionFact
-from game.player_reduction import reduce_lineage
-from game.presentation import capture_interval, capture_lineage, reduce_interval
-from game.replay import capture_history
+from dnd.player.facts import ActionFact
+from dnd.player.reduction import reduce_lineage
+from dnd.player.capture import capture_interval, capture_lineage, reduce_interval
+from dnd.player.recorded import capture_history
 from tests.game.player_helpers import player_history
 
 

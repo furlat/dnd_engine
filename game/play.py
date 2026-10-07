@@ -33,10 +33,10 @@ from game.app import BACKGROUND, WINDOW_SIZE, draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.combat import BoundCast, BoundEquipment, bind_cast, bind_equipment
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, IntervalEnvelope
-from game.player_facts import EquipmentFact, PlayerLineage, PlayerState, SpellFact
-from game.player_projection import begin_projection, project_lineage
-from game.player_reduction import reduce_initialization, reduce_lineage
+from dnd.player.capture import CompletedLineage, IntervalEnvelope
+from dnd.player.facts import EquipmentFact, PlayerLineage, PlayerState, SpellFact
+from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.reduction import reduce_initialization, reduce_lineage
 from game.projection import Camera, ZOOM_LEVELS
 
 
@@ -218,14 +218,14 @@ async def _run(
                     continue
                 latest = reduce_lineage(latest, lineage)
                 pending.append(lineage)
-                if isinstance(lineage.root.fact, SpellFact):
+                if isinstance((lineage.root.fact if lineage.root is not None else None), SpellFact):
                     reduced_casts += 1
                 await asyncio.sleep(0)
 
             started = False
             while active is None and pending:
                 lineage = pending.popleft()
-                match lineage.root.fact:
+                match (lineage.root.fact if lineage.root is not None else None):
                     case SpellFact():
                         # Explicit terrace geometry; original recipe/time stays intact.
                         active = bind_cast(historical, lineage, data, travel_apex_steps=1.0)
@@ -256,7 +256,7 @@ async def _run(
                     historical = reduce_lineage(historical, lineage)
                     completed_lineages += 1
                     continue
-                current_log = lineage.root.combat_log.compact if lineage.root.combat_log is not None else ""
+                current_log = lineage.root.combat_log.compact if lineage.root is not None and lineage.root.combat_log is not None else ""
                 clock.tick()
                 elapsed_ms, previous_ms = 0.0, -1.0
                 shown = active

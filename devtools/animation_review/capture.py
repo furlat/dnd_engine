@@ -8,9 +8,9 @@ from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from devtools.animation_review.cases import RecordedInput, ReviewCase, ReviewPerspective
 from devtools.animation_review.cli import main as run_review, write_json
 from devtools.animation_review.produce import produce
-from game.player_projection import project_sequence
-from game.player_reduction import encode_player_sequence
-from game.replay import RecordedSequence
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import encode_player_sequence
+from dnd.player.recorded import RecordedSequence
 
 
 def capture_inputs(case: ReviewCase, output: Path, captured_at: str, sources: dict) -> tuple[RecordedInput, ...]:

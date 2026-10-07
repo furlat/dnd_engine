@@ -2923,7 +2923,7 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
             bonus_breakdown=stealth_bonus_breakdown,
             advantage_breakdown=stealth_advantage_breakdown,
             success=success
-        ).model_dump()
+        )
     )
 
     check_event.phase_to(EventPhase.COMPLETION)

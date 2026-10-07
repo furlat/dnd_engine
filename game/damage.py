@@ -12,8 +12,8 @@ from game.animation import (
 from game.animation_types import AnimationData, StudioDamage
 from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference
 from game.combat import actor_contact
-from game.player_reduction import PlayerCausalIndex, index_player_lineage
-from game.player_facts import DamageRequestFact, DamageResultFact, LifeFact, PlayerLineage, PlayerNode, PlayerState
+from dnd.player.reduction import PlayerCausalIndex, index_player_lineage
+from dnd.player.facts import DamageRequestFact, DamageResultFact, LifeFact, PlayerLineage, PlayerNode, PlayerState
 
 
 @dataclass(frozen=True, slots=True)

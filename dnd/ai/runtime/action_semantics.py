@@ -228,6 +228,11 @@ PROFILE_PREFERRED_ACTION_KEYS = frozenset({
 })
 
 
+def clear_action_semantics_cache() -> None:
+    """Forget semantic inputs carrying item identities from a retired world."""
+    _action_semantics_for_input.cache_clear()
+
+
 def action_semantics_for_available_action(row: AvailableActionInfo) -> ActionSemantics:
     """Build typed meaning from one engine discovery row.
 

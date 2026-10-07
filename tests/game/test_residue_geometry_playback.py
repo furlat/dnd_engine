@@ -16,9 +16,9 @@ from game.animation_data import load_animation_data
 from game.animation_types import ParticleMediaAsset
 from game.choreography import bind_choreography
 from game.particle_media import sample_particles
-from game.player_facts import AttackFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import AttackFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from game.residue_media import landing_point, landing_template, sample_residue_reveals, target_cell
 from game.surface_residue import ResidueSurfaceCache, geometric_residue_image

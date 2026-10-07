@@ -1,0 +1,1797 @@
+{
+  "components": {
+    "securitySchemes": {
+      "SeatBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Subjective Player Server",
+    "version": "1.0.0-design"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/bootstrap": {
+      "get": {
+        "operationId": "get_bootstrap",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/BootstrapResponse"
+                }
+              }
+            },
+            "description": "Complete typed result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          }
+        },
+        "security": [
+          {
+            "SeatBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/content/{revision}": {
+      "get": {
+        "operationId": "get_revision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ContentResponse"
+                }
+              }
+            },
+            "description": "Complete typed result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          }
+        },
+        "security": [
+          {
+            "SeatBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/games/{game_id}/ack": {
+      "post": {
+        "operationId": "post_ack",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Game-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Audience-Id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Attachment-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./player-api-v1.schema.json#/$defs/AckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/AckResponse"
+                }
+              }
+            },
+            "description": "Complete typed result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          }
+        },
+        "security": [
+          {
+            "SeatBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/games/{game_id}/attachment": {
+      "post": {
+        "operationId": "post_attachment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Game-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Audience-Id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./player-api-v1.schema.json#/$defs/AttachmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/AttachmentResponse"
+                }
+              }
+            },
+            "description": "Complete typed result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          }
+        },
+        "security": [
+          {
+            "SeatBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/games/{game_id}/choices": {
+      "post": {
+        "operationId": "post_choices",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Game-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Audience-Id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Attachment-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./player-api-v1.schema.json#/$defs/ChoicesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ChoicesResponse"
+                }
+              }
+            },
+            "description": "Complete typed result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          }
+        },
+        "security": [
+          {
+            "SeatBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/games/{game_id}/commands": {
+      "post": {
+        "operationId": "post_commands",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Game-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Audience-Id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Attachment-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./player-api-v1.schema.json#/$defs/CommandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ReceiptResponse"
+                }
+              }
+            },
+            "description": "Complete typed result"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ReceiptResponse"
+                }
+              }
+            },
+            "description": "Reserved/pending; no gameplay success asserted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          }
+        },
+        "security": [
+          {
+            "SeatBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/games/{game_id}/commands/{number}": {
+      "get": {
+        "operationId": "get_number",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Game-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Audience-Id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ReceiptResponse"
+                }
+              }
+            },
+            "description": "Complete typed result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          }
+        },
+        "security": [
+          {
+            "SeatBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/games/{game_id}/events": {
+      "get": {
+        "operationId": "get_events",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Game-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Audience-Id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Attachment-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": true,
+            "schema": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "UTF-8 SSE. ready/status are unnumbered; operation id equals cursor.sequence. EOF fragment is discarded. See semantic-contract.md.",
+            "x-event-schemas": {
+              "operation": {
+                "$ref": "./player-api-v1.schema.json#/$defs/PlayerOperation"
+              },
+              "ready": {
+                "$ref": "./player-api-v1.schema.json#/$defs/StreamReady"
+              },
+              "status": {
+                "$ref": "./player-api-v1.schema.json#/$defs/StreamStatus"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          }
+        },
+        "security": [
+          {
+            "SeatBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/games/{game_id}/initialization": {
+      "get": {
+        "operationId": "get_initialization",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Game-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Audience-Id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Attachment-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/InitializationResponse"
+                }
+              }
+            },
+            "description": "Complete typed result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          }
+        },
+        "security": [
+          {
+            "SeatBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/games/{game_id}/preview": {
+      "post": {
+        "operationId": "post_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Game-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Audience-Id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Attachment-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./player-api-v1.schema.json#/$defs/PreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/PreviewResponse"
+                }
+              }
+            },
+            "description": "Complete typed result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          }
+        },
+        "security": [
+          {
+            "SeatBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/games/{game_id}/status": {
+      "get": {
+        "operationId": "get_status",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Game-Epoch",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Audience-Id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/StatusResponse"
+                }
+              }
+            },
+            "description": "Complete typed result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/ApiError"
+                }
+              }
+            },
+            "description": "Typed refusal or unavailable state; see finite error union"
+          }
+        },
+        "security": [
+          {
+            "SeatBearer": []
+          }
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "get_healthz",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./player-api-v1.schema.json#/$defs/HealthResponse"
+                }
+              }
+            },
+            "description": "Complete typed result"
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "x-contract-status": "Proposed preimplementation contract. No endpoints claimed operational."
+}

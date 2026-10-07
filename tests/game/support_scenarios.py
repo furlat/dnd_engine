@@ -28,8 +28,8 @@ from dnd.spells.divination import Guidance
 from dnd.spells.evocation import CureWounds, HealingWord, Light, PrayerOfHealing
 from dnd.spells.infernal import Thaumaturgy
 from dnd.types.senses import SenseMode, SensesType
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 SupportProgram = Literal["cure_wounds", "healing_word", "prayer_of_healing", "guidance",

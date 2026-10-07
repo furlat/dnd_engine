@@ -16,9 +16,9 @@ from game.cast_media import cast_media_draw_commands
 from game.choreography import bind_choreography, bind_motion, sample_choreography, sample_motion
 from game.combat import BoundCast
 from game.motion_media import bind_motion_media, motion_media_draw_commands
-from game.player_facts import ActionFact, DamageFact, MovementFact, SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import ActionFact, DamageFact, MovementFact, SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from game.stationary_draw import stationary_media_draw_commands
 from tests.game.pending_spell_scenarios import pending_spell_history

@@ -207,7 +207,7 @@ def test_successful_attack_rolls_damage_applies_hp_loss_and_spends_action() -> N
     assert event.combat_log is not None
     assert event.combat_log.entry_type == CombatLogEntryType.ATTACK
     assert event.combat_log.success is True
-    assert event.combat_log.data["outcome"] == "hit"
+    assert event.combat_log.data.outcome == "hit"
     assert any(
         child.entry_type == CombatLogEntryType.DAMAGE_TAKEN
         for child in event.combat_log.sub_entries

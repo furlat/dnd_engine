@@ -16,7 +16,7 @@ from game.animation_types import AnimationData
 from game.draw_commands import DrawCommand
 from game.body_effects import silhouette_dust
 from game.construction_surface import construction_surface_commands
-from game.player_facts import PlayerObject, PlayerState
+from dnd.player.facts import PlayerObject, PlayerState
 from game.projection import Camera, painter_key, project_screen, inverse_rotate_position
 from game.registered_media import RegisteredMediaSample, registered_media_samples
 from game.world_animation import WorldTransitionSample, ObjectDustContact

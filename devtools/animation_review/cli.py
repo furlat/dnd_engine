@@ -18,9 +18,9 @@ from devtools.animation_review.cases import RecordedInput, ReviewCase, ReviewSeq
 from devtools.animation_review.library import write_run_index
 from devtools.animation_review.record import record_case
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
-from game.replay import RecordedSequence
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence
+from dnd.player.recorded import RecordedSequence
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence
 
 
 REPO = Path(__file__).resolve().parents[2]

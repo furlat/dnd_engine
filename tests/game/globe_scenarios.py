@@ -28,8 +28,8 @@ from dnd.spells.conjuration import Cloudkill, Darkness, FogCloud, IncendiaryClou
 from dnd.spells.evocation import Fireball, FireBolt
 from dnd.spells.ice_knife import IceKnife
 from dnd.types.world import CardinalDirection
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def globe_history(*, spell: Literal["fireball", "fire_bolt", "ice_knife", "fog_cloud", "darkness", "cloudkill", "incendiary_cloud"] = "fireball",

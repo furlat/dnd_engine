@@ -5,7 +5,7 @@ import pytest
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
 from dnd.types.senses import PerceivedSpatialEffect
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from tests.game.persistent_spell_scenarios import persistent_spell_history
 from tests.game.player_helpers import player_history
 

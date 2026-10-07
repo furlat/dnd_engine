@@ -8,9 +8,9 @@ import pytest
 from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectInteractionOperation
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography
-from game.player_facts import SpatialEffectStateFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import SpatialEffectStateFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from game.spatial_media_draw import spatial_media_draw_commands
 from game.spatial_media_lifetime import register_spatial_lifetimes

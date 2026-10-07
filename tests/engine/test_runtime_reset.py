@@ -14,7 +14,8 @@ from dnd.core.content.runtime import (
 )
 from dnd.core.events import EventPhase, EventQueue, EventType, SpatialChangeEvent
 from dnd.core.gridmap import get_map
-from dnd.core.values import BaseValue
+from dnd.core.dice import Dice, DiceRoll
+from dnd.core.values import BaseValue, ModifiableValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -124,3 +125,12 @@ def test_reset_engine_runtime_invalidates_nested_behavior_provider_scopes() -> N
         assert active_runtime_behavior_binding() is None
 
     assert active_runtime_behavior_binding() is None
+
+
+def test_retired_world_dice_cannot_be_looked_up_in_the_next_world():
+    die = Dice(count=1, value=20, bonus=ModifiableValue(
+        source_entity_uuid=uuid4(), base_value=0))
+    roll = die.roll
+    assert Dice.get(die.uuid) is die and DiceRoll.get(roll.roll_uuid) is roll
+    reset_engine_runtime()
+    assert Dice.get(die.uuid) is None and DiceRoll.get(roll.roll_uuid) is None

@@ -17,7 +17,7 @@ from game.animation_draw import BodyRows, attack_draw_commands, load_attack_medi
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.attack import BoundAttack, bind_attack, sample_attack
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from tests.game.player_helpers import player_history
 from game.projection import Camera
 from tests.game.scenarios import attack_history

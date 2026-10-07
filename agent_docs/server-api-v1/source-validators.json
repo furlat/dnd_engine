@@ -1,0 +1,229 @@
+[
+  {
+    "decorators": [
+      "model_validator(mode='after')"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/base_actions.py",
+    "line": 425,
+    "method": "validate_branch",
+    "source": "def validate_branch(self) -> \"ActionTargetEffectBranchProfile\":\n        \"\"\"Reject contradictory applicability and incomplete save rules.\"\"\"\n        overlap = self.included_creature_types & self.excluded_creature_types\n        if overlap:\n            raise ValueError(\"included and excluded creature types cannot overlap\")\n        if self.resolution is OutcomeResolution.SAVING_THROW:\n            if self.save_dc is None or self.save_ability is None:\n                raise ValueError(\"saving-throw target effects require save_dc and save_ability\")\n        elif self.save_dc is not None or self.save_ability is not None:\n            raise ValueError(\"save metadata is valid only for saving-throw target effects\")\n        return self",
+    "type": "ActionTargetEffectBranchProfile"
+  },
+  {
+    "decorators": [
+      "model_validator(mode='after')"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/base_actions.py",
+    "line": 450,
+    "method": "validate_unique_effect_ids",
+    "source": "def validate_unique_effect_ids(self) -> \"ActionTargetEffectProfile\":\n        \"\"\"Require one unambiguous definition for each effect identity.\"\"\"\n        effect_ids = [branch.effect_id for branch in self.branches]\n        if len(effect_ids) != len(set(effect_ids)):\n            raise ValueError(\"target effect branch ids must be unique\")\n        return self",
+    "type": "ActionTargetEffectProfile"
+  },
+  {
+    "decorators": [
+      "model_validator(mode='after')"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/base_actions.py",
+    "line": 520,
+    "method": "validate_information_effect",
+    "source": "def validate_information_effect(self) -> \"InformationEffectProfile\":\n        \"\"\"Require coherent geometry and sense metadata.\"\"\"\n        if (self.shape is None) != (self.radius_feet is None):\n            raise ValueError(\"information effect shape and radius_feet must be declared together\")\n        if self.operation is ActionInformationOperation.GRANT_SENSE:\n            if self.sense_type is None:\n                raise ValueError(\"grant-sense information effects require sense_type\")\n        elif self.sense_type is not None:\n            raise ValueError(\"sense_type is valid only for grant-sense information effects\")\n        return self",
+    "type": "InformationEffectProfile"
+  },
+  {
+    "decorators": [
+      "model_validator(mode='after')"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/base_actions.py",
+    "line": 548,
+    "method": "validate_topology_geometry",
+    "source": "def validate_topology_geometry(self) -> \"TopologyEffectProfile\":\n        \"\"\"Require shape and radius to describe one complete area contract.\"\"\"\n        if (self.shape is None) != (self.radius_feet is None):\n            raise ValueError(\"topology effect shape and radius_feet must be declared together\")\n        return self",
+    "type": "TopologyEffectProfile"
+  },
+  {
+    "decorators": [
+      "model_validator(mode='after')"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/base_actions.py",
+    "line": 571,
+    "method": "validate_nonempty_world_effect",
+    "source": "def validate_nonempty_world_effect(self) -> \"ActionWorldEffectProfile\":\n        \"\"\"Require at least one observable information or topology transition.\"\"\"\n        if not self.information_effects and not self.topology_effects:\n            raise ValueError(\"world effect profiles require an information or topology effect\")\n        return self",
+    "type": "ActionWorldEffectProfile"
+  },
+  {
+    "decorators": [
+      "model_validator(mode='after')"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/base_actions.py",
+    "line": 2783,
+    "method": "_validate_availability_status",
+    "source": "def _validate_availability_status(self) -> \"AvailableActionInfo\":\n        \"\"\"Reject contradictory affordability and closed status facts.\"\"\"\n        source_unaffordable = (\n            self.availability_status\n            is ActionAvailabilityStatus.SOURCE_UNAFFORDABLE\n        )\n        if source_unaffordable == self.can_afford:\n            raise ValueError(\n                \"source_unaffordable requires can_afford=false, while every \"\n                \"other availability status requires can_afford=true\"\n            )\n        available = (\n            self.availability_status is ActionAvailabilityStatus.AVAILABLE\n        )\n        if available != bool(self.valid_targets):\n            raise ValueError(\n                \"available requires at least one executable target, while \"\n                \"every unavailable status requires an empty target list\"\n            )\n        return self",
+    "type": "AvailableActionInfo"
+  },
+  {
+    "decorators": [
+      "field_validator('behavior_id', 'provided_by_id', 'origin_root_id')",
+      "classmethod"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/base_actions.py",
+    "line": 2806,
+    "method": "_validate_behavior_id",
+    "source": "def _validate_behavior_id(cls, value: str | None) -> str | None:\n        if value is None:\n            return None\n        return validate_namespaced_id(value, \"discovered behavior identity\")",
+    "type": "AvailableActionInfo"
+  },
+  {
+    "decorators": [
+      "field_validator('behavior_id', 'provided_by_id', 'origin_root_id')",
+      "classmethod"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/base_actions.py",
+    "line": 2867,
+    "method": "_validate_behavior_id",
+    "source": "def _validate_behavior_id(cls, value: str | None) -> str | None:\n        if value is None:\n            return None\n        return validate_namespaced_id(value, \"discovered handler identity\")",
+    "type": "AvailableHandlerInfo"
+  },
+  {
+    "decorators": [
+      "field_serializer('perceiver_uuids', 'revealed_entity_uuids', when_used='json')"
+    ],
+    "disposition": "Producer-only serialization/canonicalization; export wire shapes, never reproduce in an SDK",
+    "file": "dnd/core/combat_log.py",
+    "line": 640,
+    "method": "serialize_uuid_set",
+    "source": "def serialize_uuid_set(self, value: Set[str]) -> List[str]:\n        \"\"\"Emit unordered UUID knowledge as a canonical JSON array.\"\"\"\n        return sorted(value)",
+    "type": "CombatLogEntry"
+  },
+  {
+    "decorators": [
+      "field_validator('equipment_sprites')",
+      "classmethod"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/content/descriptors.py",
+    "line": 67,
+    "method": "_normalize_equipment_sprites",
+    "source": "def _normalize_equipment_sprites(\n        cls,\n        value: tuple[EquipmentSpritePresentation, ...],\n    ) -> tuple[EquipmentSpritePresentation, ...]:\n        layer_keys = [\n            (row.equipment_slot, row.render_layer)\n            for row in value\n        ]\n        if len(layer_keys) != len(set(layer_keys)):\n            raise ValueError(\n                \"equipment presentation slot/layer pairs must be unique\",\n            )\n        return tuple(sorted(\n            value,\n            key=lambda row: (\n                row.equipment_slot.value,\n                row.render_layer.value,\n            ),\n        ))",
+    "type": "ContentPresentation"
+  },
+  {
+    "decorators": [
+      "field_validator('pack_id')",
+      "classmethod"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/content/identities.py",
+    "line": 72,
+    "method": "_validate_pack_id",
+    "source": "def _validate_pack_id(cls, value: str) -> str:\n        return validate_namespaced_id(value, \"pack_id\")",
+    "type": "ContentRef"
+  },
+  {
+    "decorators": [
+      "field_validator('content_id')",
+      "classmethod"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/content/identities.py",
+    "line": 77,
+    "method": "_validate_content_id",
+    "source": "def _validate_content_id(cls, value: str) -> str:\n        return validate_namespaced_id(value, \"content_id\")",
+    "type": "ContentRef"
+  },
+  {
+    "decorators": [
+      "field_validator('definition_contract_hash')",
+      "classmethod"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/content/identities.py",
+    "line": 82,
+    "method": "_validate_contract_hash",
+    "source": "def _validate_contract_hash(cls, value: str) -> str:\n        return validate_sha256(value, \"definition_contract_hash\")",
+    "type": "ContentRef"
+  },
+  {
+    "decorators": [
+      "model_validator(mode='after')"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/presentation_geometry.py",
+    "line": 62,
+    "method": "validate_centering",
+    "source": "def validate_centering(self) -> \"CubePresentationGeometry\":\n        \"\"\"Require only directional cubes to carry an orientation.\"\"\"\n        if self.centered and self.direction is not None:\n            raise ValueError(\"centered cube cannot carry a direction\")\n        if not self.centered and self.direction is None:\n            raise ValueError(\"directional cube requires a direction\")\n        return self",
+    "type": "CubePresentationGeometry"
+  },
+  {
+    "decorators": [
+      "model_validator(mode='after')"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/presentation_geometry.py",
+    "line": 90,
+    "method": "validate_segment",
+    "source": "def validate_segment(self) -> \"WallSegment\":\n        if self.start == self.end:\n            raise ValueError(\"A wall segment must have positive length\")\n        return self",
+    "type": "WallSegment"
+  },
+  {
+    "decorators": [
+      "model_validator(mode='after')"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/core/presentation_geometry.py",
+    "line": 114,
+    "method": "validate_path",
+    "source": "def validate_path(self) -> \"WallPolyline\":\n        if any(first == second for first, second in zip(self.points, self.points[1:])):\n            raise ValueError(\"Consecutive wall vertices must differ\")\n        return self",
+    "type": "WallPolyline"
+  },
+  {
+    "decorators": [
+      "field_serializer('blocked_effect_ids', when_used='json')"
+    ],
+    "disposition": "Producer-only serialization/canonicalization; export wire shapes, never reproduce in an SDK",
+    "file": "dnd/types/actor.py",
+    "line": 43,
+    "method": "serialize_blocked_effect_ids",
+    "source": "def serialize_blocked_effect_ids(self, value: frozenset[str]) -> list[str]:\n        return sorted(value)",
+    "type": "OutcomeProtection"
+  },
+  {
+    "decorators": [
+      "model_validator(mode='after')"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/types/world_placement.py",
+    "line": 83,
+    "method": "validate_shape",
+    "source": "def validate_shape(self) -> Self:\n        \"\"\"Require exact vertical and center/boundary shape semantics.\"\"\"\n        if not self.covered_supports:\n            # Older records already carry this exact support identity.\n            object.__setattr__(self, \"covered_supports\", (\n                WorldObjectSupport(position=self.position, tile_uuid=self.tile_uuid),\n            ))\n        if len({support.position for support in self.covered_supports}) != len(self.covered_supports):\n            raise ValueError(\"covered support positions must be unique\")\n        if WorldObjectSupport(position=self.position, tile_uuid=self.tile_uuid) not in self.covered_supports:\n            raise ValueError(\"covered supports must contain the canonical anchor\")\n        if self.top_height_steps <= self.base_height_steps:\n            raise ValueError(\n                \"top_height_steps must be greater than base_height_steps\"\n            )\n        supports = {support.position for support in self.covered_supports}\n        if len(set(self.removed_bands)) != len(self.removed_bands) or any(\n                (x, y) not in supports or not self.base_height_steps <= height < self.top_height_steps\n                for x, y, height in self.removed_bands):\n            raise ValueError(\"removed bands must be unique cells of this object volume\")\n        if self.kind is WorldPlacementKind.CENTER:\n            if self.boundary_direction is not None:\n                raise ValueError(\n                    \"center placement cannot define boundary_direction\"\n                )\n        elif self.boundary_direction is None:\n            raise ValueError(\"boundary placement requires boundary_direction\")\n        elif len(self.covered_supports) != 1:\n            raise ValueError(\"boundary placement has one owner Tile\")\n        return self",
+    "type": "WorldObjectPlacement"
+  },
+  {
+    "decorators": [
+      "model_validator(mode='after')"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "dnd/types/world_placement.py",
+    "line": 137,
+    "method": "validate_channels",
+    "source": "def validate_channels(self) -> Self:\n        \"\"\"Require unique channels in canonical order.\"\"\"\n        canonical = tuple(WorldEdgeChannel)\n        if len(set(self.blocked_channels)) != len(self.blocked_channels):\n            raise ValueError(\"blocked_channels must not contain duplicates\")\n        if tuple(\n            channel\n            for channel in canonical\n            if channel in self.blocked_channels\n        ) != self.blocked_channels:\n            raise ValueError(\"blocked_channels must use canonical channel order\")\n        return self",
+    "type": "BoundaryStructure"
+  },
+  {
+    "decorators": [
+      "model_validator(mode='before')",
+      "classmethod"
+    ],
+    "disposition": "Retain source owner validation; finite wire/cross-field counterpart inventoried in semantic-contract.md",
+    "file": "game/player_facts.py",
+    "line": 212,
+    "method": "restore_recorded_area_policy",
+    "source": "def restore_recorded_area_policy(cls, value: object) -> object:\n        return upgrade_spell_fact(value)",
+    "type": "SpellFact"
+  }
+]

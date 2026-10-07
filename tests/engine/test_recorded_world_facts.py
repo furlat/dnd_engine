@@ -24,8 +24,8 @@ from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
 from dnd.types.world import CardinalDirection
 from dnd.world_authoring import set_world_tile
 from dnd.world_facts import WorldFacts, apply_world_fact
-from game.event_record import RecordedEvent
-from game.presentation import _retained_event
+from dnd.player.event_record import RecordedEvent
+from dnd.player.capture import _retained_event
 from tests.engine.support import create_test_entity
 
 

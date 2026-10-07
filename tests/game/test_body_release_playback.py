@@ -20,9 +20,9 @@ from game.assets import SurfaceCache, load_catalog
 from game.app import draw_frame
 from game.choreography import bind_choreography, sample_choreography
 from game.motion import bind_motion, sample_motion
-from game.player_facts import AttackFact, DamageResultFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import AttackFact, DamageResultFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from tests.game.body_residue_scenarios import body_residue_history, hidden_residue_history
 from tests.game.dread_residue_scenarios import dread_residue_history

@@ -11,7 +11,7 @@ from dnd.core.combat_log import CombatLogEntryType
 from game.animation_data import load_animation_data
 from game.choreography import BoundChoreography, MotionTimeline
 from game.attack import BoundAttack
-from game.player_reduction import index_player_lineage
+from dnd.player.reduction import index_player_lineage
 from game.presentation_group import presentation_groups, bind_presentation_group, reduce_presentation_group
 from game.ui.combat_log import (LogHistory, LogView, LogLayout, group_log_rows, retain_logs, admitted_log_rows,
     visible_log_rows, copy_log_selection, draw_combat_log, scroll_log, log_text_position, drag_log_scroll, row_text)

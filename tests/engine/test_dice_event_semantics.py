@@ -9,7 +9,10 @@ import pytest
 
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.combat_log import (
+    ActionLogData, CombatLogEntry, CombatLogEntryType,
+    RollModificationLogData, RollModificationLogFact,
+)
 from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
@@ -1258,7 +1261,8 @@ def test_eb_03_014_real_attack_pipeline_applies_modified_damage_rolls() -> None:
     ]
     assert len(modification_logs) == 1
     assert modification_logs[0] is damage_event.combat_log
-    assert modification_logs[0].data["modifications"][0]["handler_name"] == (
+    assert isinstance(modification_logs[0].data, RollModificationLogData)
+    assert modification_logs[0].data.modifications[0].handler_name == (
         "Great Weapon Fighting"
     )
 
@@ -1713,21 +1717,14 @@ def test_modified_result_emits_typed_combat_log_and_unmodified_result_is_silent(
     assert modified.combat_log.entry_type is CombatLogEntryType.ROLL_MODIFICATION
     assert modified.combat_log.source_name == "Scout"
     assert modified.combat_log.target_name == "Locked Door"
-    assert modified.combat_log.data == {
-        "roll_type": "check",
-        "modifications": [
-            {
-                "operation": "replace",
-                "handler_name": "Guidance",
-                "packet_index": None,
-                "previous_total": 8,
-                "final_total": 11,
-                "reason": "+3 (1d4)",
-                "packet_damage_type": None,
-                "packet_dice": None,
-            }
-        ],
-    }
+    assert modified.combat_log.data == RollModificationLogData(
+        roll_type="check",
+        modifications=[RollModificationLogFact(
+            operation="replace", handler_name="Guidance", packet_index=None,
+            previous_total=8, final_total=11, reason="+3 (1d4)",
+            packet_damage_type=None, packet_dice=None,
+        )],
+    )
     assert "Guidance" in modified.combat_log.compact
     assert "8" in modified.combat_log.verbose
     assert "11" in modified.combat_log.verbose
@@ -1747,7 +1744,7 @@ def test_damage_packet_modification_log_nests_under_its_causal_parent() -> None:
         event_type=EventType.BASE_ACTION,
         phase=EventPhase.DECLARATION,
         combat_log=CombatLogEntry(
-            entry_type=CombatLogEntryType.ATTACK,
+            entry_type=CombatLogEntryType.ACTION,
             source_name="Paladin",
             source_uuid=str(source_uuid),
             target_name="Fiend",
@@ -1755,6 +1752,9 @@ def test_damage_packet_modification_log_nests_under_its_causal_parent() -> None:
             compact="Paladin attacks Fiend",
             verbose="Paladin attacks Fiend",
             detailed="Paladin attacks Fiend",
+            data=ActionLogData(entity_name="Paladin", entity_uuid=str(source_uuid),
+                action_name="Parent Attack", effect_description="Paladin attacks Fiend",
+                target_name="Fiend", target_uuid=str(target_uuid)),
         ),
     )
     weapon_roll = make_damage_roll(source_uuid, target_uuid, [5])
@@ -1784,16 +1784,12 @@ def test_damage_packet_modification_log_nests_under_its_causal_parent() -> None:
     )
 
     assert result.combat_log is not None
-    assert result.combat_log.data["modifications"][0] == {
-        "operation": "append",
-        "handler_name": "Divine Smite",
-        "packet_index": 1,
-        "previous_total": None,
-        "final_total": 13,
-        "reason": "Level 1 spell slot",
-        "packet_damage_type": "radiant",
-        "packet_dice": "2d8",
-    }
+    assert isinstance(result.combat_log.data, RollModificationLogData)
+    assert result.combat_log.data.modifications[0] == RollModificationLogFact(
+        operation="append", handler_name="Divine Smite", packet_index=1,
+        previous_total=None, final_total=13, reason="Level 1 spell slot",
+        packet_damage_type="radiant", packet_dice="2d8",
+    )
     assert parent_completion.combat_log is not None
     assert [
         entry.entry_type for entry in parent_completion.combat_log.sub_entries

@@ -19,7 +19,7 @@ from dnd.types.world_placement import BoundaryStructureKind
 from game.app import BACKGROUND, draw_frame
 from game.demo import build_demo_intervals
 from game.assets import SurfaceCache, load_catalog
-from game.presentation import reduce_interval
+from dnd.player.capture import reduce_interval
 from game.projection import Camera, pick_support, project_screen
 
 

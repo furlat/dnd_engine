@@ -33,8 +33,8 @@ from game.condition_animation import (
     sample_condition_body,
 )
 from game.forced_movement import sample_forced_body, sample_shove
-from game.player_facts import AttackFact, MovementFact, SpellFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import AttackFact, MovementFact, SpellFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
 from tests.game.concealment_scenarios import concealment_history
 from tests.game.forced_movement_scenarios import forced_movement_history

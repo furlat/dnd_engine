@@ -51,7 +51,7 @@ def _scan_logs_for_reveals(logs: List[CombatLogEntry], revealed: Set[str]) -> No
     """Recursively scan condition-owned perceivability removals."""
     for log in logs:
         if log.entry_type == CombatLogEntryType.CONDITION_REMOVED:
-            if log.data.get("reveals_target") and log.target_uuid:
+            if log.data.kind == "condition_removed" and log.data.reveals_target and log.target_uuid:
                 target = Entity.get(UUID(log.target_uuid))
                 if target and not target.stealth_dc and not target.is_invisible:
                     revealed.add(log.target_uuid)
@@ -148,6 +148,9 @@ class AdvanceResult(BaseObject):
         turn_index: Current initiative-order index.
         log_start_index: Combat-log index before automated turns ran.
     """
+
+    use_register: bool = Field(default=False,
+        description="Transient advancement result; register only when explicitly requested.")
 
     status: str = Field(description="Result status for the advancement attempt.")
     entity_uuid: Optional[UUID] = Field(
@@ -679,26 +682,26 @@ class Encounter(BaseObject):
         )
         event = event.phase_to(EventPhase.EXECUTION)
         event = event.phase_to(EventPhase.EFFECT)
+        self._environment_step(parent_event=event)
         event = event.phase_to(EventPhase.COMPLETION)
         return event
 
-    def _environment_step(self) -> None:
+    def _environment_step(self, *, parent_event: Event | None = None) -> None:
         """Advance each world-owned condition once at the round boundary."""
         grid = get_map()
         for condition in list(grid.get_spatial_conditions()):
             if isinstance(condition, SpatialCondition):
-                condition.progress_spatial_duration()
+                condition.progress_spatial_duration(parent_event=parent_event)
         for tile in grid.get_tiles_with_conditions():
             for cond_name in list(tile.active_conditions.keys()):
-                tile.advance_duration(cond_name)
+                tile.advance_duration(cond_name, parent_event=parent_event)
         for item_block in grid.get_objects_with_conditions():
             for cond_name in list(item_block.active_conditions.keys()):
-                item_block.advance_duration(cond_name, interval=(self.uuid, self.round_number))
+                item_block.advance_duration(cond_name, interval=(self.uuid, self.round_number), parent_event=parent_event)
 
     def _advance_round(self) -> None:
         """Advance to the next round."""
         self._fire_round_end()
-        self._environment_step()
 
         self.round_number += 1
         self.current_turn_index = 0
@@ -1033,15 +1036,7 @@ class Encounter(BaseObject):
         self.combat_log.append(event.combat_log)
         index = len(self.combat_log) - 1
         for listener in list(self.__class__._combat_log_listeners):
-            try:
-                listener(self, index, event.combat_log, event)
-            except Exception:
-                logger.exception(
-                    "Passive combat-log listener %r failed for encounter %s log %s",
-                    listener,
-                    self.uuid,
-                    index,
-                )
+            listener(self, index, event.combat_log, event)
         return index
 
     def get_combat_log(

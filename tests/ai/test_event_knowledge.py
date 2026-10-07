@@ -25,8 +25,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.abjuration import ProtectionFromEnergyEffect, ShieldBuff
 from dnd.spells.necromancy import NoHealing
 from dnd.types.actor_facts import ConditionFact
-from game.event_record import RecordedEvent
-from game.presentation import _retained_event
+from dnd.player.event_record import RecordedEvent
+from dnd.player.capture import _retained_event
 
 
 SOURCE_ROWS = TypeAdapter(list[tuple[int, RecordedEvent, ConditionFact | None]])

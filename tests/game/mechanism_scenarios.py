@@ -30,8 +30,8 @@ from dnd.spatial.triggers import materialize_pressure_plate
 from dnd.types.controls import ActivationLink, ControlLink
 from dnd.types.traps import TrapDamage, TrapPayload
 from dnd.types.world import CardinalDirection
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def mechanism_history(*, program: Literal["darts", "blade", "crusher", "door", "light"] = "darts",

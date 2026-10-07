@@ -25,11 +25,11 @@ from devtools.animation_review.produce import produce
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.motion import bind_motion, sample_motion
-from game.presentation import capture_lineage, reduce_lineage
-from game.replay import RecordedSequence, capture_history, decode_sequence, encode_sequence
-from game.event_record import decode_event, encode_event
-from game.player_facts import StepFact
-from game.player_reduction import reduce_lineage as reduce_player_lineage
+from dnd.player.capture import capture_lineage, reduce_lineage
+from dnd.player.recorded import RecordedSequence, capture_history, decode_sequence, encode_sequence
+from dnd.player.event_record import decode_event, encode_event
+from dnd.player.facts import StepFact
+from dnd.player.reduction import reduce_lineage as reduce_player_lineage
 from tests.game.player_helpers import player_inputs
 from tests.game.scenarios import _healing_encounter
 from tests.game.persistent_spell_scenarios import persistent_spell_history
@@ -92,7 +92,18 @@ def test_retained_completion_archives_preserve_absent_receipts_on_native_round_t
             for name in fields:
                 assert name not in old and name not in new
             checked += bool(fields)
-            pending.extend((value, new[key]) for key, value in old.items())
+            if old.get("entry_type") == "multi_entity_action" and "per_target_logs" in old["data"]:
+                # Typed logs retain each original target result once, as an
+                # ordered child reference instead of a second copied payload.
+                targets = old["data"]["per_target_logs"]
+                indices = new["data"]["target_entry_indices"]
+                assert len(targets) == len(indices)
+                for target, index in zip(targets, indices, strict=True):
+                    assert all(new["sub_entries"][index]["data"][key] == value
+                               for key, value in target.items())
+                pending.extend((target, new["sub_entries"][index]["data"])
+                               for target, index in zip(targets, indices, strict=True))
+            pending.extend((value, new[key]) for key, value in old.items() if key != "per_target_logs")
         elif isinstance(old, list):
             assert len(old) == len(new)
             pending.extend(zip(old, new, strict=True))

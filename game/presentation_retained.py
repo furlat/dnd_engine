@@ -15,7 +15,7 @@ from game.concentration_media import ConcentrationMediaLifetime, register_concen
 from game.item_attachment_lifetime import register_item_attachment_starts
 from game.deposit_media import DepositStart, register_deposit_starts
 from game.timing_evidence import DependencyScope, PresentationDependencies, validate_timing_evidence
-from game.player_facts import PlayerLineage, PlayerState
+from dnd.player.facts import PlayerLineage, PlayerState
 
 
 @dataclass(frozen=True, slots=True)

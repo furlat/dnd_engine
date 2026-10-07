@@ -19,9 +19,9 @@ from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media
 from game.device_art import device_bank, load_device_art
 from game.playback_frame import sample_playback_frame
-from game.player_facts import AttackFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import AttackFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, project_screen
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors

@@ -15,7 +15,7 @@ os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 from dnd.content_system.spell_catalog_composition import SPELL_CATALOG_COMPOSITION_ROWS
 from dnd.core.events import EventType
 from game.animation_data import load_animation_data
-from game.event_record import EVENT_MODELS
+from dnd.player.event_record import EVENT_MODELS
 from game.environment_art import load_environment_art
 from game.presentation_coverage import presentation_inventory
 

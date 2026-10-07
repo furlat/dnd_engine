@@ -9,7 +9,7 @@ from dnd.types.event_facts import EventType
 from dnd.core.item_types import ItemEffectPresentationState
 from game.animation_types import AnimationData, ItemAttachmentStart
 from game.choreography import BoundChoreography, MotionTimeline, walk_bound_timelines
-from game.player_facts import ItemEffectChangeFact, PlayerLineage, PlayerState
+from dnd.player.facts import ItemEffectChangeFact, PlayerLineage, PlayerState
 
 
 def item_attachment_members(state: PlayerState, data: AnimationData,

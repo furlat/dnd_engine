@@ -12,7 +12,7 @@ from dnd.world_authoring import project_world_tile
 from game.controls import ActionSelection, confirm_targeting, undo_targeting
 from tests.game.ui_selection_helpers import selected_prefix
 from game.projection import Camera, project_screen
-from game.session import discover_player_actions, execute_player_action, player_position_options
+from dnd.player.session import discover_player_actions, execute_player_action, player_position_options
 from tests.engine.test_telekinesis_landing import scene as scene, cast
 from tests.game.test_session import session as session, _advance_to_human
 

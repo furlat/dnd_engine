@@ -14,8 +14,8 @@ from game.choreography import bind_choreography
 from game.condition_media_lifetime import register_condition_lifetimes
 from game.choreography_draw import load_choreography_media
 from game.playback_frame import sample_playback_frame
-from game.player_facts import SpellFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import SpellFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors

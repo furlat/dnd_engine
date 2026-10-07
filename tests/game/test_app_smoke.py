@@ -28,7 +28,7 @@ from game.app import (
 from game.demo import _display_sources, _produce_intervals, build_demo_intervals, run
 from game.assets import SurfaceCache, load_catalog
 from game.environment_art import load_environment_art
-from game.presentation import PresentationTarget, reduce_interval
+from dnd.player.capture import PresentationTarget, reduce_interval
 from game.projection import Camera, pick_support, project_screen
 
 
@@ -461,9 +461,9 @@ def test_public_decoder_sampler_and_painter_imports_stay_passive() -> None:
             sys.executable,
             "-c",
             (
-                "import sys; import game.player_reduction; import game.playback_frame; import game.app; "
+                "import sys; import dnd.player.reduction; import game.playback_frame; import game.app; "
                 "forbidden = ('dnd.actions', 'dnd.conditions', 'dnd.entity', 'dnd.blocks.sensory', "
-                "'game.player_projection', 'game.presentation', 'game.actor_projection', "
+                "'dnd.player.projection', 'dnd.player.capture', 'dnd.player.actor_projection', "
                 "'game.combat_demo', 'game.demo'); "
                 "loaded = [name for name in sys.modules if any(name == prefix or name.startswith(prefix + '.') "
                 "for prefix in forbidden)]; assert not loaded, loaded"

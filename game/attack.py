@@ -30,8 +30,8 @@ from game.animation_types import (
     LayerColors, PaletteTreatment, RigLayer, StudioActorLayer, StudioDamage, WeaponTrailPose, WeaponTrailPresentation,
 )
 from game.combat import actor_contact, object_contact
-from game.player_facts import AttackFact, DamageResultFact, ObjectDamageFact, LifeFact, PlayerLineage, PlayerNode, PlayerState
-from game.player_reduction import PlayerCausalIndex, index_player_lineage, reduce_lineage
+from dnd.player.facts import AttackFact, DamageResultFact, ObjectDamageFact, LifeFact, PlayerLineage, PlayerNode, PlayerState
+from dnd.player.reduction import PlayerCausalIndex, index_player_lineage, reduce_lineage
 from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
 
 

@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
 from dnd.core.base_object import BaseObject
-from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
+from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent, SpellProtectionRegistry
 from dnd.core.condition_types import (
     HazardFilter, InvoluntarySustainLoss, SustainLossPolicy, ConditionTag,
 )
@@ -1683,8 +1683,17 @@ class BaseBlock(BaseModel):
 
         return None
 
+    def publish_condition_state(self, condition: BaseCondition, *, parent_event: Event | None = None) -> None:
+        """Publish an existing membership's after-values without replaying application."""
+        ConditionStateChangedEvent(source_entity_uuid=condition.source_entity_uuid,
+            target_entity_uuid=self.uuid, parent_event=parent_event.uuid if parent_event is not None else None,
+            phase=EventPhase.COMPLETION, condition_state=condition.snapshot_state(),
+            resulting_stats=self.snapshot_entity_stats(), resulting_tile=self.snapshot_world_tile(),
+            resulting_item=self.snapshot_item_state(),
+            behavior_id=condition.behavior_binding.behavior_id if condition.behavior_binding is not None else None)
+
     def advance_duration(self, condition_name: str, *,
-                         interval: Optional[Tuple[UUID, int]] = None) -> bool:
+                         interval: Optional[Tuple[UUID, int]] = None, parent_event: Event | None = None) -> bool:
         """Progress a block-owned condition duration without saving throws.
 
         Args:
@@ -1698,9 +1707,12 @@ class BaseBlock(BaseModel):
         condition = self.active_conditions.get(condition_name)
         if condition is None:
             return False
+        before = condition.snapshot_duration()
         expired = condition.progress_for_interval(interval)
         if expired:
-            self.remove_condition(condition_name, expire=True)
+            self.remove_condition(condition_name, expire=True, parent_event=parent_event)
+        elif before != condition.snapshot_duration():
+            self.publish_condition_state(condition, parent_event=parent_event)
         return expired
 
     def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, parent_event: Optional[Event] = None, *, required_condition: Optional[Tuple['BaseBlock', BaseCondition]] = None)  -> Optional[Event]:

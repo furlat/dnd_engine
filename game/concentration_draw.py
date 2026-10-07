@@ -7,7 +7,7 @@ from game.animation_types import AnimationData
 from game.concentration_media import ConcentrationMediaLifetime
 from game.draw_commands import DrawCommand
 from game.maintained_media import maintained_media_alpha, maintained_media_frame
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.projection import Camera
 from game.spatial_field_media import field_media_commands
 

@@ -102,6 +102,7 @@ from dnd.core.gridmap import (
 )
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.geometry import supercover_line
+from dnd.core.combat_log import EmptyLogData
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.creature_transforms import (
     ModifierOwnership,
@@ -1200,7 +1201,7 @@ class Entity(BaseBlock):
             ),
             proficiency_bonus=self.proficiency_bonus.normalized_score,
             initiative=self.initiative.normalized_score,
-            armor_class=self.ac_bonus().normalized_score,
+            armor_class=self.ac_bonus(use_register=False).normalized_score,
             life_state=self.health.life_state.value,
             remains_disposition=self.health.remains_disposition,
             current_hit_points=max(0, self.get_hp()),
@@ -2144,7 +2145,7 @@ class Entity(BaseBlock):
             if self.check_condition_immunity(condition.name, condition=condition):
                 target_name = self.name
                 condition_name = condition.name
-                entry = CombatLogEntry(
+                entry = CombatLogEntry(data=EmptyLogData(),
                     entry_type=CombatLogEntryType.CONDITION_APPLIED,
                     source_name=target_name,
                     source_uuid=str(self.uuid),
@@ -2160,11 +2161,10 @@ class Entity(BaseBlock):
                     located_entity_observer_uuids={identity: set(observers) for identity, observers
                         in declaration_event.located_entity_observer_uuids.items()},
                 )
-                EventQueue.push_combat_log(entry, self.uuid)
-
                 if declaration_event is not None:
                     canceled = declaration_event.cancel(
                         status_message=f"Condition {condition.name} is immune",
+                        combat_log=entry,
                     )
                     self._discard_uncommitted_condition_tree(condition)
                     return canceled
@@ -2258,7 +2258,8 @@ class Entity(BaseBlock):
             if errors:
                 raise BaseExceptionGroup("Committed initial condition publication failed", errors)
 
-    def advance_duration_condition(self, condition_name: str, skip_save_throw: bool = False) -> bool:
+    def advance_duration_condition(self, condition_name: str, skip_save_throw: bool = False, *,
+                                   parent_event: Event | None = None) -> bool:
         """Progress a condition's duration and remove if expired.
 
         Handles saving throw checks for conditional removal. Uses Entity's
@@ -2278,13 +2279,16 @@ class Entity(BaseBlock):
         if not skip_save_throw and condition.removal_saving_throw is not None:
             (_, _, success) = self.saving_throw(condition.removal_saving_throw)
             if success:
-                self.remove_condition(condition_name)
+                self.remove_condition(condition_name, parent_event=parent_event)
                 return True
 
+        before = condition.snapshot_duration()
         expired = condition.progress_for_interval(self.turn_duration_interval)
         if expired:
-            self.remove_condition(condition_name, expire=True,
+            self.remove_condition(condition_name, expire=True, parent_event=parent_event,
                 terminal_release=condition.terminal_release_for_expiration())
+        elif before != condition.snapshot_duration():
+            self.publish_condition_state(condition, parent_event=parent_event)
         return expired
 
     def reduce_condition_level(
@@ -2355,7 +2359,7 @@ class Entity(BaseBlock):
         if count > hit_die.available_hit_dice:
             raise ValueError(f"Not enough hit dice available to spend {count}")
 
-        constitution_modifier = self.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+        constitution_modifier = self.ability_scores.get_ability("constitution").get_combined_values(use_register=False).normalized_score
         results: List[HitDiceHealingResult] = []
         for _ in range(count):
             roll_result = self.health.spend_hit_die(
@@ -2410,7 +2414,7 @@ class Entity(BaseBlock):
             maximum_hp=maximum_hp,
             temporary_hp=self.health.temporary_hit_points.normalized_score,
             temporary_hp_grant=self.health.temporary_hit_points_grant,
-            armor_class=self.ac_bonus().normalized_score,
+            armor_class=self.ac_bonus(use_register=False).normalized_score,
             resolved_size=self.size,
             native_plane_id=self.native_plane_id, current_plane_id=self.current_plane_id,
             spatial_disposition=self.spatial_disposition,
@@ -2423,7 +2427,7 @@ class Entity(BaseBlock):
 
     def get_max_hp(self) -> int:
         """Return maximum normal HP before temporary hit points and damage."""
-        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
+        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values(use_register=False)
         return self.health.get_max_hit_dices_points(
             constitution_modifier=con_modifier.normalized_score
         ) + self.health.max_hit_points_bonus.normalized_score
@@ -2946,18 +2950,18 @@ class Entity(BaseBlock):
 
         condition_names = list(self.active_conditions.keys())
         for condition_name in condition_names:
-            self.advance_duration_condition(condition_name)
+            self.advance_duration_condition(condition_name, parent_event=event)
             if self._runtime_agency_revoked:
                 return event.phase_to(EventPhase.COMPLETION)
 
         for item in self.equipment.get_all_equipped_items():
             for cond_name in list(item.active_conditions.keys()):
                 item.advance_duration(cond_name, interval=(encounter_uuid, round_number)
-                                      if encounter_uuid is not None else None)
+                                      if encounter_uuid is not None else None, parent_event=event)
         for item in self.inventory.items.values():
             for cond_name in list(item.active_conditions.keys()):
                 item.advance_duration(cond_name, interval=(encounter_uuid, round_number)
-                                      if encounter_uuid is not None else None)
+                                      if encounter_uuid is not None else None, parent_event=event)
 
         self.action_economy.reset_all_costs()
         self.action_economy.on_turn_start()
@@ -3034,7 +3038,7 @@ class Entity(BaseBlock):
 
         return event
 
-    def _get_bonuses_for_skill(self, skill_name: SkillName) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
+    def _get_bonuses_for_skill(self, skill_name: SkillName, *, use_register: bool = True) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
         """Return component values that make up an entity skill bonus.
 
         Args:
@@ -3056,7 +3060,7 @@ class Entity(BaseBlock):
                 ability.check_proficiency_sources.apply(bonus),
             )
 
-        ability_bonus = ability.get_combined_values()
+        ability_bonus = ability.get_combined_values(use_register=use_register)
         normalized_proficiency_bonus = proficiency_bonus.model_copy(deep=True)
         normalized_proficiency_bonus.update_normalizers(proficiency_bonus_multiplier_callable)
         return normalized_proficiency_bonus, skill_bonus, ability_bonus
@@ -3241,8 +3245,8 @@ class Entity(BaseBlock):
         """
         timing = action_timing_enabled()
         started = time.perf_counter() if timing else 0.0
-        skill_bonuses = self._get_bonuses_for_skill(skill_name)
-        skill_bonus = skill_bonuses[0].combine_values(list(skill_bonuses[1:]))
+        skill_bonuses = self._get_bonuses_for_skill(skill_name, use_register=False)
+        skill_bonus = skill_bonuses[0].combine_values(list(skill_bonuses[1:]), use_register=False)
         if timing:
             record_action_timing(f"passive_skill.{skill_name}.skill_bonus_ms", started)
 
@@ -3279,11 +3283,12 @@ class Entity(BaseBlock):
         """Entity relays to its Senses block for sense modes."""
         return self.senses.get_sense_modes()
 
-    def ac_bonus(self, target_entity_uuid: Optional[UUID]=None) -> ModifiableValue:
+    def ac_bonus(self, target_entity_uuid: Optional[UUID]=None, *, use_register: bool = True) -> ModifiableValue:
         """Build the entity's armor class value.
 
         Args:
             target_entity_uuid: Optional entity targeting this armor class.
+            use_register: Register temporary combined values for later UUID lookup.
 
         Returns:
             Combined armor class value.
@@ -3298,11 +3303,11 @@ class Entity(BaseBlock):
         )
         formula_ac: Optional[ModifiableValue] = None
         if formula is not None:
-            unarmored_values = self.equipment.get_unarmored_ac_values(formula)
+            unarmored_values = self.equipment.get_unarmored_ac_values(formula, use_register=use_register)
             abilities = self.equipment.get_unarmored_abilities(formula)
-            ability_bonuses = [self.ability_scores.get_ability(ability).get_combined_values() for ability in abilities]
+            ability_bonuses = [self.ability_scores.get_ability(ability).get_combined_values(use_register=use_register) for ability in abilities]
             formula_ac = unarmored_values[0].combine_values(
-                unarmored_values[1:] + ability_bonuses
+                unarmored_values[1:] + ability_bonuses, use_register=use_register
             )
 
         if self.equipment.is_unarmored():
@@ -3312,12 +3317,12 @@ class Entity(BaseBlock):
         else:
             armored_values = self.equipment.get_armored_ac_values()
             max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
-            combined_dexterity_bonus = self.ability_scores.get_ability("dexterity").get_combined_values()
+            combined_dexterity_bonus = self.ability_scores.get_ability("dexterity").get_combined_values(use_register=use_register)
 
             if max_dexterity_bonus is not None and combined_dexterity_bonus.normalized_score > max_dexterity_bonus.normalized_score:
                 combined_dexterity_bonus = max_dexterity_bonus
 
-            ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus])
+            ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus], use_register=use_register)
             if (
                 formula_ac is not None
                 and formula_ac.normalized_score > ac_bonus.normalized_score
@@ -3979,7 +3984,7 @@ class Entity(BaseBlock):
 
     def get_hp(self) -> int:
         """Return current total HP after Constitution, bonuses, temp HP, and damage."""
-        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
+        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values(use_register=False)
         return self.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
 
     def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Range:
@@ -4879,7 +4884,7 @@ class Entity(BaseBlock):
             position=position,
             equipment_slot=equipment_slot,
             merged_into_item_uuid=merged_into_item_uuid,
-            entity_armor_class_after=self.ac_bonus().normalized_score,
+            entity_armor_class_after=self.ac_bonus(use_register=False).normalized_score,
             stack_count=stack_count,
             source_entity_uuid=self.uuid,
             parent_event=parent_event,
@@ -5235,8 +5240,9 @@ class Entity(BaseBlock):
         safe_path_costs: Dict[Tuple[int, int], int] = {}
         has_reachable_hazard = any(
             grid.is_position_hazardous_for(step[0], step[1], self.uuid)
-            for path in filtered_paths.values()
-            for step in path[1:]
+            for step in {
+                step for path in filtered_paths.values() for step in path[1:]
+            }
         )
         if has_reachable_hazard:
             safe_distances, safe_raw_paths = grid.compute_paths(

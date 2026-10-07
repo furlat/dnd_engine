@@ -11,7 +11,7 @@ from game.animation_types import AnimationData, GroundEllipse, OrbitMedia, Spati
 from game.area_media import AreaLayer, AreaMedia
 from game.draw_commands import DrawCommand
 from game.media_blend import SCREEN_BLEND
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.projection import Camera, TILE_WIDTH, TILE_HEIGHT, painter_key, project_screen
 from game.registered_media import registered_media_samples
 

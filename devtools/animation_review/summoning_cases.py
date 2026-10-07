@@ -35,8 +35,8 @@ from dnd.summoning.system import bind_summoning
 from dnd.summoning.forms import selected_form
 from dnd.types.summoning import SummonFamily, SummonSelection
 from dnd.core.life_types import LifeState
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def summoning_history(

@@ -15,8 +15,8 @@ from game.condition_animation import (
     compile_condition, condition_transition_appearances, resolve_condition_appearance, sample_condition,
 )
 from game.condition_types import load_condition_recipes
-from game.actor_facts import ConditionFact
-from game.player_facts import ConditionChangeFact, PlayerNode
+from dnd.player.actor_facts import ConditionFact
+from dnd.player.facts import ConditionChangeFact, PlayerNode
 
 
 SOURCE = Path("game/data/neuroclient/source/src/render/data/animation")

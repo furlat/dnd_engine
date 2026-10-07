@@ -22,8 +22,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.conjuration import MistyStep
 from dnd.types.senses import SenseMode, SensesType
 from dnd.types.world import OccupancyLayer
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def teleport_history(

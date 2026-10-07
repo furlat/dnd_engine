@@ -26,11 +26,11 @@ from game.environment_animation import remnant_bank
 from game.environment_art import load_environment_art
 from game.environment_draw import environment_command
 from game.playback_frame import sample_playback_frame
-from game.player_facts import MechanismActivationFact, ObjectDestroyedFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import MechanismActivationFact, ObjectDestroyedFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, camera_axis_vectors, camera_pose, project_screen
-from game.replay import RecordedSequence
+from dnd.player.recorded import RecordedSequence
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors
 from game.world_animation import WorldTransitionSample

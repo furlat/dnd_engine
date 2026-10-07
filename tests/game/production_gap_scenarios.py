@@ -22,8 +22,8 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.evocation import ConeOfCold
 from dnd.spells.wall_fields import WindWall
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 from tests.game.area_spell_scenarios import area_spell_history
 from tests.game.assembly_scenarios import assembly_history
 from tests.manual.spell_regression_support import force_save_result

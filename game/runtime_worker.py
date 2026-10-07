@@ -1,7 +1,7 @@
 """Sole native session owner for live play; launched as a separate module."""
 
 from contextlib import redirect_stdout
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 import random
 import sys
 from time import perf_counter
@@ -10,21 +10,20 @@ from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.base_actions import AvailableActionInfo, AvailableTarget
 from dnd.core.events import EventQueue
-from game.controls import selection_target_pool
-from game.player_facts import PlayerState
-from game.player_commands import CommandRejected
-from game.ui_content_composition import ui_content_manifest
-from game.player_projection import ProjectionState, begin_projection, project_lineage
-from game.player_reduction import reduce_initialization, reduce_lineage
-from game.presentation import capture_interval, capture_lineages
+from dnd.player.selection import selection_target_pool
+from dnd.player.facts import PlayerState
+from dnd.player.content import UIContentManifest
+from dnd.player.application import AudienceRuntime, initialize_audiences, capture_application_operation
+from dnd.player.commands import CommandRejected
+from dnd.player.content_composition import ui_content_manifest
 from game.runtime_protocol import (
     REQUEST_CODEC, REPLY_CODEC, RuntimeRequest, RuntimeReply, StartRequest, StartedReply,
     AdvanceRequest, DiscoverRequest, DiscoveryReply, ChoiceRequest, PreviewRequest, PreviewReply,
     ActionRequest, EndTurnRequest, EquipRequest, UnequipRequest, HandlerRequest,
     CloseRequest, ClosedReply, OperationReply, RejectedReply, read_packet, write_packet,
 )
-from game.session import (
-    Session, Operation, create_session, close_session, player_audience, snapshot_player_hud,
+from dnd.player.session import (
+    Session, Operation, create_session, close_session,
     advance_controller, discover_player_actions, preview_player_selection, execute_player_action,
     end_player_turn, equip_player_item, unequip_player_item, toggle_player_handler,
 )
@@ -33,8 +32,12 @@ from game.session import (
 @dataclass(slots=True)
 class NativeRuntime:
     session: Session
-    projection: ProjectionState
-    latest: PlayerState
+    audiences: dict[str, AudienceRuntime]
+    catalog: UIContentManifest
+
+    @property
+    def latest(self) -> PlayerState:
+        return next(iter(self.audiences.values())).latest
 
 
 def start_runtime(request: StartRequest) -> tuple[NativeRuntime, StartedReply]:
@@ -45,14 +48,13 @@ def start_runtime(request: StartRequest) -> tuple[NativeRuntime, StartedReply]:
         player_positions=request.player_positions, enemy_positions=request.enemy_positions,
         player_builds=request.player_builds)
     try:
-        startup = capture_interval(name="encounter startup", start_cursor=0,
-            end_cursor=EventQueue.event_cursor(), observer_uuid=session.player_uuids[0],
-            audience=player_audience(session), battlefield_id=session.battlefield.definition.battlefield_id)
-        projection, initialization = begin_projection(startup)
-        initialization = replace(initialization, hud_snapshot=snapshot_player_hud(session))
-        return NativeRuntime(session, projection, reduce_initialization(initialization)), StartedReply(
-            request_id=request.request_id, initialization=initialization, encounter_name=session.encounter.name,
-            ui_content=ui_content_manifest())
+        catalog = ui_content_manifest()
+        audiences, initializations = initialize_audiences(session, catalog)
+        return NativeRuntime(session, audiences, catalog), StartedReply(
+            request_id=request.request_id, initialization=next(iter(initializations.values())),
+            encounter_name=session.encounter.name, ui_content=UIContentManifest(
+                content=tuple((row.ref, row) for row in next(iter(audiences.values())).latest.content),
+                feature_ids=catalog.feature_ids, item_ids=catalog.item_ids))
     except BaseException:
         close_session(session)
         raise
@@ -60,22 +62,12 @@ def start_runtime(request: StartRequest) -> tuple[NativeRuntime, StartedReply]:
 
 def capture_operation(runtime: NativeRuntime, request_id: int, operation: Operation) -> OperationReply:
     """Capture the whole committed operation before allowing another mutation."""
-    received = []
-    gaps = []
-    for native in capture_lineages(operation.roots, observer_uuid=runtime.latest.observer_uuid,
-            audience=runtime.latest.viewing_audience, known_actor_uuids=frozenset(runtime.latest.actors)):
-        lineage = project_lineage(runtime.projection, native)
-        if lineage is None:
-            continue
-        runtime.latest = reduce_lineage(runtime.latest, lineage)
-        received.append(lineage)
-        classes = {row.event_uuid: row.event_class for row in native.objective_rows}
-        gaps.extend((event_id, f"Unprojected state payload: {classes[event_id]}")
-                    for event_id, _ in native.dispositions)
+    start_cursor = runtime.latest.reducer_cursor
+    update = next(iter(capture_application_operation(runtime.audiences, operation, runtime.catalog).values()))
     return OperationReply(request_id=request_id, generation=runtime.latest.generation,
-        start_cursor=operation.start_cursor, end_cursor=operation.end_cursor,
-        lineages=tuple(received), hud=operation.hud_snapshot, gaps=tuple(gaps),
-        combat_log_appends=operation.combat_log_appends,
+        start_cursor=start_cursor, end_cursor=runtime.latest.reducer_cursor,
+        lineages=update.lineages, hud=update.hud, combat_log_appends=update.combat_log_appends,
+        content_additions=update.content_additions,
         boundary_status=operation.boundary.status if operation.boundary is not None else None)
 
 

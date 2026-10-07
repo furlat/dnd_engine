@@ -7,7 +7,7 @@ import pygame
 import pytest
 
 from game.animation import media_target_applies
-from game.actor_facts import ConditionFact
+from dnd.player.actor_facts import ConditionFact
 from dnd.core.condition_types import ConditionCategory
 from game.animation_data import load_animation_data
 from game.condition_animation import ConditionAppearance, resolve_condition_appearance
@@ -21,9 +21,9 @@ from game.scene_actors import scene_actors
 from game.projection import Camera
 from game.choreography import bind_choreography
 from game.combat import BoundCast
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.replay import RecordedSequence, PASSIVE_EVENT_REPLAY
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import RecordedSequence, PASSIVE_EVENT_REPLAY
 from tests.game.curse_scenarios import curse_history
 
 

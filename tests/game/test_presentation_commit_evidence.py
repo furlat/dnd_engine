@@ -10,7 +10,7 @@ from pydantic import TypeAdapter, ValidationError
 from devtools.animation_review.trace import group_trace, motion_trace, retained_trace
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, bind_motion, sample_choreography, sample_motion
-from game.player_facts import DamageResultFact
+from dnd.player.facts import DamageResultFact
 from game.presentation_timing import PresentationDependencies, presentation_dependencies
 from game.timing_evidence import validate_timing_evidence
 from tests.game.construction_scenarios import construction_history
@@ -20,7 +20,7 @@ from game.condition_media import ResolvedConditionLayer
 from game.body_pose_types import ActorPose
 from game.scene_actors import scene_actors
 from game.animation import sample_idle_body
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from tests.game.player_helpers import player_history
 from tests.game.projectile_life_scenarios import projectile_life_history
 from tests.game.movement_scenarios import flight_history, movement_history

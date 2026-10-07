@@ -13,9 +13,9 @@ from game.body_presentation import sample_body_presentation
 from game.condition_media_lifetime import register_condition_lifetimes
 from dnd.types.actor import SpatialDisposition
 from dnd.core.events import EventType
-from game.player_facts import ConditionChangeFact, SpatialFact
+from dnd.player.facts import ConditionChangeFact, SpatialFact
 from dnd.core.events import SpatialChangeType
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
 from tests.game.player_helpers import player_history
 from tests.game.transport_spell_scenarios import transport_spell_history

@@ -13,11 +13,11 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spatial.environmental_conditions import materialize_spike_trap_condition
 from dnd.types.traps import TrapState
-from game.player_projection import project_sequence
-from game.player_facts import SpatialEffectStateFact
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import capture_interval, reduce_interval
-from game.replay import ObserverCapture, RecordedSequence, capture_history
+from dnd.player.recorded import project_sequence
+from dnd.player.facts import SpatialEffectStateFact
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import ObserverCapture, RecordedSequence, capture_history
 from tests.engine.test_senses_light_stealth import PerceptionModifierCondition
 
 

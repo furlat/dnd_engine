@@ -13,8 +13,8 @@ from game.animation_draw import actor_draw_commands, animation_draw_commands, lo
 from game.animation_types import RigLayer
 from game.choreography import bind_choreography
 from game.combat import BoundCast
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence,encode_player_sequence,reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence,encode_player_sequence,reduce_lineage
 from game.projectile_media import projectile_frame_layers
 from game.projection import Camera, painter_key, project_screen
 from tests.game.scorching_scenarios import scorching_history

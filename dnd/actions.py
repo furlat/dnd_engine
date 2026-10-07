@@ -89,6 +89,7 @@ from dnd.types.event_facts import LandingKind
 from dnd.types.world import OccupancyLayer
 from dnd.core.base_block import LightLevel
 from dnd.action_timing import record_action_elapsed, record_action_timing
+from dnd.core.combat_log import JumpMovementLogData, ConnectorMovementLogData, EmptyLogData, ShoveLogData, SpellDamageLogData
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
@@ -517,18 +518,18 @@ class MovementEvent(ActionEvent):
             detailed_text += f"\n  Path: {path_str}"
 
         data = MovementLogData(
-            entity_name=source_name,
-            entity_uuid=str(self.source_entity_uuid),
-            start_position=self.start_position,
-            end_position=self.end_position,
-            path=path,
-            distance_feet=distance_feet,
-            movement_cost=movement_cost,
-            requested_end_position=self.requested_end_position,
-            termination_reason=self.termination_reason.value,
-            controller_revalidation=self.controller_revalidation,
-            controller_revalidation_reason=self.controller_revalidation_reason,
-        )
+                entity_name=source_name,
+                entity_uuid=str(self.source_entity_uuid),
+                start_position=self.start_position,
+                end_position=self.end_position,
+                path=path,
+                distance_feet=distance_feet,
+                movement_cost=movement_cost,
+                requested_end_position=self.requested_end_position,
+                termination_reason=self.termination_reason.value,
+                controller_revalidation=self.controller_revalidation,
+                controller_revalidation_reason=self.controller_revalidation_reason,
+            )
 
         return CombatLogEntry(
             entry_type=CombatLogEntryType.MOVEMENT,
@@ -537,7 +538,7 @@ class MovementEvent(ActionEvent):
             compact=compact_text,
             verbose=verbose_text,
             detailed=detailed_text,
-            data=data.model_dump(),
+            data=data,
             success=True
         )
 
@@ -1230,31 +1231,27 @@ class TraverseConnectorEvent(ActionEvent):
             compact=compact,
             verbose=verbose,
             detailed=verbose,
-            data={
-                "movement_type": "connector",
-                "entity_name": source_name,
-                "entity_uuid": str(self.source_entity_uuid),
-                "start_position": self.start_position,
-                "requested_end_position": self.requested_end_position,
-                "objective_end_position": self.objective_end_position,
-                "end_position": self.end_position,
-                "path": path,
-                "start_elevation_feet": self.start_elevation_feet,
-                "requested_end_elevation_feet": (
-                    self.requested_end_elevation_feet
-                ),
-                "end_elevation_feet": self.end_elevation_feet,
-                "distance_feet": distance_feet,
-                "movement_cost": self.movement_cost_feet,
-                "connector_uuid": str(self.connector_uuid),
-                "connector_authored_id": self.connector_authored_id,
-                "connector_kind": self.connector_kind.value,
-                "connector_presentation_key": self.connector_presentation_key,
-                "connector_provocation_policy": (
-                    self.connector_provocation_policy.value
-                ),
-                "termination_reason": self.termination_reason.value,
-            },
+            data=ConnectorMovementLogData(
+                movement_type='connector',
+                entity_name=source_name,
+                entity_uuid=str(self.source_entity_uuid),
+                start_position=self.start_position,
+                requested_end_position=self.requested_end_position,
+                objective_end_position=self.objective_end_position,
+                end_position=self.end_position,
+                path=path,
+                start_elevation_feet=self.start_elevation_feet,
+                requested_end_elevation_feet=self.requested_end_elevation_feet,
+                end_elevation_feet=self.end_elevation_feet,
+                distance_feet=distance_feet,
+                movement_cost=self.movement_cost_feet,
+                connector_uuid=self.connector_uuid,
+                connector_authored_id=self.connector_authored_id,
+                connector_kind=self.connector_kind,
+                connector_presentation_key=self.connector_presentation_key,
+                connector_provocation_policy=self.connector_provocation_policy,
+                termination_reason=self.termination_reason.value,
+            ),
             success=(
                 self.termination_reason is MovementTerminationReason.COMPLETED
                 and self.end_position == self.objective_end_position
@@ -1842,27 +1839,27 @@ class AttackEvent(ActionEvent):
         )
 
         data = AttackLogData(
-            attacker_name=source_name,
-            attacker_uuid=str(self.source_entity_uuid),
-            target_name=target_name,
-            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
-            weapon_name=weapon_name,
-            weapon_slot=self.weapon_slot.value if self.weapon_slot else None,
-            attack_roll=attack_roll,
-            attack_breakdown=attack_breakdown,
-            advantage_breakdown=advantage_breakdown,
-            target_ac=target_ac,
-            ac_breakdown=ac_breakdown,
-            outcome=outcome,
-            is_hit=is_hit,
-            is_crit=is_crit,
-            damage_rolls=damage_roll_displays,
-            total_damage=total_damage,
-            target_hp=target_hp,
-            is_opportunity_attack=is_opportunity_attack,
-            is_long_range=self.is_long_range,
-            is_threatened=self.is_threatened
-        )
+                attacker_name=source_name,
+                attacker_uuid=str(self.source_entity_uuid),
+                target_name=target_name,
+                target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else '',
+                weapon_name=weapon_name,
+                weapon_slot=self.weapon_slot.value if self.weapon_slot else None,
+                attack_roll=attack_roll,
+                attack_breakdown=attack_breakdown,
+                advantage_breakdown=advantage_breakdown,
+                target_ac=target_ac,
+                ac_breakdown=ac_breakdown,
+                outcome=outcome,
+                is_hit=is_hit,
+                is_crit=is_crit,
+                damage_rolls=damage_roll_displays,
+                total_damage=total_damage,
+                target_hp=target_hp,
+                is_opportunity_attack=is_opportunity_attack,
+                is_long_range=self.is_long_range,
+                is_threatened=self.is_threatened,
+            )
 
         return CombatLogEntry(
             entry_type=CombatLogEntryType.ATTACK,
@@ -1873,7 +1870,7 @@ class AttackEvent(ActionEvent):
             compact=compact_text,
             verbose=verbose_text,
             detailed=detailed_text,
-            data=data.model_dump(),
+            data=data,
             success=is_hit
         )
 
@@ -3359,29 +3356,20 @@ class JumpEvent(ActionEvent):
             path_str = " -> ".join(f"({p[0]},{p[1]})" for p in self.path)
             detailed_text += f"\n  Air path: {path_str}"
 
-        data = MovementLogData(
-            entity_name=source_name,
-            entity_uuid=str(self.source_entity_uuid),
-            start_position=self.start_position,
-            end_position=self.end_position,
-            path=self.path or [self.start_position, self.end_position],
-            distance_feet=self.jump_distance,
-            movement_cost=self.jump_distance
-        ).model_dump()
-        data.update({
-            "movement_type": "jump",
-            "requested_end_position": (
-                self.requested_end_position or self.end_position
-            ),
-            "objective_end_position": (
-                self.objective_end_position or self.end_position
-            ),
-            "start_elevation_feet": self.start_elevation_feet,
-            "requested_end_elevation_feet": (
-                self.requested_end_elevation_feet
-            ),
-            "end_elevation_feet": self.end_elevation_feet,
-        })
+        data = JumpMovementLogData(
+                entity_name=source_name,
+                entity_uuid=str(self.source_entity_uuid),
+                start_position=self.start_position,
+                end_position=self.end_position,
+                path=self.path or [self.start_position, self.end_position],
+                distance_feet=self.jump_distance,
+                movement_cost=self.jump_distance,
+                requested_end_position=self.requested_end_position or self.end_position,
+                objective_end_position=self.objective_end_position or self.end_position,
+                start_elevation_feet=self.start_elevation_feet,
+                requested_end_elevation_feet=self.requested_end_elevation_feet,
+                end_elevation_feet=self.end_elevation_feet,
+            )
 
         return CombatLogEntry(
             entry_type=CombatLogEntryType.MOVEMENT,
@@ -3896,18 +3884,18 @@ class ShoveEvent(ActionEvent):
             compact=compact_text,
             verbose=verbose_text,
             detailed=detailed_text,
-            data={
-                "action_type": "shove",
-                "target_weight": self.target_weight,
-                "max_shove_weight": self.max_shove_weight,
-                "contest_success": self.contest_success,
-                "push_distance": self.push_distance,
-                "push_direction": list(self.push_direction),
-                "end_position": self.end_position,
-                "knocked_prone": self.knocked_prone,
-                "blocked_by": self.blocked_by,
-                "is_ally": self.is_ally
-            },
+            data=ShoveLogData(
+                action_type='shove',
+                target_weight=self.target_weight,
+                max_shove_weight=self.max_shove_weight,
+                contest_success=self.contest_success,
+                push_distance=self.push_distance,
+                push_direction=self.push_direction,
+                end_position=self.end_position,
+                knocked_prone=self.knocked_prone,
+                blocked_by=self.blocked_by,
+                is_ally=self.is_ally,
+            ),
             success=self.contest_success or False
         )
 
@@ -4341,7 +4329,8 @@ class SpellEvent(ActionEvent):
             compact=f"{self.source_entity_name or 'Unknown'} casts {self.name or 'spell'}",
             verbose=f"{self.source_entity_name or 'Unknown'} casts {self.name or 'spell'}",
             detailed=f"{self.source_entity_name or 'Unknown'} casts {self.name or 'spell'}",
-            data={},
+            data=EmptyLogData(
+            ),
             success=True
         )
 
@@ -4412,23 +4401,23 @@ class SpellEvent(ActionEvent):
         save_advantage_breakdown: List[ModifierBreakdown] = []
 
         data = SpellSaveLogData(
-            caster_name=caster_name,
-            caster_uuid=str(self.source_entity_uuid) if self.source_entity_uuid else "",
-            target_name=target_name,
-            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
-            spell_name=spell_name,
-            spell_level=self.spell_level,
-            save_ability=self.save_ability or "dexterity",
-            save_dc=dc,
-            save_roll=save_roll_display,
-            save_bonus_breakdown=save_bonus_breakdown,
-            save_advantage_breakdown=save_advantage_breakdown,
-            save_success=success,
-            damage_rolls=damage_displays,
-            base_damage=base_damage,
-            final_damage=total_dmg,
-            damage_type=damage_type
-        )
+                caster_name=caster_name,
+                caster_uuid=str(self.source_entity_uuid) if self.source_entity_uuid else '',
+                target_name=target_name,
+                target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else '',
+                spell_name=spell_name,
+                spell_level=self.spell_level,
+                save_ability=self.save_ability or 'dexterity',
+                save_dc=dc,
+                save_roll=save_roll_display,
+                save_bonus_breakdown=save_bonus_breakdown,
+                save_advantage_breakdown=save_advantage_breakdown,
+                save_success=success,
+                damage_rolls=damage_displays,
+                base_damage=base_damage,
+                final_damage=total_dmg,
+                damage_type=damage_type,
+            )
 
         spell_effect_succeeded = not success
         return CombatLogEntry(
@@ -4440,7 +4429,7 @@ class SpellEvent(ActionEvent):
             compact=compact,
             verbose=verbose,
             detailed=detailed,
-            data=data.model_dump(),
+            data=data,
             success=spell_effect_succeeded
         )
 
@@ -4579,24 +4568,24 @@ class SpellEvent(ActionEvent):
 
         target_hp = target_entity.get_hp() if target_entity else None
         data = AttackLogData(
-            attacker_name=source_name,
-            attacker_uuid=str(self.source_entity_uuid),
-            target_name=target_name,
-            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
-            weapon_name=spell_name,
-            attack_roll=attack_roll,
-            attack_breakdown=attack_breakdown,
-            advantage_breakdown=advantage_breakdown,
-            target_ac=target_ac,
-            ac_breakdown=ac_breakdown,
-            outcome=outcome,
-            is_hit=is_hit,
-            is_crit=is_crit,
-            damage_rolls=damage_roll_displays,
-            total_damage=total_damage,
-            target_hp=target_hp,
-            is_threatened=self.is_threatened,
-        )
+                attacker_name=source_name,
+                attacker_uuid=str(self.source_entity_uuid),
+                target_name=target_name,
+                target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else '',
+                weapon_name=spell_name,
+                attack_roll=attack_roll,
+                attack_breakdown=attack_breakdown,
+                advantage_breakdown=advantage_breakdown,
+                target_ac=target_ac,
+                ac_breakdown=ac_breakdown,
+                outcome=outcome,
+                is_hit=is_hit,
+                is_crit=is_crit,
+                damage_rolls=damage_roll_displays,
+                total_damage=total_damage,
+                target_hp=target_hp,
+                is_threatened=self.is_threatened,
+            )
 
         return CombatLogEntry(
             entry_type=CombatLogEntryType.ATTACK,
@@ -4607,7 +4596,7 @@ class SpellEvent(ActionEvent):
             compact=compact_text,
             verbose=verbose_text,
             detailed=detailed_text,
-            data=data.model_dump(),
+            data=data,
             success=is_hit
         )
 
@@ -4652,12 +4641,12 @@ class SpellEvent(ActionEvent):
             compact=compact,
             verbose=verbose,
             detailed=detailed,
-            data={
-                "spell_name": spell_name,
-                "target_name": target_name,
-                "damage": total_dmg,
-                "damage_type": damage_type
-            },
+            data=SpellDamageLogData(
+                spell_name=spell_name,
+                target_name=target_name,
+                damage=total_dmg,
+                damage_type=damage_type,
+            ),
             success=True
         )
 

@@ -8,7 +8,7 @@ from game.animation_data import load_animation_data
 from game.choreography import bind_choreography
 from game.combat import BoundCast
 from game.directed_media import directed_draw_commands
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera, project_screen
 from tests.game.electric_spell_scenarios import electric_spell_history
 from tests.game.player_helpers import player_history

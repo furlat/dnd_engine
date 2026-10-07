@@ -6,7 +6,7 @@ import pytest
 
 from dnd.core.events import EventPhase, EventQueue, HealEvent, LifeStateChangeEvent
 from dnd.core.life_types import LifeState, LifeStateChangeReason
-from game.presentation import reduce_lineage
+from dnd.player.capture import reduce_lineage
 from tests.game.scenarios import healing_history
 
 

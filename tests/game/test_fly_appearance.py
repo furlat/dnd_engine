@@ -20,10 +20,10 @@ from game.choreography import bind_choreography
 from game.condition_animation import compile_condition, resolve_condition_appearance, sample_condition
 from game.condition_media_lifetime import register_condition_lifetimes, sample_condition_lifetimes
 from game.condition_sampling import sample_condition_media
-from game.player_facts import ConditionChangeFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ConditionChangeFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
-from game.replay import ObserverCapture, capture_history
+from dnd.player.recorded import ObserverCapture, capture_history
 from tests.game.player_helpers import player_history
 from tests.game.scenarios import _healing_encounter
 from tests.game.test_condition_animation import header

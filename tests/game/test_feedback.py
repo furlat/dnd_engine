@@ -18,10 +18,10 @@ from game.combat_demo import iter_combat_demo
 from game.condition_animation import compile_condition
 from game.feedback import choreography_feedback, motion_feedback, sample_feedback
 from game.motion import bind_motion, sample_motion
-from game.presentation import CompletedLineage, ConditionFact, PresentationTarget, IntervalEnvelope, reduce_interval
+from dnd.player.capture import CompletedLineage, ConditionFact, PresentationTarget, IntervalEnvelope, reduce_interval
 from tests.game.scenarios import attack_history, movement_with_paralysis
 from tests.game.player_helpers import player_history, player_inputs
-from game.player_facts import ConditionChangeFact, PlayerNode, PlayerState, PlayerWorld
+from dnd.player.facts import ConditionChangeFact, PlayerNode, PlayerState, PlayerWorld
 
 
 @pytest.fixture(scope="module")

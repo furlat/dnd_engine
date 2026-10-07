@@ -20,8 +20,8 @@ from dnd.content.items.window_builders import place_window
 from dnd.content.items.window_definitions import WINDOW_DEFINITIONS
 from dnd.items.environment import DirectionalWall
 from dnd.types.world import CardinalDirection
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 from tests.game.door_destruction_scenarios import review_actor, take_turn, attack_item, walk
 
 

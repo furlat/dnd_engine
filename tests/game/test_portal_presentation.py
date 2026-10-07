@@ -17,10 +17,10 @@ from game.assets import prop_animation_frame
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import sample_playback_frame
 from game.portal_draw import portal_draw_commands
-from game.player_facts import ActionFact, DamageFact, MovementFact, PortalTransferFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage, stage_lineage
-from game.replay import RecordedSequence
+from dnd.player.facts import ActionFact, DamageFact, MovementFact, PortalTransferFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage, stage_lineage
+from dnd.player.recorded import RecordedSequence
 from game.projection import Camera
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors

@@ -24,8 +24,8 @@ from game.media_blend import blit_media_commands
 from game.draw_commands import DrawCommand
 from game.object_dust import object_dust_commands
 from game.assets import AssetCatalog, SurfaceCache, flame_frame_index, prop_animation_frame
-from game.actor_facts import PresentationTarget
-from game.player_facts import FloorItem, PlayerObject, PlayerState
+from dnd.player.actor_facts import PresentationTarget
+from dnd.player.facts import FloorItem, PlayerObject, PlayerState
 from game.projection import (
     Camera,
     HEIGHT_STEP_PIXELS,

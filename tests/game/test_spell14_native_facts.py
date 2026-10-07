@@ -31,12 +31,12 @@ from dnd.spells.illusion import MirrorImage
 from dnd.spells.transmutation import EnlargeReduce, SpikeGrowth
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.world import CardinalDirection, OccupancyLayer, WorldEdgeChannel
-from game.player_facts import AttackFact, ConditionChangeFact, DamageFact, DamageRequestFact, SpatialEffectStateFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import capture_interval, capture_lineages
+from dnd.player.facts import AttackFact, ConditionChangeFact, DamageFact, DamageRequestFact, SpatialEffectStateFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import capture_interval, capture_lineages
 from game.presentation_coverage import lineage_coverage
-from game.replay import RecordedSequence
+from dnd.player.recorded import RecordedSequence
 from tests.engine.support import force_attack_miss, get_hp
 from tests.engine.test_spell_families import create_family_caster, create_family_target
 

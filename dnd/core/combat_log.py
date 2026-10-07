@@ -5,9 +5,14 @@ display payloads near the event data that produced them.
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, Set, Tuple
+from typing import Annotated, Any, Dict, List, Literal, Optional, Self, Set, Tuple
+from uuid import UUID
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+from dnd.types.event_facts import MovementTrajectory
+from dnd.types.world import MovementProvocationPolicy
+from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectInteractionOperation, SpatialEffectLayer
+from dnd.core.traversal_connectors import ConnectorProvocationPolicy, TraversalConnectorKind
 
 
 def position_evidence_key(position: Tuple[int, int]) -> str:
@@ -57,6 +62,8 @@ class ModifierBreakdown(BaseModel):
         source: Description of where the modifier originated.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(description="Human-readable modifier name (e.g., 'Prof', 'DEX')")
     value: int = Field(description="The modifier value (+2, -1, etc.)")
     source: str = Field(default="self", description="Where the modifier comes from")
@@ -74,6 +81,8 @@ class DiceRollDisplay(BaseModel):
         d20_used: D20 value used for the final result.
         advantage_status: Advantage state captured for the roll.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     dice_str: str = Field(description="Dice notation (e.g., '1d6', 'd20')")
     results: List[int] = Field(default_factory=list, description="Individual die results")
@@ -105,6 +114,8 @@ class DamageRollDisplay(BaseModel):
         bonus_breakdown: Modifier breakdown for the damage bonus.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     dice_str: str = Field(description="Dice notation (e.g., '1d6', '2d8')")
     dice_results: List[int] = Field(default_factory=list, description="Individual die results")
     bonus: int = Field(default=0, description="Damage bonus")
@@ -123,6 +134,8 @@ class RollModificationLogFact(BaseModel):
     combat-log contracts are dependency-neutral and must not import upward
     from the event system.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     operation: Literal["replace", "append"] = Field(
         description="Whether an effective roll changed or a damage packet was added.",
@@ -160,6 +173,9 @@ class RollModificationLogFact(BaseModel):
 class RollModificationLogData(BaseModel):
     """Structured ordered changes made to one effective roll result."""
 
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["roll_modification"] = "roll_modification"
+
     roll_type: str = Field(
         min_length=1,
         description="Mechanical roll category whose result changed.",
@@ -196,6 +212,9 @@ class AttackLogData(BaseModel):
         is_threatened: Whether the attacker was threatened while attacking.
     """
 
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["attack"] = "attack"
+
     attacker_name: str = Field(description="Display name of the attacking entity.")
     attacker_uuid: str = Field(description="UUID string of the attacking entity.")
     target_name: str = Field(description="Display name of the attacked entity.")
@@ -227,7 +246,7 @@ class AttackLogData(BaseModel):
     is_threatened: bool = Field(default=False, description="Whether the attacker was threatened while attacking.")
 
 
-class MovementLogData(BaseModel):
+class _MovementLogFields(BaseModel):
     """Structured movement data for programmatic access.
 
     Attributes:
@@ -243,6 +262,8 @@ class MovementLogData(BaseModel):
         controller_revalidation: Whether a committed step required a new decision.
         controller_revalidation_reason: Subjective change requiring that decision.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     entity_name: str = Field(description="Display name of the moving entity.")
     entity_uuid: str = Field(description="UUID string of the moving entity.")
@@ -284,6 +305,9 @@ class SavingThrowLogData(BaseModel):
         source_name: Display name of the effect that requested the save.
     """
 
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["saving_throw"] = "saving_throw"
+
     entity_name: str = Field(description="Display name of the saving entity.")
     entity_uuid: str = Field(description="UUID string of the saving entity.")
     ability: str = Field(description="Ability used for the saving throw.")
@@ -321,6 +345,9 @@ class SpellSaveLogData(BaseModel):
         target_hp_after: Target HP after spell resolution, if known.
     """
 
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["spell_save"] = "spell_save"
+
     caster_name: str = Field(description="Display name of the spellcaster.")
     caster_uuid: str = Field(description="UUID string of the spellcaster.")
     target_name: str = Field(description="Display name of the spell target.")
@@ -345,6 +372,9 @@ class SpellSaveLogData(BaseModel):
 
 class SpellInterruptionLogData(BaseModel):
     """Structured result of one Counterspell reaction."""
+
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["spell_interruption"] = "spell_interruption"
 
     outcome_code: str = Field(description="Stable reaction outcome identity.")
     counterspeller_name: str = Field(description="Display name of the reacting caster.")
@@ -374,6 +404,9 @@ class SkillCheckLogData(BaseModel):
         success: Whether the check succeeded, when a DC exists.
     """
 
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["skill_check"] = "skill_check"
+
     entity_name: str = Field(description="Display name of the checking entity.")
     entity_uuid: str = Field(description="UUID string of the checking entity.")
     skill: str = Field(description="Skill used for the check.")
@@ -400,11 +433,14 @@ class EntitySpottedLogData(BaseModel):
         stealth_dc: Stealth DC that was beaten.
     """
 
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["entity_spotted"] = "entity_spotted"
+
     observer_name: str = Field(description="Display name of the observer.")
     observer_uuid: str = Field(description="UUID string of the observer.")
     target_name: str = Field(description="Display name of the spotted entity.")
     target_uuid: str = Field(description="UUID string of the spotted entity.")
-    target_position: Tuple[int, int] = Field(description="Grid position where the entity was spotted.")
+    target_position: tuple[int, int] | None = Field(description="Admitted grid position, or unknown.")
     passive_perception: int = Field(description="Passive Perception score that detected the entity.")
     stealth_dc: int = Field(description="Stealth DC that was beaten.")
 
@@ -421,10 +457,13 @@ class HazardDetectedLogData(BaseModel):
         stealth_dc: Stealth DC that was beaten.
     """
 
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["hazard_detected"] = "hazard_detected"
+
     observer_name: str = Field(description="Display name of the observer.")
     observer_uuid: str = Field(description="UUID string of the observer.")
     hazard_name: str = Field(description="Display name of the detected hazard.")
-    position: Tuple[int, int] = Field(description="Grid position of the hazard.")
+    position: tuple[int, int] | None = Field(description="Admitted hazard position, or unknown.")
     passive_perception: int = Field(description="Passive Perception score that detected the hazard.")
     stealth_dc: int = Field(description="Stealth DC that was beaten.")
 
@@ -441,6 +480,9 @@ class DamageTakenLogData(BaseModel):
         blocked: Whether the damage effect was blocked.
         blocked_reason: Human-readable reason the damage was blocked.
     """
+
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["damage_taken"] = "damage_taken"
 
     target_name: str = Field(description="Display name of the damaged entity.")
     damage: int = Field(description="Damage applied, or zero when the effect was blocked.")
@@ -470,6 +512,9 @@ class HealLogData(BaseModel):
         source_description: Description of the healing source.
     """
 
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["heal"] = "heal"
+
     entity_name: str = Field(description="Display name of the healed entity.")
     entity_uuid: str = Field(description="UUID string of the healed entity.")
     amount: int = Field(description="Healing amount.")
@@ -487,6 +532,9 @@ class ActionLogData(BaseModel):
         target_name: Display name of the target, when the action has one.
         target_uuid: UUID string of the target, when the action has one.
     """
+
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["action"] = "action"
 
     entity_name: str = Field(description="Display name of the acting entity.")
     entity_uuid: str = Field(description="UUID string of the acting entity.")
@@ -506,10 +554,13 @@ class TurnLogData(BaseModel):
         turn_index: Encounter initiative index.
     """
 
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["turn"] = "turn"
+
     entity_name: str = Field(description="Display name of the turn entity.")
     entity_uuid: str = Field(description="UUID string of the turn entity.")
     round_number: int = Field(description="Encounter round number.")
-    turn_index: int = Field(description="Encounter initiative index.")
+    turn_index: int | None = Field(description="Admitted initiative index, or unknown.")
 
 
 class MultiEntityLogData(BaseModel):
@@ -524,10 +575,13 @@ class MultiEntityLogData(BaseModel):
         per_target_damage: Damage totals per target.
         saves_succeeded: Count of successful target saves.
         saves_failed: Count of failed target saves.
-        per_target_logs: Structured per-target log payloads.
+        target_entry_indices: Ordered target membership in sub_entries.
         aoe_shape: Area-of-effect shape label, if applicable.
         aoe_center: Area-of-effect origin or center, if applicable.
     """
+
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["multi_entity_action"] = "multi_entity_action"
 
     action_name: str = Field(description="Display name of the action.")
     caster_name: str = Field(description="Display name of the action source.")
@@ -537,12 +591,207 @@ class MultiEntityLogData(BaseModel):
     per_target_damage: List[int] = Field(default_factory=list, description="Damage totals per target.")
     saves_succeeded: int = Field(default=0, description="Count of successful target saves.")
     saves_failed: int = Field(default=0, description="Count of failed target saves.")
-    per_target_logs: List[Optional[Dict[str, Any]]] = Field(
-        default_factory=list,
-        description="Structured per-target log payloads.",
+    target_entry_indices: tuple[int, ...] = Field(
+        default=(), description="Ordered target application indices in sub_entries.",
+        json_schema_extra={"uniqueItems": True},
     )
     aoe_shape: Optional[str] = Field(default=None, description="Area-of-effect shape label, if applicable.")
     aoe_center: Optional[Tuple[int, int]] = Field(default=None, description="Area-of-effect origin or center, if applicable.")
+
+
+class MovementLogData(_MovementLogFields):
+    kind: Literal["movement"] = "movement"
+
+
+class JumpMovementLogData(_MovementLogFields):
+    kind: Literal["jump_movement"] = "jump_movement"
+    movement_type: Literal["jump"] = "jump"
+    objective_end_position: tuple[int, int]
+    start_elevation_feet: int
+    requested_end_elevation_feet: int
+    end_elevation_feet: int
+
+
+class ConnectorMovementLogData(_MovementLogFields):
+    kind: Literal["connector_movement"] = "connector_movement"
+    movement_type: Literal["connector"] = "connector"
+    objective_end_position: tuple[int, int]
+    start_elevation_feet: int
+    requested_end_elevation_feet: int
+    end_elevation_feet: int
+    connector_uuid: UUID
+    connector_authored_id: str
+    connector_kind: TraversalConnectorKind
+    connector_presentation_key: str
+    connector_provocation_policy: ConnectorProvocationPolicy
+
+
+class EmptyLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["empty"] = "empty"
+
+
+class ConditionRemovedLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["condition_removed"] = "condition_removed"
+    condition_name: str
+    reveals_target: bool
+
+
+class DeathLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["death"] = "death"
+    entity_name: str
+    final_hp: int
+
+
+class SpellDamageLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["spell_damage"] = "spell_damage"
+    spell_name: str
+    target_name: str
+    damage: int
+    damage_type: str
+
+
+class DeathSaveLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["death_save"] = "death_save"
+    entity_name: str
+    entity_uuid: str
+    roll: int
+    natural_roll: int
+    dc: int
+    successes: int
+    failures: int
+    became_stable: bool
+    regained_hit_point: bool
+    died: bool
+
+
+class ShoveLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["shove"] = "shove"
+    action_type: Literal["shove"] = "shove"
+    target_weight: int
+    max_shove_weight: int
+    contest_success: bool | None
+    push_distance: int
+    push_direction: tuple[int, int]
+    end_position: tuple[int, int] | None
+    knocked_prone: bool
+    blocked_by: str | None
+    is_ally: bool
+
+
+class StepMovementLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["step_movement"] = "step_movement"
+    type: Literal["step_movement"] = "step_movement"
+    from_position: tuple[int, int]
+    to_position: tuple[int, int]
+    path_index: int = Field(ge=0)
+    movement_cost: float
+    trajectory: MovementTrajectory
+    disclosed_path: tuple[tuple[int, int], ...]
+    from_elevation_feet: int
+    to_elevation_feet: int
+    provocation_policy: MovementProvocationPolicy
+    committed: bool
+
+
+class ForcedMovementLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["forced_movement"] = "forced_movement"
+    type: Literal["forced_movement"] = "forced_movement"
+    cause: str
+    direction: tuple[int, int]
+    intended_distance: int
+    actual_distance: int
+    blocked: bool
+    blocked_by: str | None
+    start_position: tuple[int, int] | None
+    end_position: tuple[int, int] | None
+
+
+class ObservedMovementLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["observed_movement"] = "observed_movement"
+    type: Literal["movement"] = "movement"
+    entity_name: str
+    entity_uuid: str
+    movement_type: str | None = None
+    observation_complete: bool
+    observed_path_segments: tuple[tuple[tuple[int, int], ...], ...]
+    observed_distance_feet: float
+    start_position: tuple[int, int] | None = None
+    end_position: tuple[int, int] | None = None
+    path: tuple[tuple[int, int], ...] = ()
+    distance_feet: float | None = None
+    movement_cost: float | None = None
+
+
+class UnlocatedMovementLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["unlocated_movement"] = "unlocated_movement"
+    type: Literal["movement"] = "movement"
+    observation_complete: Literal[False] = False
+
+
+class UnknownMovementLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["unknown_movement"] = "unknown_movement"
+    type: Literal["movement"] = "movement"
+    observed: Literal[True] = True
+
+
+class SpatialChangeLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["spatial_change"] = "spatial_change"
+    operation: SpatialEffectChangeOperation
+    content_identity: str
+    layer: SpatialEffectLayer
+    affected_positions: tuple[tuple[int, int], ...]
+
+
+class SpatialInteractionLogData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["spatial_interaction"] = "spatial_interaction"
+    operation: SpatialEffectInteractionOperation
+    intensity: Literal["minor", "moderate", "strong"]
+    affected_positions: tuple[tuple[int, int], ...]
+    source_item_id: str | None
+
+
+CombatLogData = Annotated[
+    AttackLogData | MovementLogData | JumpMovementLogData | ConnectorMovementLogData
+    | SavingThrowLogData | SpellSaveLogData | SpellInterruptionLogData | SkillCheckLogData
+    | EntitySpottedLogData | HazardDetectedLogData | DamageTakenLogData | HealLogData
+    | ActionLogData | TurnLogData | MultiEntityLogData | RollModificationLogData
+    | EmptyLogData | ConditionRemovedLogData | DeathLogData | SpellDamageLogData
+    | DeathSaveLogData | ShoveLogData | StepMovementLogData | ForcedMovementLogData
+    | ObservedMovementLogData | UnlocatedMovementLogData | UnknownMovementLogData
+    | SpatialChangeLogData | SpatialInteractionLogData,
+    Field(discriminator="kind"),
+]
+
+
+LOG_KIND_CATEGORIES: dict[str, frozenset[str]] = {
+    "attack": frozenset({"attack"}),
+    "movement": frozenset({"movement", "jump_movement", "connector_movement", "step_movement", "forced_movement", "observed_movement", "unlocated_movement", "unknown_movement"}),
+    "action": frozenset({"action", "shove", "empty"}),
+    "saving_throw": frozenset({"saving_throw", "death_save"}),
+    "skill_check": frozenset({"skill_check"}),
+    "condition_applied": frozenset({"empty"}),
+    "condition_removed": frozenset({"condition_removed"}),
+    "damage_taken": frozenset({"damage_taken"}), "heal": frozenset({"heal"}),
+    "death": frozenset({"death"}), "turn_start": frozenset({"turn"}), "turn_end": frozenset({"turn"}),
+    "multi_entity_action": frozenset({"multi_entity_action"}),
+    "spell_save": frozenset({"spell_save"}), "spell_damage": frozenset({"spell_damage"}),
+    "spell_interruption": frozenset({"spell_interruption"}), "entity_spotted": frozenset({"entity_spotted"}),
+    "hazard_detected": frozenset({"hazard_detected"}), "roll_modification": frozenset({"roll_modification"}),
+    "spatial_effect": frozenset({"spatial_change", "spatial_interaction"}),
+}
 
 
 class CombatLogEntry(BaseModel):
@@ -574,6 +823,8 @@ class CombatLogEntry(BaseModel):
             keyed by canonical ``x,y`` position.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     entry_type: CombatLogEntryType = Field(description="Category of combat-log entry.")
     source_name: str = Field(description="Display name of the acting entity or source.")
     source_uuid: str = Field(description="UUID string of the acting entity or source.")
@@ -588,22 +839,19 @@ class CombatLogEntry(BaseModel):
     detailed: str = Field(
         description="Full breakdown with all modifiers.",
     )
-    data: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Type-specific structured data (AttackLogData, MovementLogData, etc.).",
-    )
+    data: CombatLogData = Field(description="Recorded finite log payload; no arbitrary dictionary fallback.")
     success: Optional[bool] = Field(default=None, description="Success indicator for attacks, saves, and checks.")
     sub_entries: List["CombatLogEntry"] = Field(
         default_factory=list,
         description="Combat-log entries from child events, in order.",
     )
     perceiver_uuids: Set[str] = Field(
-        default_factory=set,
+        default_factory=set, exclude=True,
         description="Entity UUIDs that could perceive this event when it happened.",
         json_schema_extra={"uniqueItems": True},
     )
     revealed_entity_uuids: Set[str] = Field(
-        default_factory=set,
+        default_factory=set, exclude=True,
         description="Entity UUIDs revealed during this event chain.",
         json_schema_extra={"uniqueItems": True},
     )
@@ -631,6 +879,16 @@ class CombatLogEntry(BaseModel):
             "that saw that coordinate at the relevant event phase."
         ),
     )
+
+    @model_validator(mode="after")
+    def validate_payload_category(self) -> Self:
+        if self.data.kind not in LOG_KIND_CATEGORIES[self.entry_type.value]:
+            raise ValueError(f"{self.entry_type.value} cannot contain {self.data.kind} log data")
+        if self.data.kind == "multi_entity_action":
+            indices = self.data.target_entry_indices
+            if tuple(sorted(set(indices))) != indices or any(i < 0 or i >= len(self.sub_entries) for i in indices):
+                raise ValueError("target entry indices must be distinct, ordered and within sub_entries")
+        return self
 
     @field_serializer(
         "perceiver_uuids",
@@ -824,3 +1082,32 @@ def format_attack_detailed(
         lines.append(dmg_line)
 
     return "\n".join(lines)
+
+
+def log_damage(data: CombatLogData) -> int | None:
+    match data:
+        case AttackLogData() | MultiEntityLogData():
+            return data.total_damage
+        case SpellSaveLogData():
+            return data.final_damage
+        case DamageTakenLogData() | SpellDamageLogData():
+            return data.damage
+        case _:
+            return None
+
+
+def summarize_target_entries(data: MultiEntityLogData, entries: list[CombatLogEntry],
+                             indices: tuple[int, ...]) -> MultiEntityLogData:
+    """Summarize only captured target applications; children remain the detail owner."""
+    if tuple(sorted(set(indices))) != indices or any(i < 0 or i >= len(entries) for i in indices):
+        raise ValueError("invalid target application membership")
+    targets = [entries[i] for i in indices]
+    damage = [value for entry in targets if (value := log_damage(entry.data)) is not None]
+    saves = [entry.data for entry in targets if entry.data.kind == "spell_save"]
+    return data.model_copy(update={
+        "target_entry_indices": indices, "total_targets": len(targets),
+        "target_names": [entry.target_name or "Unknown" for entry in targets],
+        "per_target_damage": damage, "total_damage": sum(damage),
+        "saves_succeeded": sum(value.save_success for value in saves),
+        "saves_failed": sum(not value.save_success for value in saves),
+    })

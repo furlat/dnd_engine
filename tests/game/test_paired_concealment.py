@@ -11,11 +11,11 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventQueue, SensoryUpdateEvent, SkillCheckEvent
 from dnd.entity import Entity
 from dnd.types.senses import SensesType
-from game.player_facts import ItemChargeFact, SensoryFact, StepFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import reduce_interval
-from game.replay import RecordedSequence
+from dnd.player.facts import ItemChargeFact, SensoryFact, StepFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import reduce_interval
+from dnd.player.recorded import RecordedSequence
 
 
 def contact_pattern(

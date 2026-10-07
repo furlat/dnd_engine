@@ -2,7 +2,7 @@
 
 import pytest
 
-from game.player_facts import ActionFact
+from dnd.player.facts import ActionFact
 from tests.game.class_feature_scenarios import class_feature_history
 from tests.game.player_helpers import player_history
 
@@ -31,7 +31,7 @@ def test_identified_foreign_font_conversion_redacts_amounts_from_fact_and_log(pr
             assert fact.font_conversion.spell_slots_delta is None
             assert fact.name == label
             assert node.combat_log is not None
-            assert node.combat_log.data["action_name"] == label
+            assert node.combat_log.data.action_name == label
             for text in (node.combat_log.compact, node.combat_log.verbose, node.combat_log.detailed):
                 assert label in text and "L2" not in text and "3SP" not in text
 

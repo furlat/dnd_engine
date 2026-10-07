@@ -9,17 +9,17 @@ import pytest
 
 from dnd.core.effect_types import EventResolutionRef
 from dnd.core.events import EventQueue
-from game.player_facts import DamageRequestFact, DamageResultFact, PlayerSequence, SensoryFact, SpatialFact
-from game.player_projection import project_sequence
+from dnd.player.facts import DamageRequestFact, DamageResultFact, PlayerSequence, SensoryFact, SpatialFact
+from dnd.player.recorded import project_sequence
 from game.animation_data import load_animation_data
 from game.attack import bind_attack
 from game.combat import BoundCast
-from game.presentation import reduce_interval, reduce_lineage as reduce_native_lineage
+from dnd.player.capture import reduce_interval, reduce_lineage as reduce_native_lineage
 from dnd.core.events import TakeDamageEvent
 from tests.game.damage_resolution_scenarios import resolution_history
 from game.choreography import BoundChoreography, bind_choreography, sample_choreography, walk_bound_timelines
-from game.event_record import decode_event, encode_event
-from game.player_reduction import decode_player_sequence, encode_player_sequence, index_player_lineage, reduce_lineage
+from dnd.player.event_record import decode_event, encode_event
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, index_player_lineage, reduce_lineage
 from tests.game.scenarios import attack_history
 
 
@@ -45,7 +45,7 @@ def test_current_player_archive_preserves_ordered_native_result_ownership(receiv
     assert before.observer_uuid == received_attack.initialization.observer_uuid
 
 
-def test_player_v1_does_not_infer_damage_ownership_from_an_attack_parent(received_attack):
+def test_player_v1_is_rejected_before_damage_ownership_inference(received_attack):
     document = received_attack.model_dump(mode="json")
     document["schema_version"] = 1
     for node in document["initialization"]["nodes"]:
@@ -53,12 +53,12 @@ def test_player_v1_does_not_infer_damage_ownership_from_an_attack_parent(receive
     for lineage in document["lineages"]:
         for node in [lineage["root"], *lineage["events"]]:
             node.pop("resolution_ref", None)
-    with pytest.raises(ValueError, match="lacks unambiguous resolution ownership"):
+    with pytest.raises(ValueError, match="reproject the preserved native recording"):
         decode_player_sequence(json.dumps(document).encode())
     assert EventQueue.event_cursor() == 0
 
 
-def test_ambiguous_legacy_callback_reports_the_exact_missing_owner(received_attack):
+def test_legacy_public_callback_requires_native_reprojection(received_attack):
     document = received_attack.model_dump(mode="json")
     document["schema_version"] = 1
     for lineage in document["lineages"]:
@@ -68,7 +68,7 @@ def test_ambiguous_legacy_callback_reports_the_exact_missing_owner(received_atta
                 if node["fact"]["stage"] == "taken":
                     # The old packet did not disclose its immediate cause.
                     node["parent_lineage"] = "00000000-0000-0000-0000-000000000001"
-    with pytest.raises(ValueError, match="lacks unambiguous resolution ownership"):
+    with pytest.raises(ValueError, match="reproject the preserved native recording"):
         decode_player_sequence(json.dumps(document).encode())
 
 
@@ -89,7 +89,7 @@ def test_observation_references_only_name_disclosed_operations(received_attack):
                         assert reference.resolution_ref.lineage_uuid in disclosed
 
 
-def test_movement_commit_versions_survive_current_and_legacy_player_archives():
+def test_movement_commit_versions_survive_current_public_archives():
     history = attack_history("weapon.longsword", 17, opportunity=True, whole_movement=True)
     sequence = project_sequence(history.views["hero"])
     before, roots = decode_player_sequence(encode_player_sequence(sequence))
@@ -111,10 +111,8 @@ def test_movement_commit_versions_survive_current_and_legacy_player_archives():
         for node in nodes:
             if node["fact"] and node["fact"]["kind"] == "spatial":
                 node["fact"].pop("commit_event_uuid", None)
-    restored, migrated = decode_player_sequence(json.dumps(legacy).encode())
-    for lineage in migrated:
-        restored = reduce_lineage(restored, lineage)
-    assert restored == state
+    with pytest.raises(ValueError, match="reproject the preserved native recording"):
+        decode_player_sequence(json.dumps(legacy).encode())
     assert EventQueue.event_cursor() == 0
 
 
@@ -192,7 +190,7 @@ def test_real_retaliation_keeps_its_own_results_and_ambiguous_archives_diagnose(
     for row in old['lineages']:
         for node in [row['root'], *row['events']]:
             node.pop('resolution_ref', None)
-    with pytest.raises(ValueError, match='lacks unambiguous resolution ownership'):
+    with pytest.raises(ValueError, match='reproject the preserved native recording'):
         decode_player_sequence(json.dumps(old).encode())
     old_events = tuple(decode_event({key: value for key, value in encode_event(event).items()
                                     if key != 'resolution_ref'}) for event in native.lineages[0].events)

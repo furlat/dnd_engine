@@ -3,11 +3,11 @@
 import pytest
 
 from dnd.spells.abjuration import CounterspellReactionEvent
-from game.player_facts import ActionFact, SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import ActionFact, SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation_group import presentation_groups, reduce_presentation_group
-from game.replay import RecordedSequence, decode_sequence, encode_sequence
+from dnd.player.recorded import RecordedSequence, decode_sequence, encode_sequence
 from tests.game.interruption_scenarios import interruption_history
 
 

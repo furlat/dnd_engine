@@ -30,8 +30,8 @@ from dnd.spells.enchantment import HoldPerson
 from dnd.spells.evocation import FireBolt, Fireball, MagicMissile, SacredFlame
 from dnd.spells.illusion import Blur
 from dnd.spells.necromancy import FingerOfDeath
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def interruption_history(*, blocker: Literal['sanctuary', 'counterspell'] = 'sanctuary',

@@ -26,7 +26,7 @@ from game.app import (
 )
 from game.demo import _display_sources, build_demo_intervals
 from game.assets import AssetCatalog, SurfaceCache, load_catalog
-from game.presentation import PresentationTarget, reduce_interval
+from dnd.player.capture import PresentationTarget, reduce_interval
 from game.projection import Camera, MAP_CENTER, TILE_WIDTH, camera_pose, project_screen
 from game.water import WaterSupportInput, render_water_batch, water_source_origin
 

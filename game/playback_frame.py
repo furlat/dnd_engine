@@ -31,7 +31,7 @@ from game.attack import BoundAttack
 from game.feedback import FeedbackTrack, sample_feedback
 from game.motion import MotionTimeline
 from game.motion_media import MotionMediaCue, motion_media_draw_commands
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.projection import Camera, TILE_WIDTH, project_screen
 from game.body_pose_types import SceneActor
 from game.visual_position import VisualPosition

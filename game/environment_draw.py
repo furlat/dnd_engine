@@ -12,7 +12,7 @@ from game.device_draw import device_treatment
 from game.draw_commands import DrawCommand
 from game.environment_art import EnvironmentBank, load_environment_art
 from game.environment_art import prop_state_key
-from game.player_facts import PlayerObject
+from dnd.player.facts import PlayerObject
 from game.item_draw import item_selection_command
 from dnd.core.item_types import ItemIntegrity
 from dnd.core.events import WorldObjectState

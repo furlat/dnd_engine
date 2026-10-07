@@ -31,12 +31,12 @@ from dnd.conditions import Prone
 from game.animation_types import RigLayer
 from game.choreography import bind_choreography, sample_choreography
 from game.body_presentation import sample_body_presentation
-from game.player_facts import ActionFact, DamageResultFact, FactionFact, SpatialFact, SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, observe_actors, reduce_lineage
-from game.presentation import capture_interval, reduce_interval
+from dnd.player.facts import ActionFact, DamageResultFact, FactionFact, SpatialFact, SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, observe_actors, reduce_lineage
+from dnd.player.capture import capture_interval, reduce_interval
 from game.projection import Camera, TILE_WIDTH
-from game.replay import ObserverCapture, RecordedSequence, capture_history
+from dnd.player.recorded import ObserverCapture, RecordedSequence, capture_history
 from game.scene_actors import scene_actors
 from tests.game.visibility_scenarios import visibility_history
 

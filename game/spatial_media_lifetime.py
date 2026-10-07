@@ -11,7 +11,7 @@ from game.animation_types import AnimationData, Facing8
 from game.animation import ActorContact, media_target_applies, media_track_duration
 from game.combat import BoundCast
 from game.choreography import BoundChoreography, MotionTimeline, walk_bound_timelines
-from game.player_facts import DamageResultFact, PlayerLineage, PlayerState, SpatialEffectStateFact
+from dnd.player.facts import DamageResultFact, PlayerLineage, PlayerState, SpatialEffectStateFact
 from game.maintained_media import maintained_removal_duration
 
 

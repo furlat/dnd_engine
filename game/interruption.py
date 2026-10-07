@@ -9,7 +9,7 @@ from game.animation_types import AnimationData, InterruptionRule, ReactionMedia
 from game.attack import AttackSample, BoundAttack
 from game.body_action import BodyActionCue
 from game.combat import BoundCast
-from game.player_facts import PlayerNode
+from dnd.player.facts import PlayerNode
 from game.stationary_media import StationaryMediaCue
 from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference, CompiledTimingReference, TimingTarget, record_timing
 

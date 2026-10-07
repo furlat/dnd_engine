@@ -26,8 +26,8 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.senses import PerceivedContact, SenseMode, SensesType
 from dnd.types.world import LightLevel
 from game.demo import build_demo_intervals
-from game.event_record import encode_event
-from game.presentation import Disposition, IntervalEnvelope, reduce_interval
+from dnd.player.event_record import encode_event
+from dnd.player.capture import Disposition, IntervalEnvelope, reduce_interval
 
 
 def test_three_intervals_are_complete_passive_and_replay_after_reset() -> None:

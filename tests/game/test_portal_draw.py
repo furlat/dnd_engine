@@ -9,8 +9,8 @@ import pytest
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.motion import bind_motion
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.portal_draw import clip_portal_bodies
 from game.projection import Camera, project_screen
 from game.scene import load_scene_media, scene_draw_commands

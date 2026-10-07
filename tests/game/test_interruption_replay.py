@@ -5,7 +5,7 @@ import pytest
 from dnd.core.events import EventPhase
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
-from game.player_facts import DamageFact, SpellFact
+from dnd.player.facts import DamageFact, SpellFact
 from game.animation import CastSample
 from game.combat import BoundCast
 from game.presentation_timing import presentation_milestones, presentation_dependencies

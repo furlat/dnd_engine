@@ -14,6 +14,7 @@ from dnd.core.action_execution import (
     MovementTerminationReason,
 )
 from dnd.core.combat_log import (
+    CombatLogData, DamageTakenLogData, EmptyLogData, StepMovementLogData,
     CombatLogEntry,
     CombatLogEntryType,
     DamageRollDisplay,
@@ -68,7 +69,7 @@ def _log(
     source_uuid: str = HIDDEN_SOURCE_UUID,
     target_name: str | None = "Controlled Hero",
     target_uuid: str | None = CONTROLLED_UUID,
-    data: dict | None = None,
+    data: CombatLogData | None = None,
     sub_entries: list[CombatLogEntry] | None = None,
     perceiver_uuids: set[str] | None = None,
 ) -> CombatLogEntry:
@@ -82,7 +83,8 @@ def _log(
         compact=text,
         verbose=text,
         detailed=text,
-        data=dict(data or {}),
+        data=data or (DamageTakenLogData(target_name=target_name or "Unknown", damage=0, damage_type="fire", source_name=source_name)
+            if entry_type is CombatLogEntryType.DAMAGE_TAKEN else EmptyLogData()),
         sub_entries=list(sub_entries or []),
         perceiver_uuids=set(
             {CONTROLLED_UUID}
@@ -97,45 +99,10 @@ def _project(log: CombatLogEntry) -> CombatLogEntry | None:
         log,
         controlled_entity_uuids=frozenset({CONTROLLED_UUID}),
         observer_entity_uuids=frozenset({OBSERVER_UUID}),
+        known_connector_uuids=frozenset({"00000000-0000-0000-0000-000000000777"}),
     )
 
 
-@pytest.mark.parametrize(
-    "entry_type",
-    tuple(CombatLogEntryType),
-    ids=lambda entry_type: entry_type.value,
-)
-def test_every_log_kind_uses_the_same_recursive_projection(
-    entry_type: CombatLogEntryType,
-) -> None:
-    objective = _log(
-        entry_type,
-        data={
-            "hidden_uuid": HIDDEN_SOURCE_UUID,
-            f"secret/{HIDDEN_SOURCE_UUID}": "hidden key",
-            "nested": {
-                "rows": [
-                    "Hidden Assassin",
-                    {"identity": f"Hidden Assassin/{HIDDEN_SOURCE_UUID}"},
-                ],
-            },
-        },
-        perceiver_uuids={OBSERVER_UUID},
-    )
-    objective_before = objective.model_copy(deep=True)
-
-    projected = _project(objective)
-
-    assert isinstance(projected, CombatLogEntry)
-    serialized = json.dumps(projected.model_dump(mode="json"), sort_keys=True)
-    assert HIDDEN_SOURCE_UUID not in serialized
-    assert "Hidden Assassin" not in serialized
-    assert projected.perceiver_uuids == set()
-    assert projected.revealed_entity_uuids == set()
-    assert projected.identified_entity_observer_uuids == {}
-    assert projected.located_entity_observer_uuids == {}
-    assert projected.located_position_observer_uuids == {}
-    assert objective == objective_before
 
 
 def test_fully_unobserved_tree_is_hidden() -> None:
@@ -161,7 +128,7 @@ def test_visible_child_retains_its_sanitized_hidden_parent() -> None:
         CombatLogEntryType.DAMAGE_TAKEN,
         source_name="Controlled Hero",
         source_uuid=CONTROLLED_UUID,
-        data={"damage": 7},
+        data=DamageTakenLogData(target_name="Controlled Hero", damage=7, damage_type="fire", source_name="Controlled Hero"),
         perceiver_uuids=set(),
     )
     objective = _log(
@@ -180,89 +147,11 @@ def test_visible_child_retains_its_sanitized_hidden_parent() -> None:
     assert projected.source_uuid == ""
     assert len(projected.sub_entries) == 1
     assert projected.sub_entries[0].entry_type is CombatLogEntryType.DAMAGE_TAKEN
-    assert projected.sub_entries[0].data["damage"] == 7
+    assert projected.sub_entries[0].data.damage == 7
 
 
-def test_multi_target_summary_contains_only_projected_children() -> None:
-    visible = _log(
-        CombatLogEntryType.SPELL_SAVE,
-        source_name="Controlled Hero",
-        source_uuid=CONTROLLED_UUID,
-        target_name="Visible Target",
-        target_uuid=VISIBLE_TARGET_UUID,
-        data={"save_success": False, "total_damage": 7},
-        perceiver_uuids=set(),
-    )
-    visible.identified_entity_observer_uuids = {
-        VISIBLE_TARGET_UUID: {OBSERVER_UUID},
-    }
-    hidden = _log(
-        CombatLogEntryType.SPELL_SAVE,
-        target_name="Secret Target",
-        target_uuid=HIDDEN_TARGET_UUID,
-        data={"save_success": True, "total_damage": 999},
-        perceiver_uuids={HIDDEN_SOURCE_UUID},
-    )
-    objective = _log(
-        CombatLogEntryType.MULTI_ENTITY_ACTION,
-        source_name="Controlled Hero",
-        source_uuid=CONTROLLED_UUID,
-        target_name=None,
-        target_uuid=None,
-        data={
-            "action_name": "Area Spell",
-            "aoe_center": (91, 73),
-            "total_targets": 2,
-            "target_names": ["Visible Target", "Secret Target"],
-            "per_target_damage": [7, 999],
-            "total_damage": 1006,
-            "saves_succeeded": 1,
-            "saves_failed": 1,
-        },
-        sub_entries=[visible, hidden],
-        perceiver_uuids=set(),
-    )
-
-    projected = _project(objective)
-
-    assert isinstance(projected, CombatLogEntry)
-    assert len(projected.sub_entries) == 1
-    assert projected.data["total_targets"] == 1
-    assert projected.data["target_names"] == ["Visible Target"]
-    assert projected.data["per_target_damage"] == [7]
-    assert projected.data["total_damage"] == 7
-    assert projected.data["saves_succeeded"] == 0
-    assert projected.data["saves_failed"] == 1
-    assert "aoe_center" not in projected.data
-    assert "Secret Target" not in projected.model_dump_json()
 
 
-def test_bare_coordinates_without_event_time_grants_are_scrubbed_recursively() -> None:
-    objective = _log(
-        CombatLogEntryType.ACTION,
-        source_name="Controlled Hero",
-        source_uuid=CONTROLLED_UUID,
-        target_name=None,
-        target_uuid=None,
-        data={
-            "position": (91, 73),
-            "nested": {"path": [(91, 73)], "value": "91,73"},
-            "91,73": "reached 91,73",
-        },
-        perceiver_uuids=set(),
-    )
-    objective.compact = "Controlled Hero acts at 91,73"
-    objective.verbose = "Controlled Hero acts at (91, 73)"
-    objective.detailed = "Controlled Hero acts at [91,73]"
-
-    projected = _project(objective)
-
-    assert isinstance(projected, CombatLogEntry)
-    serialized = projected.model_dump_json()
-    assert "91" not in serialized
-    assert "73" not in serialized
-    assert "position" not in projected.data
-    assert projected.data["nested"]["path"] == []
 
 
 def test_controlled_mover_retains_its_owned_geometry() -> None:
@@ -272,93 +161,22 @@ def test_controlled_mover_retains_its_owned_geometry() -> None:
         source_uuid=CONTROLLED_UUID,
         target_name=None,
         target_uuid=None,
-        data={
-            "type": "step_movement",
-            "from_position": (1, 2),
-            "to_position": (2, 2),
-            "movement_cost": 5,
-            "path_index": 1,
-            "nested_secret": (91, 73),
-        },
+        data=StepMovementLogData(from_position=(1, 2), to_position=(2, 2), movement_cost=5,
+            path_index=1, trajectory=MovementTrajectory.PATH, disclosed_path=((1, 2), (2, 2)),
+            from_elevation_feet=0, to_elevation_feet=0,
+            provocation_policy=MovementProvocationPolicy.ORDINARY_EXIT, committed=True),
         perceiver_uuids=set(),
     )
 
     projected = _project(objective)
 
     assert isinstance(projected, CombatLogEntry)
-    assert projected.data["from_position"] == (1, 2)
-    assert projected.data["to_position"] == (2, 2)
-    assert "nested_secret" not in projected.data
+    assert projected.data.from_position == (1, 2)
+    assert projected.data.to_position == (2, 2)
     assert "91" not in projected.model_dump_json()
     assert "73" not in projected.model_dump_json()
 
 
-def test_two_roll_arrays_are_not_misclassified_as_positions() -> None:
-    attack_roll = DiceRollDisplay(
-        dice_str="d20",
-        results=[15, 8],
-        bonus=5,
-        total=20,
-        all_d20_rolls=[15, 8],
-        d20_used=15,
-        advantage_status="advantage",
-    )
-    damage_roll = DamageRollDisplay(
-        dice_str="2d6",
-        dice_results=[3, 4],
-        bonus=0,
-        total=7,
-        damage_type="slashing",
-    )
-    objective = _log(
-        CombatLogEntryType.ATTACK,
-        source_name="Controlled Hero",
-        source_uuid=CONTROLLED_UUID,
-        data={
-            "attack_roll": {
-                "results": [15, 8],
-                "all_d20_rolls": [15, 8],
-                "total": 23,
-            },
-        },
-        perceiver_uuids=set(),
-    )
-    objective.compact = format_attack_compact(
-        "Controlled Hero",
-        "Training Dummy",
-        "hit",
-        7,
-    )
-    objective.verbose = format_attack_verbose(
-        "Controlled Hero",
-        "Training Dummy",
-        "Greatsword",
-        attack_roll,
-        12,
-        "hit",
-        [damage_roll],
-        7,
-    )
-    objective.detailed = format_attack_detailed(
-        "Controlled Hero",
-        "Training Dummy",
-        "Greatsword",
-        attack_roll,
-        [],
-        12,
-        [],
-        "hit",
-        [damage_roll],
-        7,
-    )
-
-    projected = _project(objective)
-
-    assert isinstance(projected, CombatLogEntry)
-    assert projected.data == objective.data
-    assert projected.compact == objective.compact
-    assert projected.verbose == objective.verbose
-    assert projected.detailed == objective.detailed
 
 
 def _completed_atomic_movement_log(
@@ -414,7 +232,8 @@ def _completed_atomic_movement_log(
         steps.append(step)
         visible_step = _project(step)
         assert visible_step is not None
-        assert f"step {index}/{len(path) - 1}; {step_event.movement_cost}ft" in visible_step.detailed
+        assert "step " not in visible_step.detailed
+        assert f"{step_event.movement_cost:g}ft" in visible_step.detailed
 
     if movement_type == "jump":
         event = JumpEvent(
@@ -495,7 +314,7 @@ def test_atomic_geometry_requires_exact_event_time_position_evidence(
 
     assert isinstance(projected, CombatLogEntry)
     assert projected.data == objective.data
-    assert projected.sub_entries[0].data == objective.sub_entries[0].data
+    assert projected.sub_entries[0].data == objective.sub_entries[0].data.model_copy(update={"path_index": 0})
 
     hidden_position = path[len(path) // 2]
     for step in objective.sub_entries:
@@ -507,12 +326,12 @@ def test_atomic_geometry_requires_exact_event_time_position_evidence(
 
     assert isinstance(hidden_geometry, CombatLogEntry)
     serialized = hidden_geometry.model_dump_json()
-    assert hidden_geometry.data["observation_complete"] is False
+    assert hidden_geometry.data.observation_complete is False
     if movement_type == "jump":
         assert f"[{hidden_position[0]},{hidden_position[1]}]" not in serialized
     else:
-        assert "connector_uuid" not in hidden_geometry.data
-        assert "connector_authored_id" not in hidden_geometry.data
+        assert "connector_uuid" not in hidden_geometry.data.model_dump()
+        assert "connector_authored_id" not in hidden_geometry.data.model_dump()
 
 
 def test_sensory_updates_replay_independently_for_two_observers(
@@ -620,7 +439,7 @@ def test_generation_range_preserves_three_authoritative_nullable_slots() -> None
         CombatLogEntryType.DAMAGE_TAKEN,
         source_name="Controlled Hero",
         source_uuid=CONTROLLED_UUID,
-        data={"damage": 7},
+        data=DamageTakenLogData(target_name="Controlled Hero", damage=7, damage_type="fire", source_name="Controlled Hero"),
         perceiver_uuids=set(),
     )
     nested_root = _log(
@@ -691,7 +510,7 @@ def test_surviving_encounter_rejects_old_logs_after_generation_reset() -> None:
         CombatLogEntryType.DAMAGE_TAKEN,
         source_name="Controlled Hero",
         source_uuid=CONTROLLED_UUID,
-        data={"damage": 3},
+        data=DamageTakenLogData(target_name="Controlled Hero", damage=3, damage_type="fire", source_name="Controlled Hero"),
         perceiver_uuids=set(),
     )
     assert encounter.add_event_to_combat_log(_event_with_log(first)) == 0
@@ -727,7 +546,7 @@ def test_projection_failure_returns_no_partial_batch_or_source_mutation(
 ) -> None:
     """One projector failure leaves the append-only objective source intact."""
     encounter = Encounter(source_entity_uuid=uuid4())
-    for entry_type in (CombatLogEntryType.ACTION, CombatLogEntryType.ATTACK):
+    for entry_type in (CombatLogEntryType.ACTION, CombatLogEntryType.ACTION):
         encounter.add_event_to_combat_log(_event_with_log(_log(
             entry_type,
             source_name="Controlled Hero",

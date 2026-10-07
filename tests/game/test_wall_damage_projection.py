@@ -11,12 +11,12 @@ from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.walls import WallOfFire, WallOfFireZone
-from game.event_record import decode_event, encode_event
-from game.player_facts import DamageFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence
-from game.presentation import capture_interval, capture_lineage
-from game.replay import RecordedSequence
+from dnd.player.event_record import decode_event, encode_event
+from dnd.player.facts import DamageFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence
+from dnd.player.capture import capture_interval, capture_lineage
+from dnd.player.recorded import RecordedSequence
 from tests.manual.spell_regression_support import create_spell_regression_actor
 
 

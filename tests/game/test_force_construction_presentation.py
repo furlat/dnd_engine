@@ -10,10 +10,11 @@ from game.animation_data import load_animation_data
 from game.choreography import bind_choreography
 from game.construction_media import construction_media_draw_commands
 from game.construction_media_lifetime import register_construction_lifetimes
-from game.player_projection import project_sequence, begin_projection, project_lineage
-from game.player_facts import SpatialFact
+from dnd.player.recorded import project_sequence
+from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.facts import SpatialFact
 from dnd.core.events import SpatialChangeEvent, SpatialChangeType
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from game.animation import ObjectContact
 from game.directed_contacts import recorded_surface_contact

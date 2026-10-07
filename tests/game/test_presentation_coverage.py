@@ -18,8 +18,8 @@ from game.choreography import bind_choreography, bind_motion
 from game.environment_art import load_environment_art
 from game.condition_types import ConditionFile
 from tests.game.portal_scenarios import portal_history
-from game.player_facts import ActionFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ActionFact
+from dnd.player.reduction import reduce_lineage
 from game.presentation_coverage import lineage_coverage, missing_observed_bindings, presentation_inventory
 from tests.game.concealment_scenarios import concealment_history
 from tests.game.player_helpers import player_history

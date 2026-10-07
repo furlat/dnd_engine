@@ -26,7 +26,7 @@ from game.motion import bind_motion, sample_motion
 from game.projection import Camera, TILE_WIDTH, project_world
 from tests.game.scenarios import attack_history
 from tests.game.player_helpers import player_history, visible_body, visible_contact
-from game.player_facts import AttackFact, MovementFact
+from dnd.player.facts import AttackFact, MovementFact
 
 
 @pytest.fixture(scope="module")

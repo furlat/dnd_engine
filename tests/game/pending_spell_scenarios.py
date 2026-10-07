@@ -33,8 +33,8 @@ from dnd.spells.transmutation import EnhanceAbility, ExpeditiousRetreat, Haste, 
 from dnd.types.character_progression import AppliedOriginState, Background, Species
 from dnd.types.world import CardinalDirection
 from dnd.world_authoring import set_world_tile_elevation
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 from tests.game.teleport_scenarios import teleport_history
 
 

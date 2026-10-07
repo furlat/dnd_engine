@@ -19,12 +19,12 @@ from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from game.presentation import (
+from dnd.player.capture import (
     capture_interval, capture_lineage,
     reduce_interval, reduce_lineage,
 )
 
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def discovery_history(

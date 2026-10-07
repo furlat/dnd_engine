@@ -17,8 +17,8 @@ from game.interaction_frame import pick_world
 from game.environment_animation import remnant_bank
 from game.environment_art import load_environment_art, sample_environment_frame
 from game.environment_draw import environment_selection_command, pick_environment_target
-from game.player_facts import MovementFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import MovementFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera, pick_support
 from tests.game.test_environment_presentation import _saved, _render_head
 from game.assets import SurfaceCache, load_catalog

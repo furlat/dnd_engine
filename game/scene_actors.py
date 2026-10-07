@@ -8,7 +8,7 @@ from game.animation_types import AnimationData, Facing8
 from game.body_pose_types import SceneActor
 from game.combat import actor_contact, actor_is_visible
 from game.condition_animation import resolve_condition_appearance
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.visual_position import VisualPosition, placed_contact
 
 

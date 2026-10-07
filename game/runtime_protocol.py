@@ -4,17 +4,18 @@ No live events, executable templates or registry objects cross this boundary.
 The request identity also identifies an asynchronous preview's exact prefix.
 """
 
-from typing import Annotated, IO, Literal
+from typing import Annotated, Literal
 from uuid import UUID
-import struct
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from player_server.framing import MAX_PACKET_BYTES as MAX_PACKET_BYTES, read_packet as read_packet, write_packet as write_packet
 
 from dnd.content.characters.build_types import CharacterBuild
 from dnd.core.base_actions import AvailableActionsResult, AvailableSelectionPreview
-from game.player_commands import ActionSelection, EquipItem, UnequipItem, ToggleHandler
-from game.player_facts import CombatLogAppend, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage
-from game.ui.content_types import UIContentManifest
+from dnd.player.commands import ActionSelection, EquipItem, UnequipItem, ToggleHandler
+from dnd.player.facts import CombatLogAppend, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage
+from dnd.player.content import UIContentManifest
+from dnd.core.content.descriptors import ContentDescriptor
 
 
 class Request(BaseModel):
@@ -111,6 +112,7 @@ class OperationReply(Reply):
     lineages: tuple[PlayerLineage, ...]
     hud: PlayerHUDSnapshot | None
     combat_log_appends: tuple[CombatLogAppend, ...]
+    content_additions: tuple[ContentDescriptor, ...] = ()
     boundary_status: str | None = None
     gaps: tuple[tuple[UUID, str], ...] = ()
 
@@ -144,32 +146,3 @@ RuntimeReply = Annotated[
 
 REQUEST_CODEC: TypeAdapter[RuntimeRequest] = TypeAdapter(RuntimeRequest)
 REPLY_CODEC: TypeAdapter[RuntimeReply] = TypeAdapter(RuntimeReply)
-MAX_PACKET_BYTES = 64 * 1024 * 1024
-
-
-def read_packet(stream: IO[bytes]) -> bytes | None:
-    header = stream.read(4)
-    if not header:
-        return None
-    if len(header) != 4:
-        raise EOFError("Truncated native reply header")
-    size, = struct.unpack("!I", header)
-    if size > MAX_PACKET_BYTES:
-        raise ValueError("Native packet exceeds the bounded transport size")
-    chunks: list[bytes] = []
-    remaining = size
-    while remaining:
-        chunk = stream.read(remaining)
-        if not chunk:
-            raise EOFError("Truncated native packet")
-        chunks.append(chunk)
-        remaining -= len(chunk)
-    return b"".join(chunks)
-
-
-def write_packet(stream: IO[bytes], payload: bytes) -> None:
-    if len(payload) > MAX_PACKET_BYTES:
-        raise ValueError("Native packet exceeds the bounded transport size")
-    stream.write(struct.pack("!I", len(payload)))
-    stream.write(payload)
-    stream.flush()

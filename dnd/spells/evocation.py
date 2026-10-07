@@ -4445,7 +4445,7 @@ class ContinualFlameCondition(BaseCondition):
     _removed_light: SpatialChangeEvent | None = PrivateAttr(default=None)
 
     def snapshot_item_effect(self) -> ItemEffectPresentationState:
-        return ItemEffectPresentationState(effect_uuid=self.uuid,
+        return ItemEffectPresentationState(duration=self.duration.snapshot_summary(), effect_uuid=self.uuid,
             behavior_id=self.get_semantic_key(),
             display_name=self.name, description=self.description,
             applied_source_event_cursor=self.applied_source_event_cursor)

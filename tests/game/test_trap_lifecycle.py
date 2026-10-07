@@ -8,10 +8,10 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventQueue, EventType
 from dnd.entity import Entity
 from dnd.types.traps import TrapState
-from game.player_facts import ActionFact, ConditionChangeFact, DamageFact, MovementFact, SpatialEffectStateFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.replay import RecordedSequence
+from dnd.player.facts import ActionFact, ConditionChangeFact, DamageFact, MovementFact, SpatialEffectStateFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import RecordedSequence
 from tests.game.trap_scenarios import TRAP_CONTENT, trap_history
 
 

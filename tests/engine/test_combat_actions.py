@@ -25,6 +25,7 @@ from dnd.blocks.equipment import EquipmentConfig, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core import dice as dice_module
 from dnd.core.dice import AttackOutcome
+from dnd.core.combat_log import AttackLogData, ForcedMovementLogData
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.equipment_types import WeaponSlot
@@ -674,13 +675,13 @@ def test_eb_10_007_shove_forced_movement_does_not_trigger_opportunity_attack() -
     forced_movement_logs = [
         entry
         for entry in event.combat_log.sub_entries
-        if entry.data.get("type") == "forced_movement"
+        if isinstance(entry.data, ForcedMovementLogData)
     ]
     assert len(forced_movement_logs) == 1
     forced_log = forced_movement_logs[0]
-    assert forced_log.data["cause"] == "shove"
-    assert forced_log.data["start_position"] == (3, 2)
-    assert forced_log.data["end_position"] == target.position
+    assert forced_log.data.cause == "shove"
+    assert forced_log.data.start_position == (3, 2)
+    assert forced_log.data.end_position == target.position
     assert "(3, 2) →" in forced_log.verbose
     assert f"→ {target.position}" in forced_log.verbose
 
@@ -1106,7 +1107,8 @@ def test_eb_10_016_mixed_weapon_damage_applies_resistance_per_component() -> Non
     assert hp_before - target.get_hp() == 9
     assert event.total_damage == 9
     assert event.combat_log is not None
-    assert event.combat_log.data["total_damage"] == 9
+    assert isinstance(event.combat_log.data, AttackLogData)
+    assert event.combat_log.data.total_damage == 9
     assert "{red:9} damage" in event.combat_log.compact
     take_damage_events = [
         event

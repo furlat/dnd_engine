@@ -15,9 +15,9 @@ from game.animation_draw import action_media_draw_commands
 from game.animation_types import ParticleMediaAsset
 from game.choreography import bind_choreography
 from game.particle_media import sample_particles
-from game.player_facts import AttackFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence
+from dnd.player.facts import AttackFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence
 from game.projection import Camera, painter_key
 from tests.game.body_residue_scenarios import body_residue_history
 

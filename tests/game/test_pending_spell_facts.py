@@ -25,11 +25,11 @@ from dnd.spells.evocation import Shatter
 from dnd.spells.necromancy import FalseLife
 from dnd.spells.transmutation import EnhanceAbility, ExpeditiousRetreat, Haste
 from dnd.types.actor import TemporaryHitPointsGrant
-from game.player_facts import SpellFact, StepFact, TemporaryHitPointsFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import capture_interval, reduce_interval
-from game.replay import ObserverCapture, RecordedSequence, capture_history
+from dnd.player.facts import SpellFact, StepFact, TemporaryHitPointsFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import ObserverCapture, RecordedSequence, capture_history
 from tests.game.movement_scenarios import movement_history
 
 

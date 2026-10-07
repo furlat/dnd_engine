@@ -15,7 +15,7 @@ from dnd.spells.conjuration import FogCloud
 from dnd.types.senses import VolumeSurfaceSight
 from game.animation import view_facing
 from game.animation_types import ProjectileStorage, SpatialMediaBinding, SpatialMediaLayer
-from game.player_reduction import decode_player_sequence
+from dnd.player.reduction import decode_player_sequence
 from game.projection import Camera, TILE_WIDTH, rotate_position, project_screen
 from game.registered_media import registered_media_samples
 from game.spatial_field_media import field_media_commands

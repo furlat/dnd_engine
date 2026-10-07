@@ -24,7 +24,11 @@ from dnd.core.base_conditions import (
 )
 from dnd.core.condition_types import ConditionAgencyDenial, ConditionRemovalTrigger
 from dnd.core.base_object import BaseObject
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.combat_log import (
+    ActionLogData, CombatLogEntry, CombatLogEntryType, ConditionRemovedLogData,
+    DamageTakenLogData, EntitySpottedLogData, HazardDetectedLogData, MovementLogData,
+    MultiEntityLogData, SpellDamageLogData, StepMovementLogData, summarize_target_entries,
+)
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
@@ -40,7 +44,6 @@ from dnd.core.events import (
     SensoryUpdateReason,
     SpatialChangeEvent,
     TakeDamageEvent,
-    _enrich_multi_entity_log_from_children,
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.life_types import LifeState
@@ -72,7 +75,9 @@ from server.agent_runtime.observation_journal import (
     _event_should_patch_referenced_entities,
     observation_wakeup_stream,
 )
-from server.combat_log_projection import _sanitize_multi_entity_log_summary
+from dnd.subjective_combat_log import project_combat_log
+from dnd.types.event_facts import MovementTrajectory
+from dnd.types.world import MovementProvocationPolicy
 from dnd.actions import MovementEvent
 from dnd.blocks.base_item import ItemResourceChangeEvent
 from server.event_server import app, sim
@@ -372,6 +377,9 @@ def test_child_projection_captures_at_its_completion_boundary() -> None:
         use_register=False,
         combat_log=CombatLogEntry(
             entry_type=CombatLogEntryType.ACTION,
+            data=ActionLogData(entity_name=hero.name, entity_uuid=str(hero.uuid),
+                action_name="Top-level action", effect_description="Causal sensory update",
+                target_name=monster.name, target_uuid=str(monster.uuid)),
             source_name=hero.name,
             source_uuid=str(hero.uuid),
             target_name=monster.name,
@@ -716,6 +724,9 @@ def test_standalone_spotted_log_wakes_and_replays_once() -> None:
     subscription = observation_wakeup_stream.subscribe(session_id)
     spotted = CombatLogEntry(
         entry_type=CombatLogEntryType.ENTITY_SPOTTED,
+        data=EntitySpottedLogData(observer_name=hero.name, observer_uuid=str(hero.uuid),
+            target_name=monster.name, target_uuid=str(monster.uuid), target_position=monster.position,
+            passive_perception=12, stealth_dc=10),
         source_name=hero.name,
         source_uuid=str(hero.uuid),
         target_name=monster.name,
@@ -771,6 +782,9 @@ def test_registered_completion_log_is_not_duplicated_by_log_listener() -> None:
     snapshot = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
     action_log = CombatLogEntry(
         entry_type=CombatLogEntryType.ACTION,
+        data=ActionLogData(entity_name=hero.name, entity_uuid=str(hero.uuid),
+            action_name="One action", effect_description="One registered completion",
+            target_name=monster.name, target_uuid=str(monster.uuid)),
         source_name=hero.name,
         source_uuid=str(hero.uuid),
         target_name=monster.name,
@@ -820,6 +834,8 @@ def test_standalone_hazard_log_reaches_only_its_perceiver_session() -> None:
     ).json()
     hazard = CombatLogEntry(
         entry_type=CombatLogEntryType.HAZARD_DETECTED,
+        data=HazardDetectedLogData(observer_name=hero.name, observer_uuid=str(hero.uuid),
+            hazard_name="Hidden hazard", position=(3, 1), passive_perception=12, stealth_dc=10),
         source_name=hero.name,
         source_uuid=str(hero.uuid),
         compact=f"{hero.name} detects a hidden hazard",
@@ -1056,6 +1072,8 @@ def test_current_senses_do_not_retroactively_authorize_legacy_combat_logs() -> N
     assert monster.uuid in hero.senses.entities
     encounter.combat_log.append(CombatLogEntry(
         entry_type=CombatLogEntryType.ACTION,
+        data=ActionLogData(entity_name=monster.name, entity_uuid=str(monster.uuid),
+            action_name="Legacy action", effect_description="RETROACTIVE-LEGACY-LOG"),
         source_name=monster.name,
         source_uuid=str(monster.uuid),
         compact="RETROACTIVE-LEGACY-LOG",
@@ -1803,44 +1821,37 @@ def test_unseen_enemy_movement_does_not_leak_live_position_or_identity() -> None
 
 def test_known_enemy_movement_log_stops_at_last_perceived_step() -> None:
     """A known mover's parent log cannot reveal steps hidden after contact is lost."""
-    client, session_id, hero, monster, _encounter = create_observation_game()
-    client.get(f"/ai/sessions/{session_id}/observation/snapshot")
-    hero.senses.entities.pop(monster.uuid, None)
+    hero_id, monster_id = uuid4(), uuid4()
+    monster_name = "Observation Skeleton"
 
     visible_step = CombatLogEntry(
         entry_type=CombatLogEntryType.MOVEMENT,
-        source_name=monster.name,
-        source_uuid=str(monster.uuid),
-        compact=f"{monster.name} steps to (3, 1)",
-        verbose=f"{monster.name} (2, 1) -> (3, 1)",
-        detailed=f"{monster.name} (2, 1) -> (3, 1) (step 1/3, 5ft)",
-        data={
-            "type": "step_movement",
-            "from_position": (2, 1),
-            "to_position": (3, 1),
-            "path_index": 1,
-            "movement_cost": 5.0,
-        },
-        perceiver_uuids={str(hero.uuid)},
-        identified_entity_observer_uuids={str(monster.uuid): {str(hero.uuid)}},
-        located_entity_observer_uuids={str(monster.uuid): {str(hero.uuid)}},
+        source_name=monster_name,
+        source_uuid=str(monster_id),
+        compact=f"{monster_name} steps to (3, 1)",
+        verbose=f"{monster_name} (2, 1) -> (3, 1)",
+        detailed=f"{monster_name} (2, 1) -> (3, 1) (step 1/3, 5ft)",
+        data=StepMovementLogData(from_position=(2, 1), to_position=(3, 1),
+            path_index=1, movement_cost=5.0, trajectory=MovementTrajectory.PATH,
+            disclosed_path=((2, 1), (3, 1)), from_elevation_feet=0, to_elevation_feet=0,
+            provocation_policy=MovementProvocationPolicy.ORDINARY_EXIT, committed=True),
+        perceiver_uuids={str(hero_id)},
+        identified_entity_observer_uuids={str(monster_id): {str(hero_id)}},
+        located_entity_observer_uuids={str(monster_id): {str(hero_id)}},
     )
     hidden_steps = [
         CombatLogEntry(
             entry_type=CombatLogEntryType.MOVEMENT,
-            source_name=monster.name,
-            source_uuid=str(monster.uuid),
-            compact=f"{monster.name} steps to {destination}",
-            verbose=f"{monster.name} {origin} -> {destination}",
-            detailed=f"{monster.name} {origin} -> {destination}",
-            data={
-                "type": "step_movement",
-                "from_position": origin,
-                "to_position": destination,
-                "path_index": index,
-                "movement_cost": 5.0,
-            },
-            perceiver_uuids={str(monster.uuid)},
+            source_name=monster_name,
+            source_uuid=str(monster_id),
+            compact=f"{monster_name} steps to {destination}",
+            verbose=f"{monster_name} {origin} -> {destination}",
+            detailed=f"{monster_name} {origin} -> {destination}",
+            data=StepMovementLogData(from_position=origin, to_position=destination,
+                path_index=index, movement_cost=5.0, trajectory=MovementTrajectory.PATH,
+                disclosed_path=(origin, destination), from_elevation_feet=0, to_elevation_feet=0,
+                provocation_policy=MovementProvocationPolicy.ORDINARY_EXIT, committed=True),
+            perceiver_uuids={str(monster_id)},
         )
         for index, origin, destination in (
             (2, (3, 1), (4, 1)),
@@ -1849,45 +1860,36 @@ def test_known_enemy_movement_log_stops_at_last_perceived_step() -> None:
     ]
     parent_log = CombatLogEntry(
         entry_type=CombatLogEntryType.MOVEMENT,
-        source_name=monster.name,
-        source_uuid=str(monster.uuid),
-        compact=f"{monster.name} moves 15ft to (5, 1)",
-        verbose=f"{monster.name} moves (2, 1) -> (5, 1) (15ft)",
-        detailed=f"{monster.name} moves (2, 1) -> (5, 1)\nPath: (2, 1) -> (3, 1) -> (4, 1) -> (5, 1)",
-        data={
-            "entity_name": monster.name,
-            "entity_uuid": str(monster.uuid),
-            "start_position": (2, 1),
-            "end_position": (5, 1),
-            "path": [(2, 1), (3, 1), (4, 1), (5, 1)],
-            "distance_feet": 15,
-            "movement_cost": 15,
-        },
+        source_name=monster_name,
+        source_uuid=str(monster_id),
+        compact=f"{monster_name} moves 15ft to (5, 1)",
+        verbose=f"{monster_name} moves (2, 1) -> (5, 1) (15ft)",
+        detailed=f"{monster_name} moves (2, 1) -> (5, 1)\nPath: (2, 1) -> (3, 1) -> (4, 1) -> (5, 1)",
+        data=MovementLogData(entity_name=monster_name, entity_uuid=str(monster_id),
+            start_position=(2, 1), end_position=(5, 1), path=[(2, 1), (3, 1), (4, 1), (5, 1)],
+            distance_feet=15, movement_cost=15),
         sub_entries=[visible_step, *hidden_steps],
-        perceiver_uuids={str(hero.uuid), str(monster.uuid)},
-        identified_entity_observer_uuids={str(monster.uuid): {str(hero.uuid)}},
+        perceiver_uuids={str(hero_id), str(monster_id)},
+        identified_entity_observer_uuids={str(monster_id): {str(hero_id)}},
     )
-    EventQueue.push_combat_log(parent_log, monster.uuid)
-
-    snapshot = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
-    movement = next(
-        log
-        for log in reversed(snapshot["combat_logs"])
-        if log["entry_type"] == CombatLogEntryType.MOVEMENT.value
-        and log["source_uuid"] == str(monster.uuid)
-    )
+    projected = project_combat_log(parent_log,
+        controlled_entity_uuids=frozenset({str(hero_id)}),
+        observer_entity_uuids=frozenset({str(hero_id)}))
+    assert projected is not None
+    movement = CombatLogEntry.model_validate_json(projected.model_dump_json()).model_dump(mode="json")
     movement_text = json.dumps(movement)
 
     assert len(movement["sub_entries"]) == 1
     assert movement["data"]["observation_complete"] is False
     assert movement["data"]["observed_path_segments"] == []
-    assert "start_position" not in movement["data"]
-    assert "end_position" not in movement["data"]
-    assert "path" not in movement["data"]
+    assert movement["data"]["start_position"] is None
+    assert movement["data"]["end_position"] is None
+    assert movement["data"]["path"] == []
     safe_step = movement["sub_entries"][0]
     assert safe_step["entry_type"] == CombatLogEntryType.MOVEMENT.value
-    assert safe_step["source_uuid"] == str(monster.uuid)
+    assert safe_step["source_uuid"] == str(monster_id)
     assert safe_step["data"] == {
+        "kind": "unlocated_movement",
         "type": "movement",
         "observation_complete": False,
     }
@@ -1899,80 +1901,55 @@ def test_known_enemy_movement_log_stops_at_last_perceived_step() -> None:
 
 def test_subjective_combat_logs_scrub_nested_hidden_identity_payloads() -> None:
     """Nested combat-log data cannot smuggle unknown entity identities."""
-    client, session_id, hero, monster, _encounter = create_observation_game(hidden_monster=True)
-    replication_bootstrap = bootstrap_player_replication(client, session_id)
-    combat_log_cursor = replication_bootstrap["combat_log_frames"]["through_cursor"]
+    hero_id, monster_id = uuid4(), uuid4()
+    monster_name = "Observation Skeleton"
     child_log = CombatLogEntry(
         entry_type=CombatLogEntryType.SPELL_DAMAGE,
-        source_name=monster.name,
-        source_uuid=str(monster.uuid),
-        target_name=monster.name,
-        target_uuid=str(monster.uuid),
-        compact=f"{monster.name} nested child",
-        verbose=f"{monster.name} nested child verbose",
-        detailed=f"{monster.name} nested child detailed",
-        data={
-            "target_name": monster.name,
-            "target_uuid": str(monster.uuid),
-            "nested": {
-                "entity_uuid": str(monster.uuid),
-                "entity_name": monster.name,
-                "targets": [
-                    {"target_uuid": str(monster.uuid), "target_name": monster.name},
-                    str(monster.uuid),
-                    monster.name,
-                ],
-            },
-        },
-        perceiver_uuids={str(hero.uuid)},
+        source_name=monster_name,
+        source_uuid=str(monster_id),
+        target_name=monster_name,
+        target_uuid=str(monster_id),
+        compact=f"{monster_name} nested child",
+        verbose=f"{monster_name} nested child verbose",
+        detailed=f"{monster_name} nested child detailed",
+        data=SpellDamageLogData(spell_name="Nested Leakage", target_name=monster_name,
+            damage=7, damage_type="force"),
+        sub_entries=[CombatLogEntry(entry_type=CombatLogEntryType.DAMAGE_TAKEN,
+            source_name=monster_name, source_uuid=str(monster_id),
+            target_name=monster_name, target_uuid=str(monster_id),
+            compact=f"{monster_name} takes 7 force damage", verbose=monster_name, detailed=monster_name,
+            data=DamageTakenLogData(target_name=monster_name, damage=7, damage_type="force",
+                source_name=monster_name, effect_id=str(monster_id)),
+            perceiver_uuids={str(hero_id)})],
+        perceiver_uuids={str(hero_id)},
     )
     parent_log = CombatLogEntry(
         entry_type=CombatLogEntryType.MULTI_ENTITY_ACTION,
-        source_name=monster.name,
-        source_uuid=str(monster.uuid),
+        source_name=monster_name,
+        source_uuid=str(monster_id),
         target_name=None,
         target_uuid=None,
-        compact=f"{monster.name} uses nested leakage",
-        verbose=f"{monster.name} uses nested leakage verbose",
-        detailed=f"{monster.name} uses nested leakage detailed",
-        data={
-            "action_name": "Nested Leakage",
-            "caster_name": monster.name,
-            "total_targets": 1,
-            "target_names": [monster.name],
-            "per_target_logs": [
-                {
-                    "target_name": monster.name,
-                    "target_uuid": str(monster.uuid),
-                    "deeper": [{"entity_uuid": str(monster.uuid), "entity_name": monster.name}],
-                }
-            ],
-        },
+        compact=f"{monster_name} uses nested leakage",
+        verbose=f"{monster_name} uses nested leakage verbose",
+        detailed=f"{monster_name} uses nested leakage detailed",
+        data=MultiEntityLogData(action_name="Nested Leakage", caster_name=monster_name,
+            total_targets=1, target_names=[monster_name], target_entry_indices=(0,)),
         sub_entries=[child_log],
-        perceiver_uuids={str(hero.uuid)},
+        perceiver_uuids={str(hero_id)},
     )
     raw_log_text = parent_log.model_dump_json()
-    assert str(monster.uuid) in raw_log_text
-    assert monster.name in raw_log_text
-    EventQueue.push_combat_log(parent_log, monster.uuid)
-
-    subjective_logs = get_player_combat_log_window(
-        client,
-        session_id,
-        replication_bootstrap,
-        from_cursor=combat_log_cursor,
-    )
-    assert subjective_logs["through_cursor"] == combat_log_cursor + 1
-    canonical_logs_text = json.dumps(subjective_logs["frames"])
-    snapshot = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
-    logs_text = json.dumps(snapshot["combat_logs"])
-
-    assert str(monster.uuid) not in canonical_logs_text
-    assert monster.name not in canonical_logs_text
-    assert "Unknown" in canonical_logs_text
-    assert str(monster.uuid) not in logs_text
-    assert monster.name not in logs_text
+    assert str(monster_id) in raw_log_text
+    assert monster_name in raw_log_text
+    projected = project_combat_log(parent_log,
+        controlled_entity_uuids=frozenset({str(hero_id)}),
+        observer_entity_uuids=frozenset({str(hero_id)}))
+    assert projected is not None
+    logs_text = CombatLogEntry.model_validate_json(projected.model_dump_json()).model_dump_json()
+    assert str(monster_id) not in logs_text
+    assert monster_name not in logs_text
     assert "Unknown" in logs_text
+    assert '"effect_id":null' in logs_text
+    assert parent_log.model_dump_json() == raw_log_text
 
 
 def test_repeated_projectile_keeps_declared_target_identity_after_lethal_hit() -> None:
@@ -2037,7 +2014,9 @@ def test_multi_projectile_summary_ignores_non_target_causal_descendants() -> Non
         damage: int | None = None,
         children: list[CombatLogEntry] | None = None,
     ) -> CombatLogEntry:
-        data = {"total_damage": damage} if damage is not None else {}
+        data = (SpellDamageLogData(spell_name="Scorching Ray", target_name=target_name,
+            damage=damage, damage_type="fire") if damage is not None else
+            ConditionRemovedLogData(condition_name="Cleanup", reveals_target=False))
         return CombatLogEntry(
             entry_type=entry_type,
             source_name="Sorcerer",
@@ -2049,6 +2028,7 @@ def test_multi_projectile_summary_ignores_non_target_causal_descendants() -> Non
             detailed=f"{entry_type.value} -> {target_name}",
             data=data,
             sub_entries=list(children or []),
+            identified_entity_observer_uuids={target_uuid: {"sorcerer"}},
         )
 
     hero_cleanup = log(CombatLogEntryType.CONDITION_REMOVED, "Hero", "hero")
@@ -2067,8 +2047,8 @@ def test_multi_projectile_summary_ignores_non_target_causal_descendants() -> Non
         ),
         log(
             CombatLogEntryType.SPELL_DAMAGE,
-            "Skeleton Warlock",
-            "warlock",
+            "Skeleton Archer",
+            "archer",
             damage=4,
         ),
         log(
@@ -2086,20 +2066,23 @@ def test_multi_projectile_summary_ignores_non_target_causal_descendants() -> Non
         compact="Sorcerer uses Scorching Ray",
         verbose="Sorcerer uses Scorching Ray",
         detailed="Sorcerer uses Scorching Ray",
-        data={"action_name": "Scorching Ray", "total_targets": 3},
+        data=summarize_target_entries(MultiEntityLogData(action_name="Scorching Ray",
+            caster_name="Sorcerer"), direct_children, (0, 1, 2)),
         sub_entries=direct_children,
     )
 
-    _enrich_multi_entity_log_from_children(parent, direct_children)
-    subjective_data = _sanitize_multi_entity_log_summary(
-        parent,
-        direct_children,
-        dict(parent.data),
-    )
-
-    assert parent.data["target_names"] == ["Skeleton Warlock"]
-    assert parent.data["per_target_damage"] == [12, 4, 5]
-    assert subjective_data["target_names"] == ["Skeleton Warlock"]
+    original = parent.model_copy(deep=True)
+    projected = project_combat_log(parent, controlled_entity_uuids=frozenset({"sorcerer"}),
+        observer_entity_uuids=frozenset({"sorcerer"}))
+    assert projected is not None and isinstance(projected.data, MultiEntityLogData)
+    projected = CombatLogEntry.model_validate_json(projected.model_dump_json())
+    assert parent == original
+    assert parent.data.target_names == ["Skeleton Warlock", "Skeleton Archer", "Skeleton Warlock"]
+    assert parent.data.per_target_damage == [12, 4, 5]
+    assert projected.data.target_names == parent.data.target_names
+    assert projected.data.per_target_damage == [12, 4, 5]
+    assert projected.data.total_damage == 21 and projected.data.total_targets == 3
+    assert projected.data.target_entry_indices == (0, 1, 2)
     assert len(parent.sub_entries) == 3
     assert parent.sub_entries[0].sub_entries == [hero_cleanup]
     assert parent.sub_entries[2].sub_entries == [warrior_cleanup]
@@ -2202,54 +2185,50 @@ def test_subjective_successful_damage_log_exposes_exact_effect_id() -> None:
 
 def test_subjective_damage_evidence_respects_sanitization_and_perception() -> None:
     """Typed effect evidence cannot reveal hidden identities or unseen events."""
-    client, session_id, hero, monster, _encounter = create_observation_game(hidden_monster=True)
-    client.get(f"/ai/sessions/{session_id}/observation/snapshot")
+    hero_id, monster_id = uuid4(), uuid4()
+    hero_name, monster_name = "Observation Hero", "Observation Skeleton"
 
     hidden_identity_log = TakeDamageEvent(
-        source_entity_uuid=monster.uuid,
-        target_entity_uuid=hero.uuid,
-        source_entity_name=monster.name,
-        target_entity_name=hero.name,
+        source_entity_uuid=monster_id,
+        target_entity_uuid=hero_id,
+        source_entity_name=monster_name,
+        target_entity_name=hero_name,
         total_damage=1,
         damages=[],
-        effect_id=str(monster.uuid),
+        effect_id=str(monster_id),
         use_register=False,
     ).generate_combat_log().model_copy(update={
-        "perceiver_uuids": {str(hero.uuid)},
+        "perceiver_uuids": {str(hero_id)},
     })
     unperceived_effect_id = "tests.subjective_observation.unperceived_damage"
     unperceived_log = TakeDamageEvent(
-        source_entity_uuid=monster.uuid,
-        target_entity_uuid=monster.uuid,
-        source_entity_name=monster.name,
-        target_entity_name=monster.name,
+        source_entity_uuid=monster_id,
+        target_entity_uuid=monster_id,
+        source_entity_name=monster_name,
+        target_entity_name=monster_name,
         total_damage=1,
         damages=[],
         effect_id=unperceived_effect_id,
         use_register=False,
     ).generate_combat_log().model_copy(update={
-        "perceiver_uuids": {str(monster.uuid)},
+        "perceiver_uuids": {str(monster_id)},
     })
 
-    assert hidden_identity_log.data["effect_id"] == str(monster.uuid)
-    assert unperceived_log.data["effect_id"] == unperceived_effect_id
-    EventQueue.push_combat_log(hidden_identity_log, monster.uuid)
-    EventQueue.push_combat_log(unperceived_log, monster.uuid)
-
-    snapshot = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
-    logs_json = json.dumps(snapshot["combat_logs"])
-    perceived_damage = next(
-        entry
-        for entry in reversed(snapshot["combat_logs"])
-        if entry["entry_type"] == CombatLogEntryType.DAMAGE_TAKEN.value
-        and entry["target_uuid"] == str(hero.uuid)
-    )
-
-    assert perceived_damage["source_uuid"] == ""
-    assert perceived_damage["source_name"] == "Unknown"
-    assert "effect_id" not in perceived_damage["data"]
-    assert str(monster.uuid) not in logs_json
-    assert monster.name not in logs_json
+    assert hidden_identity_log.data.effect_id == str(monster_id)
+    assert unperceived_log.data.effect_id == unperceived_effect_id
+    authority = dict(controlled_entity_uuids=frozenset({str(hero_id)}),
+        observer_entity_uuids=frozenset({str(hero_id)}))
+    perceived_damage = project_combat_log(hidden_identity_log, **authority)
+    assert perceived_damage is not None
+    assert project_combat_log(unperceived_log, **authority) is None
+    perceived_damage = CombatLogEntry.model_validate_json(perceived_damage.model_dump_json())
+    logs_json = perceived_damage.model_dump_json()
+    assert perceived_damage.source_uuid == ""
+    assert perceived_damage.source_name == "Unknown"
+    assert isinstance(perceived_damage.data, DamageTakenLogData)
+    assert perceived_damage.data.effect_id is None
+    assert str(monster_id) not in logs_json
+    assert monster_name not in logs_json
     assert unperceived_effect_id not in logs_json
 
 
@@ -2370,6 +2349,9 @@ def test_child_log_inherits_identity_established_by_its_causal_parent() -> None:
         target_entity_uuid=monster.uuid,
         combat_log=CombatLogEntry(
             entry_type=CombatLogEntryType.ACTION,
+            data=ActionLogData(entity_name=hero.name, entity_uuid=str(hero.uuid),
+                action_name="Known parent", effect_description="Late causal damage",
+                target_name=monster.name, target_uuid=str(monster.uuid)),
             source_name=hero.name,
             source_uuid=str(hero.uuid),
             target_name=monster.name,
@@ -2398,7 +2380,8 @@ def test_child_log_inherits_identity_established_by_its_causal_parent() -> None:
             compact=f"{monster.name} takes damage",
             verbose=f"{monster.name} takes damage",
             detailed=f"{monster.name} takes damage",
-            data={"target_name": monster.name, "target_uuid": str(monster.uuid)},
+            data=DamageTakenLogData(target_name=monster.name, damage=1, damage_type="force",
+                source_name=hero.name),
         ),
     )
 
@@ -2417,5 +2400,5 @@ def test_child_log_inherits_identity_established_by_its_causal_parent() -> None:
     damage = next(entry for entry in flattened if entry["entry_type"] == "damage_taken")
     assert damage["target_uuid"] == str(monster.uuid)
     assert damage["target_name"] == monster.name
-    assert damage["data"]["target_uuid"] == str(monster.uuid)
+    assert damage["data"]["kind"] == "damage_taken"
     assert damage["data"]["target_name"] == monster.name

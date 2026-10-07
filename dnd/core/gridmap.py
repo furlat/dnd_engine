@@ -2,6 +2,8 @@
 
 import math
 import time
+from dnd.core.condition_types import ConditionDurationSummary
+
 from typing import AbstractSet, Any, Dict, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
@@ -112,6 +114,8 @@ class SpatialConditionOwner(Protocol):
 
     @property
     def observation_revision(self) -> int: ...
+
+    def snapshot_duration(self) -> ConditionDurationSummary: ...
 
     def is_hazardous_for(
         self, entity_uuid: Optional[UUID] = None, *,
@@ -1568,7 +1572,9 @@ class GridMap:
 
     def has_any_hazards(self) -> bool:
         """Return whether any tile or placed object currently declares a hazard."""
-        for tile in self.get_tiles_with_conditions():
+        # Independent area conditions are checked once below; resolving them
+        # through every covered tile would repeatedly rebuild the same maps.
+        for tile in self._tiles.values():
             if any(condition.hazard_filter is not None for condition in tile.active_conditions.values()):
                 return True
         for obj in self.get_objects_with_conditions():
@@ -1768,13 +1774,20 @@ class GridMap:
         key = (from_pos, to_pos)
         if side_cache is not None and key in side_cache:
             return side_cache[key]
-        result = self._world_edge_channel_allows(
-            self.get_world_edge(from_pos, to_pos),
-            world_channel,
-            movement_mode=movement_mode,
-            requester_uuid=requester_uuid,
-            subjective=subjective,
-        )
+        exit_direction = self._transition_direction(from_pos, to_pos)
+        entry_direction = self._opposite_direction(exit_direction)
+        if (not self.get_boundary_objects_at(from_pos, exit_direction)
+                and not self.get_boundary_objects_at(to_pos, entry_direction)):
+            result = self.spatial_crossing_allows(from_pos, to_pos, channel,
+                requester_uuid, movement_mode, subjective=subjective)
+        else:
+            result = self._world_edge_channel_allows(
+                self.get_world_edge(from_pos, to_pos),
+                world_channel,
+                movement_mode=movement_mode,
+                requester_uuid=requester_uuid,
+                subjective=subjective,
+            )
         if side_cache is not None:
             side_cache[key] = result
         return result
@@ -2485,6 +2498,11 @@ class GridMap:
         def side_allows(first: Tuple[int, int], second: Tuple[int, int]) -> bool:
             if first not in self._tiles or second not in self._tiles:
                 return False
+            exit_direction = self._transition_direction(first, second)
+            entry_direction = self._opposite_direction(exit_direction)
+            if (not self.get_boundary_objects_at(first, exit_direction)
+                    and not self.get_boundary_objects_at(second, entry_direction)):
+                return True
             edge = self.get_world_edge(first, second)
             for contribution in (*edge.exit_contributions, *edge.entry_contributions):
                 if contribution.provider_uuid == terminal_provider_uuid or not known(contribution.provider_uuid):
@@ -5127,6 +5145,45 @@ class GridMap:
 
         self._propagation_fov_cache[cache_key] = tuple(visible_positions)
         return list(visible_positions)
+
+    def connected_propagation_positions(
+        self, origin: Tuple[int, int], geometric: Set[Tuple[int, int]],
+    ) -> Set[Tuple[int, int]]:
+        """Spread within one footprint using the current objective topology.
+
+        Adjacent footprints share the existing revision-invalidated edge and
+        cell queries. A solid terminal cell is reached but cannot carry the
+        effect onward; the origin itself may still emit from a solid cell.
+        """
+        if origin not in geometric or origin not in self._tiles:
+            return set()
+        remaining = {position for position in geometric if position in self._tiles}
+        remaining.remove(origin)
+        reached = {origin}
+        pending = [origin]
+        while pending:
+            current = pending.pop()
+            if current != origin:
+                blocked = self._propagation_blocking_cache.get(current)
+                if blocked is None:
+                    blocked = self.is_blocking_propagation(*current)
+                    self._propagation_blocking_cache[current] = blocked
+                if blocked:
+                    continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                neighbor = (current[0] + dx, current[1] + dy)
+                if neighbor not in remaining:
+                    continue
+                edge = (current, neighbor)
+                allowed = self._propagation_transition_cache.get(edge)
+                if allowed is None:
+                    allowed = self.can_propagate_transition(current, neighbor)
+                    self._propagation_transition_cache[edge] = allowed
+                if allowed:
+                    remaining.remove(neighbor)
+                    reached.add(neighbor)
+                    pending.append(neighbor)
+        return reached
 
     def filter_propagation_positions(
         self,

@@ -12,11 +12,11 @@ from game.animation_data import load_animation_data
 from game.animation_draw import actor_draw_commands, load_attack_media, load_cast_rows
 from game.attack import BoundAttack, bind_attack, sample_attack
 from game.choreography import bind_choreography, sample_choreography
-from game.player_facts import AttackFact, SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, lineage_branch, reduce_lineage
+from dnd.player.facts import AttackFact, SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, lineage_branch, reduce_lineage
 from game.projection import Camera
-from game.replay import RecordedSequence
+from dnd.player.recorded import RecordedSequence
 from tests.game.true_strike_scenarios import true_strike_history
 
 

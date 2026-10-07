@@ -10,7 +10,7 @@ from dnd.core.presentation_geometry import SpherePresentationGeometry
 from devtools.animation_review.control_cases import control_spell_history
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, bind_motion, sample_choreography
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera, painter_key
 from game.spatial_media_draw import spatial_media_draw_commands
 from game.spatial_media_lifetime import register_spatial_lifetimes

@@ -21,8 +21,8 @@ from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from game.presentation import capture_interval, reduce_interval
-from game.replay import ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import ObserverCapture, capture_history
 from tests.game.scenarios import _healing_encounter
 
 

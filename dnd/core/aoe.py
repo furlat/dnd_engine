@@ -44,29 +44,8 @@ class AoEShape(BaseObject):
     propagation: AreaPropagation = "line_of_effect"
 
     def _connected_positions(self, origin: Tuple[int, int], geometric: Set[Tuple[int, int]]) -> Set[Tuple[int, int]]:
-        """Spread through open edges without extending the original footprint.
-
-        A solid cell may receive the effect on its surface, but cannot carry it
-        onward. Directional structures are handled by the map's edge channels.
-        """
-        grid = get_map()
-        if origin not in geometric or not grid.has_tile(*origin):
-            return set()
-        reached = {origin}
-        pending = [origin]
-        while pending:
-            current = pending.pop()
-            if current != origin and grid.is_blocking_propagation(*current):
-                continue
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                neighbor = (current[0] + dx, current[1] + dy)
-                if (neighbor in reached or neighbor not in geometric
-                        or not grid.has_tile(*neighbor)
-                        or not grid.can_propagate_transition(current, neighbor)):
-                    continue
-                reached.add(neighbor)
-                pending.append(neighbor)
-        return reached
+        """Resolve connected reach through the map's shared topology queries."""
+        return get_map().connected_propagation_positions(origin, geometric)
 
     def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
         """Return default origin for this shape type. Override in subclasses."""

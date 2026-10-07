@@ -10,14 +10,14 @@ from game.animation import sample_cast
 from game.cast_media import cast_media_draw_commands
 from game.choreography import bind_choreography, bind_motion, sample_choreography
 from game.combat import BoundCast
-from game.player_facts import ConditionChangeFact, DamageFact, HealFact, MovementFact, SpellFact
+from dnd.player.facts import ConditionChangeFact, DamageFact, HealFact, MovementFact, SpellFact
 from game.condition_animation import resolve_condition_appearance
 from game.condition_media_lifetime import register_condition_lifetimes, sample_condition_lifetimes
 from game.condition_sampling import sample_condition_media
 from game.projection import Camera
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.replay import RecordedSequence
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import RecordedSequence
 from tests.game.healing_batch_scenarios import SPELLS, healing_batch_history
 from tests.game.test_projectile_media import display as display
 

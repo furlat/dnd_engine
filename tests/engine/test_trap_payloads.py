@@ -26,7 +26,7 @@ from dnd.spatial.environmental_conditions import (
 )
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.traps import TrapPayload, TrapState
-from game.event_record import decode_event, encode_event
+from dnd.player.event_record import decode_event, encode_event
 
 
 @pytest.fixture(autouse=True)

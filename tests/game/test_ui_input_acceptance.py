@@ -9,7 +9,7 @@ from dataclasses import replace
 from game.encounter_play import run
 from game.ui.action_bar import action_families, default_shortcuts
 from game.ui.layout import layout
-from game.player_facts import ActionFact
+from dnd.player.facts import ActionFact
 from game.controls import ActionSelection
 from game.interaction_frame import pick_world
 from game.ui.combat_log import copy_log_selection, log_text_position

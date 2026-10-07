@@ -25,12 +25,12 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.abjuration import DeathWard
 from dnd.spells.necromancy import NoHealing
 from dnd.spells.transmutation import EnhanceAbility, Regenerate
-from game.event_record import decode_event, encode_event
-from game.player_facts import ConditionChangeFact, HealFact, SpellFact, TurnFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import capture_interval, reduce_interval
-from game.replay import ObserverCapture, RecordedSequence, capture_history
+from dnd.player.event_record import decode_event, encode_event
+from dnd.player.facts import ConditionChangeFact, HealFact, SpellFact, TurnFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import ObserverCapture, RecordedSequence, capture_history
 
 
 BATTLEFIELD = "battlefield.open_floor_bright"

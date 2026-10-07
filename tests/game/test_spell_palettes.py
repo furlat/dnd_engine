@@ -12,8 +12,8 @@ from game.animation_data import load_animation_data
 from game.animation_draw import actor_draw_commands, load_actor_media, load_cast_rows, load_animation_media
 from game.animation_types import ElementColors, LayerColors, PaletteTreatment, RigLayer
 from game.body_action import bind_body_action
-from game.player_facts import SpellFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import SpellFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
 from game.spell_palette import palette_noise, recolor_palette
 from tests.game.player_helpers import player_history

@@ -28,8 +28,8 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.transmutation import Fly
 from dnd.types.world import CardinalDirection, MovementMode
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def fly_lifetime_history(*, recipient: Literal["modular-backpack", "huntsman", "wolf"],

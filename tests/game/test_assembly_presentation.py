@@ -8,8 +8,8 @@ import pytest
 from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
 from game.spatial_media_lifetime import register_spatial_lifetimes
 from game.wall_assembly_media import assembly_media_draw_commands, assembly_media_limitation

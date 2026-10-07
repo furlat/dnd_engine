@@ -22,7 +22,7 @@ from game.condition_animation import (ConditionAppearance, LiveCopyAppearance,
     ConditionResponseCue, condition_body_pose, resolve_condition_appearance)
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer, supported_layer
 from game.condition_types import ConditionLayer, ConditionRecipe, ConditionTransitionEffect, ConditionLiveCopies
-from game.player_facts import ConditionChangeFact, PlayerActor, PlayerLineage, PlayerState, SpatialFact, TemporaryHitPointsFact
+from dnd.player.facts import ConditionChangeFact, PlayerActor, PlayerLineage, PlayerState, SpatialFact, TemporaryHitPointsFact
 
 
 @dataclass(frozen=True, slots=True)

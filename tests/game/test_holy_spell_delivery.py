@@ -12,7 +12,7 @@ from game.animation_draw import LoadedBodyRows
 from game.choreography import BoundChoreography, bind_choreography, walk_bound_timelines
 from game.choreography_draw import load_choreography_media
 from game.playback_frame import sample_playback_frame
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from game.orbit_media import orbit_point
 from game.combat import actor_contact
 from game.condition_draw import condition_body_ramp

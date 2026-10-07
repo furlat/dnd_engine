@@ -18,8 +18,8 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventQueue, EventPhase, TakeDamageEvent
 from dnd.spells.evocation import FireShield, Thunderwave
 from dnd.spells.transmutation import SpikeGrowth
-from game.presentation import capture_interval, capture_lineage
-from game.replay import RecordedSequence
+from dnd.player.capture import capture_interval, capture_lineage
+from dnd.player.recorded import RecordedSequence
 from tests.game.scenarios import _healing_encounter
 
 

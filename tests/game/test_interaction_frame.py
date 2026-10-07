@@ -12,12 +12,12 @@ from game.animation_data import load_animation_data, resolve_player_layers
 from game.animation_draw import actor_draw_commands, load_actor_media
 from game.app import draw_frame
 from game.demo import build_demo_intervals
-from game.presentation import reduce_interval
+from dnd.player.capture import reduce_interval
 from tests.game.test_boundary_rendering import _wall_target
 from game.assets import SurfaceCache, load_catalog
 from game.combat import actor_contact
 from game.choreography import bind_choreography, sample_motion
-from game.player_facts import MovementFact
+from dnd.player.facts import MovementFact
 from game.draw_commands import DrawCommand
 from game.fixture_depth import partition_world_depth
 from game.floor_composition import compose_floor_coverings
@@ -28,7 +28,7 @@ from dnd.types.world import CardinalDirection
 from dnd.types.senses import PerceivedContact
 from game.construction_media import construction_media_draw_commands
 from tests.game.construction_scenarios import construction_history
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from dnd.core.item_types import ItemIntegrity
 from game.condition_animation import ConditionAppearance
 from tests.game.test_environment_presentation import _saved

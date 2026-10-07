@@ -21,11 +21,11 @@ from dnd.spatial.environmental_conditions import materialize_spike_trap_conditio
 from tests.engine.test_senses_light_stealth import PerceptionModifierCondition, create_skeleton, reset_senses_state
 from dnd.types.senses import PerceivedSpatialEffect, VolumeSurfaceSight
 from dnd.types.spell_suppression import SpellSuppression
-from game.audience import AudiencePerception, PlayerAudience, audience_view, observe_audience, tile_observers
-from game.player_facts import DamageResultFact, PlayerSequence, SensoryFact
-from game.player_projection import begin_projection, project_lineage
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_initialization, reduce_lineage
-from game.presentation import capture_interval, capture_lineages
+from dnd.player.audience import AudiencePerception, PlayerAudience, audience_view, observe_audience, tile_observers
+from dnd.player.facts import DamageResultFact, PlayerSequence, SensoryFact
+from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_initialization, reduce_lineage
+from dnd.player.capture import capture_interval, capture_lineages
 
 
 @pytest.mark.parametrize("split", [True, False])
@@ -104,7 +104,8 @@ def test_split_party_retains_combat_once_and_replays_without_native_owners(split
         reset_engine_runtime()
 
 
-def test_single_observer_v2_archive_migrates_at_the_packet_boundary() -> None:
+@pytest.mark.parametrize("version", (None, 1, 2, 3, 5))
+def test_unsupported_public_archive_requires_preserved_native_reprojection(version) -> None:
     reset_engine_runtime()
     battlefield = "battlefield.visibility_doorway_open"
     build_battlefield(battlefield)
@@ -116,10 +117,15 @@ def test_single_observer_v2_archive_migrates_at_the_packet_boundary() -> None:
         _, initial = begin_projection(capture_interval(name="singleton", start_cursor=0,
             end_cursor=EventQueue.event_cursor(), observer_uuid=actor.uuid, battlefield_id=battlefield))
         raw = json.loads(encode_player_sequence(PlayerSequence(initialization=initial, lineages=())))
-        raw["schema_version"] = 2
+        if version is None:
+            raw.pop("schema_version")
+        else:
+            raw["schema_version"] = version
         raw["initialization"].pop("audience")
-        decoded, roots = decode_player_sequence(json.dumps(raw).encode())
-        assert decoded == reduce_initialization(initial) and roots == ()
+        cursor = EventQueue.event_cursor()
+        with pytest.raises(ValueError, match="reproject the preserved native recording"):
+            decode_player_sequence(json.dumps(raw).encode())
+        assert EventQueue.event_cursor() == cursor
     finally:
         game.close()
         reset_engine_runtime()

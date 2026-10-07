@@ -16,8 +16,8 @@ from game.animation_types import RigLayer
 from game.attack import BoundAttack
 from game.choreography import bind_choreography
 from game.combat import BoundCast, actor_contact
-from game.player_facts import ActionFact, AttackFact, SpellFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ActionFact, AttackFact, SpellFact
+from dnd.player.reduction import reduce_lineage
 from game.presentation_group import presentation_groups, reduce_presentation_group
 from game.projection import Camera
 from tests.game.creature_scenarios import creature_history

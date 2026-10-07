@@ -20,11 +20,12 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spatial.portals import PORTAL_HATCH_CONTENT_REF, materialize_portal
 from dnd.types.traps import TrapState
-from game.player_facts import MovementFact, PortalTransferFact
-from game.player_projection import project_sequence, begin_projection, project_lineage
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage, reduce_nodes
-from game.presentation import capture_interval, reduce_interval
-from game.replay import ObserverCapture, RecordedSequence, capture_history
+from dnd.player.facts import MovementFact, PortalTransferFact
+from dnd.player.recorded import project_sequence
+from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage, reduce_nodes
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import ObserverCapture, RecordedSequence, capture_history
 
 
 @pytest.fixture(scope="module", params=("walk", "jump"))

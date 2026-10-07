@@ -22,12 +22,12 @@ from game.animation_data import load_animation_data, resolve_player_layers
 from game.animation_draw import actor_draw_commands, load_actor_media
 from game.body_hop import sample_body_hop
 from game.choreography import bind_choreography, sample_choreography
-from game.player_facts import ForcedMovementFact, MechanismActivationFact, MovementFact, SavingThrowFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import capture_interval, reduce_interval
+from dnd.player.facts import ForcedMovementFact, MechanismActivationFact, MovementFact, SavingThrowFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import capture_interval, reduce_interval
 from game.projection import Camera, TILE_WIDTH
-from game.replay import ObserverCapture, capture_history
+from dnd.player.recorded import ObserverCapture, capture_history
 from tests.game.trap_expansion_scenarios import trap_expansion_history
 from tests.game.mechanism_scenarios import mechanism_history
 

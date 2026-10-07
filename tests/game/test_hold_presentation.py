@@ -7,7 +7,7 @@ import pygame
 import pytest
 
 from dnd.core.condition_types import ConditionCategory
-from game.actor_facts import ConditionFact
+from dnd.player.actor_facts import ConditionFact
 from game.animation import ActorContact, BodySample, body_clip
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography
@@ -15,8 +15,8 @@ from game.combat import BoundCast
 from game.condition_animation import condition_body_pose, resolve_condition_appearance
 from game.condition_media_lifetime import ConditionMediaLifetime, sample_condition_lifetimes
 from game.condition_sampling import sample_condition_media
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from tests.game.hold_scenarios import hold_history
 
 

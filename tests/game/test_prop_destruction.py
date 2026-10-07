@@ -16,8 +16,8 @@ from game.combat import actor_is_visible
 from game.environment_animation import remnant_bank
 from game.environment_art import load_environment_art, prop_state_key
 from game.environment_draw import environment_command
-from game.player_facts import ObjectDestroyedFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ObjectDestroyedFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera, camera_pose, project_world
 from tests.game.prop_destruction_scenarios import prop_destruction_history
 from tests.game.test_environment_presentation import _render_head, _saved, raster as raster

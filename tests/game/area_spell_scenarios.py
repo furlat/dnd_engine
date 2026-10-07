@@ -26,8 +26,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.evocation import BurningHands, GustOfWind, Thunderwave
 from dnd.spells.conjuration import CallLightning
 from dnd.types.world import CardinalDirection
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 AreaProgram = Literal["burning_hands", "thunderwave", "gust_of_wind", "call_lightning"]

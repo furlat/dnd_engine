@@ -25,7 +25,7 @@ from game.animation_types import PackedSurfaceFrames, PackedSurfaceComponent, Pr
 from game.animation_data import load_animation_data
 from game.animation import ActorContact, CastInput, GroundContact, compile_cast, sample_cast
 from game.animation_draw import animation_draw_commands, load_animation_media
-from game.player_facts import PlayerFact, SpellFact
+from dnd.player.facts import PlayerFact, SpellFact
 from game.projection import Camera, rotate_position
 from game.registered_media import registered_media_samples
 from game.volume_media import SurfaceVolume, compose_volume, observed_support_heights

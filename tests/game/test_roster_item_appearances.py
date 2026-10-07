@@ -24,7 +24,7 @@ from game.animation_draw import actor_draw_commands, load_actor_media
 from game.item_appearance import ground_appearance
 from game.item_draw import item_ground_commands
 from dnd.core.events import WorldObjectState
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from tests.game.item_appearance_scenarios import item_transfer_history
 from tests.game.player_helpers import player_history
 from game.projection import Camera

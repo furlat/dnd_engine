@@ -10,7 +10,7 @@ from game.animation import cast_actor_contacts, BodySample, sample_idle_body
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, Facing8
 from game.choreography import BoundChoreography, ChoreographySample, MotionTimeline, MotionSample, sample_choreography, sample_motion
-from game.player_facts import PlayerState, LifeFact
+from dnd.player.facts import PlayerState, LifeFact
 from game.condition_animation import condition_contact, condition_transition_appearances, resolve_condition_appearance
 from game.attack import attack_actor_contacts, BoundAttack
 from game.body_pose_types import SceneActor

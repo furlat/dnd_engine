@@ -10,7 +10,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter
 
-from game.player_facts import PlayerSequence
+from dnd.player.facts import PlayerSequence
 from game.presentation_export import PresentationCatalogExport
 from game.animation_types import (StudioDraftFile, DamageContext, DeathContext, AttackRecipe,
     VoluntaryMovementContext, BodyRig, RigTables, EquipmentTransitionContext,

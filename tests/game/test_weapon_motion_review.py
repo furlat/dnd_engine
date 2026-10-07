@@ -10,9 +10,9 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 from dnd.core.events import EventQueue
 from devtools.animation_review.cases import RecordedInput, ReviewSequence, load_cases
 from devtools.animation_review.record import record_case
-from game.player_facts import AttackFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence
+from dnd.player.facts import AttackFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence
 from tests.game.body_residue_scenarios import body_residue_history
 
 

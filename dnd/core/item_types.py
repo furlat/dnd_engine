@@ -1,5 +1,7 @@
 """Dependency-neutral item presentation and location contracts."""
 
+from dnd.core.condition_types import ConditionDurationSummary
+
 from enum import Enum
 from typing import Optional, Protocol, Tuple, runtime_checkable
 from uuid import UUID
@@ -134,6 +136,8 @@ class ItemEffectPresentationState(BaseModel):
     """Native item-owned membership; media remains independently authored."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+    duration: ConditionDurationSummary | None = None
+
     effect_uuid: UUID
     contribution_uuid: UUID | None = None
     behavior_id: str

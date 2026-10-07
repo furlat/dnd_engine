@@ -23,8 +23,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.enchantment import HoldPerson, HoldMonster
 from dnd.spells.transmutation import EnlargeReduceEffect
 from dnd.conditions import Paralyzed
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def hold_history(*, program: Literal['hold_person', 'hold_monster'], saved: bool = False,

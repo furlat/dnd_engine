@@ -15,8 +15,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spatial.environmental_conditions import FireSurface, OilSurface, BurningWeb
 from dnd.spells.conjuration import WebZone
 from dnd.types.spatial_effects import SpatialEffectInteractionOperation
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 from tests.game.door_destruction_scenarios import review_actor, walk
 
 

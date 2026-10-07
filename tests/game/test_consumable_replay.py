@@ -19,16 +19,16 @@ from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.necromancy import FalseLife
-from game.player_facts import ItemChargeFact, TemporaryHitPointsFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, RecordedSequence, capture_history
-from game.audience import PlayerAudience
+from dnd.player.facts import ItemChargeFact, TemporaryHitPointsFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, RecordedSequence, capture_history
+from dnd.player.audience import PlayerAudience
 from game.animation_data import load_animation_data
-from game.player_projection import begin_projection, project_lineage
-from game.player_reduction import reduce_initialization
-from game.presentation import capture_lineages
+from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.reduction import reduce_initialization
+from dnd.player.capture import capture_lineages
 from game.scene_actors import scene_actors
 
 
@@ -133,16 +133,20 @@ def test_consumed_potion_updates_only_recorded_owned_inventory(stack_count: int)
     assert charges[0].resource_change is ItemResourceChange.CONSUME
     assert EventQueue.event_cursor() == 0
 
-    legacy = project_sequence(history.views["drinker"]).model_dump(mode="json")
-    legacy["schema_version"] = 1
+    legacy = history.views["drinker"].model_dump(mode="json")
+    removed = 0
     for root in legacy["lineages"]:
-        for node in root["events"]:
-            if node["fact"] and node["fact"]["kind"] == "item_charge":
-                node["fact"].pop("resource_change")
-    old_state, old_roots = decode_player_sequence(json.dumps(legacy).encode())
+        for event in (root["root"], *root["events"]):
+            if event["wire_type"] == "dnd.blocks.base_item.ItemChargeConsumptionEvent":
+                event.pop("resource_change")
+                removed += 1
+    assert removed
+    restored = RecordedSequence.model_validate_json(json.dumps(legacy), context=PASSIVE_EVENT_REPLAY)
+    old_state, old_roots = decode_player_sequence(encode_player_sequence(project_sequence(restored)))
     old_charges = [node.fact for root in old_roots for node in root.events
                    if isinstance(node.fact, ItemChargeFact)]
-    assert len(old_charges) == 1 and old_charges[0].resource_change is None
+    # The old native event category explicitly represented consumption.
+    assert len(old_charges) == 1 and old_charges[0].resource_change is ItemResourceChange.CONSUME
     for root in old_roots:
         old_state = reduce_lineage(old_state, root)
     assert old_state == after

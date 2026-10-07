@@ -27,12 +27,12 @@ from game.attack import BoundAttack, bind_attack, sample_attack
 from game.choreography import bind_choreography
 from game.combat import bind_cast
 from game.feedback import choreography_feedback, sample_feedback
-from game.player_facts import AreaReachFact, AttackFact, ObjectDamageFact, ObjectDestroyedFact, SpellFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_initialization, reduce_lineage
-from game.presentation import capture_interval, capture_lineage, reduce_interval
+from dnd.player.facts import AreaReachFact, AttackFact, ObjectDamageFact, ObjectDestroyedFact, SpellFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_initialization, reduce_lineage
+from dnd.player.capture import capture_interval, capture_lineage, reduce_interval
 from game.projection import Camera
-from game.replay import RecordedSequence
+from dnd.player.recorded import RecordedSequence
 from tests.game.object_attack_scenarios import object_attack_history
 from tests.game.prop_destruction_scenarios import prop_destruction_history
 

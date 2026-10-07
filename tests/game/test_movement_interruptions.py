@@ -23,9 +23,9 @@ from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
 from game.timing_evidence import validate_timing_evidence
 from game.presentation_timing import presentation_dependencies
-from game.presentation import reduce_lineage
-from game.player_reduction import reduce_lineage as reduce_player
-from game.player_facts import AttackFact, PlayerState
+from dnd.player.capture import reduce_lineage
+from dnd.player.reduction import reduce_lineage as reduce_player
+from dnd.player.facts import AttackFact, PlayerState
 from tests.game.player_helpers import player_history, visible_contact
 from tests.game.scenarios import movement_with_paralysis
 

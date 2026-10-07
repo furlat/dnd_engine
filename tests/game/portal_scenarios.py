@@ -23,8 +23,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spatial.portals import PORTAL_CONTENT_REF, PORTAL_HATCH_CONTENT_REF, materialize_portal
 from dnd.spatial.environmental_conditions import materialize_spike_trap_condition
 from dnd.types.traps import TrapState, TrapDamage, TrapPayload
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 def portal_history(*, program: Literal["hatch-walk", "hatch-jump", "bare-walk", "blocked-exit",

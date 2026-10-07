@@ -15,7 +15,7 @@ from game.animation_draw import action_media_draw_commands
 from game.animation_types import ParticleMediaAsset
 from game.choreography import sample_choreography
 from game.motion import bind_motion, sample_motion
-from game.player_facts import DamageFact
+from dnd.player.facts import DamageFact
 from game.projection import Camera
 from tests.game.player_helpers import player_history, visible_contact
 

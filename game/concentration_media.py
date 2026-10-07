@@ -11,8 +11,8 @@ from game.animation_types import AnimationData
 from game.choreography import BoundChoreography, MotionTimeline, walk_bound_timelines
 from game.combat import BoundCast
 from game.maintained_media import maintained_removal_duration
-from game.player_facts import PlayerLineage, PlayerState, SpellFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import PlayerLineage, PlayerState, SpellFact
+from dnd.player.reduction import reduce_lineage
 
 
 @dataclass(frozen=True, slots=True)

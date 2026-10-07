@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-07",
+  "scope": "Read-only source evidence for server stream and SDK planning. No implementation, tests or benchmarks.",
+  "branch": "feature/server-is-coming-back",
+  "head": "40eb37b9b4cac72ea75d00d7b1545a4e48a5d2a2",
+  "initial_tree": "clean before documentation edits",
+  "files": [
+    {
+      "path": "game/player_facts.py",
+      "bytes": 26113,
+      "sha256": "0ca63988ac80e03d037065e8afe728b3a162ee2cb3c7c7257348da287f7174d4"
+    },
+    {
+      "path": "game/player_reduction.py",
+      "bytes": 21070,
+      "sha256": "2624e55f8d1c09931cfb7c395d783305f9e7f04819710ceec5cedcbd31eb76b7"
+    },
+    {
+      "path": "game/runtime_protocol.py",
+      "bytes": 4880,
+      "sha256": "119a170477fa898f06a01493212250d5e69547526beff4f94220063bb4c74eeb"
+    },
+    {
+      "path": "game/session.py",
+      "bytes": 22239,
+      "sha256": "0b3596a783162076db7a0fe2f4fe16d2f2d5a27e3f34deadbfd094a360ae58cf"
+    },
+    {
+      "path": "game/runtime_worker.py",
+      "bytes": 9577,
+      "sha256": "fd2c408551a01e023916d33e862a9c6815a5607f34c772a094ff5cdd1b10c2cb"
+    },
+    {
+      "path": "game/ui_content_composition.py",
+      "bytes": 1133,
+      "sha256": "1c167b045d5a544dfbd8a64bde7b6b43d907a596be9ccec98b7b21d39ea69d1b"
+    },
+    {
+      "path": "game/export_schema.py",
+      "bytes": 2473,
+      "sha256": "2b3011eb0caf4829fd88f5ef6ce2b41f4835ee502b18bb60de16b206404be7ce"
+    },
+    {
+      "path": "dnd/core/base_actions.py",
+      "bytes": 131691,
+      "sha256": "bdb68d1870fafb643596b88bbb7a142975aa2e588b2fdb70ddad8947c024f6fd"
+    },
+    {
+      "path": "dnd/core/content/descriptors.py",
+      "bytes": 6074,
+      "sha256": "d19bbe350421b90cccf24cfbce51c95079c96228dbf277b6f155a7bb48f9bb0b"
+    },
+    {
+      "path": "server/event_server.py",
+      "bytes": 253292,
+      "sha256": "208e384372e8c19de9ce68d7a0cbf675ce627d86350ed5ac3f8d56622d281e33"
+    },
+    {
+      "path": "server/player_replication_contract.py",
+      "bytes": 88865,
+      "sha256": "51d5adcc10b455aa90d6d753bc41dd1c0f9e986f12387cc47cc8006e04a50d14"
+    },
+    {
+      "path": "sdk/typescript/package.json",
+      "bytes": 581,
+      "sha256": "0b2225c7d25d08268660db050c9079f52977365f5c77cbdb84d536fcaec2f433"
+    },
+    {
+      "path": "sdk/typescript/src/index.ts",
+      "bytes": 482,
+      "sha256": "73b22771124492bfbbc1f3253857c2dff2213d731253ae571482a9257d67a004"
+    },
+    {
+      "path": "sdk/typescript/src/sse.ts",
+      "bytes": 4591,
+      "sha256": "528e4368324d7a6ececebfe75ef91b8844a71369135f93753991bf829f9e012a"
+    },
+    {
+      "path": "sdk/typescript/src/subjectiveSse.ts",
+      "bytes": 43772,
+      "sha256": "30a47fc6d2141b2cde066ade2b82d6bed9f1b962b996b89f4015f66886a8e40f"
+    },
+    {
+      "path": "sdk/typescript/src/subjectiveClient.ts",
+      "bytes": 17634,
+      "sha256": "e450d8763070534216c0aea612952513f5f8939072f07f8ed3d846d03b3466ad"
+    },
+    {
+      "path": "devtools/generate_typescript_sdk.py",
+      "bytes": 21440,
+      "sha256": "8a67139375c9812cf899cc4f06c8675acde97d3433240a72dbb352c74a78c65f"
+    },
+    {
+      "path": "/home/tommaso/Dev/NeuroClient/app/src/engine/eventStream.ts",
+      "bytes": 34021,
+      "sha256": "912ef41889c5a1a753d8969037550e3fabc6ecbd126e1d417e4cced6290fd522"
+    },
+    {
+      "path": "/home/tommaso/Dev/NeuroClient/app/package.json",
+      "bytes": 16589,
+      "sha256": "8b4de2a3bae5ab6f176ddd18d4c5916e30259431869c22e89f20bf8eb5087cd9"
+    }
+  ]
+}

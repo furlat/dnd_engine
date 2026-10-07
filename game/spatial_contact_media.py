@@ -13,7 +13,7 @@ from dnd.types.senses import PerceivedSpatialEffect
 from game.animation import ActorContact, media_track_duration
 from game.animation_types import AnimationData, StudioMediaTrack, Facing8, ContactSweep
 from game.combat import BoundCast, actor_contact, actor_is_visible
-from game.player_facts import DamageResultFact, PlayerNode, PlayerState, SpatialFact, SpatialEffectStateFact
+from dnd.player.facts import DamageResultFact, PlayerNode, PlayerState, SpatialFact, SpatialEffectStateFact
 from game.stationary_media import StationaryMediaCue
 from game.spatial_response import damage_spatial_owner
 

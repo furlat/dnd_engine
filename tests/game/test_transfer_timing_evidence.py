@@ -5,8 +5,8 @@ from pydantic import TypeAdapter
 
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, walk_bound_timelines, BoundChoreography
-from game.player_reduction import reduce_lineage, state_before_event, lineage_branch
-from game.player_facts import ForcedMovementFact
+from dnd.player.reduction import reduce_lineage, state_before_event, lineage_branch
+from dnd.player.facts import ForcedMovementFact
 from game.forced_movement import bind_forced_movement
 from game.timing_evidence import TimingEvidence, validate_timing_evidence
 from tests.game.player_helpers import player_history

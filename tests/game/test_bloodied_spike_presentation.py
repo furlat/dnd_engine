@@ -20,11 +20,11 @@ from game.assets import SurfaceCache, load_catalog
 from game.attack import BoundAttack
 from game.choreography import bind_choreography, sample_choreography
 from game.motion import bind_motion, sample_motion
-from game.player_facts import ActionFact, AttackFact, DamageResultFact, MovementFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.facts import ActionFact, AttackFact, DamageResultFact, MovementFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, camera_pose, project_screen
-from game.replay import RecordedSequence
+from dnd.player.recorded import RecordedSequence
 from game.residue_media import sample_residue_reveals
 from game.world_animation import sample_world_transitions
 from tests.game.body_residue_scenarios import body_residue_history, hidden_residue_history

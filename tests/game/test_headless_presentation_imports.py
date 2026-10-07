@@ -16,7 +16,7 @@ class RejectGraphics:
 sys.meta_path.insert(0, RejectGraphics())
 from game.choreography import bind_choreography, bind_motion
 from game.animation_data import load_animation_data
-from game.player_reduction import decode_player_sequence
+from dnd.player.reduction import decode_player_sequence
 from game.export_schema import export_schemas
 from devtools.animation_review.trace import group_trace, motion_trace
 from game.condition_media_lifetime import register_condition_lifetimes

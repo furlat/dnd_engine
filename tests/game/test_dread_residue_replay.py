@@ -9,11 +9,11 @@ from dnd.types.world import OccupancyLayer
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.motion import bind_motion, sample_motion
-from game.player_facts import ConditionChangeFact, DamageResultFact, MovementFact, SpatialFact, SpellFact, StepFact
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import reduce_interval, reduce_lineage as reduce_native_lineage
-from game.replay import RecordedSequence
+from dnd.player.facts import ConditionChangeFact, DamageResultFact, MovementFact, SpatialFact, SpellFact, StepFact
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import reduce_interval, reduce_lineage as reduce_native_lineage
+from dnd.player.recorded import RecordedSequence
 from tests.game.dread_residue_scenarios import dread_residue_history
 
 

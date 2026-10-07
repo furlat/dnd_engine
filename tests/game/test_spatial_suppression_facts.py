@@ -13,10 +13,10 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.abjuration import GlobeOfInvulnerability, GlobeZone
 from dnd.spells.conjuration import Cloudkill, CloudkillZone, FogCloud, FogCloudZone, InsectPlague, InsectPlagueZone
 from dnd.types.world import CardinalDirection
-from game.player_projection import project_sequence
-from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
-from game.presentation import capture_interval
-from game.replay import RecordedSequence
+from dnd.player.recorded import project_sequence
+from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
+from dnd.player.capture import capture_interval
+from dnd.player.recorded import RecordedSequence
 from tests.engine.test_spell_families import create_family_caster, create_family_target
 from tests.game.globe_scenarios import globe_history
 from tests.game.player_helpers import player_history

@@ -21,9 +21,9 @@ from game.choreography_draw import load_choreography_media, load_motion_media
 from game.combat import actor_contact
 from game.condition_animation import resolve_condition_appearance, condition_contact, sample_condition
 from game.condition_media_lifetime import register_condition_lifetimes, sample_condition_lifetimes
-from game.player_facts import ConditionChangeFact
-from game.player_reduction import decode_player_sequence, reduce_lineage, encode_player_sequence
-from game.player_projection import project_sequence
+from dnd.player.facts import ConditionChangeFact
+from dnd.player.reduction import decode_player_sequence, reduce_lineage, encode_player_sequence
+from dnd.player.recorded import project_sequence
 from game.playback_frame import sample_playback_frame
 from game.projection import Camera, project_screen, TILE_WIDTH
 from game.scene import load_scene_media

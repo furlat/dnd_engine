@@ -10,7 +10,7 @@ from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, EntityLifecyclePhase
 from game.body_pose_types import ActorPose, SceneActor
 from game.condition_animation import condition_body_pose, resolve_condition_appearance
-from game.player_facts import FactionFact, PlayerActor, PlayerFact, SpatialFact
+from dnd.player.facts import FactionFact, PlayerActor, PlayerFact, SpatialFact
 from game.stationary_media import StationaryMediaCue
 from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference
 

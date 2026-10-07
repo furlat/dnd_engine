@@ -10,7 +10,7 @@ from game.body_pose_types import ActorPose
 from game.condition_animation import AbsenceBodySample
 from game.condition_media_lifetime import ConditionMediaLifetime
 from game.draw_commands import DrawCommand
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.projection import Camera, painter_key, project_screen
 from game.registered_media import registered_media_blits
 

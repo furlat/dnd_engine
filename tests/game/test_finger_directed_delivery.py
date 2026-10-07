@@ -12,7 +12,7 @@ from game.combat import BoundCast
 from game.directed_media import directed_draw_commands
 from game.directed_mesh_media import _source
 from game.interruption_draw import reaction_media_draw_commands
-from game.player_reduction import reduce_lineage
+from dnd.player.reduction import reduce_lineage
 from game.presentation_group import presentation_groups, reduce_presentation_group
 from game.projection import Camera
 from game.stationary_draw import stationary_media_draw_commands

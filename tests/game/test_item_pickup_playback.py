@@ -10,8 +10,8 @@ from game.assets import SurfaceCache, load_catalog
 from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media
 from game.playback_frame import sample_playback_frame
-from game.player_facts import ActionFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ActionFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors

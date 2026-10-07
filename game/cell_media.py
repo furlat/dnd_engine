@@ -11,7 +11,7 @@ from game.animation_types import AnimationData, SpatialMediaBinding
 from game.area_media import AreaMedia
 from game.draw_commands import DrawCommand
 from game.maintained_media import maintained_media_alpha, maintained_media_samples
-from game.player_facts import PlayerState
+from dnd.player.facts import PlayerState
 from game.projection import Camera, TILE_WIDTH, painter_key, project_screen
 from game.registered_media import registered_media_samples
 from game.spatial_media_lifetime import SpatialMediaLifetime

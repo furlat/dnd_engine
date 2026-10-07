@@ -31,8 +31,8 @@ from game.condition_draw import compose_condition_layers
 from game.condition_media_lifetime import register_condition_lifetimes, sample_condition_lifetimes
 from game.condition_sampling import sample_condition_media
 from game.condition_types import ConditionBodyRamp, ConditionResponse
-from game.player_facts import ConditionChangeFact, SpellFact
-from game.player_reduction import reduce_lineage
+from dnd.player.facts import ConditionChangeFact, SpellFact
+from dnd.player.reduction import reduce_lineage
 from game.projection import Camera, TILE_WIDTH
 from game.spell_palette import BODY_PALETTES
 from tests.game.test_support_condition_facts import ABILITIES, arena as arena, baseline, cast, saved_views

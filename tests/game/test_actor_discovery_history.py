@@ -10,10 +10,10 @@ from dnd.core.events import EventQueue
 from game.animation_data import load_animation_data
 from game.attack import bind_attack
 from game.motion import bind_motion, sample_motion
-from game.presentation import reduce_lineage as reduce_native_lineage
-from game.player_reduction import lineage_branch, reduce_lineage, stage_lineage
-from game.player_facts import SensoryFact, StepFact
-from game.replay import decode_sequence, encode_sequence
+from dnd.player.capture import reduce_lineage as reduce_native_lineage
+from dnd.player.reduction import lineage_branch, reduce_lineage, stage_lineage
+from dnd.player.facts import SensoryFact, StepFact
+from dnd.player.recorded import decode_sequence, encode_sequence
 from game.scene_actors import scene_actors
 from tests.game.discovery_scenarios import discovery_history
 from tests.game.player_helpers import player_history

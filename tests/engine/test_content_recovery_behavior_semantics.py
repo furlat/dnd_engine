@@ -21,7 +21,7 @@ from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_BY_NAME,
     SPELL_CATALOG_COMPOSITION_ROWS,
 )
-from dnd.core.combat_log import CombatLogEntryType
+from dnd.core.combat_log import CombatLogEntryType, SpellInterruptionLogData
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.creature_types import DamageType
@@ -328,11 +328,12 @@ def test_counterspell_commits_both_casts_exact_bindings_and_one_cancel() -> None
     assert reaction.combat_log.entry_type is CombatLogEntryType.SPELL_INTERRUPTION
     assert reaction.combat_log.source_uuid == str(counterspeller.uuid)
     assert reaction.combat_log.target_uuid == str(caster.uuid)
-    assert reaction.combat_log.data["outcome_code"] == (
+    assert isinstance(reaction.combat_log.data, SpellInterruptionLogData)
+    assert reaction.combat_log.data.outcome_code == (
         COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
     )
-    assert reaction.combat_log.data["counterspell_slot_level"] == 3
-    assert reaction.combat_log.data["succeeded"] is True
+    assert reaction.combat_log.data.counterspell_slot_level == 3
+    assert reaction.combat_log.data.succeeded is True
 
 
 def test_counterspell_ignores_allied_spells_without_spending() -> None:

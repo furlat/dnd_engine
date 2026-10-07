@@ -24,8 +24,8 @@ from dnd.monsters.skeleton_abilities import Marked
 from dnd.monsters.traits import LifeDrainReduction
 from dnd.extensions.field_focus import FieldFocus
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from game.presentation import capture_interval, reduce_interval
-from game.replay import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import capture_interval, reduce_interval
+from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
 
 
 CONDITIONS = {"unconscious": Unconscious,"petrified": Petrified, "restrained": Restrained, "incapacitated": Incapacitated, "stunned": Stunned, "sickened": SickenedCondition, "marked": Marked, "field_focus": FieldFocus, "life_drain": LifeDrainReduction, "no_reactions": NoReactions, "guiding_mark": GuidingBoltMarked, "no_healing": NoHealing}
