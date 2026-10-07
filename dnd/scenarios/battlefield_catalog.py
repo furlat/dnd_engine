@@ -336,6 +336,18 @@ def _preview_for_battlefield(battlefield_id: str) -> BattlefieldPreview:
 
 BATTLEFIELDS: tuple[BattlefieldDefinition, ...] = (
     BattlefieldDefinition(
+        battlefield_id="battlefield.lantern_crypt", title="The Lantern Crypt",
+        width=22, height=14, light_level="darkness",
+        tags=("interior", "exploration", "loot", "trap"),
+        capabilities=("closed-door", "container-lid", "wall-torches", "spike-traps", "furniture"),
+        preview=BattlefieldPreview(objects=(
+            _preview_object((7,6),"door","Crypt passage",blocked_directions=("east",),is_open=False),
+            _preview_object((12,6),"door","Burial hall",blocked_directions=("west",),is_open=False),
+            _preview_object((3,3),"loot_chest","Expedition supplies"),
+            _preview_object((6,11),"loot_chest","Sealed cache"),
+        )),
+    ),
+    BattlefieldDefinition(
         battlefield_id="battlefield.storehouse_demo", title="Occupied Storehouse",
         width=13, height=9, light_level="darkness",
         tags=("interior", "door", "furniture", "demo"),
@@ -676,6 +688,83 @@ def _build_standard_hazards(
         notable_positions={"door": door_position},
         object_uuids={"door": environment.barrier.door.uuid},
     )
+
+
+def _build_lantern_crypt(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
+    """An entry camp, trapped side vault and sealed burial hall, using native props."""
+    entry={(x,y) for x in range(1,8) for y in range(2,9)}
+    passage={(x,y) for x in range(8,12) for y in range(5,8)}
+    hall={(x,y) for x in range(12,21) for y in range(2,11)}
+    vault={(x,y) for x in range(4,8) for y in range(9,13)}
+    cells=entry|passage|hall|vault
+    for x,y in sorted(cells):
+        grid.set_tile(x,y,name="Crypt flagstones",surface=TileSurface(base_material=Material.STONE),
+            default_light=LightLevel.DARKNESS)
+    objects: dict[str,UUID]={}
+    # Place the outer shell exactly on exposed cell boundaries, not on a
+    # second layer of artificial blocking floor tiles.
+    directions=((CardinalDirection.NORTH,(0,1)),(CardinalDirection.EAST,(1,0)),
+                (CardinalDirection.SOUTH,(0,-1)),(CardinalDirection.WEST,(-1,0)))
+    for x,y in sorted(cells):
+        for direction,(dx,dy) in directions:
+            if (x+dx,y+dy) not in cells:
+                wall=build_directional_wall(display_name="Crypt wall",blocked_channels=STANDARD_BLOCKING_CHANNELS)
+                wall.place_on_grid((x,y),boundary_direction=direction)
+    # These source walls have thickness inside their owner cell. Keep each
+    # partition on the same side as its adjoining room walls; the opposite
+    # owner blocks the same native edge but offsets the visible masonry.
+    for key,column,direction in (("passage_door",7,CardinalDirection.EAST),
+                                  ("hall_door",12,CardinalDirection.WEST)):
+        for y in range(5,8):
+            if y==6:
+                door=build_directional_door(display_name="Crypt passage" if key=="passage_door" else "Burial hall door")
+                door.place_on_grid((column,y),boundary_direction=direction)
+                objects[key]=door.uuid
+            else:
+                wall=build_directional_wall(display_name="Crypt wall",blocked_channels=STANDARD_BLOCKING_CHANNELS)
+                wall.place_on_grid((column,y),boundary_direction=direction)
+    for x in range(4,8):
+        if x==5:
+            door=build_directional_door(display_name="Vault door")
+            door.place_on_grid((x,8),boundary_direction=CardinalDirection.NORTH)
+            objects["vault_door"]=door.uuid
+        else:
+            wall=build_directional_wall(display_name="Vault wall",blocked_channels=STANDARD_BLOCKING_CHANNELS)
+            wall.place_on_grid((x,8),boundary_direction=CardinalDirection.NORTH)
+    for key,position,name,amount in (("supplies",(3,3),"Expedition supplies",8),("cache",(6,11),"Sealed cache",16)):
+        chest=build_storage_chest(name,include_loot_all_action=True,is_open=False)
+        chest.chest_inventory.source_entity_uuid=chest.uuid
+        chest.chest_inventory.add_item(build_healing_potion(chest.uuid,heal_amount=amount))
+        chest.place_on_grid(position)
+        objects[key]=chest.uuid
+    for index,position in enumerate(((2,3),(6,3),(10,5),(13,3),(19,3),(19,9),(6,12))):
+        torch=build_wall_torch()
+        torch.bright_radius_feet=15
+        torch.dim_radius_feet=15
+        torch.mount(position,lit=False)
+        objects[f"torch_{index}"]=torch.uuid
+    for key,item_id,position in (
+        ("bed","environment.furniture.bed",(2,7)),
+        ("desk","environment.furniture.writing_desk",(2,4)),
+        ("supplies_crates","environment.furniture.crate_stack",(6,8)),
+        ("statue_north","environment.furniture.winged_statue",(16,3)),
+        ("statue_south","environment.furniture.animal_statue",(16,9)),
+        ("hall_table","environment.furniture.table",(19,5)),
+        ("hall_shelves","environment.furniture.bookshelf",(20,7)),
+        ("vault_crates","environment.furniture.barrel_cluster",(4,12)),
+    ):
+        item=build_world_prop(item_id,defer_behaviors=True)
+        item.place_on_grid(position)
+        objects[key]=item.uuid
+    trap_uuid=uuid4()
+    lever=build_trap_lever(trap_uuid)
+    lever.name="Vault trap lever"
+    lever.place_on_grid((6,7))
+    objects["trap_lever"]=lever.uuid
+    return BuiltBattlefield(definition=definition,environment=None,
+        notable_positions={"entry":(3,5),"supplies":(3,3),"vault_trap":(5,10),
+            "cache":(6,11),"passage":(8,6),"burial_hall":(12,6)},
+        object_uuids=objects,spike_traps=((trap_uuid,((5,10),(6,10))),))
 
 
 def _build_storehouse_demo(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
@@ -1156,6 +1245,7 @@ BattlefieldBuilder = Callable[
 ]
 
 _BUILDERS: dict[str, BattlefieldBuilder] = {
+    "battlefield.lantern_crypt": _build_lantern_crypt,
     "battlefield.storehouse_demo": _build_storehouse_demo,
     "battlefield.environment_controls": _build_environment_controls,
     "battlefield.environment_workshop": _build_environment_workshop,

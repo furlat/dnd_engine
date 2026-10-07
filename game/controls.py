@@ -1,6 +1,7 @@
 """Pure selection intents consume complete native-prefix previews."""
 
 from dataclasses import dataclass, replace
+from game.player_commands import ActionSelection as ActionSelection, EndTurn as EndTurn
 
 from dnd.core.base_actions import AvailableActionInfo, AvailableTarget, AvailableSelectionPreview
 
@@ -13,18 +14,6 @@ class MenuState:
     selected_positions: tuple[tuple[int, int], ...] = ()
     status: str = ""
     target_cursor: int = 0
-
-
-@dataclass(frozen=True, slots=True)
-class ActionSelection:
-    action_index: int
-    target_indices: tuple[int, ...]
-    extra_target_positions: tuple[tuple[int, int], ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class EndTurn:
-    pass
 
 
 def selection_target_pool(action: AvailableActionInfo, selected: tuple[int, ...]) -> list[AvailableTarget]:

@@ -6,6 +6,8 @@ agent_docs/retired_server_tests/2026-09-21/README.md.
 
 import json
 
+import pytest
+
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -15,10 +17,12 @@ from dnd.actions import Attack, Move
 from dnd.controller import CodexController, Controller, HumanController, PassController, TurnContext
 from dnd.core.base_actions import BaseAction
 from dnd.core.creature_types import DamageType
+from dnd.core.combat_log import CombatLogEntryType
 from dnd.items.environment import DirectionalWall
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventQueue
+from dnd.core.events import EventQueue, EventPhase, DeathSaveEvent, TurnEndEvent
+from dnd.core.dice import fixed_dice_faces
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.encounter import Encounter, EncounterState, TurnState
@@ -28,6 +32,7 @@ from dnd.monsters.bestiary import create_goblin as _create_goblin, create_skelet
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_DECLARATIONS_BY_ID
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.subjective_combat_log import project_combat_log
 from tests.engine.support import force_attack_hit, get_hp, remove_attack_modifier, set_hp
 
 
@@ -483,3 +488,100 @@ def test_entity_and_encounter_serialization_are_json_safe() -> None:
     assert "combatants" in encounter_dump
     assert "initiative_order" in encounter_dump
     assert EventQueue.event_cursor() == cursor
+
+
+def test_opportunity_attack_death_keeps_witnessed_turn_identity_without_location() -> None:
+    reset_chapter_18_state(width=36)
+    hero, monster = create_book_pair()
+    spare = create_skeleton(name='Other skeleton', position=(34, 8), faction='monsters',
+        content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID['skeleton'].ref)
+    encounter = Encounter(name='Reaction death', source_entity_uuid=hero.uuid)
+    for entity in (monster, hero, spare):
+        encounter.add_combatant(entity, PassController(source_entity_uuid=entity.uuid))
+    encounter.roll_initiative()
+    encounter.initiative_order = [monster.uuid, hero.uuid, spare.uuid]
+    encounter.start_encounter()
+    encounter.start_turn()
+    assert monster.uuid not in spare.senses.entities
+    set_hp(monster, 1)
+    add_opportunity_attack_handler(hero)
+    force_attack_hit(hero)
+    Move(source_entity_uuid=monster.uuid, end_position=(4, 1)).apply()
+    assert monster.health.life_state is LifeState.DEAD
+    assert monster.uuid not in hero.senses.entities
+    event = encounter.end_turn()
+    assert event is not None and event.combat_log is not None
+    projected = project_combat_log(event.combat_log,
+        controlled_entity_uuids=frozenset({str(hero.uuid)}),
+        observer_entity_uuids=frozenset({str(hero.uuid)}))
+    assert projected is not None
+    assert projected.source_name == monster.name
+    assert monster.name in projected.compact
+    assert str(hero.uuid) not in event.located_entity_observer_uuids.get(str(monster.uuid), set())
+    # No party-wide grant: the distant opposing creature did not witness him.
+    assert str(spare.uuid) not in event.identified_entity_observer_uuids.get(str(monster.uuid), set())
+
+
+@pytest.mark.parametrize("face,successes,failures,stable,expected", (
+    (10, 0, 0, False, LifeState.DYING),
+    (2, 0, 0, False, LifeState.DYING),
+    (10, 2, 0, False, LifeState.STABLE),
+    (2, 0, 2, False, LifeState.DEAD),
+    (10, 0, 0, True, LifeState.STABLE),
+    (20, 0, 0, False, LifeState.ALIVE),
+))
+def test_external_turn_processes_death_save_without_waiting_on_incapacitated_actor(
+    face, successes, failures, stable, expected,
+):
+    reset_chapter_18_state()
+    hero, monster = create_book_pair()
+    hero.uses_death_saves = True
+    ally = create_goblin(name="Standing ally", position=(4, 4), faction="heroes")
+    encounter = Encounter(name="Downed turn", source_entity_uuid=hero.uuid)
+    for actor in (hero, ally, monster):
+        encounter.add_combatant(actor, HumanController(source_entity_uuid=actor.uuid))
+    encounter.roll_initiative()
+    encounter.initiative_order = [hero.uuid, ally.uuid, monster.uuid]
+    encounter.start_encounter()
+    hero.receive_damage(hero.get_normal_hp(), DamageType.SLASHING, monster.uuid)
+    hero.death_save_successes, hero.death_save_failures = successes, failures
+    if stable:
+        hero.stabilize()
+    cursor = EventQueue.event_cursor()
+    with fixed_dice_faces(face):
+        boundary = encounter.advance_one_controller_boundary()
+    finished = [event for _, event in EventQueue.iter_events_since(cursor)
+        if event.phase is EventPhase.COMPLETION]
+    saves = [event for event in finished if isinstance(event, DeathSaveEvent)]
+    assert len(saves) == (0 if stable else 1)
+    assert hero.health.life_state is expected
+    if expected is LifeState.ALIVE:
+        assert hero.get_normal_hp() == 1 and hero.can_take_actions()
+        assert boundary.status == "waiting_for_human" and boundary.entity_uuid == hero.uuid
+        assert not any(isinstance(event, TurnEndEvent) for event in finished)
+    else:
+        assert boundary.status == "advanced_autonomous"
+        assert encounter.get_current_entity().uuid == ally.uuid
+        assert any(isinstance(event, TurnEndEvent) and event.entity_uuid == hero.uuid for event in finished)
+    reset_engine_runtime()
+
+
+def test_final_death_save_closes_last_party_turn_and_encounter():
+    reset_chapter_18_state()
+    hero, monster = create_book_pair()
+    hero.uses_death_saves = True
+    encounter = start_ordered_encounter(hero, monster,
+        HumanController(source_entity_uuid=hero.uuid),
+        HumanController(source_entity_uuid=monster.uuid), hero)
+    hero.receive_damage(hero.get_normal_hp(), DamageType.SLASHING, monster.uuid)
+    hero.death_save_failures = 2
+    cursor = EventQueue.event_cursor()
+    with fixed_dice_faces(2):
+        boundary = encounter.advance_one_controller_boundary()
+    completed = [event for _, event in EventQueue.iter_events_since(cursor)
+        if event.phase is EventPhase.COMPLETION]
+    assert boundary.status == "encounter_ended" and encounter.state is EncounterState.ENDED
+    assert hero.health.life_state is LifeState.DEAD
+    assert sum(isinstance(event, DeathSaveEvent) for event in completed) == 1
+    assert sum(isinstance(event, TurnEndEvent) and event.entity_uuid == hero.uuid for event in completed) == 1
+    reset_engine_runtime()

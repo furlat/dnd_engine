@@ -2490,7 +2490,7 @@
           "assetPhase": "travel",
           "fps": 32,
           "composition": "billboard",
-          "fineRotation": "none"
+          "fineRotation": "isometricHybrid"
         },
         "impact": {
           "enabled": true,

@@ -43,6 +43,8 @@ class BoundarySprite:
     key: tuple[int, float, float, int, tuple[str, ...]]
     actor_aperture: pygame.Surface | None = None
     actor_occludes: bool = False
+    actor_aperture_mask: np.ndarray | None = None
+    fade_for_visible_ground: bool = True
 
 
 @dataclass(frozen=True, slots=True)

@@ -19,7 +19,7 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
     BaseAction, ActionCategory, TargetType, Cost, CostType,
-    ActionEvent, spell_slot_cost_type,
+    ActionEvent, ActionVariantFacet, spell_slot_cost_type,
 )
 from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger,
@@ -1399,6 +1399,9 @@ class ConvertSlotToSP(BaseAction):
     slot_level: int = Field(default=1, ge=1, le=5, description="Spell slot level converted into sorcery points.")
     costs: List[Cost] = Field(default_factory=list, description="Generated bonus-action and spell-slot costs for this conversion.")
 
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        return (ActionVariantFacet(key="rank", value=str(self.slot_level), label=f"Level {self.slot_level}"),)
+
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         slot_cost_type = spell_slot_cost_type(self.slot_level)
@@ -1463,6 +1466,9 @@ class ConvertSPToSlot(BaseAction):
     action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Action category used for discovery and reveal behavior.")
     slot_level: int = Field(default=1, ge=1, le=5, description="Spell slot level created from sorcery points.")
     costs: List[Cost] = Field(default_factory=list, description="Generated bonus-action and sorcery-point costs for this conversion.")
+
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        return (ActionVariantFacet(key="rank", value=str(self.slot_level), label=f"Level {self.slot_level}"),)
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)

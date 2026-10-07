@@ -21,6 +21,8 @@ from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, A
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.blocks.equipment import EquippableItem
 from game.player_facts import PlayerCharacterSheet, PlayerHUDSnapshot, PlayerResource, CombatLogAppend
+from game.audience import PlayerAudience
+from game.player_commands import CommandRejected
 from dnd.subjective_combat_log import project_combat_log
 from dnd.core.combat_log import CombatLogEntry
 from typing import Callable
@@ -48,7 +50,7 @@ class DiscoveryCache:
     original: AvailableActionsResult | None = None
     detached: AvailableActionsResult | None = None
     previews: dict[tuple[int, tuple[int, ...], tuple[tuple[int, int], ...]], AvailableSelectionPreview] = field(default_factory=dict)
-    log_appends: list[tuple[int, CombatLogEntry]] = field(default_factory=list)
+    log_appends: list[tuple[int, UUID, CombatLogEntry]] = field(default_factory=list)
     log_listener: Callable[[Encounter, int, CombatLogEntry, Event], None] | None = None
 
 
@@ -82,10 +84,17 @@ class Operation:
     combat_log_appends: tuple[CombatLogAppend, ...] = ()
 
 
-def snapshot_player_hud(session: Session) -> PlayerHUDSnapshot:
+def player_audience(session: Session) -> PlayerAudience:
+    return PlayerAudience(session.player_uuids, session.player_uuids)
+
+
+def snapshot_player_hud(session: Session, observer_uuid: UUID | None = None) -> PlayerHUDSnapshot:
     """Evaluate permitted party facts once at a native committed boundary."""
-    observer = session.game.entities[session.player_uuids[0]]
-    seen = set(observer.senses.entities) | {observer.uuid}
+    observer = session.game.entities[observer_uuid or session.player_uuids[0]]
+    members = session.player_uuids if observer_uuid is None else (observer_uuid,)
+    seen = set(session.player_uuids)
+    for identity in members:
+        seen.update(session.game.entities[identity].senses.entities)
     sheets = []
     for identity in session.player_uuids:
         actor = session.game.entities[identity]
@@ -102,7 +111,9 @@ def snapshot_player_hud(session: Session) -> PlayerHUDSnapshot:
             for rank, capacity in economy.get_normal_spell_slot_capacities().items() if capacity)
         resources.extend(PlayerResource(key=f"resource:{name}", label=name.replace('_', ' ').title(),
             current=resource.current, maximum=resource.maximum) for name, resource in economy.resources.items())
-        sheets.append(PlayerCharacterSheet(actor_uuid=identity, species=actor.character_species,
+        sheets.append(PlayerCharacterSheet(actor_uuid=identity, name=actor.name,
+            portrait_key=actor.appearance.portrait_key, normal_hp=actor.get_normal_hp(),
+            maximum_hp=actor.get_max_hp(), species=actor.character_species,
             species_variant=actor.character_species_variant, background=actor.character_background,
             origin=actor.applied_origin_state, class_levels=actor.applied_class_levels,
             abilities=tuple((ability.name, ability.ability_score.score) for ability in actor.ability_scores.abilities_list),
@@ -121,11 +132,12 @@ def _bind_log_capture(session: Session) -> Session:
     def capture(encounter: Encounter, index: int, entry: CombatLogEntry, event: Event) -> None:
         if encounter is not session.encounter or (event.context or {}).get("combat_log_origin") != "standalone":
             return
-        observer = str(session.player_uuids[0])
-        projected = project_combat_log(entry, controlled_entity_uuids=frozenset({observer}),
-                                     observer_entity_uuids=frozenset({observer}))
+        audience = player_audience(session)
+        projected = project_combat_log(entry, controlled_entity_uuids=frozenset(map(str, audience.controlled)),
+                                     observer_entity_uuids=frozenset(map(str, audience.observers)))
         if projected is not None:
-            session.discovery.log_appends.append((index, CombatLogEntry.model_validate_json(projected.model_dump_json())))
+            session.discovery.log_appends.append((index,session.player_uuids[0],
+                CombatLogEntry.model_validate_json(projected.model_dump_json())))
     session.discovery.log_listener = capture
     Encounter.add_combat_log_listener(capture)
     return session
@@ -232,7 +244,7 @@ def _current_player(session: Session, actor_uuid: UUID) -> Entity:
             or actor_uuid not in session.player_uuids
             or actor is None or actor.uuid != actor_uuid
             or not isinstance(encounter.get_current_controller(), HumanController)):
-        raise ValueError("the selected actor does not own the current human turn")
+        raise CommandRejected("the selected actor does not own the current human turn")
     return actor
 
 
@@ -262,9 +274,9 @@ def _retained_row(session: Session, action: AvailableActionInfo) -> AvailableAct
             or action.discovery_runtime != EventQueue.generation_id()
             or action.discovery_generation != cache.generation
             or cache.cursor != EventQueue.event_cursor()):
-        raise ValueError("This selection is stale; choose again")
+        raise CommandRejected("This selection is stale; choose again")
     if not 0 <= action.discovery_index < len(cache.original.all_actions):
-        raise ValueError("Selection does not belong to the current discovery")
+        raise CommandRejected("Selection does not belong to the current discovery")
     return cache.original.all_actions[action.discovery_index]
 
 
@@ -282,11 +294,11 @@ def preview_player_selection(session: Session, actor_uuid: UUID, action: Availab
                 else original.valid_targets)
         by_index = {target.index: target for target in pool}
         if any(chosen.index not in by_index for chosen in selected[1:]):
-            raise ValueError("This allocation is not admitted")
+            raise CommandRejected("This allocation is not admitted")
         retained = (() if primary is None else (primary, *tuple(
             by_index[chosen.index] for chosen in selected[1:])))
         if selected and primary is None:
-            raise ValueError("This target is not admitted")
+            raise CommandRejected("This target is not admitted")
         value = preview_available_selection(actor, original, retained, positions)
         cache[key] = AvailableSelectionPreview.model_validate(value.model_dump())
     return AvailableSelectionPreview.model_validate(cache[key].model_dump())
@@ -297,9 +309,9 @@ def _operation(session: Session, start_cursor: int, boundary: AdvanceResult | No
     roots = tuple(event for index, event in EventQueue.iter_events_since(start_cursor)
                   if index <= end_cursor and event.parent_lineage is None
                   and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
-    appends = tuple(CombatLogAppend(generation=EventQueue.generation_id(), observer_uuid=session.player_uuids[0],
+    appends = tuple(CombatLogAppend(generation=EventQueue.generation_id(), observer_uuid=observer_uuid,
         encounter_log_index=index, operation_end_cursor=end_cursor, entry=entry)
-        for index, entry in session.discovery.log_appends)
+        for index, observer_uuid, entry in session.discovery.log_appends)
     session.discovery.log_appends.clear()
     return Operation(start_cursor, end_cursor, roots, boundary, snapshot_player_hud(session), appends)
 
@@ -319,7 +331,7 @@ def execute_player_action(
     original = _retained_row(session, action)
     retained = next((candidate for candidate in original.valid_targets if candidate.index == target.index), None)
     if retained is None:
-        raise ValueError("selected target does not belong to the discovered action")
+        raise CommandRejected("selected target does not belong to the discovered action")
     start = EventQueue.event_cursor()
     execute_available_action(
         actor, original, retained, extra_target_uuids=[str(identity) for identity in extra_target_uuids],
@@ -339,7 +351,7 @@ def player_position_options(
     original = _retained_row(session, action)
     retained = next((candidate for candidate in original.valid_targets if candidate.index == target.index), None)
     if retained is None:
-        raise ValueError("selected target does not belong to the discovered action")
+        raise CommandRejected("selected target does not belong to the discovered action")
     if original.position_selection is None or original.position_selection.kind not in ("path", "entity_destination"):
         return ()
     return tuple(get_extra_position_options(actor, original, retained, list(selected)))
@@ -348,18 +360,22 @@ def player_position_options(
 def equip_player_item(session: Session, actor_uuid: UUID, item_uuid: UUID,
                       slot: EquipmentSlot | None = None) -> Operation:
     actor = _current_player(session, actor_uuid)
+    if not actor.can_take_actions():
+        raise CommandRejected("This character cannot change equipment right now")
     start = EventQueue.event_cursor()
     if not actor.equip_item(item_uuid, slot):
-        raise ValueError("This equipment change is not admitted")
+        raise CommandRejected("This equipment change is not admitted")
     return _operation(session, start)
 
 
 def unequip_player_item(session: Session, actor_uuid: UUID, slot: EquipmentSlot,
                         *, allow_ground_fallback: bool = False) -> Operation:
     actor = _current_player(session, actor_uuid)
+    if not actor.can_take_actions():
+        raise CommandRejected("This character cannot change equipment right now")
     start = EventQueue.event_cursor()
     if actor.unequip_item(slot, allow_ground_fallback=allow_ground_fallback) is None:
-        raise ValueError("Cannot move this equipment into inventory")
+        raise CommandRejected("Cannot move this equipment into inventory")
     return _operation(session, start)
 
 
@@ -369,10 +385,10 @@ def toggle_player_handler(session: Session, actor_uuid: UUID, handler_uuid: UUID
     if (choices is None or choices.entity_uuid != actor_uuid
             or session.discovery.cursor != EventQueue.event_cursor()
             or not any(row.uuid == handler_uuid for row in choices.handler_details)):
-        raise ValueError("This reaction preference is not admitted")
+        raise CommandRejected("This reaction preference is not admitted")
     start = EventQueue.event_cursor()
     if not actor.set_handler_enabled_by_uuid(handler_uuid, enabled):
-        raise ValueError("This reaction preference is not available")
+        raise CommandRejected("This reaction preference is not available")
     session.discovery.cursor = -1
     session.discovery.previews.clear()
     return _operation(session, start)

@@ -1264,9 +1264,9 @@
         "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
       },
       "elementColors": {
-        "primary": 16737792,
-        "secondary": 16719360,
-        "tertiary": 16763904
+        "primary": 14955290,
+        "secondary": 16758647,
+        "tertiary": 4915712
       },
       "cast": {
         "actionClip": "Attack5",
@@ -1284,15 +1284,15 @@
             "category": "Effect1",
             "colors": {
               "source": "auto",
-              "primary": 16737792,
+              "primary": 14955290,
               "mode": "paletteSwap"
             },
             "sourceSheet": "/spritesheets/Effect1/Attack5.png",
             "palette": {
               "colors": [
-                16763904,
-                16737792,
-                16719360
+                4915712,
+                14955290,
+                16758647
               ],
               "gamma": 0.65,
               "noiseSheet": "/spell-palettes/source-hand-noise.png",
@@ -1314,15 +1314,15 @@
           "category": "Magic2",
           "colors": {
             "source": "auto",
-            "primary": 16737792,
+            "primary": 14955290,
             "mode": "paletteSwap"
           },
           "sourceSheet": "/spritesheets/Magic2/Attack5.png",
           "palette": {
             "colors": [
-              16763904,
-              16737792,
-              16719360
+              4915712,
+              14955290,
+              16758647
             ],
             "gamma": 0.65,
             "noiseSheet": "/spell-palettes/source-hand-noise.png",
@@ -1890,7 +1890,8 @@
           "assetId": "fire.scorching.travel",
           "assetPhase": "travel",
           "fps": 32,
-          "fitDuration": true
+          "fitDuration": true,
+          "fineRotation": "isometricHybrid"
         },
         "impact": {
           "enabled": true,

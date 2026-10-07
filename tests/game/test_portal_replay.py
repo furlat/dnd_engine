@@ -7,6 +7,7 @@ import pytest
 
 from dnd.actions import Jump, Move
 from dnd.actions_functional import setup_standard_actions
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventQueue, PortalTransferEvent
@@ -20,7 +21,7 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spatial.portals import PORTAL_HATCH_CONTENT_REF, materialize_portal
 from dnd.types.traps import TrapState
 from game.player_facts import MovementFact, PortalTransferFact
-from game.player_projection import project_sequence
+from game.player_projection import project_sequence, begin_projection, project_lineage
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage, reduce_nodes
 from game.presentation import capture_interval, reduce_interval
 from game.replay import ObserverCapture, RecordedSequence, capture_history
@@ -39,6 +40,8 @@ def recorded(request):
             actor = Entity.create(uuid4(), role, config=EntityConfig(position=position,
                 ability_scores=AbilityScoresConfig(strength=AbilityConfig(ability_score=18))))
             setup_standard_actions(actor)
+            if role == "traveler":
+                actor.install_initial_items(((build_authored_item("consumable.potion_haste", actor.uuid), None),))
             actor.compose_entity()
             game.deploy_entity(actor, position)
             actors[role] = actor
@@ -60,6 +63,8 @@ def recorded(request):
         result = action.apply()
         assert result is not None and not result.canceled
         assert actors["traveler"].position == (17, 2)
+        potion = next(iter(actors["traveler"].inventory.items))
+        assert actors["traveler"].drop_item(potion) is not None
         history = capture_history(before, (), observers=tuple(
             ObserverCapture(role, actor.uuid, cursor) for role, actor in actors.items()))
         return history, portal.uuid, actors["traveler"].uuid, result.lineage_uuid
@@ -136,3 +141,18 @@ def test_existing_saved_portal_inputs_remain_readable_without_new_content_identi
     crossing, = [node.fact for root in roots for node in root.events if isinstance(node.fact, PortalTransferFact)]
     assert crossing.portal_content_id is None and crossing.portal_uuid is None
     assert crossing.start_position is None and crossing.end_position == (17, 2)
+
+
+def test_portal_then_inventory_change_preserves_projection_and_replay_pose(recorded):
+    history, _, traveler, _ = recorded
+    native = RecordedSequence.model_validate_json(history.views["traveler"].model_dump_json(), context=PASSIVE_EVENT_REPLAY)
+    projection, _ = begin_projection(native.initialization)
+    sequence = project_sequence(native)
+    state, _ = decode_player_sequence(encode_player_sequence(sequence))
+    for native_lineage in native.lineages:
+        projected = project_lineage(projection, native_lineage)
+        if projected is not None:
+            state = reduce_lineage(state, projected)
+            assert projection.remembered.actors[traveler].last_visual_position == state.actors[traveler].last_visual_position
+    assert state.actors[traveler].last_visual_position == (17, 2)
+    assert state.actors[traveler].controlled_items == ()

@@ -1941,13 +1941,15 @@ class Entity(BaseBlock):
         return bool(self.origin_capability_sources.get(capability))
 
     def can_traverse_creature_space(self, occupant: "Entity") -> bool:
-        """Return whether an origin rule permits crossing an occupied cell.
+        """Return whether allegiance or an origin rule permits crossing a cell.
 
         This is deliberately an Entity-owned rule: it needs both creatures'
         exact sizes and must not make GridMap or Senses import upward into the
         entity layer. Traversal does not make the occupied cell a legal
         movement destination.
         """
+        if self.is_ally(occupant):
+            return True
         if not self.has_origin_capability(
             OriginCapability.HALFLING_NIMBLENESS,
         ):
@@ -2978,7 +2980,8 @@ class Entity(BaseBlock):
 
         return event
 
-    def on_turn_end(self, encounter_uuid: Optional[UUID] = None, round_number: int = 0, turn_index: int = 0) -> TurnEndEvent:
+    def on_turn_end(self, encounter_uuid: Optional[UUID] = None, round_number: int = 0, turn_index: int = 0,
+                    *, identified_by: Optional[Set[str]] = None) -> TurnEndEvent:
         """
         Handle turn end for this entity.
 
@@ -3008,6 +3011,7 @@ class Entity(BaseBlock):
         event = TurnEndEvent(
             source_entity_uuid=self.uuid,
             source_entity_name=self.name,
+            identified_entity_observer_uuids={str(self.uuid): set(identified_by or ())},
             target_entity_uuid=self.uuid,
             entity_uuid=self.uuid,
             encounter_uuid=encounter_uuid or self.uuid,
@@ -5479,6 +5483,7 @@ class Entity(BaseBlock):
             description=description if description is not None else template.description,
             cost_type=cost_type,
             cost_amount=cost_amount,
+            restricted_action_budget=template.get_restricted_action_display_name(),
             costs=[BaseCost.model_validate(cost) for cost in eff_costs],
             weapon_slot=weapon_slot,
             weapon_name=weapon_name,
@@ -6343,6 +6348,9 @@ class Entity(BaseBlock):
         """Retain candidates whose target-specialized costs are affordable."""
         executable: List[AvailableTarget] = []
         remaining_movement = self.action_economy.movement_remaining()
+        # Cost evaluation only reads the selected destination. Keep one detached
+        # probe for this query instead of copying the full action for every cell.
+        targeted_template = template.model_copy(deep=True)
         for candidate in candidates:
             if candidate.position is None:
                 continue
@@ -6352,10 +6360,7 @@ class Entity(BaseBlock):
                 and candidate.path_cost > remaining_movement
             ):
                 continue
-            targeted_template = template.model_copy(
-                deep=True,
-                update={"end_position": candidate.position},
-            )
+            targeted_template.end_position = candidate.position
             target_costs = targeted_template.effective_costs
             if not targeted_template.check_costs():
                 continue

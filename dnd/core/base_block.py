@@ -530,6 +530,10 @@ class BaseBlock(BaseModel):
         structure = self.get_boundary_structure()
         return structure.contact_passage if structure is not None else ContactPassage.STRUCTURAL
 
+    def get_manual_contact_range(self) -> int:
+        """Distance from an occupied support to this object's usable surface."""
+        return 5
+
     def get_supporting_object_uuid(self) -> Optional[UUID]:
         """Physical attachment, independent of inventory ownership."""
         return None

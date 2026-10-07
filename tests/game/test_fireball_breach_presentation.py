@@ -15,7 +15,7 @@ from dnd.encounter import Encounter
 from dnd.controller import HumanController
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import Fireball
-from dnd.types.world import CardinalDirection
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from game.animation_data import load_animation_data
 from game.animation import ActorContact
 from game.presentation_timing import presentation_dependencies
@@ -94,6 +94,7 @@ def test_cold_breach_replay_waits_for_door_clearance_and_keeps_one_cast():
     blocked = sample_choreography(bound, clear - 1).displayed.objects[destroyed.object_uuid]
     opened = sample_choreography(bound, clear + 1).displayed.objects[destroyed.object_uuid]
     assert blocked.item.boundary_structure is not None
+    assert WorldEdgeChannel.PROPAGATION in blocked.item.boundary_structure.blocked_channels
     assert opened.item.boundary_structure is None or not opened.item.boundary_structure.blocked_channels
     later = {row.fact.application_id for row in lineage.events if isinstance(row.fact, SpellFact)
              and row.parent_lineage == stages[1].lineage_uuid}
@@ -124,8 +125,8 @@ def test_cold_breach_replay_waits_for_door_clearance_and_keeps_one_cast():
     try:
         media = load_choreography_media(bound)
         font = pygame.font.Font(None, 16)
-        # Same explosion clock and exact received reach in every camera; the
-        # far region cannot appear while its blocking door remains intact.
+        # The same continuous explosion uses the retained physical barrier in
+        # every camera, never the disclosed damage cells as an image stencil.
         for quadrant in range(4):
             camera = Camera(quadrant=quadrant).with_focus((3, 4))
             columns = []
@@ -134,7 +135,9 @@ def test_cold_breach_replay_waits_for_door_clearance_and_keeps_one_cast():
                 commands = choreography_draw_commands(bound, sample, media, font, font, camera)
                 volumes = [command.volume for command in commands if command.volume is not None]
                 assert volumes
-                assert all(((4, 4) in (volume.admitted or ())) == reached for volume in volumes)
+                assert all(volume.admitted is None for volume in volumes)
+                assert all(any(wall.object_uuid == destroyed.object_uuid for wall in volume.boundaries)
+                           is not reached for volume in volumes)
                 impact, = [p for p in sample.clips[0].sample.projectiles if p.phase == 'impact']
                 columns.append(impact.column)
             assert columns[0] < columns[1] and columns[0] == columns[2]

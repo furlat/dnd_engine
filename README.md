@@ -31,16 +31,19 @@ storage regardless of the checkout location. These are fresh-process import
 measurements after setup, not whole-game startup times. See the
 [startup comparison](agent_docs/PERFORMANCE_REPAIR_RESULTS_2026-09-12.md).
 
-`python -m game` opens party creation before the playable Goblin skirmish.
-Use `--quick-start` for the existing Fighter and Sorcerer premades or
-`--fullscreen` for the current monitor. The compact icon bar pins a small set
-of discovered abilities; K opens the full ability library. Click the world to
+`python -m game` enters the Lantern Crypt with the Fighter and Sorcerer premades.
+Use `--fullscreen` for the current monitor. The compact icon bar groups actions,
+spells, class abilities and usable items in independently paged rows; K opens the
+full ability library. Click the world to
 move, attack or use an object, Ctrl-click to force an attack, right-click for
 available interactions and hold Alt to highlight usable objects. Native spell
-rank/form choices open behind an ability. Click recipients or ordered points,
+rank/form choices appear above the hovered ability at the same icon size.
+Click recipients or ordered points,
 Backspace to undo and Enter to confirm partial/repeated allocations where
 the native action allows them. Space ends the turn in neutral input state.
-Costs, unavailable reasons, movement and conditions stay native.
+Choose the sword or bow control (or X) to select melee or ranged attacks;
+the game keeps that preference for each character. Costs, unavailable reasons,
+movement and conditions stay native.
 
 `uv run --no-sync python -m game --encounter encounter.residue_workshop` opens
 the Blood and Bone Workshop: a clothed fighter, modular skeleton warrior,
@@ -49,13 +52,15 @@ injuries leave native tile residue; movement and turns exercise its effects.
 The same controls and historical playback apply to both encounters.
 
 I opens inventory, N the character sheet, L reaction preferences and the Log
-control the canonical combat log, including recorded dice and modifiers.
+control the right-docked combat log. Expand a movement or damage entry for its
+children; enable Math for the original recorded dice and modifiers. Copy log
+copies displayed entries; Ctrl+C copies a selected entry or text selection.
 Q/E rotate, WASD pan, the wheel zooms, G toggles the grid and F12 shows
 diagnostics. Escape cancels the current selection or closes the current panel;
 from neutral state it opens the pause/settings panel. Pause pauses historical
 playback; enemy progression remains independent. `--headless --frames 120`
 is a bounded SDL run; `--capture-dir` saves displayed frames. Whole-encounter
-save/load remains deferred; character build editing is available before play.
+save/load remains deferred. The normal entry flow does not open character creation.
 
 For the current clip-extraction checkpoint, run
 `python -m devtools.animation_review.capture` once and

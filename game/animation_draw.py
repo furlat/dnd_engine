@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from colorsys import rgb_to_hsv
 from dataclasses import dataclass, replace
-from math import ceil, cos, degrees, floor, hypot, pi, sin, sqrt
+from math import ceil, cos, floor, hypot, pi, sin, sqrt
 from types import MappingProxyType
 from typing import Literal, Mapping, NamedTuple, Sequence
 from uuid import UUID
@@ -50,7 +50,7 @@ from game.interaction_types import SelectionCoverage, WorldHit
 from game.interaction_frame import align_coverage
 from game.media_blend import SCREEN_BLEND, blit_media
 from game.directed_media import directed_draw_commands, preload_directed_media
-from game.registered_media import registered_media_samples
+from game.registered_media import registered_media_samples, transform_registered_part
 from game.device_draw import device_draw_command
 from dnd.types.world_placement import WorldObjectPlacement
 from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_WIDTH, painter_key, project_screen, rotate_position
@@ -557,7 +557,9 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
                     category=category, base_tint=tint,
                     owned_modifiers=tuple(row.modifier for row in condition.item_modifiers
                         if row.item_uuid == layer.item_uuid) if condition is not None else (),
-                    time_ms=condition.time_ms if condition is not None else 0.)
+                    time_ms=condition.time_ms if condition is not None else 0.,
+                    source_key=(data.media_root, contact.rig_id, body.clip, category, row,
+                                None if treatment is not None else body.frame))
             if (flash is None and condition is not None and condition.body_color is not None
                     and slot in CONDITION_BODY_SLOTS):
                 colored = condition_body_color(colored, condition.body_color)
@@ -844,11 +846,12 @@ def _projectile_layer_blits(timeline: CastTimeline, effect: ProjectileSample,
                     canvas=(asset.frame.width, asset.frame.height),
                     offset=(round(layer.offset[0]), round(layer.offset[1])))
                  if coverage is not None else layer.image)
-        size = (max(1, round(frame.width * scale)), max(1, round(frame.height * scale)))
-        if size != frame.get_size():
-            frame = pygame.transform.scale(frame, size)
-        if effect.rotation_radians != 0:
-            frame = pygame.transform.rotate(frame, -degrees(effect.rotation_radians))
+        transformed = transform_registered_part(frame, offset=layer.offset,
+            asset_pivot=(asset.frame.width / 2, asset.frame.height / 2), scale=scale,
+            anchor=center, rotation=effect.rotation_radians)
+        if transformed is None:
+            continue
+        frame, destination, _ = transformed
         if effect.opacity < 1:
             frame = frame.copy()
             if layer.blend == pygame.BLEND_RGB_ADD:
@@ -856,7 +859,6 @@ def _projectile_layer_blits(timeline: CastTimeline, effect: ProjectileSample,
                 frame.fill((fade, fade, fade, 255), special_flags=pygame.BLEND_RGBA_MULT)
             else:
                 frame.set_alpha(round((frame.get_alpha() or 255) * effect.opacity))
-        destination = (round(center[0] - frame.width / 2), round(center[1] - frame.height / 2))
         result.append(ProjectileLayerBlit(frame, destination, layer.blend, layer.depth))
     return tuple(result)
 

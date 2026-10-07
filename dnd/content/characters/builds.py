@@ -7,7 +7,6 @@ from uuid import UUID, uuid4
 from dnd.actions_functional import setup_standard_actions, update_weapon_templates
 from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
-from dnd.blocks.appearance import AppearanceConfig, BodyCategory, HeadCategory
 from dnd.blocks.creature_proficiencies import CreatureProficienciesConfig
 from dnd.blocks.health import HealthConfig
 from dnd.content.characters.class_definitions import (
@@ -22,7 +21,6 @@ from dnd.content.items.authored_item_builders import (
     DIRECT_ITEM_BUILDERS,
     build_authored_item,
 )
-from dnd.content.items.item_loadouts import ItemLoadoutEntry
 from dnd.core.progression import point_buy_cost
 from dnd.entity import Entity, EntityConfig
 from dnd.items.torches import Torch
@@ -30,17 +28,15 @@ from dnd.types.abilities import AbilityName
 from dnd.types.character_progression import (
     AppliedClassLevel,
     AppliedOriginState,
-    Background,
     CharacterClass,
-    FeatureToggleSelection,
-    OriginChoiceSelection,
-    PreparedSpellSelection,
-    Species,
-    SpeciesVariant,
 )
 
 
-CHARACTER_BODY_ID = "creature.player.humanoid_body"
+from dnd.content.characters.build_types import (
+    CHARACTER_BODY_ID as CHARACTER_BODY_ID,
+    CharacterAppearance as CharacterAppearance,
+    CharacterBuild as CharacterBuild,
+)
 SUPPORTED_FEATURE_TOGGLE_IDS = frozenset({
     "class_feature.fighter.fighting_style.great_weapon_fighting",
     "class_feature.fighter.fighting_style.protection",
@@ -48,58 +44,6 @@ SUPPORTED_FEATURE_TOGGLE_IDS = frozenset({
     "class_feature.barbarian.retaliation",
     "feat.lucky",
 })
-
-
-@dataclass(frozen=True, slots=True)
-class CharacterAppearance:
-    """Plain mechanical appearance values copied from accepted evidence."""
-
-    visual_scale: float = 1.0
-    visual_scale_x: float = 1.0
-    body_category: BodyCategory = "NakedBody"
-    skin_tint: int = 0xDDAA88
-    head_category: HeadCategory | None = None
-    hair_tint: int = 0
-    has_beard: bool = False
-    beard_tint: int = 0
-    portrait_key: str | None = None
-
-    def config(self) -> AppearanceConfig:
-        """Validate and project these values onto the existing owner config."""
-        return AppearanceConfig(
-            visual_scale=self.visual_scale,
-            visual_scale_x=self.visual_scale_x,
-            body_category=self.body_category,
-            skin_tint=self.skin_tint,
-            head_category=self.head_category,
-            hair_tint=self.hair_tint,
-            has_beard=self.has_beard,
-            beard_tint=self.beard_tint,
-            portrait_key=self.portrait_key,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class CharacterBuild:
-    """Complete saveable authored input for one direct character."""
-
-    name: str
-    base_ability_scores: tuple[tuple[AbilityName, int], ...]
-    flexible_ability_bonuses: tuple[tuple[AbilityName, int], ...]
-    species: Species
-    background: Background
-    class_levels: tuple[AppliedClassLevel, ...]
-    item_loadout: tuple[ItemLoadoutEntry, ...]
-    appearance: CharacterAppearance
-    species_variant: SpeciesVariant | None = None
-    origin_choices: tuple[OriginChoiceSelection, ...] = ()
-    prepared_spells: tuple[PreparedSpellSelection, ...] = ()
-    feature_toggles: tuple[FeatureToggleSelection, ...] = ()
-    character_body_id: str = CHARACTER_BODY_ID
-    description: str = "Direct player character"
-    faction: str | None = None
-    position: tuple[int, int] = (0, 0)
-    weight: int = 150
 
 
 @dataclass(frozen=True, slots=True)

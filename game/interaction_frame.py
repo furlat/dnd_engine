@@ -49,6 +49,7 @@ def compose_interaction_frame(commands: Sequence[DrawCommand], viewport: tuple[i
     """Subtract foreground physical coverage in the painter's actual order."""
     covered = np.zeros(viewport, dtype=bool)
     regions = []
+    coverage_by_surface = {}
     for order in range(len(commands) - 1, -1, -1):
         command = commands[order]
         if command.surface.get_alpha() == 0:
@@ -66,8 +67,13 @@ def compose_interaction_frame(commands: Sequence[DrawCommand], viewport: tuple[i
                 mask.setflags(write=False)
                 regions.append(InteractionRegion(selection.hit, overlap.topleft, mask, order))
         if command.selection_occluder:
-            physical = (command.selection_block_mask if command.selection_block_mask is not None
-                        else pygame.surfarray.array_alpha(command.surface) > 0)
+            physical = command.selection_block_mask
+            if physical is None:
+                identity = id(command.surface)
+                physical = coverage_by_surface.get(identity)
+                if physical is None:
+                    physical = pygame.surfarray.array_alpha(command.surface) > 0
+                    coverage_by_surface[identity] = physical
             covered[screen_region] |= physical[local]
     return InteractionFrame(tuple(regions))
 
@@ -106,15 +112,26 @@ def draw_highlights(screen: pygame.Surface, frame: InteractionFrame,
         screen.blit(image, region.destination)
 
 
-def support_selection(command: DrawCommand, tile: WorldTileState, camera: Camera) -> DrawCommand:
-    """A disclosed support top uses the terrain command's actual surviving pixels."""
-    image = pygame.Surface(command.surface.get_size(), pygame.SRCALPHA)
+def support_vertices(command: DrawCommand, tile: WorldTileState, camera: Camera) -> tuple[tuple[int, int], ...]:
     x,y=tile.position
     corners=tuple(project_screen((x+dx,y+dy),camera,elevation_steps=tile.elevation_steps)
         for dx,dy in ((-.5,-.5),(.5,-.5),(.5,.5),(-.5,.5)))
-    pygame.draw.polygon(image,'white',[(round(px-command.destination[0]),round(py-command.destination[1]))
-        for px,py in corners])
-    mask=(pygame.surfarray.array_alpha(image)>0)&(pygame.surfarray.array_alpha(command.surface)>0)
+    return tuple((round(px-command.destination[0]),round(py-command.destination[1])) for px,py in corners)
+
+
+def support_selection(command: DrawCommand, tile: WorldTileState, camera: Camera, *,
+                      top_mask: np.ndarray | None = None) -> DrawCommand:
+    """Selectable top and full terrain occlusion remain distinct coverage."""
+    physical = command.selection_block_mask
+    if physical is None:
+        physical = pygame.surfarray.array_alpha(command.surface) > 0
+        physical.setflags(write=False)
+    if top_mask is None:
+        image = pygame.Surface(command.surface.get_size(), pygame.SRCALPHA)
+        pygame.draw.polygon(image,'white',support_vertices(command,tile,camera))
+        mask=(pygame.surfarray.array_alpha(image)>0)&physical
+    else:
+        mask = top_mask
     mask.setflags(write=False)
     coverage=SelectionCoverage(WorldHit('ground',str(tile.tile_uuid),tile.position,tile.elevation_steps),mask)
-    return command._replace(selection=(*command.selection,coverage))
+    return command._replace(selection=(*command.selection,coverage), selection_block_mask=physical)

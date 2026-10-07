@@ -2133,9 +2133,9 @@
     "equipment.portable_torch": {
       "label": "Torch",
       "presentation": {
-        "icon_key": "item.potion-of-healing"
+        "icon_key": "item.torch"
       },
-      "approximation": "Shares an existing item-family icon."
+      "approximation": null
     },
     "focus.wand": {
       "label": "Wand",

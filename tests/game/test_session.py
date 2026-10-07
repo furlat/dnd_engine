@@ -11,11 +11,17 @@ from dnd.encounter import TurnState
 from dnd.actions import SpellEvent
 from dnd.content.items.environment_item_builders import build_spell_device
 from dnd.entity import Entity
+from dnd.core.base_block import BaseBlock
+from dnd.core.creature_types import DamageType
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.gridmap import get_map
+from dnd.items.environment import DirectionalDoor
 from dnd.spells.walls import WallOfFire
+from game.player_commands import CommandRejected
 from game.session import (
     Operation, Session, advance_controller, close_session, create_session,
     discover_player_actions, end_player_turn, execute_player_action,
-    player_position_options,
+    player_position_options, equip_player_item, unequip_player_item,
 )
 
 
@@ -40,6 +46,25 @@ def _advance_to_human(session: Session, operations: list[Operation]) -> None:
         if operation.boundary.status == "waiting_for_human":
             return
     pytest.fail("native encounter did not return a human decision boundary")
+
+
+def test_lantern_crypt_rooms_are_sealed_until_their_real_doors_open():
+    value=create_session(encounter_id='encounter.lantern_crypt')
+    try:
+        grid=get_map()
+        assert grid.get_path((2,4),(2,5)) is not None
+        assert grid.get_path((3,5),(7,6)) is not None
+        assert grid.get_path((5,8),(5,10)) is None
+        assert grid.get_path((7,6),(8,6)) is None
+        assert grid.get_path((11,6),(13,6)) is None
+        for name,start,end in (('vault_door',(5,8),(5,10)),
+                               ('passage_door',(7,6),(8,6)),('hall_door',(11,6),(13,6))):
+            door=BaseBlock.get(value.battlefield.object_uuids[name])
+            assert isinstance(door,DirectionalDoor)
+            door.open()
+            assert grid.get_path(start,end) is not None
+    finally:
+        close_session(value)
 
 
 def test_human_session_queries_and_executes_explicit_wall_points(session: Session) -> None:
@@ -93,7 +118,7 @@ def test_two_players_move_spend_actions_and_receive_native_enemy_turns(session: 
     actions_before = actor.action_economy.actions.normalized_score
     other_player = next(identity for identity in session.player_uuids if identity != first_player)
     cursor_before_rejection = EventQueue.event_cursor()
-    with pytest.raises(ValueError, match="current human turn"):
+    with pytest.raises(CommandRejected, match="current human turn"):
         execute_player_action(session, other_player, move, destination)
     assert EventQueue.event_cursor() == cursor_before_rejection
 
@@ -111,7 +136,7 @@ def test_two_players_move_spend_actions_and_receive_native_enemy_turns(session: 
     operations.append(end_player_turn(session, first_player))
     assert any(isinstance(root, TurnEndEvent) for root in operations[-1].roots)
     cursor_before_rejection = EventQueue.event_cursor()
-    with pytest.raises(ValueError, match="current human turn"):
+    with pytest.raises(CommandRejected, match="current human turn"):
         execute_player_action(session, first_player, move, destination)
     assert EventQueue.event_cursor() == cursor_before_rejection
 
@@ -156,3 +181,19 @@ def test_explicit_arrangement_uses_the_same_public_composition() -> None:
     finally:
         close_session(session)
         random.setstate(random_state)
+
+
+def test_downed_player_cannot_change_equipment_during_a_retained_turn(session):
+    _advance_to_human(session, [])
+    actor = session.encounter.get_current_entity()
+    assert actor is not None
+    actor.receive_damage(actor.get_normal_hp(), DamageType.FORCE, actor.uuid)
+    assert not actor.can_take_actions()
+    cursor = EventQueue.event_cursor()
+    equipment = actor.equipment.model_dump(mode="json")
+    with pytest.raises(CommandRejected, match="cannot change equipment"):
+        equip_player_item(session, actor.uuid, actor.uuid)
+    with pytest.raises(CommandRejected, match="cannot change equipment"):
+        unequip_player_item(session, actor.uuid, WeaponSlot.MELEE_MAIN)
+    assert EventQueue.event_cursor() == cursor
+    assert actor.equipment.model_dump(mode="json") == equipment

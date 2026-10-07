@@ -38,7 +38,7 @@ def test_full_round_moves_conditions_and_enemy_actions_while_history_paused() ->
     try:
         # Native ranged delivery and each Jump leg keep their authored duration.
         # The public settled-round boundary still determines when the run ends.
-        result = run(player_input=choose, stop_after_commands=6, frame_deltas=(0.1,), max_frames=240,
+        result = run(test_seed=0, player_input=choose, stop_after_commands=6, frame_deltas=(0.1,), max_frames=240,
                      collect_frames=True,
                      frame_events={
                          80: (pygame.event.Event(pygame.KEYDOWN, key=pygame.K_PAUSE),)})
@@ -46,6 +46,12 @@ def test_full_round_moves_conditions_and_enemy_actions_while_history_paused() ->
         random.setstate(state)
     assert result.player_commands == 6
     assert result.latest == result.historical
+    assert {lineage.observer_uuid for lineage in result.lineages} == {result.latest.observer_uuid}
+    assert {frame.observer_uuid for frame in result.frames} == {result.latest.observer_uuid}
+    assert len(result.latest.viewing_audience.controlled) == 2
+    assert {frame.observer_uuid for frame in result.frames} <= {
+        lineage.root.fact.source_entity_uuid for lineage in result.lineages
+        if isinstance(lineage.root.fact, MovementFact)}
     assert result.historical.round_number == 2
     assert any(isinstance(lineage.root.fact, MovementFact) for lineage in result.lineages)
     assert len({lineage.root.fact.source_entity_uuid for lineage in result.lineages
@@ -76,7 +82,7 @@ def test_authored_workshop_plays_a_discovered_lever_action_in_the_same_frame_pum
     state = random.getstate()
     random.seed(0)
     try:
-        result = run(encounter_id="encounter.residue_workshop", player_input=choose,
+        result = run(test_seed=0, encounter_id="encounter.residue_workshop", player_input=choose,
                      stop_after_commands=2, frame_deltas=(0.1,), max_frames=400, collect_frames=True)
     finally:
         random.setstate(state)

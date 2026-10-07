@@ -1,0 +1,159 @@
+{
+  "purpose": "Research references only; not game assets or runtime bindings",
+  "screenshots": [
+    {
+      "id": "hud",
+      "title": "PC combat HUD and the right-side log",
+      "topic": "Layout",
+      "image": "https://steamuserimages-a.akamaihd.net/ugc/2264812245447689840/71E91ED019A82FA85D5463DBE87871CFA8C64989/",
+      "source": "https://steamcommunity.com/sharedfiles/filedetails/?id=3122428771",
+      "credit": "Combat for Beginners · Steam community guide · December 2023",
+      "note": "Party left, initiative top, selected-character controls below and log right. The repeated XP rows in this older image were consolidated in the later Patch 6 update.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "weapon",
+      "title": "Explicit ranged attack and its tooltip",
+      "topic": "Weapon selection",
+      "image": "https://images.steamusercontent.com/ugc/2264812245446824645/C9A95201C8A10D17E4EA31DBE485E78B79B14965/",
+      "source": "https://steamcommunity.com/sharedfiles/filedetails/?id=3122428771",
+      "credit": "Combat for Beginners · Steam community guide · December 2023",
+      "note": "The selected weapon attack is named. Damage, range and cost live in the hover description; weapon controls sit next to the selected portrait.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "upcast-a",
+      "title": "Upcasting: available ranks in a temporary selector",
+      "topic": "Spell choices",
+      "image": "https://images.steamusercontent.com/ugc/2264812245446979304/71D5203A2ED8CA161AB95232789A819DA07539A4/",
+      "source": "https://steamcommunity.com/sharedfiles/filedetails/?id=3122428771",
+      "credit": "Combat for Beginners · Steam community guide · December 2023",
+      "note": "The temporary selector offers slot levels I–V, distinguishes spent slots and highlights the selected available rank.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "icon-legibility",
+      "title": "Hotbar icons: readable silhouettes and variant badges",
+      "topic": "Availability",
+      "image": "https://images.steamusercontent.com/ugc/2264812245446979313/7DAE5C0DF127B335F0FD3D113C7F2407977F737F/",
+      "source": "https://steamcommunity.com/sharedfiles/filedetails/?id=3122428771",
+      "credit": "Combat for Beginners · Steam community guide · December 2023",
+      "note": "Bright available symbols remain distinct against dark slots. Small plus badges signal additional choices; icon colour is not the only state cue.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "availability",
+      "title": "Resource indicators above the hotbar",
+      "topic": "Availability",
+      "image": "https://images.steamusercontent.com/ugc/2264812245446979296/AD6768785F057B9411B90624220180F2B7BBD21B/",
+      "source": "https://steamcommunity.com/sharedfiles/filedetails/?id=3122428771",
+      "credit": "Combat for Beginners · Steam community guide · December 2023",
+      "note": "Actions, bonus actions, class resources and spell slots have different shapes. Filled and spent slots remain distinguishable.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "path",
+      "title": "Movement and attack preview in an actual dungeon",
+      "topic": "Targeting",
+      "image": "https://shacknews-www.s3.amazonaws.com/assets/editorial/2023/08/baldurs-gate-3-combat-movement-and-attack.jpg",
+      "source": "https://www.shacknews.com/article/136590/combat-explainer-baldurs-gate-3",
+      "credit": "Shacknews · Combat explainer · August 2023",
+      "note": "The path, destination and attack preview are spatial. Dungeon architecture, lighting and props provide context without a permanent instruction panel.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "opportunity",
+      "title": "Opportunity-attack warning on a proposed move",
+      "topic": "Targeting",
+      "image": "https://cdnportal.mobalytics.gg/production/2023/09/fd32bc6d-red-arrow-opp-attack.jpg",
+      "source": "https://mobalytics.gg/blog/baldurs-gate-3/combat-tips-tricks/",
+      "credit": "Mobalytics · Combat tips · 2023",
+      "note": "The red warning appears on the creature that threatens the route. It is a consequence preview beside the relevant world object.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "labels",
+      "title": "World labels for loot and containers",
+      "topic": "World interaction",
+      "image": "https://i.imgur.com/gVAS8x9.png",
+      "source": "https://www.reddit.com/r/BaldursGate3/comments/15j0hlp/has_anybody_found_the_matching_true_loves_caress/",
+      "credit": "Player screenshot · Reddit · August 2023",
+      "note": "Named labels sit over the world. Alt is the default item-label key; it is not a promise that every lever, door and decorative prop receives an item label.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "door",
+      "title": "Door and threshold in a lit interior",
+      "topic": "World interaction",
+      "image": "https://i.imgur.com/3s1pnp2.png",
+      "source": "https://clutchpoints.com/gaming/baldurs-gate-3-guide-open-locked-door-in-overgrown-ruins",
+      "credit": "ClutchPoints · Overgrown Ruins door guide · release-era PC screenshot",
+      "note": "A real dungeon threshold in its architectural and lighting context. This image demonstrates scene/UI composition, not the hover or opening state of the door.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "context",
+      "title": "World-object context menu",
+      "topic": "World interaction",
+      "image": "https://cdn.staticneo.com/ew/7/70/Baldurs_Gate_3_Gortash_Netherstone_5.jpg",
+      "source": "https://www.neoseeker.com/baldurs-gate-3/walkthrough/Get_Gortashs_Netherstone",
+      "credit": "Neoseeker · Get Gortash's Netherstone walkthrough",
+      "note": "A small menu beside an object offers alternatives such as picking it up, attacking it and throwing it. This is a world interaction reference, not an inventory reference.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "dice",
+      "title": "Combat-log calculation details",
+      "topic": "Combat log",
+      "image": "https://i.imgur.com/0Pot0a3.png",
+      "source": "https://forums.larian.com/ubbthreads.php?Number=883795&ubb=showflat",
+      "credit": "Player screenshot · Larian forum · August 2023",
+      "note": "Inspect the calculation popup separately from the readable short log entries. We need the recorded dice and named modifiers; copying the log remains our own requirement.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "multitarget",
+      "title": "PC Magic Missile: projectile allocation controls",
+      "topic": "Multi-target",
+      "image": "https://images.steamusercontent.com/ugc/2264812245446824661/2FE836BFC81966C20FB9B2F1EA53F8D4056F92FE/",
+      "source": "https://steamcommunity.com/sharedfiles/filedetails/?id=3122428771",
+      "credit": "Combat for Beginners · Steam community guide · December 2023",
+      "note": "The targeting bar shows a remaining-projectile indicator and a confirmation control. Repeated and partial allocations follow the particular action.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "reactions",
+      "title": "Reaction settings: automatic or ask",
+      "topic": "Reactions",
+      "image": "https://images.steamusercontent.com/ugc/2264812245447472546/288BD82A3B752538DED7F8CFB9C69FDEBF095BC1/",
+      "source": "https://steamcommunity.com/sharedfiles/filedetails/?id=3122428771",
+      "credit": "Combat for Beginners · Steam community guide · December 2023",
+      "note": "Reactions have separate enabled and Ask choices; they are not another set of permanently visible hotbar instructions.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    },
+    {
+      "id": "spell-tooltip",
+      "title": "Spell description on demand",
+      "topic": "Tooltips",
+      "image": "https://images.steamusercontent.com/ugc/2264812245447615733/866611C9762F293960F664FA6F173B902A1B3282/",
+      "source": "https://steamcommunity.com/sharedfiles/filedetails/?id=3122428771",
+      "credit": "Combat for Beginners · Steam community guide · December 2023",
+      "note": "The temporary tooltip groups name, damage, description, save, range and resource cost. That detail is not repeated as permanent HUD text.",
+      "platform": "PC mouse and keyboard",
+      "visual_inspection_date": "2026-10-06"
+    }
+  ]
+}

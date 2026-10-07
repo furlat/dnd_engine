@@ -49,9 +49,8 @@ def approach_action(actions: AvailableActionsResult, option: AvailableWorldInter
 def main_attack(actions: AvailableActionsResult, subject_uuid: UUID,
                 preference: str = 'MELEE_MAIN') -> ActionSelection | None:
     rows = [(index, row) for index, row in enumerate(actions.all_actions)
-        if row.is_attack and row.weapon_slot in ('MELEE_MAIN','RANGED_MAIN')
+        if row.is_attack and row.weapon_slot == preference
         and not any(cost.cost_type in ('bonus_actions','reactions') for cost in row.costs)]
-    rows.sort(key=lambda pair: pair[1].weapon_slot != preference)
     for index, row in rows:
         target = next((target for target in row.valid_targets if target.target_uuid == subject_uuid), None)
         if target is not None:

@@ -171,7 +171,14 @@ def test_open_ground_cast_preserves_original_round_fringe(production_data, displ
                               pygame.surfarray.array_alpha(command.surface)[owned])
         assert np.array_equal(pygame.surfarray.array3d(actual)[owned],
                               pygame.surfarray.array3d(command.surface)[owned])
-        assert not pygame.surfarray.array_alpha(actual)[~owned].any()
+        # Without any physical clipping input, retain the raw art, including
+        # its antialiased fringe beyond the coordinate packet's owned samples.
+        # When supports are present, unresolved samples cannot bypass clipping.
+        if supports:
+            assert not pygame.surfarray.array_alpha(actual)[~owned].any()
+        else:
+            assert np.array_equal(pygame.surfarray.array_alpha(actual),
+                                  pygame.surfarray.array_alpha(command.surface))
 
 
 @pytest.mark.parametrize('quadrant', range(4))

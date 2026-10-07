@@ -2705,6 +2705,9 @@ class AvailableActionInfo(BaseModel):
     description: str = Field(default="", description="Action description")
     cost_type: CostType = Field(description="Type of cost (actions, bonus_actions, etc.)")
     cost_amount: int = Field(default=1, description="Cost amount (usually 1)")
+    restricted_action_budget: Optional[str] = Field(
+        default=None, description="Restricted budget funding this otherwise ordinary action, e.g. Haste.",
+    )
     costs: List[BaseCost] = Field(
         default_factory=list,
         description=(

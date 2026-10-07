@@ -7,23 +7,24 @@ the renderer receives neither live entities nor an engine clock.
 
 import asyncio
 from game.presentation_retained import RetainedPresentation, retain_presentation
-from collections import deque
+from collections import deque, OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
+from time import perf_counter
 from typing import Callable, Mapping, Sequence, Literal
 from uuid import UUID
 
 import pygame
 
 from dnd.core.base_actions import AvailableActionsResult, AvailableSelectionPreview, AvailableWorldInteraction, TargetType
-from dnd.content.characters.builds import CharacterBuild
-from dnd.core.events import EventQueue
+from dnd.content.characters.build_types import CharacterBuild
 from dnd.core.life_types import LifeState
 from game.animation_data import load_animation_data
 from game.animation_draw import LoadedBodyRows
-from game.animation_types import Facing8
+from game.animation_types import Facing8, AnimationData
 from game.app import draw_frame
-from game.assets import SurfaceCache, load_catalog
+from game.assets import SurfaceCache, load_catalog, AssetCatalog
 from game.choreography import BoundChoreography
 from game.choreography_draw import ChoreographyMedia, load_choreography_media, load_motion_media
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
@@ -32,33 +33,33 @@ from game.controls import (ActionSelection, EndTurn, MenuState, selection_target
     begin_targeting, targeting_values, append_target, append_position, undo_targeting, confirm_targeting)
 from game.motion import MotionTimeline
 from game.playback_frame import sample_playback_frame
-from game.presentation import capture_interval, capture_lineage
 from game.player_facts import AttackFact, MovementFact, PlayerLineage, PlayerState, PlayerHUDSnapshot, StepFact, CombatLogAppend
-from game.player_projection import begin_projection, project_lineage
 from game.player_reduction import reduce_initialization, reduce_lineage
 from game.presentation_group import (PresentationGroup, presentation_groups,
     reduce_presentation_group, stage_presentation_group, bind_presentation_group)
 from game.projection import Camera, ZOOM_LEVELS
 from game.scene import load_scene_media
 from game.scene_actors import scene_actors
-from game.session import (
-    Operation, advance_controller, close_session, create_session, discover_player_actions,
-    end_player_turn, execute_player_action,
-    preview_player_selection, snapshot_player_hud,
-    equip_player_item, unequip_player_item, toggle_player_handler,
+from game.runtime_connection import launch_runtime, submit_request, poll_reply, close_runtime, RuntimeFailure
+from game.runtime_protocol import (
+    RuntimeRequest, StartRequest, StartedReply, OperationReply, AdvanceRequest, DiscoverRequest,
+    DiscoveryReply, PreviewRequest, PreviewReply, RejectedReply, ActionRequest,
+    EndTurnRequest, EquipRequest, UnequipRequest, HandlerRequest,
 )
+
 from game.visual_position import VisualPosition
 from game.body_history import retain_body_head
 from game.interaction_frame import InteractionFrame, pick_world, draw_highlights
 from game.interaction_types import WorldHit
-from game.ui_composition import compose_ui_media
-from game.ui.action_bar import ActionFamily, ActionFamilyKey, action_families, family_at, default_shortcuts, shortcut_indices, shortcut_page, cost_label, variant_label
+from game.ui.media import load_ui_media
+from game.ui.action_bar import ActionFamily, ActionFamilyKey, action_families, family_at, family_has_choices, default_shortcuts, action_blocks, block_counts, weapon_modes, shortcut_page, cost_label, variant_label
+from game.ui.variants import initial_variant
 from game.ui.layout import layout
 from game.ui.primitives import fonts, text, GREEN, GOLD
 from game.ui.skin import load_skin
 from game.ui.hud import draw_hud, draw_tooltip
 from game.ui.combat_log import (LogHistory, LogView, LogLayout, group_log_rows, append_log_rows, retain_logs,
-    draw_combat_log, copy_log_selection, scroll_log, log_text_position, drag_log_scroll)
+    draw_combat_log, copy_log_selection, scroll_log, log_text_position, drag_log_scroll, children_expanded)
 from dnd.core.combat_log import CombatLogEntryType
 from game.ui.targeting import draw_selection_preview, draw_movement_preview, undisclosed_position_at
 from game.ui.types import UIFocus, UIFrame, UIHit, PendingInteraction, EquipItem, UnequipItem, ToggleHandler
@@ -68,6 +69,7 @@ from game.ui.world_interaction import world_options, admitted_world_actions, app
 @dataclass(frozen=True, slots=True)
 class GameFrame:
     index: int
+    observer_uuid: UUID
     latest_cursor: int
     historical_cursor: int
     pending: int
@@ -94,6 +96,14 @@ class GameSummary:
 PlayerInput = Callable[[PlayerState, AvailableActionsResult], ActionSelection | EndTurn | None]
 
 
+def _load_metadata() -> tuple[AssetCatalog, AnimationData]:
+    """Read/validate passive metadata; SDL objects stay on the display thread."""
+    catalog = load_catalog()
+    data = load_animation_data(rig_files=tuple(sorted((Path(__file__).parent / "data/rigs").glob("*.json"))),
+        world_source=catalog.world_source)
+    return catalog, data
+
+
 async def _run(
     *, frame_deltas: Sequence[float] | None, frame_events: Mapping[int, Sequence[pygame.event.Event]],
     max_frames: int | None, window_size: tuple[int, int], quadrant: int,
@@ -101,28 +111,49 @@ async def _run(
     exit_when_ended: bool, collect_frames: bool, encounter_id: str | None,
     player_positions: tuple[tuple[int, int], tuple[int, int]],
     enemy_positions: tuple[tuple[int, int], tuple[int, int]],
-    player_builds: tuple[CharacterBuild, ...] | None, fullscreen: bool,
+    player_builds: tuple[CharacterBuild, ...] | None, fullscreen: bool, test_seed: int | None,
 ) -> GameSummary:
+    start_request = StartRequest(request_id=0, encounter_id=encounter_id,
+        player_positions=player_positions, enemy_positions=enemy_positions, player_builds=player_builds,
+        test_seed=test_seed)
     pygame.init()
-    windowed_size=window_size
-    screen = pygame.display.set_mode((0,0) if fullscreen else window_size,
-        pygame.FULLSCREEN if fullscreen else pygame.RESIZABLE)
-    window_size=screen.get_size()
-    session = create_session(encounter_id=encounter_id,
-        player_positions=player_positions, enemy_positions=enemy_positions,player_builds=player_builds)
-    pygame.display.set_caption(f"D&D Engine — {session.encounter.name}")
+    connection = None
     try:
-        observer = session.game.entities[session.player_uuids[0]]
-        cursor = EventQueue.event_cursor()
-        startup = capture_interval(
-            name="encounter startup", start_cursor=0, end_cursor=cursor,
-            observer_uuid=observer.uuid, battlefield_id=session.battlefield.definition.battlefield_id,
-        )
-        projection, initialization = begin_projection(startup)
-        baseline = reduce_initialization(replace(initialization,hud_snapshot=snapshot_player_hud(session)))
+        windowed_size=window_size
+        screen = pygame.display.set_mode((0,0) if fullscreen else window_size,
+            pygame.FULLSCREEN if fullscreen else pygame.RESIZABLE)
+        window_size=screen.get_size()
+        connection = launch_runtime()
+        submit_request(connection, start_request)
+        pygame.display.set_caption("D&D Engine — Loading")
+        startup_clock = pygame.time.Clock()
+        startup: StartedReply | None = None
+        # One startup-only reader. No game rules, display conversions or fonts
+        # run here. The window continues pumping while metadata/native load.
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="presentation-metadata") as readers:
+            metadata = readers.submit(_load_metadata)
+            while startup is None or not metadata.done():
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        raise SystemExit(0)
+                incoming = poll_reply(connection)
+                if isinstance(incoming, RuntimeFailure):
+                    raise RuntimeError(f"Native startup failed: {incoming.message}\n"
+                        + b"".join(connection.diagnostics).decode(errors="replace"))
+                if incoming is not None:
+                    if not isinstance(incoming, StartedReply):
+                        raise RuntimeError(f"Unexpected native startup reply: {incoming}")
+                    startup = incoming
+                startup_clock.tick(60)
+                await asyncio.sleep(0)
+            catalog, data = metadata.result()
+        assert startup is not None
+        pygame.display.set_caption(f"D&D Engine — {startup.encounter_name}")
+        baseline = reduce_initialization(startup.initialization)
         latest = historical = baseline
-        catalog = load_catalog()
-        data = load_animation_data(rig_files=tuple(sorted((Path(__file__).parent / "data/rigs").glob("*.json"))), world_source=catalog.world_source)
+        observer_uuid = baseline.observer_uuid
+        audience = baseline.viewing_audience
+        request_id = 1
         number_font, badge_font = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx),
                                                        bold=style.fontWeight == "bold")
                                    for style in (data.number_style, data.badge_style))
@@ -132,34 +163,39 @@ async def _run(
         body_media: LoadedBodyRows = {}
         load_scene_media(actors, data, body_rows=body_media)
         cache = SurfaceCache(catalog)
-        media=compose_ui_media()
+        media=load_ui_media(dict(startup.ui_content.content), feature_ids=startup.ui_content.feature_ids,
+                            item_ids=startup.ui_content.item_ids)
         skin=load_skin(media.resources)
         geometry=layout(window_size)
         ui_fonts=fonts(geometry.scale)
         ui_images: dict[tuple[str,tuple[int,int]],pygame.Surface]={}
-        focus_ui: UIFocus=UIFocus(selected_actor=observer.uuid)
+        focus_ui: UIFocus=UIFocus(selected_actor=observer_uuid)
         rendered_focus: UIFocus=focus_ui
         pointer_focus: UIFocus=focus_ui
         ui_frame: UIFrame=UIFrame()
         interaction: InteractionFrame=InteractionFrame()
         pointer_capture: UIHit | None = None
         log_thumb_offset=0
+        cursor=pygame.SYSTEM_CURSOR_ARROW
         tooltip_lines: tuple[str,...]=()
         tooltip_point=(0,0)
         hover_since=ui_elapsed_ms=0.
+        transient_status=''
+        status_until_ms=0.
         hud=baseline.hud_snapshot
-        hud_pending: list[PlayerHUDSnapshot]=[]
+        hud_pending: deque[tuple[int, PlayerHUDSnapshot]] = deque()
         log_history: LogHistory=LogHistory()
-        log_view: LogView=LogView()
+        log_view: LogView=LogView(detailed=False,fold_groups=True)
         log_layout: LogLayout=LogLayout()
         log_hits_valid=False
         log_pending: list[tuple[tuple[CombatLogAppend, ...], UUID | None]]=[]
         feedback_viewport=geometry.viewport
-        min_x, min_y, max_x, max_y = historical.world.bounds
-        focus = ((min_x + max_x) / 2, (min_y + max_y) / 2)
+        assert historical.senses is not None
+        focus = historical.actors[observer_uuid].last_visual_position or historical.senses.position
         camera = Camera(quadrant=quadrant, zoom=1.0, viewport=window_size).with_focus(focus)
         camera = camera.with_screen_pan((0, -60*geometry.scale))
         pending: deque[PresentationGroup] = deque()
+        operation_markers: deque[int] = deque()
         retained: list[PlayerLineage] = []
         frames: list[GameFrame] = []
         gaps: list[tuple[UUID, str]] = []
@@ -177,10 +213,15 @@ async def _run(
         families: tuple[ActionFamily,...]=()
         family_order: tuple[ActionFamilyKey,...]=()
         shortcuts: dict[UUID,tuple[ActionFamilyKey,...]]={}
+        weapon_preferences: dict[UUID,Literal['MELEE_MAIN','RANGED_MAIN']]={}
         force_attack=False
         choice_force_attack=False
         menu: MenuState = MenuState()
         preview: AvailableSelectionPreview | None = None
+        queued_command: RuntimeRequest | None = None
+        confirmation: ActionSelection | None = None
+        hover_selection: ActionSelection | None = None
+        preview_cache: OrderedDict[ActionSelection, AvailableSelectionPreview] = OrderedDict()
         waiting_for_player = encounter_ended = paused = show_debug = False
         show_grid = False
         running = True
@@ -190,55 +231,74 @@ async def _run(
         presentation_lifetimes = retain_presentation(RetainedPresentation(), historical, data, absolute_start_ms=0, facings=facings)
         body_history = retain_body_head((), historical, None, start_ms=0, facings=facings, positions=positions)
         clock = pygame.time.Clock()
+        frame_times: deque[float] = deque(maxlen=60)
+        previous_frame_time = perf_counter()
+        fps_caption = ui_fonts.small.render('FPS —', True, (217, 224, 229))
         if capture_dir is not None:
             capture_dir.mkdir(parents=True, exist_ok=True)
 
-        def receive(operation: Operation) -> None:
+        def receive(operation: OperationReply) -> None:
             nonlocal latest
-            if operation.hud_snapshot is not None:
-                hud_pending.append(operation.hud_snapshot)
-            received = []
-            for root in operation.roots:
-                native = capture_lineage(root, observer_uuid=observer.uuid,
-                                         known_actor_uuids=frozenset(latest.actors))
-                lineage = project_lineage(projection, native)
-                if lineage is None:
-                    continue
+            for lineage in operation.lineages:
                 latest = reduce_lineage(latest, lineage)
-                received.append(lineage)
                 retained.append(lineage)
-                classes = {row.event_uuid: row.event_class for row in native.objective_rows}
-                gaps.extend((identity, f"Unprojected state payload: {classes[identity]}")
-                            for identity, _ in native.dispositions)
-            groups = presentation_groups(tuple(received))
+            gaps.extend(operation.gaps)
+            groups = presentation_groups(operation.lineages)
+            if operation.lineages:
+                operation_markers.append(max(lineage.end_cursor for lineage in operation.lineages))
+            if operation.hud is not None:
+                hud_pending.append((operation_markers[-1] if operation_markers else historical.reducer_cursor,
+                                    operation.hud))
             pending.extend(groups)
-            if operation.combat_log_appends:
-                # The last received group is this operation's visual boundary.
-                # A later operation must not postpone its standalone entries.
-                log_pending.append((operation.combat_log_appends,
-                    groups[-1].primary.root.uuid if groups else
+            appends = operation.combat_log_appends
+            if appends:
+                log_pending.append((appends, groups[-1].primary.root.uuid if groups else
                     pending[-1].primary.root.uuid if pending else
                     active_group.primary.root.uuid if active_group is not None else None))
 
+        def selection() -> ActionSelection:
+            return ActionSelection(menu.selected_action, menu.selected_targets, menu.selected_positions)
+
         def refresh_preview() -> None:
             nonlocal preview
-            preview=None
-            if menu.active and choices is not None and historical.current_actor_uuid is not None:
-                row=choices.all_actions[menu.selected_action]
-                preview=preview_player_selection(session,historical.current_actor_uuid,row,
-                    targeting_values(menu,row),menu.selected_positions)
+            preview = preview_cache.get(selection()) if menu.active and choices is not None else None
+
+        def request_confirmation() -> ActionSelection | None:
+            nonlocal confirmation
+            refresh_preview()
+            if preview is not None:
+                return confirm_targeting(menu, preview)
+            if menu.active and menu.selected_targets:
+                confirmation = selection()
+            return None
+
+        def install_choices(value: DiscoveryReply) -> None:
+            nonlocal choices, view_choices, choice_force_attack, focus_ui, families, family_order, menu, preview
+            choices = value.choices
+            choice_force_attack = value.force_attack
+            actor_uuid = choices.entity_uuid
+            if view_choices is None or focus_ui.selected_actor == view_choices.entity_uuid:
+                focus_ui = replace(focus_ui, selected_actor=actor_uuid)
+            view_choices = choices
+            focus_ui = replace(focus_ui, attack_preference=weapon_preferences.get(actor_uuid, 'MELEE_MAIN'))
+            families = action_families(choices, family_order)
+            family_order = tuple(family.key for family in families)
+            shortcuts.setdefault(actor_uuid, default_shortcuts(choices, families))
+            menu = MenuState(status=menu.status)
+            preview = None
+            preview_cache.clear()
 
         def select_row(index: int) -> ActionSelection | None:
             nonlocal menu,focus_ui
             assert choices is not None
             row=choices.all_actions[index]
+            if not row.valid_targets:
+                return None
             focus_ui=replace(focus_ui,family=None,variant_index=None,context=(),panel=None,pending=None,pinned_tooltip=())
             menu=begin_targeting(index)
             refresh_preview()
-            if row.target_type is TargetType.SELF and preview is not None and preview.next_targets:
-                menu=append_target(menu,preview,preview.next_targets[0].index)
-                refresh_preview()
-                return confirm_targeting(menu,preview) if preview is not None else None
+            if row.target_type is TargetType.SELF:
+                return ActionSelection(index, (row.valid_targets[0].index,))
             return None
 
         def select_world(option: AvailableWorldInteraction) -> ActionSelection | None:
@@ -256,7 +316,7 @@ async def _run(
                 focus_ui=replace(focus_ui,pending=PendingInteraction(historical.current_actor_uuid,
                     option.subject_uuid,option,choices.discovery_generation))
                 return approach[0]
-            menu=replace(menu,status=option.reason or 'No admitted safe approach')
+            menu=replace(menu,status=option.reason or 'Cannot reach that from here')
             return None
 
         def resize_display(size: tuple[int,int], toggle: bool = False) -> None:
@@ -276,7 +336,7 @@ async def _run(
             old=camera.viewport
             actual=screen.get_size()
             camera=replace(camera,viewport=actual,pan=(camera.pan[0]+(actual[0]-old[0])/2,camera.pan[1]+(actual[1]-old[1])/2))
-            geometry=layout(actual,focus_ui.ui_scale)
+            geometry=layout(actual,focus_ui.ui_scale,log_open=focus_ui.log_open)
             ui_fonts=fonts(geometry.scale)
             feedback_viewport=geometry.viewport
             ui_frame=UIFrame(blocked=(geometry.viewport,))
@@ -302,36 +362,51 @@ async def _run(
                     resize_display(screen.get_size())
                 case 'log':
                     focus_ui=replace(focus_ui,log_open=not focus_ui.log_open)
+                    resize_display(screen.get_size())
                 case 'log_row' if hit.log_key is not None:
                     log_view=replace(log_view,selected=hit.log_key,selection_anchor=None)
                 case 'log_expand' if hit.log_key is not None:
                     collapsed=set(log_view.collapsed)
-                    if hit.log_key in collapsed:
-                        collapsed.remove(hit.log_key)
+                    expanded=set(log_view.expanded)
+                    row=next(row for row in log_history.rows if row.key==hit.log_key)
+                    if not children_expanded(row,log_view):
+                        collapsed.discard(hit.log_key)
+                        expanded.add(hit.log_key)
                     else:
                         collapsed.add(hit.log_key)
-                    log_view=replace(log_view,selected=hit.log_key,collapsed=frozenset(collapsed),selection_anchor=None)
+                        expanded.discard(hit.log_key)
+                    log_view=replace(log_view,selected=hit.log_key,collapsed=frozenset(collapsed),expanded=frozenset(expanded),selection_anchor=None)
+                    log_hits_valid=False
+                case 'log_row_detail' if hit.log_key is not None:
+                    log_view=replace(log_view,details=log_view.details.symmetric_difference((hit.log_key,)),
+                        selected=hit.log_key,selection_anchor=None)
                     log_hits_valid=False
                 case 'log_detail':
-                    log_view=replace(log_view,detailed=not log_view.detailed,selection_anchor=None)
+                    log_view=replace(log_view,detailed=not log_view.detailed,details=frozenset(),selection_anchor=None)
                     log_hits_valid=False
                 case 'log_follow':
                     log_view=replace(log_view,follow=True)
                     log_hits_valid=False
                 case 'log_filter':
                     categories=(None,*tuple(CombatLogEntryType))
-                    log_view=replace(log_view,category=categories[(categories.index(log_view.category)+1)%len(categories)],selection_anchor=None)
+                    log_view=replace(log_view,category=categories[(categories.index(log_view.category)+1)%len(categories)],selected=None,selection_anchor=None)
                     log_hits_valid=False
                 case 'log_actor':
-                    log_view=replace(log_view,actor_uuid=focus_ui.selected_actor if log_view.actor_uuid is None else None,selection_anchor=None)
+                    log_view=replace(log_view,actor_uuid=focus_ui.selected_actor if log_view.actor_uuid is None else None,selected=None,selection_anchor=None)
                     log_hits_valid=False
                 case 'log_copy':
-                    copied=copy_log_selection(log_history,log_view)
+                    copy_view=replace(log_view,selected=None,selection_anchor=None) if hit.index else log_view
+                    copied=copy_log_selection(log_history,copy_view,now_ms=presentation_ms)
                     if copied:
                         pygame.scrap.put_text(copied)
-                case 'page':
-                    pins=shortcuts.get(view_choices.entity_uuid,()) if view_choices is not None else ()
-                    focus_ui=replace(focus_ui,bar_page=shortcut_page(focus_ui.bar_page+hit.index,len(pins),geometry.columns))
+                case 'page' if hit.bar_group is not None:
+                    group=hit.bar_group
+                    actor=displayed.actors.get(view_choices.entity_uuid) if view_choices is not None else None
+                    blocks=action_blocks(view_choices,families,shortcuts.get(view_choices.entity_uuid,()) if view_choices else (),actor)
+                    capacity=max(1,geometry.block_columns[group]*2-(len(weapon_modes(actor)) if group==0 else 0))
+                    pages=list(focus_ui.bar_pages)
+                    pages[group]=shortcut_page(pages[group]+hit.index,len(blocks[group].families),capacity)
+                    focus_ui=replace(focus_ui,bar_pages=(pages[0],pages[1],pages[2],pages[3]))
                 case 'inspect' if hit.identity is not None:
                     focus_ui=replace(focus_ui,selected_actor=hit.identity)
                     if clicks>1 and hit.identity in historical.actors:
@@ -339,12 +414,18 @@ async def _run(
                         if contact is not None:
                             camera=camera.with_focus(contact.grid)
                 case 'attack_mode':
-                    focus_ui=replace(focus_ui,attack_preference='RANGED_MAIN' if focus_ui.attack_preference=='MELEE_MAIN' else 'MELEE_MAIN')
+                    preference: Literal['MELEE_MAIN','RANGED_MAIN']='RANGED_MAIN' if hit.index else 'MELEE_MAIN'
+                    focus_ui=replace(focus_ui,attack_preference=preference,family=None)
+                    if view_choices is not None:
+                        weapon_preferences[view_choices.entity_uuid]=preference
+                    menu=MenuState();preview=None
                 case 'panel':
                     focus_ui=replace(focus_ui,panel=('inventory','sheet','spellbook','reactions')[hit.index],family=None,context=(),pending=None,popup_scroll=0)
                     menu=MenuState();preview=None
+                case 'equipment_slot':
+                    focus_ui=replace(focus_ui,equipment_slot=hit.equipment_slot,item_detail_scroll=0)
                 case 'inventory_item':
-                    focus_ui=replace(focus_ui,selected_item=hit.identity,item_detail_scroll=0)
+                    focus_ui=replace(focus_ui,selected_item=hit.identity,equipment_slot=None,item_detail_scroll=0)
                 case 'library_filter':
                     filters: tuple[Literal['all','spells','actions','items'],...] = ('all','spells','actions','items')
                     focus_ui=replace(focus_ui,library_filter=filters[hit.index],popup_scroll=0)
@@ -359,17 +440,16 @@ async def _run(
                         if choice_force_attack!=force_attack:
                             choices=None
                     elif hit.verb=='confirm':
-                        refresh_preview()
-                        command=confirm_targeting(menu,preview) if preview is not None else None
+                        command=request_confirmation()
                     elif hit.verb=='family':
                         family=family_at(families,hit.index)
                         if family is None:
                             return command
-                        if len(family.indices)>1:
-                            focus_ui=replace(focus_ui,family=hit.index,variant_index=None,popup_scroll=0,context=(),panel=None,pending=None)
+                        if family_has_choices(choices,family):
+                            focus_ui=replace(focus_ui,family=hit.index,hover_family=False,variant_index=None,popup_scroll=0,context=(),panel=None,pending=None)
                             menu=MenuState();preview=None
-                        elif len(family.indices)==1:
-                            command=select_row(family.indices[0])
+                        else:
+                            command=select_row(initial_variant(choices,family,None))
                     elif hit.verb=='variant':
                         command=select_row(hit.index)
                     elif hit.verb=='variant_pick':
@@ -387,32 +467,65 @@ async def _run(
             return command
 
         while running and (max_frames is None or frame < max_frames):
-            delta = (clock.tick(60) / 1000 if frame_deltas is None
-                     else frame_deltas[min(frame, len(frame_deltas) - 1)])
+            frame_seconds = clock.tick(60) / 1000
+            delta = frame_seconds if frame_deltas is None else frame_deltas[min(frame, len(frame_deltas) - 1)]
+            now = perf_counter()
+            frame_times.append(now - previous_frame_time)
+            previous_frame_time = now
+            if frame % 15 == 0 and frame_times:
+                average_ms = sum(frame_times) * 1000 / len(frame_times)
+                fps_caption = ui_fonts.small.render(
+                    f'{1000 / max(average_ms, .01):.0f} FPS · {max(frame_times) * 1000:.0f} ms',
+                    True, (217, 224, 229))
             if not paused:
                 presentation_ms += delta * 1000
             ui_elapsed_ms += delta*1000
-            ready = waiting_for_player and active is None and not pending and not paused and geometry.supported
-            if ready and choices is not None and not menu.active and choice_force_attack!=force_attack:
-                choices=None
-            if ready and choices is None:
-                actor_uuid = historical.current_actor_uuid
-                if actor_uuid is None:
-                    raise RuntimeError("human boundary lacks its displayed turn owner")
-                choices = discover_player_actions(session,actor_uuid,force_attack=force_attack)
-                choice_force_attack=force_attack
-                if view_choices is None or focus_ui.selected_actor==view_choices.entity_uuid:
-                    focus_ui=replace(focus_ui,selected_actor=actor_uuid)
-                view_choices=choices
-                families=action_families(choices,family_order)
-                family_order=tuple(family.key for family in families)
-                shortcuts.setdefault(actor_uuid,default_shortcuts(choices,families))
-                menu=MenuState(status=menu.status)
-                preview=None
+            submitted = connection.pending
+            incoming = poll_reply(connection)
+            if isinstance(incoming, RuntimeFailure):
+                raise RuntimeError(f"Native request {submitted} failed: {incoming.message}\n"
+                    + b"".join(connection.diagnostics).decode(errors="replace"))
+            if isinstance(incoming, OperationReply):
+                receive(incoming)
+                if incoming.boundary_status == "error":
+                    raise RuntimeError("encounter has no valid controller action boundary")
+                waiting_for_player = incoming.boundary_status == "waiting_for_human"
+                encounter_ended = incoming.boundary_status == "encounter_ended"
+                if isinstance(submitted, (ActionRequest, EndTurnRequest, EquipRequest, UnequipRequest, HandlerRequest)):
+                    issued += 1
+            elif isinstance(incoming, DiscoveryReply):
+                if incoming.force_attack == force_attack:
+                    install_choices(incoming)
+            elif isinstance(incoming, PreviewReply):
+                if (isinstance(submitted, PreviewRequest) and choices is not None
+                        and submitted.discovery_generation == choices.discovery_generation):
+                    preview_cache[submitted.selection] = incoming.preview
+                    preview_cache.move_to_end(submitted.selection)
+                    while len(preview_cache) > 64:
+                        preview_cache.popitem(last=False)
+                    refresh_preview()
+            elif isinstance(incoming, RejectedReply):
+                menu = MenuState(status=incoming.message)
+                focus_ui = replace(focus_ui, pending=None)
+                queued_command = None
+                confirmation = None
+                choices = None
+            ready = (waiting_for_player and active is None and not pending and not paused and geometry.supported
+                     and queued_command is None and (connection.pending is None or isinstance(connection.pending, PreviewRequest)))
+            if ready and choices is not None and not menu.active and choice_force_attack != force_attack:
+                choices = None
             command: ActionSelection | EndTurn | EquipItem | UnequipItem | ToggleHandler | None = None
+            if confirmation is not None:
+                if not menu.active or confirmation != selection():
+                    confirmation = None
+                elif preview is not None:
+                    command = confirm_targeting(menu, preview)
+                    confirmation = None
             for event in frame_events.get(frame, ()):
                 pygame.event.post(event)
             for event in pygame.event.get():
+                if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN) and menu.status:
+                    menu=replace(menu,status='')
                 if event.type == pygame.QUIT:
                     running=False
                     continue
@@ -423,10 +536,7 @@ async def _run(
                     was_forced=force_attack
                     force_attack=False
                     if was_forced and ready and not menu.active and command is None:
-                        assert historical.current_actor_uuid is not None
-                        choices=discover_player_actions(session,historical.current_actor_uuid,force_attack=False)
-                        choice_force_attack=False
-                        view_choices=choices;families=action_families(choices,family_order)
+                        choices = None
                         focus_ui=replace(focus_ui,context=(),family=None)
                     continue
                 if event.type == pygame.KEYDOWN:
@@ -435,8 +545,8 @@ async def _run(
                     if event.key==pygame.K_RETURN and modifiers&pygame.KMOD_ALT:
                         resize_display(screen.get_size(),toggle=True)
                         continue
-                    if event.key==pygame.K_c and modifiers&pygame.KMOD_CTRL and focus_ui.log_open and log_view.selected is not None:
-                        copied=copy_log_selection(log_history,log_view)
+                    if event.key==pygame.K_c and modifiers&pygame.KMOD_CTRL and focus_ui.log_open:
+                        copied=copy_log_selection(log_history,log_view,now_ms=presentation_ms)
                         if copied:
                             pygame.scrap.put_text(copied)
                         continue
@@ -471,6 +581,13 @@ async def _run(
                     if event.key==pygame.K_g:
                         show_grid=not show_grid
                         continue
+                    if (event.key==pygame.K_x and focus_ui.panel is None and view_choices is not None
+                            and any(row.weapon_slot=='RANGED_MAIN' for row in view_choices.all_actions)):
+                        preference='RANGED_MAIN' if focus_ui.attack_preference=='MELEE_MAIN' else 'MELEE_MAIN'
+                        focus_ui=replace(focus_ui,attack_preference=preference,family=None)
+                        weapon_preferences[view_choices.entity_uuid]=preference
+                        menu=MenuState();preview=None
+                        continue
                     if event.key in (pygame.K_q,pygame.K_e):
                         camera=camera.quarter_turned(-1 if event.key==pygame.K_q else 1)
                         continue
@@ -490,47 +607,37 @@ async def _run(
                         continue
                     if event.key in (pygame.K_F1,pygame.K_F2,pygame.K_F3,pygame.K_F4):
                         offset=event.key-pygame.K_F1
-                        if offset<len(session.player_uuids):
-                            focus_ui=replace(focus_ui,selected_actor=session.player_uuids[offset])
+                        if offset<len(audience.controlled):
+                            focus_ui=replace(focus_ui,selected_actor=audience.controlled[offset])
                         continue
                     if ready and command is None and choices is not None:
                         if event.key in (pygame.K_LCTRL,pygame.K_RCTRL) and not menu.active:
                             force_attack=True
-                            assert historical.current_actor_uuid is not None
-                            choices=discover_player_actions(session,historical.current_actor_uuid,force_attack=True)
-                            choice_force_attack=True
-                            view_choices=choices;families=action_families(choices,family_order)
+                            choices = None
                             focus_ui=replace(focus_ui,context=(),family=None)
                         elif event.key==pygame.K_SPACE and not menu.active and focus_ui.family is None and not focus_ui.context and focus_ui.pending is None:
                             command=EndTurn()
                         elif event.key==pygame.K_RETURN and menu.active:
-                            refresh_preview()
-                            command=confirm_targeting(menu,preview) if preview is not None else None
+                            command=request_confirmation()
                         elif event.key==pygame.K_BACKSPACE and menu.active:
                             menu=undo_targeting(menu);refresh_preview()
                         else:
                             hotkeys=(pygame.K_1,pygame.K_2,pygame.K_3,pygame.K_4,pygame.K_5,pygame.K_6,
                                 pygame.K_7,pygame.K_8,pygame.K_9,pygame.K_0,pygame.K_MINUS,pygame.K_EQUALS)
-                            if event.key in hotkeys:
-                                offset=hotkeys.index(event.key)
-                                pins=shortcut_indices(families,shortcuts.get(choices.entity_uuid,()))
-                                page=shortcut_page(focus_ui.bar_page,len(pins),geometry.columns)
-                                slot=page*geometry.columns+offset
-                                index=pins[slot] if slot<len(pins) else None
-                                family=family_at(families,index) if index is not None else None
-                                if offset<geometry.columns and family is not None:
-                                    if len(family.indices)>1:
-                                        focus_ui=replace(focus_ui,family=index,variant_index=None,popup_scroll=0,context=(),pending=None)
-                                        menu=MenuState();preview=None
-                                    elif len(family.indices)==1:
-                                        command=select_row(family.indices[0])
+                            if event.key in hotkeys and focus_ui==rendered_focus:
+                                shortcut=hotkeys.index(event.key)+(12 if event.mod&pygame.KMOD_SHIFT else 0)
+                                hit=next((hit for hit in ui_frame.hits if hit.shortcut==shortcut and hit.enabled),None)
+                                if hit is not None and (hit.discovery_generation is None or hit.discovery_generation==choices.discovery_generation):
+                                    command=apply_ui_hit(hit,ready=ready,clicks=1,command=command)
                     continue
                 if event.type==pygame.TEXTINPUT and focus_ui.panel=='spellbook':
                     focus_ui=replace(focus_ui,search_text=(focus_ui.search_text+event.text)[:80],popup_scroll=0)
                     continue
                 if event.type==pygame.MOUSEWHEEL:
                     point=pygame.mouse.get_pos()
-                    if focus_ui.log_open and focus_ui.panel is None and geometry.log.collidepoint(point):
+                    if focus_ui.family is not None and any(hit.verb=='surface' and hit.rect.collidepoint(point) for hit in ui_frame.hits):
+                        focus_ui=replace(focus_ui,popup_scroll=max(0,focus_ui.popup_scroll-event.y))
+                    elif focus_ui.log_open and focus_ui.panel is None and geometry.log.collidepoint(point):
                         log_view=scroll_log(log_view,log_layout,-event.y*ui_fonts.small.get_linesize()*3)
                         log_hits_valid=False
                         pointer_capture=None
@@ -539,8 +646,10 @@ async def _run(
                     elif focus_ui.family is not None or focus_ui.context or focus_ui.panel is not None:
                         focus_ui=replace(focus_ui,popup_scroll=max(0,focus_ui.popup_scroll-event.y))
                     elif geometry.bar.collidepoint(point):
-                        pins=shortcuts.get(view_choices.entity_uuid,()) if view_choices is not None else ()
-                        focus_ui=replace(focus_ui,bar_page=shortcut_page(focus_ui.bar_page-event.y,len(pins),geometry.columns))
+                        group=next((i for i,rect in enumerate(geometry.blocks) if rect.collidepoint(point)),None)
+                        if group is not None:
+                            command=apply_ui_hit(UIHit(geometry.blocks[group],'page',-event.y,bar_group=group),
+                                ready=ready,clicks=1,command=command)
                     elif not any(rect.collidepoint(point) for rect in ui_frame.blocked):
                         zoom_index=max(0,min(len(ZOOM_LEVELS)-1,ZOOM_LEVELS.index(camera.zoom)+event.y))
                         camera=camera.with_zoom_at(ZOOM_LEVELS[zoom_index],point)
@@ -567,7 +676,7 @@ async def _run(
                         continue
                     shortcut=next((world_hit for world_hit in reversed(ui_frame.hits)
                         if world_hit.rect.collidepoint(point) and world_hit.family_key is not None and geometry.bar.colliderect(world_hit.rect)),None)
-                    if shortcut is not None and view_choices is not None and focus_ui.panel is None:
+                    if shortcut is not None and shortcut.bar_group!=3 and view_choices is not None and focus_ui.panel is None:
                         pins=shortcuts.get(view_choices.entity_uuid,())
                         shortcuts[view_choices.entity_uuid]=tuple(key for key in pins if key!=shortcut.family_key)
                         continue
@@ -630,8 +739,8 @@ async def _run(
                             menu=append_target(menu,preview,target.index);refresh_preview()
                             explicit=(row.target_type is TargetType.MULTI_ENTITY or row.position_selection is not None
                                 and row.position_selection.kind in ('path','entity_destination'))
-                            if not explicit and preview is not None:
-                                command=confirm_targeting(menu,preview)
+                            if not explicit:
+                                command=request_confirmation()
                     elif world_hit is not None:
                         focus_ui=replace(focus_ui,pending=None)
                         if world_hit.kind=='ground':
@@ -680,7 +789,7 @@ async def _run(
                     elif direct:
                         command=select_row(direct[0].action_index)
                     else:
-                        menu=replace(menu,status='Interaction canceled: no longer admitted')
+                        menu=replace(menu,status='That interaction is no longer available')
             if not running:
                 break
             if ready and not paused and command is None and player_input is not None and choices is not None:
@@ -689,51 +798,51 @@ async def _run(
             if ready and command is not None and choices is not None and not paused:
                 actor_uuid = historical.current_actor_uuid
                 assert actor_uuid is not None
-                accepted: Operation | None=None
-                try:
-                    match command:
-                        case EndTurn():
-                            accepted = end_player_turn(session, actor_uuid)
-                        case ActionSelection():
-                            action = choices.all_actions[command.action_index]
-                            selected = tuple(next(target for target in selection_target_pool(action, command.target_indices)
-                                                  if target.index == index) for index in command.target_indices)
-                            if not selected:
-                                raise ValueError("player command requires its discovered target")
-                            accepted = execute_player_action(
-                                session, actor_uuid, action, selected[0],
-                                extra_target_uuids=tuple(target.target_uuid for target in selected[1:]
-                                                         if target.target_uuid is not None),
-                                extra_target_positions=command.extra_target_positions,
-                            )
-                        case EquipItem():
-                            accepted=equip_player_item(session,actor_uuid,command.item_uuid,command.slot)
-                        case UnequipItem():
-                            accepted=unequip_player_item(session,actor_uuid,command.slot)
-                        case ToggleHandler():
-                            accepted=toggle_player_handler(session,actor_uuid,command.handler_uuid,command.enabled)
-                except ValueError as error:
-                    menu=MenuState(status=str(error))
-                    focus_ui=replace(focus_ui,pending=None)
-                if accepted is not None:
-                    receive(accepted)
-                    menu=MenuState()
-                    waiting_for_player = False
-                    issued += 1
+                fields = dict(request_id=request_id, generation=latest.generation, actor_uuid=actor_uuid,
+                    discovery_generation=choices.discovery_generation)
+                match command:
+                    case EndTurn():
+                        queued_command = EndTurnRequest(**fields)
+                    case ActionSelection():
+                        queued_command = ActionRequest(selection=command, **fields)
+                    case EquipItem():
+                        queued_command = EquipRequest(command=command, **fields)
+                    case UnequipItem():
+                        queued_command = UnequipRequest(command=command, **fields)
+                    case ToggleHandler():
+                        queued_command = HandlerRequest(command=command, **fields)
+                request_id += 1
+                menu = MenuState()
+                confirmation = None
                 choices = None
-                preview=None
+                preview = None
                 focus_ui=replace(focus_ui,family=None,context=())
 
-            # Independent process: a native decision can run while history is
-            # paused or animating. No rendered duration enters the rules engine.
-            if not waiting_for_player and not encounter_ended:
-                operation = advance_controller(session)
-                receive(operation)
-                assert operation.boundary is not None
-                if operation.boundary.status == "error":
-                    raise RuntimeError("encounter has no valid controller action boundary")
-                waiting_for_player = operation.boundary.status == "waiting_for_human"
-                encounter_ended = operation.boundary.status == "encounter_ended"
+            # At most one accepted spending gesture; later clicks remain disabled.
+            # A read-only preview already on the pipe may finish first.
+            if connection.pending is None and queued_command is not None:
+                submit_request(connection, queued_command)
+                queued_command = None
+                waiting_for_player = False
+            if connection.pending is None and not waiting_for_player and not encounter_ended and len(operation_markers) < 2:
+                # One native operation of lookahead, never unbounded simulation
+                # while history is paused or a human decision is due.
+                submit_request(connection, AdvanceRequest(request_id=request_id, generation=latest.generation))
+                request_id += 1
+            elif connection.pending is None and waiting_for_player and not pending and active is None:
+                actor_uuid = historical.current_actor_uuid
+                if actor_uuid is None:
+                    raise RuntimeError("human boundary lacks its displayed turn owner")
+                if choices is None:
+                    submit_request(connection, DiscoverRequest(request_id=request_id, generation=latest.generation,
+                        actor_uuid=actor_uuid, force_attack=force_attack))
+                    request_id += 1
+                elif menu.active:
+                    desired = selection() if selection() not in preview_cache else hover_selection
+                    if desired is not None and desired not in preview_cache:
+                        submit_request(connection, PreviewRequest(request_id=request_id, generation=latest.generation,
+                            actor_uuid=actor_uuid, discovery_generation=choices.discovery_generation, selection=desired))
+                        request_id += 1
             await asyncio.sleep(0)
 
             started = False
@@ -812,19 +921,21 @@ async def _run(
                 deposited_materials=playback.deposited_materials,
                 revisions=(latest.reducer_cursor, latest.reducer_cursor, historical.reducer_cursor))
             interaction=scene.interaction or InteractionFrame()
-            ready=waiting_for_player and active is None and not pending and not paused and geometry.supported
-            if active is None and not pending and hud_pending:
-                hud=hud_pending[-1]
-                hud_pending.clear()
+            ready=(waiting_for_player and active is None and not pending and not paused and geometry.supported
+                and queued_command is None and (connection.pending is None or isinstance(connection.pending, PreviewRequest)))
+            while hud_pending and hud_pending[0][0] <= historical.reducer_cursor:
+                _, hud = hud_pending.popleft()
             immediate = tuple(row for rows, owner in log_pending if owner is None for row in rows)
             if immediate:
                 log_history=retain_logs(log_history,append_log_rows(immediate,reveal_ms=presentation_ms))
                 log_pending[:] = [(rows, owner) for rows, owner in log_pending if owner is not None]
+            ready=ready and active is None and not pending and command is None
             mouse=pygame.mouse.get_pos()
-            hover=None if any(rect.collidepoint(mouse) for rect in ui_frame.blocked) else pick_world(interaction,mouse)
+            hover=None if not ready or focus_ui.panel is not None or any(rect.collidepoint(mouse) for rect in ui_frame.blocked) else pick_world(interaction,mouse)
             highlights: list[tuple[WorldHit,tuple[int,int,int]]]=[]
             world_labels: list[UIHit]=[]
             hovered_target=None
+            hover_selection=None
             visible_tiles={position:tile for position,tile in displayed.tiles.items()
                 if displayed.senses is not None and position in displayed.senses.visible}
             if ready and menu.active and choices is not None:
@@ -837,10 +948,21 @@ async def _run(
                     hovered_target=target_at(preview.next_targets,hover) if hover is not None else None
                     values=targeting_values(menu,choices.all_actions[menu.selected_action])
                     points=tuple(target.position for target in values if target.position is not None)+menu.selected_positions
-                    draw_selection_preview(screen,preview,visible_tiles,camera,hovered_target,
+                    proposed=preview
+                    row=choices.all_actions[menu.selected_action]
+                    hover_selection = None
+                    if menu.selected_targets and hover is not None and hover.position in preview.next_positions:
+                        hover_selection = ActionSelection(menu.selected_action, menu.selected_targets,
+                            (*menu.selected_positions, (round(hover.position[0]),round(hover.position[1]))))
+                    elif hovered_target is not None:
+                        hover_selection = ActionSelection(menu.selected_action,
+                            (*menu.selected_targets, hovered_target.index), menu.selected_positions)
+                    if hover_selection is not None:
+                        proposed = preview_cache.get(hover_selection, preview)
+                    draw_selection_preview(screen,proposed,visible_tiles,camera,hovered_target,
                         selected=values,points=points if choices.all_actions[menu.selected_action].position_selection is not None else (),font=ui_fonts.small)
                     if hovered_target is not None and choices.all_actions[menu.selected_action].behavior_id=='action.move':
-                        draw_movement_preview(screen,hovered_target,choices.remaining_movement,visible_tiles,camera,ui_fonts.small)
+                        draw_movement_preview(screen,hovered_target,choices.remaining_movement,displayed.tiles,camera,ui_fonts.small)
             elif ready and choices is not None and hover is not None and focus_ui.panel is None and focus_ui.family is None and not focus_ui.context and not force_attack:
                 movement = None
                 if hover.kind=='ground':
@@ -854,10 +976,10 @@ async def _run(
                         approach=approach_action(choices,options[0])
                         movement=approach[1] if approach is not None else None
                 if movement is not None:
-                    draw_movement_preview(screen,movement,choices.remaining_movement,visible_tiles,camera,ui_fonts.small)
+                    draw_movement_preview(screen,movement,choices.remaining_movement,displayed.tiles,camera,ui_fonts.small)
             if hover is not None:
                 highlights.append((hover,GOLD))
-            if pygame.key.get_mods()&pygame.KMOD_ALT and choices is not None:
+            if ready and focus_ui.panel is None and pygame.key.get_mods()&pygame.KMOD_ALT and choices is not None:
                 subjects={str(option.subject_uuid) for option in choices.world_interactions}
                 seen=set()
                 for region in interaction.regions:
@@ -874,12 +996,28 @@ async def _run(
                                 discovery_generation=choices.discovery_generation))
             draw_highlights(screen,interaction,highlights)
             settled_end=encounter_ended and active is None and not pending
-            outcome='You survived' if historical.actors[observer.uuid].life_state is LifeState.ALIVE else 'You fell'
+            outcome='You survived' if historical.actors[observer_uuid].life_state is LifeState.ALIVE else 'You fell'
+            if menu.status != transient_status:
+                transient_status=menu.status
+                status_until_ms=ui_elapsed_ms+3000
+            elif menu.status and ui_elapsed_ms>=status_until_ms:
+                menu=replace(menu,status='')
+                transient_status=''
             status=f'Encounter complete · {outcome}' if settled_end else 'Paused' if paused else 'Your turn' if ready else 'Playing history'
             if menu.status and not menu.active:
                 status=menu.status
             if not geometry.supported:
                 status='Resize to at least 960 × 540'
+            bar_actor=displayed.actors.get(view_choices.entity_uuid) if view_choices is not None else None
+            blocks=action_blocks(view_choices,families,shortcuts.get(view_choices.entity_uuid,()) if view_choices else (),bar_actor)
+            geometry=layout(screen.get_size(),focus_ui.ui_scale,log_open=focus_ui.log_open,bar_counts=block_counts(blocks,bar_actor))
+            log_frame=UIFrame()
+            if focus_ui.log_open and focus_ui.panel is None:
+                log_frame,log_view=draw_combat_log(screen,geometry,ui_fonts,skin,log_history,log_view,log_layout,displayed,
+                    now_ms=presentation_ms,mouse=mouse)
+                log_hits_valid=True
+            else:
+                log_hits_valid=False
             ui_frame=draw_hud(screen,geometry,ui_fonts,skin,media,ui_images,displayed,hud,view_choices,
                 families,menu,focus_ui,preview,ready=ready,mouse=mouse,status=status,shown_hp=shown_hp,shortcuts=shortcuts.get(view_choices.entity_uuid,()) if view_choices is not None else ())
             if ui_frame.detail_scroll_max is not None:
@@ -887,25 +1025,32 @@ async def _run(
             rendered_focus=focus_ui
             if focus_ui.panel is None:
                 ui_frame=UIFrame((*tuple(world_labels),*ui_frame.hits),(*tuple(hit.rect for hit in world_labels),*ui_frame.blocked))
-            if focus_ui.log_open and focus_ui.panel is None:
-                log_frame,log_view=draw_combat_log(screen,geometry,ui_fonts,skin,log_history,log_view,log_layout,displayed,
-                    now_ms=presentation_ms,mouse=mouse)
-                ui_frame=UIFrame((*ui_frame.hits,*log_frame.hits),(*ui_frame.blocked,*log_frame.blocked))
-                log_hits_valid=True
-            else:
-                log_hits_valid=False
+            ui_frame=UIFrame((*log_frame.hits,*ui_frame.hits),(*log_frame.blocked,*ui_frame.blocked),ui_frame.detail_scroll_max,ui_frame.detail_scroll_rect)
             tooltip=()
             ui_hover=next((hit for hit in reversed(ui_frame.hits) if hit.rect.collidepoint(mouse)),None)
+            if ready and focus_ui.panel is None and not focus_ui.context and not menu.active:
+                source=next((hit.rect for hit in ui_frame.hits if hit.verb=='family' and hit.index==focus_ui.family),None)
+                options=[hit.rect for hit in ui_frame.hits if hit.verb in ('variant','variant_pick')]
+                popup=options[0].unionall(options[1:]).inflate(round(12*geometry.scale),round(12*geometry.scale)) if options else None
+                bridge=pygame.Rect(min(source.left,popup.left),popup.bottom,max(source.right,popup.right)-min(source.left,popup.left),
+                    max(0,source.top-popup.bottom)) if source is not None and popup is not None else None
+                crossing=focus_ui.hover_family and bridge is not None and bridge.collidepoint(mouse)
+                if not crossing and ui_hover is not None and ui_hover.verb=='family' and ui_hover.enabled and view_choices is not None and family_has_choices(view_choices,families[ui_hover.index]):
+                    if focus_ui.family!=ui_hover.index:
+                        focus_ui=replace(focus_ui,family=ui_hover.index,hover_family=True,variant_index=None,popup_scroll=0)
+                elif focus_ui.hover_family and not crossing and not any(rect is not None and rect.collidepoint(mouse) for rect in (source,popup)):
+                    focus_ui=replace(focus_ui,family=None,hover_family=False)
             if ui_hover is not None and view_choices is not None:
                 if ui_hover.verb=='family':
                     row=view_choices.all_actions[families[ui_hover.index].indices[0]]
-                    tooltip=(row.display_name,variant_label(row),cost_label(row),row.description,
-                        row.availability_status.value.replace('_',' ') if not row.valid_targets else '')
-                elif ui_hover.verb=='variant':
+                    if focus_ui.family!=ui_hover.index:
+                        tooltip=(row.display_name,variant_label(row),cost_label(row),row.description,
+                            row.availability_status.value.replace('_',' ') if not row.valid_targets else '')
+                elif ui_hover.verb in ('variant','variant_pick'):
                     row=view_choices.all_actions[ui_hover.index]
                     tooltip=(row.display_name,variant_label(row),cost_label(row),row.description,
                         row.availability_status.value.replace('_',' ') if not row.valid_targets else '')
-                elif ui_hover.label:
+                elif ui_hover.label and ui_hover.verb not in ('confirm','cancel'):
                     tooltip=(ui_hover.label,)
             elif hover is not None:
                 actor=displayed.actors.get(UUID(hover.identity)) if hover.kind=='actor' else None
@@ -915,6 +1060,30 @@ async def _run(
                 elif obj is not None:
                     options=world_options(choices,hover) if choices is not None else ()
                     tooltip=(obj.item.name,*tuple(option.label+(f' · {option.reason}' if option.reason else '') for option in options))
+            if focus_ui.panel=='inventory' and ui_hover is not None and ui_hover.verb=='equipment_slot' and ui_hover.equipment_slot!=focus_ui.equipment_slot:
+                focus_ui=replace(focus_ui,equipment_slot=ui_hover.equipment_slot,item_detail_scroll=0)
+            next_cursor=pygame.SYSTEM_CURSOR_ARROW
+            if ui_hover is not None:
+                next_cursor=(pygame.SYSTEM_CURSOR_ARROW if ui_hover.verb in ('bar_label','surface') else pygame.SYSTEM_CURSOR_IBEAM if ui_hover.verb=='log_text' else
+                             pygame.SYSTEM_CURSOR_HAND if ui_hover.enabled else pygame.SYSTEM_CURSOR_NO)
+            elif hover is not None and choices is not None and ready:
+                if menu.active:
+                    next_cursor=pygame.SYSTEM_CURSOR_CROSSHAIR if hovered_target is not None or (preview is not None and hover.kind=='ground' and (round(hover.position[0]),round(hover.position[1])) in preview.next_positions) else pygame.SYSTEM_CURSOR_NO
+                elif force_attack or hover.kind=='actor':
+                    attack=(main_attack(choices,UUID(hover.identity),focus_ui.attack_preference)
+                            if hover.kind in ('actor','object') else None)
+                    next_cursor=(pygame.SYSTEM_CURSOR_CROSSHAIR if attack is not None else
+                                 pygame.SYSTEM_CURSOR_HAND if not force_attack and hover.kind=='actor' else pygame.SYSTEM_CURSOR_NO)
+                elif hover.kind=='ground':
+                    next_cursor=pygame.SYSTEM_CURSOR_ARROW if move_to(choices,(round(hover.position[0]),round(hover.position[1]))) is not None else pygame.SYSTEM_CURSOR_NO
+                else:
+                    options=world_options(choices,hover)
+                    next_cursor=(pygame.SYSTEM_CURSOR_HAND if any(admitted_world_actions(choices,option) or approach_action(choices,option) is not None for option in options)
+                                 else pygame.SYSTEM_CURSOR_NO)
+            if next_cursor!=cursor:
+                cursor=next_cursor
+                if pygame.display.get_driver()!='dummy':
+                    pygame.mouse.set_cursor(cursor)
             tooltip=tuple(line for line in tooltip if line)
             if tooltip!=tooltip_lines:
                 tooltip_lines=tooltip;hover_since=ui_elapsed_ms
@@ -923,10 +1092,11 @@ async def _run(
                 draw_tooltip(screen,geometry,ui_fonts,skin,focus_ui.pinned_tooltip,focus_ui.tooltip_position)
             elif ui_elapsed_ms-hover_since>=350:
                 draw_tooltip(screen,geometry,ui_fonts,skin,tooltip_lines,tooltip_point)
+            screen.blit(fps_caption, (8, 6))
             pygame.display.flip()
             if collect_frames:
                 frames.append(GameFrame(
-                    frame, latest.reducer_cursor, historical.reducer_cursor, len(pending),
+                    frame, observer_uuid, latest.reducer_cursor, historical.reducer_cursor, len(pending),
                     active.root.uuid if active is not None else None, elapsed_ms, paused, ready and not paused,
                     tuple((actor.contact.actor_uuid, actor.contact.grid) for actor in actors),
                     tuple((actor.contact.actor_uuid, shown_hp.get(actor.contact.actor_uuid, actor.contact.hp)) for actor in actors),
@@ -935,6 +1105,8 @@ async def _run(
                 pygame.image.save(screen, capture_dir / f"frame-{frame:05}.png")
             if active is not None and complete and not paused:
                 historical = after
+                while operation_markers and operation_markers[0] <= historical.reducer_cursor:
+                    operation_markers.popleft()
                 assert active_group is not None
                 settled = tuple(row for rows, owner in log_pending if owner == active_group.primary.root.uuid for row in rows)
                 if settled:
@@ -953,7 +1125,8 @@ async def _run(
         return GameSummary(latest, historical, tuple(frames), tuple(retained), issued, tuple(gaps), encounter_ended,
                            restart_requested)
     finally:
-        close_session(session)
+        if connection is not None:
+            close_runtime(connection)
         pygame.quit()
 
 
@@ -966,6 +1139,7 @@ def run(
     stop_after_commands: int | None = None,
     exit_when_ended: bool = False, collect_frames: bool = False,
     player_builds: tuple[CharacterBuild,...] | None = None, fullscreen: bool = False,
+    test_seed: int | None = None,
     player_positions: tuple[tuple[int, int], tuple[int, int]] = ((10, 10), (10, 12)),
     enemy_positions: tuple[tuple[int, int], tuple[int, int]] = ((14, 10), (14, 12)),
 ) -> GameSummary:
@@ -979,5 +1153,5 @@ def run(
         window_size=window_size, quadrant=quadrant, capture_dir=capture_dir,
         player_input=player_input, capture_every=capture_every, stop_after_commands=stop_after_commands,
         exit_when_ended=exit_when_ended, collect_frames=collect_frames, encounter_id=encounter_id,
-        player_positions=player_positions, enemy_positions=enemy_positions,player_builds=player_builds,fullscreen=fullscreen,
+        player_positions=player_positions, enemy_positions=enemy_positions,player_builds=player_builds,fullscreen=fullscreen, test_seed=test_seed,
     ))

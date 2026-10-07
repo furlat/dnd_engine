@@ -110,6 +110,9 @@ class SpatialConditionOwner(Protocol):
     @property
     def spatial_suppressions(self) -> Tuple[SpellSuppression, ...]: ...
 
+    @property
+    def observation_revision(self) -> int: ...
+
     def is_hazardous_for(
         self, entity_uuid: Optional[UUID] = None, *,
         occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND,
@@ -2525,9 +2528,13 @@ class GridMap:
         subjective: bool = False,
         origin: Optional[Tuple[int, int]] = None,
     ) -> Optional[Tuple[int, int]]:
-        """Find a hand-use contact without expanding manual interaction reach."""
+        """Use the object's native contact range from its registered surface."""
+        provider = BaseBlock.get(object_uuid)
+        if provider is None:
+            return None
+        reach = provider.get_manual_contact_range()
         return self.attack_object_contact(requester_uuid, object_uuid,
-            range_feet=5, access=access, subjective=subjective, origin=origin)
+            range_feet=reach, access=access, subjective=subjective, origin=origin)
 
     def attack_object_contact(
         self, requester_uuid: UUID, object_uuid: UUID, *,

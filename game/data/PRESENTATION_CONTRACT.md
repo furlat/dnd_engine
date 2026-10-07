@@ -1517,6 +1517,21 @@ native world, and are evaluated at the displayed XYZ during movement. These gran
 the ground nor its occupants, and do not establish a hidden protection provider.
 Full `visible_volume_positions` retains its existing meaning.
 
+For a controlled party, independent complete plane rows at one cell are
+alternatives (OR); planes within each row remain conjunctive (AND). The public
+sequence v3 retains member sensory deltas and one stable `PlayerAudience`; v2
+singleton archives acquire their singleton audience at the decode boundary.
+`PerceivedSpatialEffect.owner_revision` is the spatial owner's monotonically
+increasing change revision, preserved through visibility-only refreshes. It is
+not the sensory update's cause or cursor. Only observations of the same owner
+revision and compatible coordinate/state values may combine footprint and
+suppression cells. Legacy observations without this field select one complete
+observation. Empty ground confirms absence only for an effect whose native
+observation explicitly guarantees apparent presence, or for a previously known
+footprint removed by that same member's new observation. A companion failing
+to discover a concealed trap cannot erase the party's discovery. Qualified
+absence retires only the observed cells, preserving uncertain hidden memory.
+
 Native perception derives conservative clearance over finite structural boundaries
 from the observer's support elevation. Existing range, first-surface, lighting and
 other-owner obscuration checks still apply. Current grants expire on perception

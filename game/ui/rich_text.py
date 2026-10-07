@@ -86,6 +86,17 @@ def wrap_spans(spans: tuple[TextSpan, ...], normal: pygame.font.Font,
             if used and used + size > width and not run.isspace():
                 lines.append([])
                 used = 0
+            if size <= max(1, width) and used + size <= max(1, width):
+                # Measure and place a fitting word as one run. Summing glyph
+                # widths loses kerning and can split an otherwise fitting word.
+                if lines[-1] and lines[-1][-1].color == span.color and lines[-1][-1].bold == span.bold:
+                    previous = lines[-1][-1].text
+                    lines[-1][-1] = replace(lines[-1][-1], text=previous + run)
+                    used += font.size(previous + run)[0] - font.size(previous)[0]
+                else:
+                    lines[-1].append(replace(span, text=run))
+                    used += size
+                continue
             for char in run:
                 size = font.size(char)[0]
                 if used and used + size > max(1, width):
@@ -102,10 +113,14 @@ def wrap_spans(spans: tuple[TextSpan, ...], normal: pygame.font.Font,
 
 def draw_spans(screen: pygame.Surface, lines: tuple[tuple[TextSpan, ...], ...],
                normal: pygame.font.Font, bold: pygame.font.Font,
-               position: tuple[int, int], *, muted: bool = False) -> None:
+               position: tuple[int, int], *, muted: bool = False, shadow: bool = False) -> None:
     for row, spans in enumerate(lines):
         x, y = position[0], position[1] + row * normal.get_linesize()
         for span in spans:
+            if shadow:
+                outline=(bold if span.bold else normal).render(span.text,True,(9,12,16))
+                for dx,dy in ((-1,0),(1,0),(0,-1),(0,1)):
+                    screen.blit(outline,(x+dx,y+dy))
             image = (bold if span.bold else normal).render(span.text, True, MUTED if muted else span.color)
             screen.blit(image, (x, y))
             x += image.width

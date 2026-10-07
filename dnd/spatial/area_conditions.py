@@ -66,6 +66,7 @@ class SpatialCondition(BaseCondition):
         description="Authoritative anchor position.",
     )
     affected_positions: Set[Tuple[int, int]] = Field(default_factory=set)
+    observation_revision: int = Field(default=0, ge=0, exclude=True)
     layer: SpatialEffectLayer
     occupancy_policy: SpatialEffectOccupancyPolicy
     anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.FIXED_POSITION
@@ -149,6 +150,7 @@ class SpatialCondition(BaseCondition):
         return PerceivedSpatialEffect(
             content_ref=self.content_ref, name=self.name, description=self.description,
             positions=tuple(sorted(positions)),
+            apparent_presence=self.condition_stealth_dc is None,
             anchor_position=self.position if self.position in positions else None,
             anchor_elevation_steps=get_map().get_support_elevation_feet(self.position)//5 if self.position in positions else None,
             anchor_item_uuid=(self.anchor_uuid if self.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT
@@ -377,6 +379,7 @@ class SpatialCondition(BaseCondition):
                 raise RuntimeError("Admitted incumbent disappeared")
             _, remaining = self._displaced_footprints[incumbent_uuid]
             incumbent.affected_positions = set(remaining)
+            incumbent.observation_revision += 1
             if remaining:
                 grid.set_spatial_condition_positions(
                     condition=incumbent,
@@ -450,6 +453,7 @@ class SpatialCondition(BaseCondition):
                 continue
             original, _ = self._displaced_footprints[incumbent_uuid]
             incumbent.affected_positions = set(original)
+            incumbent.observation_revision += 1
             grid.set_spatial_condition_positions(
                 condition=incumbent,
                 layer=incumbent.layer,
@@ -553,6 +557,7 @@ class SpatialCondition(BaseCondition):
             for cell in self.affected_positions
         }
         self.position = position
+        self.observation_revision += 1
         try:
             return self.change_footprint(
                 translated or {position},
@@ -560,6 +565,7 @@ class SpatialCondition(BaseCondition):
             )
         except BaseException:
             self.position = previous_anchor
+            self.observation_revision += 1
             raise
 
     def activate(
@@ -637,6 +643,7 @@ class SpatialCondition(BaseCondition):
             positions=normalized,
         )
         self.affected_positions = normalized
+        self.observation_revision += 1
         if self.magical_origin and not self.antimagic_exempt():
             self.spatial_suppressions = (*tuple(row for row in self.spatial_suppressions if not row.antimagic),
                 *SpellProtectionRegistry.get_antimagic_suppressions(normalized))
@@ -678,6 +685,8 @@ class SpatialCondition(BaseCondition):
         publish: bool = True,
     ) -> SpatialEffectChangeEvent:
         """Publish the non-vetoable phases that directly cause a spatial change."""
+        if operation is not SpatialEffectChangeOperation.FOOTPRINT_CHANGED:
+            self.observation_revision += 1
         declaration = SpatialEffectChangeEvent(
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
@@ -1110,6 +1119,7 @@ class AreaCondition(SpatialCondition):
         previous_position = self.position
         previous_suppressions = self.spatial_suppressions
         self.position = position
+        self.observation_revision += 1
         try:
             grid = get_map()
             positions = {
@@ -1122,6 +1132,7 @@ class AreaCondition(SpatialCondition):
         except BaseException:
             self.position = previous_position
             self.spatial_suppressions = previous_suppressions
+            self.observation_revision += 1
             raise
 
     def _protection_spell_level(self) -> Optional[int]:
@@ -1546,6 +1557,7 @@ class AreaCondition(SpatialCondition):
             positions=normalized,
         )
         self.affected_positions = normalized
+        self.observation_revision += 1
         if self.magical_origin and not self.antimagic_exempt():
             self.spatial_suppressions = (*tuple(row for row in self.spatial_suppressions if not row.antimagic),
                 *SpellProtectionRegistry.get_antimagic_suppressions(normalized))

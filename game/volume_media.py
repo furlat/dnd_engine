@@ -84,6 +84,8 @@ def observed_support_heights(x: np.ndarray, z: np.ndarray, supports: tuple[World
     ix, iz = cx-x0, cz-z0
     inside = (ix >= 0) & (iz >= 0) & (ix < heights.shape[0]) & (iz < heights.shape[1])
     ix, iz = np.clip(ix, 0, heights.shape[0]-1), np.clip(iz, 0, heights.shape[1]-1)
+    if not np.any(gradients):
+        return np.where(inside, heights[ix, iz], np.nan)
     dx, dz = x-cx, z-cz
     gx = gradients[ix, iz, np.where(dx >= 0, 0, 1)]
     gz = gradients[ix, iz, np.where(dz >= 0, 2, 3)]
@@ -268,7 +270,14 @@ def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
         for origin in origins:
             reachable |= _visible_from(origin, x, z, segments)
         keep &= reachable
-    if volume.supports:
+    # A support sampler is unnecessary when every owned sample is already
+    # above the highest disclosed support. Progressive edges interpolate
+    # within those support heights, so this preserves the exact physical cut.
+    support_top = max((tile.elevation_steps for tile in volume.supports), default=-float("inf"))
+    supports_can_clip = (volume.supports
+        and (volume.support_clipping != "raised" or support_top > volume.elevation + dh + .001)
+        and np.min(height, where=owned, initial=float("inf")) < support_top - .001)
+    if supports_can_clip:
         floor_height = observed_support_heights(x, z, volume.supports)
         below = height < floor_height - .001
         if volume.support_clipping == "raised":

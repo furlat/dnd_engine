@@ -9,6 +9,8 @@ from dnd.actions_functional import execute_by_index, get_available_actions, setu
 from dnd.blocks.base_item import ItemResourceChangeEvent
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.content.characters.premades import create_premade_character, FIGHTER_PREMADE_ID, SORCERER_PREMADE_ID
+from dnd.conditions import Blinded
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventPhase, EventQueue, TemporaryHitPointsChangedEvent
 from dnd.core.item_types import ItemResourceChange
@@ -22,6 +24,12 @@ from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, RecordedSequence, capture_history
+from game.audience import PlayerAudience
+from game.animation_data import load_animation_data
+from game.player_projection import begin_projection, project_lineage
+from game.player_reduction import reduce_initialization
+from game.presentation import capture_lineages
+from game.scene_actors import scene_actors
 
 
 def test_false_life_records_parented_temporary_hp_for_passive_player_replay() -> None:
@@ -144,3 +152,45 @@ def test_consumed_potion_updates_only_recorded_owned_inventory(stack_count: int)
     for root in other_roots:
         other = reduce_lineage(other, root)
     assert other.actors[before.observer_uuid].controlled_items is None
+
+
+@pytest.mark.parametrize("split, lose_sight", ((False, False), (True, False), (False, True)))
+def test_party_potion_replay_retains_both_controlled_bodies(split: bool, lose_sight: bool) -> None:
+    reset_engine_runtime()
+    battlefield = "battlefield.visibility_doorway_closed" if split else "battlefield.open_floor_bright"
+    build_battlefield(battlefield)
+    game = Game()
+    try:
+        watcher = create_premade_character(FIGHTER_PREMADE_ID, faction="heroes", position=(5, 7))
+        drinker = create_premade_character(SORCERER_PREMADE_ID, faction="heroes", position=(8, 7))
+        for actor in (watcher, drinker):
+            game.deploy_entity(actor, actor.position)
+        audience = PlayerAudience((watcher.uuid, drinker.uuid), (watcher.uuid, drinker.uuid))
+        cursor = EventQueue.event_cursor()
+        projection, initialization = begin_projection(capture_interval(name="party before potion",
+            start_cursor=0, end_cursor=cursor, observer_uuid=watcher.uuid, audience=audience,
+            battlefield_id=battlefield))
+        before = reduce_initialization(initialization)
+        if lose_sight:
+            assert not watcher.add_condition(Blinded(source_entity_uuid=watcher.uuid,
+                target_entity_uuid=watcher.uuid)).canceled
+        choices = get_available_actions(drinker)
+        row = next(row for row in choices.all_actions if row.behavior_id == "action.item.potion_haste.drink" and row.valid_targets)
+        result = execute_by_index(drinker, row.template_name, row.valid_targets[0].index, available=choices)
+        assert result is not None and not result.canceled
+        roots = tuple(event for _, event in EventQueue.iter_events_since(cursor)
+            if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
+        lineages = tuple(value for native in capture_lineages(roots, observer_uuid=watcher.uuid,
+            audience=audience, known_actor_uuids=frozenset(before.actors))
+            if (value := project_lineage(projection, native)) is not None)
+        expected = {str(actor.uuid): actor.position for actor in (watcher, drinker)}
+    finally:
+        game.close()
+        reset_engine_runtime()
+    data = load_animation_data()
+    after = before
+    for lineage in lineages:
+        after = reduce_lineage(after, lineage)
+        assert {actor.contact.actor_uuid: actor.contact.grid for actor in scene_actors(after, data, {})} == expected
+    assert any(condition.name == "Haste" for condition in after.actors[drinker.uuid].conditions)
+    assert {str(actor.uuid): actor.last_visual_position for actor in after.actors.values()} == expected

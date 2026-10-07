@@ -11,7 +11,7 @@ from dnd.subjective_combat_log import project_combat_log
 from dnd.core.events import EventQueue
 from game.presentation import capture_interval
 from game.player_facts import PlayerSequence
-from game.player_projection import project_sequence
+from game.player_projection import project_sequence, begin_projection
 from game.player_reduction import encode_player_sequence, decode_player_sequence, reduce_initialization
 from game.replay import RecordedSequence
 from game.session import (advance_controller, close_session, create_session, discover_player_actions,
@@ -64,17 +64,19 @@ def test_visible_other_immunity_is_original_projected_append(session):
     result = other.add_condition(Poisoned(source_entity_uuid=actor.uuid, target_entity_uuid=other.uuid))
     assert result.canceled
     operation = end_player_turn(session, actor.uuid)
-    assert len(operation.combat_log_appends) == 1
-    append = operation.combat_log_appends[0]
+    appends=tuple(row for row in operation.combat_log_appends if row.observer_uuid==observer.uuid)
+    assert len(appends)==1
+    assert {row.observer_uuid for row in operation.combat_log_appends}==set(session.player_uuids)
+    append = appends[0]
     assert append.entry.target_uuid == str(other.uuid) and "immune" in append.entry.compact
     assert append.operation_end_cursor == operation.end_cursor
     assert append.entry.compact == session.encounter.combat_log[append.encounter_log_index].compact
     initial = capture_interval(name="append packet", start_cursor=0, end_cursor=operation.end_cursor,
         observer_uuid=session.player_uuids[0], battlefield_id=session.battlefield.definition.battlefield_id)
     packet = project_sequence(RecordedSequence(initialization=initial, lineages=(),
-        combat_log_appends=operation.combat_log_appends))
+        combat_log_appends=appends))
     restored = PlayerSequence.model_validate_json(encode_player_sequence(packet))
-    assert restored.combat_log_appends == operation.combat_log_appends
+    assert restored.combat_log_appends == appends
 
 
 def test_hud_and_standalone_append_roundtrip_with_old_packet_defaults(session):
@@ -112,8 +114,33 @@ def test_nonvisual_immunity_uses_original_native_disclosure_policy(session):
                                  observer_entity_uuids=frozenset({str(observer.uuid)}))
     # Native contact can identify an invisible actor through nonvisual senses.
     # The adapter preserves this policy instead of granting visual access or suppressing real logs.
+    appends=tuple(row for row in operation.combat_log_appends if row.observer_uuid==observer.uuid)
     if expected is None:
-        assert not operation.combat_log_appends
+        assert not appends
     else:
-        assert len(operation.combat_log_appends) == 1
-        assert operation.combat_log_appends[0].entry.model_dump() == expected.model_dump()
+        assert len(appends)==1
+        assert appends[0].entry.model_dump()==expected.model_dump()
+
+
+def test_separated_party_keeps_roster_without_sharing_spatial_or_inventory_facts():
+    value=create_session(encounter_id='encounter.lantern_crypt')
+    try:
+        first,second=(value.game.entities[identity] for identity in value.player_uuids)
+        Entity.update_entity_position(second,(14,6))
+        Entity.update_all_entities_senses()
+        enemies=set(value.enemy_controller.controlled_entity_uuids)
+        assert not any(contact.visual for identity,contact in first.senses.entities.items() if identity in enemies)
+        assert any(contact.visual for identity,contact in second.senses.entities.items() if identity in enemies)
+        for observer,other in ((first,second),(second,first)):
+            snapshot=snapshot_player_hud(value,observer.uuid)
+            assert {sheet.actor_uuid for sheet in snapshot.sheets}==set(value.player_uuids)
+            assert all(sheet.name and sheet.portrait_key and sheet.maximum_hp for sheet in snapshot.sheets)
+            initial=capture_interval(name='Separated party',start_cursor=0,end_cursor=EventQueue.event_cursor(),
+                observer_uuid=observer.uuid,battlefield_id=value.battlefield.definition.battlefield_id)
+            _,packet=begin_projection(initial)
+            state=reduce_initialization(replace(packet,hud_snapshot=snapshot))
+            assert state.actors[observer.uuid].controlled_items is not None
+            assert other.uuid not in state.actors or state.actors[other.uuid].controlled_items is None
+            assert state.hud_snapshot.observer_uuid==observer.uuid
+    finally:
+        close_session(value)

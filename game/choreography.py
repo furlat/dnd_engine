@@ -1783,6 +1783,13 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             spatial_causal_producers[event.lineage_uuid] = tuple(dict.fromkeys(causal_producers))
             commit_milestones[event.lineage_uuid] = max(max(dates),
                 commit_milestones.get(event.lineage_uuid, 0.))
+    # A later sibling can republish an object's destroyed after-value (for
+    # example an item-effect update). Its complete received snapshot must
+    # respect the same clearance as the destruction that preceded it natively.
+    object_clearances = tuple((event.fact.object_uuid, order[event.uuid],
+        TimingOperand(TimingReference('event', event.uuid, 'clearance'), destruction_state_times[event.uuid]))
+        for event in lineage.events if isinstance(event.fact, ObjectDestroyedFact)
+        and event.uuid in destruction_state_times)
     dated_nodes = []
     for at, node in state_nodes:
         fact = node.fact
@@ -1812,12 +1819,13 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             if obj is not None and obj.item.construction_owner_uuid is not None:
                 removed.add(obj.item.construction_owner_uuid)
         base_at = at
-        at = max((at, *(formation_commits[owner] for owner in owners if owner in formation_commits),
-                  *(removal_commits[owner] for owner in removed if owner in removal_commits)))
-        commit_milestones[node.lineage_uuid] = max(at, commit_milestones.get(node.lineage_uuid, at))
         owner_inputs = tuple(timing_operand(formation_producers[owner]) for owner in sorted(owners, key=str)
             if owner in formation_producers) + tuple(timing_operand(removal_producers[owner])
-            for owner in sorted(removed, key=str) if owner in removal_producers)
+            for owner in sorted(removed, key=str) if owner in removal_producers) + tuple(
+                operand for identity, source_order, operand in object_clearances
+                if identity in owners | removed and source_order <= order[node.uuid])
+        at = max((at, *(operand.at_ms for operand in owner_inputs)))
+        commit_milestones[node.lineage_uuid] = max(at, commit_milestones.get(node.lineage_uuid, at))
         if owner_inputs:
             event_producers[node.uuid] = len(timing_evidence)
             timing_evidence.append(TimingEvidence(len(timing_evidence), TimingReference('event', node.uuid, 'commit'),

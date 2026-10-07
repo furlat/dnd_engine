@@ -47,7 +47,7 @@ class ActionVariantFacet(BaseModel):
     """One action-owned choice exposed without parsing execution tokens."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    key: Literal["form", "side", "radius", "ability", "damage_type", "movement", "width"]
+    key: Literal["form", "side", "radius", "ability", "damage_type", "movement", "width", "rank"]
     value: str
     label: str
 

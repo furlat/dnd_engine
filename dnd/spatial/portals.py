@@ -96,6 +96,7 @@ class Portal(SpatialCondition):
             previous_positions=positions, affected_positions=positions,
             parent_event=parent_event, trap_state=state, previous_trap_state=self.trap_state)
         self.trap_state = state
+        self.observation_revision += 1
         if state is TrapState.ACTIVATED:
             self.condition_stealth_dc = None
         self._complete_change(effect)

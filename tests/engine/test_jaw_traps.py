@@ -16,7 +16,7 @@ from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemoval
 from dnd.core.base_actions import ActionEvent
 from dnd.core.condition_types import ConditionTag
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, MechanismActivationEvent, Trigger
+from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, MechanismActivationEvent, SensoryUpdateEvent, Trigger
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -374,3 +374,29 @@ def test_antimagic_of_independent_restraint_preserves_mundane_capture_in_both_or
     assert target.active_conditions["Restrained"].uuid == standalone.uuid
     assert target.remove_condition_by_uuid(standalone.uuid)
     assert "Restrained" not in target.active_conditions and target.action_economy.movement_remaining() == 30
+
+
+def test_jaw_callback_observation_has_activation_revision(arena):
+    target = actor(arena)
+    jaw = materialize_jaw_trap(target.position)
+    ready = target.senses.spatial_effects[jaw.uuid]
+    assert ready.trap_state is TrapState.READY
+    observed = []
+
+    def during_save(event, source_uuid):
+        target.update_entity_senses()
+        observed.append(target.senses.spatial_effects[jaw.uuid])
+        return None
+
+    EventQueue.add_event_handler(EventHandler(name="Observe trap during save", source_entity_uuid=target.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.SAVING_THROW, event_phase=EventPhase.DECLARATION)],
+        event_processor=during_save))
+    cursor = EventQueue.event_cursor()
+    assert pulse(jaw, 1, 4).committed
+    assert observed and all(row.trap_state is TrapState.ACTIVATED for row in observed)
+    assert all(row.owner_revision > ready.owner_revision for row in observed)
+    recorded = [row.spatial_effects_changed[jaw.uuid]
+        for _, row in EventQueue.iter_events_since(cursor)
+        if isinstance(row, SensoryUpdateEvent) and row.observer_uuid == target.uuid
+        and jaw.uuid in row.spatial_effects_changed]
+    assert any(row.owner_revision == observed[0].owner_revision for row in recorded)

@@ -1065,6 +1065,7 @@ class SpikeTrap(SpatialCondition):
             previous_trap_state=self.trap_state,
         )
         self.trap_state = state
+        self.observation_revision += 1
         if state is TrapState.ACTIVATED:
             self.reveal(parent_event=effect)
             occupants = {identity for position in positions

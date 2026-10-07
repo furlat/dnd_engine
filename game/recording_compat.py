@@ -55,6 +55,19 @@ def legacy_damage_reference(event_uuid: UUID, lineage_uuid: UUID,
 
 
 def upgrade_player_sequence(value: object) -> object:
+    """Convert old singleton packets once, before the current reducer reads them."""
+    upgraded = _upgrade_causality(value)
+    if not isinstance(upgraded, dict) or upgraded.get("schema_version") != 2:
+        return upgraded
+    def with_audience(group: dict[str, Any]) -> dict[str, Any]:
+        identity = group["observer_uuid"]
+        return {**group, "audience": {"controlled": [identity], "observers": [identity], "revision": 0}}
+    return {**upgraded, "schema_version": 3,
+        "initialization": with_audience(upgraded["initialization"]),
+        "lineages": [with_audience(group) for group in upgraded["lineages"]]}
+
+
+def _upgrade_causality(value: object) -> object:
     """One passive archive boundary; never infer undisclosed damage causality."""
     if not isinstance(value, dict) or value.get("schema_version", 1) == 2:
         return value

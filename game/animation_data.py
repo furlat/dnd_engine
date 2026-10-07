@@ -247,9 +247,11 @@ def _root_body_rig(rig: RigTables, resources: Mapping[str, Path], body_anchor: P
 
 
 def _additional_rigs(paths: tuple[Path, ...], data_root: Path,
-                     rigs: dict[str, BodyRig], resources: dict[str, Path], creature_rigs: dict[str, str]) -> None:
+                     rigs: dict[str, BodyRig], resources: dict[str, Path], creature_rigs: dict[str, str]) -> dict[Path, str]:
+    identities: dict[Path, str] = {}
     for binding_path in paths:
         binding = _RigBinding.model_validate_json(_read(binding_path))
+        identities[binding_path.resolve()] = binding.rig_id
         if binding.rig_id in rigs:
             raise ValueError(f"duplicate body rig identity: {binding.rig_id}")
         local = _local_resources(binding.resources, data_root)
@@ -264,6 +266,7 @@ def _additional_rigs(paths: tuple[Path, ...], data_root: Path,
                 raise ValueError(f"duplicate creature rig binding: {identity}")
             creature_rigs[identity] = binding.rig_id
         resources.update(local)
+    return identities
 
 
 def load_animation_data(data_root: Path = DATA_ROOT, *,
@@ -486,7 +489,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     rigs = {bindings.root_rig: _root_body_rig(rig, resources, bindings.root_body_anchor,
                                           bindings.root_rest_pose_anchors, pose_sockets)}
     creature_rigs = {identity: bindings.root_rig for identity in bindings.root_creature_content_refs}
-    _additional_rigs(rig_files, data_root, rigs, resources, creature_rigs)
+    loaded_rig_ids = _additional_rigs(rig_files, data_root, rigs, resources, creature_rigs)
     world = world_source if world_source is not None else WorldBindingsSource.model_validate_json(
         _read(DATA_ROOT.parent / "world_bindings.json"))
     spatial_media = {identity: explicit_spatial_composition(
@@ -617,8 +620,10 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         blood_responses=MappingProxyType(TypeAdapter(dict[str, BloodResponse | None]).validate_json(
             _read(DATA_ROOT.parent / "blood-responses.json"))),
     )
-    installed_rig_ids = frozenset(TypeAdapter(Identifier).validate_python(
-        json.loads(_read(path))["rig_id"]) for path in (data_root.parent / "rigs").glob("*.json"))
+    installed_rig_ids = frozenset(
+        loaded_rig_ids[path.resolve()] if path.resolve() in loaded_rig_ids else
+        TypeAdapter(Identifier).validate_python(json.loads(_read(path))["rig_id"])
+        for path in (data_root.parent / "rigs").glob("*.json"))
     for phase, recipe in data.entity_lifecycle_media.items():
         if (phase in ("arrival", "departure")) != (recipe.bodyFadeMs is not None):
             raise ValueError("arrival/departure require body markers; bond media never changes presence")

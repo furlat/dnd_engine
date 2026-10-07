@@ -10,7 +10,7 @@ from game.player_facts import PlayerState, PlayerHUDSnapshot, PlayerActor, Playe
 from game.ui.action_bar import ActionFamily, ActionFamilyKey, cost_label
 from game.ui.layout import UILayout
 from game.ui.media import UIPresentationCatalog, action_reference, item_reference, reference_label, actor_portrait_reference, ui_image
-from game.ui.primitives import UIFonts, GOLD, MUTED, TEXT, panel, text, button, wrap
+from game.ui.primitives import UIFonts, GOLD, MUTED, TEXT, BORDER, panel, text, button, wrap, icon_control
 from game.ui.skin import UISkin
 from game.ui.types import UIFocus, UIFrame, UIHit
 
@@ -42,7 +42,8 @@ def draw_panels(screen: pygame.Surface, geometry: UILayout, font: UIFonts, skin:
     library_rows=(library_families(actions,families,focus.library_filter,focus.search_text)
         if actions is not None and selected is not None and selected.uuid==actions.entity_uuid else ())
     handler_rows=(actions.handler_details if actions is not None and selected is not None and selected.uuid==actions.entity_uuid else ())
-    width=min(geometry.viewport.width-px(32),px(620 if focus.panel=='inventory' else 460))
+    left=geometry.party.right+px(16)
+    width=min(geometry.viewport.width-left-px(16),px(920 if focus.panel=='inventory' else 460))
     sheet_values=_sheet_lines(media,selected,sheet) if selected is not None else ()
     sheet_width=width-px(36+112)
     sheet_lines=tuple(line for value in sheet_values for line in wrap(value,font.body,max(px(80),sheet_width)))
@@ -50,9 +51,9 @@ def draw_panels(screen: pygame.Surface, geometry: UILayout, font: UIFonts, skin:
         px(80+min(6,max(1,len(handler_rows)))*60) if focus.panel=='reactions' else
         px(80)+max(px(128),len(sheet_lines)*font.body.get_linesize()) if focus.panel=='sheet' else
         px(100+min(6,max(4,len(selected.controlled_items or ()) if selected else 0))*53))
-    height=min(desired,max(px(180),geometry.vitals.top-px(112)))
-    rect=pygame.Rect(px(16),px(100),width,height)
-    panel(screen,rect,skin,scale=geometry.scale)
+    height=min(px(440),geometry.viewport.height-px(130)) if focus.panel=='inventory' else min(desired,max(px(180),geometry.vitals.top-px(112)))
+    rect=pygame.Rect(left,px(100),width,height)
+    panel(screen,rect,skin,scale=geometry.scale,mouse=mouse)
     title={'inventory':'Inventory','sheet':'Character','spellbook':'Abilities','reactions':'Automatic reactions'}[focus.panel]
     text(screen,font.heading,title+(f' — {selected.name}' if selected else ''),(rect.left+px(18),rect.top+px(16)),max_width=rect.width-px(90))
     hits=[button(screen,font.body,UIHit(pygame.Rect(rect.right-px(55),rect.top+px(12),px(38),px(32)),
@@ -92,10 +93,11 @@ def draw_panels(screen: pygame.Surface, geometry: UILayout, font: UIFonts, skin:
                 text(screen,font.small,reason,(row_rect.left+px(55),row_rect.top+px(29)),MUTED,max_width=row_rect.width-px(130))
                 hits.append(UIHit(row_rect,'family',index,label=row.description,enabled=own_turn,
                     discovery_generation=actions.discovery_generation))
-                pin=UIHit(pygame.Rect(row_rect.right-px(65),row_rect.top+px(9),px(60),px(30)),
-                    'pin',label='Unpin' if family.key in shortcuts else 'Pin',family_key=family.key,
-                    discovery_generation=actions.discovery_generation)
-                hits.append(button(screen,font.small,pin,mouse,skin,scale=geometry.scale))
+                if family.key.source_item_uuid is None:
+                    pin=UIHit(pygame.Rect(row_rect.right-px(65),row_rect.top+px(9),px(60),px(30)),
+                        'pin',label='Unpin' if family.key in shortcuts else 'Pin',family_key=family.key,
+                        discovery_generation=actions.discovery_generation)
+                    hits.append(button(screen,font.small,pin,mouse,skin,scale=geometry.scale))
             if not rows:
                 text(screen,font.body,'No matching abilities',(content.left,content.top+px(80)),MUTED)
         else:
@@ -104,7 +106,7 @@ def draw_panels(screen: pygame.Surface, geometry: UILayout, font: UIFonts, skin:
         inventory_hits,detail_scroll_max=_inventory(screen,content,font,skin,media,images,selected,sheet,actions,focus,
             ready=own_turn,mouse=mouse,scale=geometry.scale)
         hits.extend(inventory_hits)
-        detail_scroll_rect=pygame.Rect(content.left+content.width//2+px(6),content.top,content.width-content.width//2-px(6),content.height)
+        detail_scroll_rect=pygame.Rect(content.left+px(490),content.top,content.width-px(490),content.height)
     elif focus.panel=='sheet' and selected is not None:
         portrait=ui_image(media,actor_portrait_reference(media,selected),
             (px(96),px(128)),images,portrait=True,portrait_role='sheet')
@@ -114,7 +116,8 @@ def draw_panels(screen: pygame.Surface, geometry: UILayout, font: UIFonts, skin:
             content.left+=portrait.width+px(16)
         wrapped=tuple(line for value in sheet_values for line in wrap(value,font.body,content.width))
         start=min(focus.popup_scroll,max(0,len(wrapped)-content.height//font.body.get_linesize()))
-        for offset,line in enumerate(wrapped[start:]):
+        capacity=max(1,content.height//font.body.get_linesize())
+        for offset,line in enumerate(wrapped[start:start+capacity]):
             text(screen,font.body,line,(content.left,content.top+offset*font.body.get_linesize()),TEXT)
     elif focus.panel=='reactions':
         rows=handler_rows
@@ -164,24 +167,73 @@ def _inventory(screen: pygame.Surface, content: pygame.Rect, font: UIFonts, skin
     equipped={item.item_uuid:item.slot for item in actor.visual_loadout.layers}
     items=actor.controlled_items
     selected=next((item for item in items if item.item_uuid==focus.selected_item),items[0] if items else None)
-    visible=max(1,content.height//px(53))
-    start=min(focus.popup_scroll,max(0,len(items)-visible))
-    width=content.width//2-px(12)
-    for offset,item in enumerate(items[start:start+visible]):
-        rect=pygame.Rect(content.left,content.top+offset*px(53),width,px(48))
-        image=ui_image(media,item_reference(media,item.item_id),(px(40),px(40)),images)
-        if image is not None:
-            screen.blit(image,image.get_rect(center=(rect.left+px(21),rect.centery)))
-        text(screen,font.body,item.name+(f' ×{item.stack_count}' if item.stack_count>1 else ''),(rect.left+px(48),rect.top),max_width=width-px(48))
-        text(screen,font.small,equipped.get(item.item_uuid,'Carried').replace('_',' ').title(),(rect.left+px(48),rect.top+px(23)),GOLD if item.item_uuid in equipped else MUTED)
-        if selected is not None and selected.item_uuid==item.item_uuid:
-            pygame.draw.line(screen,GOLD,rect.bottomleft,rect.bottomright,max(1,px(1)))
-        hits.append(UIHit(rect,'inventory_item',identity=item.item_uuid,label=item.description or item.name))
+    gear=pygame.Rect(content.left,content.top,px(210),content.height)
+    cell=px(40);gap=px(8)
+    pairs=((BodyPart.HEAD,BodyPart.AMULET),(BodyPart.CLOAK,BodyPart.BODY),
+           (BodyPart.HANDS,BodyPart.LEGS),(RingSlot.LEFT,RingSlot.RIGHT),
+           (BodyPart.BACKPACK,BodyPart.FEET),(WeaponSlot.MELEE_MAIN,WeaponSlot.MELEE_OFF),
+           (WeaponSlot.RANGED_MAIN,WeaponSlot.RANGED_OFF))
+    portrait=ui_image(media,actor_portrait_reference(media,actor),(px(96),px(128)),images,
+        portrait=True,portrait_role='sheet')
+    if portrait is not None:
+        screen.blit(portrait,portrait.get_rect(midtop=(gear.centerx,gear.top+px(54))))
+    for row,pair in enumerate(pairs):
+        for side,slot in enumerate(pair):
+            rect=pygame.Rect(gear.left if side==0 else gear.right-cell,gear.top+row*(cell+gap),cell,cell)
+            layer=next((layer for layer in actor.visual_loadout.layers if layer.slot==slot.value),None)
+            image=ui_image(media,item_reference(media,layer.item_id),(28,28),images) if layer else None
+            icon_control(screen,rect,image,selected=focus.equipment_slot==slot,hover=rect.collidepoint(mouse),scale=scale)
+            if layer is None:
+                pygame.draw.circle(screen,BORDER,rect.center,max(1,px(2)))
+            name=next((item.name for item in items if layer is not None and item.item_uuid==layer.item_uuid),'Empty')
+            hits.append(UIHit(rect,'equipment_slot',equipment_slot=slot,label=slot.value.replace('_',' ').title()+' · '+name))
+    bag=pygame.Rect(gear.right+px(24),content.top,px(232),content.height)
+    cell=px(52);gap=px(5);columns=max(1,(bag.width+gap)//(cell+gap))
+    visible_rows=max(1,bag.height//(cell+gap))
+    start=min(focus.popup_scroll,max(0,(len(items)+columns-1)//columns-visible_rows))*columns
+    for offset,item in enumerate(items[start:start+columns*visible_rows]):
+        rect=pygame.Rect(bag.left+(offset%columns)*(cell+gap),bag.top+(offset//columns)*(cell+gap),cell,cell)
+        image=ui_image(media,item_reference(media,item.item_id),(28*max(1,int(scale)),28*max(1,int(scale))),images)
+        icon_control(screen,rect,image,selected=focus.equipment_slot is None and selected is not None and selected.item_uuid==item.item_uuid,
+            hover=rect.collidepoint(mouse),scale=scale)
+        if item.stack_count>1:
+            label=font.small.render(str(item.stack_count),True,TEXT)
+            screen.blit(label,label.get_rect(bottomright=(rect.right-px(3),rect.bottom-px(2))))
+        if item.item_uuid in equipped:
+            pygame.draw.circle(screen,GOLD,(rect.left+px(5),rect.top+px(5)),max(2,px(2)))
+        hits.append(UIHit(rect,'inventory_item',identity=item.item_uuid,label=item.name+'\n'+(item.description or '')))
+    x=content.left+px(490)
+    pygame.draw.line(screen,BORDER,(x-px(12),content.top),(x-px(12),content.bottom))
+    if focus.equipment_slot is not None:
+        slot=focus.equipment_slot
+        text(screen,font.body,slot.value.replace('_',' ').title(),(x,content.top),GOLD)
+        compatible={identity for identity,slots in sheet.compatible_item_slots if slot.value in slots} if sheet else set()
+        candidates=tuple(item for item in items if item.item_uuid in compatible)
+        maximum=max(0,len(candidates)*px(54)+px(75)-content.height)
+        y=content.top+px(38)-min(focus.item_detail_scroll,maximum)
+        for item in candidates:
+            rect=pygame.Rect(x,y,content.right-x,px(48))
+            current=equipped.get(item.item_uuid)==slot.value
+            if current or rect.collidepoint(mouse):
+                pygame.draw.rect(screen,(34,40,45),rect)
+            image=ui_image(media,item_reference(media,item.item_id),(28*max(1,int(scale)),28*max(1,int(scale))),images)
+            if image is not None:
+                screen.blit(image,image.get_rect(midleft=(rect.left+px(5),rect.centery)))
+            text(screen,font.small,item.name,(rect.left+px(45),rect.top+px(14)),GOLD if current else TEXT,max_width=rect.width-px(48))
+            hits.append(UIHit(rect,'equip',identity=item.item_uuid,equipment_slot=slot,
+                label=item.name,enabled=ready and not current))
+            y+=px(54)
+        if not candidates:
+            text(screen,font.small,'No compatible items',(x,y),MUTED)
+        equipped_layer=next((layer for layer in actor.visual_loadout.layers if layer.slot==slot.value),None)
+        if equipped_layer is not None:
+            control=UIHit(pygame.Rect(x,y+px(8),content.right-x,px(30)),'unequip',identity=equipped_layer.item_uuid,equipment_slot=slot,label='Unequip',enabled=ready)
+            hits.append(button(screen,font.small,control,mouse,skin,scale=scale))
+        return tuple(hits),maximum
     if selected is None:
         text(screen,font.body,'No items in inventory.',content.topleft,MUTED)
         return tuple(hits),0
-    x=content.left+content.width//2+px(6)
-    lines=[selected.name,selected.description or '',f'{selected.rarity.value.title()} · {selected.weight:g} lb']
+    lines=[selected.description or '',f'{selected.rarity.value.title()} · {selected.weight:g} lb']
     if selected.charges is not None:
         lines.append('Unlimited charges' if selected.charges<0 else f'Charges: {selected.charges}/{selected.max_charges}')
     if selected.damage_dice:
@@ -191,13 +243,18 @@ def _inventory(screen: pygame.Surface, content: pygame.Rect, font: UIFonts, skin
         if row.source_item_uuid==selected.item_uuid and row.interaction_affordance.surface!='world') if actions is not None else ()
     slot=equipped.get(selected.item_uuid)
     compatible=next((slots for identity,slots in sheet.compatible_item_slots if identity==selected.item_uuid),()) if sheet else ()
-    wrapped=tuple(line for value in lines for line in wrap(value,font.small,content.right-x))
+    wrapped=tuple(line for value in lines if value for line in wrap(value,font.small,content.right-x))
     controls=len(native_rows)+(1 if slot in _SLOTS else sum(value in _SLOTS for value in compatible))
-    maximum=max(0,len(wrapped)*font.small.get_linesize()+px(12)+controls*px(35)-content.height)
+    title_lines=wrap(selected.name,font.body,content.right-x)
+    title_height=len(title_lines)*font.body.get_linesize()+px(12)
+    maximum=max(0,title_height+len(wrapped)*font.small.get_linesize()+px(18)+controls*px(35)-content.height)
     y=content.top-min(focus.item_detail_scroll,maximum)
-    for line in wrapped:
-        text(screen,font.small,line,(x,y));y+=font.small.get_linesize()
+    for line in title_lines:
+        text(screen,font.body,line,(x,y),GOLD);y+=font.body.get_linesize()
     y+=px(12)
+    for line in wrapped:
+        text(screen,font.small,line,(x,y),MUTED);y+=font.small.get_linesize()
+    y+=px(18)
     # Item action variants still go through the same family/row selector.
     for index,row in native_rows:
         hit=UIHit(pygame.Rect(x,y,content.right-x,px(30)),'variant',index,

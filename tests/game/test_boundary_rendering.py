@@ -21,7 +21,6 @@ from dnd.types.world import CardinalDirection, LightLevel
 from game.app import (
     BACKGROUND,
     FrameEvidence,
-    _authored_treatment,
     _treatment,
     draw_frame,
 )
@@ -182,7 +181,7 @@ def test_every_owner_tile_wall_subset_has_exact_four_camera_composition(
     assert Counter(represented) == Counter(str(value) for value in object_uuids)
 
 
-def test_corner_coalescing_ignores_support_light_but_requires_equal_base_height(
+def test_corner_keeps_joined_geometry_and_observed_light_but_requires_equal_base_height(
     rendering,
     base_target,
 ) -> None:
@@ -215,7 +214,7 @@ def test_corner_coalescing_ignores_support_light_but_requires_equal_base_height(
     assert treatment_evidence is not None
     treatment_rows = _boundary_rows(treatment_evidence)
     assert [row[6] for row in treatment_rows] == ["wall_corner"]
-    assert treatment_rows[0][3:6] == ("current", None, "world.authored")
+    assert treatment_rows[0][3:6] == ("current", LightLevel.BRIGHT_LIGHT.value, "light.bright")
     assert isinstance(treatment_rows[0][0], tuple)
     assert Counter(treatment_rows[0][0]) == Counter(
         str(value) for value in treatment_uuids
@@ -341,15 +340,17 @@ def test_real_lodge_and_storehouse_use_matching_corners_and_straights(
     ][camera_pose("west", quadrant)]
 
 
-def test_current_composite_wall_uses_neutral_treatment_in_every_quadrant(
+@pytest.mark.parametrize("level", tuple(LightLevel))
+def test_current_wall_uses_observed_light_in_every_quadrant(
     rendering,
     base_target,
+    level,
 ) -> None:
     screen, catalog, cache = rendering
     target, (wall_uuid,) = _wall_target(
         base_target,
         (CardinalDirection.EAST,),
-        light_levels={OWNER: LightLevel.BRIGHT_LIGHT},
+        light_levels={OWNER: level},
     )
 
     rows = []
@@ -369,7 +370,7 @@ def test_current_composite_wall_uses_neutral_treatment_in_every_quadrant(
 
     assert all(row[0] == wall_uuid for row in rows)
     assert {row[3:6] for row in rows} == {
-        ("current", None, "world.authored")
+        ("current", level.value, catalog.bindings["treatments"][str(level.value)]["id"])
     }
     assert target.senses is not None
     assert (OWNER[0] + 1, OWNER[1]) not in target.senses.visible
@@ -407,6 +408,41 @@ def test_memory_only_composite_wall_keeps_memory_treatment(
     row = _boundary_rows(evidence)[0]
     assert row[0] == wall_uuid
     assert row[3:6] == ("memory", None, "memory.seen")
+
+
+@pytest.mark.parametrize("kind", ("wall", "door"))
+@pytest.mark.parametrize("quadrant", range(4))
+def test_boundary_pixels_follow_observed_light_from_either_side(rendering, base_target, kind, quadrant):
+    screen, catalog, cache = rendering
+    target = deepcopy(base_target)
+    obj = next(row for row in target.objects.values()
+        if row.item.boundary_structure is not None
+        and row.item.boundary_structure.structure.value == kind)
+    identity = obj.item.item_uuid
+    target.objects = {identity: obj.model_copy(update={"placement": obj.placement.model_copy(update={
+        "position": OWNER, "boundary_direction": CardinalDirection.EAST,
+        "base_height_steps": 0, "top_height_steps": 2})})}
+    target.tiles = {}
+    assert target.senses is not None
+    neighbor = (OWNER[0] + 1, OWNER[1])
+    camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus(OWNER)
+    frames = []
+    for observed, level in ((OWNER, LightLevel.BRIGHT_LIGHT),
+                            (neighbor, LightLevel.BRIGHT_LIGHT), (OWNER, LightLevel.DIM_LIGHT)):
+        # The other support's bright value is not currently observed. It must
+        # neither override dim light nor be required to light the boundary.
+        levels = {OWNER: LightLevel.BRIGHT_LIGHT, neighbor: LightLevel.BRIGHT_LIGHT}
+        levels[observed] = level
+        target.senses = replace(target.senses, visible={observed}, seen={OWNER, neighbor},
+            effective_light_levels=levels)
+        draw_frame(screen, target, catalog, cache, camera, 0,
+            show_grid=False, show_debug=False, mouse_position=None)
+        frames.append(pygame.surfarray.array3d(screen))
+    assert np.array_equal(frames[0], frames[1]), "owner-side choice must not change observed lighting"
+    silhouette = np.any(frames[0] != BACKGROUND, axis=2)
+    assert silhouette.any()
+    assert np.array_equal(silhouette, np.any(frames[2] != BACKGROUND, axis=2))
+    assert frames[2][silhouette].mean() < frames[0][silhouette].mean(), "dim light must dim the actual pixels"
 
 
 def test_door_frame_does_not_disclose_leaf_or_settle_state_without_contact(
@@ -685,8 +721,12 @@ def test_real_q0_water_wall_overlap_uses_planar_then_spatial_pixel_order(
     wall_surface = cache.cropped_treated(
         wall_id,
         camera.zoom,
-        _authored_treatment(catalog)[1],
+        _treatment(catalog, LightLevel.DIM_LIGHT)[1],
     )
+    # This foreground wall covers currently visible water. The live cutaway
+    # fades it, but still composites it after the premultiplied water layer.
+    wall_surface = wall_surface.copy()
+    wall_surface.set_alpha(65)
     wall_destination = cache.blit_position(wall_id, camera.zoom, contact)
     wall_bounds = cache.alpha_bounds(wall_id, camera.zoom)
     wall_destination = (

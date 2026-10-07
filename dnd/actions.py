@@ -746,6 +746,8 @@ class Move(BaseAction):
             return declaration_event.cancel(status_message=f"Invalid path start for {declaration_event.name}")
         if declaration_event.path[-1] != declaration_event.end_position:
             return declaration_event.cancel(status_message=f"Invalid path end for {declaration_event.name}")
+        if not source_entity.can_end_movement_at(declaration_event.end_position, subjective=True):
+            return declaration_event.cancel(status_message="Movement destination is occupied")
         for from_pos, to_pos in zip(declaration_event.path, declaration_event.path[1:]):
             if (max(abs(from_pos[0] - to_pos[0]), abs(from_pos[1] - to_pos[1])) != 1
                     or not grid.can_transition(from_pos, to_pos, source_entity.uuid, movement_mode, subjective=True)):
@@ -885,10 +887,12 @@ class Move(BaseAction):
                 step_source_cursor_start = EventQueue.event_cursor()
 
                 phase_started = time.perf_counter()
-                if not grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode):
+                endpoint_occupied = (i == total_path_length - 1
+                    and not source_entity.can_end_movement_at(to_pos))
+                if endpoint_occupied or not grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode):
                     transition_check_seconds += time.perf_counter() - phase_started
                     if grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode, subjective=True):
-                        cell_blocked = not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid, self.movement_mode)
+                        cell_blocked = endpoint_occupied or not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid, self.movement_mode)
                         directions = []
                         from_tile = grid.get_tile(*from_pos)
                         if from_tile:
@@ -974,7 +978,8 @@ class Move(BaseAction):
                     break
 
                 phase_started = time.perf_counter()
-                if not grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode):
+                if ((i == total_path_length - 1 and not source_entity.can_end_movement_at(to_pos))
+                        or not grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode)):
                     transition_check_seconds += time.perf_counter() - phase_started
                     termination_reason = MovementTerminationReason.COLLISION
                     processed_step.phase_to(

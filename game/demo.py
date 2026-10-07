@@ -65,19 +65,24 @@ def _iter_demo_intervals() -> Iterator[IntervalEnvelope]:
         source_entity_uuid=uuid4(),
         name="Visual observer",
         config=EntityConfig(
-            # This observer operates the door by hand; use the authored near
-            # contact instead of the viewing point two cells away.
             position=built.notable_positions["near_probe"],
             faction="heroes",
             has_ordinary_sight=True,
         ),
     )
     observer.compose_entity()
+    # Closing requires an empty owner support. An exterior operator uses the
+    # opposite handle while the interior observer retains the intended
+    # open-view to remembered-ground demonstration.
+    operator = Entity.create(source_entity_uuid=uuid4(), name="Exterior door operator",
+        config=EntityConfig(position=built.notable_positions["far_probe"], faction="heroes"))
+    operator.compose_entity()
     if len(standing_torch.get_attached_light_sources()) != 1:
         raise RuntimeError("standing fixture must own one active light")
 
     game = Game()
     game.deploy_entity(observer, built.notable_positions["near_probe"])
+    game.deploy_entity(operator, built.notable_positions["far_probe"])
     startup_end = EventQueue.event_cursor()
     yield capture_interval(
         name="startup",
@@ -92,7 +97,7 @@ def _iter_demo_intervals() -> Iterator[IntervalEnvelope]:
     open_start = startup_end
     _successful(
         OpenDirectionalDoorAction(
-            source_entity_uuid=observer.uuid,
+            source_entity_uuid=operator.uuid,
             source_item_uuid=door.uuid,
             template=False,
         ).apply(),
@@ -114,7 +119,7 @@ def _iter_demo_intervals() -> Iterator[IntervalEnvelope]:
     close_start = open_end
     _successful(
         CloseDirectionalDoorAction(
-            source_entity_uuid=observer.uuid,
+            source_entity_uuid=operator.uuid,
             source_item_uuid=door.uuid,
             template=False,
         ).apply(),

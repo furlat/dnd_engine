@@ -10,6 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from game.recording_compat import upgrade_spell_fact
+from game.audience import AudiencePerception, PlayerAudience, resolve_audience
 
 from dnd.types.appearance import AppearanceConfig
 from dnd.types.world import MovementProvocationPolicy
@@ -64,6 +65,10 @@ class PlayerCharacterSheet:
     saves: tuple[str, ...]
     proficiency_bonus: int
     resources: tuple[PlayerResource, ...]
+    name: str = ''
+    portrait_key: str | None = None
+    normal_hp: int = 0
+    maximum_hp: int = 0
     compatible_item_slots: tuple[tuple[UUID, tuple[str, ...]], ...] = ()
 
 
@@ -687,6 +692,7 @@ class PlayerLineage:
     observations: tuple[PlayerObservation, ...] = ()
     world_updates: tuple[WorldUpdate, ...] = ()
     hud_snapshot: PlayerHUDSnapshot | None = None
+    audience: PlayerAudience | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -700,11 +706,12 @@ class PlayerInitialization:
     observations: tuple[PlayerObservation, ...]
     world_updates: tuple[WorldUpdate, ...]
     hud_snapshot: PlayerHUDSnapshot | None = None
+    audience: PlayerAudience | None = None
 
 
 class PlayerSequence(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     initialization: PlayerInitialization
     lineages: tuple[PlayerLineage, ...]
     combat_log_appends: tuple[CombatLogAppend, ...] = ()
@@ -728,3 +735,9 @@ class PlayerState:
     current_actor_uuid: UUID | None = None
     round_number: int = 0
     hud_snapshot: PlayerHUDSnapshot | None = None
+    audience: PlayerAudience | None = None
+    perception: AudiencePerception = field(default_factory=AudiencePerception)
+
+    @property
+    def viewing_audience(self) -> PlayerAudience:
+        return resolve_audience(self.observer_uuid, self.audience)

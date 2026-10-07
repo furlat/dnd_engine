@@ -95,7 +95,7 @@ def actor_is_visible(target: PlayerState, actor: PlayerActor) -> bool:
     if target.senses is None or not actor.present or actor.spatial_disposition is not SpatialDisposition.PRESENT:
         return False
     perceived = target.senses.entities.get(actor.uuid)
-    return (actor.uuid == target.observer_uuid or perceived is not None and perceived.visual
+    return (target.viewing_audience.controls(actor.uuid) or perceived is not None and perceived.visual
             or actor.life_state is LifeState.DEAD and actor.last_visual_position is not None)
 
 
@@ -104,6 +104,8 @@ def actor_contact(target: PlayerState, actor: PlayerActor, data: AnimationData, 
         raise ValueError("actor binding requires retained observer contacts")
     if actor.uuid == target.observer_uuid:
         position = target.senses.position
+    elif target.viewing_audience.controls(actor.uuid) and actor.last_visual_position is not None:
+        position = actor.last_visual_position
     else:
         perceived = target.senses.entities.get(actor.uuid)
         if perceived is not None and perceived.visual:
@@ -111,10 +113,18 @@ def actor_contact(target: PlayerState, actor: PlayerActor, data: AnimationData, 
         elif actor.life_state == LifeState.DEAD and actor.last_visual_position is not None:
             position = actor.last_visual_position
         else:
-            raise ValueError("selected actor binding requires a retained visual contact")
+            member = target.perception.members.get(actor.uuid)
+            raise ValueError(
+                f"Actor {actor.name!r} ({actor.uuid}) has no retained visual position; "
+                f"observer={target.observer_uuid}, cursor={target.reducer_cursor}, "
+                f"controlled={target.viewing_audience.controls(actor.uuid)}, "
+                f"life={actor.life_state.value}, last_visual_position={actor.last_visual_position}, "
+                f"contact={perceived}, member_position={member.position if member is not None else None}"
+            )
     support = target.tiles.get(position)
     if support is None:
-        raise ValueError("actor contact requires its retained world support")
+        raise ValueError(f"Actor {actor.name!r} ({actor.uuid}) at {position} lacks its retained support; "
+                         f"observer={target.observer_uuid}, cursor={target.reducer_cursor}")
     if actor.creature_content_ref is None:
         rig_id = data.root_rig
     elif actor.creature_content_ref in data.creature_rigs:

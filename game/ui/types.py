@@ -10,9 +10,10 @@ from dnd.core.base_actions import AvailableWorldInteraction
 from dnd.core.content.identities import ContentRef
 from dnd.core.equipment_types import EquipmentSlot
 from game.interaction_types import WorldHit
+from game.player_commands import EquipItem as EquipItem, UnequipItem as UnequipItem, ToggleHandler as ToggleHandler
 
 
-UIVerb: TypeAlias = Literal['family','variant','world','confirm','cancel','end','panel','inspect','focus','close','page','menu','attack_mode','all_here','scale','fullscreen','retry','quit','log','log_row','log_expand','log_text','log_scrollbar','log_detail','log_filter','log_actor','log_follow','log_copy','pin','variant_pick','equip','unequip','use_item','drop_item','handler','inventory_item','library_filter']
+UIVerb: TypeAlias = Literal['surface','bar_label','equipment_slot','family','variant','world','confirm','cancel','end','panel','inspect','focus','close','page','menu','attack_mode','all_here','scale','fullscreen','retry','quit','log','log_row','log_expand','log_row_detail','log_text','log_scrollbar','log_detail','log_filter','log_actor','log_follow','log_copy','pin','variant_pick','equip','unequip','use_item','drop_item','handler','inventory_item','library_filter']
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +45,8 @@ class UIHit:
     family_key: ActionFamilyKey | None = None
     equipment_slot: EquipmentSlot | None = None
     world_hit: WorldHit | None = None
+    bar_group: int | None = None
+    shortcut: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,35 +66,20 @@ class PendingInteraction:
 
 
 @dataclass(frozen=True, slots=True)
-class EquipItem:
-    item_uuid: UUID
-    slot: EquipmentSlot
-
-
-@dataclass(frozen=True, slots=True)
-class UnequipItem:
-    slot: EquipmentSlot
-
-
-@dataclass(frozen=True, slots=True)
-class ToggleHandler:
-    handler_uuid: UUID
-    enabled: bool
-
-
-@dataclass(frozen=True, slots=True)
 class UIFocus:
     selected_actor: UUID | None = None
     panel: Literal['inventory','sheet','spellbook','reactions','menu'] | None = None
     family: int | None = None
+    hover_family: bool = False
     variant_index: int | None = None
     selected_item: UUID | None = None
+    equipment_slot: EquipmentSlot | None = None
     library_filter: Literal['all','spells','actions','items'] = 'all'
     search_text: str = ''
     context: tuple[AvailableWorldInteraction,...] = ()
     context_position: tuple[int,int] = (0,0)
     pending: PendingInteraction | None = None
-    bar_page: int = 0
+    bar_pages: tuple[int, int, int, int] = (0, 0, 0, 0)
     popup_scroll: int = 0
     item_detail_scroll: int = 0
     ui_scale: float = 1.

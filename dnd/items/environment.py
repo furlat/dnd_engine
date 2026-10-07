@@ -284,6 +284,10 @@ class DirectionalDoor(UsableItem):
         """
         return self.is_open
 
+    def get_manual_contact_range(self) -> int:
+        """Boundary handles belong to the two incident supports."""
+        return 0
+
     def get_door_mechanism(self) -> DoorMechanism:
         return self.mechanism
 

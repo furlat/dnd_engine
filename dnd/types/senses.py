@@ -63,6 +63,8 @@ class VolumeSurfaceSight(BaseModel):
 
     A sample is visible above every plane: height > a*x + b*y + c.
     Coordinates and height use native grid/elevation steps, before animation.
+    Multiple entries for the same cell represent alternative observations:
+    satisfying one complete entry is sufficient; planes within it remain AND.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -79,6 +81,8 @@ class PerceivedSpatialEffect(BaseModel):
     name: str
     description: str
     positions: tuple[tuple[int, int], ...]
+    owner_revision: int | None = Field(default=None, ge=0)
+    apparent_presence: bool = False
     trap_state: TrapState | None = None
     pressed: bool | None = None
     direction: tuple[int, int] | None = None

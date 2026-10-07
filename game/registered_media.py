@@ -38,6 +38,43 @@ def _nearest_indices(source_size: int, output_size: int) -> np.ndarray:
     return (np.arange(output_size, dtype=np.int64) * step + step // 2) >> 16
 
 
+def transform_registered_part(image: pygame.Surface, *, offset: tuple[float, float],
+                              asset_pivot: tuple[float, float], scale: float,
+                              anchor: tuple[float, float], rotation: float,
+                              footpoint_image: pygame.Surface | None = None,
+                              ) -> tuple[pygame.Surface, tuple[int, int], pygame.Surface | None] | None:
+    """Keep a cropped part at its original position around the shared pivot."""
+    source_width, source_height = image.get_size()
+    if not rotation:
+        # All parts share the registered canvas edges. Independent rounding
+        # of each band's size creates transparent seams at fractional zoom.
+        left = round(anchor[0] + (offset[0] - asset_pivot[0]) * scale)
+        top = round(anchor[1] + (offset[1] - asset_pivot[1]) * scale)
+        right = round(anchor[0] + (offset[0] + image.width - asset_pivot[0]) * scale)
+        bottom = round(anchor[1] + (offset[1] + image.height - asset_pivot[1]) * scale)
+        size, destination = (right - left, bottom - top), (left, top)
+        if min(size) <= 0:
+            return None
+        if image.get_size() != size:
+            image = pygame.transform.scale(image, size)
+            if footpoint_image is not None:
+                footpoint_image = pygame.transform.scale(footpoint_image, size)
+    else:
+        size = max(1, round(image.width * scale)), max(1, round(image.height * scale))
+        if image.get_size() != size:
+            image = pygame.transform.scale(image, size)
+            if footpoint_image is not None:
+                footpoint_image = pygame.transform.scale(footpoint_image, size)
+        dx = (offset[0] + source_width / 2 - asset_pivot[0]) * scale
+        dy = (offset[1] + source_height / 2 - asset_pivot[1]) * scale
+        dx, dy = dx*cos(rotation)-dy*sin(rotation), dx*sin(rotation)+dy*cos(rotation)
+        image = pygame.transform.rotate(image, -degrees(rotation))
+        if footpoint_image is not None:
+            footpoint_image = pygame.transform.rotate(footpoint_image, -degrees(rotation))
+        destination = round(anchor[0]+dx-image.width/2), round(anchor[1]+dy-image.height/2)
+    return image, destination, footpoint_image
+
+
 def registered_media_samples(data: AnimationData, asset_id: str,
                            phase: Literal["cast", "travel", "impact"], frame: int,
                            facing: Facing8, *, scale: float, anchor: tuple[float, float],
@@ -59,33 +96,12 @@ def registered_media_samples(data: AnimationData, asset_id: str,
     for layer in layers:
         image = layer.image
         footpoint_image = layer.footpoint.image if layer.footpoint is not None else None
-        if not rotation:
-            # All parts share the registered canvas edges. Independent rounding
-            # of each band's size creates transparent seams at fractional zoom.
-            left = round(anchor[0] + (layer.offset[0] - asset_pivot[0]) * scale)
-            top = round(anchor[1] + (layer.offset[1] - asset_pivot[1]) * scale)
-            right = round(anchor[0] + (layer.offset[0] + image.width - asset_pivot[0]) * scale)
-            bottom = round(anchor[1] + (layer.offset[1] + image.height - asset_pivot[1]) * scale)
-            size, destination = (right - left, bottom - top), (left, top)
-            if min(size) <= 0:
-                continue
-            if image.get_size() != size:
-                image = pygame.transform.scale(image, size)
-                if footpoint_image is not None:
-                    footpoint_image = pygame.transform.scale(footpoint_image, size)
-        else:
-            size = max(1, round(image.width * scale)), max(1, round(image.height * scale))
-            if image.get_size() != size:
-                image = pygame.transform.scale(image, size)
-                if footpoint_image is not None:
-                    footpoint_image = pygame.transform.scale(footpoint_image, size)
-            dx = (layer.offset[0] + layer.image.width / 2 - asset_pivot[0]) * scale
-            dy = (layer.offset[1] + layer.image.height / 2 - asset_pivot[1]) * scale
-            dx, dy = dx*cos(rotation)-dy*sin(rotation), dx*sin(rotation)+dy*cos(rotation)
-            image = pygame.transform.rotate(image, -degrees(rotation))
-            if footpoint_image is not None:
-                footpoint_image = pygame.transform.rotate(footpoint_image, -degrees(rotation))
-            destination = round(anchor[0]+dx-image.width/2), round(anchor[1]+dy-image.height/2)
+        transformed = transform_registered_part(image, offset=layer.offset,
+            asset_pivot=asset_pivot, scale=scale, anchor=anchor, rotation=rotation,
+            footpoint_image=footpoint_image)
+        if transformed is None:
+            continue
+        image, destination, footpoint_image = transformed
         positions, ownership, material_positions = None, None, None
         if layer.positions is not None:
             if rotation:

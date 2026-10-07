@@ -145,6 +145,7 @@ class JawTrap(SpatialCondition):
             return event
         self.trap_state = TrapState.ACTIVATED
         self.condition_stealth_dc = None
+        self.observation_revision += 1
         if target is not None:
             request = target.create_saving_throw_request(target_entity_uuid=target.uuid, ability_name="dexterity",
                 dc=self.save_dc, parent_event=event.uuid, saving_throw_context=SavingThrowContext(

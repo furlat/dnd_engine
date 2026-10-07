@@ -45,15 +45,15 @@ def draw_selection_preview(screen: pygame.Surface, preview: AvailableSelectionPr
                            font: pygame.font.Font | None = None) -> None:
     if preview is None:
         return
-    for position in preview.affected_positions:
-        if position in tiles:
-            pygame.draw.lines(screen,(180,122,87),True,position_outline(position,tiles,camera),1)
-    for position in preview.next_positions:
-        pygame.draw.lines(screen,(119,164,182),True,position_outline(position,tiles,camera),1)
-    for target in preview.next_targets:
-        if target.position in tiles:
-            assert target.position is not None
-            pygame.draw.lines(screen,(119,164,182),True,position_outline(target.position,tiles,camera),1)
+    affected = set(preview.affected_positions) | set(hovered.affected_positions or () if hovered is not None else ())
+    if affected:
+        area = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        for position in affected:
+            if position in tiles:
+                polygon = position_outline(position,tiles,camera)
+                pygame.draw.polygon(area,(232,152,80,60),polygon)
+                pygame.draw.lines(area,(232,177,103,180),True,polygon,2)
+        screen.blit(area,(0,0))
     for position in points:
         if position in tiles:
             pygame.draw.lines(screen,(215,185,103),True,position_outline(position,tiles,camera),2)
@@ -73,9 +73,6 @@ def draw_selection_preview(screen: pygame.Surface, preview: AvailableSelectionPr
             screen.blit(label,label.get_rect(midbottom=(round(x),round(y)-12)))
     if hovered is not None and hovered.position is not None:
         pygame.draw.lines(screen,(215,185,103),True,position_outline(hovered.position,tiles,camera),2)
-        for position in hovered.affected_positions or ():
-            if position in tiles:
-                pygame.draw.lines(screen,(190,118,93),True,position_outline(position,tiles,camera),1)
 
 
 def draw_movement_preview(screen: pygame.Surface, target: AvailableTarget, movement_remaining: int,

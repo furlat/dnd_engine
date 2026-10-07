@@ -96,6 +96,9 @@ class TileResidueCondition(BaseCondition):
             contributions=self.contributions,
         )
 
+    def format_application_log(self, target_name: str) -> str:
+        return self.profile.description
+
     def on_membership_changed(self, event: Event) -> None:
         if self.hazard_filter is None:
             return

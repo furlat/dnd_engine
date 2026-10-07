@@ -10,6 +10,7 @@ from math import nextafter
 from pathlib import Path
 
 import numpy as np
+from scipy.ndimage import find_objects
 import pygame
 
 from game.animation_types import PropDepth
@@ -72,36 +73,46 @@ def partition_world_depth(command: DrawCommand, depth: np.ndarray,
         pieces.append(command._replace(surface=remainder, selection=selection, selection_block_mask=blocker))
     minimum, maximum = float(depth[occupied].min()), float(depth[occupied].max())
     cuts = sorted({value for value in peer_depths if ordered_bands or minimum <= value <= maximum})
-    previous = -float("inf")
-    for cutoff in (*cuts, float("inf")):
-        band = (depth > previous) & (depth <= cutoff)
-        retained = band if coverage is None else band & coverage
-        selected = occupied & band
-        extent = selected.copy()
-        for selection in command.selection:
-            extent |= selection.mask & retained
-        lower = previous
-        previous = cutoff
-        xs, ys = np.nonzero(extent)
-        if not len(xs):
+    # Classify each participating pixel once. Re-scanning a large effect's
+    # entire canvas at every peer depth made area spells stall the frame pump.
+    extent = occupied.copy()
+    for selection in command.selection:
+        extent |= selection.mask if coverage is None else selection.mask & coverage
+    extent &= depth > -float("inf")
+    labels = np.zeros(alpha.shape, dtype=np.int32)
+    labels[extent] = np.searchsorted(cuts, depth[extent], side="left") + 1
+    for index, bounds in enumerate(find_objects(labels, max_label=len(cuts) + 1)):
+        if bounds is None:
             continue
-        left, top, right, bottom = int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
+        cutoff = cuts[index] if index < len(cuts) else float("inf")
+        lower = cuts[index - 1] if index else -float("inf")
+        horizontal, vertical = bounds
+        left, right, top, bottom = horizontal.start, horizontal.stop, vertical.start, vertical.stop
+        local_depth = depth[left:right, top:bottom]
+        band = (local_depth > lower) & (local_depth <= cutoff)
+        selected = occupied[left:right, top:bottom] & band
         part = command.surface.subsurface((left, top, right - left, bottom - top)).copy()
         part_alpha = pygame.surfarray.pixels_alpha(part)
-        part_alpha[:] *= selected[left:right, top:bottom]
+        part_alpha[:] *= selected
         del part_alpha
         if command.blend == pygame.BLEND_RGB_ADD:
-            pygame.surfarray.pixels3d(part)[:] *= selected[left:right, top:bottom, None]
+            pygame.surfarray.pixels3d(part)[:] *= selected[:, :, None]
         # Coplanar pixels belong behind the vertical billboard.
         if ordered_bands:
-            # Sibling materials share a band key. Their changing surface means
-            # must not reverse the authored smoke/fire compositing order.
+            # Sibling materials retain their authored compositing order.
             sort_depth = (nextafter(cutoff, -float("inf")) if cutoff != float("inf")
                           else nextafter(lower, float("inf")) if cuts else command.key[1])
         else:
-            sort_depth = min(float(depth[selected if np.any(selected) else extent].mean()),
-                             nextafter(cutoff, -float("inf")))
-        selection, blocker = cut_selection(command, retained, (left, top, right-left, bottom-top))
+            selected_depth = local_depth[selected if np.any(selected) else
+                extent[left:right, top:bottom] & band]
+            sort_depth = min(float(selected_depth.mean()), nextafter(cutoff, -float("inf")))
+        if command.selection or command.selection_block_mask is not None:
+            retained = (depth > lower) & (depth <= cutoff)
+            if coverage is not None:
+                retained &= coverage
+            selection, blocker = cut_selection(command, retained, (left, top, right-left, bottom-top))
+        else:
+            selection, blocker = (), None
         pieces.append(command._replace(key=(command.key[0], sort_depth, *command.key[2:]),
             surface=part, destination=(command.destination[0] + left, command.destination[1] + top),
             selection=selection, selection_block_mask=blocker,

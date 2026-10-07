@@ -18,7 +18,7 @@ from game.player_reduction import index_player_lineage
 from game.presentation_group import PresentationGroup
 from game.presentation_timing import presentation_milestones, presentation_dependencies
 from game.ui.layout import UILayout
-from game.ui.primitives import UIFonts, GOLD, MUTED, panel, text, button
+from game.ui.primitives import UIFonts, GOLD, MUTED, TEXT, BORDER, text, glass
 from game.ui.rich_text import TextSpan, log_spans, plain_log, wrap_spans, draw_spans
 from game.ui.skin import UISkin
 from game.ui.types import LogKey, UIFrame, UIHit, UIVerb
@@ -35,6 +35,7 @@ class LogRow:
     source_index: int
     reveal_ms: float
     timing_basis: Literal['presentation', 'group_completion', 'operation_completion']
+    actor_condition: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +48,9 @@ class LogHistory:
 class LogView:
     collapsed: frozenset[LogKey] = frozenset()
     detailed: bool = True
+    fold_groups: bool = False
+    expanded: frozenset[LogKey] = frozenset()
+    details: frozenset[LogKey] = frozenset()
     category: CombatLogEntryType | None = None
     actor_uuid: UUID | None = None
     selected: LogKey | None = None
@@ -191,7 +195,8 @@ def group_log_rows(group: PresentationGroup, *, choreography: BoundChoreography 
                 node.combat_log, LogKey(lineage.generation, lineage.observer_uuid, 'event', str(ancestor.uuid)) if ancestor else None,
                 node.turn_execution_id, group.primary.root.uuid,
                 primary_key if lineage.root.uuid in reactions and ancestor is None else None,
-                index.source_order[node.uuid], start_ms + at, 'group_completion' if fallback else 'presentation'))
+                index.source_order[node.uuid], start_ms + at, 'group_completion' if fallback else 'presentation',
+                actor_condition=node.fact is not None and node.fact.kind=='condition'))
     return tuple(result)
 
 
@@ -241,6 +246,12 @@ def admitted_log_rows(history: LogHistory, now_ms: float) -> dict[LogKey, LogRow
     return admitted
 
 
+def children_expanded(row: LogRow, view: LogView) -> bool:
+    return row.key not in view.collapsed and (not view.fold_groups or row.key in view.expanded
+        or row.entry.entry_type not in (CombatLogEntryType.MOVEMENT,CombatLogEntryType.DAMAGE_TAKEN,
+            CombatLogEntryType.SPELL_DAMAGE,CombatLogEntryType.ATTACK))
+
+
 def visible_log_rows(history: LogHistory, view: LogView, now_ms: float) -> tuple[tuple[LogRow, int, bool], ...]:
     admitted = admitted_log_rows(history, now_ms)
     children: dict[LogKey | None, list[LogRow]] = {}
@@ -259,13 +270,18 @@ def visible_log_rows(history: LogHistory, view: LogView, now_ms: float) -> tuple
             ancestor = row.parent or row.reaction_to
     result = []
 
-    def walk(key: LogKey | None, depth: int) -> None:
+    def walk(key: LogKey | None, depth: int, reactions_only: bool = False) -> None:
         for row in children.get(key, []):
             if row.key not in included:
                 continue
+            if reactions_only and row.reaction_to is None and not row.actor_condition and row.entry.entry_type not in (
+                CombatLogEntryType.DEATH,
+                CombatLogEntryType.SAVING_THROW,CombatLogEntryType.SPELL_SAVE,CombatLogEntryType.ROLL_MODIFICATION):
+                walk(row.key,depth,reactions_only=True)
+                continue
             result.append((row, depth, row.key not in matches))
-            if row.key not in view.collapsed or view.category is not None or view.actor_uuid is not None:
-                walk(row.key, depth + 1)
+            opened=children_expanded(row,view) or view.category is not None or view.actor_uuid is not None
+            walk(row.key,depth+1,reactions_only=not opened)
 
     walk(None, 0)
     return tuple(result)
@@ -280,19 +296,22 @@ def scroll_log(view: LogView, cache: LogLayout, delta: int) -> LogView:
 
 
 def row_text(row: LogRow, view: LogView) -> str:
-    return row.entry.detailed if view.detailed else row.entry.verbose
+    return row.entry.detailed if view.detailed != (row.key in view.details) else row.entry.compact
 
 
-def copy_log_selection(history: LogHistory, view: LogView) -> str:
-    row = next((row for row in history.rows if row.key == view.selected), None)
-    if row is None:
-        return ''
-    value=plain_log(row_text(row,view))
-    if view.selection_anchor is not None and view.selection_anchor[0]==row.key:
-        start,end=sorted((view.selection_anchor[1],view.selection_end))
-        if start!=end:
-            return value[start:end]
-    return value
+def copy_log_selection(history: LogHistory, view: LogView, *, now_ms: float = float('inf')) -> str:
+    admitted=admitted_log_rows(history,now_ms)
+    visible=visible_log_rows(history,view,now_ms)
+    row=admitted.get(view.selected) if view.selected is not None and any(row.key==view.selected for row,_,_ in visible) else None
+    if row is not None:
+        value=plain_log(row_text(row,view))
+        if view.selection_anchor is not None and view.selection_anchor[0]==row.key:
+            start,end=sorted((view.selection_anchor[1],view.selection_end))
+            if start!=end:
+                return value[start:end]
+        return value
+    return '\n'.join('  '*depth+plain_log(row_text(row,view))
+        for row,depth,_ in visible_log_rows(history,view,now_ms))
 
 
 def log_text_position(cache: LogLayout, point: tuple[int,int], key: LogKey | None = None) -> tuple[LogKey,int] | None:
@@ -330,33 +349,46 @@ def draw_combat_log(screen: pygame.Surface, geometry: UILayout, font: UIFonts, s
                     *, now_ms: float, mouse: tuple[int, int]) -> tuple[UIFrame, LogView]:
     rect, scale = geometry.log, geometry.scale
     retained = frozenset(row.key for row in history.rows)
-    view = replace(view, collapsed=view.collapsed & retained,
+    view = replace(view, collapsed=view.collapsed & retained, expanded=view.expanded & retained, details=view.details & retained,
                    selected=view.selected if view.selected in retained else None,
                    seen=view.seen & retained,
                    selection_anchor=view.selection_anchor if view.selection_anchor is not None and view.selection_anchor[0] in retained else None)
     px = lambda value: round(value * scale)
-    panel(screen, rect, skin, scale=scale)
-    text(screen, font.body, 'Combat log', (rect.left+px(12), rect.top+px(10)))
-    hits = []
-    controls: tuple[tuple[UIVerb, str], ...] = (('log_filter', view.category.value.replace('_', ' ') if view.category else 'All events'),
-        ('log_actor', 'Everyone' if view.actor_uuid is None else 'Selected actor'), ('log_detail', 'Detailed' if view.detailed else 'Verbose'))
-    for index, (verb, label) in enumerate(controls):
-        hit = UIHit(pygame.Rect(rect.left+px(9)+index*(rect.width-px(18))//3, rect.top+px(36),
-            (rect.width-px(18))//3-px(3), px(26)), verb, label=label)
-        hits.append(button(screen, font.small, hit, mouse, skin, scale=scale))
-    content = rect.inflate(-px(20), 0)
-    content.width-=px(10)
-    content.top = rect.top + px(72)
-    content.height = max(1, rect.bottom - px(42) - content.top)
+    glass(screen,rect,active=rect.collidepoint(mouse))
+
+    margin=px(7)
+    text(screen, font.body, 'Combat log', (rect.left+margin, rect.top+px(5)))
+    close=pygame.Rect(rect.right-px(32),rect.top+px(2),px(28),px(28))
+    text(screen,font.body,'×',close.move(px(7),px(2)).topleft,MUTED)
+    hits = [UIHit(close,'log',label='Close combat log')]
+    controls: tuple[tuple[UIVerb,str,bool], ...] = (
+        ('log_filter',view.category.value.replace('_',' ').title() if view.category else 'All events',view.category is not None),
+        ('log_actor','Party member' if view.actor_uuid else 'Everyone',view.actor_uuid is not None),
+        ('log_detail','Dice',view.detailed))
+    x=rect.left+margin
+    for verb,label,active in controls:
+        width=font.small.size(label)[0]+px(14)
+        if verb=='log_detail':
+            x=rect.right-margin-width
+        control=pygame.Rect(x,rect.top+px(32),width,px(27))
+        text(screen,font.small,label,control.move(px(3),px(2)).topleft,GOLD if active else TEXT if control.collidepoint(mouse) else MUTED)
+        if active:
+            pygame.draw.line(screen,GOLD,control.bottomleft,control.bottomright,max(1,px(1)))
+        hits.append(UIHit(control,verb,label=label))
+        x+=width+px(8)
+    pygame.draw.line(screen,BORDER,(rect.left+margin,rect.top+px(61)),(rect.right-margin,rect.top+px(61)))
+    content=pygame.Rect(rect.left+margin,rect.top+px(65),rect.width-2*margin-px(7),max(1,rect.height-px(104)))
     visible = visible_log_rows(history, view, now_ms)
-    signature = (tuple((row.key, depth, context) for row, depth, context in visible), view.collapsed, view.detailed,
+    signature = (tuple((row.key, depth, context) for row, depth, context in visible), view.collapsed, view.expanded, view.details, view.detailed,
         content.width, font.small.get_height())
     if cache.signature != signature:
         rows = []
         offsets = [0]
         for row, depth, context in visible:
-            width = max(px(60), content.width - px(18) - min(depth, 5)*px(12))
-            height = len(_lines(cache, row, view, font, width))*font.small.get_linesize() + px(27)
+            width = max(px(60), content.width - px(40) - min(depth, 2)*px(10))
+            height = len(_lines(cache, row, view, font, width))*font.small.get_linesize() + px(18 if depth==0 else 12)
+            if row.entry.entry_type in (CombatLogEntryType.TURN_START,CombatLogEntryType.TURN_END):
+                height+=px(8)
             rows.append(LogLayoutRow(row, depth, context, width, height))
             offsets.append(offsets[-1] + height)
         cache.signature, cache.rows, cache.offsets = signature, tuple(rows), tuple(offsets)
@@ -365,6 +397,7 @@ def draw_combat_log(screen: pygame.Surface, geometry: UILayout, font: UIFonts, s
                      if item.row.key == view.anchor), view.scroll)
     scroll = maximum if view.follow else min(maximum, max(0, anchored))
     text_regions=[]
+    parents={row.parent or row.reaction_to for row in admitted_log_rows(history,now_ms).values()}
     previous_clip = screen.get_clip()
     screen.set_clip(content.clip(previous_clip))
     start = max(0, bisect_right(cache.offsets, scroll)-1)
@@ -374,16 +407,32 @@ def draw_combat_log(screen: pygame.Surface, geometry: UILayout, font: UIFonts, s
         if y >= content.bottom:
             break
         row_rect = pygame.Rect(content.left, y, content.width, item.height)
-        if item.row.entry.entry_type in (CombatLogEntryType.TURN_START, CombatLogEntryType.TURN_END):
-            pygame.draw.line(screen, GOLD, row_rect.topleft, row_rect.topright, max(1,px(1)))
+        turn=item.row.entry.entry_type in (CombatLogEntryType.TURN_START,CombatLogEntryType.TURN_END)
+        padding=px(8 if turn else 3)
+        if turn:
+            pygame.draw.line(screen,BORDER,row_rect.topleft,row_rect.topright)
         if item.row.key == view.selected:
-            pygame.draw.rect(screen, (44, 48, 55), row_rect)
-        x = content.left + min(item.depth, 5)*px(12)
-        expand_rect=pygame.Rect(x,y,px(16),font.small.get_linesize())
-        text(screen, font.small, '+' if item.row.key in view.collapsed else '−', expand_rect.topleft, GOLD)
+            pygame.draw.rect(screen, (32, 39, 47), row_rect)
+        x=content.left+min(item.depth,2)*px(10)
+        if item.depth and not turn:
+            pygame.draw.line(screen,(49,57,65),(content.left+px(3),y+px(4)),(content.left+px(3),y+item.height-px(5)))
+        expand_rect=pygame.Rect(x,y,px(16),font.small.get_linesize()+padding)
+        if item.row.key in parents:
+            cx,cy=expand_rect.centerx,expand_rect.centery
+            points=((cx-px(3),cy-px(2)),(cx+px(3),cy-px(2)),(cx,cy+px(2))) if children_expanded(item.row,view) else ((cx-px(2),cy-px(3)),(cx-px(2),cy+px(3)),(cx+px(2),cy))
+            pygame.draw.polygon(screen,MUTED,points)
         lines = _lines(cache, item.row, view, font, item.width)
         hits.append(UIHit(row_rect.clip(content), 'log_row', log_key=item.row.key))
-        hits.append(UIHit(expand_rect.clip(content),'log_expand',log_key=item.row.key))
+        if item.row.key in parents:
+            hits.append(UIHit(expand_rect.clip(content),'log_expand',log_key=item.row.key,label='Expand consequences'))
+        if item.row.entry.detailed!=item.row.entry.compact:
+            detail_rect=pygame.Rect(content.right-px(20),y+padding,px(19),px(20))
+            color=GOLD if view.detailed != (item.row.key in view.details) else TEXT if detail_rect.collidepoint(mouse) else MUTED
+            die=pygame.Rect(detail_rect.left+px(3),detail_rect.top+px(3),px(12),px(12))
+            pygame.draw.rect(screen,color,die,1,border_radius=px(2))
+            for step in (3,6,9):
+                pygame.draw.circle(screen,color,(die.left+px(step),die.top+px(step)),max(1,px(1)))
+            hits.append(UIHit(detail_rect.clip(content),'log_row_detail',log_key=item.row.key,label='Recorded dice and modifiers'))
         plain=plain_log(row_text(item.row,view));cursor=0
         for line_index,line in enumerate(lines):
             value=''.join(span.text for span in line)
@@ -396,7 +445,7 @@ def draw_combat_log(screen: pygame.Surface, geometry: UILayout, font: UIFonts, s
                 line_font=font.small_bold if span.bold else font.small
                 base=advances[-1]
                 advances.extend(base+line_font.size(span.text[:i])[0] for i in range(1,len(span.text)+1))
-            line_rect=pygame.Rect(x+px(16),y+line_index*font.small.get_linesize(),max(1,advances[-1]),font.small.get_linesize())
+            line_rect=pygame.Rect(x+px(16),y+padding+line_index*font.small.get_linesize(),max(1,advances[-1]),font.small.get_linesize())
             if view.selection_anchor is not None and view.selection_anchor[0]==item.row.key:
                 begin,end=sorted((view.selection_anchor[1],view.selection_end))
                 left,right=max(0,begin-start),min(len(value),end-start)
@@ -406,20 +455,7 @@ def draw_combat_log(screen: pygame.Surface, geometry: UILayout, font: UIFonts, s
             if line_rect.colliderect(content):
                 text_regions.append(LogTextRegion(item.row.key,line_rect,start,tuple(advances)))
                 hits.append(UIHit(line_rect.clip(content),'log_text',log_key=item.row.key))
-        draw_spans(screen, lines, font.small, font.small_bold, (x+px(16), y), muted=item.context)
-        chip_y = y + len(lines)*font.small.get_linesize() + px(3)
-        for identity, name in ((item.row.entry.source_uuid, item.row.entry.source_name), (item.row.entry.target_uuid, item.row.entry.target_name)):
-            if not identity or not name:
-                continue
-            # Chips carry exact projected UUIDs. A historical name never grants
-            # a current map location or permission to issue commands.
-            actor = next((actor for actor in state.actors.values() if str(actor.uuid) == identity and actor.present), None)
-            if actor is None:
-                continue
-            chip = pygame.Rect(x+px(16), chip_y, min(item.width, font.small.size(name)[0]+px(8)), font.small.get_linesize())
-            text(screen, font.small, name, chip.topleft, MUTED)
-            hits.append(UIHit(chip.clip(content), 'inspect', identity=actor.uuid, label=name))
-            x += chip.width + px(8)
+        draw_spans(screen, lines, font.small, font.small_bold, (x+px(16), y+padding), muted=item.context or turn,shadow=True)
     screen.set_clip(previous_clip)
     cache.text_regions=tuple(text_regions)
     cache.maximum_scroll=maximum
@@ -431,15 +467,17 @@ def draw_combat_log(screen: pygame.Surface, geometry: UILayout, font: UIFonts, s
         pygame.draw.rect(screen,(49,56,65),cache.scrollbar_track)
         pygame.draw.rect(screen,MUTED,cache.scrollbar_thumb)
         hits.append(UIHit(cache.scrollbar_track,'log_scrollbar'))
-    footer = rect.bottom-px(32)
+    footer=rect.bottom-px(33)
+    pygame.draw.line(screen,BORDER,(rect.left+margin,footer-px(7)),(rect.right-margin,footer-px(7)))
     eligible = frozenset(admitted_log_rows(history, now_ms))
     new = len(eligible-view.seen) if not view.follow else 0
-    footer_buttons: tuple[tuple[UIVerb,str],...] = (('log_follow', f'New entries ({new})' if new else 'Follow' if not view.follow else 'Following'), ('log_copy', 'Copy selection'))
-    for offset, (verb, label) in enumerate(footer_buttons):
-        hit = UIHit(pygame.Rect(rect.left+px(9)+offset*px(120), footer, px(115), px(24)), verb, label=label)
-        hits.append(button(screen, font.small, hit, mouse, skin, scale=scale))
-    if history.dropped:
-        text(screen, font.small, f'{history.dropped} earlier entries removed', (rect.left+px(12), rect.top+px(66)), MUTED)
+    follow_label=f'↓ {new} new' if new else '↓ Latest' if not view.follow else 'Following'
+    footer_controls: tuple[tuple[UIVerb,str,bool], ...] = (('log_follow',follow_label,False),('log_copy','Copy log',True))
+    for verb,label,right in footer_controls:
+        width=font.small.size(label)[0]+px(10)
+        control=pygame.Rect(rect.right-margin-width if right else rect.left+margin,footer,width,px(27))
+        text(screen,font.small,label,control.move(px(3),px(2)).topleft,TEXT if control.collidepoint(mouse) else MUTED)
+        hits.append(UIHit(control,verb,index=1 if verb=='log_copy' else 0,label=label))
     top = min(len(cache.rows)-1, max(0,bisect_right(cache.offsets,scroll)-1))
     view = replace(view, scroll=scroll,
         anchor=cache.rows[top].row.key if top>=0 and not view.follow else None,

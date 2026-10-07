@@ -66,11 +66,20 @@ def test_direct_item_binding_reports_provisional_weapon_substitution(catalog):
     assert catalog.authored.direct_items['weapon.longsword'].presentation.icon_key=='item.longsword'
 
 
+@pytest.mark.parametrize('creature', ('skeleton_warrior', 'skeleton_archer', 'skeleton_warlock'))
+def test_original_skeleton_portraits_follow_native_creature_identity(catalog, creature):
+    reference = action_reference(catalog, 'creature.' + creature)
+    for role, size in (('initiative', (36, 48)), ('hud', (48, 64)), ('sheet', (96, 128))):
+        image = ui_image(catalog, reference, size, {}, portrait=True, portrait_role=role)
+        assert image is not None and image.size == size
+
+
 def test_new_creature_portraits_resolve_all_roles_through_exact_content_and_rig_identity(catalog):
     cache={}
     records={ref:descriptor for ref,descriptor in catalog.content.items()
         if descriptor.presentation.portrait_key is not None and
-        'portrait:'+descriptor.presentation.portrait_key+':initiative' in catalog.resources}
+        'portrait:'+descriptor.presentation.portrait_key+':initiative' in catalog.resources and
+        'ui_pixelated/creatures/' in catalog.resources['portrait:'+descriptor.presentation.portrait_key+':initiative'].path.as_posix()}
     assert len(records)==41
     for ref,descriptor in records.items():
         binding=next(json.loads(path.read_text()) for path in Path('game/data/rigs').glob('*.json')

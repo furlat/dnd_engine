@@ -51,11 +51,11 @@ from game.floor_composition import compose_floor_coverings
 from game.volume_media import compose_volume
 from game.environment_art import load_environment_art, prop_state_key, sample_environment_frame
 from game.environment_animation import door_pose, trap_pose, remnant_bank
-from game.environment_draw import environment_command, environment_depth_sample, environment_aperture_image, bind_object_selection
-from game.interaction_frame import support_selection, InteractionFrame, compose_interaction_frame, cut_selection
+from game.environment_draw import environment_command, environment_depth_sample, environment_aperture_frame, bind_object_selection
+from game.interaction_frame import support_selection, support_vertices, InteractionFrame, compose_interaction_frame, cut_selection
 from game.item_draw import item_ground_commands, item_attachment_commands
 from game.animation_types import AnimationData, ItemAttachmentStart
-from game.boundary_occlusion import clip_actor_boundaries
+from game.boundary_occlusion import clip_actor_boundaries, reveal_visible_supports
 
 
 WINDOW_SIZE = (1280, 720)
@@ -127,7 +127,7 @@ def _treatment(
 def _authored_treatment(
     catalog: AssetCatalog,
 ) -> tuple[str, tuple[float, float, float]]:
-    """Return the neutral treatment for objective structural geometry."""
+    """Return the muted treatment for unobserved structural geometry."""
     treatments = cast(Mapping[str, Mapping[str, object]], catalog.bindings["treatments"])
     row = treatments["authored"]
     rgb = cast(list[float], row["rgb"])
@@ -152,23 +152,6 @@ def _disclosure(
         return "current", max(levels, key=lambda value: value.value)
     if any(position in senses.seen for position in positions):
         return "memory", None
-    return None
-
-
-def _boundary_disclosure(
-    target: PresentationTarget | PlayerState,
-    position: tuple[int, int],
-    direction: CardinalDirection,
-) -> str | None:
-    """Classify composite boundary geometry from its incident supports."""
-    senses = target.senses
-    if senses is None:
-        return None
-    incident = _incident_positions(position, direction)
-    if any(support in senses.visible for support in incident):
-        return "current"
-    if any(support in senses.seen for support in incident):
-        return "memory"
     return None
 
 
@@ -641,8 +624,9 @@ def draw_frame(
             evidence,
             role="terrain_floor", support_height_steps=tile.elevation_steps,
          selection_occluder=True))
-        if collect_interaction and position in senses.visible:
-            commands[-1] = support_selection(commands[-1], tile, camera)
+        if collect_interaction and (position in senses.visible or position in senses.seen):
+            commands[-1] = support_selection(commands[-1]._replace(selection_block_mask=cache.coverage(asset_id,camera.zoom)),
+                tile, camera, top_mask=cache.support_coverage(asset_id,camera.zoom,support_vertices(commands[-1],tile,camera)))
         if tile.elevation_steps > 0:
             top_depth = ((destination[1] + np.arange(surface.height) + .5 - camera.pan[1])
                          / camera.zoom + tile.elevation_steps * HEIGHT_STEP_PIXELS)
@@ -672,8 +656,9 @@ def draw_frame(
              selection_occluder=True))
             if collect_interaction:
                 for support in (lower,middle,upper):
-                    if support.position in senses.visible:
-                        commands[-1] = support_selection(commands[-1], support, camera)
+                    if support.position in senses.visible or support.position in senses.seen:
+                        commands[-1] = support_selection(commands[-1]._replace(selection_block_mask=cache.coverage(asset_id,camera.zoom)),
+                            support, camera, top_mask=cache.support_coverage(asset_id,camera.zoom,support_vertices(commands[-1],support,camera)))
             # The whole-flight image retains its existing depth below the
             # highest support. It cannot occlude a billboard above that plane.
             top_depth = ((destination[1] + np.arange(surface.height) + .5 - camera.pan[1])
@@ -788,7 +773,7 @@ def draw_frame(
                 evidence, support_height_steps=target.tiles[position].elevation_steps,
                 selection_occluder=True,
             ))
-            if collect_interaction and position in senses.visible:
+            if collect_interaction and (position in senses.visible or position in senses.seen):
                 commands[-1] = support_selection(commands[-1],target.tiles[position],camera)
 
     stone_straight_bindings = cast(
@@ -836,7 +821,8 @@ def draw_frame(
         direction = obj.placement.boundary_direction or obj.placement.orientation or CardinalDirection.EAST
         boundary_pose = camera_pose(direction.value, camera.quadrant)
         physical_boundary = boundary_pose if obj.placement.boundary_direction is not None else None
-        disclosure = _disclosure(target, (position,))
+        disclosure = _disclosure(target, _incident_positions(position, direction)
+            if obj.placement.boundary_direction is not None else (position,))
         if disclosure is None:
             multiplier = authored_multiplier
         else:
@@ -857,7 +843,7 @@ def draw_frame(
                     quadrant=camera.quadrant, role="frame", identity=identity,
                     boundary_poses=(boundary_pose,)), frame_image, destination, 0,
                     (identity, position, frame_id, "current", None, "authored", "door_frame", base_height),
-                    selection_occluder=True)
+                    selection_occluder=True, selection_block_mask=cache.coverage(frame_id,camera.zoom))
                 commands.append(frame_command)
                 boundary_sprites.append(BoundarySprite((obj.placement,), frame_image, destination, frame_command.key))
         if not current_contact:
@@ -925,9 +911,11 @@ def draw_frame(
         if depth is not None and identity not in dust_objects:
             fixture_depths.append(depth)
         if physical_boundary is not None and identity not in dust_objects:
-            aperture = environment_aperture_image(obj.item.item_id,pose,camera) if not destroyed else None
+            aperture = environment_aperture_frame(obj.item.item_id,pose,camera) if not destroyed else None
             boundary_sprites.append(BoundarySprite((obj.placement,), command.surface, command.destination,
-                command.key,actor_aperture=aperture,
+                command.key,actor_aperture=aperture.image if aperture is not None else None,
+                actor_aperture_mask=aperture.coverage if aperture is not None else None,
+                fade_for_visible_ground=source_door is None,
                 actor_occludes=prop is not None and prop.occludes_actor_face and not destroyed))
     wall_rows: dict[
         tuple[tuple[int, int], Material],
@@ -950,20 +938,14 @@ def draw_frame(
         direction = world_object.placement.boundary_direction
         if structure is None or direction is None:
             continue
-        disclosure = _boundary_disclosure(
-            target,
-            world_object.placement.position,
-            direction,
-        )
+        disclosure = _disclosure(target,
+            _incident_positions(world_object.placement.position, direction))
         if disclosure is None:
             state, level = "authored", None
             treatment_id, multiplier = authored_treatment_id, authored_multiplier
         else:
-            state, level = disclosure, None
-            if state == "memory":
-                treatment_id, multiplier = _treatment(catalog, None)
-            else:
-                treatment_id, multiplier = authored_treatment_id, authored_multiplier
+            state, level = disclosure
+            treatment_id, multiplier = _treatment(catalog, level)
         pose = camera_pose(direction.value, camera.quadrant)
         position = world_object.placement.position
         base_height = world_object.placement.base_height_steps
@@ -1002,7 +984,7 @@ def draw_frame(
                         "door_frame",
                         base_height,
                     ),
-                 selection_occluder=True))
+                 selection_occluder=True, selection_block_mask=cache.coverage(frame_id,camera.zoom)))
                 boundary_sprites.append(BoundarySprite((world_object.placement,), frame, frame_destination, commands[-1].key))
             if object_uuid not in senses.objects:
                 continue
@@ -1041,8 +1023,10 @@ def draw_frame(
                         is_open,
                     ),
                 )
+                command = command._replace(selection_block_mask=cache.coverage(leaf_id,camera.zoom))
                 append_object(command, world_object.item)
-                boundary_sprites.append(BoundarySprite((world_object.placement,), prepared_leaf[0], leaf_destination, command.key))
+                boundary_sprites.append(BoundarySprite((world_object.placement,), prepared_leaf[0], leaf_destination,
+                    command.key,fade_for_visible_ground=False))
         elif structure.structure is BoundaryStructureKind.WALL:
             if structure.material not in {Material.STONE, Material.WOOD}:
                 raise RuntimeError(
@@ -1080,28 +1064,32 @@ def draw_frame(
             if len(rows) == 2
             else None
         )
-        same_treatment_and_height = (
+        same_height = (
             len(rows) == 2
-            and (rows[0][5], rows[0][6])
-            == (rows[1][5], rows[1][6])
             and rows[0][1].placement.base_height_steps
             == rows[1][1].placement.base_height_steps
         )
-        if representative is not None and same_treatment_and_height:
+        if representative is not None and same_height:
             source_ids = tuple(sorted(str(row[0]) for row in rows))
             directions = tuple(sorted(row[2].value for row in rows))
-            state = "current" if any(row[3] == "current" for row in rows) else rows[0][3]
+            # One source corner has one raster. Keep its joined geometry and
+            # sample only the observed incident supports, as for a straight wall.
+            disclosure = _disclosure(target, tuple({support for row in rows
+                for support in _incident_positions(position, row[2])}))
+            state, level = disclosure if disclosure is not None else ("authored", None)
+            treatment_id, multiplier = (_treatment(catalog, level) if disclosure is not None
+                else (authored_treatment_id, authored_multiplier))
             pose = camera_pose(representative.value, camera.quadrant)
             asset_id = corner_bindings[pose]
             base_height = rows[0][1].placement.base_height_steps
             contact = project_screen(position, camera, elevation_steps=base_height)
             prepared = _static_blit(
-                cache, asset_id, camera, contact, rows[0][6], screen
+                cache, asset_id, camera, contact, multiplier, screen
             )
             if prepared is not None:
                 surface, destination = prepared
                 surface = _marked_wall_surface(surface, asset_id, tuple(row[1] for row in rows),
-                                                catalog, cache, camera, rows[0][6])
+                                                catalog, cache, camera, multiplier)
                 command = DrawCommand(
                     painter_key(
                         position,
@@ -1120,12 +1108,13 @@ def draw_frame(
                         (position, directions),
                         asset_id,
                         state,
-                        None,
-                        rows[0][5],
+                        level.value if level is not None else None,
+                        treatment_id,
                         "wall_corner",
                         base_height,
                     ),
-                 selection_occluder=True)
+                 selection_occluder=True, selection_block_mask=(cache.coverage(asset_id,camera.zoom)
+                    if surface is prepared[0] else None))
                 rear, front = [], []
                 for identity, obj, direction, _, _, _, multiplier in rows:
                     if identity not in senses.objects:
@@ -1139,7 +1128,8 @@ def draw_frame(
                         continue
                     if collect_interaction:
                         command = bind_object_selection(command, obj, camera, component=command._replace(
-                            surface=original[0], destination=original[1], selection=()))
+                            surface=original[0], destination=original[1], selection=(),
+                            selection_block_mask=cache.coverage(straight_bindings[item_pose],camera.zoom)))
                     back, fore = item_attachment_commands(command._replace(
                         surface=original[0], destination=original[1]), obj.item,
                         animation_data, camera, time_ms=presentation_time * 1000, starts=item_starts)
@@ -1186,7 +1176,8 @@ def draw_frame(
                     "wall",
                     base_height,
                 ),
-             selection_occluder=True)
+             selection_occluder=True, selection_block_mask=(cache.coverage(asset_id,camera.zoom)
+                if surface is prepared[0] else None))
             if object_uuid in senses.objects:
                 append_object(command, world_object.item)
             else:
@@ -1530,6 +1521,9 @@ def draw_frame(
     commands = object_dust_commands(commands,world_transitions,
         animation_data.death_context.silhouetteDust if animation_data is not None else None)
     commands = compose_floor_coverings(commands)
+    commands, retained_boundaries = reveal_visible_supports(commands, boundary_sprites,
+        tuple(tile for position,tile in target.tiles.items() if position in senses.visible), camera)
+    boundary_sprites = list(retained_boundaries)
     commands = clip_actor_boundaries(commands,boundary_sprites,camera)
     commands = split_actor_fixtures(commands, fixture_depths)
     commands = _split_terrain_depths(commands, terrain_depths, extra_commands)
@@ -1540,7 +1534,8 @@ def draw_frame(
             image, depth = compose_volume(command.surface, command.volume, camera,
                 destination=command.destination, visual_boundaries=registered_boundaries,
                 world_bounds=target.world.bounds)
-            selection, blocker = cut_selection(command, pygame.surfarray.array_alpha(image) > 0)
+            selection, blocker = (cut_selection(command, pygame.surfarray.array_alpha(image) > 0)
+                if command.selection or command.selection_block_mask is not None else ((), None))
             composed.append(command._replace(surface=image, volume=None, world_depth=depth,
                 selection=selection, selection_block_mask=blocker))
             continue
@@ -1549,22 +1544,13 @@ def draw_frame(
             continue
         image, wall_contacts = compose_area(command.surface, command.destination,
             command.area, camera, boundary_sprites, command.blend)
-        selection, blocker = cut_selection(command, pygame.surfarray.array_alpha(image) > 0)
+        selection, blocker = (cut_selection(command, pygame.surfarray.array_alpha(image) > 0)
+                if command.selection or command.selection_block_mask is not None else ((), None))
         composed.append(command._replace(surface=image, area=None,
             selection=selection, selection_block_mask=blocker))
         composed.extend(DrawCommand(contact.key, contact.image, contact.destination,
             command.blend, (*command.evidence[:6], "wall_contact", *command.evidence[7:]))
             for contact in wall_contacts)
-    commands = split_world_depth(composed)
-    commands.sort(key=lambda row: row[0])
-    expected_draws = tuple(command[4] for command in commands) if collect_evidence else ()
-    actual_draws: list[tuple[object, ...]] | None = [] if collect_evidence else None
-    blit_media_commands(screen, commands)
-    for command in commands:
-        if actual_draws is not None:
-            actual_draws.append(command.evidence)
-        static_draws += 1
-
     grid_tiles = tuple(target.tiles.values()) if show_grid else ()
     grid_candidates = len(grid_tiles)
     grid_draws = 0
@@ -1585,18 +1571,37 @@ def draw_frame(
             )
             if not bounds.colliderect(screen_rect):
                 continue
+            image = pygame.Surface((bounds.width+1,bounds.height+1), pygame.SRCALPHA)
             pygame.draw.polygon(
-                screen,
+                image,
                 (105, 120, 150),
                 (
-                    (contact[0] - half_w, contact[1]),
-                    (contact[0], contact[1] - half_h),
-                    (contact[0] + half_w, contact[1]),
-                    (contact[0], contact[1] + half_h),
+                    (0,half_h),
+                    (half_w,0),
+                    (half_w*2,half_h),
+                    (half_w,half_h*2),
                 ),
                 width=1,
             )
+            key=painter_key(tile.position,elevation_steps=tile.elevation_steps,
+                quadrant=camera.quadrant,role="terrain",identity=(str(tile.tile_uuid),"grid"))
+            key=(45 if tile.elevation_steps==0 else key[0],*key[1:])
+            composed.append(DrawCommand(key,image,bounds.topleft,0,
+                (tile.tile_uuid,tile.position,'grid','current',None,'overlay','grid',tile.elevation_steps),
+                world_depth=np.broadcast_to(((bounds.y+np.arange(image.height)-camera.pan[1])/camera.zoom
+                    + tile.elevation_steps*HEIGHT_STEP_PIXELS)[None,:],image.get_size())))
             grid_draws += 1
+
+    commands = split_world_depth(composed)
+    commands.sort(key=lambda row: row[0])
+    expected_draws = tuple(command[4] for command in commands) if collect_evidence else ()
+    actual_draws: list[tuple[object, ...]] | None = [] if collect_evidence else None
+    blit_media_commands(screen, commands)
+    for command in commands:
+        if actual_draws is not None:
+            actual_draws.append(command.evidence)
+        static_draws += 1
+
 
     frame_evidence = None
     if expected_calculations is not None and actual_calculations is not None and actual_draws is not None:

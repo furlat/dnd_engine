@@ -481,6 +481,9 @@ class Encounter(BaseObject):
             parent = pending[active_uuid]
             try:
                 TurnEndEvent(source_entity_uuid=active_uuid, entity_uuid=active_uuid,
+                    source_entity_name=self.combatants[active_uuid].entity.name
+                        if self.combatants[active_uuid].entity is not None else None,
+                    identified_entity_observer_uuids={str(active_uuid): self._turn_identity_observers(active_uuid)},
                     encounter_uuid=self.uuid, round_number=self.round_number,
                     turn_index=self.current_turn_index, phase=EventPhase.COMPLETION,
                     parent_event=parent.uuid if parent is not None else None)
@@ -878,7 +881,8 @@ class Encounter(BaseObject):
                 event = entity.on_turn_end(
                     encounter_uuid=self.uuid,
                     round_number=self.round_number,
-                    turn_index=self.current_turn_index
+                    turn_index=self.current_turn_index,
+                    identified_by=self._turn_identity_observers(entity.uuid),
                 )
 
                 if controller and entity.uuid not in self._pending_leaves:
@@ -892,6 +896,23 @@ class Encounter(BaseObject):
             self._end_turn_execution()
 
         return event
+
+    def _turn_identity_observers(self, entity_uuid: UUID) -> Set[str]:
+        """Carry witnessed identity to turn closure, without carrying location.
+
+        Death can remove the actor from live senses before its turn closes.
+        The existing turn record remains evidence of who acted, including actors
+        first revealed by a reaction during the turn.
+        """
+        cursor = self.current_turn_started_source_event_cursor
+        if cursor is None:
+            return set()
+        return {
+            observer
+            for _, event in EventQueue.iter_events_since(max(0, cursor - 1))
+            if event.turn_execution_id == self.current_turn_execution_id
+            for observer in event.identified_entity_observer_uuids.get(str(entity_uuid), ())
+        }
 
     def next_turn(self) -> Optional[TurnStartEvent]:
         """
@@ -1397,6 +1418,14 @@ class Encounter(BaseObject):
                 or current_entity.uuid != actor_uuid
             ):
                 status = "advanced_autonomous"
+            elif not current_entity.can_take_actions():
+                # Turn-start effects (including death saves) have already run.
+                # A recovered actor keeps the decision; an incapacitated one
+                # completes its lifecycle without waiting for a meaningless click.
+                self.complete_current_turn()
+                self.check_deaths()
+                status = ("encounter_ended" if self.state is EncounterState.ENDED
+                          else "advanced_autonomous")
             else:
                 status = controller.external_boundary_status or "waiting_for_external"
             current = self.get_current_entity()

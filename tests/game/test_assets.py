@@ -290,3 +290,24 @@ def test_catalog_rejects_malformed_json_and_decode_failure(
             SurfaceCache(catalog).canonical("terrain.earth.e")
     finally:
         pygame.quit()
+
+
+def test_cached_support_masks_match_rasterized_geometry_through_pan_and_eviction(surface_cache):
+    # Exercise local polygon rounding and the memory limit with the actual art.
+    tiny = SurfaceCache(surface_cache.catalog, coverage_limit_bytes=12_000)
+    for pose in 'ensw':
+        for zoom in (.5, 1., 1.5):
+            identity = surface_cache.catalog.bindings['terrain']['earth'][pose]
+            source = surface_cache.cropped_treated(identity, zoom, (.7, .7, .7))
+            physical = pygame.surfarray.array_alpha(source) > 0
+            for shift in (0, 1, -1, 0):
+                w, h = source.get_size()
+                vertices = ((shift, h//2), (w//2+shift, 0), (w+shift, h//2), (w//2+shift, h))
+                polygon = pygame.Surface((w,h), pygame.SRCALPHA)
+                pygame.draw.polygon(polygon, 'white', vertices)
+                expected = (pygame.surfarray.array_alpha(polygon) > 0) & physical
+                actual = tiny.support_coverage(identity, zoom, vertices)
+                assert np.array_equal(actual, expected), (pose, zoom, shift)
+                assert not actual.flags.writeable
+                assert 0 <= tiny.coverage_bytes <= tiny.coverage_limit_bytes
+    assert tiny.coverage_evictions > 0

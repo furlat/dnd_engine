@@ -172,7 +172,10 @@ def cast_surface_volume(timeline: CastTimeline, sample: RegisteredMediaSample, a
         sample.positions, sample.ownership, sample.vertical_scale,
         area.boundaries if area is not None else (), exclusions,
         area.solids if area is not None else (), area.supports if area is not None else (),
-        source.area_propagation, admitted=area.admitted if area is not None else None,
+        # A witnessed burst is one continuous volume. Received affected cells
+        # describe outcomes, not a stencil for its artwork. Actual barriers,
+        # raised supports and exclusions still clip the physical volume.
+        source.area_propagation,
         translation=translation,
         line_geometry=source.area_geometry if isinstance(source.area_geometry, LinePresentationGeometry) else None,
         support_clipping=support_clipping)

@@ -9,8 +9,11 @@ sequence of spell demonstrations.** Working branch: **codex/recovery-design**,
 based on **codex/july-reconstruction at 16a6bfe**. The human committed the
 validated recovery implementation as **58b0946** (`visio nextraction working`).
 
-**Objective:** a playable in-process D&D encounter using the existing engine and
-NeuroStudio data through Python/Pygame. Complete subjective lineages reduce
+**Current objective (October 7):** plan the direct networked NeuroClient/PixiJS
+recovery described below, preserving the native engine and accepted authored data.
+Implementation of the previous pygame/OpenGL destination is paused for this design.
+The earlier objective was a playable in-process encounter through Python/Pygame.
+Complete subjective lineages reduce
 independently of historical playback. The engine already owns the rules; the
 application must connect movement, actions, turns, reactions and state into a
 coherent game. Hundreds of spells exercise shared capabilities and data, rather
@@ -26,6 +29,84 @@ is now imported through the original Studio schema, independently of gameplay.
 ## Active work — playable encounter through shared capabilities
 
 ### Current position — read this before the checkpoint details
+
+**October 7 — server-only practical plan, then independent engine-speed work.**
+The human narrowed the active study to the backend server. The
+[server implementation and engine performance plan](agent_docs/SERVER_IMPLEMENTATION_AND_ENGINE_PERFORMANCE_PLAN_2026-10-07.md)
+specifies native/application/transport ownership, finite API and lifecycle, command
+admission/retry/revisions, exact public recording and a client-free test harness.
+Gate A is a complete server and full headless encounter with independently reviewed
+correctness. Gate B then profiles and repairs measured engine/capture/transport
+costs. Baselines are collected during construction; speculative optimization does
+not precede a working shape. No frontend, UI, Studio, graphics or artwork work is
+part of this server-only phase. This request remains planning, not implementation.
+
+**October 7 — direct network server/NeuroClient/Studio design; planning only.**
+The human reconsidered the pygame/OpenGL destination and requests a deep shared
+design of a narrow new server, WSL frontend and complete production-renderer Studio.
+The current proposal is the
+[network server, NeuroClient and Studio plan](agent_docs/NETWORK_SERVER_NEUROCLIENT_STUDIO_PLAN_2026-10-07.md),
+with its [complete authoring coverage](agent_docs/NEUROCLIENT_AUTHORING_COVERAGE_2026-10-07.md).
+Native rules stay in their existing engine owners; the new server must not reuse
+the old omniserver's duplicated mechanics. Backend checkout/Windows execution may
+remain where they are. Preserve the old NeuroClient as reference. The proposal
+uses PixiJS/WebGL2 with one production presentation pipeline shared by playback
+and Studio. NeuroClient UI was more advanced than pygame but lacked many features;
+the human has not approved wholesale reuse. Assess components against all current
+requirements. Revised icons/portraits are supplied separately and are not the
+whole UI task. It supersedes
+the desktop-GL destination, not P01–P31, the
+packing/playback-speed audit or the earlier UI requirements. Preserve all dirty
+source work. This planning request does not authorize starting the migration.
+The plan records the anti-slop and ECS/import-DAG review outcomes and remaining
+implementation proof gates; inventories alone do not establish a working port.
+
+The following October 6/7 implementation checkpoints are historical context.
+
+**October 6 — live playtest recovery implementation resumed by the human.**
+The latest playtest exposed 29 recorded complaints, including active-character
+map switching, synchronous engine work in the SDL loop, repeated per-pixel work,
+door/ally route problems and inconsistent input. The active design is the
+[complete playtest recovery plan](agent_docs/PLAYER_PLAYTEST_RECOVERY_PLAN_2026-10-06.md).
+The human has now authorized proceeding with the reviewed plan. Start with the
+mandatory native-engine/startup audit, then implement its dependent repair steps.
+The October 7 Haste-potion crash is tracked as P30: projection now retains
+controlled actors' recorded poses through inventory updates, with shared replay
+commit ordering and explicit diagnostic failures. Its bounded correction received
+both source reviews; the implementation receipt records actual regression evidence.
+The broader recovery remains incomplete.
+The October 7 rendering direction is now the
+[full GPU migration addendum](agent_docs/GPU_RENDERER_AND_MEDIA_READINESS_2026-10-07.md):
+full world/creature/VFX/UI migration, packing repair, portable palette/XYZ shader
+operations, bounded resource readiness and removal of the CPU compositor. All
+P01–P31 and earlier UI repairs remain required. The human retains 32 FPS and
+requests a separate playback-speed audit. Transparency/picking/readiness proofs
+and two independent reviews precede production cutover. Do not resume a series of
+small CPU-compositor fixes as the recovery strategy.
+Existing uncommitted source changes remain provisional until their stated checks
+and independent reviews pass; preserve them without claiming completion.
+The plan supersedes the old per-observer UI-switching contract with one controlled
+party audience, and proposes one isolated native worker for live scheduling.
+It preserves native ECS mechanics, recorded causal playback and the existing log.
+Independent plan reviews and measurable real-display acceptance are required;
+earlier source reviews and dummy-display profiles do not establish smooth play.
+
+
+**October 6 — player UI setup/material checkpoint; earlier visual acceptance is superseded.**
+The human rejected the delivered UI’s composition, portrait proportions, readability,
+weapon-selection ambiguity and log formatting. The active repair contract is at the
+start of [the UI plan](agent_docs/PLAYER_UI_PLAN_2026-10-05.md). Normal launch now
+enters a fixed Fighter/Sorcerer party in the authored Lantern Crypt; the current
+implementation has actual gameplay frames, a completed native dungeon walkthrough and focused input/native checks. The [repair report](agent_docs/audits/PLAYER_UI_REPAIR_2026-10-06.md) distinguishes source review from pending human visual acceptance.
+Small BG3-like portraits and a lean WoW Classic PvP action strip are the direction.
+Agree on setup, proportions and materials first; consistent pixel-density/artwork
+regeneration is a later pass, not approved by the current prototype. The later
+human corrections authorize four independently paged icon blocks, a fixed bar
+when the log opens, shared glass panels, and equipment-slot/item-grid views with
+hovered compatible replacements. Native inventory rules remain unchanged. New
+artwork and new rules/event subsystems are excluded. The completion
+claims below describe the earlier rejected version, not approval of this repair.
+
 
 **October 6 — player UI complete and independently reviewed.**
 The [implementation report](agent_docs/audits/PLAYER_UI_IMPLEMENTATION_2026-10-06.md)

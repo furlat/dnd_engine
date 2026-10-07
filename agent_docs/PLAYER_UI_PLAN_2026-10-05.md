@@ -1,6 +1,86 @@
 # Player UI implementation plan — second source pass, 2026-10-05
 
-Status: implemented and independently reviewed. The [implementation and acceptance report](audits/PLAYER_UI_IMPLEMENTATION_2026-10-06.md) records actual module ownership, the native feature trace, the five persistent gameplay recordings, resolution samples and full regression reconciliation. Both final anti-slop and ECS/import-DAG receipts approve the delivered scope with its explicit limits. This document replaces the thin first plan and its appended amendments; the technical decisions below are retained as the approved contract.
+## Active grouped-bar / log repair — October 6, later user correction
+
+This supersedes the single mixed shortcut row and the previous visual checkpoint.
+The target is a coherent playable interface; source/test approval is not human
+visual acceptance. Keep the current accepted icon/portrait artwork and materials.
+
+| Requested behavior | Boundary and input | Observable acceptance |
+| --- | --- | --- |
+| Four distinct action blocks | Native discovery for Fighter/Sorcerer, owned items, resize, turn change | Base actions (including explicit melee/ranged), Spells, Class abilities, Items. Empty optional blocks disappear; world interactions stay in the world. Item-granted spells belong to Items. |
+| Multiple compact rows | Two rows per block, constrained viewport and open log | Each block wraps independently; overflowing blocks have their own pages. No global page that replaces one category with another. Native rank/form variants remain one family. Hotkeys follow the visible positions. |
+| Honest defaults | Initial discovery and inventory change | Include discovered usable families, even when temporarily unavailable. Owned-item membership follows current discovery; no dropped-item ghost controls. No duplicate ordinary/Extra Attack buttons. Existing pin preference applies to non-item families. |
+| Designed combat history | Open log after movement, repeated hits, damage, reactions | Flush-right dock, aligned text gutter, quiet turn dividers, compact action/outcome lines, bounded child indentation and expandable math/detail. No repeated full tree dump by default. Native identities, ancestry and clocks remain authoritative. |
+| Exact math and copy | Expand one row or turn on Dice, select/drag/copy, scroll | Native detailed wording and recorded dice/modifiers unchanged; canonical text selection and copied content agree with the visible text. Outcomes never recomputed; no second narrative formatter. |
+| Surrounding UI consistency | Open inventory, item details, spell variants and tooltips | Measured readable type, matching margins/materials, no clipped content or overlapping controls at 1280×720, 1920×1080, 2560×1440. Repair concrete layout defects only; no new inventory mechanics or asset generation. |
+| Fixed controls and glass panels | Toggle combat log; open inventory/choices/sheet | Bar position, wrapping and keys never change when the log opens. Log ends above the controls with a narrow text gutter. All open views share the same translucent surface; other HUD widgets must not show through beneath their controls. |
+| Minimal permanent text | Idle HUD and action blocks | Category headers are icons with hover names. Persistent text is limited to useful state and necessary controls; explanations stay in descriptions/tooltips. |
+| Hover choices, not a large selector | Hover any multi-choice spell/class ability; move into its options | A compact strip above the source button, with icons the same size as the bar. Shared level symbols for all spell levels and Sorcerer conversions; specific existing artwork for summon/form/element choices. No repeated spell art for rank, no title/cost/footer/Select panel. Clicking the final choice selects the exact native row. Earlier dependent facets update the remaining choices. |
+
+Implementation: passive block membership in existing `action_bar.py`, shared
+block geometry in `layout.py`, four page indices in existing focus, and the same
+rendered hit records for pointer and keyboard activation. Existing HUD and native
+command selection remain the only executor route. Existing `combat_log.py` keeps
+its retained rows and timing gate; refine its fold policy and draw hierarchy,
+without changing native producers. Verify real SDL input plus actual captured
+framebuffers, including both party members and owned consumables. Read-only
+anti-slop and anti-OOP/ECS reviewers examine this contract and the final source,
+input evidence and screenshots. No other-chat communication.
+
+Latest inventory extension: show equipped gear in a compact paper-doll slot layout
+and carried gear as icons. Hover/click an equipped slot opens compatible carried
+alternatives in the detail column, using `compatible_item_slots` exclusively;
+clicking one uses existing EquipItem. No cross-character transfers or invented
+slot rules. Use already accepted item/portrait icons. Category headings on the
+bar become icons with hover labels; no persistent nonessential category text.
+BG3 reference: https://bg3.wiki/wiki/Equipment and
+https://www.reddit.com/r/BaldursGate3/comments/16ccd5x . PoE2 reference:
+https://s3.amazonaws.com/obsidian-media/deadfire/deadfire-game-manual.pdf .
+
+Additional user steering: the log is a translucent overlay, with a stronger
+backing on hover and readable glyph shadows, not an opaque side block.
+Contextual cursors follow existing admitted world actions
+and selection previews; clear targeting/hover outlines during execution, including
+the command-commit frame. Use platform arrow/hand/crosshair/unavailable/text states
+without producing new cursor artwork. BG3 context references:
+https://forums.larian.com/ubbthreads.php?Number=731397&ubb=showflat and
+https://www.reddit.com/r/BaldursGate3/comments/1gzuf20 . These confirm contextual
+feedback; this is not a claim of exact BG3 cursor artwork reproduction.
+
+## Player-facing repair acceptance — 2026-10-06
+
+The earlier UI implementation is not accepted. This repair follows the user's
+play-session feedback and supersedes the character-creation entry flow below.
+
+| Requested behavior | Observable boundary / input | Required result |
+| --- | --- | --- |
+| Play immediately with Fighter and Sorcerer | Normal `python -m game` launch | Two premades in an authored dungeon; no creation screen. Existing explicit demo encounters remain available. |
+| Readable minimal HUD | Actual framebuffer at 1280×720 through 2560×1440 | Left party portraits, separate top initiative, compact bottom actions, no persistent debug/instruction paragraphs. Accepted icons retain their authored colors. |
+| Deliberate weapon choice | Choose melee/ranged, then click a creature/object | Exact native attack slot; no automatic fallback. Preference retained per player. |
+| Usable combat log | Open, scroll, expand, select, copy | Right-docked panel, consistent measured text and indentation, native compact summaries, inspectable original dice/modifiers. Copy works without selecting a row and excludes unrevealed entries. |
+| Causal movement and blood | Move a path; take damage producing residue | One native movement parent with expandable steps/reactions; blood tile aftermath belongs under damage, not anonymous creature-condition spam. |
+| Party understanding and visibility | Turn passes to the other human | Current command owner clear; no hidden-map disclosure through the inspection sidebar. |
+| Worth playing | Follow dungeon route, inspect/loot, trigger trap, fight | Existing authored floor/walls/lights/props, native loot/trap/door actions, exploration leading to combat. No new campaign or AI subsystem. |
+
+Implementation remains in the existing session, native log/projector, HUD and
+encounter authoring owners. The later approved equipment-slot/item-grid and
+hover-replacement view supersedes the earlier inventory-layout exclusion; native
+inventory mechanics stay unchanged. New artwork, narrative rendering and generic
+event/rules expansion remain outside this repair.
+
+Verification: reproduce the reported input failures, run the relevant UI/native
+contract tests, then inspect actual Pygame frames and exercise the real controls.
+Anti-slop and anti-OOP/ECS reviewers independently review the final diff and
+evidence; repair their actionable findings before declaring completion.
+
+### Design checkpoint before pixel-density work
+
+The user requires agreement on layout, proportions and materials before regenerating artwork. Use BG3-like small party/initiative portraits, with a lean WoW Classic PvP action strip instead of BG3’s hotbar. Keep current authored art colors; use quiet charcoal panel surfaces, thin neutral borders and restrained warm selection accents consistently. No new asset production in this checkpoint. One active-character highlight only: the portrait border; no duplicate vertical bar. Existing integer artwork scaling is provisional, not a final density standard: once the composition is accepted, audit pixel density across icon, portrait and chrome roles and consider dedicated resolution variants through 2560×1440. Text stays antialiased at display resolution.
+
+### Historical implementation baseline
+
+Historical status before the user’s rejection: implemented and independently reviewed. The [implementation and acceptance report](audits/PLAYER_UI_IMPLEMENTATION_2026-10-06.md) records actual module ownership, the native feature trace, the five persistent gameplay recordings, resolution samples and full regression reconciliation. Both final anti-slop and ECS/import-DAG receipts approve the delivered scope with its explicit limits. This document replaces the thin first plan and its appended amendments; the technical decisions below are retained as the approved contract.
 
 ## 1. Scope and fixed decisions
 

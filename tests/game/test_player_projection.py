@@ -177,7 +177,7 @@ def _door_memory_history() -> tuple[dict[str, RecordedSequence], UUID]:
     game = Game()
     try:
         observer = Entity.create(uuid4(), "Observer", config=EntityConfig(position=(5, 7)))
-        operator = Entity.create(uuid4(), "Door operator", config=EntityConfig(position=(8, 7)))
+        operator = Entity.create(uuid4(), "Door operator", config=EntityConfig(position=(6, 7)))
         for actor in (observer, operator):
             actor.compose_entity()
             game.deploy_entity(actor, actor.position)
@@ -197,7 +197,7 @@ def _door_memory_history() -> tuple[dict[str, RecordedSequence], UUID]:
         assert not any(observer.senses.visible.values())
         closed = CloseDirectionalDoorAction(source_entity_uuid=operator.uuid,
             source_item_uuid=door_uuid, template=False).apply()
-        assert closed is not None and not closed.canceled
+        assert closed is not None and not closed.canceled, closed.status_message if closed else 'No close result'
         assert not any(observer.senses.visible.values())
         observer.remove_condition_by_uuid(blindness.uuid)
         assert any(observer.senses.visible.values())

@@ -50,8 +50,10 @@ def field_media_commands(state: PlayerState, data: AnimationData, identity: UUID
     if geometry is None and (layer.composition != "clump" or anchor_position is None):
         return ()
     volume_layer = layer.composition in ("xy_volume", "xyz_volume")
-    upper = {row.position: row.lower_height_planes for row in upper_surfaces
-             if row.lower_height_planes and row.position not in positions}
+    upper: dict[tuple[int, int], list[tuple[tuple[float, float, float], ...]]] = {}
+    for row in upper_surfaces:
+        if row.position not in positions:
+            upper.setdefault(row.position, []).append(row.lower_height_planes)
     full_positions = positions
     moving_xyz = (previous_effect is not None and layer.composition == "xyz_volume"
                   and isinstance(geometry, SpherePresentationGeometry))
@@ -169,8 +171,13 @@ def field_media_commands(state: PlayerState, data: AnimationData, identity: UUID
                 elif layer.composition == "xyz_volume" and position in upper:
                     assert sample.positions is not None
                     sample_height = sample.positions[:, :, 1] * sample.vertical_scale + tile_height
-                    for a, b, c in upper[position]:
-                        admitted &= sample_height > a * (points[:, :, 0] + displayed_source[0]) + b * (points[:, :, 1] + displayed_source[1]) + c
+                    witnessed = np.zeros(admitted.shape, dtype=bool)
+                    for planes in upper[position]:
+                        clear = admitted.copy()
+                        for a, b, c in planes:
+                            clear &= sample_height > a * (points[:, :, 0] + displayed_source[0]) + b * (points[:, :, 1] + displayed_source[1]) + c
+                        witnessed |= clear
+                    admitted &= witnessed
                 if outside is not None:
                     assert edge_owners is not None and displayed_points is not None
                     fringe = (outside & (edge_owners[:, :, 0] == received_position[0])

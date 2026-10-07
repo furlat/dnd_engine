@@ -67,6 +67,7 @@ class PressurePlate(SpatialCondition):
             previous_pressed=self.pressed, pressed=occupied)
         # Nested movement caused by the output must observe the new contact state.
         self.pressed = occupied
+        self.observation_revision += 1
         self._send_output(parent_event=effect)
         self._complete_change(effect)
 
@@ -108,6 +109,7 @@ class PressurePlate(SpatialCondition):
                 target.cancel_pending_close(self.uuid)
             if self.pressed and parent_event is not None:
                 self.pressed = False
+                self.observation_revision += 1
                 self._send_output(parent_event=parent_event)
         super()._release_owned_runtime_state(parent_event=parent_event)
 

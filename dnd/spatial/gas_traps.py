@@ -178,6 +178,7 @@ class GasVent(SpatialCondition):
             previous_positions=positions, affected_positions=positions,
             parent_event=parent_event, previous_trap_state=self.trap_state, trap_state=state)
         self.trap_state = state
+        self.observation_revision += 1
         if state is TrapState.ACTIVATED:
             self.condition_stealth_dc = None
         self._complete_change(change)

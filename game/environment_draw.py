@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, NamedTuple
 from uuid import UUID
 
 import pygame
@@ -27,11 +27,19 @@ def _sheet(path: Path) -> pygame.Surface:
     return pygame.image.load(path).convert_alpha()
 
 
+class EnvironmentFrame(NamedTuple):
+    image: pygame.Surface
+    coverage: np.ndarray
+
+
 @lru_cache(maxsize=256)
-def _frame(path: Path, rect: tuple[int, int, int, int], scale: float) -> pygame.Surface:
+def _frame(path: Path, rect: tuple[int, int, int, int], scale: float) -> EnvironmentFrame:
     _, _, width, height = rect
     image = _sheet(path).subsurface(rect)
-    return pygame.transform.scale(image, (max(1, round(width * scale)), max(1, round(height * scale))))
+    scaled = pygame.transform.scale(image, (max(1, round(width * scale)), max(1, round(height * scale))))
+    coverage = pygame.surfarray.array_alpha(scaled) > 0
+    coverage.setflags(write=False)
+    return EnvironmentFrame(scaled, coverage)
 
 
 def environment_command(bank: EnvironmentBank, frame: int, *, identity: UUID,
@@ -50,8 +58,8 @@ def environment_command(bank: EnvironmentBank, frame: int, *, identity: UUID,
         assert path is not None
         width, height = bank.cell
         rect = frame * width, bank.rows.index(pose) * height, width, height
-    image = device_treatment(_frame(path, rect, scale),
-                             multiplier, flash)
+    source = _frame(path, rect, scale)
+    image = device_treatment(source.image, multiplier, flash)
     origin = project_screen(position, camera, elevation_steps=elevation)
     pivot = bank.pivots_by_pose[pose]
     destination = (round(origin[0] - pivot[0] * scale), round(origin[1] - pivot[1] * scale))
@@ -65,7 +73,7 @@ def environment_command(bank: EnvironmentBank, frame: int, *, identity: UUID,
         (identity, position, bank.identity, "current", None, "authored", role, elevation, pose, frame),
         world_depth=depth, role="environment_floor" if flat_ground else "other",
         support_height_steps=elevation, owner=str(identity), cell=position,
-        selection_occluder=True)
+        selection_occluder=True, selection_block_mask=source.coverage)
 
 
 def environment_depth_sample(command: DrawCommand, index: int, bank: EnvironmentBank,
@@ -102,7 +110,7 @@ def environment_selection_command(obj: PlayerObject | WorldObjectState, camera: 
     bank = art.intact.get(state) if state is not None else None
     if region is None or bank is None:
         return None
-    image = _frame(region.path, region.rect, bank.scale*camera.zoom)
+    source = _frame(region.path, region.rect, bank.scale*camera.zoom)
     origin = project_screen(obj.placement.position, camera, elevation_steps=obj.placement.base_height_steps)
     pivot = bank.pivots_by_pose[pose]
     key = painter_key(obj.placement.position, elevation_steps=obj.placement.base_height_steps,
@@ -110,11 +118,11 @@ def environment_selection_command(obj: PlayerObject | WorldObjectState, camera: 
         boundary_poses=(pose,) if obj.placement.boundary_direction is not None else ())
     if obj.item.supported_by_uuid is not None:
         key = (*key[:4], (str(obj.item.supported_by_uuid), "attached", str(obj.item.item_uuid)))
-    return DrawCommand(key, image, (round(origin[0]-pivot[0]*bank.scale*camera.zoom),
-        round(origin[1]-pivot[1]*bank.scale*camera.zoom)), 0, ())
+    return DrawCommand(key, source.image, (round(origin[0]-pivot[0]*bank.scale*camera.zoom),
+        round(origin[1]-pivot[1]*bank.scale*camera.zoom)), 0, (), selection_block_mask=source.coverage)
 
 
-def environment_aperture_image(item_id: str, pose: str, camera: Camera) -> pygame.Surface | None:
+def environment_aperture_frame(item_id: str, pose: str, camera: Camera) -> EnvironmentFrame | None:
     """Explicit opening coverage, independent of target selection and sprite alpha."""
     prop = load_environment_art().props.get(item_id)
     region = prop.aperture_masks_by_pose.get(pose) if prop is not None else None
@@ -122,32 +130,41 @@ def environment_aperture_image(item_id: str, pose: str, camera: Camera) -> pygam
     return _frame(region.path,region.rect,bank.scale*camera.zoom) if region is not None and bank is not None else None
 
 
+def environment_aperture_image(item_id: str, pose: str, camera: Camera) -> pygame.Surface | None:
+    frame = environment_aperture_frame(item_id, pose, camera)
+    return frame.image if frame is not None else None
+
+
 def bind_object_selection(command: DrawCommand, obj: PlayerObject | WorldObjectState,
                           camera: Camera, *, component: DrawCommand | None = None) -> DrawCommand:
     """Attach the registered target region to the actual displayed piece."""
     registered = component or environment_selection_command(obj, camera)
+    physical = command.selection_block_mask
+    if physical is None:
+        physical = pygame.surfarray.array_alpha(command.surface) > 0
+        physical.setflags(write=False)
     if registered is None:
-        mask = pygame.surfarray.array_alpha(command.surface) > 0
-        mask.setflags(write=False)
+        mask = physical
     else:
-        mask = align_coverage(pygame.surfarray.array_alpha(registered.surface) > 0,
-                              registered.destination, command)
-        mask = mask & (pygame.surfarray.array_alpha(command.surface) > 0)
+        registered_mask = registered.selection_block_mask
+        if registered_mask is None:
+            registered_mask = pygame.surfarray.array_alpha(registered.surface) > 0
+        mask = align_coverage(registered_mask, registered.destination, command) & physical
         mask.setflags(write=False)
     hit = WorldHit("object", str(obj.item.item_uuid), obj.placement.position, obj.placement.base_height_steps)
     direction = obj.placement.boundary_direction or obj.placement.orientation
     pose = camera_pose(direction.value if direction is not None else "east", camera.quadrant)
-    opening = environment_aperture_image(obj.item.item_id, pose, camera)
+    opening = environment_aperture_frame(obj.item.item_id, pose, camera)
     coverage = []
     if opening is not None:
-        aperture = align_coverage(pygame.surfarray.array_alpha(opening) > 0, command.destination, command)
-        mask = mask & ~aperture & (pygame.surfarray.array_alpha(command.surface) > 0)
+        aperture = align_coverage(opening.coverage, command.destination, command)
+        mask = mask & ~aperture
         mask.setflags(write=False)
         coverage.append(SelectionCoverage(WorldHit("aperture", str(obj.item.item_uuid),
             obj.placement.position, obj.placement.base_height_steps), aperture))
     coverage.insert(0, SelectionCoverage(hit, mask))
     return command._replace(selection=(*command.selection, *coverage),
-                            selection_occluder=True)
+                            selection_occluder=True, selection_block_mask=physical)
 
 
 def pick_environment_target(point: tuple[int, int], objects: Mapping[UUID, PlayerObject],

@@ -13,7 +13,7 @@ from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, Spell
 from dnd.spells.abjuration import CounterspellReactionEvent
 from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
-from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
+from dnd.types.senses import SensesSnapshot
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.base_actions import ActionEvent
@@ -34,6 +34,8 @@ from dnd.types.world import CardinalDirection
 from dnd.types.class_features import FontConversion
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult, ObjectResidueState
 from dnd.types.summoning import SummonDepartureCause
+from game.audience import PlayerAudience, resolve_audience
+
 from game.actor_facts import ActorState, ConditionFact, PresentationTarget
 from game.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
 from dnd.actor_projection import remove_previous_item_holdings
@@ -48,27 +50,27 @@ from game.player_facts import (
 from game.presentation import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
 from game.replay import RecordedSequence
 from game.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
-from game.player_reduction import apply_world_update, apply_player_fact
+from game.player_reduction import apply_world_update, apply_player_fact, apply_committed_player_fact
 from game.recording_compat import legacy_damage_reference
 
 
-def _identified(event: Event, identity: UUID | None, observer: UUID) -> bool:
-    return identity is not None and (identity == observer or str(observer) in
-        event.identified_entity_observer_uuids.get(str(identity), set()))
+def _identified(event: Event, identity: UUID | None, observer: PlayerAudience) -> bool:
+    return identity is not None and (observer.controls(identity) or observer.granted(
+        event.identified_entity_observer_uuids.get(str(identity), set())))
 
 
-def _action_name(event: ActionEvent, observer: UUID) -> str | None:
-    if event.font_conversion is None or event.source_entity_uuid == observer:
+def _action_name(event: ActionEvent, observer: PlayerAudience) -> str | None:
+    if event.font_conversion is None or observer.controls(event.source_entity_uuid):
         return event.name
     return ("Convert slot to sorcery points" if event.font_conversion.direction == "slot_to_points"
         else "Convert sorcery points to slot")
 
 
 def _action_log(log: CombatLogEntry | None, fact: PlayerFact | None,
-                observer: UUID) -> CombatLogEntry | None:
+                observer: PlayerAudience) -> CombatLogEntry | None:
     """Keep a foreign conversion's resource amounts out of its public label too."""
     if (log is None or not isinstance(fact, ActionFact) or fact.font_conversion is None
-            or fact.source_entity_uuid == observer):
+            or observer.controls(fact.source_entity_uuid)):
         return log
     description = log.data.get("effect_description", "")
     compact = f"{{cyan:{log.source_name or 'Unknown'}}} uses {{bold:{fact.name}}}"
@@ -77,20 +79,20 @@ def _action_log(log: CombatLogEntry | None, fact: PlayerFact | None,
         "data": {**log.data, "action_name": fact.name}})
 
 
-def _position_allowed(event: Event, position: tuple[int, int], observer: UUID) -> bool:
-    return str(observer) in event.located_position_observer_uuids.get(
-        f"{position[0]},{position[1]}", set())
+def _position_allowed(event: Event, position: tuple[int, int], observer: PlayerAudience) -> bool:
+    return observer.granted(event.located_position_observer_uuids.get(
+        f"{position[0]},{position[1]}", set()))
 
 
-def _step_allowed(event: StepMovementEvent, observer: UUID) -> bool:
+def _step_allowed(event: StepMovementEvent, observer: PlayerAudience) -> bool:
     return _identified(event, event.source_entity_uuid, observer) and (
-        event.source_entity_uuid == observer or all(_position_allowed(event, position, observer)
+        observer.controls(event.source_entity_uuid) or all(_position_allowed(event, position, observer)
             for position in (event.disclosed_path or (event.from_position, event.to_position))))
 
 
-def _forced_allowed(event: ForcedMovementEvent, observer: UUID) -> bool:
+def _forced_allowed(event: ForcedMovementEvent, observer: PlayerAudience) -> bool:
     return _identified(event, event.target_entity_uuid, observer) and (
-        observer in (event.source_entity_uuid, event.target_entity_uuid)
+        any(observer.controls(identity) for identity in (event.source_entity_uuid, event.target_entity_uuid))
         or all(_position_allowed(event, point, observer)
                for point in (event.disclosed_path or (event.start_position, event.end_position))))
 
@@ -107,7 +109,7 @@ def _visual_loadout(actor: ActorState) -> VisualLoadout:
         for slot, identity in actor.equipment))
 
 
-def _public_actor(actor: ActorState, observer: UUID) -> PlayerActor:
+def _public_actor(actor: ActorState, observer: PlayerAudience) -> PlayerActor:
     return PlayerActor(uuid=actor.uuid, name=actor.name,
         character_body_id=actor.character_body_id, creature_content_ref=actor.creature_content_ref,
         appearance=actor.appearance, visual_loadout=_visual_loadout(actor),
@@ -121,8 +123,8 @@ def _public_actor(actor: ActorState, observer: UUID) -> PlayerActor:
         last_visual_position=actor.last_visual_position, faction=actor.faction,
         manifestation=actor.summon_origin.manifestation if actor.summon_origin is not None else None,
         occupancy_layer=(actor.occupancy_layer
-                         if actor.uuid == observer or actor.last_visual_position is not None else None),
-        controlled_items=actor.items if actor.uuid == observer else None)
+                         if observer.controls(actor.uuid) or actor.last_visual_position is not None else None),
+        controlled_items=actor.items if observer.controls(actor.uuid) else None)
 
 
 def _sensory_fact(event: SensoryUpdateEvent) -> SensoryFact:
@@ -147,10 +149,11 @@ def _sensory_fact(event: SensoryUpdateEvent) -> SensoryFact:
         visual_access=event.visual_access, paths_dirty=event.paths_dirty)
 
 
-def _held_item_disclosed(item_uuid: UUID | None, event: Event, observer: UUID,
+def _held_item_disclosed(item_uuid: UUID | None, event: Event, observer: PlayerAudience,
                          actors: dict[UUID, ActorState], known: set[UUID],
                          senses: SensesSnapshot | None) -> bool:
-    if observer in actors and any(item.item_uuid == item_uuid for item in actors[observer].items):
+    if any(identity in actors and any(item.item_uuid == item_uuid for item in actors[identity].items)
+           for identity in observer.controlled):
         return True
     return any(identity in known and _identified(event, identity, observer)
         and senses is not None and identity in senses.entities and senses.entities[identity].visual
@@ -158,7 +161,7 @@ def _held_item_disclosed(item_uuid: UUID | None, event: Event, observer: UUID,
         for identity, actor in actors.items())
 
 
-def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
+def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, ActorState],
                   condition: ConditionFact | None, events: tuple[Event, ...],
                   admissions: tuple[ActorAdmission, ...], known: set[UUID],
                   observed_objects: set[UUID], senses: SensesSnapshot | None,
@@ -228,7 +231,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 operation=event.operation, previous_pressed=event.previous_pressed,
                 pressed=event.pressed, interaction_operation=interaction_operation) if positions else None
         case SensoryUpdateEvent():
-            return _sensory_fact(event) if event.observer_uuid == observer else None
+            return _sensory_fact(event) if observer.observes(event.observer_uuid) else None
         case StepMovementEvent():
             if not _step_allowed(event, observer):
                 return None
@@ -247,7 +250,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
             if not observed:
                 return None
             atomic = isinstance(event, JumpEvent) and (
-                event.source_entity_uuid == observer or bool(steps) and all(_step_allowed(row, observer) for row in steps)
+                observer.controls(event.source_entity_uuid) or bool(steps) and all(_step_allowed(row, observer) for row in steps)
                 and set(event.path or ()).issubset({position for row in steps
                     for position in (row.disclosed_path or (row.from_position, row.to_position))}))
             # The trajectory ends at its last committed step. A portal or paid
@@ -257,15 +260,15 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 start_position=event.start_position if atomic else None,
                 end_position=(landing.to_position if landing is not None else event.start_position) if atomic else None,
                 requested_end_position=event.requested_end_position if atomic and (
-                    source == observer or event.requested_end_position in (event.path or ())) else None,
+                    observer.controls(source) or event.requested_end_position in (event.path or ())) else None,
                 path=tuple(event.path or ()) if atomic else (),
                 start_elevation_feet=event.start_elevation_feet if atomic and isinstance(event, JumpEvent) else None,
                 end_elevation_feet=(landing.to_elevation_feet if landing is not None else event.start_elevation_feet)
                     if atomic and isinstance(event, JumpEvent) else None,
-                movement_mode=(event.movement_mode if event.source_entity_uuid == observer
+                movement_mode=(event.movement_mode if observer.controls(event.source_entity_uuid)
                                or any(_step_allowed(row, observer) for row in steps) else None),
-                start_layer=event.start_layer if atomic or event.source_entity_uuid == observer else None,
-                end_layer=event.end_layer if atomic or event.source_entity_uuid == observer else None)
+                start_layer=event.start_layer if atomic or observer.controls(event.source_entity_uuid) else None,
+                end_layer=event.end_layer if atomic or observer.controls(event.source_entity_uuid) else None)
         case TraverseConnectorEvent():
             steps = tuple(row for row in events if isinstance(row, StepMovementEvent)
                           and row.parent_lineage == event.lineage_uuid)
@@ -296,7 +299,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 item_effects=event.source_item_presentation.item_effects if event.source_item_presentation is not None else (),
                 target_kind=event.target_kind,
                 target_position=event.target_position if event.target_kind == "object" and (
-                    source == observer or event.target_position is not None and (
+                    observer.controls(source) or event.target_position is not None and (
                         _position_allowed(event, event.target_position, observer)
                         or declaration_senses is not None and event.target_position in declaration_senses.visible)) else None,
                 target_base_height_steps=event.target_base_height_steps if event.target_kind == "object" else None,
@@ -315,7 +318,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                     not _identified(event, identity, observer) and identity not in observed_objects
                     for identity in event.declared_target_entity_uuids):
                 return None
-            if event.propagation is not None and source != observer and any(
+            if event.propagation is not None and not observer.controls(source) and any(
                     (endpoint.kind == "creature" and not _identified(event, endpoint.uuid, observer)
                      or endpoint.kind == "object" and endpoint.uuid not in observed_objects)
                     or not (_position_allowed(event, endpoint.position, observer)
@@ -324,7 +327,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                     for endpoint in (event.propagation.source, event.propagation.target)):
                 return None
             source_position = event.source_position
-            if source_position is not None and event.source_entity_uuid != observer and not _position_allowed(event, source_position, observer):
+            if source_position is not None and not observer.controls(event.source_entity_uuid) and not _position_allowed(event, source_position, observer):
                 # Locating an actor at completion grants its received contact,
                 # not an earlier declaration coordinate (e.g. teleport origin).
                 contact = senses.entities.get(source) if senses is not None else None
@@ -332,7 +335,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 observed_declaration = (declared_contact is not None and declared_contact.visual
                     and declared_contact.position == source_position)
                 if not observed_declaration and (
-                        str(observer) not in event.located_entity_observer_uuids.get(str(source), set())
+                        not observer.granted(event.located_entity_observer_uuids.get(str(source), set()))
                         or contact is None or contact.position != source_position):
                     source_position = None
             # A direction pick may lie beyond the visible map; it is not the
@@ -353,7 +356,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
             return SpellFact(source_entity_uuid=source, target_entity_uuid=target,
                 target_kind=event.target_kind,
                 target_position=event.target_position if event.target_kind == "object" and (
-                    source == observer or event.target_position is not None and (
+                    observer.controls(source) or event.target_position is not None and (
                         _position_allowed(event, event.target_position, observer)
                         or declaration_senses is not None and event.target_position in declaration_senses.visible)) else None,
                 target_base_height_steps=event.target_base_height_steps if event.target_kind == "object" else None,
@@ -405,9 +408,9 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
         case PortalTransferEvent():
             if target is None:
                 return None
-            departure = event.start_position if (target == observer
+            departure = event.start_position if (observer.controls(target)
                 or _position_allowed(event, event.start_position, observer)) else None
-            arrival = event.end_position if event.committed and (target == observer
+            arrival = event.end_position if event.committed and (observer.controls(target)
                 or _position_allowed(event, event.end_position, observer)) else None
             if departure is None and arrival is None:
                 return None
@@ -418,7 +421,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 portal_uuid=event.portal_uuid if departure is not None and (
                     senses is not None and event.portal_uuid in senses.spatial_effects
                     or declaration_senses is not None and event.portal_uuid in declaration_senses.spatial_effects
-                    or any(isinstance(row, SensoryUpdateEvent) and row.observer_uuid == observer
+                    or any(isinstance(row, SensoryUpdateEvent) and observer.observes(row.observer_uuid)
                         and event.portal_uuid in row.spatial_effects_changed for row in events)) else None,
                 start_position=departure, end_position=arrival, committed=event.committed,
                 portal_content_id=(event.portal_content_ref.content_id if event.portal_content_ref is not None
@@ -451,15 +454,15 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 contact = senses.entities.get(target) if senses is not None else None
                 if (effect is None or spatial_source.position not in effect.positions
                         or senses is None or spatial_source.position not in senses.visible
-                        or not (target == observer or contact is not None and contact.visual
+                        or not (observer.controls(target) or contact is not None and contact.visual
                             and contact.position == spatial_source.target_position)):
                     spatial_source = None
             release = None
             recorded = event.body_release
             if recorded is not None:
                 contact = senses.entities.get(target) if senses is not None else None
-                located = (target == observer or _position_allowed(event, recorded.position, observer)
-                    or str(observer) in event.located_entity_observer_uuids.get(str(target), set())
+                located = (observer.controls(target) or _position_allowed(event, recorded.position, observer)
+                    or observer.granted(event.located_entity_observer_uuids.get(str(target), set()))
                     and contact is not None and contact.visual and contact.position == recorded.position)
                 if not located:
                     # Entry payloads can complete before their sensory child.
@@ -523,8 +526,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                     else TemporaryHitPointsFact(entity_uuid=event.entity_uuid,
                         resulting_temporary_hp=event.resulting_temporary_hp, grant=event.grant))
         case EntityFactionChangedEvent():
-            located = (event.entity_uuid == observer or str(observer) in
-                       event.located_entity_observer_uuids.get(str(event.entity_uuid), set()))
+            located = (observer.controls(event.entity_uuid) or observer.granted(event.located_entity_observer_uuids.get(str(event.entity_uuid), set())))
             return (FactionFact(entity_uuid=event.entity_uuid, faction_after=event.faction_after)
                     if event.entity_uuid in known and _identified(event, event.entity_uuid, observer) and located else None)
         case LifeStateChangeEvent():
@@ -547,16 +549,16 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 indomitable_reroll=event.indomitable_reroll,
                 effect_id=event.saving_throw_context.effect_id if event.saving_throw_context is not None else None))
         case ItemResourceChangeEvent():
-            return (ItemChargeFact(source_entity_uuid=observer, item_uuid=event.item_uuid,
+            return (ItemChargeFact(source_entity_uuid=event.source_entity_uuid, item_uuid=event.item_uuid,
                 charges_after=event.charges_after, stack_count_after=event.stack_count_after,
-                item_destroyed=event.item_destroyed, resource_change=event.resource_change) if event.source_entity_uuid == observer else None)
+                item_destroyed=event.item_destroyed, resource_change=event.resource_change) if observer.controls(event.source_entity_uuid) else None)
         case EquipmentEvent() | ItemLocationStateEvent() | ItemHoldingsReleasedEvent():
             owner = actor_fact_owner(event)
             if owner is None or owner not in known or owner not in actors or not _identified(event, owner, observer):
                 return None
             actor = actors[owner]
             return EquipmentFact(source_entity_uuid=owner, visual_loadout=_visual_loadout(actor),
-                armor_class=actor.armor_class, controlled_items=actor.items if owner == observer else None)
+                armor_class=actor.armor_class, controlled_items=actor.items if observer.controls(owner) else None)
         case SpatialChangeEvent():
             if event.change_type in (SpatialChangeType.OBJECT_PLACED, SpatialChangeType.OBJECT_REMOVED):
                 if event.canceled or event.phase is not EventPhase.COMPLETION or event.object_uuid is None:
@@ -569,7 +571,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 return SpatialFact(change_type=event.change_type, entity_uuid=None, object_uuid=event.object_uuid,
                     position=contact.position, commit_event_uuid=event.commit_event_uuid)
             identified_entity = event.entity_uuid if _identified(event, event.entity_uuid, observer) else None
-            own_position = identified_entity == observer
+            own_position = observer.controls(identified_entity)
             if event.change_type not in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT,
                                          SpatialChangeType.PERCEIVABILITY_CHANGED, SpatialChangeType.MOVEMENT_COLLISION):
                 return None
@@ -588,7 +590,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
             witnessed_departure = (terminal and departed_contact is not None
                 and departed_contact.visual and departed_contact.position == event.position)
             located_arrival = (event.change_type is SpatialChangeType.ENTITY_ENTERED
-                and str(observer) in event.located_entity_observer_uuids.get(str(event.entity_uuid), set()))
+                and observer.granted(event.located_entity_observer_uuids.get(str(event.entity_uuid), set())))
             if identified_entity is None or not (own_position or parent_geometry or located_arrival or witnessed_departure
                                                 or _position_allowed(event, event.position, observer)):
                 return None
@@ -647,14 +649,14 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
             object_target = event.target_entity_uuid if event.target_entity_uuid in observed_objects else target
             return (None if source is None else ActionFact(source_entity_uuid=source, target_entity_uuid=object_target,
                 behavior_id=event.behavior_id, name=_action_name(event, observer),
-                font_conversion=(event.font_conversion if source == observer else
+                font_conversion=(event.font_conversion if observer.controls(source) else
                     FontConversion(direction=event.font_conversion.direction)
                     if event.font_conversion is not None else None),
                 source_item_uuid=event.source_item_uuid if event.source_item_uuid in observed_objects else None))
     return None
 
 
-def _content_attributions(event: Event, fact: PlayerFact | None, observer: UUID,
+def _content_attributions(event: Event, fact: PlayerFact | None, observer: PlayerAudience,
                           disclosed_lineages: set[UUID]) -> tuple[ContentAttribution, ...]:
     result: list[ContentAttribution] = []
     if fact is not None and isinstance(event, ActionEvent) and event.behavior_id is not None:
@@ -842,7 +844,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                    ) -> tuple[tuple[PlayerNode, ...], tuple[PlayerObservation, ...], tuple[WorldUpdate, ...]]:
     events = upgrade_recorded_spatial_commits(events, tuple(
         (row.lineage_uuid, row.event_uuid) for row in sorted(versions, key=lambda row: row.source_index)))
-    observer = remembered.observer_uuid
+    observer = remembered.viewing_audience
     indexes = {row.event_uuid: row.source_index for row in versions}
     by_version = {event.uuid: event for event in (*observed_sources, *events)}
     facts = {row.event_uuid: row for row in conditions}
@@ -915,10 +917,10 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                 removed_holders = remove_previous_item_holdings(private_actors, event)
                 for identity in removed_holders:
                     contact = private_world.senses.entities.get(identity) if private_world.senses is not None else None
-                    if identity in remembered.actors and (identity == observer or contact is not None and contact.visual):
+                    if identity in remembered.actors and (observer.controls(identity) or contact is not None and contact.visual):
                         actor = private_actors[identity]
                         observed = replace(remembered.actors[identity], visual_loadout=_visual_loadout(actor),
-                                           controlled_items=actor.items if identity == observer else None)
+                                           controlled_items=actor.items if observer.controls(identity) else None)
                         # A gear-only observation cannot roll back the life/HP
                         # facts already disclosed since its preceding snapshot.
                         # Read emitted facts, not hidden private actor values.
@@ -950,18 +952,22 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                                                        for item in actor.items))
                     private_actors[identity] = actor
                     contact = private_world.senses.entities.get(identity) if private_world.senses is not None else None
-                    if identity in remembered.actors and (identity == observer or contact is not None and contact.visual):
+                    if identity in remembered.actors and (observer.controls(identity) or contact is not None and contact.visual):
                         observed = replace(remembered.actors[identity], visual_loadout=_visual_loadout(actor),
-                                           controlled_items=actor.items if identity == observer else None)
+                                           controlled_items=actor.items if observer.controls(identity) else None)
                         observations.append(PlayerObservation(event_uuid=event.uuid, actor=observed, contact=None))
                         remembered.actors[identity] = observed
             world_changed = apply_world_fact(private_world, event, facts.get(event.uuid))
-            if isinstance(event, SensoryUpdateEvent) and event.observer_uuid == observer:
+            if isinstance(event, SensoryUpdateEvent) and observer.observes(event.observer_uuid):
                 for source_uuid in dict.fromkeys(row.source_event_uuid for row in event.observed_changes):
                     source = by_version.get(source_uuid)
                     if source is not None and not source.canceled:
                         apply_world_fact(private_world, source)
-                private_world.senses = reduce_senses_snapshot(observer, private_world.senses, event)
+                # Keep the projector's remembered body positions in the same
+                # fold as replay. A later gear-only observation must not replace
+                # a teammate's pose with their pre-deployment admission value.
+                apply_player_fact(remembered, _sensory_fact(event), source_cursor=indexes[event.uuid])
+                private_world.senses = remembered.senses
                 world_changed = True
             if world_changed:
                 update = _world_update(private_world, remembered, event.uuid)
@@ -993,7 +999,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                             declaration_senses)
         condition_target = event.target_entity_uuid
         if (fact is None and event.event_type is EventType.CONDITION_REMOVAL
-                and event.source_entity_uuid == observer and condition_target is not None
+                and observer.controls(event.source_entity_uuid) and condition_target is not None
                 and condition_target in remembered.actors):
             # The source receives the end of its own already-known membership.
             # That does not disclose the absent recipient's current stats or place.
@@ -1005,8 +1011,8 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                     event_type=event.event_type, condition=replace(known_member,
                         event_uuid=event.uuid, resulting_stats=None, resulting_max_hp=None,
                         resulting_ac=None, resulting_tile=None, resulting_item=None))
-        if isinstance(fact, ConditionChangeFact) and not event.canceled:
-            apply_player_fact(remembered, fact)
+        if isinstance(fact, (ConditionChangeFact, SpatialFact)) and not event.canceled:
+            apply_committed_player_fact(remembered, fact, source_cursor=indexes[event.uuid], version_cursors=indexes)
         if isinstance(fact, FactionFact):
             parent = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
             removed = (facts.get(parent.uuid) if parent is not None
@@ -1122,7 +1128,7 @@ def begin_projection(initialization: IntervalEnvelope) -> tuple[ProjectionState,
     world = PlayerWorld(battlefield_id=world_event.battlefield_id, battlefield_name=world_event.battlefield_name,
         bounds=world_event.bounds, width=world_event.width, height=world_event.height)
     private_world = PresentationTarget(generation=initialization.generation, observer_uuid=initialization.observer_uuid)
-    remembered = PlayerState(generation=initialization.generation, observer_uuid=initialization.observer_uuid, world=world)
+    remembered = PlayerState(generation=initialization.generation, observer_uuid=initialization.observer_uuid, world=world, audience=resolve_audience(initialization.observer_uuid, initialization.audience))
     actors: dict[UUID, ActorState] = {}
     versions = _versions(initialization.objective_rows)
     disclosed: set[UUID] = set()
@@ -1130,13 +1136,14 @@ def begin_projection(initialization: IntervalEnvelope) -> tuple[ProjectionState,
         versions, initialization.admissions, initialization.conditions, private_world, actors, remembered, disclosed)
     initial = PlayerInitialization(generation=initialization.generation, observer_uuid=initialization.observer_uuid,
         world=world, nodes=nodes, version_rows=versions, end_cursor=initialization.end_cursor,
-        observations=observations, world_updates=updates)
+        observations=observations, world_updates=updates, audience=remembered.audience)
     return ProjectionState(private_world, actors, remembered, disclosed), initial
 
 
 def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> PlayerLineage | None:
     """Advance the same private projection memory over one closed root."""
-    if state.world.generation != lineage.generation or state.world.observer_uuid != lineage.observer_uuid:
+    if (state.world.generation != lineage.generation or state.world.observer_uuid != lineage.observer_uuid
+            or state.remembered.viewing_audience != resolve_audience(lineage.observer_uuid, lineage.audience)):
         raise ValueError("recorded lineage belongs to another projection")
     versions = _versions(lineage.objective_rows)
     nodes, observations, updates = _project_nodes(upgrade_recorded_resolutions(lineage.events), versions, lineage.admissions,
@@ -1156,7 +1163,7 @@ def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> Player
     root = next(node for node in nodes if node.uuid == lineage.root.uuid)
     return PlayerLineage(generation=lineage.generation, observer_uuid=lineage.observer_uuid,
         root=root, events=nodes, version_rows=versions, start_cursor=lineage.start_cursor,
-        end_cursor=lineage.end_cursor, observations=observations, world_updates=updates)
+        end_cursor=lineage.end_cursor, observations=observations, world_updates=updates, audience=state.remembered.audience)
 
 
 def project_sequence(native: RecordedSequence) -> PlayerSequence:

@@ -1,6 +1,7 @@
 """Small measured drawing functions; text is never part of pixel artwork."""
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 import pygame
 
@@ -28,16 +29,36 @@ class UIFonts:
 
 
 def fonts(scale: float) -> UIFonts:
-    family='segoeui,dejavusans,arial'
-    return UIFonts(pygame.font.SysFont(family,round(18*scale)),pygame.font.SysFont(family,round(16*scale)),
-        pygame.font.SysFont(family,round(21*scale),bold=True),pygame.font.SysFont('consolas,dejavusansmono',round(16*scale)),
-        pygame.font.SysFont(family,round(16*scale),bold=True))
+    family='dejavusans,segoeui,arial'
+    return UIFonts(pygame.font.SysFont(family,max(15,round(17*scale))),pygame.font.SysFont(family,max(14,round(15*scale))),
+        pygame.font.SysFont(family,max(19,round(21*scale)),bold=True),pygame.font.SysFont('consolas,dejavusansmono',max(14,round(15*scale))),
+        pygame.font.SysFont(family,max(14,round(15*scale)),bold=True))
 
 
-def panel(screen: pygame.Surface, rect: pygame.Rect, skin: UISkin, *, scale: float = 1., tooltip: bool = False) -> None:
-    pygame.draw.rect(screen,PANEL,rect)
+@lru_cache(maxsize=16)
+def _glass_surface(size: tuple[int,int], active: bool) -> pygame.Surface:
+    surface=pygame.Surface(size,pygame.SRCALPHA)
+    surface.fill((12,17,23,145 if active else 94))
+    return surface
+
+
+def glass(screen: pygame.Surface, rect: pygame.Rect, *, active: bool = False) -> None:
+    screen.blit(_glass_surface(rect.size,active),rect)
+
+
+def panel(screen: pygame.Surface, rect: pygame.Rect, skin: UISkin, *, scale: float = 1., tooltip: bool = False,
+          mouse: tuple[int,int] = (-1,-1)) -> None:
+    glass(screen,rect,active=tooltip or rect.collidepoint(mouse))
     pygame.draw.rect(screen,BORDER,rect,max(1,round(scale)))
-    pygame.draw.line(screen,GOLD,rect.topleft,rect.topright,max(1,round(scale)))
+
+
+def icon_control(screen: pygame.Surface, rect: pygame.Rect, image: pygame.Surface | None,
+                 *, selected: bool = False, hover: bool = False, scale: float = 1.) -> None:
+    """One chrome treatment; authored pixels are never tinted or dimmed."""
+    pygame.draw.rect(screen,(12,16,21),rect)
+    if image is not None:
+        screen.blit(image,image.get_rect(center=rect.center))
+    pygame.draw.rect(screen,GOLD if selected else TEXT if hover else BORDER,rect,max(1,round(scale)))
 
 
 def text(screen: pygame.Surface, font: pygame.font.Font, value: str, position: tuple[int,int],

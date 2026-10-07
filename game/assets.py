@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import OrderedDict
 import json
 from pathlib import Path
 from types import MappingProxyType
@@ -166,7 +167,7 @@ def load_catalog() -> AssetCatalog:
 class SurfaceCache:
     """Canonical decoded Surfaces plus finite scaled/tinted derivatives."""
 
-    def __init__(self, catalog: AssetCatalog) -> None:
+    def __init__(self, catalog: AssetCatalog, *, coverage_limit_bytes: int = 16 * 1024 * 1024) -> None:
         if pygame.display.get_surface() is None:
             raise RuntimeError("pygame display must be initialized before asset loading")
         self.catalog = catalog
@@ -184,6 +185,49 @@ class SurfaceCache:
         self.debug_font = pygame.font.Font(None, 18)
         self.cache_hits = 0
         self.cache_rebuilds = 0
+        self.coverage_limit_bytes = coverage_limit_bytes
+        self.coverage_bytes = 0
+        self.coverage_evictions = 0
+        self._coverage: OrderedDict[tuple[object, ...], np.ndarray] = OrderedDict()
+
+    def _retain_coverage(self, key: tuple[object, ...], mask: np.ndarray) -> np.ndarray:
+        mask.setflags(write=False)
+        if mask.nbytes <= self.coverage_limit_bytes:
+            while self._coverage and self.coverage_bytes + mask.nbytes > self.coverage_limit_bytes:
+                _, old = self._coverage.popitem(last=False)
+                self.coverage_bytes -= old.nbytes
+                self.coverage_evictions += 1
+            self._coverage[key] = mask
+            self.coverage_bytes += mask.nbytes
+        self.cache_rebuilds += 1
+        return mask
+
+    def coverage(self, asset_id: str, zoom: float, *, cropped: bool = True) -> np.ndarray:
+        """Physical alpha is shared by all RGB/light treatments of this source."""
+        key = ('alpha', asset_id, zoom, cropped)
+        value = self._coverage.get(key)
+        if value is not None:
+            self._coverage.move_to_end(key)
+            self.cache_hits += 1
+            return value
+        image = self.scaled(asset_id, zoom)
+        if cropped:
+            image = image.subsurface(self.alpha_bounds(asset_id, zoom))
+        return self._retain_coverage(key, pygame.surfarray.array_alpha(image) > 0)
+
+    def support_coverage(self, asset_id: str, zoom: float,
+                         vertices: tuple[tuple[int, int], ...]) -> np.ndarray:
+        """Cache only exact local raster geometry, including pan-rounding phase."""
+        key = ('support', asset_id, zoom, vertices)
+        value = self._coverage.get(key)
+        if value is not None:
+            self._coverage.move_to_end(key)
+            self.cache_hits += 1
+            return value
+        physical = self.coverage(asset_id, zoom)
+        polygon = pygame.Surface(physical.shape, pygame.SRCALPHA)
+        pygame.draw.polygon(polygon, 'white', vertices)
+        return self._retain_coverage(key, (pygame.surfarray.array_alpha(polygon) > 0) & physical)
 
     def canonical(self, asset_id: str) -> pygame.Surface:
         """Decode a requested world raster once in this presentation session."""

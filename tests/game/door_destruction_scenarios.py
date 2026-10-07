@@ -144,21 +144,25 @@ def door_destruction_history(*, item_id: str = "environment.door.indoor_door_sha
             assert door.swing is DoorSwing(swing)
 
         if program in ("preview", "passage", "break-open"):
+            walk(attacker, (5, 4))
             use(attacker, "Open Door")
         if program == "preview":
-            use(attacker, "Close Door")
+            # Clear the owner support; the witness operates the opposite handle.
+            walk(attacker, (4, 4))
+            use(witness, "Close Door")
         elif program == "passage":
             take_turn(encounter, witness)
             walk(witness, (6, 5))
             take_turn(encounter, attacker)
-            walk(attacker, (5, 4))
             assert "Close Door" not in {action.name for action in door.get_use_actions(attacker.uuid)}
             walk(attacker, (6, 4))
             use(attacker, "Close Door")
             use(attacker, "Open Door")
             walk(attacker, (5, 4))
             walk(attacker, (4, 4))
-            use(attacker, "Close Door")
+            take_turn(encounter, witness)
+            walk(witness, (6, 4))
+            use(witness, "Close Door")
         else:
             attack_item(attacker, door, 4)
             assert door.get_hp() == 8 and door.get_position() == (5, 4)
@@ -169,7 +173,8 @@ def door_destruction_history(*, item_id: str = "environment.door.indoor_door_sha
             take_turn(encounter, witness)
             walk(witness, (6, 5))
             take_turn(encounter, attacker)
-            walk(attacker, (5, 4))
+            if attacker.position != (5, 4):
+                walk(attacker, (5, 4))
             walk(attacker, (6, 4), accepted=not jammed)
         if late_snapshot:
             baseline = EventQueue.event_cursor()

@@ -1,6 +1,7 @@
 """Actual ray events and source pixels share contact, direction and painter order."""
 
 from math import hypot
+from dataclasses import replace
 
 import numpy as np
 import pygame
@@ -8,7 +9,7 @@ import pytest
 
 from game.animation import ActorContact, BodySample, ProjectileSample, sample_cast, project_projectile
 from game.animation_data import load_animation_data
-from game.animation_draw import actor_draw_commands, animation_draw_commands, load_animation_media
+from game.animation_draw import actor_draw_commands, animation_draw_commands, load_animation_media, projectile_layer_blits
 from game.animation_types import RigLayer
 from game.choreography import bind_choreography
 from game.combat import BoundCast
@@ -72,19 +73,25 @@ def test_actual_eight_heading_trail_pixels_point_toward_the_native_contact(data,
         if isinstance(node.bound,BoundCast))
     row=timeline.applications[0]; age=row.travel_start_ms+.8*(row.travel_end_ms-row.travel_start_ms)
     sample=sample_cast(timeline,age)
+    appearance=(RigLayer('body','NakedBody'),RigLayer('head','Head10'))
+    media=load_animation_media(timeline,{a.actor_uuid:appearance for a in
+        (timeline.source.caster,*(r.target for r in timeline.source.applications))
+        if isinstance(a,ActorContact)})
     for q in range(4):
         effect=next(p for p in sample.projectiles if isinstance(p,ProjectileSample) and p.application_id==row.source.application_id)
         effect=project_projectile(timeline,effect,q)
-        assert effect.rotation_radians==0
-        asset=data.projectile_assets[effect.asset_id]; projectile=timeline.recipe.projectile
-        assert projectile is not None and projectile.sprite is not None
-        layer,=projectile_frame_layers(data,asset,'travel',effect.column,asset.rowOrder[effect.row],projectile.sprite,{})
-        alpha=pygame.surfarray.array_alpha(layer.image).astype(float);x,y=np.indices(alpha.shape)
-        # The original physical root is the leading head. Its retained emitter
-        # history trails backward, independently of gameplay distance or sockets.
-        centroid=np.array([(alpha*(x+layer.offset[0]-192)).sum(),(alpha*(y+layer.offset[1]-192)).sum()])/alpha.sum()
-        camera=Camera(quadrant=q,zoom=1);origin=project_screen((0,0),camera);end=project_screen(direction,camera)
-        expected=np.array(end)-origin
+        camera=Camera(quadrant=q,zoom=1)
+        layer,=projectile_layer_blits(timeline,effect,media,camera)
+        image,destination,_=layer
+        alpha=pygame.surfarray.array_alpha(image).astype(float);x,y=np.indices(alpha.shape)
+        point=np.array(effect.point) * 128/timeline.data.rig.TILE_W + np.array(camera.pan)
+        centroid=np.array([(alpha*(x+destination[0]-point[0])).sum(),
+            (alpha*(y+destination[1]-point[1])).sum()])/alpha.sum()
+        # Test the delivered pixels after directional selection, cropping,
+        # scaling and residual rotation against their actual screen trajectory.
+        prior=project_projectile(timeline,replace(effect,progress=effect.progress-.0001),q)
+        later=project_projectile(timeline,replace(effect,progress=effect.progress+.0001),q)
+        expected=np.array(later.point)-np.array(prior.point)
         cosine=-np.dot(centroid,expected)/(hypot(*centroid)*hypot(*expected))
         assert cosine>.93,(direction,q,centroid,expected)
 

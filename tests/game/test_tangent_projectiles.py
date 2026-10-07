@@ -59,6 +59,21 @@ def angular_error(first: float, second: float) -> float:
     return abs((first - second + pi) % (2 * pi) - pi)
 
 
+@pytest.mark.parametrize('quadrant', range(4))
+@pytest.mark.parametrize('height', (0, 2))
+def test_scorching_ray_follows_the_projected_flight(data, quadrant, height):
+    source = CastInput('ray', ActorContact('caster', (0, 1), 'S', .7),
+        (CastApplication('hit', ActorContact('target', (7, 3), 'W', .7,
+            elevation_steps=height), True, None, None),))
+    timeline = compile_cast(data, 'spell.scorching_ray', source)
+    effect = travel(timeline, .5)
+    actual = project_projectile(timeline, effect, quadrant)
+    before = project_projectile(timeline, replace(effect, progress=.49), quadrant)
+    after = project_projectile(timeline, replace(effect, progress=.51), quadrant)
+    direction = atan2(after.point[1]-before.point[1], after.point[0]-before.point[0])
+    assert angular_error(row_angle(timeline, actual)+actual.rotation_radians, direction) < 1e-6
+
+
 def row_angle(timeline: CastTimeline, effect: ProjectileSample) -> float:
     asset = timeline.data.projectile_assets[effect.asset_id]
     index = timeline.data.rig.AUTHORED_PROJECTILE_ROW_ORDER.index(asset.rowOrder[effect.row])

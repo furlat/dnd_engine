@@ -12142,5 +12142,149 @@
       0
     ],
     "scale": 1
+  },
+  "portrait:creature.skeleton_warrior": {
+    "path": "ui_recovered/portraits/gritty-tabletop-v1/monsters.skeleton_trio/monster_1.webp",
+    "native_size": [
+      384,
+      384
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
+  },
+  "portrait:creature.skeleton_warrior:initiative": {
+    "path": "ui_pixelated/portraits/existing-cie/monsters.skeleton_trio/monster_1/initiative.png",
+    "native_size": [
+      36,
+      48
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
+  },
+  "portrait:creature.skeleton_warrior:hud": {
+    "path": "ui_pixelated/portraits/existing-cie/monsters.skeleton_trio/monster_1/hud.png",
+    "native_size": [
+      48,
+      64
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
+  },
+  "portrait:creature.skeleton_warrior:sheet": {
+    "path": "ui_pixelated/portraits/existing-cie/monsters.skeleton_trio/monster_1/sheet.png",
+    "native_size": [
+      96,
+      128
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
+  },
+  "portrait:creature.skeleton_archer": {
+    "path": "ui_recovered/portraits/gritty-tabletop-v1/monsters.skeleton_trio/monster_2.webp",
+    "native_size": [
+      384,
+      384
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
+  },
+  "portrait:creature.skeleton_archer:initiative": {
+    "path": "ui_pixelated/portraits/existing-cie/monsters.skeleton_trio/monster_2/initiative.png",
+    "native_size": [
+      36,
+      48
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
+  },
+  "portrait:creature.skeleton_archer:hud": {
+    "path": "ui_pixelated/portraits/existing-cie/monsters.skeleton_trio/monster_2/hud.png",
+    "native_size": [
+      48,
+      64
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
+  },
+  "portrait:creature.skeleton_archer:sheet": {
+    "path": "ui_pixelated/portraits/existing-cie/monsters.skeleton_trio/monster_2/sheet.png",
+    "native_size": [
+      96,
+      128
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
+  },
+  "portrait:creature.skeleton_warlock": {
+    "path": "ui_recovered/portraits/gritty-tabletop-v1/monsters.skeleton_trio/monster_3.webp",
+    "native_size": [
+      384,
+      384
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
+  },
+  "portrait:creature.skeleton_warlock:initiative": {
+    "path": "ui_pixelated/portraits/existing-cie/monsters.skeleton_trio/monster_3/initiative.png",
+    "native_size": [
+      36,
+      48
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
+  },
+  "portrait:creature.skeleton_warlock:hud": {
+    "path": "ui_pixelated/portraits/existing-cie/monsters.skeleton_trio/monster_3/hud.png",
+    "native_size": [
+      48,
+      64
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
+  },
+  "portrait:creature.skeleton_warlock:sheet": {
+    "path": "ui_pixelated/portraits/existing-cie/monsters.skeleton_trio/monster_3/sheet.png",
+    "native_size": [
+      96,
+      128
+    ],
+    "pivot": [
+      0,
+      0
+    ],
+    "scale": 1
   }
 }

@@ -6,7 +6,7 @@ from typing import Mapping, Sequence
 
 import pygame
 
-from dnd.content.characters.builds import CharacterBuild
+from dnd.content.characters.build_types import CharacterBuild
 from dnd.content.characters.premades import PREMADE_CHARACTER_BUILDS, FIGHTER_PREMADE_ID, SORCERER_PREMADE_ID
 from dnd.types.character_progression import CharacterClass
 from game.animation_data import load_animation_data

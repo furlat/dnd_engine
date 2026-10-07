@@ -5493,7 +5493,7 @@ class TurnStartEvent(TurnEvent):
         """Generate a combat log entry for turn start."""
         entity_name = self.source_entity_name or "Unknown"
 
-        text = f"─── {md_color(entity_name, 'bold yellow')}'s turn ───"
+        text = f"{md_color(entity_name, 'bold yellow')}'s turn"
 
         return CombatLogEntry(
             entry_type=CombatLogEntryType.TURN_START,
@@ -5524,7 +5524,7 @@ class TurnEndEvent(TurnEvent):
         """Generate a combat log entry for turn end."""
         entity_name = self.source_entity_name or "Unknown"
 
-        text = f"─ {md_color(entity_name, 'dim')}'s turn ends ─"
+        text = f"{md_color(entity_name, 'dim')}'s turn ends"
 
         return CombatLogEntry(
             entry_type=CombatLogEntryType.TURN_END,

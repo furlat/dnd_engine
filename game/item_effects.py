@@ -15,6 +15,7 @@ import pygame
 from dnd.core.item_types import ItemEffectPresentationState
 from game.condition_types import ConditionEquipmentModifier, ConditionRecipe, load_condition_recipes
 from game.item_appearance import item_source_palettes
+from game.spell_palette import cached_palette, retain_palette
 
 
 class ItemMaterialRecipe(BaseModel):
@@ -82,7 +83,7 @@ def item_material(surface: pygame.Surface, effects: tuple[ItemEffectPresentation
                   slot: str, recipes: Mapping[str, ConditionRecipe], *,
                   category: str, base_tint: int = 0xFFFFFF,
                   owned_modifiers: tuple[ConditionEquipmentModifier, ...] = (),
-                  time_ms: float = 0.) -> pygame.Surface:
+                  time_ms: float = 0., source_key: tuple[object, ...] | None = None) -> pygame.Surface:
     """Swap authored palette zones; preserve other colors and original alpha."""
     modifiers = [modifier for effect in effects
                  if not effect.suppression_provider_uuids and (recipe := recipes.get(effect.behavior_id)) is not None
@@ -91,6 +92,13 @@ def item_material(surface: pygame.Surface, effects: tuple[ItemEffectPresentation
     material = _material_recipe(effects) if slot in ("weapon", "offhand") else None
     if not modifiers and material is None and base_tint == 0xFFFFFF:
         return surface
+    # Source keys describe immutable loaded art, independent of camera/panning.
+    # Animated glints remain sampled each frame; static dyes/coatings share the
+    # renderer's existing byte-bounded palette cache.
+    cache_key = (('item-material', source_key, category, base_tint, material, tuple(modifiers))
+                 if source_key is not None and not any(row.glint is not None for row in modifiers) else None)
+    if cache_key is not None and (cached := cached_palette(cache_key)) is not None:
+        return cached
     result = surface.copy()
     # Applying both the item dye and coating color darkens an already dark
     # weapon twice. A coating supplies its own material color on the source art.
@@ -115,12 +123,17 @@ def item_material(surface: pygame.Surface, effects: tuple[ItemEffectPresentation
             gray = targets.mean(axis=1, keepdims=True)
             targets = (gray + (targets - gray) * modifier.saturation) * modifier.brightness
         targets = np.clip(np.rint(targets), 0, 255).astype(np.uint8)
-        rgb = pygame.surfarray.array3d(surface)
-        distance = ((rgb[..., None, :] - source_colors) ** 2).sum(axis=3)
-        zone = distance.argmin(axis=2)
-        matched = (distance.min(axis=2) < (255 * .1) ** 2) & (pygame.surfarray.array_alpha(surface) > 0)
+        # Equipment occupies a small fraction of a complete body cell. Do the
+        # same nearest-palette calculation only for its nontransparent pixels.
+        occupied = pygame.surfarray.array_alpha(surface) > 0
+        rgb = pygame.surfarray.array3d(surface)[occupied]
+        distance = ((rgb[:, None, :] - source_colors) ** 2).sum(axis=2)
+        zone = distance.argmin(axis=1)
+        accepted = distance.min(axis=1) < (255 * .1) ** 2
+        matched = np.zeros(surface.get_size(), dtype=bool)
+        matched[occupied] = accepted
         pixels = pygame.surfarray.pixels3d(result)
-        pixels[matched] = targets[zone[matched]]
+        pixels[matched] = targets[zone[accepted]]
         del pixels
         for modifier in modifiers:
             glint = modifier.glint
@@ -140,4 +153,4 @@ def item_material(surface: pygame.Surface, effects: tuple[ItemEffectPresentation
             alpha = pygame.surfarray.pixels_alpha(result)
             alpha[:] = np.rint(alpha * modifier.alphaMultiplier).astype(np.uint8)
             del alpha
-    return result
+    return retain_palette(cache_key, result) if cache_key is not None else result

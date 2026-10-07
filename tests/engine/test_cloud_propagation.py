@@ -7,6 +7,7 @@ from dnd.content.items.environment_item_builders import build_directional_door, 
 from dnd.core.events import EventQueue, SpatialEffectChangeEvent, TakeDamageEvent
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.gridmap import get_map
+from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalDoor
 from dnd.types.senses import PerceivedSpatialEffect
@@ -70,14 +71,16 @@ def test_fog_cloud_retains_slot_scaled_radius():
 
 
 def test_established_cloud_survives_door_close_open_and_destruction_without_retrigger():
-    _, door, zone = cast_beside_door(Cloudkill, opened=True)
+    caster, door, zone = cast_beside_door(Cloudkill, opened=True)
     identity, positions = zone.uuid, set(zone.affected_positions)
+    version = caster.senses.spatial_effects[identity].owner_revision
     assert (7, 10) in positions
     cursor = EventQueue.event_cursor()
     for transition in (door.close, door.open, door.close, door.destroy):
         transition()
         assert get_map().get_spatial_condition(identity) is zone
         assert zone.affected_positions == positions
+        assert caster.senses.spatial_effects[identity].owner_revision == version
     events = [event for _, event in EventQueue.iter_events_since(cursor)]
     assert not any(isinstance(event, TakeDamageEvent) for event in events)
     assert not any(isinstance(event, SpatialEffectChangeEvent) and event.spatial_effect_uuid == identity
@@ -105,11 +108,18 @@ def test_creature_around_corner_takes_only_the_admitted_cloud_damage(opened):
 def test_real_cloud_turn_movement_resolves_connected_destination_after_door_closes():
     caster, door, zone = cast_beside_door(Cloudkill, opened=True)
     original = set(zone.affected_positions)
+    original_revision = caster.senses.spatial_effects[zone.uuid].owner_revision
     door.close()
     assert zone.affected_positions == original
     caster.on_turn_start(round_number=2, turn_index=0)
     assert zone.position == (7, 8)
     assert zone.affected_positions != original
+    assert zone.observation_revision > original_revision
+    # The caster is behind the closed door: its remembered cloud must keep
+    # the old revision until it sees the cloud's new position.
+    assert caster.senses.spatial_effects[zone.uuid].owner_revision == original_revision
+    door.open()
+    assert caster.senses.spatial_effects[zone.uuid].owner_revision == zone.observation_revision
     assert all(x >= 7 for x, _ in zone.affected_positions)
     assert all((x-7)**2 + (y-8)**2 <= 16 for x, y in zone.affected_positions)
 
@@ -157,3 +167,21 @@ def test_upper_surface_updates_when_a_door_behind_another_wall_closes_and_reopen
     door.open()
     assert caster.senses.spatial_effects[zone.uuid].upper_volume_surfaces == initial
     assert (8, 8) not in caster.senses.visible
+
+
+def test_observer_support_height_refreshes_cloud_surface_sight_without_revealing_ground():
+    caster = create_spell_regression_actor('Observer', (0, 8), 'heroes', spell_slots={1: 2})
+    for y in range(7, 10):
+        build_directional_wall().place_on_grid((6, y), boundary_direction=CardinalDirection.EAST)
+    cast = FogCloud(source_entity_uuid=caster.uuid, end_position=(5, 8)).apply()
+    assert cast is not None and not cast.canceled
+    grid = get_map()
+    zone, = grid.get_spatial_conditions()
+    initial = caster.senses.spatial_effects[zone.uuid].upper_volume_surfaces
+    assert initial
+    assert grid.set_tile_elevation(caster.position, height=2, surface_kind=ElevationSurfaceKind.ORDINARY, slope_axis=None)
+    raised = caster.senses.spatial_effects[zone.uuid].upper_volume_surfaces
+    assert raised != initial
+    assert (8, 8) not in caster.senses.visible
+    assert grid.set_tile_elevation(caster.position, height=0, surface_kind=ElevationSurfaceKind.ORDINARY, slope_axis=None)
+    assert caster.senses.spatial_effects[zone.uuid].upper_volume_surfaces == initial

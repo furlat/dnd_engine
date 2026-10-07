@@ -36,7 +36,7 @@ def _slots(state: PlayerState, actor: UUID, item: UUID | None) -> tuple[ItemConc
             return None
         obj = state.objects.get(item)
         return obj.item.concentration_slots if obj is not None else None
-    if actor != state.observer_uuid and (state.senses is None
+    if not state.viewing_audience.controls(actor) and (state.senses is None
             or (contact := state.senses.entities.get(actor)) is None or not contact.visual):
         return None
     owner = state.actors.get(actor)

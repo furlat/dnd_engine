@@ -29,6 +29,13 @@ from game.presentation_timing import presentation_milestones
 from dnd.core.life_types import LifeState
 
 
+def test_log_wrap_keeps_fitting_words_whole(data):
+    font=fonts(1.)
+    value='Magic Missile hits Goblin 1 for 5 Force damage'
+    lines=wrap_spans(log_spans(value),font.small,font.small_bold,font.small.size(value)[0])
+    assert tuple(''.join(span.text for span in line) for line in lines)==(value,)
+
+
 @pytest.fixture(scope='module')
 def data():
     pygame.init()
@@ -93,9 +100,26 @@ def test_native_reaction_condition_and_movement_logs_use_the_existing_group_and_
                                   if str(node.uuid)==row.key.identity) for row in rows)
         if group.reactions and group.primary.root.combat_log is not None:
             assert any(row.reaction_to is not None for row in rows)
+        if scenario=='opportunity':
+            history=LogHistory(rows);view=LogView(detailed=False,fold_groups=True)
+            visible=visible_log_rows(history,view,bound.complete_ms)
+            movement=next(row for row,_,_ in visible if row.entry.entry_type==CombatLogEntryType.MOVEMENT)
+            assert len(visible)<len(rows)
+            expanded=replace(view,expanded=frozenset({movement.key}))
+            assert len(visible_log_rows(history,expanded,bound.complete_ms))>len(visible)
+            assert row_text(movement,expanded)==movement.entry.compact
+            detailed=replace(expanded,details=frozenset({movement.key}))
+            assert row_text(movement,detailed)==movement.entry.detailed
+            assert all(any(shown.key==row.key for shown,_,_ in visible) for row in rows if row.reaction_to is not None)
+        if scenario=='condition':
+            conditions=[row for row in rows if row.actor_condition]
+            visible=visible_log_rows(LogHistory(rows),LogView(detailed=False,fold_groups=True),bound.complete_ms)
+            assert all(any(shown.key==row.key for shown,_,_ in visible) for row in conditions)
         all_rows.extend(rows)
         state=reduce_presentation_group(state,group)
     assert all_rows
+    if scenario=='condition':
+        assert any(row.actor_condition for row in all_rows)
 
 
 def test_safe_native_markup_and_measured_wrap_preserve_readable_text():
@@ -220,4 +244,22 @@ def test_recorded_dice_and_modifiers_are_visible_before_expanding_children(repea
     view=LogView()
     assert len(visible_log_rows(LogHistory(rows),view,100_000))==len(rows)
     assert all(row_text(row,view)==row.entry.detailed for row in rows)
-    assert all(row_text(row,replace(view,detailed=False))==row.entry.verbose for row in rows)
+    assert all(row_text(row,replace(view,detailed=False))==row.entry.compact for row in rows)
+
+
+def test_compact_copy_keeps_native_outcomes_and_obeys_reveal_gate(repeated):
+    _,_,bound,rows=repeated
+    history=LogHistory(rows)
+    view=LogView(detailed=False,fold_groups=True)
+    visible=visible_log_rows(history,view,bound.complete_ms)
+    assert visible and len(visible)<len(rows)
+    outcomes=[row for row,_,_ in visible if row.entry.entry_type==CombatLogEntryType.SPELL_DAMAGE]
+    assert len(outcomes)==3  # All repeated missiles remain, with application details folded.
+    opened=replace(view,expanded=frozenset(row.key for row in rows))
+    assert len(visible_log_rows(history,opened,bound.complete_ms))==len(rows)
+    assert copy_log_selection(history,view,now_ms=-1)==''
+    copied=copy_log_selection(history,view,now_ms=bound.complete_ms)
+    assert copied=='\n'.join('  '*depth+plain_log(row.entry.compact) for row,depth,_ in visible)
+    assert not any(row.entry.entry_type==CombatLogEntryType.CONDITION_APPLIED and not row.actor_condition for row,_,_ in visible)
+    selected=replace(view,selected=outcomes[0].key,category=CombatLogEntryType.TURN_START)
+    assert copy_log_selection(history,selected,now_ms=bound.complete_ms)==''

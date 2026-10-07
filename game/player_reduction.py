@@ -11,7 +11,7 @@ from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
 from dnd.types.event_facts import EventType, SpatialChangeType
-from dnd.types.senses import reduce_senses_snapshot
+from game.audience import audience_view, observe_audience, resolve_audience
 from game.player_facts import (
     AttackFact, ConditionChangeFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, LifeFact,
     PlayerFact, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
@@ -118,7 +118,8 @@ def observe_actors(target: PlayerState, observations: tuple[PlayerObservation, .
 
 def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
     """Supply absent binding contacts without advancing known world geometry."""
-    if target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid:
+    if (target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid
+            or target.viewing_audience != resolve_audience(lineage.observer_uuid, lineage.audience)):
         raise ValueError("player lineage belongs to a different observer or generation")
     result = stage_actors(target, lineage.observations)
     connectors = {row.connector_uuid: row for row in result.connectors}
@@ -133,7 +134,7 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
     return result
 
 
-def apply_player_fact(target: PlayerState, fact: PlayerFact) -> None:
+def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int | None = None) -> None:
     """Fold an already-disclosed committed fact into player memory."""
     match fact:
         case FactionFact():
@@ -153,17 +154,17 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact) -> None:
                 target.actors[actor.uuid] = actor
             if actor is not None and fact.occupancy_layer is not None:
                 target.actors[actor.uuid] = replace(actor, occupancy_layer=fact.occupancy_layer)
-            if (fact.entity_uuid == target.observer_uuid
+            if (target.viewing_audience.controls(fact.entity_uuid)
                     and fact.change_type is SpatialChangeType.ENTITY_ENTERED):
                 # Own entry is an explicit permitted contact even when one
                 # sensory batch folds an arrival and return to the same cell.
-                if target.senses is not None:
+                if target.senses is not None and fact.entity_uuid == target.observer_uuid:
                     target.senses = replace(target.senses, position=fact.position)
                 if actor is not None:
                     target.actors[actor.uuid] = replace(target.actors[actor.uuid], last_visual_position=fact.position)
         case ItemChargeFact():
             actor = target.actors[fact.source_entity_uuid]
-            if actor.controlled_items is None or actor.uuid != target.observer_uuid:
+            if actor.controlled_items is None or not target.viewing_audience.controls(actor.uuid):
                 raise ValueError("item charges require the controlled actor's inventory")
             items = tuple(item.model_copy(update={
                 "charges": fact.charges_after, "stack_count": fact.stack_count_after,
@@ -174,9 +175,11 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact) -> None:
             target.actors[actor.uuid] = replace(actor, controlled_items=items,
                 visual_loadout=replace(actor.visual_loadout, layers=layers))
         case SensoryFact():
-            target.senses = reduce_senses_snapshot(target.observer_uuid, target.senses, fact)
-            if fact.observer_position_changed and target.observer_uuid in target.actors:
-                target.actors[target.observer_uuid] = replace(target.actors[target.observer_uuid], last_visual_position=fact.observer_position)
+            target.perception = observe_audience(target.perception, target.viewing_audience, fact,
+                target.reducer_cursor if source_cursor is None else source_cursor)
+            target.senses = audience_view(target.perception, target.observer_uuid)
+            if fact.observer_position_changed and fact.observer_uuid in target.actors:
+                target.actors[fact.observer_uuid] = replace(target.actors[fact.observer_uuid], last_visual_position=fact.observer_position)
             for identity, contact in fact.entity_contacts_changed.items():
                 if contact.visual and identity in target.actors and target.actors[identity].present:
                     target.actors[identity] = replace(target.actors[identity], last_visual_position=contact.position)
@@ -236,6 +239,22 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact) -> None:
                 target.current_actor_uuid = fact.entity_uuid if fact.event_type is EventType.TURN_START else None
 
 
+def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
+                               version_cursors: Mapping[UUID, int]) -> None:
+    """Fold a committed fact without letting an outer move undo nested arrival."""
+    if (isinstance(fact, SpatialFact) and fact.entity_uuid is not None
+            and fact.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT)):
+        if fact.commit_event_uuid is None or fact.commit_event_uuid not in version_cursors:
+            raise ValueError(f"Spatial change at cursor {source_cursor} lacks its recorded commit version")
+        committed_at = version_cursors[fact.commit_event_uuid]
+        # Only a nested commit supersedes this closing transition. Independent
+        # earlier transitions may be retimed (e.g. jump after preflight OAs).
+        if committed_at < target.spatial_commit_cursors.get(fact.entity_uuid, -1) < source_cursor:
+            return
+        target.spatial_commit_cursors[fact.entity_uuid] = committed_at
+    apply_player_fact(target, fact, source_cursor=source_cursor)
+
+
 def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
             observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...]) -> PlayerState:
     """Fold received values in source order, including a timed partial group."""
@@ -251,20 +270,7 @@ def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: t
         if node.uuid in world_updates:
             apply_world_update(result, world_updates[node.uuid])
         if not node.canceled and node.fact is not None:
-            if (isinstance(node.fact, SpatialFact) and node.fact.entity_uuid is not None
-                    and node.fact.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT)):
-                # The producer identifies the actual commit publication. An
-                # enclosing completion cannot restore a superseded membership.
-                if node.fact.commit_event_uuid is None or node.fact.commit_event_uuid not in indexes:
-                    raise ValueError(f"Spatial change {node.uuid} lacks its recorded commit version")
-                committed_at = indexes[node.fact.commit_event_uuid]
-                # Only a nested commit supersedes this closing transition.
-                # Independent earlier transitions can be deliberately retimed
-                # (e.g. jump takeoff after all preflight opportunity attacks).
-                if committed_at < result.spatial_commit_cursors.get(node.fact.entity_uuid, -1) < indexes[node.uuid]:
-                    continue
-                result.spatial_commit_cursors[node.fact.entity_uuid] = committed_at
-            apply_player_fact(result, node.fact)
+            apply_committed_player_fact(result, node.fact, source_cursor=indexes[node.uuid], version_cursors=indexes)
     if observation is not None:
         _observe(result, observation)
     for remaining in pending:
@@ -286,7 +292,8 @@ def state_before_event(before: PlayerState, lineage: PlayerLineage, event: Playe
 
 def reduce_initialization(initialization: PlayerInitialization) -> PlayerState:
     target = PlayerState(generation=initialization.generation, observer_uuid=initialization.observer_uuid,
-                         world=initialization.world)
+                         world=initialization.world,
+                         audience=resolve_audience(initialization.observer_uuid, initialization.audience))
     target = reduce_nodes(target, initialization.nodes, initialization.version_rows,
                      initialization.observations, initialization.world_updates)
     target.reducer_cursor = initialization.end_cursor
@@ -300,7 +307,8 @@ def reduce_initialization(initialization: PlayerInitialization) -> PlayerState:
 
 
 def reduce_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
-    if target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid:
+    if (target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid
+            or target.viewing_audience != resolve_audience(lineage.observer_uuid, lineage.audience)):
         raise ValueError("player lineage belongs to a different observer or generation")
     if lineage.end_cursor <= target.reducer_cursor:
         raise ValueError("player lineage precedes this reduction position")
@@ -341,7 +349,7 @@ def encode_player_sequence(sequence: PlayerSequence) -> bytes:
 
 def decode_player_sequence(payload: bytes) -> tuple[PlayerState, tuple[PlayerLineage, ...]]:
     raw = json.loads(payload)
-    if raw.get("schema_version", 1) == 1:
+    if raw.get("schema_version", 1) < 3:
         payload = json.dumps(upgrade_player_sequence(raw)).encode("utf-8")
     sequence = PlayerSequence.model_validate_json(payload)
     return reduce_initialization(sequence.initialization), sequence.lineages

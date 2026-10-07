@@ -934,6 +934,7 @@ class SpatialSensesSystem:
             )
             if observation is not None:
                 observations[condition.uuid] = observation.model_copy(update={
+                    "owner_revision": condition.observation_revision,
                     "positions": tuple(sorted(set(observation.positions) | volume_positions)),
                     "visible_volume_positions": tuple(sorted(volume_positions)),
                     "upper_volume_surfaces": upper.get(condition.uuid, ()),
@@ -1339,16 +1340,26 @@ class SpatialSensesSystem:
                     and event.target_entity_uuid == observer_uuid
                 )
             )
+            tile_refresh = (
+                isinstance(event, SpatialChangeEvent)
+                and event.event_type is EventType.SPATIAL_TILE_CHANGED
+                and event.senses_hint is not None
+                and not event.senses_hint.requires_fov
+                and not event.senses_hint.requires_paths
+            )
             field = senses._field
             if (
-                (owner_refresh or residue_tile is not None) and observer_uuid in self.published_observers
+                (owner_refresh or residue_tile is not None or tile_refresh)
+                and observer_uuid in self.published_observers
                 and field is not None
                 and field.occupancy_revision == get_map().occupancy_revision
                 and self._field_is_current(observer_uuid, senses)
             ):
-                # A residue membership changes its own hazards; current field and
-                # occupancy revisions retain the already resolved contacts.
-                # Object/spatial changes keep their separate update path.
+                # Inert tile after-values and residue membership do not change contacts
+                # when field and occupancy revisions still match. Refresh their
+                # hazards without resolving every visible cell again.
+                # Support elevation, traversal and other spatial changes retain
+                # their full refresh (including upper-volume sight planes).
                 self._refresh_hazards(observer_uuid, senses, hazard_positions)
             else:
                 self.recompute_observer(observer_uuid, hazard_positions=hazard_positions)
