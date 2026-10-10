@@ -47,7 +47,7 @@ def import_contacts(source: Path, *, preserved: Path, production: Path, repo: Pa
                     if any(crop.getpixel(p) for i in range(23) for p in ((i, 0), (i, 22), (0, i), (22, i))):
                         raise ValueError('The literal forward-hand crop clips source pixels')
             selections[identity] = {'phases': {'impact': {'layers': [{'partsByFacing': views, 'blendMode': 'normal'}]}}}
-        asset = {'assetId': identity, 'displayName': identity, 'kind': 'projectile', 'sheet': '/'+identity+'.png',
+        asset = {'assetId': identity, 'displayName': identity, 'sheet': '/'+identity+'.png',
             'frame': {'width': size[0], 'height': size[1], 'rows': 8, 'cols': count}, 'fps': 32,
             'rowOrder': list(DIRECTIONS), 'phases': {'impact': {'start': 0, 'frames': count, 'fps': 32, 'loop': count == 1}},
             'anchor': {'x': pivot[0]/size[0], 'y': pivot[1]/size[1]}, 'defaultScale': 1,

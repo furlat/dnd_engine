@@ -38,6 +38,7 @@ from dnd.content.items.authored_item_definitions import (
 )
 from dnd.content.items.environment_item_builders import (
     LIQUID_BARREL_PROFILES,
+    SOLID_WALL_MATERIALS,
     build_authored_door,
     build_arcane_device,
     build_arcane_machine_gun,
@@ -48,6 +49,7 @@ from dnd.content.items.environment_item_builders import (
     build_fireball_cannon,
     build_liquid_barrel,
     build_storage_chest,
+    build_solid_wall,
     build_trap_lever,
     build_wall_torch,
 )
@@ -426,6 +428,10 @@ def _window_component_builder(family: str, *, insert: bool) -> ItemBuilder:
         family, insert=insert, source_entity_uuid=source))
 
 
+def _solid_wall_builder(item_id: str) -> ItemBuilder:
+    return _single_item_builder(item_id, lambda source: build_solid_wall(item_id, source))
+
+
 def _spell_wearable_builder(definition: SpellWearableDefinition) -> ItemBuilder:
     action_type = {
         "action.item.ember_quiver": EmberQuiverActivation,
@@ -448,6 +454,7 @@ def _spell_wearable_builder(definition: SpellWearableDefinition) -> ItemBuilder:
 
 
 DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
+    **{item_id: _solid_wall_builder(item_id) for item_id in SOLID_WALL_MATERIALS},
     **{item_id: _weapon_definition_builder(definition) for item_id, definition in ROSTER_WEAPON_APPEARANCE_DEFINITIONS.items()},
     **{item_id: _wearable_definition_builder(definition) for item_id, definition in ROSTER_WEARABLE_APPEARANCE_DEFINITIONS.items()},
     **{item_id: _spell_wearable_builder(definition) for item_id, definition in POWERED_WEARABLE_DEFINITIONS.items()},

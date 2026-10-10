@@ -14,7 +14,7 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.player.audience import SeatAssignment
 from dnd.spells.catalog_content import SPELL_CONTENT_IDENTITY_BY_NAME
-from player_server.config import SeatCredential, ServerConfig
+from server.config import SeatCredential, ServerConfig
 
 
 def configuration(mode: str, directory: Path) -> ServerConfig:

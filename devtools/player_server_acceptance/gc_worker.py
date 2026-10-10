@@ -12,7 +12,7 @@ import weakref
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue
 from dnd.core.values import BaseValue
-from player_server import worker
+from server import worker
 
 
 def rss_bytes():
@@ -48,7 +48,7 @@ def main():
         'dnd/blocks/health.py', 'dnd/blocks/abilities.py', 'dnd/blocks/equipment.py',
         'dnd/player/projection.py', 'dnd/controller.py', 'dnd/encounter.py',
         'dnd/core/base_object.py', 'dnd/core/gridmap.py', 'dnd/blocks/sensory.py',
-        'player_server/protocol.py', 'player_server/worker.py', 'uv.lock')}
+        'server/protocol.py', 'server/worker.py', 'uv.lock')}
     original_start, original_dispatch = worker.start, worker.dispatch
     original_main, original_identity = worker.main, worker.protocol_identity
     original_freeze, original_collect = gc.freeze, gc.collect

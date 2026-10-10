@@ -13,8 +13,8 @@ from uuid import uuid4
 from devtools.player_server_acceptance.fixtures import configuration
 from dnd.core.events import EventQueue
 from dnd.player.session import close_session
-from player_server.worker import dispatch, needs_advance, start
-from player_server.worker_protocol import Advance, Start
+from server.worker import dispatch, needs_advance, start
+from server.worker_protocol import Advance, Start
 
 IMPORTED = perf_counter()
 
@@ -49,7 +49,7 @@ def main():
         'events': EventQueue.event_cursor(), 'seats': len(runtime.audiences),
         'source_sha256': {path: sha256((root/path).read_bytes()).hexdigest() for path in (
             'dnd/core/events.py', 'dnd/player/capture.py', 'dnd/player/application.py',
-            'dnd/player/session.py', 'player_server/worker.py', 'uv.lock')}}
+            'dnd/player/session.py', 'server/worker.py', 'uv.lock')}}
     close_session(runtime.session)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + '\n')

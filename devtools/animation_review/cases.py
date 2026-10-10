@@ -423,6 +423,15 @@ class WindowCase(BaseModel):
     program: Literal["insert-cross-wall", "parent"] = "insert-cross-wall"
 
 
+class SolidWallCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["solid-wall"]
+    item_id: str = "environment.directional_wall"
+    material: Literal["stone", "wood"] = "stone"
+    raised: bool = False
+    corner: bool = False
+
+
 class DoorCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["door"]
@@ -596,7 +605,7 @@ class ReviewCase(BaseModel):
     description: str
     framing: Literal["scene", "actors"] = "scene"
     initial_facings: tuple[ReviewFacing, ...] = ()
-    scenario: Annotated[ConeOfColdCase | WindInterceptionCase | ClassFeatureCase | TransportSpellCase | HolyCase | AntimagicCase | WeatherSolarCase | AttackCase | DamageResolutionCase | ConstructionCase | SurfaceIgnitionCase | FlightCase | ItemPowerCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
+    scenario: Annotated[SolidWallCase | ConeOfColdCase | WindInterceptionCase | ClassFeatureCase | TransportSpellCase | HolyCase | AntimagicCase | WeatherSolarCase | AttackCase | DamageResolutionCase | ConstructionCase | SurfaceIgnitionCase | FlightCase | ItemPowerCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
                         | SummoningCase | AssemblyCase | HypnoticCase | CurseCase | DivineCase | SlowCase | HoldCase | ScorchingCase | FearCase | ContinualFlameCase | CreatureCase | EquipmentCase | ItemTransferCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | CallLightningCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase | PowerWordCase | SharedConditionCase | NatureSpellCase | NecroticSpellCase | ElectricSpellCase | DirectedSpellCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)

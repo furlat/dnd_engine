@@ -61,8 +61,7 @@ def import_group(source: Path, group: str, *, repo: Path = ROOT) -> tuple[str, .
                 views[DIRECTIONS[q * 2]] = parts
                 views[DIRECTIONS[q * 2 + 1]] = parts
             assets[identity] = {
-                "assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/support-conditions/{name}/{side}.png",
+                "assetId": identity, "displayName": identity, "sheet": f"/support-conditions/{name}/{side}.png",
                 "frame": {"width": width, "height": height, "rows": 8, "cols": count},
                 "fps": fps, "rowOrder": list(DIRECTIONS),
                 "phases": {"impact": {"start": 0, "frames": count, "fps": fps, "loop": row["loop"]}},

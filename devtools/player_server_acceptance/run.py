@@ -21,7 +21,7 @@ async def run_case(mode: str, output: Path, python: str, node_client: Path, port
     (node_client / 'player.mjs').write_bytes((source / 'typescript_player.mjs').read_bytes())
     started = perf_counter()
     server_log = (directory / 'server.log').open('wb')
-    server = await asyncio.create_subprocess_exec(server_python or sys.executable, '-m', 'player_server', '--config', str(path), '--port', str(port),
+    server = await asyncio.create_subprocess_exec(server_python or sys.executable, '-m', 'server', '--config', str(path), '--port', str(port),
         stdout=server_log, stderr=server_log)
     jobs=[];logs=[]
     def live():

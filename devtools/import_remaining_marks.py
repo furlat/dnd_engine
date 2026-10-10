@@ -30,8 +30,7 @@ def import_marks(source: Path, *, preserved: Path, production: Path, repo: Path 
         runtime = "game/assets/remaining_marks/" + Path(row["file"]).name
         payloads.append((row["file"], runtime, row["sha256"]))
         identity = "condition.mark." + name
-        assets[identity] = {"assetId": identity, "displayName": name, "kind": "projectile",
-            "sheet": "/remaining-marks/" + name + ".png",
+        assets[identity] = {"assetId": identity, "displayName": name, "sheet": "/remaining-marks/" + name + ".png",
             "frame": {"width": width, "height": height, "rows": 8, "cols": count},
             "fps": row["fps"], "rowOrder": list(DIRECTIONS),
             "phases": {"impact": {"start": 0, "frames": count, "fps": row["fps"], "loop": True}},

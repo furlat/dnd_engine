@@ -61,8 +61,7 @@ def import_registered_bank(source: Path, row: dict, program: str,
                 views[DIRECTIONS[2 * q]] = parts
                 views[DIRECTIONS[2 * q + 1]] = parts
             cell = row["cell"]
-            assets[identity] = {"assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/{bundle}/{program}/{phase}/{side}.png",
+            assets[identity] = {"assetId": identity, "displayName": identity, "sheet": f"/{bundle}/{program}/{phase}/{side}.png",
                 "frame": {"width": cell, "height": cell, "rows": 8, "cols": count},
                 "fps": 32, "rowOrder": list(DIRECTIONS),
                 "phases": {"impact": {"start": 0, "frames": count, "fps": 32, "loop": phase == "hold"}},
@@ -131,8 +130,7 @@ def register_billboard_bank(row: dict, identity: str, *, media_root: str,
         parts = [[] if frame is None else [{"file": f"{media_root}/{layer['pages'][frame['page']]}",
                   "rect": frame["source"], "offset": frame["offset"]}] for frame in layer["frames"]]
         cell = row["cell"]
-        assets[asset_id] = {"assetId": asset_id, "displayName": asset_id, "kind": "projectile",
-            "sheet": f"/{asset_id}.png", "frame": {"width": cell, "height": cell, "rows": 8, "cols": row["frames"]},
+        assets[asset_id] = {"assetId": asset_id, "displayName": asset_id, "sheet": f"/{asset_id}.png", "frame": {"width": cell, "height": cell, "rows": 8, "cols": row["frames"]},
             "fps": 32, "rowOrder": list(DIRECTIONS), "phases": {"impact": {"start": 0, "frames": row["frames"], "fps": 32, "loop": loop}},
             "anchor": {"x": row["pivot"][0] / cell, "y": row["pivot"][1] / cell}, "defaultScale": default_scale,
             "palettePreview": {"colors": [int(color, 16) for color in row["palette"]]}}

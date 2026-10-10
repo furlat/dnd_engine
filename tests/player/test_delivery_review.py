@@ -10,12 +10,12 @@ import pytest
 
 from dnd.player.audience import PlayerAudience
 from dnd.player.facts import PlayerInitialization, PlayerWorld
-from player_server import host as owner, protocol as wire, service
-from player_server.app import create_app
-from player_server.config import SeatCredential, ServerConfig
-from player_server.framing import MAX_PACKET_BYTES
-from player_server.recording import commit_records, stage_record
-from player_server.worker_protocol import Publication
+from server import host as owner, protocol as wire, service
+from server.app import create_app
+from server.config import SeatCredential, ServerConfig
+from server.framing import MAX_PACKET_BYTES
+from server.recording import commit_records, stage_record
+from server.worker_protocol import Publication
 
 
 @pytest.fixture

@@ -68,8 +68,7 @@ def import_wind(source: Path, *, preserved: Path, production: Path, repo: Path =
                        "rect": frame["source"], "offset": frame["offset"]}]
                      for frame in row["frames"][first:first + count]]
             cell = row["cell"]
-            assets[identity] = {"assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/fly-wind/{phase}/{side}.png",
+            assets[identity] = {"assetId": identity, "displayName": identity, "sheet": f"/fly-wind/{phase}/{side}.png",
                 "frame": {"width": cell, "height": cell, "rows": 8, "cols": count},
                 "fps": 32, "rowOrder": list(FACINGS),
                 "phases": {"impact": {"start": 0, "frames": count, "fps": 32, "loop": loop}},

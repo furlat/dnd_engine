@@ -122,6 +122,26 @@ test('preview correlation also checks actor and ordered selection', async t => {
   t.mock.method(globalThis, 'fetch', async () => Response.json({...scope, kind: 'preview', state_revision: 'r', request: {...body, selection: {...body.selection, target_indices: [1, 2, 1]}}, preview: {can_confirm: true}}));
   await assert.rejects(sdk.preview(server.connection, body), sdk.ProtocolError);
 });
+for (const [requested, echoed] of [[undefined, true], [true, true], [false, false], [false, true], [true, false], [undefined, false]] as const) {
+  test(`preview route preference ${requested} echoed as ${echoed}`, async t => {
+    const selection: sdk.ActionSelection = {action_index: 0, target_indices: [0]};
+    if (requested !== undefined) selection.prefer_safe = requested;
+    const body: sdk.PreviewRequest = {actor_uuid: uuid, state_revision: 'r', discovery_generation: 1, correlation_id: uuid, selection};
+    const server = peer(t, []);
+    t.mock.method(globalThis, 'fetch', async (_input: string, options: RequestInit) => {
+      assert.deepEqual(JSON.parse(options.body as string), body);
+      return Response.json({...scope, kind: 'preview', state_revision: 'r',
+        request: {...body, selection: {...selection, prefer_safe: echoed}}, preview: {can_confirm: true}});
+    });
+    if (echoed === (requested ?? true)) {
+      const result = await sdk.preview(server.connection, body);
+      assert.equal(result.request.selection.prefer_safe, echoed);
+    } else {
+      await assert.rejects(sdk.preview(server.connection, body), /Preview correlation mismatch/);
+    }
+  });
+}
+
 test('choices for a different actor are rejected', async t => {
   const body: sdk.ChoicesRequest = {actor_uuid: uuid, state_revision: 'r', force_attack: false, correlation_id: uuid}; const server = peer(t, []);
   t.mock.method(globalThis, 'fetch', async () => Response.json({...scope, kind: 'choices', state_revision: 'r', force_attack: false, correlation_id: uuid, choices: {entity_uuid: '00000000-0000-4000-8000-000000000002'}}));

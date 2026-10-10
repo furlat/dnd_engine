@@ -131,8 +131,7 @@ def import_bundle(source: Path, *, preserved: Path, production: Path, repo: Path
                                "rect": frame["source"], "offset": frame["offset"]}]
                              for frame in row["frames"]]
                     views[FACINGS[2 * q]] = views[FACINGS[2 * q + 1]] = parts
-                assets.append({"assetId": identity, "displayName": identity, "kind": "projectile",
-                    "sheet": f"/summoning/{family}/{phase}/{side}.png",
+                assets.append({"assetId": identity, "displayName": identity, "sheet": f"/summoning/{family}/{phase}/{side}.png",
                     "frame": {"width": 384, "height": 384, "rows": 8, "cols": count},
                     "fps": 32, "rowOrder": list(FACINGS),
                     "phases": {"impact": {"start": 0, "frames": count, "fps": 32, "loop": False}},

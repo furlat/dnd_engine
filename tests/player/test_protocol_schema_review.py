@@ -4,7 +4,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 
-from player_server.protocol import protocol_identity, public_schema
+from server.protocol import protocol_identity, public_schema
 
 
 def test_runtime_schema_matches_the_published_client_contract():

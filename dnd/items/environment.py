@@ -12,6 +12,7 @@ from dnd.core.item_types import DoorMechanism, DoorSwing, ItemDestructionProfile
 from dnd.core.events import Event, EventPhase, EventQueue, EventType, SpatialHandler
 from dnd.core.gridmap import get_map
 from dnd.types.materials import Material
+from dnd.types.physical_access import ContactPassage
 from dnd.types.world import WorldEdgeChannel
 from dnd.types.world_placement import (
     BoundaryStructure,
@@ -61,16 +62,17 @@ class DirectionalWall(BaseItem):
     armor_class: int = Field(default=17, ge=0)
     is_pickable: bool = Field(default=False, description="Whether the wall can be looted into inventory.")
     is_usable: bool = Field(default=False, description="Whether the wall exposes use actions.")
-    is_targetable: bool = Field(default=False, description="Whether the wall can be directly targeted.")
+    is_targetable: bool = Field(default=True, description="Whether the wall can be directly targeted.")
     blocks_movement: bool = Field(default=False, description="Global movement blocker flag for the wall.")
     blocks_optics_field: bool = Field(default=False, description="Global optical blocker flag for the wall.")
     map_char: str = Field(default="W", description="Map-editor glyph for the wall.")
     include_in_senses_objects: bool = Field(
-        default=False,
+        default=True,
         description="Whether senses expose the wall as a visible object.",
     )
+    include_in_adjacent_senses_objects: bool = True
     include_in_available_object_actions: bool = Field(
-        default=False,
+        default=True,
         description="Whether object action discovery includes the wall.",
     )
 
@@ -87,9 +89,24 @@ class DirectionalWall(BaseItem):
         """Validate the provider's structural channels."""
         super().model_post_init(__context)
         _validate_channels(self.blocked_channels)
+        if self.is_targetable:
+            if self.health is None:
+                self.health = self.create_item_health(self.uuid, 18 if self.material is Material.WOOD else 27)
+            if self.destruction_profile is None:
+                self.destruction_profile = ItemDestructionProfile(
+                    name=f"Broken {self.name}", outcome="clear",
+                    placement_spec=WorldPlacementSpec(kind=WorldPlacementKind.BOUNDARY,
+                        occupies_bands=False, vertical_extent_steps=1),
+                    boundary_structure=BoundaryStructure(structure=BoundaryStructureKind.WALL,
+                        material=self.material, blocked_channels=(), contact_passage=ContactPassage.CLEAR),
+                )
 
     def get_world_placement_spec(self) -> WorldPlacementSpec:
         """Require one explicit owner-Tile boundary side."""
+        if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
+            profile = self.destruction_profile.placement_spec
+            if profile is not None:
+                return profile
         return WorldPlacementSpec(
             kind=WorldPlacementKind.BOUNDARY,
             occupies_bands=True,
@@ -98,6 +115,10 @@ class DirectionalWall(BaseItem):
 
     def get_boundary_structure(self) -> BoundaryStructure:
         """Return the wall's current structural contribution."""
+        if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
+            structure = self.destruction_profile.boundary_structure
+            if structure is not None:
+                return structure
         return BoundaryStructure(
             structure=BoundaryStructureKind.WALL,
             material=self.material,

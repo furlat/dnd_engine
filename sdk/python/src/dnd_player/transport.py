@@ -200,7 +200,8 @@ async def preview(connection: Connection, body: c.PreviewRequest) -> c.PreviewRe
     if result['state_revision'] != body['state_revision'] or any(echoed[key] != body[key] for key in (
             'actor_uuid', 'state_revision', 'discovery_generation', 'correlation_id')) or any(
             echoed['selection'].get(key, []) != body['selection'].get(key, []) for key in (
-                'action_index', 'target_indices', 'extra_target_positions')):
+                'action_index', 'target_indices', 'extra_target_positions')) or (
+            echoed['selection'].get('prefer_safe', True) != body['selection'].get('prefer_safe', True)):
         raise ProtocolError('Preview correlation mismatch')
     return result
 

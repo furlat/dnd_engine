@@ -1,0 +1,400 @@
+{
+  "retrieved_date": "2026-10-08",
+  "scope": "Official rolling 8.x guide snapshot, not claimed to be frozen 8.22 source docs; API and release inspected against v8.22.0. Documentation is reference data, not local agent instructions.",
+  "npm_version": "8.22.0",
+  "npm_integrity": "sha512-QbTANHMZ751MIjLiLSUSM8a7LNMWwMIf0KbRCqlW+SPS9hNLfSVS+cl1O2SEp9g1K/wyLzj/OJHv+1TUfiPr/w==",
+  "release": {
+    "url": "https://github.com/pixijs/pixijs/releases/tag/v8.22.0",
+    "published_at": "2026-10-01T21:48:36Z"
+  },
+  "files": [
+    {
+      "url": "https://pixijs.com/8.x/guides/getting-started/ecosystem.md",
+      "file": "guides/getting-started/ecosystem.md",
+      "bytes": 4179,
+      "sha256": "eea087e0bc7cd6991b1b253a8ba5b4de90569748d1b092083a855a7e2ac74d79"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/getting-started/quick-start.md",
+      "file": "guides/getting-started/quick-start.md",
+      "bytes": 3923,
+      "sha256": "33fa734493dca59aace090c5e3fd6875c7d9a9cde0f047199c82c1c28008c4b5"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/concepts/architecture.md",
+      "file": "guides/concepts/architecture.md",
+      "bytes": 5839,
+      "sha256": "f7319fa32614aa43db3eac847a64dfd8a98f8edd3a5c70e4cba472f61eac8216"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/concepts/environments.md",
+      "file": "guides/concepts/environments.md",
+      "bytes": 1939,
+      "sha256": "74f4feaaa09b26ab048048197f1a022bf7c69ce9e4b3d40ebd52995e1bed1ce4"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/concepts/garbage-collection.md",
+      "file": "guides/concepts/garbage-collection.md",
+      "bytes": 2938,
+      "sha256": "11546ea2ecb1a40dbfb563bb3dc1926e00e5b5814c9496ee20007bb5fb33a6bd"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/concepts/performance-tips.md",
+      "file": "guides/concepts/performance-tips.md",
+      "bytes": 3407,
+      "sha256": "bcf84ea646b6c8f41cad9f5f4a4362629f80bb8e5f67697c531b9bcda4f30162"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/concepts/render-groups.md",
+      "file": "guides/concepts/render-groups.md",
+      "bytes": 3380,
+      "sha256": "1643251ef3e7d0bd09f7f68296a116508c37731caf42ab015dac395e98c59a3d"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/concepts/render-layers.md",
+      "file": "guides/concepts/render-layers.md",
+      "bytes": 11276,
+      "sha256": "ab2933b9bb7c800489596b475ebd2b942f1e3db68b7b7a45523a225573579042"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/concepts/render-loop.md",
+      "file": "guides/concepts/render-loop.md",
+      "bytes": 2653,
+      "sha256": "8e53ed7d229419a9f49c93024e8fc1d5da8ec9f413860b428fcdc20f2f7b189b"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/concepts/scene-graph.md",
+      "file": "guides/concepts/scene-graph.md",
+      "bytes": 10082,
+      "sha256": "f6b9d1d38f04d57722101ff911ff520eae80407468657b2165b70f728f4b5e62"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/accessibility.md",
+      "file": "guides/components/accessibility.md",
+      "bytes": 3443,
+      "sha256": "627eb99473bf84eee39f779e2e334380593d8912f4768eaa36a07385999dc138"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/color.md",
+      "file": "guides/components/color.md",
+      "bytes": 1701,
+      "sha256": "d1d9bd9cbe4bd6ab1e777a3e7bb715708558644cbc71456ced768ea62e047692"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/events.md",
+      "file": "guides/components/events.md",
+      "bytes": 11063,
+      "sha256": "d0ae5873dac3a54cd02d4a4a3c70e1370af0737d477db4cedc609dc2bb8756fb"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/filters.md",
+      "file": "guides/components/filters.md",
+      "bytes": 4828,
+      "sha256": "c9418e4bf9ef48e0c292550d7f6aefd60a74d519b350f9ddbdc0c2ce0fc7f590"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/math.md",
+      "file": "guides/components/math.md",
+      "bytes": 5738,
+      "sha256": "ea171b001033a99854b02c5f74ec30e94a4640cb3870f17191639b5bd8c08f6f"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/textures.md",
+      "file": "guides/components/textures.md",
+      "bytes": 5199,
+      "sha256": "5fb0b4dd4726cc255064726f99b415ed2c1b25861e33fded8876ae62df8bfc51"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/ticker.md",
+      "file": "guides/components/ticker.md",
+      "bytes": 2052,
+      "sha256": "1ef016a78bbc348b0e07a1d0da13f791dbe5ce9cb4d69da2c75ee34562a7b2e6"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/third-party/mixing-three-and-pixi.md",
+      "file": "guides/third-party/mixing-three-and-pixi.md",
+      "bytes": 8519,
+      "sha256": "81654deeeaa45e70de6d8cadf64747e5ec0aee8d949b35d445ccc00ff7c78df4"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/migrations/v8.md",
+      "file": "guides/migrations/v8.md",
+      "bytes": 25365,
+      "sha256": "d9b09ee9d14b7b5cc330700edb6b1d8e2df41b58d234a53bfc69abc9699e69de"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/application/culler-plugin.md",
+      "file": "guides/components/application/culler-plugin.md",
+      "bytes": 2619,
+      "sha256": "414849c6b7f82c5f0e1bab7cd64bb181dbcea5a948aa705b8ab246e6bdafe919"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/application.md",
+      "file": "guides/components/application.md",
+      "bytes": 10748,
+      "sha256": "16f3824bdae69a7e859398997cd6643265ddabc841d391c0d6f2ee3ba16102dc"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/application/resize-plugin.md",
+      "file": "guides/components/application/resize-plugin.md",
+      "bytes": 1710,
+      "sha256": "367167ce8ac1a777801675a52e163af03ec2da619bd4bcbb3ad2658b3420fca5"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/application/ticker-plugin.md",
+      "file": "guides/components/application/ticker-plugin.md",
+      "bytes": 2128,
+      "sha256": "8cc537a555ccab134c33805accd6f4cc014b0ee69778f6eeeba85d09d543030c"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/assets/background-loader.md",
+      "file": "guides/components/assets/background-loader.md",
+      "bytes": 2120,
+      "sha256": "71d63a2985f01fc6dd5651352cad8d5f415a22394f1d9c46c261b7b570c3a205"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/assets/compressed-textures.md",
+      "file": "guides/components/assets/compressed-textures.md",
+      "bytes": 2717,
+      "sha256": "c511dc0d8fff1073277af1f96f924f7997c7cc85ff3a26def69a5b69be6a5eb1"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/assets.md",
+      "file": "guides/components/assets.md",
+      "bytes": 6761,
+      "sha256": "ac217392a6393bbc61737e5e6ed3cbb7da0265aa2a7114824cec9de27d9cdca5"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/assets/manifest.md",
+      "file": "guides/components/assets/manifest.md",
+      "bytes": 3032,
+      "sha256": "c04918cc4fa2ba0a3be7b75ae0cd1682db2ac3d0c02d612c34972eddb4203371"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/assets/resolver.md",
+      "file": "guides/components/assets/resolver.md",
+      "bytes": 3687,
+      "sha256": "a701bac36744e6d68929fff060b3cc04da6c86cadd45e044deb9a4ea7c4fa38c"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/assets/svg.md",
+      "file": "guides/components/assets/svg.md",
+      "bytes": 11209,
+      "sha256": "d241722ed6a00d2e9033ccb4c3eccce57d714fd5087d8cb7ce444a3a26d1903d"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/renderers.md",
+      "file": "guides/components/renderers.md",
+      "bytes": 3682,
+      "sha256": "f62b79c363e00dd594c686a0b4da13c44b8b29e48562d1ebcd82e7f8b4dadb10"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/container/cache-as-texture.md",
+      "file": "guides/components/scene-objects/container/cache-as-texture.md",
+      "bytes": 7134,
+      "sha256": "bbca9354ce0c83253f1b92d8bd919144fec084057f05937306c0e04723fe8cb1"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/container.md",
+      "file": "guides/components/scene-objects/container.md",
+      "bytes": 4344,
+      "sha256": "907793798f30e8b28195df405a1d74262d637b62363a3e3d7fec34ae035f33c9"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/graphics/graphics-fill.md",
+      "file": "guides/components/scene-objects/graphics/graphics-fill.md",
+      "bytes": 10716,
+      "sha256": "3b7c795335e7f68d08324b92c3ce421e7a1a805cc44abf91b4423afc3b6636ff"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/graphics/graphics-pixel-line.md",
+      "file": "guides/components/scene-objects/graphics/graphics-pixel-line.md",
+      "bytes": 9003,
+      "sha256": "4ae13e4261058909702227f83255106a84e8e94202558f3f269ccbb500309a26"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/graphics.md",
+      "file": "guides/components/scene-objects/graphics.md",
+      "bytes": 4923,
+      "sha256": "0bdcf9b10c54462ba2f16ea85af0bf304343315bec4951c3860c282217628c2a"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects.md",
+      "file": "guides/components/scene-objects.md",
+      "bytes": 12598,
+      "sha256": "073db915e5fc528450434c2981f76ad9531a6715c4c977a05e6c6385bd019123"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/mesh.md",
+      "file": "guides/components/scene-objects/mesh.md",
+      "bytes": 4465,
+      "sha256": "e447eb01ba2ce27c2886888a7a163e662bcc8326631d1c01f0a8897f4c9a764b"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/nine-slice-sprite.md",
+      "file": "guides/components/scene-objects/nine-slice-sprite.md",
+      "bytes": 2679,
+      "sha256": "6d5398a6b6bd712d567476892ec00ef9a71d7625d6f52a997d448643cad14046"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/particle-container.md",
+      "file": "guides/components/scene-objects/particle-container.md",
+      "bytes": 3081,
+      "sha256": "d0d03132478a07dbd06357f00efec19765a6b6b62cadb1320299bb756f7b9c4e"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/sprite.md",
+      "file": "guides/components/scene-objects/sprite.md",
+      "bytes": 1629,
+      "sha256": "188ef00d7b1dd45d92ce22a05d04d9c09d4d1c9c6505980e4997a99705862e10"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/text/bitmap.md",
+      "file": "guides/components/scene-objects/text/bitmap.md",
+      "bytes": 3176,
+      "sha256": "47449af235729a297a5592b78c7c9754bc663525c464285d3c8f210c3dfd1ca7"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/text/canvas.md",
+      "file": "guides/components/scene-objects/text/canvas.md",
+      "bytes": 3264,
+      "sha256": "1e177a64afb056faed64a610a0bab115d0a2d838754bd4a99cfe43c2c4f9a120"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/text/html.md",
+      "file": "guides/components/scene-objects/text/html.md",
+      "bytes": 1874,
+      "sha256": "398f3f43f41b4f11a46e6ca5f807925b7c5d6475ad78cce59520dc564bc1b287"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/text.md",
+      "file": "guides/components/scene-objects/text.md",
+      "bytes": 2832,
+      "sha256": "68d5f1267e03f8a628ed274decc23b13627941c07121846bac41d87eaa6a5b1a"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/text/split-text.md",
+      "file": "guides/components/scene-objects/text/split-text.md",
+      "bytes": 5767,
+      "sha256": "363e03bcfb1cb43eba2a5a8c46c193e9ba07042f2cc43b27de6cce1e60b28429"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/text/style.md",
+      "file": "guides/components/scene-objects/text/style.md",
+      "bytes": 2376,
+      "sha256": "f623e9ca16460f5ddb6e6892e7dc9a120ced1d909f9a07f846d0a3dcf03d8206"
+    },
+    {
+      "url": "https://pixijs.com/8.x/guides/components/scene-objects/tiling-sprite.md",
+      "file": "guides/components/scene-objects/tiling-sprite.md",
+      "bytes": 2822,
+      "sha256": "5b765a4deb1d816dc704b3062d73538be2a4e2c65fd9023f2e65ee1b5f0b6a0e"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/scene/layers/RenderLayer.ts",
+      "file": "api-source/src/scene/layers/RenderLayer.ts",
+      "bytes": 25415,
+      "sha256": "58750d15dd1d314d125057d82496c3e2f0d09d3aedd9fff91100acd6cb2d4a1a"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/filters/Filter.ts",
+      "file": "api-source/src/filters/Filter.ts",
+      "bytes": 9483,
+      "sha256": "71d1d3ba2048d8f66931a421df3d1f818d53c4134d96c10f5ad90fb80c93de98"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/filters/FilterSystem.ts",
+      "file": "api-source/src/filters/FilterSystem.ts",
+      "bytes": 34824,
+      "sha256": "83df48f7100cbd2a3d8e99a02d32d3bf09afb08e30bb43830fb1dcc4185b5089"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/shared/state/State.ts",
+      "file": "api-source/src/rendering/renderers/shared/state/State.ts",
+      "bytes": 5824,
+      "sha256": "82d2e59372edaf8d53b2d36932c8b43bea26f88cc95519af498af77f64be0651"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/scene/mesh/shared/Mesh.ts",
+      "file": "api-source/src/scene/mesh/shared/Mesh.ts",
+      "bytes": 11280,
+      "sha256": "eb33bd4c5f5fa93fad5d2ac703178f2a9afda7d66800394b7971f668dd6d7d29"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/scene/mesh/shared/MeshPipe.ts",
+      "file": "api-source/src/scene/mesh/shared/MeshPipe.ts",
+      "bytes": 7390,
+      "sha256": "8e5847a0cfe63a3738a828274b4419036ccde10c1f21c50316c5f1299b0e8adb"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/prepare/PrepareBase.ts",
+      "file": "api-source/src/prepare/PrepareBase.ts",
+      "bytes": 6285,
+      "sha256": "386d98d535d805a5fb519279ec8fa23e6251e2f5ed363d8e19005d8d77d9886b"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/ticker/Ticker.ts",
+      "file": "api-source/src/ticker/Ticker.ts",
+      "bytes": 29206,
+      "sha256": "a032a08ee56cc0762ab56ae52ad19a0dc0837a5a3cfaa947b59f0cbfc0fca30a"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/package.json",
+      "file": "api-source/package.json",
+      "bytes": 12404,
+      "sha256": "2bb6b7570ca5f4a062609b34fd16fecfa2a76e8c3599c67a5b996a276eabaa32"
+    }
+  ],
+  "total_bytes": 250620,
+  "license_note": "PIXI-LICENSE is the core PixiJS v8.22 license. The documentation repository GitHub metadata has no detected license; no different license is asserted for the guide snapshot.",
+  "pinned_api_sources": [
+    {
+      "file": "api-source/src/prepare/PrepareSystem.ts",
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/prepare/PrepareSystem.ts",
+      "bytes": 1708,
+      "sha256": "fd47443035e883cd00653ab225481df474e000ae49d1d57f535a2c8a79bce351"
+    },
+    {
+      "file": "api-source/src/rendering/renderers/shared/GCSystem.ts",
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/shared/GCSystem.ts",
+      "bytes": 18030,
+      "sha256": "295513887359c1bc7e3ddd302cdeaabd8d766db1cbfd4aa469e6d215f0d687ca"
+    },
+    {
+      "file": "api-source/src/rendering/renderers/shared/texture/TextureGCSystem.ts",
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/shared/texture/TextureGCSystem.ts",
+      "bytes": 5649,
+      "sha256": "1735425df860bdd211e991824097247eef981e680c0d7a5384ce2847ab963e77"
+    },
+    {
+      "file": "api-source/src/rendering/renderers/shared/texture/sources/BufferImageSource.ts",
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/shared/texture/sources/BufferImageSource.ts",
+      "bytes": 8992,
+      "sha256": "6d8de6be374c2c0a5d17ddaf7c029eeac9e377b69107cf16f969f8f24def8407"
+    },
+    {
+      "file": "api-source/src/rendering/renderers/gl/texture/GlTextureSystem.ts",
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/gl/texture/GlTextureSystem.ts",
+      "bytes": 24316,
+      "sha256": "58e204460bd7befd0e6661f75693d1a960fa65499d78ec681dca39bd30ecd03e"
+    },
+    {
+      "file": "api-source/src/rendering/renderers/shared/texture/sources/TextureSource.ts",
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/shared/texture/sources/TextureSource.ts",
+      "bytes": 28675,
+      "sha256": "9e2ad60617e157d86ab3d3f88e6926c465277b15e5ab6220a9f8043c1da5014d"
+    },
+    {
+      "file": "api-source/src/rendering/renderers/shared/shader/Shader.ts",
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/shared/shader/Shader.ts",
+      "bytes": 16623,
+      "sha256": "2c240dccd60e5b93cf2492d0c99b5ba13b531e46eb337a293237eb9a350d60f4"
+    },
+    {
+      "file": "api-source/src/rendering/renderers/gl/shader/GlProgram.ts",
+      "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/gl/shader/GlProgram.ts",
+      "bytes": 7552,
+      "sha256": "403c64d9fdaa551593a742cbc14cad73d76139809487b882325f2fde79fa80fd"
+    }
+  ]
+}

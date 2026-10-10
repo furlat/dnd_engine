@@ -1,0 +1,2329 @@
+{
+  "schema_version": 1,
+  "runtime_id": "a91b5312-c088-4f53-ad72-2579c1c35e0c",
+  "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+  "generated_at": "2026-07-30T20:13:14.349855+00:00",
+  "subjectivity_scope": "session_subjective",
+  "record_count": 9,
+  "final_record_digest": "8b8d92bf87ee342e73bdced35fdfdae47bafd33d20077f1a0e4c0c03ff298104",
+  "records": [
+    {
+      "schema_version": 1,
+      "sequence": 0,
+      "recorded_at": "2026-07-30T20:13:12.499977+00:00",
+      "record_type": "session_started",
+      "payload_type": "codex.session_started@v1",
+      "runtime_id": "a91b5312-c088-4f53-ad72-2579c1c35e0c",
+      "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+      "encounter_uuid": null,
+      "observation_cursor": null,
+      "epoch_id": null,
+      "actor_uuid": null,
+      "command_id": null,
+      "payload": {
+        "claim_id": "4e44dac8-5035-46b7-92ea-ac98bae602af",
+        "faction": "characters",
+        "controlled_entity_uuids": [
+          "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+        ],
+        "representation_profile_id": "codex.balanced-v2",
+        "representation_manifest_digest": "461568ed37a82a6a319e6fb4baa7d58a6d96eee6e5cbbc7e4dad861c4565a00b",
+        "representation_manifest": {
+          "profile_id": "codex.balanced-v2",
+          "profile_version": "2.0.0",
+          "profile_description": "Neutral automatic Codex context with complete local recovery and no pre-action advice.",
+          "components": [
+            {
+              "order": 0,
+              "spec": {
+                "component_id": "core.revision",
+                "version": "1.0.0",
+                "title": "Subjective revision",
+                "description": "Select runtime, session, cursor, epoch, and active actor identity.",
+                "role": "state_selection",
+                "semantic_intent": "preserve_revision_identity",
+                "input_domains": [
+                  "revision",
+                  "session",
+                  "encounter",
+                  "decision_epoch"
+                ],
+                "output_model": "codex.representation.CoreRevisionBlock",
+                "transform": "select",
+                "omission_contract": {
+                  "source_domains": [
+                    "revision"
+                  ],
+                  "omitted_paths": [
+                    "world.source_event_cursor",
+                    "world.source_combat_log_cursor"
+                  ],
+                  "filtering_predicate": null,
+                  "ordering_rule": null,
+                  "item_limit": null,
+                  "depth_limit": null,
+                  "omitted_counts_reported": true,
+                  "recoverability": [
+                    "local_get",
+                    "local_export"
+                  ],
+                  "rationale": "Automatic context needs decision identity but not source-stream debugging cursors."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": true,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [],
+                "implementation_ref": "ai.codex_tools.representation.components.CoreRevisionComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {}
+            },
+            {
+              "order": 1,
+              "spec": {
+                "component_id": "core.turn",
+                "version": "1.0.0",
+                "title": "Complete turn core",
+                "description": "Preserve encounter turn state, actor facts, economy, resources, and controlled team.",
+                "role": "state_selection",
+                "semantic_intent": "preserve_turn_state",
+                "input_domains": [
+                  "encounter",
+                  "known_entities",
+                  "decision_epoch"
+                ],
+                "output_model": "codex.representation.TurnCoreBlock",
+                "transform": "select",
+                "omission_contract": {
+                  "source_domains": [
+                    "encounter",
+                    "known_entities",
+                    "decision_epoch"
+                  ],
+                  "omitted_paths": [],
+                  "filtering_predicate": null,
+                  "ordering_rule": null,
+                  "item_limit": null,
+                  "depth_limit": null,
+                  "omitted_counts_reported": false,
+                  "recoverability": [
+                    "not_applicable"
+                  ],
+                  "rationale": "The component preserves its selected source information without omission."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": true,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [],
+                "implementation_ref": "ai.codex_tools.representation.components.TurnCoreComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {}
+            },
+            {
+              "order": 2,
+              "spec": {
+                "component_id": "contacts.partition",
+                "version": "1.0.0",
+                "title": "Contact knowledge partition",
+                "description": "Partition contacts by control, visibility, memory, relationship, and death knowledge.",
+                "role": "deterministic_derivation",
+                "semantic_intent": "classify_contact_knowledge",
+                "input_domains": [
+                  "known_entities"
+                ],
+                "output_model": "codex.representation.ContactLedgerBlock",
+                "transform": "partition",
+                "omission_contract": {
+                  "source_domains": [
+                    "known_entities"
+                  ],
+                  "omitted_paths": [
+                    "world.known_entities.*.unselected_fields"
+                  ],
+                  "filtering_predicate": "Controlled by include_remembered_allies and preserve_knowledge_detail parameters.",
+                  "ordering_rule": null,
+                  "item_limit": null,
+                  "depth_limit": null,
+                  "omitted_counts_reported": true,
+                  "recoverability": [
+                    "local_get",
+                    "local_select",
+                    "local_search",
+                    "local_export"
+                  ],
+                  "rationale": "Automatic contact groups are compact while exact subjective entity facts remain inspectable."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": false,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [
+                  {
+                    "parameter_id": "include_remembered_allies",
+                    "value_type": "boolean",
+                    "description": "Retain remembered allied contacts in automatic context.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": false,
+                    "allowed_values": [],
+                    "minimum": null,
+                    "maximum": null
+                  },
+                  {
+                    "parameter_id": "preserve_knowledge_detail",
+                    "value_type": "boolean",
+                    "description": "Preserve explicit visibility and memory distinctions in each partition.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": false,
+                    "allowed_values": [],
+                    "minimum": null,
+                    "maximum": null
+                  }
+                ],
+                "implementation_ref": "ai.codex_tools.representation.components.ContactLedgerComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {
+                "include_remembered_allies": true,
+                "preserve_knowledge_detail": true
+              }
+            },
+            {
+              "order": 3,
+              "spec": {
+                "component_id": "objects.known",
+                "version": "1.0.0",
+                "title": "Known object index",
+                "description": "Expose known subjective objects without inferring untyped object state.",
+                "role": "state_index",
+                "semantic_intent": "index_known_objects",
+                "input_domains": [
+                  "known_objects"
+                ],
+                "output_model": "codex.representation.ObjectLedgerBlock",
+                "transform": "select",
+                "omission_contract": {
+                  "source_domains": [
+                    "known_objects"
+                  ],
+                  "omitted_paths": [
+                    "world.known_objects.*.state"
+                  ],
+                  "filtering_predicate": null,
+                  "ordering_rule": null,
+                  "item_limit": 0,
+                  "depth_limit": null,
+                  "omitted_counts_reported": true,
+                  "recoverability": [
+                    "local_get",
+                    "local_select",
+                    "local_export"
+                  ],
+                  "rationale": "Automatic object rows may be bounded while full object state remains locally inspectable."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": false,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [
+                  {
+                    "parameter_id": "max_items",
+                    "value_type": "integer",
+                    "description": "Maximum automatic object rows, where zero means unbounded.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": 0,
+                    "allowed_values": [],
+                    "minimum": 0.0,
+                    "maximum": null
+                  },
+                  {
+                    "parameter_id": "include_full_objects",
+                    "value_type": "boolean",
+                    "description": "Include complete subjective object facts in automatic context.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": false,
+                    "allowed_values": [],
+                    "minimum": null,
+                    "maximum": null
+                  }
+                ],
+                "implementation_ref": "ai.codex_tools.representation.components.ObjectLedgerComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {
+                "include_full_objects": false,
+                "max_items": 64
+              }
+            },
+            {
+              "order": 4,
+              "spec": {
+                "component_id": "topology.summary",
+                "version": "1.0.0",
+                "title": "Known topology summary",
+                "description": "Index known hazards, slow cells, blockers, and vision blockers.",
+                "role": "state_index",
+                "semantic_intent": "index_known_topology",
+                "input_domains": [
+                  "known_tiles"
+                ],
+                "output_model": "codex.representation.TopologySummaryBlock",
+                "transform": "aggregate",
+                "omission_contract": {
+                  "source_domains": [
+                    "known_tiles"
+                  ],
+                  "omitted_paths": [
+                    "world.known_tiles.*.light",
+                    "world.known_tiles.*.conditions",
+                    "world.known_tiles.*.movement_cost",
+                    "world.known_tiles.*.knowledge_state"
+                  ],
+                  "filtering_predicate": null,
+                  "ordering_rule": null,
+                  "item_limit": null,
+                  "depth_limit": null,
+                  "omitted_counts_reported": true,
+                  "recoverability": [
+                    "local_get",
+                    "local_select",
+                    "local_export"
+                  ],
+                  "rationale": "The bounded turn view carries topology classes while exact tile records remain inspectable."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": false,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [],
+                "implementation_ref": "ai.codex_tools.representation.components.TopologySummaryComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {}
+            },
+            {
+              "order": 5,
+              "spec": {
+                "component_id": "spatial.scene",
+                "version": "1.0.0",
+                "title": "Neutral spatial scene",
+                "description": "Build a bounded non-ranking scene from known topology and contacts.",
+                "role": "computational_augmentation",
+                "semantic_intent": "summarize_spatial_context",
+                "input_domains": [
+                  "known_entities",
+                  "known_objects",
+                  "known_tiles",
+                  "geometry"
+                ],
+                "output_model": "codex.representation.SpatialSceneBlock",
+                "transform": "select",
+                "omission_contract": {
+                  "source_domains": [
+                    "known_entities",
+                    "known_objects",
+                    "known_tiles"
+                  ],
+                  "omitted_paths": [
+                    "world.known_tiles.outside_scene"
+                  ],
+                  "filtering_predicate": "Known positions within scene_radius of controlled actors or known contacts.",
+                  "ordering_rule": null,
+                  "item_limit": null,
+                  "depth_limit": null,
+                  "omitted_counts_reported": true,
+                  "recoverability": [
+                    "local_select",
+                    "local_export"
+                  ],
+                  "rationale": "A bounded spatial workspace avoids dumping the full known map at every decision."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": false,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [
+                  {
+                    "parameter_id": "scene_radius",
+                    "value_type": "integer",
+                    "description": "Grid radius around controlled actors and contacts included automatically.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": 12,
+                    "allowed_values": [],
+                    "minimum": 1.0,
+                    "maximum": null
+                  },
+                  {
+                    "parameter_id": "include_unknown_cells",
+                    "value_type": "boolean",
+                    "description": "Represent unknown cells explicitly rather than omitting them from scene bounds.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": true,
+                    "allowed_values": [],
+                    "minimum": null,
+                    "maximum": null
+                  }
+                ],
+                "implementation_ref": "ai.codex_tools.representation.components.SpatialSceneComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {
+                "include_unknown_cells": true,
+                "scene_radius": 12
+              }
+            },
+            {
+              "order": 6,
+              "spec": {
+                "component_id": "actions.index",
+                "version": "1.0.0",
+                "title": "Legal affordance index",
+                "description": "Group current server-issued rows by typed action semantics and costs.",
+                "role": "state_index",
+                "semantic_intent": "index_legal_affordances",
+                "input_domains": [
+                  "decision_epoch"
+                ],
+                "output_model": "codex.representation.ActionFamilyBlock",
+                "transform": "group",
+                "omission_contract": {
+                  "source_domains": [
+                    "decision_epoch"
+                  ],
+                  "omitted_paths": [
+                    "world.current_epoch.affordances.*.full_row"
+                  ],
+                  "filtering_predicate": null,
+                  "ordering_rule": null,
+                  "item_limit": 0,
+                  "depth_limit": null,
+                  "omitted_counts_reported": true,
+                  "recoverability": [
+                    "local_get",
+                    "local_select",
+                    "local_export"
+                  ],
+                  "rationale": "Automatic action families remain bounded while every executable row stays locally selectable."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": true,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [
+                  {
+                    "parameter_id": "multi_target_row_limit",
+                    "value_type": "integer",
+                    "description": "Maximum expanded multi-target rows, where zero means unbounded.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": 8,
+                    "allowed_values": [],
+                    "minimum": 0.0,
+                    "maximum": null
+                  },
+                  {
+                    "parameter_id": "include_full_rows",
+                    "value_type": "boolean",
+                    "description": "Include complete executable rows in automatic context.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": false,
+                    "allowed_values": [],
+                    "minimum": null,
+                    "maximum": null
+                  },
+                  {
+                    "parameter_id": "family_limit",
+                    "value_type": "integer",
+                    "description": "Maximum source-action families in automatic context, where zero means unbounded.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": 24,
+                    "allowed_values": [],
+                    "minimum": 0.0,
+                    "maximum": null
+                  },
+                  {
+                    "parameter_id": "capability_limit",
+                    "value_type": "integer",
+                    "description": "Maximum non-executable actor capabilities in automatic context, where zero means unbounded.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": 24,
+                    "allowed_values": [],
+                    "minimum": 0.0,
+                    "maximum": null
+                  }
+                ],
+                "implementation_ref": "ai.codex_tools.representation.components.ActionFamilyComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {
+                "capability_limit": 24,
+                "family_limit": 24,
+                "include_full_rows": false,
+                "multi_target_row_limit": 8
+              }
+            },
+            {
+              "order": 7,
+              "spec": {
+                "component_id": "events.recent_logs",
+                "version": "1.0.0",
+                "title": "Bounded recent combat logs",
+                "description": "Reproduce the current bounded recent subjective combat-log projection.",
+                "role": "state_selection",
+                "semantic_intent": "summarize_recent_events",
+                "input_domains": [
+                  "combat_logs"
+                ],
+                "output_model": "codex.representation.RecentCombatLogsBlock",
+                "transform": "truncate",
+                "omission_contract": {
+                  "source_domains": [
+                    "combat_logs"
+                  ],
+                  "omitted_paths": [
+                    "world.combat_logs.before_limit",
+                    "world.combat_logs.*.deep_children"
+                  ],
+                  "filtering_predicate": null,
+                  "ordering_rule": "Preserve subjective log order and retain the newest top-level records.",
+                  "item_limit": 3,
+                  "depth_limit": 1,
+                  "omitted_counts_reported": true,
+                  "recoverability": [
+                    "local_select",
+                    "local_search",
+                    "local_export"
+                  ],
+                  "rationale": "Compatibility mode reproduces the bounded log view while declaring recoverable omissions."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": false,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [
+                  {
+                    "parameter_id": "log_limit",
+                    "value_type": "integer",
+                    "description": "Maximum recent top-level subjective combat logs.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": 3,
+                    "allowed_values": [],
+                    "minimum": 1.0,
+                    "maximum": null
+                  },
+                  {
+                    "parameter_id": "child_limit",
+                    "value_type": "integer",
+                    "description": "Maximum direct child log entries retained per top-level record.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": 8,
+                    "allowed_values": [],
+                    "minimum": 0.0,
+                    "maximum": null
+                  }
+                ],
+                "implementation_ref": "ai.codex_tools.representation.components.RecentCombatLogsComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {
+                "child_limit": 8,
+                "log_limit": 3
+              }
+            },
+            {
+              "order": 8,
+              "spec": {
+                "component_id": "events.decision_delta",
+                "version": "1.0.0",
+                "title": "Decision-boundary subjective delta",
+                "description": "Preserve ordered subjective changes since the preceding Codex decision boundary.",
+                "role": "state_selection",
+                "semantic_intent": "preserve_decision_delta",
+                "input_domains": [
+                  "revision",
+                  "combat_logs"
+                ],
+                "output_model": "codex.representation.DecisionDeltaBlock",
+                "transform": "group",
+                "omission_contract": {
+                  "source_domains": [
+                    "revision",
+                    "combat_logs"
+                  ],
+                  "omitted_paths": [],
+                  "filtering_predicate": null,
+                  "ordering_rule": null,
+                  "item_limit": null,
+                  "depth_limit": null,
+                  "omitted_counts_reported": false,
+                  "recoverability": [
+                    "not_applicable"
+                  ],
+                  "rationale": "The component preserves its selected source information without omission."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": false,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [],
+                "implementation_ref": "ai.codex_tools.representation.components.DecisionDeltaComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {}
+            },
+            {
+              "order": 9,
+              "spec": {
+                "component_id": "memory.combat_hypotheses",
+                "version": "1.0.0",
+                "title": "Subjective combat hypotheses",
+                "description": "Expose bounded uncertain effect-block hypotheses derived from perceived combat evidence.",
+                "role": "belief_derivation",
+                "semantic_intent": "expose_combat_beliefs",
+                "input_domains": [
+                  "agent_facts"
+                ],
+                "output_model": "codex.representation.CombatHypothesisBlock",
+                "transform": "infer",
+                "omission_contract": {
+                  "source_domains": [
+                    "agent_facts"
+                  ],
+                  "omitted_paths": [
+                    "agent_facts.non_combat_memory",
+                    "agent_facts.combat_memory.unchanged"
+                  ],
+                  "filtering_predicate": "Controlled by changed_only parameter.",
+                  "ordering_rule": null,
+                  "item_limit": null,
+                  "depth_limit": null,
+                  "omitted_counts_reported": true,
+                  "recoverability": [
+                    "local_get",
+                    "local_export"
+                  ],
+                  "rationale": "Automatic context emphasizes changed beliefs while the full derived ledger remains inspectable."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": false,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [
+                  {
+                    "parameter_id": "changed_only",
+                    "value_type": "boolean",
+                    "description": "Expose only hypotheses materially changed at the current decision boundary.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": false,
+                    "allowed_values": [],
+                    "minimum": null,
+                    "maximum": null
+                  }
+                ],
+                "implementation_ref": "ai.codex_tools.representation.components.CombatHypothesisComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {
+                "changed_only": true
+              }
+            },
+            {
+              "order": 10,
+              "spec": {
+                "component_id": "predicates.focused",
+                "version": "1.0.0",
+                "title": "Focused logical state",
+                "description": "Expose selected three-valued predicates without removing them from the complete ledger.",
+                "role": "attention_control",
+                "semantic_intent": "focus_logical_state",
+                "input_domains": [
+                  "predicate_ledger"
+                ],
+                "output_model": "codex.representation.PredicateFocusBlock",
+                "transform": "filter",
+                "omission_contract": {
+                  "source_domains": [
+                    "predicate_ledger"
+                  ],
+                  "omitted_paths": [
+                    "predicates.not_focused"
+                  ],
+                  "filtering_predicate": "Predicate focus profile and change state.",
+                  "ordering_rule": null,
+                  "item_limit": 64,
+                  "depth_limit": null,
+                  "omitted_counts_reported": true,
+                  "recoverability": [
+                    "local_get",
+                    "local_search",
+                    "local_export"
+                  ],
+                  "rationale": "Attention controls automatic exposure only; every evaluation remains in the ledger."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": false,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [
+                  {
+                    "parameter_id": "max_automatic_items",
+                    "value_type": "integer",
+                    "description": "Maximum focused predicate evaluations emitted automatically.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": 64,
+                    "allowed_values": [],
+                    "minimum": 1.0,
+                    "maximum": null
+                  },
+                  {
+                    "parameter_id": "include_changed",
+                    "value_type": "boolean",
+                    "description": "Automatically expose predicates whose value changed.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": true,
+                    "allowed_values": [],
+                    "minimum": null,
+                    "maximum": null
+                  }
+                ],
+                "implementation_ref": "ai.codex_tools.representation.components.PredicateFocusComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {
+                "include_changed": true,
+                "max_automatic_items": 64
+              }
+            },
+            {
+              "order": 11,
+              "spec": {
+                "component_id": "oracle.policy",
+                "version": "1.0.0",
+                "title": "Traditional policy oracle",
+                "description": "Optionally expose tactical opinion from the unchanged traditional policy host.",
+                "role": "policy_advice",
+                "semantic_intent": "provide_policy_advice",
+                "input_domains": [
+                  "policy_oracle"
+                ],
+                "output_model": "codex.representation.AdviceBlock",
+                "transform": "rank",
+                "omission_contract": {
+                  "source_domains": [
+                    "policy_oracle"
+                  ],
+                  "omitted_paths": [
+                    "policy.candidates.not_selected",
+                    "policy.trace.detail"
+                  ],
+                  "filtering_predicate": null,
+                  "ordering_rule": null,
+                  "item_limit": null,
+                  "depth_limit": null,
+                  "omitted_counts_reported": true,
+                  "recoverability": [
+                    "local_get"
+                  ],
+                  "rationale": "Selected-only advice is compact; complete candidates and trace are available on demand."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": false,
+                "default_exposure": "on_demand",
+                "supported_exposures": [
+                  "never",
+                  "decision_epoch",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [
+                  {
+                    "parameter_id": "detail",
+                    "value_type": "string",
+                    "description": "Amount of policy output exposed to Codex.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": "selected_only",
+                    "allowed_values": [
+                      "selected_only",
+                      "ranked",
+                      "full_trace"
+                    ],
+                    "minimum": null,
+                    "maximum": null
+                  },
+                  {
+                    "parameter_id": "advance_lifecycle_on_match",
+                    "value_type": "boolean",
+                    "description": "Advance oracle policy memory when Codex executes the recommended row.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": false,
+                    "allowed_values": [],
+                    "minimum": null,
+                    "maximum": null
+                  }
+                ],
+                "implementation_ref": "ai.codex_tools.representation.oracle.TraditionalPolicyOracle"
+              },
+              "enabled": true,
+              "exposure": "on_demand",
+              "parameters": {
+                "advance_lifecycle_on_match": false,
+                "detail": "selected_only"
+              }
+            },
+            {
+              "order": 12,
+              "spec": {
+                "component_id": "telemetry.runtime",
+                "version": "1.0.0",
+                "title": "Representation runtime telemetry",
+                "description": "Record timings, payload sizes, inspections, and command lifecycle without gameplay authority.",
+                "role": "telemetry",
+                "semantic_intent": "record_runtime_telemetry",
+                "input_domains": [
+                  "runtime_telemetry"
+                ],
+                "output_model": "codex.representation.RepresentationTelemetryBlock",
+                "transform": "aggregate",
+                "omission_contract": {
+                  "source_domains": [
+                    "runtime_telemetry"
+                  ],
+                  "omitted_paths": [],
+                  "filtering_predicate": null,
+                  "ordering_rule": null,
+                  "item_limit": null,
+                  "depth_limit": null,
+                  "omitted_counts_reported": false,
+                  "recoverability": [
+                    "not_applicable"
+                  ],
+                  "rationale": "The component preserves its selected source information without omission."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": false,
+                "required": false,
+                "default_exposure": "never",
+                "supported_exposures": [
+                  "never",
+                  "decision_epoch",
+                  "on_demand"
+                ],
+                "parameter_schema": [],
+                "implementation_ref": "ai.codex_tools.representation.components.RuntimeTelemetryComponent"
+              },
+              "enabled": true,
+              "exposure": "never",
+              "parameters": {}
+            },
+            {
+              "order": 13,
+              "spec": {
+                "component_id": "encounter.summary",
+                "version": "1.0.0",
+                "title": "Subjective encounter summary",
+                "description": "Summarize post-match outcome and observed combat statistics without an objective reveal.",
+                "role": "deterministic_derivation",
+                "semantic_intent": "summarize_encounter_outcome",
+                "input_domains": [
+                  "encounter",
+                  "known_entities",
+                  "combat_logs",
+                  "predicate_ledger",
+                  "runtime_telemetry"
+                ],
+                "output_model": "codex.representation.EncounterSummaryBlock",
+                "transform": "aggregate",
+                "omission_contract": {
+                  "source_domains": [
+                    "combat_logs",
+                    "known_entities"
+                  ],
+                  "omitted_paths": [
+                    "world.combat_logs.*.full_entry",
+                    "world.known_entities.*.full_fact"
+                  ],
+                  "filtering_predicate": null,
+                  "ordering_rule": null,
+                  "item_limit": null,
+                  "depth_limit": null,
+                  "omitted_counts_reported": true,
+                  "recoverability": [
+                    "local_get",
+                    "local_export"
+                  ],
+                  "rationale": "The summary aggregates visible evidence while canonical subjective records remain locally inspectable."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": false,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "decision_epoch",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [],
+                "implementation_ref": "ai.codex_tools.representation.components.EncounterSummaryComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {}
+            },
+            {
+              "order": 14,
+              "spec": {
+                "component_id": "presentation.typed_json",
+                "version": "1.0.0",
+                "title": "Canonical typed JSON presentation",
+                "description": "Preserve validated component blocks in one deterministic machine-readable envelope.",
+                "role": "presentation",
+                "semantic_intent": "preserve_typed_presentation",
+                "input_domains": [
+                  "revision"
+                ],
+                "output_model": "codex.representation.CodexTurnRepresentation",
+                "transform": "render",
+                "omission_contract": {
+                  "source_domains": [
+                    "revision"
+                  ],
+                  "omitted_paths": [],
+                  "filtering_predicate": null,
+                  "ordering_rule": null,
+                  "item_limit": null,
+                  "depth_limit": null,
+                  "omitted_counts_reported": false,
+                  "recoverability": [
+                    "not_applicable"
+                  ],
+                  "rationale": "The component preserves its selected source information without omission."
+                },
+                "subjectivity_contract": {
+                  "scope": "session_subjective",
+                  "permits_objective_state": false,
+                  "preserves_knowledge_distinctions": true,
+                  "description": "Reads only the session-subjective local materialization and preserves explicit knowledge-state distinctions unless the omission contract says otherwise."
+                },
+                "deterministic": true,
+                "required": true,
+                "default_exposure": "decision_epoch",
+                "supported_exposures": [
+                  "bootstrap",
+                  "decision_epoch",
+                  "after_action",
+                  "after_result",
+                  "end_turn",
+                  "end_encounter",
+                  "on_demand"
+                ],
+                "parameter_schema": [
+                  {
+                    "parameter_id": "include_command_follow_up",
+                    "value_type": "boolean",
+                    "description": "Include the resulting bounded turn brief in compact command receipts.",
+                    "required": false,
+                    "has_default": true,
+                    "default_value": true,
+                    "allowed_values": [],
+                    "minimum": null,
+                    "maximum": null
+                  }
+                ],
+                "implementation_ref": "ai.codex_tools.representation.components.TypedJsonPresentationComponent"
+              },
+              "enabled": true,
+              "exposure": "decision_epoch",
+              "parameters": {
+                "include_command_follow_up": true
+              }
+            }
+          ],
+          "created_at": "2026-07-30T20:13:12.176770Z",
+          "compatibility": {
+            "legacy_response_model": null,
+            "preserves_eager_policy_lifecycle": false,
+            "notes": [
+              "Traditional policy remains available only on demand and is not part of automatic decision context."
+            ]
+          },
+          "component_order": [
+            "core.revision",
+            "core.turn",
+            "contacts.partition",
+            "objects.known",
+            "topology.summary",
+            "spatial.scene",
+            "actions.index",
+            "events.recent_logs",
+            "events.decision_delta",
+            "memory.combat_hypotheses",
+            "predicates.focused",
+            "oracle.policy",
+            "telemetry.runtime",
+            "encounter.summary",
+            "presentation.typed_json"
+          ],
+          "manifest_digest": "461568ed37a82a6a319e6fb4baa7d58a6d96eee6e5cbbc7e4dad861c4565a00b"
+        },
+        "subjectivity_scope": "session_subjective"
+      },
+      "previous_record_digest": null,
+      "record_digest": "02cc13613c45fbbb6785df738e0d066dbbd91f17d168c239e42c948249fdf92c"
+    },
+    {
+      "schema_version": 1,
+      "sequence": 1,
+      "recorded_at": "2026-07-30T20:13:12.569398+00:00",
+      "record_type": "agent_event",
+      "payload_type": "ai.subjective.AgentEvent@v1",
+      "runtime_id": "a91b5312-c088-4f53-ad72-2579c1c35e0c",
+      "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+      "encounter_uuid": null,
+      "observation_cursor": null,
+      "epoch_id": null,
+      "actor_uuid": null,
+      "command_id": null,
+      "payload": {
+        "event_id": "5e459b14-f4f9-4925-96f9-58fad9e498c1",
+        "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+        "actor_uuid": null,
+        "epoch_id": null,
+        "observation_cursor": null,
+        "event_type": "runtime.bootstrap_started",
+        "level": "info",
+        "source": "ai.subjective.runtime",
+        "summary": "Bootstrapping subjective runtime.",
+        "payload": {},
+        "tags": [],
+        "created_at": 1785442392.5693622
+      },
+      "previous_record_digest": "02cc13613c45fbbb6785df738e0d066dbbd91f17d168c239e42c948249fdf92c",
+      "record_digest": "6687fdeec47462987c82223a3cf71d62def93104b005e8ba60f40bfa7115453d"
+    },
+    {
+      "schema_version": 1,
+      "sequence": 2,
+      "recorded_at": "2026-07-30T20:13:12.578530+00:00",
+      "record_type": "subjective_snapshot",
+      "payload_type": "ai.observation.ObservationSnapshot@v1",
+      "runtime_id": "a91b5312-c088-4f53-ad72-2579c1c35e0c",
+      "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+      "encounter_uuid": "75936957-386d-4352-a0aa-717bcddde4bc",
+      "observation_cursor": 0,
+      "epoch_id": null,
+      "actor_uuid": null,
+      "command_id": null,
+      "payload": {
+        "reason": "bootstrap",
+        "snapshot": {
+          "observation_cursor": 0,
+          "source_event_cursor": 230,
+          "source_combat_log_cursor": 0,
+          "session": {
+            "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+            "player_type": "codex",
+            "name": "Characters",
+            "connection_status": "connected",
+            "controlled_entity_uuids": [
+              "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+            ],
+            "active_entity_uuid": null,
+            "active_entity_name": null,
+            "is_my_turn": false
+          },
+          "encounter": {
+            "uuid": "75936957-386d-4352-a0aa-717bcddde4bc",
+            "name": "iri, Roster Test vs Goblin Water Skirmish",
+            "state": "not_started",
+            "round_number": 0,
+            "current_turn_index": -1,
+            "current_entity_uuid": null,
+            "current_entity_name": null,
+            "turn_started_source_event_cursor": null,
+            "initiative_order": [
+              {
+                "uuid": "30a98af8-800f-497b-8b3a-7c3f45ffbe31",
+                "name": "Roster Test",
+                "initiative": 16,
+                "life_state": "alive",
+                "is_dead": false,
+                "is_controlled": true,
+                "knowledge_state": "visible",
+                "observer_uuids": [
+                  "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+                ]
+              }
+            ]
+          },
+          "observers": [
+            {
+              "observer_uuid": "30a98af8-800f-497b-8b3a-7c3f45ffbe31",
+              "entity_name": "Roster Test",
+              "position": [
+                2,
+                5
+              ],
+              "passive_perception": 10,
+              "sense_modes": [],
+              "visible_cells": [
+                [
+                  1,
+                  4
+                ],
+                [
+                  1,
+                  5
+                ],
+                [
+                  1,
+                  6
+                ],
+                [
+                  2,
+                  4
+                ],
+                [
+                  2,
+                  5
+                ],
+                [
+                  2,
+                  6
+                ],
+                [
+                  3,
+                  4
+                ],
+                [
+                  3,
+                  5
+                ],
+                [
+                  3,
+                  6
+                ],
+                [
+                  11,
+                  0
+                ]
+              ],
+              "seen_cells": [
+                [
+                  1,
+                  4
+                ],
+                [
+                  1,
+                  5
+                ],
+                [
+                  1,
+                  6
+                ],
+                [
+                  2,
+                  4
+                ],
+                [
+                  2,
+                  5
+                ],
+                [
+                  2,
+                  6
+                ],
+                [
+                  3,
+                  4
+                ],
+                [
+                  3,
+                  5
+                ],
+                [
+                  3,
+                  6
+                ],
+                [
+                  11,
+                  0
+                ]
+              ],
+              "visible_entity_uuids": [],
+              "visible_object_uuids": []
+            }
+          ],
+          "known_entities": [
+            {
+              "uuid": "30a98af8-800f-497b-8b3a-7c3f45ffbe31",
+              "name": "Roster Test",
+              "knowledge_state": "visible",
+              "observer_uuids": [
+                "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+              ],
+              "controlled": true,
+              "position": [
+                2,
+                5
+              ],
+              "hp": 14,
+              "normal_hp": 14,
+              "temporary_hp": 0,
+              "max_hp": 14,
+              "healing_blocked": false,
+              "ac": 14,
+              "conditions": [],
+              "condition_semantic_keys": [],
+              "condition_facts": [],
+              "effect_protections": [],
+              "is_concentrating": false,
+              "damage_vulnerabilities": [],
+              "damage_resistances": [],
+              "damage_immunities": [],
+              "creature_type": "humanoid",
+              "faction": "characters",
+              "life_state": "alive",
+              "is_dead": false
+            }
+          ],
+          "known_objects": [],
+          "known_tiles": [
+            {
+              "key": "1,4",
+              "position": [
+                1,
+                4
+              ],
+              "knowledge_state": "visible",
+              "observer_uuids": [
+                "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+              ],
+              "name": "Floor",
+              "walkable": true,
+              "walking_cost": 1,
+              "is_hazardous": false,
+              "conditions": [],
+              "spatial_effects": [],
+              "light_level": 1,
+              "directional_blocks_movement": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_vision": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_light": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_propagation": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "adjacent_domain": {
+                "-1,-1": "unknown",
+                "-1,0": "unknown",
+                "-1,1": "unknown",
+                "0,-1": "unknown",
+                "0,1": "unknown",
+                "1,-1": "unknown",
+                "1,0": "unknown",
+                "1,1": "unknown"
+              }
+            },
+            {
+              "key": "1,5",
+              "position": [
+                1,
+                5
+              ],
+              "knowledge_state": "visible",
+              "observer_uuids": [
+                "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+              ],
+              "name": "Floor",
+              "walkable": true,
+              "walking_cost": 1,
+              "is_hazardous": false,
+              "conditions": [],
+              "spatial_effects": [],
+              "light_level": 1,
+              "directional_blocks_movement": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_vision": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_light": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_propagation": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "adjacent_domain": {
+                "-1,-1": "unknown",
+                "-1,0": "unknown",
+                "-1,1": "unknown",
+                "0,-1": "unknown",
+                "0,1": "unknown",
+                "1,-1": "unknown",
+                "1,0": "unknown",
+                "1,1": "unknown"
+              }
+            },
+            {
+              "key": "1,6",
+              "position": [
+                1,
+                6
+              ],
+              "knowledge_state": "visible",
+              "observer_uuids": [
+                "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+              ],
+              "name": "Floor",
+              "walkable": true,
+              "walking_cost": 1,
+              "is_hazardous": false,
+              "conditions": [],
+              "spatial_effects": [],
+              "light_level": 1,
+              "directional_blocks_movement": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_vision": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_light": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_propagation": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "adjacent_domain": {
+                "-1,-1": "unknown",
+                "-1,0": "unknown",
+                "-1,1": "unknown",
+                "0,-1": "unknown",
+                "0,1": "unknown",
+                "1,-1": "unknown",
+                "1,0": "unknown",
+                "1,1": "unknown"
+              }
+            },
+            {
+              "key": "11,0",
+              "position": [
+                11,
+                0
+              ],
+              "knowledge_state": "visible",
+              "observer_uuids": [
+                "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+              ],
+              "name": "Floor",
+              "walkable": true,
+              "walking_cost": 1,
+              "is_hazardous": false,
+              "conditions": [],
+              "spatial_effects": [],
+              "light_level": 2,
+              "directional_blocks_movement": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_vision": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_light": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_propagation": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "adjacent_domain": {
+                "-1,-1": "invalid",
+                "-1,0": "unknown",
+                "-1,1": "unknown",
+                "0,-1": "invalid",
+                "0,1": "unknown",
+                "1,-1": "invalid",
+                "1,0": "unknown",
+                "1,1": "unknown"
+              }
+            },
+            {
+              "key": "2,4",
+              "position": [
+                2,
+                4
+              ],
+              "knowledge_state": "visible",
+              "observer_uuids": [
+                "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+              ],
+              "name": "Floor",
+              "walkable": true,
+              "walking_cost": 1,
+              "is_hazardous": false,
+              "conditions": [],
+              "spatial_effects": [],
+              "light_level": 1,
+              "directional_blocks_movement": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_vision": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_light": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_propagation": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "adjacent_domain": {
+                "-1,-1": "unknown",
+                "-1,0": "unknown",
+                "-1,1": "unknown",
+                "0,-1": "unknown",
+                "0,1": "unknown",
+                "1,-1": "unknown",
+                "1,0": "unknown",
+                "1,1": "unknown"
+              }
+            },
+            {
+              "key": "2,5",
+              "position": [
+                2,
+                5
+              ],
+              "knowledge_state": "visible",
+              "observer_uuids": [
+                "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+              ],
+              "name": "Floor",
+              "walkable": true,
+              "walking_cost": 1,
+              "is_hazardous": false,
+              "conditions": [],
+              "spatial_effects": [],
+              "light_level": 1,
+              "directional_blocks_movement": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_vision": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_light": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_propagation": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "adjacent_domain": {
+                "-1,-1": "unknown",
+                "-1,0": "unknown",
+                "-1,1": "unknown",
+                "0,-1": "unknown",
+                "0,1": "unknown",
+                "1,-1": "unknown",
+                "1,0": "unknown",
+                "1,1": "unknown"
+              }
+            },
+            {
+              "key": "2,6",
+              "position": [
+                2,
+                6
+              ],
+              "knowledge_state": "visible",
+              "observer_uuids": [
+                "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+              ],
+              "name": "Floor",
+              "walkable": true,
+              "walking_cost": 1,
+              "is_hazardous": false,
+              "conditions": [],
+              "spatial_effects": [],
+              "light_level": 1,
+              "directional_blocks_movement": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_vision": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_light": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_propagation": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "adjacent_domain": {
+                "-1,-1": "unknown",
+                "-1,0": "unknown",
+                "-1,1": "unknown",
+                "0,-1": "unknown",
+                "0,1": "unknown",
+                "1,-1": "unknown",
+                "1,0": "unknown",
+                "1,1": "unknown"
+              }
+            },
+            {
+              "key": "3,4",
+              "position": [
+                3,
+                4
+              ],
+              "knowledge_state": "visible",
+              "observer_uuids": [
+                "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+              ],
+              "name": "Floor",
+              "walkable": true,
+              "walking_cost": 1,
+              "is_hazardous": false,
+              "conditions": [],
+              "spatial_effects": [],
+              "light_level": 1,
+              "directional_blocks_movement": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_vision": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_light": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_propagation": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "adjacent_domain": {
+                "-1,-1": "unknown",
+                "-1,0": "unknown",
+                "-1,1": "unknown",
+                "0,-1": "unknown",
+                "0,1": "unknown",
+                "1,-1": "unknown",
+                "1,0": "unknown",
+                "1,1": "unknown"
+              }
+            },
+            {
+              "key": "3,5",
+              "position": [
+                3,
+                5
+              ],
+              "knowledge_state": "visible",
+              "observer_uuids": [
+                "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+              ],
+              "name": "Floor",
+              "walkable": true,
+              "walking_cost": 1,
+              "is_hazardous": false,
+              "conditions": [],
+              "spatial_effects": [],
+              "light_level": 1,
+              "directional_blocks_movement": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_vision": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_light": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_propagation": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "adjacent_domain": {
+                "-1,-1": "unknown",
+                "-1,0": "unknown",
+                "-1,1": "unknown",
+                "0,-1": "unknown",
+                "0,1": "unknown",
+                "1,-1": "unknown",
+                "1,0": "unknown",
+                "1,1": "unknown"
+              }
+            },
+            {
+              "key": "3,6",
+              "position": [
+                3,
+                6
+              ],
+              "knowledge_state": "visible",
+              "observer_uuids": [
+                "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+              ],
+              "name": "Floor",
+              "walkable": true,
+              "walking_cost": 1,
+              "is_hazardous": false,
+              "conditions": [],
+              "spatial_effects": [],
+              "light_level": 1,
+              "directional_blocks_movement": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_vision": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_light": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "directional_blocks_propagation": {
+                "north": false,
+                "south": false,
+                "east": false,
+                "west": false
+              },
+              "adjacent_domain": {
+                "-1,-1": "unknown",
+                "-1,0": "unknown",
+                "-1,1": "unknown",
+                "0,-1": "unknown",
+                "0,1": "unknown",
+                "1,-1": "unknown",
+                "1,0": "unknown",
+                "1,1": "unknown"
+              }
+            }
+          ],
+          "combat_logs": [],
+          "current_epoch": null
+        }
+      },
+      "previous_record_digest": "6687fdeec47462987c82223a3cf71d62def93104b005e8ba60f40bfa7115453d",
+      "record_digest": "ea97ecf1a85e4fa5af1c1e8710d8089f0e6469bf9ae41edf1df7d9755f2c9e45"
+    },
+    {
+      "schema_version": 1,
+      "sequence": 3,
+      "recorded_at": "2026-07-30T20:13:12.581533+00:00",
+      "record_type": "agent_event",
+      "payload_type": "ai.subjective.AgentEvent@v1",
+      "runtime_id": "a91b5312-c088-4f53-ad72-2579c1c35e0c",
+      "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+      "encounter_uuid": null,
+      "observation_cursor": 0,
+      "epoch_id": null,
+      "actor_uuid": null,
+      "command_id": null,
+      "payload": {
+        "event_id": "018a30cc-8986-4abb-8d04-65d8766a8eed",
+        "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+        "actor_uuid": null,
+        "epoch_id": null,
+        "observation_cursor": 0,
+        "event_type": "runtime.bootstrap_completed",
+        "level": "info",
+        "source": "ai.subjective.runtime",
+        "summary": "Subjective runtime bootstrap completed.",
+        "payload": {
+          "automatic_gc_suspended": true,
+          "retains_observation_history": true,
+          "observation_history_start_cursor": 0
+        },
+        "tags": [],
+        "created_at": 1785442392.581511
+      },
+      "previous_record_digest": "ea97ecf1a85e4fa5af1c1e8710d8089f0e6469bf9ae41edf1df7d9755f2c9e45",
+      "record_digest": "7b2efbdf8c52268ec7185e062492a89a1ebeb2cd062be0b40295af3faf485095"
+    },
+    {
+      "schema_version": 1,
+      "sequence": 4,
+      "recorded_at": "2026-07-30T20:13:12.600879+00:00",
+      "record_type": "agent_event",
+      "payload_type": "ai.subjective.AgentEvent@v1",
+      "runtime_id": "a91b5312-c088-4f53-ad72-2579c1c35e0c",
+      "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+      "encounter_uuid": null,
+      "observation_cursor": 0,
+      "epoch_id": null,
+      "actor_uuid": null,
+      "command_id": null,
+      "payload": {
+        "event_id": "b7fbf062-b673-4abb-bd4a-b0b81f0c8ead",
+        "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+        "actor_uuid": null,
+        "epoch_id": null,
+        "observation_cursor": 0,
+        "event_type": "stream.synced",
+        "level": "info",
+        "source": "ai.subjective.runtime",
+        "summary": "Observation stream sync received.",
+        "payload": {
+          "observation_cursor": 0,
+          "source_event_cursor": 230,
+          "source_combat_log_cursor": 0,
+          "current_epoch_id": null
+        },
+        "tags": [],
+        "created_at": 1785442392.6008494
+      },
+      "previous_record_digest": "7b2efbdf8c52268ec7185e062492a89a1ebeb2cd062be0b40295af3faf485095",
+      "record_digest": "0844a168d6947b95fad579d811ee290625efd5017ebc6bdb9f66c53be3ec858b"
+    },
+    {
+      "schema_version": 1,
+      "sequence": 5,
+      "recorded_at": "2026-07-30T20:13:13.628473+00:00",
+      "record_type": "subjective_frame",
+      "payload_type": "ai.observation.ObservationFrame@v1",
+      "runtime_id": "a91b5312-c088-4f53-ad72-2579c1c35e0c",
+      "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+      "encounter_uuid": null,
+      "observation_cursor": 1,
+      "epoch_id": null,
+      "actor_uuid": null,
+      "command_id": null,
+      "payload": {
+        "observation_cursor": 1,
+        "frame_type": "event",
+        "source_kind": "engine_event",
+        "source_command_id": null,
+        "event_type": "encounter_start",
+        "event_uuid": "c32488e8-cacb-4e1b-9bb3-ceb5eb1cf766",
+        "lineage_uuid": "7bcec4ec-30d8-4d4f-b485-c87a67f57cf6",
+        "phase": "completion",
+        "source_event_cursor": 231,
+        "source_combat_log_cursor": null,
+        "patches": [
+          {
+            "patch_type": "session",
+            "reason": "encounter_start",
+            "observer_uuid": null,
+            "entity_uuid": null,
+            "object_uuid": null,
+            "tile_key": null,
+            "data": {
+              "session": {
+                "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+                "player_type": "codex",
+                "name": "Characters",
+                "connection_status": "connected",
+                "controlled_entity_uuids": [
+                  "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+                ],
+                "active_entity_uuid": null,
+                "active_entity_name": null,
+                "is_my_turn": false
+              }
+            }
+          },
+          {
+            "patch_type": "encounter",
+            "reason": "encounter_start",
+            "observer_uuid": null,
+            "entity_uuid": null,
+            "object_uuid": null,
+            "tile_key": null,
+            "data": {
+              "encounter": {
+                "uuid": "75936957-386d-4352-a0aa-717bcddde4bc",
+                "name": "iri, Roster Test vs Goblin Water Skirmish",
+                "state": "active",
+                "round_number": 1,
+                "current_turn_index": -1,
+                "current_entity_uuid": null,
+                "current_entity_name": null,
+                "turn_started_source_event_cursor": null,
+                "initiative_order": [
+                  {
+                    "uuid": "30a98af8-800f-497b-8b3a-7c3f45ffbe31",
+                    "name": "Roster Test",
+                    "initiative": 16,
+                    "life_state": "alive",
+                    "is_dead": false,
+                    "is_controlled": true,
+                    "knowledge_state": "visible",
+                    "observer_uuids": [
+                      "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "combat_log": null,
+        "state_replacement": null,
+        "decision_epoch": null,
+        "command_result": null
+      },
+      "previous_record_digest": "0844a168d6947b95fad579d811ee290625efd5017ebc6bdb9f66c53be3ec858b",
+      "record_digest": "6f0702d70808880f0dbf5af158935377d5ddafb4de95a78e37c094ebfa61dc27"
+    },
+    {
+      "schema_version": 1,
+      "sequence": 6,
+      "recorded_at": "2026-07-30T20:13:13.672554+00:00",
+      "record_type": "subjective_frame",
+      "payload_type": "ai.observation.ObservationFrame@v1",
+      "runtime_id": "a91b5312-c088-4f53-ad72-2579c1c35e0c",
+      "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+      "encounter_uuid": null,
+      "observation_cursor": 2,
+      "epoch_id": null,
+      "actor_uuid": null,
+      "command_id": null,
+      "payload": {
+        "observation_cursor": 2,
+        "frame_type": "event",
+        "source_kind": "engine_event",
+        "source_command_id": null,
+        "event_type": "round_start",
+        "event_uuid": "bc272821-25b6-4352-be3a-5b5da81c47d8",
+        "lineage_uuid": "78f0422c-c3e0-4038-8f95-38b286335307",
+        "phase": "completion",
+        "source_event_cursor": 232,
+        "source_combat_log_cursor": null,
+        "patches": [
+          {
+            "patch_type": "session",
+            "reason": "round_start",
+            "observer_uuid": null,
+            "entity_uuid": null,
+            "object_uuid": null,
+            "tile_key": null,
+            "data": {
+              "session": {
+                "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+                "player_type": "codex",
+                "name": "Characters",
+                "connection_status": "connected",
+                "controlled_entity_uuids": [
+                  "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+                ],
+                "active_entity_uuid": null,
+                "active_entity_name": null,
+                "is_my_turn": false
+              }
+            }
+          },
+          {
+            "patch_type": "encounter",
+            "reason": "round_start",
+            "observer_uuid": null,
+            "entity_uuid": null,
+            "object_uuid": null,
+            "tile_key": null,
+            "data": {
+              "encounter": {
+                "uuid": "75936957-386d-4352-a0aa-717bcddde4bc",
+                "name": "iri, Roster Test vs Goblin Water Skirmish",
+                "state": "active",
+                "round_number": 1,
+                "current_turn_index": -1,
+                "current_entity_uuid": null,
+                "current_entity_name": null,
+                "turn_started_source_event_cursor": null,
+                "initiative_order": [
+                  {
+                    "uuid": "30a98af8-800f-497b-8b3a-7c3f45ffbe31",
+                    "name": "Roster Test",
+                    "initiative": 16,
+                    "life_state": "alive",
+                    "is_dead": false,
+                    "is_controlled": true,
+                    "knowledge_state": "visible",
+                    "observer_uuids": [
+                      "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "combat_log": null,
+        "state_replacement": null,
+        "decision_epoch": null,
+        "command_result": null
+      },
+      "previous_record_digest": "6f0702d70808880f0dbf5af158935377d5ddafb4de95a78e37c094ebfa61dc27",
+      "record_digest": "7cf2735e5b587b0f5c9f9a448e45d6ba4f16f85aef7226aa4ae272393fc41092"
+    },
+    {
+      "schema_version": 1,
+      "sequence": 7,
+      "recorded_at": "2026-07-30T20:13:13.675724+00:00",
+      "record_type": "subjective_frame",
+      "payload_type": "ai.observation.ObservationFrame@v1",
+      "runtime_id": "a91b5312-c088-4f53-ad72-2579c1c35e0c",
+      "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+      "encounter_uuid": null,
+      "observation_cursor": 3,
+      "epoch_id": null,
+      "actor_uuid": null,
+      "command_id": null,
+      "payload": {
+        "observation_cursor": 3,
+        "frame_type": "event",
+        "source_kind": "engine_event",
+        "source_command_id": null,
+        "event_type": "turn_start",
+        "event_uuid": "c16b6beb-af03-4bd8-b717-83dd7904ce1e",
+        "lineage_uuid": "ab3fcaa5-727c-4516-836e-33119cdf9fc1",
+        "phase": "completion",
+        "source_event_cursor": 236,
+        "source_combat_log_cursor": 1,
+        "patches": [
+          {
+            "patch_type": "session",
+            "reason": "turn_start",
+            "observer_uuid": null,
+            "entity_uuid": null,
+            "object_uuid": null,
+            "tile_key": null,
+            "data": {
+              "session": {
+                "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+                "player_type": "codex",
+                "name": "Characters",
+                "connection_status": "connected",
+                "controlled_entity_uuids": [
+                  "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+                ],
+                "active_entity_uuid": null,
+                "active_entity_name": null,
+                "is_my_turn": false
+              }
+            }
+          },
+          {
+            "patch_type": "encounter",
+            "reason": "turn_start",
+            "observer_uuid": null,
+            "entity_uuid": null,
+            "object_uuid": null,
+            "tile_key": null,
+            "data": {
+              "encounter": {
+                "uuid": "75936957-386d-4352-a0aa-717bcddde4bc",
+                "name": "iri, Roster Test vs Goblin Water Skirmish",
+                "state": "active",
+                "round_number": 1,
+                "current_turn_index": -1,
+                "current_entity_uuid": null,
+                "current_entity_name": null,
+                "turn_started_source_event_cursor": null,
+                "initiative_order": [
+                  {
+                    "uuid": "30a98af8-800f-497b-8b3a-7c3f45ffbe31",
+                    "name": "Roster Test",
+                    "initiative": 16,
+                    "life_state": "alive",
+                    "is_dead": false,
+                    "is_controlled": true,
+                    "knowledge_state": "visible",
+                    "observer_uuids": [
+                      "30a98af8-800f-497b-8b3a-7c3f45ffbe31"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "patch_type": "combat_log",
+            "reason": "combat_log",
+            "observer_uuid": null,
+            "entity_uuid": null,
+            "object_uuid": null,
+            "tile_key": null,
+            "data": {
+              "combat_log": {
+                "entry_type": "turn_start",
+                "source_name": "Unknown",
+                "source_uuid": "",
+                "target_name": null,
+                "target_uuid": null,
+                "compact": "An unknown combatant's turn begins",
+                "verbose": "An unknown combatant's turn begins",
+                "detailed": "An unknown combatant's turn begins",
+                "data": {
+                  "entity_name": "Unknown",
+                  "round_number": 1,
+                  "turn_index": 0
+                },
+                "success": null,
+                "sub_entries": [],
+                "perceiver_uuids": [],
+                "revealed_entity_uuids": []
+              }
+            }
+          }
+        ],
+        "combat_log": {
+          "entry_type": "turn_start",
+          "source_name": "Unknown",
+          "source_uuid": "",
+          "target_name": null,
+          "target_uuid": null,
+          "compact": "An unknown combatant's turn begins",
+          "verbose": "An unknown combatant's turn begins",
+          "detailed": "An unknown combatant's turn begins",
+          "data": {
+            "entity_name": "Unknown",
+            "round_number": 1,
+            "turn_index": 0
+          },
+          "success": null,
+          "sub_entries": [],
+          "perceiver_uuids": [],
+          "revealed_entity_uuids": []
+        },
+        "state_replacement": null,
+        "decision_epoch": null,
+        "command_result": null
+      },
+      "previous_record_digest": "7cf2735e5b587b0f5c9f9a448e45d6ba4f16f85aef7226aa4ae272393fc41092",
+      "record_digest": "5c10046eadbef848872691f8d54b9a2b61c9cd24cd97f8d7253afa4dfc649ac0"
+    },
+    {
+      "schema_version": 1,
+      "sequence": 8,
+      "recorded_at": "2026-07-30T20:13:14.345586+00:00",
+      "record_type": "session_released",
+      "payload_type": "codex.session_released@v1",
+      "runtime_id": "a91b5312-c088-4f53-ad72-2579c1c35e0c",
+      "session_id": "d6d5326d-3481-4b29-b626-d269a8734019",
+      "encounter_uuid": null,
+      "observation_cursor": null,
+      "epoch_id": null,
+      "actor_uuid": null,
+      "command_id": null,
+      "payload": {
+        "status": "released",
+        "claim_id": "4e44dac8-5035-46b7-92ea-ac98bae602af",
+        "upstream_status": "released",
+        "shutdown_failures": []
+      },
+      "previous_record_digest": "5c10046eadbef848872691f8d54b9a2b61c9cd24cd97f8d7253afa4dfc649ac0",
+      "record_digest": "8b8d92bf87ee342e73bdced35fdfdae47bafd33d20077f1a0e4c0c03ff298104"
+    }
+  ]
+}

@@ -60,8 +60,7 @@ def import_bundle(source: Path, *, manifest: str = "media-four-camera.json", rep
                 views[DIRECTIONS[q * 2]] = parts
                 views[DIRECTIONS[q * 2 + 1]] = parts
             assets[identity] = {
-                "assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/healing-spells/{name}/{side}.png",
+                "assetId": identity, "displayName": identity, "sheet": f"/healing-spells/{name}/{side}.png",
                 "frame": {"width": cell, "height": cell, "rows": 8, "cols": count},
                 "fps": fps, "rowOrder": list(DIRECTIONS),
                 "phases": {"impact": {"start": 0, "frames": count, "fps": fps, "loop": name == "aid_hold"}},

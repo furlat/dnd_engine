@@ -9,7 +9,7 @@ from dnd_player import (Follower, acknowledge, attach, choices, connect, follow,
     preview, receipt, status, submit_command, wait_for_cursor)
 from dnd.player.facts import PlayerState
 from dnd.player.reduction import reduce_initialization, reduce_operation
-from player_server.protocol import InitializationResponse, PlayerOperation
+from server.protocol import InitializationResponse, PlayerOperation
 
 
 # These are the existing authored dungeon's walkthrough goals, not a pathfinder.

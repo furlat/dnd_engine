@@ -51,7 +51,7 @@ def markers():
         filename=kind+'.png';image.save(stage/filename)
         runtime='game/assets/class_media/markers/'+filename;identity='class.marker.'+kind
         payloads.append((filename,runtime,hashlib.sha256((stage/filename).read_bytes()).hexdigest()))
-        assets.append(dict(assetId=identity,displayName=identity,kind='projectile',sheet='/'+identity+'.png',
+        assets.append(dict(assetId=identity,displayName=identity,sheet='/'+identity+'.png',
             frame=dict(width=32,height=32,rows=8,cols=1),fps=32,rowOrder=list(DIRECTIONS),
             phases=dict(impact=dict(start=0,frames=1,fps=32,loop=True)),anchor=dict(x=.5,y=.75),
             defaultScale=1,palettePreview=dict(colors=[color])))

@@ -1,0 +1,1046 @@
+{
+  "date": "2026-10-08",
+  "engine_head": "804b0f7e073c658b52609a8926dc98e5dffd79a3",
+  "fields": {
+    "StudioSpellDraft": {
+      "file": "game/animation_types.py",
+      "line": 713,
+      "fields": [
+        "definitionRef",
+        "elementColors",
+        "castPalettes",
+        "cast",
+        "projectile",
+        "area",
+        "damage",
+        "condition",
+        "media",
+        "bodyMaterials",
+        "arcs",
+        "directed",
+        "cancellationMedia",
+        "displacementLayers",
+        "contact",
+        "childAttack"
+      ]
+    },
+    "AnimationData": {
+      "file": "game/animation_types.py",
+      "line": 2241,
+      "fields": [
+        "interruptions",
+        "devices",
+        "device_wrecks",
+        "drafts",
+        "attack_recipes",
+        "shove_recipes",
+        "body_action_recipes",
+        "body_action_bindings",
+        "condition_recipes",
+        "condition_media",
+        "projectile_assets",
+        "projectile_storage",
+        "media_root",
+        "rig",
+        "resources",
+        "root_rig",
+        "rigs",
+        "creature_rigs",
+        "damage_context",
+        "healing_context",
+        "death_save_context",
+        "life_state_context",
+        "death_context",
+        "equipment_context",
+        "movement_context",
+        "movement_reaction_context",
+        "forced_movement_context",
+        "forced_movement_profile",
+        "shove_feedback",
+        "number_style",
+        "badge_style",
+        "dart_style",
+        "bolt_style",
+        "vfx_source_hues",
+        "context_source_json",
+        "world_animations",
+        "spatial_media",
+        "action_media_assets",
+        "body_release_media",
+        "relocation_actions",
+        "portals",
+        "blood_responses",
+        "action_playback_rates",
+        "action_deliveries",
+        "movement_reference_speed_feet",
+        "deposit_media",
+        "concentration_media",
+        "construction_media",
+        "body_materials",
+        "entity_lifecycle_media",
+        "item_attachments",
+        "action_materials",
+        "action_intakes"
+      ]
+    },
+    "AssetCatalog": {
+      "file": "game/assets.py",
+      "line": 47,
+      "fields": [
+        "world_source",
+        "resources",
+        "bindings",
+        "flame_frames",
+        "flame_fps",
+        "water",
+        "props",
+        "spatial_effects",
+        "spatial_tethers",
+        "spatial_residue_overlays",
+        "residue_particles",
+        "residue_ground",
+        "residue_surfaces",
+        "residue_wall_faces",
+        "liquid_surfaces"
+      ]
+    },
+    "ConditionRecipe": {
+      "file": "game/condition_types.py",
+      "line": 350,
+      "fields": [
+        "definitionRef",
+        "label",
+        "disposition",
+        "mediaFailurePolicy",
+        "relationships",
+        "classification",
+        "composition",
+        "persistent",
+        "application",
+        "removal",
+        "activation",
+        "responses",
+        "reactionCastBinding",
+        "interceptionEffectsByDirection"
+      ]
+    },
+    "EnvironmentDocument": {
+      "file": "game/environment_art.py",
+      "line": 116,
+      "fields": [
+        "version",
+        "banks",
+        "doors",
+        "traps",
+        "wrecks",
+        "props"
+      ]
+    },
+    "WorldBindingsSource": {
+      "file": "game/world_binding_types.py",
+      "line": 182,
+      "fields": [
+        "schema_version",
+        "terrain",
+        "terrain_cliff",
+        "terrain_stairs",
+        "stone_wall_straight",
+        "stone_wall_corner",
+        "wood_wall_straight",
+        "wood_wall_corner",
+        "stone_door_frame",
+        "wood_door_closed",
+        "wood_door_open",
+        "props",
+        "treatments",
+        "spatial_effects",
+        "residue_wall_faces",
+        "residue_particles",
+        "residue_ground",
+        "residue_surfaces",
+        "liquid_surfaces",
+        "spatial_media",
+        "concentration_media",
+        "construction_media",
+        "deposit_media"
+      ]
+    }
+  },
+  "sources": [
+    {
+      "path": "dnd/player/__init__.py",
+      "sha256": "1e155c7591027061f02f8a94028c5a9c35e3fd73f54ad4eeb940cc154537f847",
+      "declared_functions": 0
+    },
+    {
+      "path": "dnd/player/actor_facts.py",
+      "sha256": "f56b50e58ef10240fcc67e13c00a56fab443766460dc03796f7c77238e4d7090",
+      "declared_functions": 0
+    },
+    {
+      "path": "dnd/player/actor_projection.py",
+      "sha256": "8920f0260e8c2c8f359c0149bb0aa74828d65a07174ed0d34c3e4d451234012a",
+      "declared_functions": 1
+    },
+    {
+      "path": "dnd/player/application.py",
+      "sha256": "56a84f4a294c7b824d0976d008693c7ab0ca89cffebf87e1cd2160497da25fb1",
+      "declared_functions": 2
+    },
+    {
+      "path": "dnd/player/audience.py",
+      "sha256": "51e6d701dca5930771187702657e68f0415a1fdbe95f326a1daa3270b808b397",
+      "declared_functions": 11
+    },
+    {
+      "path": "dnd/player/capture.py",
+      "sha256": "803a5c84d89c824e6da5e616ca6e32b13e5433425ab8ba5b6854db89f869c99e",
+      "declared_functions": 27
+    },
+    {
+      "path": "dnd/player/commands.py",
+      "sha256": "fb042dcd61be3164ed6ae9ff2ebfc48fbeb94e8090719c9785ccb9631be715d1",
+      "declared_functions": 0
+    },
+    {
+      "path": "dnd/player/compatibility.py",
+      "sha256": "9dc4c17bc6c26c7ddc41a2d4935597a5bdad9420eb9dab3397deccf283dd0f93",
+      "declared_functions": 5
+    },
+    {
+      "path": "dnd/player/content.py",
+      "sha256": "63bceef44ad03f8f7c3a33816025ac24ffdce11b57b93e3412dfc4c992497941",
+      "declared_functions": 0
+    },
+    {
+      "path": "dnd/player/content_composition.py",
+      "sha256": "d5fe68f2af30c2993d8d36c9caf8a16e238e62774c5350fb7fba558c6ea6839f",
+      "declared_functions": 3
+    },
+    {
+      "path": "dnd/player/event_record.py",
+      "sha256": "a87b7613c52dd98475c54e1f6c41388f126b0480f54771e119695ac267499070",
+      "declared_functions": 6
+    },
+    {
+      "path": "dnd/player/facts.py",
+      "sha256": "bebf907f3ffe363180ead4d931bdfef0bfe309509b1c5d098fb1ad74ec6ca72c",
+      "declared_functions": 6
+    },
+    {
+      "path": "dnd/player/projection.py",
+      "sha256": "614fbcf89cc937420044377a76918d90eff326fe93a30349e8b104cb52d88e02",
+      "declared_functions": 34
+    },
+    {
+      "path": "dnd/player/recorded.py",
+      "sha256": "4885042d45f9ff0c0b1d1ab540a4df09e4911e5abb9c216884b555119665b1e9",
+      "declared_functions": 4
+    },
+    {
+      "path": "dnd/player/reduction.py",
+      "sha256": "e77d17bd058b31f4c3e249fb2ef0bc24da4ef34ba53f896c0678980cdec38c4a",
+      "declared_functions": 17
+    },
+    {
+      "path": "dnd/player/selection.py",
+      "sha256": "6657cb2ac4c5d30bab97b7100534a46afc9ab4f675991683c7effd61e41c7e4f",
+      "declared_functions": 1
+    },
+    {
+      "path": "dnd/player/session.py",
+      "sha256": "4c06844a8a971089160ebd553107f754c41f51114497b69d74e133e966306651",
+      "declared_functions": 21
+    },
+    {
+      "path": "game/__init__.py",
+      "sha256": "61120482adc9c278be5a53765637c41d1b2544916cf454a027fbf1530a65af97",
+      "declared_functions": 0
+    },
+    {
+      "path": "game/__main__.py",
+      "sha256": "14ecb2f34b34b7424167c6d1d7bc149d0e4990efde137fe6355e620149b9a43e",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/absence_media.py",
+      "sha256": "3bab65e938926f18adc84f3a15311daa4bac119de49805a6d17063b2b7855226",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/action_media.py",
+      "sha256": "da8acf19e0db85b5b754245d0e9d828de684e9e25947cac103fd442522ea63b9",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/animation.py",
+      "sha256": "452198ff806bc7d556cb195244c9eb3405daf380a0181fa7739cc7d5b9c4d41b",
+      "declared_functions": 81
+    },
+    {
+      "path": "game/animation_data.py",
+      "sha256": "0fc0280d8f8c945ed1db3eb7637c210bda5c9320d542f6abf569ea7988ae8673",
+      "declared_functions": 9
+    },
+    {
+      "path": "game/animation_draw.py",
+      "sha256": "5ef421dd82f6a3cd259a5b4b0bf9097a79ff45f67b297706a08ad51f309221fb",
+      "declared_functions": 37
+    },
+    {
+      "path": "game/animation_preview.py",
+      "sha256": "580f60e09162c7b4f28d448092cc77ff94f37d16e3b93089a031245b9e21413e",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/animation_rates.py",
+      "sha256": "f83e4c1a74d583f725fd7d7abc69e22f09db05e8b1bc68feb851692eb365ec5c",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/animation_types.py",
+      "sha256": "9589c1527f6ada7c2adad8fe34ae4501e5222d25cff1a5715662d63eb4a72791",
+      "declared_functions": 38
+    },
+    {
+      "path": "game/app.py",
+      "sha256": "636203d523209e81f22c56bdae347f94f18d3bf0f4dd5d31733d8ca4ad142caa",
+      "declared_functions": 14
+    },
+    {
+      "path": "game/area_media.py",
+      "sha256": "4008aaf9b05910502f6e6b08f0dd5042092a02fba244f41894970cc084786277",
+      "declared_functions": 7
+    },
+    {
+      "path": "game/asset_types.py",
+      "sha256": "b4b9d324b38050a69ee2da5a242d07481b85efe716547f81262daa3001afa8b7",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/assets.py",
+      "sha256": "6a3b668081505e6bc805586fd2451356640ecb1578a620a7ff55440f5941fe78",
+      "declared_functions": 16
+    },
+    {
+      "path": "game/attack.py",
+      "sha256": "ec5be9f44dad30c56eeff23e0bc0b8d880ba232d10dc76e3e83126bff4c82905",
+      "declared_functions": 13
+    },
+    {
+      "path": "game/authoring_conversion.py",
+      "sha256": "3916f28943666f33439263c6c83b4c0397513b7ffca8497810fdd2f903d51504",
+      "declared_functions": 9
+    },
+    {
+      "path": "game/blood_draw.py",
+      "sha256": "33477ba8ae1c95a5442ce091a68928301e3216bbbc1fa24ae3845620245a7af8",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/body_action.py",
+      "sha256": "aa2d267cea73e33fddf21c1c99539fbc615e00ee44c63d0c6ef48ef9e3e560db",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/body_effects.py",
+      "sha256": "59120d2bc014cefa1d90d1498276b6635d9df1d12405e945d2bbd32179512edb",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/body_history.py",
+      "sha256": "6484c0bafc77f8ec423cab2f9a6b1f6b0ff5ec511f00242343d6f13263d38edc",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/body_hop.py",
+      "sha256": "359d5cc2da9058da3f72b453a6608bfdef04b8a2792b4f8ddee9e6ec18d03222",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/body_pose_types.py",
+      "sha256": "3624d47b9b236426e38abf758a368070bcda66fad6da4940a9a95c967e163b35",
+      "declared_functions": 0
+    },
+    {
+      "path": "game/body_presentation.py",
+      "sha256": "7b08fa0dd0ccb31d785b3ac87fefc2ea205e527ea2766ee84d70a257d0e4f263",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/boundary_occlusion.py",
+      "sha256": "14c834cb5ba3e124c12060004c69f8a01ef0033ff2ab26b2753b4f09a7be31f4",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/cast_media.py",
+      "sha256": "1895fb8cd4153a06d68f051db7520f1d3190e3d2847fce05ac890165d398b433",
+      "declared_functions": 7
+    },
+    {
+      "path": "game/cell_media.py",
+      "sha256": "fcf7f8d60a1a8922287e625d8e5d0074926a93044637e1222c459bea5c11eecf",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/character_select.py",
+      "sha256": "c2ff4e088389d3c44ff6c47440bc21fb2a35b63ff20796f4bdee95a78db41a75",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/choreography.py",
+      "sha256": "405980f0dfcb97734d6efc670dda7f7aaf5adf403c712c2cc1eb8544bc2a0485",
+      "declared_functions": 32
+    },
+    {
+      "path": "game/choreography_draw.py",
+      "sha256": "772232b92356b1249127cc8c58807237cc997ca0c7ad4040012bd011eefc7af7",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/combat.py",
+      "sha256": "5be4b7b94eff6eda0362b55aaab9610912642bbaa4eaaa0b8c7e1a741ea68d95",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/combat_demo.py",
+      "sha256": "1a5b55bb7f02db38478e74d65fdbb2f17c36262376edb00e17752b5d936379ec",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/component_particles.py",
+      "sha256": "9925a87a822902680b0083fdee95e24ca3a1ce5a459709500c34c4136ec02928",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/concentration_draw.py",
+      "sha256": "731f4d8f646c7a26bc958511b63d1d5e8d446db9ac451a1d8c8440311d8619a3",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/concentration_media.py",
+      "sha256": "9c28ea0ca723dda4a35979856215ba151e90c37cb187eff89b0b12c72ce3a6f7",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/condition_animation.py",
+      "sha256": "e3300024aa3a7621feb7575e7df4c7696c7612b01e805a3262622d3701c438c9",
+      "declared_functions": 14
+    },
+    {
+      "path": "game/condition_draw.py",
+      "sha256": "d62fd7e50cabad3a3605e8697f15e8cc9711fc3f45f0d3ad2416ecb5c8855db2",
+      "declared_functions": 9
+    },
+    {
+      "path": "game/condition_media.py",
+      "sha256": "88ad4a49d5b5d01632996aa6d4d757d2a77668495562f2078c122d34dd0f920d",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/condition_media_lifetime.py",
+      "sha256": "831bd9fafe0f4f589e2ea833c8235f03681114a5f1bb55f586ce33eda7a0e470",
+      "declared_functions": 12
+    },
+    {
+      "path": "game/condition_reaction.py",
+      "sha256": "75ab6fd9e90758d6889b6ac39f4e3d5a8bcf646a6f4e6d57577e68a54aebba91",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/condition_sampling.py",
+      "sha256": "633f342f09a8ce8e38d1264b90248648a2a048849868f5f2221996b861cf5b5b",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/condition_types.py",
+      "sha256": "316f74d9bc0acf640d77df7f3b57260159f1fc44f7cf57420ef27169feb94203",
+      "declared_functions": 8
+    },
+    {
+      "path": "game/connector_motion.py",
+      "sha256": "803128caf7c200ec85b8b98fd185effc384478f134fb673bad0105b0b61e9e5a",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/construction_media.py",
+      "sha256": "d89f0fc6163156f2fc79852ed676606e54489e8e79e5a792c4fbee14f2af20e3",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/construction_media_lifetime.py",
+      "sha256": "c51a511d23052efa6b1642521335362e502e53dccc4e0cd95d97ab2d7105c90e",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/construction_surface.py",
+      "sha256": "569f4f50047b5e7ac8df379432ab2ecd72a3f00e3f0813c437840d2d7097f159",
+      "declared_functions": 13
+    },
+    {
+      "path": "game/construction_transitions.py",
+      "sha256": "c7bdb8a851229c9f3fa9528851071d2ac2adbb48e24588ff489b09aab9960f7e",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/controls.py",
+      "sha256": "8abfce2011685bba803cb2da796e944c30977d525e1aa72d0879bf278e5af51b",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/damage.py",
+      "sha256": "81210291c2f2c007919b2b03f4105bd4841466d1d59c32b8438f68ead48ef747",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/demo.py",
+      "sha256": "4acedfd11dd034155975ee90580ee07810e089089198f3b10606dee351cbf88b",
+      "declared_functions": 8
+    },
+    {
+      "path": "game/deposit_draw.py",
+      "sha256": "a339290cb016cdcc453078d0769e66a006563d7b98145609a9d8a74d33f4402e",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/deposit_media.py",
+      "sha256": "18ce7679308e04ef8e8270365dd12c3d3f0753584b6966a959ab9a2dd7c840d0",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/device_art.py",
+      "sha256": "5d8341966f74fe2ec8650bd149271f8addae76f741a278bb6b7cc4815ff0a0a1",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/device_draw.py",
+      "sha256": "729163d404302cc968e9ddaeb85460ee85506402e87b72638a31539641fe27ae",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/directed_contacts.py",
+      "sha256": "cfbef5634ea912dcbc9676217d6379a0b742914283e41de0144e9589442081a3",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/directed_media.py",
+      "sha256": "720516917a45e311c0292265e16f42e2986dc514428d400e35a8a2aed49f8ceb",
+      "declared_functions": 16
+    },
+    {
+      "path": "game/directed_mesh_media.py",
+      "sha256": "12684a18a17118ba771a3a1871f99216c770e09de41f7d1eec1c3dcbc546594c",
+      "declared_functions": 8
+    },
+    {
+      "path": "game/directed_plasma_media.py",
+      "sha256": "31c2aeb650d6a8c86b4de1125d04a272ea7978247f89b6a7d19ec5a8f91135ca",
+      "declared_functions": 9
+    },
+    {
+      "path": "game/directed_surface.py",
+      "sha256": "8f432d512f8eee20006a5d761c374d9b5690e007340edf733f7cc65f299dbd23",
+      "declared_functions": 8
+    },
+    {
+      "path": "game/draw_commands.py",
+      "sha256": "dc0f25ed17c9655c1a06d0bbeae85622a89d7df59fc894c11e53e96d2a86cf99",
+      "declared_functions": 0
+    },
+    {
+      "path": "game/encounter_play.py",
+      "sha256": "6157bd390b663aa381c0556c29029c9f099736686c529e72b1d7d505e57ac75e",
+      "declared_functions": 12
+    },
+    {
+      "path": "game/entity_lifecycle.py",
+      "sha256": "904a705acbcd74057abad913252882e84f112360303109ee47fd617482ad6bdb",
+      "declared_functions": 5
+    },
+    {
+      "path": "game/environment_animation.py",
+      "sha256": "9b7396446697a2ee96530ba332d965deb0a65ed5d9620daa8cfb9298c06537fb",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/environment_art.py",
+      "sha256": "a905262f98c6a48843bfa65f7e27d3cb0458b65fcf3fb748e5fae800410eb8b0",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/environment_draw.py",
+      "sha256": "02240f3f6e90e8b565bddd3625173122c75fe91041f6d207b3eb48c55999862f",
+      "declared_functions": 9
+    },
+    {
+      "path": "game/export_schema.py",
+      "sha256": "b9b4f3383ca283b2fcd5edf3604ef356aa9a7b80fe0ffe18a91dbf287426d1a2",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/feedback.py",
+      "sha256": "f68017d6d55be99d186c64ce4924d61ea49f13dfa13cb4aeca8fef52991ac1b0",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/finite_material.py",
+      "sha256": "2b8d80c5bc9094ff3b4b65ddbb58572a00920a5842003dfbe19af7fc9f5de762",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/fixture_depth.py",
+      "sha256": "71a73994a68c1a2905dec3fd7612f4d34e5ad36eb57951afa8bb0429aeeaf9c6",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/floor_composition.py",
+      "sha256": "d643bebca3b86c3edd144d26996099f5e56b245ba3cf4c8e4527ce84c1b9b619",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/forced_movement.py",
+      "sha256": "433338681c126137d862148882a7fc5706202830611b02d2c15527bcaeb996af",
+      "declared_functions": 7
+    },
+    {
+      "path": "game/interaction_frame.py",
+      "sha256": "59f4141eeb998721476ac7ca0209bf446abdc6ab7d5c24a6e0a2edc118496188",
+      "declared_functions": 8
+    },
+    {
+      "path": "game/interaction_types.py",
+      "sha256": "d3a71e9f0eb2ec520381179853a4ac80631da88381c0d4210e25f7f99497ad67",
+      "declared_functions": 0
+    },
+    {
+      "path": "game/interruption.py",
+      "sha256": "78d9130c8be17b42473f341f3fedbe91e11ebf540c30ea5bf5c29c11f178c2e7",
+      "declared_functions": 10
+    },
+    {
+      "path": "game/interruption_draw.py",
+      "sha256": "f8d4f8bd6a8ab27f4698d693b358854a734397dd36f2321df809f77773fd0f8e",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/item_appearance.py",
+      "sha256": "e7ce72ae639cba5bf1ca226675aff63821de32c68c61e9f7b6cc28e387eea204",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/item_attachment_lifetime.py",
+      "sha256": "ee92664d737713cba197be64e474fde15a30bd0908fe3cbf77667f9f5103c556",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/item_draw.py",
+      "sha256": "4a72a9d9e9f48d28da30db2c39fff6b3438e5f94fbdfc913279232ff12d88be6",
+      "declared_functions": 7
+    },
+    {
+      "path": "game/item_effects.py",
+      "sha256": "4fe9a4fe2609eecf05117df79f53a049418063ae3f3c14323c29e64674bf8e86",
+      "declared_functions": 5
+    },
+    {
+      "path": "game/maintained_media.py",
+      "sha256": "ebe63dcbb56686ee9b17e703c19e787681f1a71c3dc41d8f83d3925f4105fa51",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/mechanism_projectile.py",
+      "sha256": "ec4c29ba2641236c7d4191f465820ebf5f11a6dbda1e7647da3122e029fc8258",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/mechanism_projectile_draw.py",
+      "sha256": "1f4a889c8c00839f1f2c1724e200c6e57e67522e5c3fb981963d86de6ebcd936",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/media_blend.py",
+      "sha256": "90dd4ef6c224fc965a6f41e10aaa13c53179f0486c584a7c9ceb6ff2793ce32b",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/media_coverage.py",
+      "sha256": "96d766c74c43b321710597975cca824c7f4ed19fe499c9b6cba3301e14828c86",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/motion.py",
+      "sha256": "b110191cd3a82495d4e69fe7187304292078ad49f57d67f85585e3efa6007303",
+      "declared_functions": 0
+    },
+    {
+      "path": "game/motion_media.py",
+      "sha256": "ce98f02fed668f61f6c157fad4dce12e90e9c78fa59be1df63d668fd6122d30b",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/object_dust.py",
+      "sha256": "ab06d257968e182b178da408c4d892b07c9a67fa3c442139152898f3feb62098",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/orbit_media.py",
+      "sha256": "ea6188b56c45562ac117d5d005eea44d891bb5e839280b858f5918f7615ef2c1",
+      "declared_functions": 9
+    },
+    {
+      "path": "game/particle_media.py",
+      "sha256": "c0702d7ffb6ab918e832dcb1ddf153c4669d954d3e40e3d1ac4fd57e7ff5e1de",
+      "declared_functions": 5
+    },
+    {
+      "path": "game/play.py",
+      "sha256": "2c7bc0a7f40743c9941cdc892c3cb8f5ae4a77ad0c52223ff1b51998e74e6fcf",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/playback_frame.py",
+      "sha256": "5dbef131ae0dd1ba46975b8348cff2eab93818a7f70d3e37064e8ffa9dde36ab",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/portal_animation.py",
+      "sha256": "75899870695f207595c5f94b5c3d12cebea48a3768a136e762cb3c69e94721a9",
+      "declared_functions": 5
+    },
+    {
+      "path": "game/portal_art.py",
+      "sha256": "a81fd9788bb92a637851a6e0d960cd10d23e612b0422d05c4611f7eb98519cc0",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/portal_draw.py",
+      "sha256": "9be58de206c7146ade38ecb5c87c717f64e714ecf686417f2d7fc22668409524",
+      "declared_functions": 9
+    },
+    {
+      "path": "game/presentation_coverage.py",
+      "sha256": "a662fae3e5522b4a5276881ba60eec16cfde33018f679d25665ef08339883eff",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/presentation_export.py",
+      "sha256": "c86b48925038f532855e63347a1d44f888bddc350962fab3311ff8b6ce6b4647",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/presentation_group.py",
+      "sha256": "363a81f2a32d4adac3ed7b66d26d373437aa5cea6f6785b56b139c4e76d6a954",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/presentation_retained.py",
+      "sha256": "686ee462eec3811a3e048231c6572e9e18f0d50194f0690d79761271c63e7768",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/presentation_timing.py",
+      "sha256": "1d2612060408e4d97d6535f027662d817410b259da19dabdcef16b6e54eea389",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/projectile_media.py",
+      "sha256": "d9335e01553d7f997d1f2de72042613b08bc1ad5d793a51c75f6ccd245606b79",
+      "declared_functions": 11
+    },
+    {
+      "path": "game/projection.py",
+      "sha256": "1f8bcfc2b4910a4da5964d39fa0c5446626b39fcf2a5817be3203b2eec152e76",
+      "declared_functions": 15
+    },
+    {
+      "path": "game/reference.py",
+      "sha256": "a4f2021dd57dda8857ddbff537043451d5b34da2b27ad2af9b55d524ab1f36d4",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/registered_media.py",
+      "sha256": "4b58102a7de6eaf9fe80e4fc9e8ea68744fc010bfcfbc65887fee70bf3be7835",
+      "declared_functions": 5
+    },
+    {
+      "path": "game/residue_media.py",
+      "sha256": "21d0e1eb2c9b604606d7ad6e3b9ceb3f80517f75636147738c6366bad1e89454",
+      "declared_functions": 9
+    },
+    {
+      "path": "game/runtime_connection.py",
+      "sha256": "ed2fe09fe2a8d623c0aabc1bafacbfc60ac82d1563bb03c274e86a4cd4845cfb",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/runtime_protocol.py",
+      "sha256": "1206a38522a395016cc6f24f695d21308196d1866679af467588664e8f3602a4",
+      "declared_functions": 0
+    },
+    {
+      "path": "game/runtime_worker.py",
+      "sha256": "20ad8416180b6d16c0a68ae7e2d246cbed7f1a9565605864abf007f4b7244e8f",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/scene.py",
+      "sha256": "06816b6719e0defa13529ba32db82af3776b47d8551cace4656d9503cf3ef8b8",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/scene_actors.py",
+      "sha256": "66444e5691fb9fac75239fec3c151801b9623220cc7ef6bf57cc1fb37347c84b",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/spatial_contact_media.py",
+      "sha256": "718133efa5a06ae2a38667505f7b93acfe71c4ec060adedefc9aeb9697ffca49",
+      "declared_functions": 5
+    },
+    {
+      "path": "game/spatial_field.py",
+      "sha256": "0d12bf6919b4fcab9be425442a53ef92623b32383d89a6407470b3aea1608225",
+      "declared_functions": 10
+    },
+    {
+      "path": "game/spatial_field_media.py",
+      "sha256": "e0bda8cdfec6c9d999c61a09e05213f34cb13251f6d5bbf44e62c96127481d0f",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/spatial_media_draw.py",
+      "sha256": "0177c31ed621caf871a7d97f65e4f5b0327d8084f9b62f77481c7e2263174a50",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/spatial_media_lifetime.py",
+      "sha256": "e5627e47617ae4917daf5b7c908fc58d94b1b10f0383125215a0598c1a44abff",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/spatial_response.py",
+      "sha256": "f730cbef289c801f6df4cf9b52ff0debb68cfb27032a51c81bfede159d93ec57",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/spatial_response_draw.py",
+      "sha256": "7d524181c81e626c8e3a760454562f54e8890631fc841294de7e6ee7c8a908cf",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/spell_palette.py",
+      "sha256": "7ad886a545cf9b1d110fb12bfa7d5b72534fde1162f33db500d14b7663554d70",
+      "declared_functions": 5
+    },
+    {
+      "path": "game/stationary_draw.py",
+      "sha256": "2f855e771c33b451e1fd214245ef6b591f73af33454d3ce5c662d1f5a663437b",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/stationary_media.py",
+      "sha256": "c516c1d8f1298dd8f56110d519b50970c3824b75684d3a3d948520d950203165",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/surface_residue.py",
+      "sha256": "52888873495c6a4a10756f4ca7696773f03b8519b8c827514c932f5ca0121c79",
+      "declared_functions": 18
+    },
+    {
+      "path": "game/sustained_draw.py",
+      "sha256": "9c9c14f5b295b53da48d02720416196920f1179ab9b4307a4bffc16d89aeddf8",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/thorns_surface.py",
+      "sha256": "ed2df70d161f3b1d497b6344cdb4e02f52c6533270cc9c0aab7d6cb002398f71",
+      "declared_functions": 7
+    },
+    {
+      "path": "game/timing_evidence.py",
+      "sha256": "7eee7592dbdb6df1321610b9ba750c95b7f7ef8ff61d823254e61d38794db26d",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/ui/__init__.py",
+      "sha256": "b882bb6b5ff4a169c82f4e3d2e81569dcb5bdcbcb5d700245235e103bc982f8d",
+      "declared_functions": 0
+    },
+    {
+      "path": "game/ui/action_bar.py",
+      "sha256": "131f97363f1fa11dfd016a19acb7a93ab08c88884232aaf33e5f82284e2580e1",
+      "declared_functions": 13
+    },
+    {
+      "path": "game/ui/character.py",
+      "sha256": "ae6c0abf22f535e74c64de3bba19ae5647c38f9692694516f2b9f5454e1d7959",
+      "declared_functions": 10
+    },
+    {
+      "path": "game/ui/combat_log.py",
+      "sha256": "03ce4ffd2588e77615c42caa967098546d49fba006136e1e3ed37fe63b22ff1f",
+      "declared_functions": 17
+    },
+    {
+      "path": "game/ui/hud.py",
+      "sha256": "086b2129d981ea133e2cbd7592cb91d2502c9f0a18d076addd8bd62cc93c24af",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/ui/layout.py",
+      "sha256": "dc2a35564912aa58a3f8b888f4d77dace8c294ec453d504868d8c630cfc3aa49",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/ui/media.py",
+      "sha256": "f8d12ce1142e3451729bf868ffd68a7671205db6e293db50f3f6a84c2bc69cd4",
+      "declared_functions": 9
+    },
+    {
+      "path": "game/ui/panels.py",
+      "sha256": "514013e4678d78070eed1bd0eb9e1d2fb71f4ffdbd9df919f922ae1444c29bec",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/ui/primitives.py",
+      "sha256": "f96bf005d3399b5f07ef010f196661959be678cbbf83230a80a54d8e0c314ddc",
+      "declared_functions": 8
+    },
+    {
+      "path": "game/ui/rich_text.py",
+      "sha256": "2a494ea2d5403845427eb9ff55bf3ca542d7038da0940aac62e4a8b23874b2a1",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/ui/skin.py",
+      "sha256": "7b8ecff03aafc557a722f37787533dd442175aa12c88a4486212dc68498b3255",
+      "declared_functions": 2
+    },
+    {
+      "path": "game/ui/targeting.py",
+      "sha256": "388d9ddd8a9b2ae15ed8f0af19e3d1035bbd2c903901221d9ea4fc51c91459e4",
+      "declared_functions": 4
+    },
+    {
+      "path": "game/ui/types.py",
+      "sha256": "3eb7b50db30e74e028e329d8e6232a2f5fde2d4da4e1b8642550a39189ebeaf7",
+      "declared_functions": 0
+    },
+    {
+      "path": "game/ui/variants.py",
+      "sha256": "1d28f3ea8ff92e5975a9f617ab3bc816db705069e355d4a7a909952271a3987d",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/ui/world_interaction.py",
+      "sha256": "60146e9f9a0c8c9a24544057f3abe123522585b9c51e6dfd429fee28616f2de5",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/ui_composition.py",
+      "sha256": "d5c5b4a415150775f1127168b4215524e1c1d70ce9f9ae72ff2884120ae94464",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/visual_position.py",
+      "sha256": "601600235ad028654fce68e04778e4a14f39f3c3b4321ebd1aac08e9e77cc4b1",
+      "declared_functions": 1
+    },
+    {
+      "path": "game/volume_media.py",
+      "sha256": "f522e9420b958d3c3d9e032f5b0c8088f2d26309b1cc7a12628f8f4a72e26ee6",
+      "declared_functions": 10
+    },
+    {
+      "path": "game/wall_assembly_media.py",
+      "sha256": "1972bc005f15bb9185cb20a58cd43e7b33d991cd79b503eea96aa38349f79009",
+      "declared_functions": 6
+    },
+    {
+      "path": "game/wall_media.py",
+      "sha256": "0472696f928be470a27bdf873c699205526bc6d1ec1736010ad649c5be8abc53",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/wall_profile.py",
+      "sha256": "ecd3a28d149e438457f4fdbcfbe5cb1494e62a2cdec39a67cd739b082e4d5085",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/water.py",
+      "sha256": "f8974d70cc7f5af09724148cccb8eba87b314aa919c27736a8753102e71bad38",
+      "declared_functions": 8
+    },
+    {
+      "path": "game/weapon_trail_media.py",
+      "sha256": "ef90f45bdbff3749a0e5b7b8826d062d2dd1b204445e3a496b3132eef802131d",
+      "declared_functions": 3
+    },
+    {
+      "path": "game/wind_flow_media.py",
+      "sha256": "2baa0233cbc0916d14ba48f4de9c0a6de117e6bdc493013d0c66dac905d2fc1e",
+      "declared_functions": 13
+    },
+    {
+      "path": "game/world_animation.py",
+      "sha256": "166da533cbc8d51e45471b54c998b7e79b08b8699857b52f42f05c65af10e41a",
+      "declared_functions": 7
+    },
+    {
+      "path": "game/world_binding_types.py",
+      "sha256": "2e36cbb993f446b7bcf63d1d2ffa6b0fa935ce473213923f5e3cc60e2c40c74e",
+      "declared_functions": 2
+    }
+  ],
+  "counts": {
+    "devices": 2,
+    "device_wrecks": 2,
+    "drafts": 149,
+    "attack_recipes": 5,
+    "shove_recipes": 1,
+    "body_action_recipes": 85,
+    "body_action_bindings": 17,
+    "condition_recipes": 160,
+    "condition_media": 236,
+    "projectile_assets": 1112,
+    "projectile_storage": 1090,
+    "resources": 2503,
+    "rigs": 44,
+    "creature_rigs": 44,
+    "shove_feedback": 4,
+    "vfx_source_hues": 17,
+    "world_animations": 13,
+    "spatial_media": 25,
+    "action_media_assets": 12,
+    "body_release_media": 4,
+    "portals": 3,
+    "blood_responses": 13,
+    "action_playback_rates": 1,
+    "action_deliveries": 5,
+    "deposit_media": 6,
+    "concentration_media": 1,
+    "construction_media": 3,
+    "body_materials": 1,
+    "entity_lifecycle_media": 3,
+    "item_attachments": 1,
+    "action_materials": 1,
+    "action_intakes": 1
+  },
+  "draft_motion_counts_including_aliases": {
+    "Attack5": 92,
+    "Special1": 43,
+    "Attack1": 2,
+    "Attack6": 4,
+    "Attack4": 8
+  },
+  "draft_enabled_layer_categories_including_aliases": {
+    "Magic2": 147,
+    "Effect1": 17,
+    "Effect5": 88,
+    "Effect4": 28,
+    "Effect2": 3,
+    "Effect3": 5
+  },
+  "registered_surface_storage_phases": 186
+}

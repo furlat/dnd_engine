@@ -13,9 +13,9 @@ from unittest.mock import patch
 
 import uvicorn
 
-from player_server.app import create_app
-from player_server import connection
-from player_server.config import ServerConfig
+from server.app import create_app
+from server import connection
+from server.config import ServerConfig
 
 
 async def run(args):
@@ -76,10 +76,10 @@ async def run(args):
                 'dnd/player/session.py',
                 'dnd/player/content_composition.py', 'dnd/player/reduction.py', 'dnd/entity.py',
                 'dnd/core/values.py', 'dnd/blocks/health.py', 'dnd/blocks/abilities.py',
-                'dnd/blocks/equipment.py', 'dnd/player/projection.py', 'player_server/worker.py',
+                'dnd/blocks/equipment.py', 'dnd/player/projection.py', 'server/worker.py',
                 'dnd/controller.py', 'dnd/encounter.py', 'dnd/core/base_object.py',
-                'dnd/core/gridmap.py', 'dnd/blocks/sensory.py', 'player_server/protocol.py',
-                'player_server/host.py', 'player_server/app.py', 'sdk/python/src/dnd_player/transport.py',
+                'dnd/core/gridmap.py', 'dnd/blocks/sensory.py', 'server/protocol.py',
+                'server/host.py', 'server/app.py', 'sdk/python/src/dnd_player/transport.py',
                 'sdk/python/pyproject.toml', 'uv.lock')}}, indent=2))
 
 

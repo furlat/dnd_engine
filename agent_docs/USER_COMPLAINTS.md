@@ -11,6 +11,41 @@ does not introduce new gameplay rules or authorize unrelated work.
 
 ## Immediate complaints: event recording and the client boundary
 
+### October 8 — resumed NDClient inspection: positioning and viewport failures
+
+The human requested review in the running app, not new exported screenshot/video
+galleries. A page loading and playing without exceptions is not visual acceptance.
+
+- `door-fantasy-a1-inward--attacker.json`, end of playback: wall segments and the
+  doorway overlap incorrectly. Trace the exact source registration and shared
+  composition; do not blame missing pivots or change assets without evidence.
+- `terraced-keep-authoring.json`: rejected geometry must not remain a selectable
+  example presented for review. Use an established authored assembly with proper
+  enclosure and compatible parts. Preserve failed work only as failure evidence.
+- `ranged-hit--hero.json`: arrows appear to launch away from the bow; apparent
+  perspective distortion and an unexplained goblin overlay are also reported.
+  The supplied image has a black vertical strip inside the world canvas. Check
+  shared viewport/projection/composition alongside sockets; do not morph sprites
+  to a new perspective, rescale them cosmetically, or assume these are one cause.
+- Pan and zoom must retain NeuroClient's clear, stable pixel sampling. The user
+  explicitly rejects apparent isometric distortion, aliasing during camera motion,
+  incompatible assemblies and physically open raised platforms on returning from
+  lunch. Restore the known reference behavior; do not change art proportions or
+  reclassify bad examples as acceptable. Keep independent review and inspect the
+  running result before asking the user to spend more time reviewing it.
+- The subsequent Lantern Crypt inspection still shows chest/table/statue and
+  other prop bases clipped by floor tiles, an ugly edge around the chest, and
+  inconsistent doorway joins with adjacent walls. These are unresolved shared
+  composition/source-registration complaints, not accepted artwork. Trace both
+  the complete object silhouettes and wall/leaf joins in the actual area.
+- `jump-midflight-lethal--hero.json`, approximately 0.84 seconds: the lower
+  character silhouette is clipped by its floor during the reaction pose. The
+  shared repair must cover characters as well as props and preserve real
+  foreground-wall and higher-support occlusion.
+
+All these complaints remain in scope together. A fix for one does not close the
+others. Current investigation/results belong in the foundation repair record.
+
 ### September 23 — blocked attempts, expenditure and reaction ownership
 
 Sanctuary review must distinguish a failed attacker save from a later successful

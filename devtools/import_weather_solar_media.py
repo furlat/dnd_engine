@@ -75,8 +75,7 @@ def import_weather_solar(source: Path, program: str, *, preserved: Path,
     def register(identity, row, layers, first, count, *, loop=False, height=None):
         views = {facing: parts(row, layers[index], first, count) for index, facing in enumerate(DIRECTIONS)}
         cell, h = row["cell"], height or row["cell"]
-        assets[identity] = {"assetId": identity, "displayName": identity, "kind": "projectile",
-            "sheet": f"/{identity}.png", "frame": {"width": cell, "height": h, "rows": 8, "cols": count},
+        assets[identity] = {"assetId": identity, "displayName": identity, "sheet": f"/{identity}.png", "frame": {"width": cell, "height": h, "rows": 8, "cols": count},
             "fps": 32, "rowOrder": list(DIRECTIONS), "phases": {"impact": {
                 "start": 0, "frames": count, "fps": 32, "loop": loop}},
             "anchor": {"x": row["pivot"][0] / cell, "y": row["pivot"][1] / h},

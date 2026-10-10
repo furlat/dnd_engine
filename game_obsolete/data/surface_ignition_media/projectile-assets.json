@@ -1,0 +1,1712 @@
+[
+  {
+    "assetId": "surface.ignition.growth_v36_d0_v0.application.back",
+    "displayName": "surface.ignition.growth_v36_d0_v0.application.back",
+    "sheet": "/surface.ignition.growth_v36_d0_v0.application.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v36_d0_v0.hold.back",
+    "displayName": "surface.ignition.growth_v36_d0_v0.hold.back",
+    "sheet": "/surface.ignition.growth_v36_d0_v0.hold.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v36_d0_v0.application.front",
+    "displayName": "surface.ignition.growth_v36_d0_v0.application.front",
+    "sheet": "/surface.ignition.growth_v36_d0_v0.application.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v36_d0_v0.hold.front",
+    "displayName": "surface.ignition.growth_v36_d0_v0.hold.front",
+    "sheet": "/surface.ignition.growth_v36_d0_v0.hold.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v36_d0_v1.application.back",
+    "displayName": "surface.ignition.growth_v36_d0_v1.application.back",
+    "sheet": "/surface.ignition.growth_v36_d0_v1.application.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v36_d0_v1.hold.back",
+    "displayName": "surface.ignition.growth_v36_d0_v1.hold.back",
+    "sheet": "/surface.ignition.growth_v36_d0_v1.hold.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v36_d0_v1.application.front",
+    "displayName": "surface.ignition.growth_v36_d0_v1.application.front",
+    "sheet": "/surface.ignition.growth_v36_d0_v1.application.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v36_d0_v1.hold.front",
+    "displayName": "surface.ignition.growth_v36_d0_v1.hold.front",
+    "sheet": "/surface.ignition.growth_v36_d0_v1.hold.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v36_d1_v0.application.back",
+    "displayName": "surface.ignition.growth_v36_d1_v0.application.back",
+    "sheet": "/surface.ignition.growth_v36_d1_v0.application.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v36_d1_v0.hold.back",
+    "displayName": "surface.ignition.growth_v36_d1_v0.hold.back",
+    "sheet": "/surface.ignition.growth_v36_d1_v0.hold.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v36_d1_v0.application.front",
+    "displayName": "surface.ignition.growth_v36_d1_v0.application.front",
+    "sheet": "/surface.ignition.growth_v36_d1_v0.application.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v36_d1_v0.hold.front",
+    "displayName": "surface.ignition.growth_v36_d1_v0.hold.front",
+    "sheet": "/surface.ignition.growth_v36_d1_v0.hold.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d1_v1.application.back",
+    "displayName": "surface.ignition.growth_v35_d1_v1.application.back",
+    "sheet": "/surface.ignition.growth_v35_d1_v1.application.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d1_v1.hold.back",
+    "displayName": "surface.ignition.growth_v35_d1_v1.hold.back",
+    "sheet": "/surface.ignition.growth_v35_d1_v1.hold.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d1_v1.application.front",
+    "displayName": "surface.ignition.growth_v35_d1_v1.application.front",
+    "sheet": "/surface.ignition.growth_v35_d1_v1.application.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d1_v1.hold.front",
+    "displayName": "surface.ignition.growth_v35_d1_v1.hold.front",
+    "sheet": "/surface.ignition.growth_v35_d1_v1.hold.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d2_v0.application.back",
+    "displayName": "surface.ignition.growth_v35_d2_v0.application.back",
+    "sheet": "/surface.ignition.growth_v35_d2_v0.application.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d2_v0.hold.back",
+    "displayName": "surface.ignition.growth_v35_d2_v0.hold.back",
+    "sheet": "/surface.ignition.growth_v35_d2_v0.hold.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d2_v0.application.front",
+    "displayName": "surface.ignition.growth_v35_d2_v0.application.front",
+    "sheet": "/surface.ignition.growth_v35_d2_v0.application.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d2_v0.hold.front",
+    "displayName": "surface.ignition.growth_v35_d2_v0.hold.front",
+    "sheet": "/surface.ignition.growth_v35_d2_v0.hold.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d2_v1.application.back",
+    "displayName": "surface.ignition.growth_v35_d2_v1.application.back",
+    "sheet": "/surface.ignition.growth_v35_d2_v1.application.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d2_v1.hold.back",
+    "displayName": "surface.ignition.growth_v35_d2_v1.hold.back",
+    "sheet": "/surface.ignition.growth_v35_d2_v1.hold.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d2_v1.application.front",
+    "displayName": "surface.ignition.growth_v35_d2_v1.application.front",
+    "sheet": "/surface.ignition.growth_v35_d2_v1.application.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d2_v1.hold.front",
+    "displayName": "surface.ignition.growth_v35_d2_v1.hold.front",
+    "sheet": "/surface.ignition.growth_v35_d2_v1.hold.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d3_v0.application.back",
+    "displayName": "surface.ignition.growth_v35_d3_v0.application.back",
+    "sheet": "/surface.ignition.growth_v35_d3_v0.application.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d3_v0.hold.back",
+    "displayName": "surface.ignition.growth_v35_d3_v0.hold.back",
+    "sheet": "/surface.ignition.growth_v35_d3_v0.hold.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d3_v0.application.front",
+    "displayName": "surface.ignition.growth_v35_d3_v0.application.front",
+    "sheet": "/surface.ignition.growth_v35_d3_v0.application.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d3_v0.hold.front",
+    "displayName": "surface.ignition.growth_v35_d3_v0.hold.front",
+    "sheet": "/surface.ignition.growth_v35_d3_v0.hold.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d3_v1.application.back",
+    "displayName": "surface.ignition.growth_v35_d3_v1.application.back",
+    "sheet": "/surface.ignition.growth_v35_d3_v1.application.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d3_v1.hold.back",
+    "displayName": "surface.ignition.growth_v35_d3_v1.hold.back",
+    "sheet": "/surface.ignition.growth_v35_d3_v1.hold.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d3_v1.application.front",
+    "displayName": "surface.ignition.growth_v35_d3_v1.application.front",
+    "sheet": "/surface.ignition.growth_v35_d3_v1.application.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.growth_v35_d3_v1.hold.front",
+    "displayName": "surface.ignition.growth_v35_d3_v1.hold.front",
+    "sheet": "/surface.ignition.growth_v35_d3_v1.hold.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.quench_wisp_0.quench.back",
+    "displayName": "surface.ignition.quench_wisp_0.quench.back",
+    "sheet": "/surface.ignition.quench_wisp_0.quench.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 80
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 80,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3819090,
+        6386817,
+        9149599,
+        11846848,
+        14081999,
+        15526351
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.quench_wisp_0.quench.front",
+    "displayName": "surface.ignition.quench_wisp_0.quench.front",
+    "sheet": "/surface.ignition.quench_wisp_0.quench.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 80
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 80,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3819090,
+        6386817,
+        9149599,
+        11846848,
+        14081999,
+        15526351
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.quench_wisp_1.quench.back",
+    "displayName": "surface.ignition.quench_wisp_1.quench.back",
+    "sheet": "/surface.ignition.quench_wisp_1.quench.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 80
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 80,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3819090,
+        6386817,
+        9149599,
+        11846848,
+        14081999,
+        15526351
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.quench_wisp_1.quench.front",
+    "displayName": "surface.ignition.quench_wisp_1.quench.front",
+    "sheet": "/surface.ignition.quench_wisp_1.quench.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 80
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 80,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3819090,
+        6386817,
+        9149599,
+        11846848,
+        14081999,
+        15526351
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.quench_wisp_2.quench.back",
+    "displayName": "surface.ignition.quench_wisp_2.quench.back",
+    "sheet": "/surface.ignition.quench_wisp_2.quench.back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 80
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 80,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3819090,
+        6386817,
+        9149599,
+        11846848,
+        14081999,
+        15526351
+      ]
+    }
+  },
+  {
+    "assetId": "surface.ignition.quench_wisp_2.quench.front",
+    "displayName": "surface.ignition.quench_wisp_2.quench.front",
+    "sheet": "/surface.ignition.quench_wisp_2.quench.front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 80
+    },
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "fps": 32,
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 80,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3819090,
+        6386817,
+        9149599,
+        11846848,
+        14081999,
+        15526351
+      ]
+    }
+  }
+]

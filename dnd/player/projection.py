@@ -561,7 +561,8 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
             return EquipmentFact(source_entity_uuid=owner, visual_loadout=_visual_loadout(actor),
                 armor_class=actor.armor_class, controlled_items=actor.items if observer.controls(owner) else None)
         case SpatialChangeEvent():
-            if event.change_type in (SpatialChangeType.OBJECT_PLACED, SpatialChangeType.OBJECT_REMOVED):
+            if event.change_type in (SpatialChangeType.OBJECT_PLACED, SpatialChangeType.OBJECT_REMOVED,
+                                     SpatialChangeType.OBJECT_CHANGED):
                 if event.canceled or event.phase is not EventPhase.COMPLETION or event.object_uuid is None:
                     return None
                 snapshot = declaration_senses if event.change_type is SpatialChangeType.OBJECT_REMOVED else senses

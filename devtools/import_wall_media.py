@@ -74,8 +74,7 @@ def import_wall_media(manifest_path: Path, *, archive: Path, production: Path,
                         "rect": frame["source"], "offset": frame["offset"]}]
                         for frame in layer["frames"][low:high]]
                 cell = bank["cell"]
-                assets.append({"assetId": identity, "displayName": identity, "kind": "projectile",
-                    "sheet": f"/wall-media/{name}/{side}/{phase}.png",
+                assets.append({"assetId": identity, "displayName": identity, "sheet": f"/wall-media/{name}/{side}/{phase}.png",
                     "frame": {"width": cell, "height": cell, "rows": 8, "cols": high - low},
                     "fps": bank["fps"], "rowOrder": ROW_ORDER,
                     "phases": {"impact": {"start": 0, "frames": high - low,

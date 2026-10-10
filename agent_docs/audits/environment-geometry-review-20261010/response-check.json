@@ -1,0 +1,26 @@
+{
+  "checked_date": "2026-10-10",
+  "scope": "Supplier metadata follow-up, no import or visual acceptance",
+  "corrected_views_checked": 816,
+  "families": 207,
+  "source_views": {
+    "e": 203,
+    "n": 203,
+    "s": 203,
+    "w": 203,
+    "single": 4
+  },
+  "view_errors": [],
+  "source_colour_path_identity_checks": 813,
+  "root_view_pending_conflicts": [],
+  "index_records": 1608,
+  "missing_receipt_selection": [],
+  "direct_frame_scope_checks": {
+    "prop.crate.intact": 4,
+    "prop.crate.break": 104
+  },
+  "frame_scope_check_result": "All expected pose/frame pairs present, no overlap; checked in preceding read-only command",
+  "direct_resource_crosswalk_check": "lever.e.0 resolves to matching resource_id",
+  "supplier_full_bank_frame_verification": "24632 pairs across 324 banks; not independently rerun here",
+  "import_resumed": false
+}

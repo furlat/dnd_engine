@@ -77,8 +77,7 @@ def import_bundle(source: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
                     views[DIRECTIONS[q * 2 + 1]] = parts
                 # Shared symbols omit cell; the packet contract fixes every canvas at512px.
                 cell = row.get("cell", 512)
-                assets[identity] = {"assetId": identity, "displayName": identity, "kind": "projectile",
-                    "sheet": f"/divine-media/{name}/{phase}/{side}.png",
+                assets[identity] = {"assetId": identity, "displayName": identity, "sheet": f"/divine-media/{name}/{phase}/{side}.png",
                     "frame": {"width": cell, "height": cell, "rows": 8, "cols": count},
                     "fps": 32, "rowOrder": list(DIRECTIONS),
                     "phases": {"impact": {"start": 0, "frames": count, "fps": 32, "loop": loop}},

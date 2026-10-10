@@ -1,0 +1,802 @@
+import EventEmitter from 'eventemitter3';
+import { isPow2 } from '../../../../../maths/misc/pow2';
+import { definedProps } from '../../../../../scene/container/utils/definedProps';
+import { uid } from '../../../../../utils/data/uid';
+import { deprecation, v8_22_0 } from '../../../../../utils/logging/deprecation';
+import { type GPUDataOwner } from '../../../../renderers/types';
+import { type GlTexture } from '../../../gl/texture/GlTexture';
+import { type GPUTextureGpuData } from '../../../gpu/texture/GpuTextureSystem';
+import { type GCable, type GCData } from '../../GCSystem';
+import { TextureStyle } from '../TextureStyle';
+
+import type { BindResource } from '../../../gpu/shader/BindResource';
+import type {
+    ALPHA_MODES,
+    SCALE_MODE,
+    TEXTURE_DIMENSIONS,
+    TEXTURE_FORMATS,
+    TEXTURE_VIEW_DIMENSIONS,
+    WRAP_MODE,
+} from '../const';
+import type { TextureStyleOptions } from '../TextureStyle';
+import type { TextureResourceOrOptions } from '../utils/textureFrom';
+
+/**
+ * options for creating a new TextureSource
+ *
+ * `depth`, which makes a 3D texture, is on {@link TextureShapeOptions}; the constructor takes both.
+ * @category rendering
+ * @advanced
+ */
+export interface TextureSourceOptions<T extends Record<string, any> = any> extends TextureStyleOptions
+{
+    /**
+     * the resource that will be uploaded to the GPU. This is where we get our pixels from
+     * eg an ImageBimt / Canvas / Video etc
+     */
+    resource?: T;
+    /** the pixel width of this texture source. This is the REAL pure number, not accounting resolution */
+    width?: number;
+    /** the pixel height of this texture source. This is the REAL pure number, not accounting resolution */
+    height?: number;
+    /** the resolution of the texture. */
+    resolution?: number;
+    /** the format that the texture data has */
+    format?: TEXTURE_FORMATS;
+    /**
+     * Used by internal textures
+     * @ignore
+     */
+    sampleCount?: number;
+    /**
+     * Only really affects RenderTextures.
+     * Should we use antialiasing for this texture. It will look better, but may impact performance as a
+     * Blit operation will be required to resolve the texture.
+     */
+    antialias?: boolean;
+    /**
+     * How the texture is stored. Derived from {@link TextureSourceOptions.viewDimension}: `'3d'` and `'1d'` views
+     * are stored as themselves, every other view as `'2d'`.
+     * @deprecated since 8.22.0 - derived from `viewDimension` and `depth`, so leave it out. A value that disagrees
+     * with the view throws in debug builds.
+     */
+    dimensions?: TEXTURE_DIMENSIONS;
+    /**
+     * How this texture is viewed/sampled by shaders.
+     *
+     * This aligns with WebGPU's `GPUTextureViewDescriptor.dimension`. It defaults from the size:
+     * `depth` gives `'3d'`, `arrayLayerCount > 1` gives `'2d-array'`, anything else `'2d'`.
+     * Pass it only when the size doesn't decide it, e.g. `'cube'` for 6 layers viewed as a cube map.
+     */
+    viewDimension?: TEXTURE_VIEW_DIMENSIONS;
+    /**
+     * The number of array layers for this texture source. Setting it above 1 makes a `'2d-array'` texture.
+     *
+     * This maps to WebGPU's `GPUTextureDescriptor.size.depthOrArrayLayers` and is used for array-backed textures
+     * such as cube maps (6 layers). Can't be combined with `depth`.
+     * @default 1
+     * @advanced
+     */
+    arrayLayerCount?: number;
+    /** The number of mip levels to generate for this texture. this is  overridden if autoGenerateMipmaps is true */
+    mipLevelCount?: number;
+    /**
+     * Should we auto generate mipmaps for this texture? This will automatically generate mipmaps
+     * for this texture when uploading to the GPU. Mipmapped textures take up more memory, but
+     * can look better when scaled down.
+     *
+     * For performance reasons, it is recommended to NOT use this with RenderTextures, as they are often updated every frame.
+     * If you do, make sure to call `updateMipmaps` after you update the texture.
+     *
+     * A 3D texture on WebGPU needs {@link TextureSourceOptions.storage} and `rgba8unorm` or `rgba16float`,
+     * because a compute shader writes the mips. WebGL fills the chain with `gl.generateMipmap`.
+     */
+    autoGenerateMipmaps?: boolean;
+    /** the alpha mode of the texture */
+    alphaMode?: ALPHA_MODES;
+    /** optional label, can be used for debugging */
+    label?: string;
+    /** If true, the Garbage Collector will unload this texture if it is not used after a period of time */
+    autoGarbageCollect?: boolean;
+    /** Used by RenderTexture.create to allow resizing. Not used by TextureSource itself. */
+    dynamic?: boolean;
+    /**
+     * WebGPU only. Marks an antialiased render target as single-pass: it is never rendered into again
+     * with `clear: false`, never has a filter or mask pop back onto it, and its depth/stencil is never
+     * needed after the pass. PixiJS then discards its multisample buffers at the end of the pass instead
+     * of writing them to memory: depth/stencil, and on GPUs that aren't tile-based also colour (tile-based
+     * GPUs already discard colour; see {@link GpuExtensions.tileBased}). If the target is reopened anyway,
+     * the colour is restored from the resolved texture but the depth/stencil is lost.
+     * @default false
+     */
+    transient?: boolean;
+    /**
+     * WebGPU only. Lets compute shaders write to this texture as a storage texture (a `texture_storage_2d` or
+     * `texture_storage_3d` binding in WGSL). PixiJS still samples it as a normal texture. WebGL has no storage
+     * textures and ignores this.
+     *
+     * Only some formats can be storage textures: every device supports `rgba8unorm`, `rgba16float`,
+     * `r32float`, `rg32float`, `rgba32float` and the matching `rgba8`, `rgba16`, `r32`, `rg32` and `rgba32`
+     * integer formats. `bgra8unorm` needs the `bgra8unorm-storage` feature and formats such as `r8unorm`
+     * or `r16float` need `texture-formats-tier1`; PixiJS enables both when the GPU has them. WebGPU rejects any
+     * other format when the texture is created.
+     * @example
+     * ```ts
+     * const volume = new TextureSource({ width: 64, height: 64, depth: 64, format: 'rgba8unorm', storage: true });
+     *
+     * // write it from your own compute pass (renderer is a WebGPURenderer)
+     * const view = renderer.texture.getGpuSource(volume).createView();
+     * // ... bind `view` to a `texture_storage_3d<rgba8unorm, write>`, dispatch, submit
+     *
+     * // then sample it in any PixiJS shader as a texture_3d
+     * ```
+     * @default false
+     */
+    storage?: boolean;
+}
+
+/**
+ * The `depth` option, which makes a 3D texture. A texture is 3D (`depth`) or layered (`arrayLayerCount`),
+ * never both, and TypeScript rejects options that set both.
+ *
+ * `depth` lives here rather than on {@link TextureSourceOptions} so that options typed with that interface
+ * still pass to the constructor.
+ * @category rendering
+ * @advanced
+ */
+export type TextureShapeOptions =
+    | {
+        /**
+         * The depth of a 3D texture, in texels. Setting it makes a `'3d'` texture.
+         *
+         * Unlike `width` and `height`, `resolution` doesn't scale it. Can't be combined with `arrayLayerCount`.
+         */
+        depth: number;
+        /** A 3D texture has no array layers */
+        arrayLayerCount?: never;
+        /** `depth` already makes the view `'3d'`, so only that value is accepted */
+        viewDimension?: '3d';
+        /** A 3D texture can't be multisampled. WebGPU has no such texture, and a volume is sampled, not resolved. */
+        antialias?: false;
+    }
+    | {
+        /** Not a 3D texture: `arrayLayerCount` and `viewDimension` decide the shape */
+        depth?: never;
+    };
+
+/**
+ * A TextureSource stores the information that represents an image.
+ * All textures have require TextureSource, which contains information about the source.
+ * Therefore you can have many textures all using a single TextureSource (eg a sprite sheet)
+ *
+ * This is an class is extended depending on the source of the texture.
+ * Eg if you are using an an image as your resource, then an ImageSource is used.
+ *
+ * Pass `depth` for a 3D texture or `arrayLayerCount` for a 2D array (see {@link TextureShapeOptions}).
+ * @category rendering
+ * @advanced
+ */
+export class TextureSource<T extends Record<string, any> = any> extends EventEmitter<{
+    change: BindResource;
+    update: TextureSource;
+    unload: TextureSource;
+    destroy: TextureSource;
+    resize: TextureSource;
+    styleChange: TextureSource;
+    updateMipmaps: TextureSource;
+    error: Error;
+}> implements BindResource, GPUDataOwner, GCable
+{
+    /** The default options used when creating a new TextureSource. override these to add your own defaults */
+    public static defaultOptions: TextureSourceOptions = {
+        resolution: 1,
+        format: 'bgra8unorm',
+        alphaMode: 'premultiply-alpha-on-upload',
+        arrayLayerCount: 1,
+        mipLevelCount: 1,
+        autoGenerateMipmaps: false,
+        sampleCount: 1,
+        antialias: false,
+        autoGarbageCollect: false,
+    };
+
+    /** @internal */
+    public _gpuData: Record<number, GlTexture | GPUTextureGpuData> = Object.create(null);
+    /** GC tracking data, undefined if not being tracked */
+    public _gcData?: GCData;
+    /** @internal */
+    public _gcLastUsed = -1;
+
+    /** unique id for this Texture source */
+    public readonly uid: number = uid('textureSource');
+    /** optional label, can be used for debugging */
+    public label: string;
+
+    /**
+     * The resource type used by this TextureSource. This is used by the bind groups to determine
+     * how to handle this resource.
+     * @internal
+     */
+    public readonly _resourceType = 'textureSource';
+    /**
+     * i unique resource id, used by the bind group systems.
+     * This can change if the texture is resized or its resource changes
+     * @internal
+     */
+    public _resourceId = uid('resource');
+    /**
+     * this is how the backends know how to upload this texture to the GPU
+     * It changes depending on the resource type. Classes that extend TextureSource
+     * should override this property.
+     * @internal
+     */
+    public uploadMethodId = 'unknown';
+
+    /** @internal */
+    public _resolution = 1;
+
+    /** the pixel width of this texture source. This is the REAL pure number, not accounting resolution */
+    public pixelWidth = 1;
+    /** the pixel height of this texture source. This is the REAL pure number, not accounting resolution */
+    public pixelHeight = 1;
+
+    /**
+     * the width of this texture source, accounting for resolution
+     * eg pixelWidth 200, resolution 2, then width will be 100
+     */
+    public width = 1;
+    /**
+     * the height of this texture source, accounting for resolution
+     * eg pixelHeight 200, resolution 2, then height will be 100
+     */
+    public height = 1;
+
+    /**
+     * the resource that will be uploaded to the GPU. This is where we get our pixels from
+     * eg an ImageBimt / Canvas / Video etc
+     */
+    public resource: T;
+
+    /**
+     * The number of samples of a multisample texture. This is always 1 for non-multisample textures.
+     * To enable multisample for a texture, set antialias to true
+     * @internal
+     */
+    public sampleCount = 1;
+
+    /**
+     * The number of mip levels to generate for this texture.
+     * this is overridden if autoGenerateMipmaps is true. it is read only!
+     */
+    public mipLevelCount = 1;
+    /**
+     * Should we auto generate mipmaps for this texture? This will automatically generate mipmaps
+     * for this texture when uploading to the GPU. Mipmapped textures take up more memory, but
+     * can look better when scaled down.
+     *
+     * For performance reasons, it is recommended to NOT use this with RenderTextures, as they are often updated every frame.
+     * If you do, make sure to call `updateMipmaps` after you update the texture.
+     *
+     * A 3D texture on WebGPU needs {@link TextureSourceOptions.storage} and `rgba8unorm` or `rgba16float`,
+     * because a compute shader writes the mips. WebGL fills the chain with `gl.generateMipmap`.
+     */
+    public autoGenerateMipmaps = false;
+    /** the format that the texture data has */
+    public format: TEXTURE_FORMATS = 'rgba8unorm';
+    /** how the texture is stored (WebGPU texture dimension), derived from {@link TextureSource#viewDimension} */
+    public dimension: TEXTURE_DIMENSIONS = '2d';
+    /** how this texture is viewed/sampled by shaders (WebGPU view dimension) */
+    public viewDimension: TEXTURE_VIEW_DIMENSIONS = '2d';
+    /** how many array layers this texture has; 1 for a 3D texture */
+    public arrayLayerCount = 1;
+    /** the depth of a 3D texture in texels; 1 for every other texture */
+    public depth = 1;
+
+    /**
+     * The size along z that the GPU allocates: {@link TextureSource#depth} for a 3D texture,
+     * {@link TextureSource#arrayLayerCount} otherwise. WebGPU's `depthOrArrayLayers`.
+     */
+    public get depthOrArrayLayers(): number
+    {
+        return this.dimension === '3d' ? this.depth : (this.arrayLayerCount || 1);
+    }
+
+    /** the alpha mode of the texture */
+    public alphaMode: ALPHA_MODES;
+    private _style: TextureStyle;
+    private _ownsStyle = false;
+
+    /**
+     * Only really affects RenderTextures.
+     * Should we use antialiasing for this texture. It will look better, but may impact performance as a
+     * Blit operation will be required to resolve the texture.
+     */
+    public antialias = false;
+
+    /**
+     * Treat the underlying GPU texture as transient — see {@link TextureSourceOptions.transient}.
+     * Internal flag, populated from options.
+     * @internal
+     */
+    public transient = false;
+
+    /**
+     * Whether compute shaders can write to this texture on WebGPU. See {@link TextureSourceOptions.storage}.
+     * Read when the GPU texture is created.
+     */
+    public storage = false;
+
+    /**
+     * Has the source been destroyed?
+     * @readonly
+     */
+    public destroyed: boolean;
+
+    /**
+     * Used by the batcher to build texture batches. faster to have the variable here!
+     * @protected
+     */
+    public _batchTick = -1;
+    /**
+     * A temporary batch location for the texture batching. Here for performance reasons only!
+     * @protected
+     */
+    public _textureBindLocation = -1;
+
+    public isPowerOfTwo: boolean;
+
+    /** If true, the Garbage Collector will unload this texture if it is not used after a period of time */
+    public autoGarbageCollect: boolean;
+
+    /**
+     * used internally to know where a texture came from. Usually assigned by the asset loader!
+     * @ignore
+     */
+    public _sourceOrigin: string;
+
+    /**
+     * @param options - options for creating a new TextureSource
+     */
+    constructor(protected readonly options: TextureSourceOptions<T> & TextureShapeOptions = {})
+    {
+        super();
+
+        const passedOptions = options;
+
+        options = { ...TextureSource.defaultOptions, ...options } as TextureSourceOptions<T> & TextureShapeOptions;
+
+        // the size decides the view unless one is given, and the view decides the texture dimension
+        const viewDimension = resolveViewDimension(options);
+        const dimension = viewDimension === '3d' || viewDimension === '1d' ? viewDimension : '2d';
+
+        // #if _DEBUG
+        // only what the caller passed: a global default such as `antialias: true` mustn't make a 3D texture throw
+        validateTextureShape(passedOptions, viewDimension, dimension);
+        // #endif
+
+        this.label = options.label ?? '';
+        this.resource = options.resource;
+        this.autoGarbageCollect = options.autoGarbageCollect;
+        this._resolution = options.resolution;
+
+        if (options.width)
+        {
+            this.pixelWidth = options.width * this._resolution;
+        }
+        else
+        {
+            this.pixelWidth = this.resource ? (this.resourceWidth ?? 1) : 1;
+        }
+
+        if (options.height)
+        {
+            this.pixelHeight = options.height * this._resolution;
+        }
+        else
+        {
+            this.pixelHeight = this.resource ? (this.resourceHeight ?? 1) : 1;
+        }
+
+        this.width = this.pixelWidth / this._resolution;
+        this.height = this.pixelHeight / this._resolution;
+
+        this.format = options.format;
+        this.dimension = dimension;
+        this.viewDimension = viewDimension;
+        this.arrayLayerCount = options.arrayLayerCount;
+        this.depth = dimension === '3d' ? (options.depth ?? 1) : 1;
+        this.mipLevelCount = options.mipLevelCount;
+        this.autoGenerateMipmaps = options.autoGenerateMipmaps;
+        this.sampleCount = options.sampleCount;
+        // a 3D texture can't be multisampled, whatever the defaults say
+        this.antialias = dimension === '3d' ? false : options.antialias;
+        this.transient = options.transient ?? false;
+        this.storage = options.storage ?? false;
+        this.alphaMode = options.alphaMode;
+
+        this.style = new TextureStyle(definedProps(options));
+        // the source constructed this style itself, so it may destroy it; styles assigned
+        // from outside (e.g. TexturePool's shared default) are shared and must survive us
+        this._ownsStyle = true;
+
+        this.destroyed = false;
+
+        this._refreshPOT();
+    }
+
+    /** returns itself */
+    get source(): TextureSource
+    {
+        return this;
+    }
+
+    /** the style of the texture */
+    get style(): TextureStyle
+    {
+        return this._style;
+    }
+
+    set style(value: TextureStyle)
+    {
+        if (this.style === value) return;
+
+        // an assigned style instance is shared with its provider — we no longer own it
+        this._ownsStyle = false;
+        this._style?.off('change', this._onStyleChange, this);
+        this._style = value;
+        this._style?.on('change', this._onStyleChange, this);
+
+        this._onStyleChange();
+    }
+
+    /** Specifies the maximum anisotropy value clamp used by the sampler. */
+    set maxAnisotropy(value: number)
+    {
+        this._style.maxAnisotropy = value;
+    }
+
+    get maxAnisotropy(): number
+    {
+        return this._style.maxAnisotropy;
+    }
+
+    /** setting this will set wrapModeU, wrapModeV and wrapModeW all at once! */
+    get addressMode(): WRAP_MODE
+    {
+        return this._style.addressMode;
+    }
+
+    set addressMode(value: WRAP_MODE)
+    {
+        this._style.addressMode = value;
+    }
+
+    /** setting this will set wrapModeU, wrapModeV and wrapModeW all at once! */
+    get repeatMode(): WRAP_MODE
+    {
+        return this._style.addressMode;
+    }
+
+    set repeatMode(value: WRAP_MODE)
+    {
+        this._style.addressMode = value;
+    }
+
+    /** Specifies the sampling behavior when the sample footprint is smaller than or equal to one texel. */
+    get magFilter(): SCALE_MODE
+    {
+        return this._style.magFilter;
+    }
+
+    set magFilter(value: SCALE_MODE)
+    {
+        this._style.magFilter = value;
+    }
+
+    /** Specifies the sampling behavior when the sample footprint is larger than one texel. */
+    get minFilter(): SCALE_MODE
+    {
+        return this._style.minFilter;
+    }
+
+    set minFilter(value: SCALE_MODE)
+    {
+        this._style.minFilter = value;
+    }
+
+    /** Specifies behavior for sampling between mipmap levels. */
+    get mipmapFilter(): SCALE_MODE
+    {
+        return this._style.mipmapFilter;
+    }
+
+    set mipmapFilter(value: SCALE_MODE)
+    {
+        this._style.mipmapFilter = value;
+    }
+
+    /** Specifies the minimum and maximum levels of detail, respectively, used internally when sampling a texture. */
+    get lodMinClamp(): number
+    {
+        return this._style.lodMinClamp;
+    }
+
+    set lodMinClamp(value: number)
+    {
+        this._style.lodMinClamp = value;
+    }
+
+    /** Specifies the minimum and maximum levels of detail, respectively, used internally when sampling a texture. */
+    get lodMaxClamp(): number
+    {
+        return this._style.lodMaxClamp;
+    }
+
+    set lodMaxClamp(value: number)
+    {
+        this._style.lodMaxClamp = value;
+    }
+
+    private _onStyleChange()
+    {
+        this.emit('styleChange', this);
+    }
+
+    /** call this if you have modified the texture outside of the constructor */
+    public update()
+    {
+        // update resource...
+        if (this.resource)
+        {
+            const resolution = this._resolution;
+
+            const didResize = this.resize(this.resourceWidth / resolution, this.resourceHeight / resolution);
+
+            // no need to dispatch the update we resized as that will
+            // notify the texture systems anyway
+            if (didResize) return;
+        }
+
+        this.emit('update', this);
+    }
+
+    /** Destroys this texture source */
+    public destroy()
+    {
+        this.destroyed = true;
+        this.unload();
+        this.emit('destroy', this);
+
+        if (this._style)
+        {
+            // only destroy a style we created — a shared style (e.g. TexturePool's
+            // default) is still in use by other sources
+            if (this._ownsStyle) this._style.destroy();
+            this._style = null;
+        }
+
+        this.uploadMethodId = null;
+        this.resource = null;
+        this.removeAllListeners();
+    }
+
+    /**
+     * This will unload the Texture source from the GPU. This will free up the GPU memory
+     * As soon as it is required fore rendering, it will be re-uploaded.
+     */
+    public unload()
+    {
+        this._resourceId = uid('resource');
+        this.emit('change', this);
+
+        /** Unloads the GPU data from the view container. */
+        this.emit('unload', this);
+        for (const key in this._gpuData)
+        {
+            this._gpuData[key]?.destroy?.();
+        }
+        this._gpuData = Object.create(null);
+    }
+
+    /** the width of the resource. This is the REAL pure number, not accounting resolution   */
+    public get resourceWidth(): number
+    {
+        const { resource } = this;
+
+        return resource.naturalWidth || resource.videoWidth || resource.displayWidth || resource.width;
+    }
+
+    /** the height of the resource. This is the REAL pure number, not accounting resolution */
+    public get resourceHeight(): number
+    {
+        const { resource } = this;
+
+        return resource.naturalHeight || resource.videoHeight || resource.displayHeight || resource.height;
+    }
+
+    /**
+     * the resolution of the texture. Changing this number, will not change the number of pixels in the actual texture
+     * but will the size of the texture when rendered.
+     *
+     * changing the resolution of this texture to 2 for example will make it appear twice as small when rendered (as pixel
+     * density will have increased)
+     */
+    get resolution(): number
+    {
+        return this._resolution;
+    }
+
+    set resolution(resolution: number)
+    {
+        if (this._resolution === resolution) return;
+
+        this._resolution = resolution;
+
+        this.width = this.pixelWidth / resolution;
+        this.height = this.pixelHeight / resolution;
+    }
+
+    /**
+     * Resize the texture, this is handy if you want to use the texture as a render texture
+     * @param width - the new width of the texture
+     * @param height - the new height of the texture
+     * @param resolution - the new resolution of the texture
+     * @returns - if the texture was resized
+     */
+    public resize(width?: number, height?: number, resolution?: number): boolean
+    {
+        resolution ||= this._resolution;
+        width ||= this.width;
+        height ||= this.height;
+
+        // make sure we work with rounded pixels
+        const newPixelWidth = Math.round(width * resolution);
+        const newPixelHeight = Math.round(height * resolution);
+
+        this.width = newPixelWidth / resolution;
+        this.height = newPixelHeight / resolution;
+
+        this._resolution = resolution;
+
+        if (this.pixelWidth === newPixelWidth && this.pixelHeight === newPixelHeight)
+        {
+            return false;
+        }
+
+        this._refreshPOT();
+
+        this.pixelWidth = newPixelWidth;
+        this.pixelHeight = newPixelHeight;
+
+        this.emit('resize', this);
+
+        this._resourceId = uid('resource');
+        this.emit('change', this);
+
+        return true;
+    }
+
+    /**
+     * Lets the renderer know that this texture has been updated and its mipmaps should be re-generated.
+     * This is only important for RenderTexture instances, as standard Texture instances will have their
+     * mipmaps generated on upload. You should call this method after you make any change to the texture
+     *
+     * The reason for this is is can be quite expensive to update mipmaps for a texture. So by default,
+     * We want you, the developer to specify when this action should happen.
+     *
+     * Generally you don't want to have mipmaps generated on Render targets that are changed every frame,
+     */
+    public updateMipmaps()
+    {
+        if (this.autoGenerateMipmaps && this.mipLevelCount > 1)
+        {
+            this.emit('updateMipmaps', this);
+        }
+    }
+
+    set wrapMode(value: WRAP_MODE)
+    {
+        this._style.wrapMode = value;
+    }
+
+    get wrapMode(): WRAP_MODE
+    {
+        return this._style.wrapMode;
+    }
+
+    set scaleMode(value: SCALE_MODE)
+    {
+        this._style.scaleMode = value;
+    }
+
+    /** setting this will set magFilter,minFilter and mipmapFilter all at once!  */
+    get scaleMode(): SCALE_MODE
+    {
+        return this._style.scaleMode;
+    }
+
+    /**
+     * Refresh check for isPowerOfTwo texture based on size
+     * @private
+     */
+    protected _refreshPOT(): void
+    {
+        this.isPowerOfTwo = isPow2(this.pixelWidth) && isPow2(this.pixelHeight);
+    }
+
+    public static test(_resource: any): any
+    {
+        // this should be overridden by other sources..
+        throw new Error('Unimplemented');
+    }
+
+    /**
+     * A helper function that creates a new TextureSource based on the resource you provide.
+     * @param resource - The resource to create the texture source from.
+     */
+    public static from: (resource: TextureResourceOrOptions) => TextureSource;
+}
+
+/**
+ * Picks the view dimension: the one given, else `'3d'` when `depth` is set, `'2d-array'` when `arrayLayerCount`
+ * is above 1, otherwise `'2d'`.
+ * @param options - the TextureSource options, merged with the defaults
+ */
+function resolveViewDimension(options: TextureSourceOptions & TextureShapeOptions): TEXTURE_VIEW_DIMENSIONS
+{
+    if (options.viewDimension) return options.viewDimension;
+    if (options.depth) return '3d';
+
+    return options.arrayLayerCount > 1 ? '2d-array' : '2d';
+}
+
+/**
+ * Throws on size and dimension options that contradict each other.
+ * @param options - the options passed to the TextureSource constructor, without the defaults
+ * @param viewDimension - the view dimension resolved from the options
+ * @param dimension - the texture dimension resolved from the view
+ */
+function validateTextureShape(
+    options: TextureSourceOptions & TextureShapeOptions,
+    viewDimension: TEXTURE_VIEW_DIMENSIONS,
+    dimension: TEXTURE_DIMENSIONS,
+): void
+{
+    if (options.depth !== undefined && typeof options.depth !== 'number')
+    {
+        throw new Error(`[TextureSource] depth is a 3D texture's depth in texels, but got ${options.depth}. `
+            + 'For a depth buffer, use the depth option of a RenderTarget or the renderer.');
+    }
+
+    if (options.depth && options.arrayLayerCount > 1)
+    {
+        throw new Error('[TextureSource] depth and arrayLayerCount can\'t be combined: '
+            + 'use depth for a 3D texture or arrayLayerCount for a 2D array.');
+    }
+
+    if (options.depth && viewDimension !== '3d')
+    {
+        throw new Error(`[TextureSource] depth makes a 3D texture, but viewDimension is '${viewDimension}'. `
+            + 'Use arrayLayerCount for layered textures.');
+    }
+
+    if (viewDimension === '3d' && options.arrayLayerCount > 1)
+    {
+        throw new Error('[TextureSource] a 3D texture takes depth, not arrayLayerCount.');
+    }
+
+    if (options.dimensions && options.dimensions !== dimension)
+    {
+        throw new Error(`[TextureSource] dimensions '${options.dimensions}' doesn't match viewDimension `
+            + `'${viewDimension}'. Leave dimensions out; it is derived from the view.`);
+    }
+    else if (options.dimensions)
+    {
+        deprecation(v8_22_0, 'TextureSource dimensions is derived from viewDimension and depth; leave it out.');
+    }
+
+    if (dimension === '3d' && options.antialias)
+    {
+        throw new Error('[TextureSource] a 3D texture can\'t be antialiased: WebGPU has no multisampled 3D textures.');
+    }
+}

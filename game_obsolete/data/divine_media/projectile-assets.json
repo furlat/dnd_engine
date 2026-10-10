@@ -1,0 +1,960 @@
+[
+  {
+    "assetId": "divine.beacon_of_hope.apply.back",
+    "displayName": "divine.beacon_of_hope.apply.back",
+    "sheet": "/divine-media/beacon_of_hope/apply/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 125
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 125,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4534354,
+        7623284,
+        11042390,
+        14003810,
+        15585169,
+        16049592
+      ]
+    }
+  },
+  {
+    "assetId": "divine.beacon_of_hope.apply.front",
+    "displayName": "divine.beacon_of_hope.apply.front",
+    "sheet": "/divine-media/beacon_of_hope/apply/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 125
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 125,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4534354,
+        7623284,
+        11042390,
+        14003810,
+        15585169,
+        16049592
+      ]
+    }
+  },
+  {
+    "assetId": "divine.beacon_of_hope.hold.back",
+    "displayName": "divine.beacon_of_hope.hold.back",
+    "sheet": "/divine-media/beacon_of_hope/hold/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4534354,
+        7623284,
+        11042390,
+        14003810,
+        15585169,
+        16049592
+      ]
+    }
+  },
+  {
+    "assetId": "divine.beacon_of_hope.hold.front",
+    "displayName": "divine.beacon_of_hope.hold.front",
+    "sheet": "/divine-media/beacon_of_hope/hold/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4534354,
+        7623284,
+        11042390,
+        14003810,
+        15585169,
+        16049592
+      ]
+    }
+  },
+  {
+    "assetId": "divine.daylight.apply.back",
+    "displayName": "divine.daylight.apply.back",
+    "sheet": "/divine-media/daylight/apply/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 47
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 47,
+        "fps": 32,
+        "loop": false,
+        "anchors": [
+          {
+            "name": "formed",
+            "frame": 8
+          }
+        ]
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5719121,
+        9598822,
+        12821619,
+        14992773,
+        15916712,
+        16313285
+      ]
+    }
+  },
+  {
+    "assetId": "divine.daylight.apply.front",
+    "displayName": "divine.daylight.apply.front",
+    "sheet": "/divine-media/daylight/apply/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 47
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 47,
+        "fps": 32,
+        "loop": false,
+        "anchors": [
+          {
+            "name": "formed",
+            "frame": 8
+          }
+        ]
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5719121,
+        9598822,
+        12821619,
+        14992773,
+        15916712,
+        16313285
+      ]
+    }
+  },
+  {
+    "assetId": "divine.daylight.hold.back",
+    "displayName": "divine.daylight.hold.back",
+    "sheet": "/divine-media/daylight/hold/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5719121,
+        9598822,
+        12821619,
+        14992773,
+        15916712,
+        16313285
+      ]
+    }
+  },
+  {
+    "assetId": "divine.daylight.hold.front",
+    "displayName": "divine.daylight.hold.front",
+    "sheet": "/divine-media/daylight/hold/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5719121,
+        9598822,
+        12821619,
+        14992773,
+        15916712,
+        16313285
+      ]
+    }
+  },
+  {
+    "assetId": "divine.mass_healing_word.finite.back",
+    "displayName": "divine.mass_healing_word.finite.back",
+    "sheet": "/divine-media/mass_healing_word/finite/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 96
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 96,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3160405,
+        4154252,
+        5279141,
+        7388105,
+        9558749,
+        12119014
+      ]
+    }
+  },
+  {
+    "assetId": "divine.mass_healing_word.finite.front",
+    "displayName": "divine.mass_healing_word.finite.front",
+    "sheet": "/divine-media/mass_healing_word/finite/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 96
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 96,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3160405,
+        4154252,
+        5279141,
+        7388105,
+        9558749,
+        12119014
+      ]
+    }
+  },
+  {
+    "assetId": "divine.divine_word.finite.back",
+    "displayName": "divine.divine_word.finite.back",
+    "sheet": "/divine-media/divine_word/finite/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 96
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 96,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5059639,
+        9262147,
+        12485705,
+        14858086,
+        15914648,
+        16312503
+      ]
+    }
+  },
+  {
+    "assetId": "divine.divine_word.finite.front",
+    "displayName": "divine.divine_word.finite.front",
+    "sheet": "/divine-media/divine_word/finite/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 96
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 96,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5059639,
+        9262147,
+        12485705,
+        14858086,
+        15914648,
+        16312503
+      ]
+    }
+  },
+  {
+    "assetId": "divine.divine_proclamation.finite.back",
+    "displayName": "divine.divine_proclamation.finite.back",
+    "sheet": "/divine-media/divine_proclamation/finite/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5059639,
+        9262147,
+        12485705,
+        14858086,
+        15914648,
+        16312503
+      ]
+    }
+  },
+  {
+    "assetId": "divine.divine_proclamation.finite.front",
+    "displayName": "divine.divine_proclamation.finite.front",
+    "sheet": "/divine-media/divine_proclamation/finite/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5059639,
+        9262147,
+        12485705,
+        14858086,
+        15914648,
+        16312503
+      ]
+    }
+  },
+  {
+    "assetId": "divine.divine_condition_blinded.sustain.back",
+    "displayName": "divine.divine_condition_blinded.sustain.back",
+    "sheet": "/divine-media/divine_condition_blinded/sustain/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5059639,
+        9262147,
+        12485705,
+        14858086,
+        15914648,
+        16312503
+      ]
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.607421875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.607421875
+      }
+    }
+  },
+  {
+    "assetId": "divine.divine_condition_blinded.sustain.front",
+    "displayName": "divine.divine_condition_blinded.sustain.front",
+    "sheet": "/divine-media/divine_condition_blinded/sustain/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5059639,
+        9262147,
+        12485705,
+        14858086,
+        15914648,
+        16312503
+      ]
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.607421875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.607421875
+      }
+    }
+  },
+  {
+    "assetId": "divine.divine_condition_deafened.sustain.back",
+    "displayName": "divine.divine_condition_deafened.sustain.back",
+    "sheet": "/divine-media/divine_condition_deafened/sustain/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5059639,
+        9262147,
+        12485705,
+        14858086,
+        15914648,
+        16312503
+      ]
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.607421875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.607421875
+      }
+    }
+  },
+  {
+    "assetId": "divine.divine_condition_deafened.sustain.front",
+    "displayName": "divine.divine_condition_deafened.sustain.front",
+    "sheet": "/divine-media/divine_condition_deafened/sustain/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687830078125
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        5059639,
+        9262147,
+        12485705,
+        14858086,
+        15914648,
+        16312503
+      ]
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.61328125
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.607421875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.607421875
+      }
+    }
+  }
+]

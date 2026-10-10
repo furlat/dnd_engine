@@ -17314,5 +17314,176 @@
     },
     "settled_hold_ms": 2000,
     "tail_duration_ms": 1500
+  },
+  {
+    "id": "solid-wall-stone-corner-breach",
+    "title": "STONE-CORNER wall \u00b7 attacks, break, passage",
+    "tags": [
+      "wall",
+      "destruction",
+      "native-xyz",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real discovered attacks damage a wall at Z2, destroy its own edge, and allow passage. Original Unity debris is finite; a corner retains its other native wall.",
+    "scenario": {
+      "kind": "solid-wall",
+      "item_id": "environment.directional_wall",
+      "material": "stone",
+      "raised": true,
+      "corner": true
+    }
+  },
+  {
+    "id": "solid-wall-wood-corner-breach",
+    "title": "WOOD-CORNER wall \u00b7 attacks, break, passage",
+    "tags": [
+      "wall",
+      "destruction",
+      "native-xyz",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real discovered attacks damage a wall at Z2, destroy its own edge, and allow passage. Original Unity debris is finite; a corner retains its other native wall.",
+    "scenario": {
+      "kind": "solid-wall",
+      "item_id": "environment.directional_wall",
+      "material": "wood",
+      "raised": true,
+      "corner": true
+    }
+  },
+  {
+    "id": "solid-wall-a1-breach",
+    "title": "A1 wall \u00b7 attacks, break, passage",
+    "tags": [
+      "wall",
+      "destruction",
+      "native-xyz",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real discovered attacks damage a wall at Z2, destroy its own edge, and allow passage. Original Unity debris is finite; a corner retains its other native wall.",
+    "scenario": {
+      "kind": "solid-wall",
+      "item_id": "environment.wall.fantasy_a1",
+      "material": "stone",
+      "raised": true,
+      "corner": false
+    }
+  },
+  {
+    "id": "solid-wall-c1-breach",
+    "title": "C1 wall \u00b7 attacks, break, passage",
+    "tags": [
+      "wall",
+      "destruction",
+      "native-xyz",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real discovered attacks damage a wall at Z2, destroy its own edge, and allow passage. Original Unity debris is finite; a corner retains its other native wall.",
+    "scenario": {
+      "kind": "solid-wall",
+      "item_id": "environment.wall.fantasy_c1",
+      "material": "wood",
+      "raised": true,
+      "corner": false
+    }
+  },
+  {
+    "id": "solid-wall-d1-breach",
+    "title": "D1 wall \u00b7 attacks, break, passage",
+    "tags": [
+      "wall",
+      "destruction",
+      "native-xyz",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real discovered attacks damage a wall at Z2, destroy its own edge, and allow passage. Original Unity debris is finite; a corner retains its other native wall.",
+    "scenario": {
+      "kind": "solid-wall",
+      "item_id": "environment.wall.fantasy_d1",
+      "material": "stone",
+      "raised": true,
+      "corner": false
+    }
+  },
+  {
+    "id": "solid-wall-d8-breach",
+    "title": "D8 wall \u00b7 attacks, break, passage",
+    "tags": [
+      "wall",
+      "destruction",
+      "native-xyz",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real discovered attacks damage a wall at Z2, destroy its own edge, and allow passage. Original Unity debris is finite; a corner retains its other native wall.",
+    "scenario": {
+      "kind": "solid-wall",
+      "item_id": "environment.wall.fantasy_d8",
+      "material": "stone",
+      "raised": true,
+      "corner": false
+    }
+  },
+  {
+    "id": "solid-wall-f1-breach",
+    "title": "F1 wall \u00b7 attacks, break, passage",
+    "tags": [
+      "wall",
+      "destruction",
+      "native-xyz",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real discovered attacks damage a wall at Z2, destroy its own edge, and allow passage. Original Unity debris is finite; a corner retains its other native wall.",
+    "scenario": {
+      "kind": "solid-wall",
+      "item_id": "environment.wall.fantasy_f1",
+      "material": "stone",
+      "raised": true,
+      "corner": false
+    }
+  },
+  {
+    "id": "solid-wall-f8-breach",
+    "title": "F8 wall \u00b7 attacks, break, passage",
+    "tags": [
+      "wall",
+      "destruction",
+      "native-xyz",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real discovered attacks damage a wall at Z2, destroy its own edge, and allow passage. Original Unity debris is finite; a corner retains its other native wall.",
+    "scenario": {
+      "kind": "solid-wall",
+      "item_id": "environment.wall.fantasy_f8",
+      "material": "stone",
+      "raised": true,
+      "corner": false
+    }
+  },
+  {
+    "id": "solid-wall-g1-breach",
+    "title": "G1 wall \u00b7 attacks, break, passage",
+    "tags": [
+      "wall",
+      "destruction",
+      "native-xyz",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real discovered attacks damage a wall at Z2, destroy its own edge, and allow passage. Original Unity debris is finite; a corner retains its other native wall.",
+    "scenario": {
+      "kind": "solid-wall",
+      "item_id": "environment.wall.fantasy_g1",
+      "material": "wood",
+      "raised": true,
+      "corner": false
+    }
   }
 ]

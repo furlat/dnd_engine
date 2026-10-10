@@ -14,8 +14,8 @@ from time import perf_counter
 import uvicorn
 
 from devtools.player_server_acceptance.fixtures import combat_configuration, configuration
-from player_server.app import create_app
-from player_server import service
+from server.app import create_app
+from server import service
 
 
 def resident_bytes(pid):
@@ -86,7 +86,7 @@ async def clients(root, config, url, combat_case):
 async def run(args):
     args.output.mkdir(parents=True, exist_ok=False)
     source_root = Path(__file__).resolve().parents[2]
-    source_paths = sorted((source_root / 'player_server').glob('*.py')) + [source_root / path for path in (
+    source_paths = sorted((source_root / 'server').glob('*.py')) + [source_root / path for path in (
         'dnd/runtime_reset.py', 'dnd/player/session.py', 'dnd/ai/runtime/action_semantics.py',
         'dnd/ai/runtime/decision_epoch.py', 'dnd/core/base_actions.py', 'dnd/core/base_conditions.py')]
     (args.output / 'source.json').write_text(json.dumps({str(path.relative_to(source_root)): 

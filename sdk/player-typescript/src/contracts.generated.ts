@@ -29,7 +29,7 @@ export type Kind = "health";
 export type Status = "ok";
 export type Kind1 = "bootstrap";
 export type ProtocolVersion = 1;
-export type PlayerSchemaVersion = 4;
+export type PlayerSchemaVersion = 5;
 export type SchemaDigest = string;
 export type GameId = string;
 export type GameEpoch = string;
@@ -3064,6 +3064,7 @@ export type CorrelationId2 = string;
 export type ActionIndex = number;
 export type TargetIndices = number[];
 export type ExtraTargetPositions = [number, number][];
+export type PreferSafe = boolean;
 export type GameId3 = string;
 export type GameEpoch3 = string;
 export type AudienceId3 = string;
@@ -5662,6 +5663,7 @@ export interface ActionSelection {
   action_index: ActionIndex;
   target_indices: TargetIndices;
   extra_target_positions?: ExtraTargetPositions;
+  prefer_safe?: PreferSafe;
 }
 export interface PreviewResponse {
   game_id: GameId3;

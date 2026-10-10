@@ -1,0 +1,21 @@
+{
+  "effects": {
+    "wall.fantasy.debris.stone": {"folder": "Wall Stone explosion", "pivot": [128, 209.92]},
+    "wall.fantasy.debris.wood_large": {"folder": "Wall Wood explotion Large", "pivot": [128, 207.36]},
+    "wall.fantasy.debris.wood_small": {"folder": "Wall Wood explosion Small", "pivot": [128, 207.36]},
+    "wall.fantasy.debris.wood_stone": {"folder": "Wall wood+stone explosion", "pivot": [128, 207.36]}
+  },
+  "fps": 12,
+  "cleanup_ms": 1300,
+  "pixels_per_unit": 127,
+  "wall_destructions": {"stone": "wall.fantasy.debris.wood_stone", "wood": "wall.fantasy.debris.wood_large"},
+  "props": {
+    "environment.wall.fantasy_a1": "wall.fantasy.debris.stone",
+    "environment.wall.fantasy_c1": "wall.fantasy.debris.wood_large",
+    "environment.wall.fantasy_d1": "wall.fantasy.debris.wood_stone",
+    "environment.wall.fantasy_d8": "wall.fantasy.debris.wood_stone",
+    "environment.wall.fantasy_f1": "wall.fantasy.debris.wood_small",
+    "environment.wall.fantasy_f8": "wall.fantasy.debris.wood_small",
+    "environment.wall.fantasy_g1": "wall.fantasy.debris.wood_small"
+  }
+}

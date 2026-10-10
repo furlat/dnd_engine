@@ -1,5 +1,13 @@
 # Wall, doorway and floor alignment — manual asset review handoff
 
+## October 8 PixiJS adjacency and elevation notes
+
+Read [the production positioning notes](PIXI_WALL_DOOR_ELEVATION_POSITIONING_HANDOFF_2026-10-08.md)
+for owner-versus-edge placement, corner/door adjacency, base/support heights,
+cliff upper-support relationships, registered stair contacts, pose offsets and
+the exact image/prefab transform arithmetic. The notes distinguish current
+source registrations from older audit snapshots and do not claim a runtime fix.
+
 ## October 6 numerical and native audit follow-up
 
 See [the production registration and animation audit](audits/WALL_FLOOR_ASSET_ALIGNMENT_AUDIT_2026-10-06.md)

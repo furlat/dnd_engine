@@ -69,8 +69,7 @@ def import_terrain(source: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
             identity = f"persistent.{name}.{phase}"
             count = end - begin
             assets[identity] = {
-                "assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/persistent-spells/{name}/{phase}.png",
+                "assetId": identity, "displayName": identity, "sheet": f"/persistent-spells/{name}/{phase}.png",
                 "frame": {"width": width, "height": height, "rows": 8, "cols": count},
                 "fps": reference["fps"], "rowOrder": list(DIRECTIONS),
                 "phases": {"impact": {"start": 0, "frames": count,
@@ -137,8 +136,7 @@ def import_protection(manifest_path: Path, *, name: str, repo: Path = ROOT) -> t
                     frames.append([{"file": destination.as_posix(), "rect": address["source"],
                                     "offset": address["offset"]}])
                 rows[facing] = frames
-            assets[identity] = {"assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/persistent-spells/{name}/{side}/{phase}.png",
+            assets[identity] = {"assetId": identity, "displayName": identity, "sheet": f"/persistent-spells/{name}/{side}/{phase}.png",
                 "frame": {"width": width, "height": height, "rows": 8, "cols": end - begin},
                 "fps": manifest["fps"], "rowOrder": list(DIRECTIONS),
                 "phases": {"impact": {"start": 0, "frames": end - begin,
@@ -183,8 +181,7 @@ def import_shield_contacts(manifest_path: Path, *, repo: Path = ROOT) -> tuple[s
                     "file": (Path("game/assets/persistent_spells/protection") / bank["pages"][row["page"]]).as_posix(),
                     "rect": row["source"], "offset": row["offset"]}] for row in bank["frames"]]
             count = len(rows["E"])
-            assets[identity] = {"assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/persistent-spells/shield/hit/{direction}/{side}.png",
+            assets[identity] = {"assetId": identity, "displayName": identity, "sheet": f"/persistent-spells/shield/hit/{direction}/{side}.png",
                 "frame": {"width": width, "height": height, "rows": 8, "cols": count},
                 "fps": manifest["fps"], "rowOrder": list(DIRECTIONS),
                 "phases": {"impact": {"start": 0, "frames": count, "fps": manifest["fps"], "loop": False}},
@@ -283,8 +280,7 @@ def import_volume(manifest_path: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
                     "footpoint": {"file": copy(view["position"]["pages"][address["page"]]), "bounds": bounds},
                 }] for address in view["color"]["rects"][begin:end]]
             phase_storage = {"layers": [{"blendMode": "normal", "partsByFacing": rows}]}
-        assets[identity] = {"assetId": identity, "displayName": identity, "kind": "projectile",
-            "sheet": f"/persistent-spells/{name}/{phase}.png",
+        assets[identity] = {"assetId": identity, "displayName": identity, "sheet": f"/persistent-spells/{name}/{phase}.png",
             "frame": {"width": width, "height": height, "rows": 8, "cols": end - begin},
             "fps": manifest["fps"], "rowOrder": list(DIRECTIONS),
             "phases": {"impact": {"start": 0, "frames": end - begin,

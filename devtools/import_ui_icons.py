@@ -1,6 +1,7 @@
 """Install the explicit CIE28 handoff through the existing private-art manifest."""
 
 import argparse
+from hashlib import sha256
 from io import BytesIO
 import json
 from pathlib import Path, PurePosixPath
@@ -12,10 +13,76 @@ from devtools.art import ROOT, MANIFEST, copy_file, digest, read_manifest, write
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from game.ui_composition import compose_ui_media
+from game.ui.media_types import ChoiceRecord
 
 
 ARCHIVE_SHA256 = 'da85d0f936d05e9e4630cc3c0060dcbd142ed9c778233dfbddb5e80691b84f11'
 PREFIX = 'ui-icons-cie28-delivery-2026-10-05/'
+
+
+def import_smooth_icons(archive: Path, sources: Path, production: Path) -> None:
+    """Install the complete smooth handoff at its existing exact icon keys."""
+    checksum = digest(archive)
+    original = sources / 'original-delivery.zip'
+    if original.exists() and digest(original) != checksum:
+        raise ValueError('Preserved smooth icon delivery differs')
+    if not original.exists():
+        copy_file(archive, original)
+    media = json.loads((ROOT / 'game/data/ui_media.json').read_text())
+    current_choices = [ChoiceRecord.model_validate(row) for row in
+                       json.loads((ROOT / 'game/data/ui_choices.json').read_text())]
+    selected = {}
+    with ZipFile(original) as package:
+        manifest = json.loads(package.read('manifest.json'))
+        bindings = json.loads(package.read('replacement-bindings.json'))
+        choices = json.loads(package.read('choice-bindings.json'))
+        if len(bindings) != 620 or len(manifest['rows']) != 594 or len(choices) != 103:
+            raise ValueError('Incomplete smooth icon handoff')
+        expected = {row['unpixelated']['file']: row['unpixelated'] for row in manifest['rows']}
+        if {row['smooth144'] for row in bindings.values()} != set(expected):
+            raise ValueError('Smooth icon files and bindings disagree')
+        if not {key[5:] for key in media if key.startswith('icon:')} <= bindings.keys():
+            raise ValueError('An existing icon is missing from the replacement')
+        delivered_choices = [ChoiceRecord(owner=row['owner'], facet=row['facetKey'],
+            value=str(row['value']), icon_key=row['iconKey'], label=row['label'],
+            requirements={('form' if key == 'wall_form' else key): value
+                          for key, value in row.get('requires', {}).items()}) for row in choices
+                             if row.get('exposure') == 'discovery' and row.get('facetKey')]
+        if delivered_choices != current_choices:
+            raise ValueError('Smooth handoff changes native choice bindings')
+        for relative, row in expected.items():
+            path = PurePosixPath(relative)
+            if path.is_absolute() or '..' in path.parts or path.parts[0] != 'smooth144':
+                raise ValueError(f'Invalid smooth icon path: {relative}')
+            payload = package.read(relative)
+            if len(payload) != row['bytes'] or sha256(payload).hexdigest() != row['sha256']:
+                raise ValueError(f'Smooth icon differs from manifest: {relative}')
+            with Image.open(BytesIO(payload)) as png:
+                if png.size != (144, 144) or png.mode != 'RGBA':
+                    raise ValueError(f'Smooth icon dimensions or channels differ: {relative}')
+            preserved = sources / relative
+            if preserved.exists() and preserved.read_bytes() != payload:
+                raise ValueError(f'Preserved smooth icon differs: {relative}')
+            preserved.parent.mkdir(parents=True, exist_ok=True)
+            preserved.write_bytes(payload)
+            installed = 'game/assets/ui_smooth/' + path.name
+            for destination in (ROOT / installed, production / installed):
+                if not destination.exists() or digest(destination) != row['sha256']:
+                    copy_file(preserved, destination)
+            selected[installed] = {'path': installed, 'bytes': len(payload), 'sha256': row['sha256']}
+        for key, row in bindings.items():
+            media['icon:' + key] = {'path': 'ui_smooth/' + PurePosixPath(row['smooth144']).name,
+                                    'native_size': [144, 144], 'pivot': [0, 0], 'scale': 1}
+    for root in (production, ROOT / '.runtime'):
+        installation = read_manifest(root)
+        files = {row['path']: row for row in installation['files']}
+        files.update(selected)
+        write_json(root / MANIFEST, {'version': 1, 'files': sorted(files.values(), key=lambda row: row['path'])})
+    write_json(ROOT / 'game/data/ui_media.json', media)
+    write_json(sources / 'admission.json', {'archive_sha256': checksum,
+        'format': 'smooth144', 'binding_count': len(bindings), 'choice_count': len(choices),
+        'files': list(selected.values())})
+    print(f'Installed {len(selected)} smooth icons for {len(bindings)} exact keys; portraits and choices preserved')
 
 
 def import_icons(archive: Path, sources: Path, production: Path) -> None:
@@ -264,8 +331,10 @@ def main() -> None:
     parser.add_argument('--production',type=Path,required=True)
     parser.add_argument('--portraits',action='store_true',help='Import the portrait-only handoff instead of CIE28 icons')
     parser.add_argument('--creatures',action='store_true',help='Import exact creature portrait roles')
+    parser.add_argument('--smooth',action='store_true',help='Import the complete smooth144 replacement')
     args = parser.parse_args()
-    importer=import_creature_portraits if args.creatures else import_portraits if args.portraits else import_icons
+    importer=(import_smooth_icons if args.smooth else import_creature_portraits if args.creatures
+              else import_portraits if args.portraits else import_icons)
     importer(args.archive,args.sources,args.production)
 
 

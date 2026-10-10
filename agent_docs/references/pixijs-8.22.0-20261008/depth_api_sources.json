@@ -1,0 +1,44 @@
+[
+  {
+    "path": "api-source/src/rendering/renderers/gl/renderTarget/GlRenderTargetAdaptor.ts",
+    "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/gl/renderTarget/GlRenderTargetAdaptor.ts",
+    "bytes": 28585,
+    "sha256": "417a77ab8abbc826a681b2fa7cd3ebc16ca946981bb3ebfc469ed6ec2b4005bb"
+  },
+  {
+    "path": "api-source/src/rendering/renderers/gl/state/GlStateSystem.ts",
+    "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/gl/state/GlStateSystem.ts",
+    "bytes": 11891,
+    "sha256": "8152c308684d90d05b4008e2f7c1d07bbf5a8dd26bf7520177f93cf415aa5c5f"
+  },
+  {
+    "path": "api-source/src/rendering/renderers/gl/texture/GlTextureSystem.ts",
+    "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/gl/texture/GlTextureSystem.ts",
+    "bytes": 24316,
+    "sha256": "58e204460bd7befd0e6661f75693d1a960fa65499d78ec681dca39bd30ecd03e"
+  },
+  {
+    "path": "api-source/src/rendering/renderers/gl/texture/utils/mapFormatToGlFormat.ts",
+    "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/gl/texture/utils/mapFormatToGlFormat.ts",
+    "bytes": 2036,
+    "sha256": "cb307803766280a95cae776a8516a5342aeadde4437fe20daa47ff95b76c7b01"
+  },
+  {
+    "path": "api-source/src/rendering/renderers/gl/texture/utils/mapFormatToGlInternalFormat.ts",
+    "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/gl/texture/utils/mapFormatToGlInternalFormat.ts",
+    "bytes": 7123,
+    "sha256": "d0fddc223b40b163f5991a1044dcca34461e3528dafde65c33eccad242971d56"
+  },
+  {
+    "path": "api-source/src/rendering/renderers/shared/renderTarget/RenderTarget.ts",
+    "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/shared/renderTarget/RenderTarget.ts",
+    "bytes": 17250,
+    "sha256": "6b4e1b3ffc290bb5a2b21cb72f8986be5f682f418dfbae1b0ff15fa5afdfe8cf"
+  },
+  {
+    "path": "api-source/src/rendering/renderers/shared/renderTarget/RenderTargetSystem.ts",
+    "url": "https://raw.githubusercontent.com/pixijs/pixijs/v8.22.0/src/rendering/renderers/shared/renderTarget/RenderTargetSystem.ts",
+    "bytes": 46295,
+    "sha256": "1a7fc5dfe90ba59299a21b78574a03b223a611231cd4f2173d7de34ededf3d4f"
+  }
+]

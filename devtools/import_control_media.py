@@ -60,8 +60,7 @@ def import_slow(source: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
             views[DIRECTIONS[2 * q]] = parts
             views[DIRECTIONS[2 * q + 1]] = parts
         cell = row["cell"]
-        assets[identity] = {"assetId": identity, "displayName": identity, "kind": "projectile",
-            "sheet": f"/control-media/slow/{side}.png",
+        assets[identity] = {"assetId": identity, "displayName": identity, "sheet": f"/control-media/slow/{side}.png",
             "frame": {"width": cell, "height": cell, "rows": 8, "cols": 128},
             "fps": 32, "rowOrder": list(DIRECTIONS),
             "phases": {"impact": {"start": 0, "frames": 128, "fps": 32, "loop": True}},

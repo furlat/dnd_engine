@@ -32,8 +32,7 @@ def copy_frames(source: Path, relative: Path, directions, count: int, *, repo: P
 
 def asset(identity: str, name: str, cell: int, directions, phases, colors):
     return {
-        "assetId": identity, "displayName": name, "kind": "projectile",
-        "sheet": f"/authored-vfx/spell-recovery/{identity}",
+        "assetId": identity, "displayName": name, "sheet": f"/authored-vfx/spell-recovery/{identity}",
         "frame": {"width": cell, "height": cell, "rows": 8,
                   "cols": max(p["start"] + p["frames"] for p in phases.values())},
         "fps": 24, "rowOrder": directions, "phases": phases,

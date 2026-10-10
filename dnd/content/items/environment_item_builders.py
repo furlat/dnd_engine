@@ -162,13 +162,32 @@ class LiquidBarrel(BaseItem):
 OilBarrel = LiquidBarrel
 
 
+SOLID_WALL_MATERIALS = MappingProxyType({
+    "environment.wall.fantasy_a1": Material.STONE,
+    "environment.wall.fantasy_c1": Material.WOOD,
+    "environment.wall.fantasy_d1": Material.STONE,
+    "environment.wall.fantasy_d8": Material.STONE,
+    "environment.wall.fantasy_f1": Material.STONE,
+    "environment.wall.fantasy_f8": Material.STONE,
+    "environment.wall.fantasy_g1": Material.WOOD,
+})
+
+
+def build_solid_wall(item_id: str, source_entity_uuid: UUID) -> DirectionalWall:
+    """Compose an already admitted solid skin on the ordinary wall lifecycle."""
+    material = SOLID_WALL_MATERIALS[item_id]
+    return DirectionalWall(source_entity_uuid=source_entity_uuid, item_id=item_id,
+        name=f"Fantasy {item_id.rsplit('_', 1)[1].upper()} Wall", material=material,
+        armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[material])
+
+
 def build_directional_wall(
     *,
     display_name: str = "Directional Wall",
     blocked_channels: tuple[WorldEdgeChannel, ...] = DIRECTIONAL_CHANNELS,
     material: Material = Material.STONE,
 ) -> DirectionalWall:
-    """Construct one fixed directional wall from direct topology facts."""
+    """Construct one breakable directional wall from direct topology facts."""
     return DirectionalWall(
         source_entity_uuid=uuid4(),
         item_id="environment.directional_wall",
@@ -186,6 +205,10 @@ def build_cliff_face(*, display_name: str = "Cliff Face") -> DirectionalWall:
         item_id="environment.cliff_face",
         name=display_name,
         blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+        is_targetable=False,
+        include_in_senses_objects=False,
+        include_in_adjacent_senses_objects=False,
+        include_in_available_object_actions=False,
     )
 
 

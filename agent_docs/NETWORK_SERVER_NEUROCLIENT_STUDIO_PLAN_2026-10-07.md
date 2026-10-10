@@ -19,6 +19,17 @@ opposing SDK clients in one encounter with no arbitrary seat-count cap; one seat
 can control a group or one entity. Frontend/UI/Studio work is
 outside that current phase; none is a prerequisite for testing the server.
 
+> **October 8 update:** the server is delivered; its implementation receipts are
+> authoritative. The client destination is now a fresh **NDClient** repository.
+> Use [the current implementation plan](NDCLIENT_IMPLEMENTATION_PLAN_2026-10-08.md)
+> and its linked studies. This document remains the historical R01–R23/P01–P31
+> coverage source; its planned server endpoints and old-client checkout sequence
+> are not instructions to recreate or replace the delivered API.
+> The current master's §§13–14 restate the renderer and complaint obligations.
+> Historical “GPU XYZ”, exact dynamic depth-statistics and full-plane preservation
+> wording below no longer prescribes browser implementation; the approved compact
+> representation prerequisite and Pixi-native composition design supersede it.
+
 ## 1. Decisions and scope
 
 - New small network host, independent of `server/event_server.py` and its SDK.

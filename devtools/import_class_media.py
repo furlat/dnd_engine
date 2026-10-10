@@ -123,7 +123,7 @@ def import_class_media(source: Path, *, preserved: Path, production: Path,
             views[facing] = [[dict(file=path, rect=frame['source'], offset=frame['offset'])]
                 if current['alphaPixelsByFrame'][index] else []
                 for index, frame in enumerate(current['frames'])]
-        asset = dict(assetId=identity, displayName=identity, kind='projectile', sheet='/'+identity+'.png',
+        asset = dict(assetId=identity, displayName=identity, sheet='/'+identity+'.png',
             frame=dict(width=width, height=height, rows=8, cols=count), fps=32,
             rowOrder=list(DIRECTIONS), phases=dict(impact=dict(start=0,frames=count,fps=32,loop=bank['loop'])),
             anchor=dict(x=bank['pivot'][0]/width,y=bank['pivot'][1]/height), defaultScale=1,

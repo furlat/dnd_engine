@@ -54,8 +54,7 @@ def import_surface_contacts(source: Path, *, archive: Path, production: Path,
                     pages[page] = relative.as_posix()
                 rows[facing] = [[] if frame is None else [{"file": pages[frame["page"]],
                     "rect": frame["source"], "offset": frame["offset"]}] for frame in frames]
-            assets.append({"assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/surface-contact/{name}/{side}.png",
+            assets.append({"assetId": identity, "displayName": identity, "sheet": f"/surface-contact/{name}/{side}.png",
                 "frame": {"width": 512, "height": 512, "rows": 8, "cols": 48},
                 "fps": 32, "rowOrder": ("E", "SE", "S", "SW", "W", "NW", "N", "NE"),
                 "phases": {"impact": {"start": 0, "frames": 48, "fps": 32, "loop": False}},

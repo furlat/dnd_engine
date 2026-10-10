@@ -21,7 +21,9 @@ for forbidden in ('dnd.entity', 'dnd.core.events', 'dnd.content_system.runtime',
     assert result.returncode == 0, result.stderr
     schemas = {path.stem.removesuffix('.schema'): json.loads(path.read_text()) for path in tmp_path.glob('*.json')}
     expected_fields = {
-        'presentation-catalog-v1': {'schema_version', 'catalog', 'time_unit', 'grid_unit', 'elevation_step_feet'},
+        'presentation-catalog-v2': {'schema_version', 'catalog', 'time_unit', 'grid_unit', 'elevation_step_feet',
+            'assets', 'world', 'environment', 'item_appearances', 'item_materials', 'item_visuals',
+            'source_palettes', 'ui_resources', 'ui_presentation', 'ui_choices', 'ui_skin', 'ui_fonts'},
         'damage-context': {'numberFrame', 'flashFrame', 'conditionFrame', 'deathFrame'},
         'death-context': {'equipmentHideFrame', 'bodyClip'},
         'attack-recipe': {'actor', 'anchors', 'variants', 'attackFeedback'},

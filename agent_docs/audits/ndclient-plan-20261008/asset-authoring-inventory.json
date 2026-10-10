@@ -1,0 +1,5700 @@
+{
+  "date": "2026-10-08",
+  "kind": "Authored JSON inventory; no binary art copied or image decoded",
+  "source_files": {
+    "game/data/assets.json": {
+      "sha256": "763063f523ca54d0aea33f44e3494cc190636baf4d22a1511aef6051459b630e",
+      "fields": [
+        "schema_version",
+        "resources",
+        "animations",
+        "water"
+      ],
+      "collections": {
+        "resources": 1417,
+        "animations": 1,
+        "water": 25
+      }
+    },
+    "game/data/environment_art.json": {
+      "sha256": "ffb25d27bc02cfa73ad53f2a2db5d499495ce939e32c72887a083c7bb992c9fe",
+      "fields": [
+        "version",
+        "banks",
+        "doors",
+        "traps",
+        "wrecks",
+        "props"
+      ],
+      "collections": {
+        "banks": 368,
+        "doors": 17,
+        "traps": 12,
+        "wrecks": 40,
+        "props": 113
+      }
+    },
+    "game/data/ui_media.json": {
+      "sha256": "ddf1bd3f31420531cde1178f26fe5ea13cb0659ddf0579e9b7a7cfb51178bfa2",
+      "fields": [
+        "icon:action.action-surge",
+        "icon:action.activate-device",
+        "icon:action.aggressive",
+        "icon:action.attack-object",
+        "icon:action.bandit-captain-multiattack-melee",
+        "icon:action.bandit-captain-multiattack-ranged",
+        "icon:action.bite",
+        "icon:action.call-lightning-strike",
+        "icon:action.close-door",
+        "icon:action.convert-slot-to-sorcery-points",
+        "icon:action.convert-sorcery-points-to-slot",
+        "icon:action.cook",
+        "icon:action.cult-fanatic-multiattack",
+        "icon:action.cunning-action-dash",
+        "icon:action.cunning-action-disengage",
+        "icon:action.cunning-action-hide",
+        "icon:action.dash",
+        "icon:action.dash-bonus",
+        "icon:action.disengage",
+        "icon:action.divine-eminence",
+        "icon:action.dodge",
+        "icon:action.dragonborn-breath-weapon",
+        "icon:action.drop",
+        "icon:action.drop-concentration",
+        "icon:action.drop-prone",
+        "icon:action.eat-from-feast",
+        "icon:action.end-rage",
+        "icon:action.escape-web",
+        "icon:action.extinguish-wall-torch",
+        "icon:action.extra-attack",
+        "icon:action.eyebite-strike",
+        "icon:action.fireball",
+        "icon:action.freedom-of-movement-escape",
+        "icon:action.frenzied-strike",
+        "icon:action.frenzy",
+        "icon:action.hide",
+        "icon:action.interact-door",
+        "icon:action.jump",
+        "icon:action.knight-multiattack",
+        "icon:action.leadership",
+        "icon:action.light-wall-torch",
+        "icon:action.loot-all",
+        "icon:action.magic-missile",
+        "icon:action.mark-target",
+        "icon:action.move",
+        "icon:action.nimble-escape-disengage",
+        "icon:action.nimble-escape-hide",
+        "icon:action.open-door",
+        "icon:action.pick-up",
+        "icon:action.pull-lever",
+        "icon:action.quickened-spell",
+        "icon:action.rage",
+        "icon:action.rampage-bite",
+        "icon:action.reckless",
+        "icon:action.reckless-attack",
+        "icon:action.rest",
+        "icon:action.scout-multiattack-longbow",
+        "icon:action.scout-multiattack-shortsword",
+        "icon:action.second-wind",
+        "icon:action.shake-awake",
+        "icon:action.shove",
+        "icon:action.spy-multiattack",
+        "icon:action.stand-up",
+        "icon:action.sunbeam-strike",
+        "icon:action.swim",
+        "icon:action.telekinesis-move",
+        "icon:action.telekinesis-restrain",
+        "icon:action.thug-multiattack",
+        "icon:action.twinned-spell",
+        "icon:action.veteran-multiattack-melee",
+        "icon:action.veteran-multiattack-ranged",
+        "icon:condition.dnd-classes-barbarian-brutalcritical",
+        "icon:condition.dnd-classes-barbarian-dangersense",
+        "icon:condition.dnd-classes-barbarian-fastmovement",
+        "icon:condition.dnd-classes-barbarian-feralinstinct",
+        "icon:condition.dnd-classes-barbarian-indomitablemight",
+        "icon:condition.dnd-classes-barbarian-intimidatingpresencefeature",
+        "icon:condition.dnd-classes-barbarian-intimidatingpresenceimmunity",
+        "icon:condition.dnd-classes-barbarian-mindlessrage",
+        "icon:condition.dnd-classes-barbarian-persistentrage",
+        "icon:condition.dnd-classes-barbarian-primalchampion",
+        "icon:condition.dnd-classes-barbarian-recklessattackfeature",
+        "icon:condition.dnd-classes-barbarian-recklessattacking",
+        "icon:condition.dnd-classes-barbarian-relentlessrage",
+        "icon:condition.dnd-classes-barbarian-retaliation",
+        "icon:condition.dnd-classes-feats-luckyfeature",
+        "icon:condition.dnd-classes-fighter-actionsurgefeature",
+        "icon:condition.dnd-classes-fighter-extraattackfeature",
+        "icon:condition.dnd-classes-fighter-fightingstylearchery",
+        "icon:condition.dnd-classes-fighter-fightingstyledefense",
+        "icon:condition.dnd-classes-fighter-fightingstyledueling",
+        "icon:condition.dnd-classes-fighter-fightingstyleprotection",
+        "icon:condition.dnd-classes-fighter-fightingstyletwoweaponfighting",
+        "icon:condition.dnd-classes-fighter-greatweaponfighting",
+        "icon:condition.dnd-classes-fighter-improvedcritical",
+        "icon:condition.dnd-classes-fighter-indomitable",
+        "icon:condition.dnd-classes-fighter-secondwindfeature",
+        "icon:condition.dnd-classes-fighter-superiorcritical",
+        "icon:condition.dnd-classes-fighter-survivor",
+        "icon:condition.dnd-classes-rage-frenzied",
+        "icon:condition.dnd-classes-rage-frenzyfeature",
+        "icon:condition.dnd-classes-rage-ragefeature",
+        "icon:condition.dnd-classes-rage-raging",
+        "icon:condition.dnd-classes-sorcerer-draconicresilience",
+        "icon:condition.dnd-classes-sorcerer-elementalaffinity",
+        "icon:condition.dnd-classes-sorcerer-metamagicactive",
+        "icon:condition.dnd-classes-sorcerer-sorcerypointsfeature",
+        "icon:condition.dnd-conditions-blinded",
+        "icon:condition.dnd-conditions-charmed",
+        "icon:condition.dnd-conditions-concentrating",
+        "icon:condition.dnd-conditions-dashing",
+        "icon:condition.dnd-conditions-deafened",
+        "icon:condition.dnd-conditions-disengaging",
+        "icon:condition.dnd-conditions-dodging",
+        "icon:condition.dnd-conditions-exhaustion",
+        "icon:condition.dnd-conditions-frightened",
+        "icon:condition.dnd-conditions-grappled",
+        "icon:condition.dnd-conditions-greaterinvisibilityeffect",
+        "icon:condition.dnd-conditions-hidden",
+        "icon:condition.dnd-conditions-incapacitated",
+        "icon:condition.dnd-conditions-invisibilityeffect",
+        "icon:condition.dnd-conditions-invisible",
+        "icon:condition.dnd-conditions-noreactions",
+        "icon:condition.dnd-conditions-paralyzed",
+        "icon:condition.dnd-conditions-petrified",
+        "icon:condition.dnd-conditions-poisoned",
+        "icon:condition.dnd-conditions-prone",
+        "icon:condition.dnd-conditions-restrained",
+        "icon:condition.dnd-conditions-stunned",
+        "icon:condition.dnd-conditions-unconscious",
+        "icon:condition.dnd-conditions-underwater",
+        "icon:condition.dnd-extensions-aegis-spark-aegissparkeffect",
+        "icon:condition.dnd-extensions-aegis-spark-aegistrainingfeature",
+        "icon:condition.dnd-extensions-field-focus-fieldfocus",
+        "icon:condition.dnd-items-test-items-weaponcoatcondition",
+        "icon:condition.dnd-items-test-reactions-dodgerollfeature",
+        "icon:condition.dnd-items-test-reactions-intercepting",
+        "icon:condition.dnd-monsters-circus-fighter-conditions-circusperformer",
+        "icon:condition.dnd-monsters-circus-fighter-conditions-dualwielder",
+        "icon:condition.dnd-monsters-circus-fighter-conditions-elementalaffinity",
+        "icon:condition.dnd-monsters-circus-fighter-conditions-elementalweaponmastery",
+        "icon:condition.dnd-monsters-circus-fighter-conditions-tired",
+        "icon:condition.dnd-monsters-skeleton-abilities-marked",
+        "icon:condition.dnd-monsters-traits-biteproneriderfeature",
+        "icon:condition.dnd-monsters-traits-bonusdamagefeature",
+        "icon:condition.dnd-monsters-traits-conditionalsaveadvantagefeature",
+        "icon:condition.dnd-monsters-traits-divineeminenceactive",
+        "icon:condition.dnd-monsters-traits-ghoulclawsparalysisfeature",
+        "icon:condition.dnd-monsters-traits-ghoulparalysiseffect",
+        "icon:condition.dnd-monsters-traits-hitsaveriderfeature",
+        "icon:condition.dnd-monsters-traits-keenperceptionfeature",
+        "icon:condition.dnd-monsters-traits-leadershipaura",
+        "icon:condition.dnd-monsters-traits-packtacticsfeature",
+        "icon:condition.dnd-monsters-traits-parryfeature",
+        "icon:condition.dnd-monsters-traits-rampageavailable",
+        "icon:condition.dnd-monsters-traits-rampagefeature",
+        "icon:condition.dnd-monsters-traits-sunlightsensitivityfeature",
+        "icon:condition.dnd-monsters-traits-undeadfortitudefeature",
+        "icon:condition.dnd-spells-abjuration-aideffect",
+        "icon:condition.dnd-spells-abjuration-antimagicfieldzone",
+        "icon:condition.dnd-spells-abjuration-banishedcondition",
+        "icon:condition.dnd-spells-abjuration-beaconofhopeeffect",
+        "icon:condition.dnd-spells-abjuration-deathwardeffect",
+        "icon:condition.dnd-spells-abjuration-freedomofmovementeffect",
+        "icon:condition.dnd-spells-abjuration-globezone",
+        "icon:condition.dnd-spells-abjuration-magearmorcondition",
+        "icon:condition.dnd-spells-abjuration-protectionfromenergyeffect",
+        "icon:condition.dnd-spells-abjuration-protectionfrompoisoneffect",
+        "icon:condition.dnd-spells-abjuration-resistanceeffect",
+        "icon:condition.dnd-spells-abjuration-sanctuaryeffect",
+        "icon:condition.dnd-spells-abjuration-shieldbuff",
+        "icon:condition.dnd-spells-abjuration-shieldoffaitheffect",
+        "icon:condition.dnd-spells-abjuration-stoneskineffect",
+        "icon:condition.dnd-spells-conjuration-cloudkillzone",
+        "icon:condition.dnd-spells-conjuration-darknesszone",
+        "icon:condition.dnd-spells-conjuration-daylightzone",
+        "icon:condition.dnd-spells-conjuration-fogcloudzone",
+        "icon:condition.dnd-spells-conjuration-greasezone",
+        "icon:condition.dnd-spells-conjuration-heroesfeastbuff",
+        "icon:condition.dnd-spells-conjuration-incendiarycloudzone",
+        "icon:condition.dnd-spells-conjuration-insectplaguezone",
+        "icon:condition.dnd-spells-conjuration-nauseatedcondition",
+        "icon:condition.dnd-spells-conjuration-sleetstormzone",
+        "icon:condition.dnd-spells-conjuration-spiritguardiansslowed",
+        "icon:condition.dnd-spells-conjuration-spiritguardianszone",
+        "icon:condition.dnd-spells-conjuration-stinkingcloudzone",
+        "icon:condition.dnd-spells-conjuration-webrestrained",
+        "icon:condition.dnd-spells-conjuration-webzone",
+        "icon:condition.dnd-spells-divination-guidanceeffect",
+        "icon:condition.dnd-spells-divination-seeinvisibilityeffect",
+        "icon:condition.dnd-spells-divination-trueseeingeffect",
+        "icon:condition.dnd-spells-enchantment-baneeffect",
+        "icon:condition.dnd-spells-enchantment-blesseffect",
+        "icon:condition.dnd-spells-enchantment-commandfleeeffect",
+        "icon:condition.dnd-spells-enchantment-commandgroveleffect",
+        "icon:condition.dnd-spells-enchantment-commandhalteffect",
+        "icon:condition.dnd-spells-enchantment-commandnextturneffect",
+        "icon:condition.dnd-spells-enchantment-holdmonstereffect",
+        "icon:condition.dnd-spells-enchantment-holdpersoneffect",
+        "icon:condition.dnd-spells-enchantment-powerwordstuneffect",
+        "icon:condition.dnd-spells-enchantment-sleepeffect",
+        "icon:condition.dnd-spells-evocation-divinewordeffect",
+        "icon:condition.dnd-spells-evocation-guidingboltmarked",
+        "icon:condition.dnd-spells-evocation-gustofwindzone",
+        "icon:condition.dnd-spells-evocation-icestormterrain",
+        "icon:condition.dnd-spells-evocation-lighteffect",
+        "icon:condition.dnd-spells-evocation-prismaticrestrained",
+        "icon:condition.dnd-spells-evocation-rayoffrosteffect",
+        "icon:condition.dnd-spells-evocation-sunburstblindedeffect",
+        "icon:condition.dnd-spells-illusion-blureffect",
+        "icon:condition.dnd-spells-illusion-colorsprayeffect",
+        "icon:condition.dnd-spells-illusion-feareffect",
+        "icon:condition.dnd-spells-illusion-hypnoticpatterneffect",
+        "icon:condition.dnd-spells-illusion-mirrorimageeffect",
+        "icon:condition.dnd-spells-illusion-silencedeafened",
+        "icon:condition.dnd-spells-illusion-silencezone",
+        "icon:condition.dnd-spells-necromancy-abilitycurseeffect",
+        "icon:condition.dnd-spells-necromancy-attackcurseeffect",
+        "icon:condition.dnd-spells-necromancy-blindnessdeafnesseffect",
+        "icon:condition.dnd-spells-necromancy-chilltoucheffect",
+        "icon:condition.dnd-spells-necromancy-damagecurseeffect",
+        "icon:condition.dnd-spells-necromancy-eyebiteasleepeffect",
+        "icon:condition.dnd-spells-necromancy-eyebitepanickedeffect",
+        "icon:condition.dnd-spells-necromancy-inactioncurseeffect",
+        "icon:condition.dnd-spells-necromancy-nohealing",
+        "icon:condition.dnd-spells-necromancy-sickenedcondition",
+        "icon:condition.dnd-spells-transmutation-darkvisioneffect",
+        "icon:condition.dnd-spells-transmutation-enhanceabilityeffect",
+        "icon:condition.dnd-spells-transmutation-enlargereduceeffect",
+        "icon:condition.dnd-spells-transmutation-expeditiousretreateffect",
+        "icon:condition.dnd-spells-transmutation-hasteeffect",
+        "icon:condition.dnd-spells-transmutation-hastelethargyeffect",
+        "icon:condition.dnd-spells-transmutation-jumpeffect",
+        "icon:condition.dnd-spells-transmutation-regeneratingeffect",
+        "icon:condition.dnd-spells-transmutation-slowedeffect",
+        "icon:condition.dnd-spells-transmutation-spikegrowthzone",
+        "icon:condition.dnd-tile-conditions-spiketrapcondition",
+        "icon:condition.dnd-tile-conditions-tileeffectcondition",
+        "icon:condition.dnd-tile-conditions-zonecontrolcondition",
+        "icon:condition.dnd-tile-conditions-zonemarkercondition",
+        "icon:condition.generic",
+        "icon:item.acid-flask",
+        "icon:item.armor-scraps",
+        "icon:item.armored-boots",
+        "icon:item.battleaxe",
+        "icon:item.bite",
+        "icon:item.bracers",
+        "icon:item.breastplate",
+        "icon:item.chain-coif",
+        "icon:item.chain-mail",
+        "icon:item.chain-shirt",
+        "icon:item.circus-performer-leather",
+        "icon:item.claws",
+        "icon:item.cloth-armor",
+        "icon:item.cloth-hood",
+        "icon:item.cloth-shoes",
+        "icon:item.club",
+        "icon:item.common-clothes",
+        "icon:item.costume",
+        "icon:item.crown",
+        "icon:item.dagger",
+        "icon:item.double-bladed-sword",
+        "icon:item.field-kit",
+        "icon:item.fine-clothes",
+        "icon:item.gauntlets",
+        "icon:item.great-helm",
+        "icon:item.greataxe",
+        "icon:item.greatsword",
+        "icon:item.half-plate",
+        "icon:item.handaxe",
+        "icon:item.heavy-crossbow",
+        "icon:item.hide",
+        "icon:item.hide-armor",
+        "icon:item.holy-symbol",
+        "icon:item.horned-helmet",
+        "icon:item.incense",
+        "icon:item.iron-helmet",
+        "icon:item.javelin",
+        "icon:item.leather",
+        "icon:item.leather-armor",
+        "icon:item.leather-boots",
+        "icon:item.leather-gloves",
+        "icon:item.leather-hood",
+        "icon:item.leather-shoes",
+        "icon:item.light-crossbow",
+        "icon:item.light-hammer",
+        "icon:item.longbow",
+        "icon:item.longsword",
+        "icon:item.mace",
+        "icon:item.monster-hands",
+        "icon:item.monster-helm",
+        "icon:item.morningstar",
+        "icon:item.natural-armor",
+        "icon:item.padded",
+        "icon:item.plate",
+        "icon:item.plate-armor",
+        "icon:item.potion-of-greater-invisibility",
+        "icon:item.potion-of-haste",
+        "icon:item.potion-of-healing",
+        "icon:item.prayer-book",
+        "icon:item.quarterstaff",
+        "icon:item.rapier",
+        "icon:item.ring-mail",
+        "icon:item.robes",
+        "icon:item.sandals",
+        "icon:item.scale-mail",
+        "icon:item.scimitar",
+        "icon:item.scroll-of-fire-bolt",
+        "icon:item.scroll-of-fireball",
+        "icon:item.scroll-of-hold-person",
+        "icon:item.scroll-of-invisibility",
+        "icon:item.scroll-of-mage-armor",
+        "icon:item.scroll-of-magic-missile",
+        "icon:item.scroll-of-spike-growth",
+        "icon:item.shield",
+        "icon:item.shortbow",
+        "icon:item.shortsword",
+        "icon:item.sickle",
+        "icon:item.slam",
+        "icon:item.sling",
+        "icon:item.spear",
+        "icon:item.splint",
+        "icon:item.splint-armor",
+        "icon:item.studded-leather",
+        "icon:item.torch",
+        "icon:item.traveler-s-clothes",
+        "icon:item.travelers-clothes",
+        "icon:item.trident",
+        "icon:item.vestments",
+        "icon:item.wand-of-fire",
+        "icon:item.wand-of-magic-missiles",
+        "icon:item.warhammer",
+        "icon:item.weapon-coat",
+        "icon:item.weapon-coat-of-flame",
+        "icon:item.weapon-coat-of-lightning",
+        "icon:item.wizard-hat",
+        "icon:item.wizard-s-hat",
+        "icon:item.wooden-shield",
+        "icon:object.arcane-device",
+        "icon:object.arcane-machine-gun",
+        "icon:object.barricade",
+        "icon:object.boulder",
+        "icon:object.campfire",
+        "icon:object.chest",
+        "icon:object.crate",
+        "icon:object.directional-door",
+        "icon:object.directional-wall",
+        "icon:object.door",
+        "icon:object.fireball-cannon",
+        "icon:object.oil-barrel",
+        "icon:object.trap-lever",
+        "icon:object.wall-torch",
+        "icon:reaction.counterspell",
+        "icon:reaction.divine-smite",
+        "icon:reaction.great-weapon-fighting",
+        "icon:reaction.opportunity-attack-handler",
+        "icon:reaction.shield",
+        "icon:spell.acid-splash",
+        "icon:spell.aegis-spark",
+        "icon:spell.aid",
+        "icon:spell.antimagic-field",
+        "icon:spell.bane",
+        "icon:spell.banishment",
+        "icon:spell.beacon-of-hope",
+        "icon:spell.bestow-curse",
+        "icon:spell.bless",
+        "icon:spell.blight",
+        "icon:spell.blindness-deafness",
+        "icon:spell.blur",
+        "icon:spell.burning-hands",
+        "icon:spell.call-lightning",
+        "icon:spell.chain-lightning",
+        "icon:spell.charm-person",
+        "icon:spell.chill-touch",
+        "icon:spell.circle-of-death",
+        "icon:spell.cloudkill",
+        "icon:spell.color-spray",
+        "icon:spell.command",
+        "icon:spell.cone-of-cold",
+        "icon:spell.continual-flame",
+        "icon:spell.cure-wounds",
+        "icon:spell.darkness",
+        "icon:spell.darkvision",
+        "icon:spell.daylight",
+        "icon:spell.death-ward",
+        "icon:spell.dimension-door",
+        "icon:spell.disintegrate",
+        "icon:spell.divine-word",
+        "icon:spell.eldritch-blast",
+        "icon:spell.enhance-ability",
+        "icon:spell.enlarge-reduce",
+        "icon:spell.expeditious-retreat",
+        "icon:spell.eyebite",
+        "icon:spell.false-life",
+        "icon:spell.fear",
+        "icon:spell.finger-of-death",
+        "icon:spell.fire-bolt",
+        "icon:spell.fireball",
+        "icon:spell.flame-strike",
+        "icon:spell.fog-cloud",
+        "icon:spell.freedom-of-movement",
+        "icon:spell.globe-of-invulnerability",
+        "icon:spell.grease",
+        "icon:spell.greater-invisibility",
+        "icon:spell.greater-restoration",
+        "icon:spell.guardian-of-faith",
+        "icon:spell.guidance",
+        "icon:spell.guiding-bolt",
+        "icon:spell.gust-of-wind",
+        "icon:spell.harm",
+        "icon:spell.haste",
+        "icon:spell.heal",
+        "icon:spell.healing-word",
+        "icon:spell.hellish-rebuke",
+        "icon:spell.heroes-feast",
+        "icon:spell.hold-monster",
+        "icon:spell.hold-person",
+        "icon:spell.hypnotic-pattern",
+        "icon:spell.ice-storm",
+        "icon:spell.incendiary-cloud",
+        "icon:spell.inflict-wounds",
+        "icon:spell.insect-plague",
+        "icon:spell.invisibility",
+        "icon:spell.jump",
+        "icon:spell.lesser-restoration",
+        "icon:spell.light",
+        "icon:spell.lightning-bolt",
+        "icon:spell.mage-armor",
+        "icon:spell.magic-missile",
+        "icon:spell.mass-cure-wounds",
+        "icon:spell.mass-heal",
+        "icon:spell.mass-healing-word",
+        "icon:spell.mirror-image",
+        "icon:spell.misty-step",
+        "icon:spell.necrotic-bless",
+        "icon:spell.poison-spray",
+        "icon:spell.power-word-kill",
+        "icon:spell.power-word-stun",
+        "icon:spell.prayer-of-healing",
+        "icon:spell.prismatic-spray",
+        "icon:spell.protection-from-energy",
+        "icon:spell.protection-from-poison",
+        "icon:spell.ray-of-frost",
+        "icon:spell.regenerate",
+        "icon:spell.remove-curse",
+        "icon:spell.resistance",
+        "icon:spell.sacred-flame",
+        "icon:spell.sanctuary",
+        "icon:spell.scorching-ray",
+        "icon:spell.see-invisibility",
+        "icon:spell.shatter",
+        "icon:spell.shield-of-faith",
+        "icon:spell.shocking-grasp",
+        "icon:spell.silence",
+        "icon:spell.sleep",
+        "icon:spell.sleet-storm",
+        "icon:spell.slow",
+        "icon:spell.spike-growth",
+        "icon:spell.spirit-guardians",
+        "icon:spell.stinking-cloud",
+        "icon:spell.stoneskin",
+        "icon:spell.sunbeam",
+        "icon:spell.sunburst",
+        "icon:spell.telekinesis",
+        "icon:spell.thaumaturgy",
+        "icon:spell.thunderwave",
+        "icon:spell.true-seeing",
+        "icon:spell.true-strike",
+        "icon:spell.web",
+        "icon:trait.acolyte-proficiencies",
+        "icon:trait.artificers-lore",
+        "icon:trait.darkvision",
+        "icon:trait.draconic-ancestry-acid-line",
+        "icon:trait.draconic-ancestry-cold-cone",
+        "icon:trait.draconic-ancestry-fire-cone",
+        "icon:trait.draconic-ancestry-fire-line",
+        "icon:trait.draconic-ancestry-lightning-line",
+        "icon:trait.draconic-ancestry-poison-cone",
+        "icon:trait.dwarven-combat-training",
+        "icon:trait.dwarven-resilience",
+        "icon:trait.dwarven-toughness",
+        "icon:trait.elf-weapon-training",
+        "icon:trait.fey-ancestry",
+        "icon:trait.gnome-cunning",
+        "icon:trait.half-orc-menacing",
+        "icon:trait.half-orc-relentless-endurance",
+        "icon:trait.half-orc-savage-attacks",
+        "icon:trait.halfling-brave",
+        "icon:trait.halfling-lucky",
+        "icon:trait.halfling-nimbleness",
+        "icon:trait.hellish-resistance",
+        "icon:trait.keen-senses",
+        "icon:trait.naturally-stealthy",
+        "icon:trait.origin-languages",
+        "icon:trait.origin-size-and-speed",
+        "icon:trait.rock-gnome-tinker",
+        "icon:trait.shelter-of-the-faithful",
+        "icon:trait.stonecunning",
+        "icon:trait.trance",
+        "icon:ui.end-turn-medallion",
+        "icon:ui.filter-actions",
+        "icon:ui.filter-all",
+        "icon:ui.filter-attacks",
+        "icon:ui.filter-bonus",
+        "icon:ui.filter-items",
+        "icon:ui.filter-movement",
+        "icon:ui.filter-reactions",
+        "icon:ui.filter-spells",
+        "icon:ui.page-next",
+        "icon:ui.page-previous",
+        "icon:ui.resource-action",
+        "icon:ui.resource-bonus",
+        "icon:ui.resource-movement",
+        "icon:ui.resource-reaction",
+        "icon:ui.waiting-medallion",
+        "portrait:dragonborn-blue-m-02",
+        "portrait:dragonborn-copper-f-01",
+        "portrait:dragonborn-gold-m-01",
+        "portrait:dragonborn-red-a-02",
+        "portrait:dwarf-a-02",
+        "portrait:dwarf-f-01",
+        "portrait:dwarf-f-02",
+        "portrait:dwarf-m-01",
+        "portrait:elf-f-01",
+        "portrait:elf-f-02",
+        "portrait:elf-m-01",
+        "portrait:elf-m-02",
+        "portrait:gnome-a-02",
+        "portrait:gnome-f-01",
+        "portrait:gnome-m-01",
+        "portrait:half-elf-f-01",
+        "portrait:half-elf-m-01",
+        "portrait:half-orc-f-01",
+        "portrait:half-orc-m-01",
+        "portrait:halfling-f-01",
+        "portrait:halfling-m-01",
+        "portrait:tiefling-a-02",
+        "portrait:tiefling-f-01",
+        "portrait:tiefling-m-01",
+        "portrait:hero.barbarian_l5_berserker_torch.hero",
+        "portrait:hero.fighter_2_sorcerer_3_spellblade.hero",
+        "portrait:hero.fighter_l5_archer_torch.hero",
+        "portrait:hero.fighter_l5_shield_torch.hero",
+        "portrait:hero.sorcerer_l5_standard_torch.hero",
+        "portrait:monsters.goblin_water_cell.monster_1",
+        "portrait:monsters.goblin_water_cell.monster_2",
+        "portrait:monsters.goblin_water_cell.monster_3",
+        "portrait:monsters.skeleton_trio.monster_1",
+        "portrait:monsters.skeleton_trio.monster_2",
+        "portrait:monsters.skeleton_trio.monster_3",
+        "portrait:monsters.srd_divine_cult_cell.monster_1",
+        "portrait:monsters.srd_divine_cult_cell.monster_2",
+        "portrait:monsters.srd_divine_cult_cell.monster_3",
+        "portrait:monsters.srd_divine_cult_cell.monster_4",
+        "portrait:monsters.srd_elite_mercenaries.monster_1",
+        "portrait:monsters.srd_elite_mercenaries.monster_2",
+        "portrait:monsters.srd_elite_mercenaries.monster_3",
+        "portrait:monsters.srd_elite_mercenaries.monster_4",
+        "portrait:monsters.srd_goblinoid_warband.monster_1",
+        "portrait:monsters.srd_goblinoid_warband.monster_2",
+        "portrait:monsters.srd_goblinoid_warband.monster_3",
+        "portrait:monsters.srd_goblinoid_warband.monster_4",
+        "portrait:monsters.srd_low_cr_patrol.monster_1",
+        "portrait:monsters.srd_low_cr_patrol.monster_2",
+        "portrait:monsters.srd_low_cr_patrol.monster_3",
+        "portrait:monsters.srd_low_cr_patrol.monster_4",
+        "portrait:monsters.srd_low_cr_patrol.monster_5",
+        "portrait:monsters.srd_undead_crypt.monster_1",
+        "portrait:monsters.srd_undead_crypt.monster_2",
+        "portrait:monsters.srd_undead_crypt.monster_3",
+        "portrait:monsters.srd_undead_crypt.monster_4",
+        "skin:panel.normal",
+        "skin:slot.normal",
+        "skin:slot.hover",
+        "skin:slot.selected",
+        "skin:slot.disabled",
+        "skin:button.normal",
+        "skin:button.hover",
+        "skin:button.pressed",
+        "skin:button.disabled",
+        "skin:tooltip.normal",
+        "icon:spell.produce_flame",
+        "icon:spell.ice_knife",
+        "icon:spell.shillelagh",
+        "icon:spell.barkskin",
+        "icon:spell.longstrider",
+        "icon:spell.conjure_animals",
+        "icon:spell.conjure_fey",
+        "icon:spell.conjure_fiend",
+        "icon:spell.fire_shield",
+        "icon:spell.wind_wall",
+        "icon:spell.wall_of_fire",
+        "icon:spell.wall_of_thorns",
+        "icon:spell.wall_of_ice",
+        "icon:spell.wall_of_stone",
+        "icon:spell.wall_of_force",
+        "icon:action.monster.wight.life_drain",
+        "icon:action.summon.dismiss",
+        "icon:action.item.ember_quiver",
+        "icon:action.spell.fire_shield.dismiss",
+        "icon:spell.acid_flask",
+        "icon:action.monster.innate_invisibility",
+        "icon:choice.fire-shield.warm",
+        "icon:choice.fire-shield.chill",
+        "icon:choice.energy.acid",
+        "icon:choice.energy.cold",
+        "icon:choice.energy.fire",
+        "icon:choice.energy.lightning",
+        "icon:choice.energy.thunder",
+        "icon:choice.ability.strength",
+        "icon:choice.ability.dexterity",
+        "icon:choice.ability.constitution",
+        "icon:choice.ability.intelligence",
+        "icon:choice.ability.wisdom",
+        "icon:choice.ability.charisma",
+        "icon:choice.spirit-guardians.radiant",
+        "icon:choice.spirit-guardians.necrotic",
+        "icon:choice.summon.wolf",
+        "icon:choice.summon.hound",
+        "icon:choice.summon.boar",
+        "icon:choice.summon.stag",
+        "icon:choice.summon.jaguar",
+        "icon:choice.summon.bison",
+        "icon:choice.summon.ostrich",
+        "icon:choice.summon.brown_bear",
+        "icon:choice.summon.lion",
+        "icon:choice.summon.tiger",
+        "icon:choice.summon.polar_bear",
+        "icon:choice.summon.rhinoceros",
+        "icon:choice.summon.blue_raptor",
+        "icon:choice.summon.stegosaurus",
+        "icon:choice.summon.elephant",
+        "icon:choice.summon.triceratops",
+        "icon:choice.summon.mammoth",
+        "icon:choice.summon.raptor",
+        "icon:choice.summon.dretch",
+        "icon:choice.summon.claw_mote_devil",
+        "icon:choice.summon.corrosive_demon",
+        "icon:choice.summon.dread_demon",
+        "icon:choice.summon.huntsman_wing_devil",
+        "icon:choice.summon.fellwing_devil",
+        "icon:choice.shape.segment",
+        "icon:choice.shape.ring",
+        "icon:choice.shape.dome",
+        "icon:choice.size.enlarge",
+        "icon:choice.size.reduce",
+        "icon:choice.side.left",
+        "icon:choice.side.right",
+        "icon:choice.side.inside",
+        "icon:choice.side.outside",
+        "icon:action.environment.control_lever.toggle",
+        "icon:action.environment.escape_jaw.acrobatics",
+        "icon:action.environment.escape_jaw.athletics",
+        "icon:action.environment.storage_chest.close",
+        "icon:action.environment.storage_chest.open",
+        "icon:condition.consumable.weapon_coat.basic_poison",
+        "icon:condition.environment.jaw_restrained",
+        "icon:condition.summon_control",
+        "icon:condition.summoned",
+        "icon:condition.tile.residue",
+        "icon:condition.spell.barkskin",
+        "icon:condition.spell.eyebite.casting",
+        "icon:condition.spell.fire_shield",
+        "icon:condition.spell.fly",
+        "icon:condition.spell.harm",
+        "icon:condition.spell.longstrider",
+        "icon:condition.spell.shillelagh",
+        "icon:condition.spell.sunbeam.blinded",
+        "icon:condition.spell.sunbeam",
+        "icon:condition.spell.wall_of_fire.zone",
+        "icon:condition.spell.wall_of_force.zone",
+        "icon:condition.spell.wall_of_ice.frigid_air",
+        "icon:condition.spell.wall_of_ice.zone",
+        "icon:condition.spell.wall_of_stone.zone",
+        "icon:condition.spell.wall_of_thorns.zone",
+        "icon:condition.spell.wind_wall.zone",
+        "icon:condition.wight.life_drain",
+        "icon:action.attack",
+        "skin:slot.pixel28",
+        "portrait:dragonborn-blue-m-02:initiative",
+        "portrait:dragonborn-blue-m-02:hud",
+        "portrait:dragonborn-blue-m-02:sheet",
+        "portrait:dragonborn-copper-f-01:initiative",
+        "portrait:dragonborn-copper-f-01:hud",
+        "portrait:dragonborn-copper-f-01:sheet",
+        "portrait:dragonborn-gold-m-01:initiative",
+        "portrait:dragonborn-gold-m-01:hud",
+        "portrait:dragonborn-gold-m-01:sheet",
+        "portrait:dragonborn-red-a-02:initiative",
+        "portrait:dragonborn-red-a-02:hud",
+        "portrait:dragonborn-red-a-02:sheet",
+        "portrait:dwarf-a-02:initiative",
+        "portrait:dwarf-a-02:hud",
+        "portrait:dwarf-a-02:sheet",
+        "portrait:dwarf-f-01:initiative",
+        "portrait:dwarf-f-01:hud",
+        "portrait:dwarf-f-01:sheet",
+        "portrait:dwarf-f-02:initiative",
+        "portrait:dwarf-f-02:hud",
+        "portrait:dwarf-f-02:sheet",
+        "portrait:dwarf-m-01:initiative",
+        "portrait:dwarf-m-01:hud",
+        "portrait:dwarf-m-01:sheet",
+        "portrait:elf-f-01:initiative",
+        "portrait:elf-f-01:hud",
+        "portrait:elf-f-01:sheet",
+        "portrait:elf-f-02:initiative",
+        "portrait:elf-f-02:hud",
+        "portrait:elf-f-02:sheet",
+        "portrait:elf-m-01:initiative",
+        "portrait:elf-m-01:hud",
+        "portrait:elf-m-01:sheet",
+        "portrait:elf-m-02:initiative",
+        "portrait:elf-m-02:hud",
+        "portrait:elf-m-02:sheet",
+        "portrait:gnome-a-02:initiative",
+        "portrait:gnome-a-02:hud",
+        "portrait:gnome-a-02:sheet",
+        "portrait:gnome-f-01:initiative",
+        "portrait:gnome-f-01:hud",
+        "portrait:gnome-f-01:sheet",
+        "portrait:gnome-m-01:initiative",
+        "portrait:gnome-m-01:hud",
+        "portrait:gnome-m-01:sheet",
+        "portrait:half-elf-f-01:initiative",
+        "portrait:half-elf-f-01:hud",
+        "portrait:half-elf-f-01:sheet",
+        "portrait:half-elf-m-01:initiative",
+        "portrait:half-elf-m-01:hud",
+        "portrait:half-elf-m-01:sheet",
+        "portrait:half-orc-f-01:initiative",
+        "portrait:half-orc-f-01:hud",
+        "portrait:half-orc-f-01:sheet",
+        "portrait:half-orc-m-01:initiative",
+        "portrait:half-orc-m-01:hud",
+        "portrait:half-orc-m-01:sheet",
+        "portrait:halfling-f-01:initiative",
+        "portrait:halfling-f-01:hud",
+        "portrait:halfling-f-01:sheet",
+        "portrait:halfling-m-01:initiative",
+        "portrait:halfling-m-01:hud",
+        "portrait:halfling-m-01:sheet",
+        "portrait:tiefling-a-02:initiative",
+        "portrait:tiefling-a-02:hud",
+        "portrait:tiefling-a-02:sheet",
+        "portrait:tiefling-f-01:initiative",
+        "portrait:tiefling-f-01:hud",
+        "portrait:tiefling-f-01:sheet",
+        "portrait:tiefling-m-01:initiative",
+        "portrait:tiefling-m-01:hud",
+        "portrait:tiefling-m-01:sheet",
+        "portrait:hero.barbarian_l5_berserker_torch.hero:initiative",
+        "portrait:hero.barbarian_l5_berserker_torch.hero:hud",
+        "portrait:hero.barbarian_l5_berserker_torch.hero:sheet",
+        "portrait:hero.fighter_2_sorcerer_3_spellblade.hero:initiative",
+        "portrait:hero.fighter_2_sorcerer_3_spellblade.hero:hud",
+        "portrait:hero.fighter_2_sorcerer_3_spellblade.hero:sheet",
+        "portrait:hero.fighter_l5_archer_torch.hero:initiative",
+        "portrait:hero.fighter_l5_archer_torch.hero:hud",
+        "portrait:hero.fighter_l5_archer_torch.hero:sheet",
+        "portrait:hero.fighter_l5_shield_torch.hero:initiative",
+        "portrait:hero.fighter_l5_shield_torch.hero:hud",
+        "portrait:hero.fighter_l5_shield_torch.hero:sheet",
+        "portrait:hero.sorcerer_l5_standard_torch.hero:initiative",
+        "portrait:hero.sorcerer_l5_standard_torch.hero:hud",
+        "portrait:hero.sorcerer_l5_standard_torch.hero:sheet",
+        "portrait:monsters.goblin_water_cell.monster_1:initiative",
+        "portrait:monsters.goblin_water_cell.monster_1:hud",
+        "portrait:monsters.goblin_water_cell.monster_1:sheet",
+        "portrait:monsters.goblin_water_cell.monster_2:initiative",
+        "portrait:monsters.goblin_water_cell.monster_2:hud",
+        "portrait:monsters.goblin_water_cell.monster_2:sheet",
+        "portrait:monsters.goblin_water_cell.monster_3:initiative",
+        "portrait:monsters.goblin_water_cell.monster_3:hud",
+        "portrait:monsters.goblin_water_cell.monster_3:sheet",
+        "portrait:monsters.skeleton_trio.monster_1:initiative",
+        "portrait:monsters.skeleton_trio.monster_1:hud",
+        "portrait:monsters.skeleton_trio.monster_1:sheet",
+        "portrait:monsters.skeleton_trio.monster_2:initiative",
+        "portrait:monsters.skeleton_trio.monster_2:hud",
+        "portrait:monsters.skeleton_trio.monster_2:sheet",
+        "portrait:monsters.skeleton_trio.monster_3:initiative",
+        "portrait:monsters.skeleton_trio.monster_3:hud",
+        "portrait:monsters.skeleton_trio.monster_3:sheet",
+        "portrait:monsters.srd_divine_cult_cell.monster_1:initiative",
+        "portrait:monsters.srd_divine_cult_cell.monster_1:hud",
+        "portrait:monsters.srd_divine_cult_cell.monster_1:sheet",
+        "portrait:monsters.srd_divine_cult_cell.monster_2:initiative",
+        "portrait:monsters.srd_divine_cult_cell.monster_2:hud",
+        "portrait:monsters.srd_divine_cult_cell.monster_2:sheet",
+        "portrait:monsters.srd_divine_cult_cell.monster_3:initiative",
+        "portrait:monsters.srd_divine_cult_cell.monster_3:hud",
+        "portrait:monsters.srd_divine_cult_cell.monster_3:sheet",
+        "portrait:monsters.srd_divine_cult_cell.monster_4:initiative",
+        "portrait:monsters.srd_divine_cult_cell.monster_4:hud",
+        "portrait:monsters.srd_divine_cult_cell.monster_4:sheet",
+        "portrait:monsters.srd_elite_mercenaries.monster_1:initiative",
+        "portrait:monsters.srd_elite_mercenaries.monster_1:hud",
+        "portrait:monsters.srd_elite_mercenaries.monster_1:sheet",
+        "portrait:monsters.srd_elite_mercenaries.monster_2:initiative",
+        "portrait:monsters.srd_elite_mercenaries.monster_2:hud",
+        "portrait:monsters.srd_elite_mercenaries.monster_2:sheet",
+        "portrait:monsters.srd_elite_mercenaries.monster_3:initiative",
+        "portrait:monsters.srd_elite_mercenaries.monster_3:hud",
+        "portrait:monsters.srd_elite_mercenaries.monster_3:sheet",
+        "portrait:monsters.srd_elite_mercenaries.monster_4:initiative",
+        "portrait:monsters.srd_elite_mercenaries.monster_4:hud",
+        "portrait:monsters.srd_elite_mercenaries.monster_4:sheet",
+        "portrait:monsters.srd_goblinoid_warband.monster_1:initiative",
+        "portrait:monsters.srd_goblinoid_warband.monster_1:hud",
+        "portrait:monsters.srd_goblinoid_warband.monster_1:sheet",
+        "portrait:monsters.srd_goblinoid_warband.monster_2:initiative",
+        "portrait:monsters.srd_goblinoid_warband.monster_2:hud",
+        "portrait:monsters.srd_goblinoid_warband.monster_2:sheet",
+        "portrait:monsters.srd_goblinoid_warband.monster_3:initiative",
+        "portrait:monsters.srd_goblinoid_warband.monster_3:hud",
+        "portrait:monsters.srd_goblinoid_warband.monster_3:sheet",
+        "portrait:monsters.srd_goblinoid_warband.monster_4:initiative",
+        "portrait:monsters.srd_goblinoid_warband.monster_4:hud",
+        "portrait:monsters.srd_goblinoid_warband.monster_4:sheet",
+        "portrait:monsters.srd_low_cr_patrol.monster_1:initiative",
+        "portrait:monsters.srd_low_cr_patrol.monster_1:hud",
+        "portrait:monsters.srd_low_cr_patrol.monster_1:sheet",
+        "portrait:monsters.srd_low_cr_patrol.monster_2:initiative",
+        "portrait:monsters.srd_low_cr_patrol.monster_2:hud",
+        "portrait:monsters.srd_low_cr_patrol.monster_2:sheet",
+        "portrait:monsters.srd_low_cr_patrol.monster_3:initiative",
+        "portrait:monsters.srd_low_cr_patrol.monster_3:hud",
+        "portrait:monsters.srd_low_cr_patrol.monster_3:sheet",
+        "portrait:monsters.srd_low_cr_patrol.monster_4:initiative",
+        "portrait:monsters.srd_low_cr_patrol.monster_4:hud",
+        "portrait:monsters.srd_low_cr_patrol.monster_4:sheet",
+        "portrait:monsters.srd_low_cr_patrol.monster_5:initiative",
+        "portrait:monsters.srd_low_cr_patrol.monster_5:hud",
+        "portrait:monsters.srd_low_cr_patrol.monster_5:sheet",
+        "portrait:monsters.srd_undead_crypt.monster_1:initiative",
+        "portrait:monsters.srd_undead_crypt.monster_1:hud",
+        "portrait:monsters.srd_undead_crypt.monster_1:sheet",
+        "portrait:monsters.srd_undead_crypt.monster_2:initiative",
+        "portrait:monsters.srd_undead_crypt.monster_2:hud",
+        "portrait:monsters.srd_undead_crypt.monster_2:sheet",
+        "portrait:monsters.srd_undead_crypt.monster_3:initiative",
+        "portrait:monsters.srd_undead_crypt.monster_3:hud",
+        "portrait:monsters.srd_undead_crypt.monster_3:sheet",
+        "portrait:monsters.srd_undead_crypt.monster_4:initiative",
+        "portrait:monsters.srd_undead_crypt.monster_4:hud",
+        "portrait:monsters.srd_undead_crypt.monster_4:sheet",
+        "portrait:creature.wolf:initiative",
+        "portrait:creature.wolf:hud",
+        "portrait:creature.wolf",
+        "portrait:creature.wolf:sheet",
+        "portrait:creature.hound:initiative",
+        "portrait:creature.hound:hud",
+        "portrait:creature.hound",
+        "portrait:creature.hound:sheet",
+        "portrait:creature.boar:initiative",
+        "portrait:creature.boar:hud",
+        "portrait:creature.boar",
+        "portrait:creature.boar:sheet",
+        "portrait:creature.stag:initiative",
+        "portrait:creature.stag:hud",
+        "portrait:creature.stag",
+        "portrait:creature.stag:sheet",
+        "portrait:creature.jaguar:initiative",
+        "portrait:creature.jaguar:hud",
+        "portrait:creature.jaguar",
+        "portrait:creature.jaguar:sheet",
+        "portrait:creature.bison:initiative",
+        "portrait:creature.bison:hud",
+        "portrait:creature.bison",
+        "portrait:creature.bison:sheet",
+        "portrait:creature.ostrich:initiative",
+        "portrait:creature.ostrich:hud",
+        "portrait:creature.ostrich",
+        "portrait:creature.ostrich:sheet",
+        "portrait:creature.brown_bear:initiative",
+        "portrait:creature.brown_bear:hud",
+        "portrait:creature.brown_bear",
+        "portrait:creature.brown_bear:sheet",
+        "portrait:creature.lion:initiative",
+        "portrait:creature.lion:hud",
+        "portrait:creature.lion",
+        "portrait:creature.lion:sheet",
+        "portrait:creature.tiger:initiative",
+        "portrait:creature.tiger:hud",
+        "portrait:creature.tiger",
+        "portrait:creature.tiger:sheet",
+        "portrait:creature.polar_bear:initiative",
+        "portrait:creature.polar_bear:hud",
+        "portrait:creature.polar_bear",
+        "portrait:creature.polar_bear:sheet",
+        "portrait:creature.rhinoceros:initiative",
+        "portrait:creature.rhinoceros:hud",
+        "portrait:creature.rhinoceros",
+        "portrait:creature.rhinoceros:sheet",
+        "portrait:creature.blue_raptor:initiative",
+        "portrait:creature.blue_raptor:hud",
+        "portrait:creature.blue_raptor",
+        "portrait:creature.blue_raptor:sheet",
+        "portrait:creature.stegosaurus:initiative",
+        "portrait:creature.stegosaurus:hud",
+        "portrait:creature.stegosaurus",
+        "portrait:creature.stegosaurus:sheet",
+        "portrait:creature.elephant:initiative",
+        "portrait:creature.elephant:hud",
+        "portrait:creature.elephant",
+        "portrait:creature.elephant:sheet",
+        "portrait:creature.triceratops:initiative",
+        "portrait:creature.triceratops:hud",
+        "portrait:creature.triceratops",
+        "portrait:creature.triceratops:sheet",
+        "portrait:creature.mammoth:initiative",
+        "portrait:creature.mammoth:hud",
+        "portrait:creature.mammoth",
+        "portrait:creature.mammoth:sheet",
+        "portrait:creature.raptor:initiative",
+        "portrait:creature.raptor:hud",
+        "portrait:creature.raptor",
+        "portrait:creature.raptor:sheet",
+        "portrait:creature.dretch:initiative",
+        "portrait:creature.dretch:hud",
+        "portrait:creature.dretch",
+        "portrait:creature.dretch:sheet",
+        "portrait:creature.claw_mote_devil:initiative",
+        "portrait:creature.claw_mote_devil:hud",
+        "portrait:creature.claw_mote_devil",
+        "portrait:creature.claw_mote_devil:sheet",
+        "portrait:creature.corrosive_demon:initiative",
+        "portrait:creature.corrosive_demon:hud",
+        "portrait:creature.corrosive_demon",
+        "portrait:creature.corrosive_demon:sheet",
+        "portrait:creature.dread_demon:initiative",
+        "portrait:creature.dread_demon:hud",
+        "portrait:creature.dread_demon",
+        "portrait:creature.dread_demon:sheet",
+        "portrait:creature.huntsman_wing_devil:initiative",
+        "portrait:creature.huntsman_wing_devil:hud",
+        "portrait:creature.huntsman_wing_devil",
+        "portrait:creature.huntsman_wing_devil:sheet",
+        "portrait:creature.fellwing_devil:initiative",
+        "portrait:creature.fellwing_devil:hud",
+        "portrait:creature.fellwing_devil",
+        "portrait:creature.fellwing_devil:sheet",
+        "portrait:creature.goblin:initiative",
+        "portrait:creature.goblin:hud",
+        "portrait:creature.goblin",
+        "portrait:creature.goblin:sheet",
+        "portrait:creature.goblin_wispbinder:initiative",
+        "portrait:creature.goblin_wispbinder:hud",
+        "portrait:creature.goblin_wispbinder",
+        "portrait:creature.goblin_wispbinder:sheet",
+        "portrait:creature.goblin_reedshot:initiative",
+        "portrait:creature.goblin_reedshot:hud",
+        "portrait:creature.goblin_reedshot",
+        "portrait:creature.goblin_reedshot:sheet",
+        "portrait:creature.goblin_buckler_rat:initiative",
+        "portrait:creature.goblin_buckler_rat:hud",
+        "portrait:creature.goblin_buckler_rat",
+        "portrait:creature.goblin_buckler_rat:sheet",
+        "portrait:creature.goblin_longpoint:initiative",
+        "portrait:creature.goblin_longpoint:hud",
+        "portrait:creature.goblin_longpoint",
+        "portrait:creature.goblin_longpoint:sheet",
+        "portrait:creature.goblin_ironhide:initiative",
+        "portrait:creature.goblin_ironhide:hud",
+        "portrait:creature.goblin_ironhide",
+        "portrait:creature.goblin_ironhide:sheet",
+        "portrait:creature.goblin_briarling:initiative",
+        "portrait:creature.goblin_briarling:hud",
+        "portrait:creature.goblin_briarling",
+        "portrait:creature.goblin_briarling:sheet",
+        "portrait:creature.goblin_redcap:initiative",
+        "portrait:creature.goblin_redcap:hud",
+        "portrait:creature.goblin_redcap",
+        "portrait:creature.goblin_redcap:sheet",
+        "portrait:creature.goblin_quicktail:initiative",
+        "portrait:creature.goblin_quicktail:hud",
+        "portrait:creature.goblin_quicktail",
+        "portrait:creature.goblin_quicktail:sheet",
+        "portrait:creature.goblin_spearline:initiative",
+        "portrait:creature.goblin_spearline:hud",
+        "portrait:creature.goblin_spearline",
+        "portrait:creature.goblin_spearline:sheet",
+        "portrait:creature.goblin_packtrail:initiative",
+        "portrait:creature.goblin_packtrail:hud",
+        "portrait:creature.goblin_packtrail",
+        "portrait:creature.goblin_packtrail:sheet",
+        "portrait:creature.goblin_ashhide:initiative",
+        "portrait:creature.goblin_ashhide:hud",
+        "portrait:creature.goblin_ashhide",
+        "portrait:creature.goblin_ashhide:sheet",
+        "portrait:creature.goblin_thornrunner:initiative",
+        "portrait:creature.goblin_thornrunner:hud",
+        "portrait:creature.goblin_thornrunner",
+        "portrait:creature.goblin_thornrunner:sheet",
+        "portrait:creature.goblin_buckler_hex:initiative",
+        "portrait:creature.goblin_buckler_hex:hud",
+        "portrait:creature.goblin_buckler_hex",
+        "portrait:creature.goblin_buckler_hex:sheet",
+        "portrait:creature.goblin_gloomplate:initiative",
+        "portrait:creature.goblin_gloomplate:hud",
+        "portrait:creature.goblin_gloomplate",
+        "portrait:creature.goblin_gloomplate:sheet",
+        "portrait:creature.goblin_mossbreaker:initiative",
+        "portrait:creature.goblin_mossbreaker:hud",
+        "portrait:creature.goblin_mossbreaker",
+        "portrait:creature.goblin_mossbreaker:sheet",
+        "portrait:creature.goblin_gutterknife:initiative",
+        "portrait:creature.goblin_gutterknife:hud",
+        "portrait:creature.goblin_gutterknife",
+        "portrait:creature.goblin_gutterknife:sheet",
+        "icon:spell.fly",
+        "portrait:creature.skeleton_warrior",
+        "portrait:creature.skeleton_warrior:initiative",
+        "portrait:creature.skeleton_warrior:hud",
+        "portrait:creature.skeleton_warrior:sheet",
+        "portrait:creature.skeleton_archer",
+        "portrait:creature.skeleton_archer:initiative",
+        "portrait:creature.skeleton_archer:hud",
+        "portrait:creature.skeleton_archer:sheet",
+        "portrait:creature.skeleton_warlock",
+        "portrait:creature.skeleton_warlock:initiative",
+        "portrait:creature.skeleton_warlock:hud",
+        "portrait:creature.skeleton_warlock:sheet"
+      ],
+      "collections": {
+        "icon:action.action-surge": 4,
+        "icon:action.activate-device": 4,
+        "icon:action.aggressive": 4,
+        "icon:action.attack-object": 4,
+        "icon:action.bandit-captain-multiattack-melee": 4,
+        "icon:action.bandit-captain-multiattack-ranged": 4,
+        "icon:action.bite": 4,
+        "icon:action.call-lightning-strike": 4,
+        "icon:action.close-door": 4,
+        "icon:action.convert-slot-to-sorcery-points": 4,
+        "icon:action.convert-sorcery-points-to-slot": 4,
+        "icon:action.cook": 4,
+        "icon:action.cult-fanatic-multiattack": 4,
+        "icon:action.cunning-action-dash": 4,
+        "icon:action.cunning-action-disengage": 4,
+        "icon:action.cunning-action-hide": 4,
+        "icon:action.dash": 4,
+        "icon:action.dash-bonus": 4,
+        "icon:action.disengage": 4,
+        "icon:action.divine-eminence": 4,
+        "icon:action.dodge": 4,
+        "icon:action.dragonborn-breath-weapon": 4,
+        "icon:action.drop": 4,
+        "icon:action.drop-concentration": 4,
+        "icon:action.drop-prone": 4,
+        "icon:action.eat-from-feast": 4,
+        "icon:action.end-rage": 4,
+        "icon:action.escape-web": 4,
+        "icon:action.extinguish-wall-torch": 4,
+        "icon:action.extra-attack": 4,
+        "icon:action.eyebite-strike": 4,
+        "icon:action.fireball": 4,
+        "icon:action.freedom-of-movement-escape": 4,
+        "icon:action.frenzied-strike": 4,
+        "icon:action.frenzy": 4,
+        "icon:action.hide": 4,
+        "icon:action.interact-door": 4,
+        "icon:action.jump": 4,
+        "icon:action.knight-multiattack": 4,
+        "icon:action.leadership": 4,
+        "icon:action.light-wall-torch": 4,
+        "icon:action.loot-all": 4,
+        "icon:action.magic-missile": 4,
+        "icon:action.mark-target": 4,
+        "icon:action.move": 4,
+        "icon:action.nimble-escape-disengage": 4,
+        "icon:action.nimble-escape-hide": 4,
+        "icon:action.open-door": 4,
+        "icon:action.pick-up": 4,
+        "icon:action.pull-lever": 4,
+        "icon:action.quickened-spell": 4,
+        "icon:action.rage": 4,
+        "icon:action.rampage-bite": 4,
+        "icon:action.reckless": 4,
+        "icon:action.reckless-attack": 4,
+        "icon:action.rest": 4,
+        "icon:action.scout-multiattack-longbow": 4,
+        "icon:action.scout-multiattack-shortsword": 4,
+        "icon:action.second-wind": 4,
+        "icon:action.shake-awake": 4,
+        "icon:action.shove": 4,
+        "icon:action.spy-multiattack": 4,
+        "icon:action.stand-up": 4,
+        "icon:action.sunbeam-strike": 4,
+        "icon:action.swim": 4,
+        "icon:action.telekinesis-move": 4,
+        "icon:action.telekinesis-restrain": 4,
+        "icon:action.thug-multiattack": 4,
+        "icon:action.twinned-spell": 4,
+        "icon:action.veteran-multiattack-melee": 4,
+        "icon:action.veteran-multiattack-ranged": 4,
+        "icon:condition.dnd-classes-barbarian-brutalcritical": 4,
+        "icon:condition.dnd-classes-barbarian-dangersense": 4,
+        "icon:condition.dnd-classes-barbarian-fastmovement": 4,
+        "icon:condition.dnd-classes-barbarian-feralinstinct": 4,
+        "icon:condition.dnd-classes-barbarian-indomitablemight": 4,
+        "icon:condition.dnd-classes-barbarian-intimidatingpresencefeature": 4,
+        "icon:condition.dnd-classes-barbarian-intimidatingpresenceimmunity": 4,
+        "icon:condition.dnd-classes-barbarian-mindlessrage": 4,
+        "icon:condition.dnd-classes-barbarian-persistentrage": 4,
+        "icon:condition.dnd-classes-barbarian-primalchampion": 4,
+        "icon:condition.dnd-classes-barbarian-recklessattackfeature": 4,
+        "icon:condition.dnd-classes-barbarian-recklessattacking": 4,
+        "icon:condition.dnd-classes-barbarian-relentlessrage": 4,
+        "icon:condition.dnd-classes-barbarian-retaliation": 4,
+        "icon:condition.dnd-classes-feats-luckyfeature": 4,
+        "icon:condition.dnd-classes-fighter-actionsurgefeature": 4,
+        "icon:condition.dnd-classes-fighter-extraattackfeature": 4,
+        "icon:condition.dnd-classes-fighter-fightingstylearchery": 4,
+        "icon:condition.dnd-classes-fighter-fightingstyledefense": 4,
+        "icon:condition.dnd-classes-fighter-fightingstyledueling": 4,
+        "icon:condition.dnd-classes-fighter-fightingstyleprotection": 4,
+        "icon:condition.dnd-classes-fighter-fightingstyletwoweaponfighting": 4,
+        "icon:condition.dnd-classes-fighter-greatweaponfighting": 4,
+        "icon:condition.dnd-classes-fighter-improvedcritical": 4,
+        "icon:condition.dnd-classes-fighter-indomitable": 4,
+        "icon:condition.dnd-classes-fighter-secondwindfeature": 4,
+        "icon:condition.dnd-classes-fighter-superiorcritical": 4,
+        "icon:condition.dnd-classes-fighter-survivor": 4,
+        "icon:condition.dnd-classes-rage-frenzied": 4,
+        "icon:condition.dnd-classes-rage-frenzyfeature": 4,
+        "icon:condition.dnd-classes-rage-ragefeature": 4,
+        "icon:condition.dnd-classes-rage-raging": 4,
+        "icon:condition.dnd-classes-sorcerer-draconicresilience": 4,
+        "icon:condition.dnd-classes-sorcerer-elementalaffinity": 4,
+        "icon:condition.dnd-classes-sorcerer-metamagicactive": 4,
+        "icon:condition.dnd-classes-sorcerer-sorcerypointsfeature": 4,
+        "icon:condition.dnd-conditions-blinded": 4,
+        "icon:condition.dnd-conditions-charmed": 4,
+        "icon:condition.dnd-conditions-concentrating": 4,
+        "icon:condition.dnd-conditions-dashing": 4,
+        "icon:condition.dnd-conditions-deafened": 4,
+        "icon:condition.dnd-conditions-disengaging": 4,
+        "icon:condition.dnd-conditions-dodging": 4,
+        "icon:condition.dnd-conditions-exhaustion": 4,
+        "icon:condition.dnd-conditions-frightened": 4,
+        "icon:condition.dnd-conditions-grappled": 4,
+        "icon:condition.dnd-conditions-greaterinvisibilityeffect": 4,
+        "icon:condition.dnd-conditions-hidden": 4,
+        "icon:condition.dnd-conditions-incapacitated": 4,
+        "icon:condition.dnd-conditions-invisibilityeffect": 4,
+        "icon:condition.dnd-conditions-invisible": 4,
+        "icon:condition.dnd-conditions-noreactions": 4,
+        "icon:condition.dnd-conditions-paralyzed": 4,
+        "icon:condition.dnd-conditions-petrified": 4,
+        "icon:condition.dnd-conditions-poisoned": 4,
+        "icon:condition.dnd-conditions-prone": 4,
+        "icon:condition.dnd-conditions-restrained": 4,
+        "icon:condition.dnd-conditions-stunned": 4,
+        "icon:condition.dnd-conditions-unconscious": 4,
+        "icon:condition.dnd-conditions-underwater": 4,
+        "icon:condition.dnd-extensions-aegis-spark-aegissparkeffect": 4,
+        "icon:condition.dnd-extensions-aegis-spark-aegistrainingfeature": 4,
+        "icon:condition.dnd-extensions-field-focus-fieldfocus": 4,
+        "icon:condition.dnd-items-test-items-weaponcoatcondition": 4,
+        "icon:condition.dnd-items-test-reactions-dodgerollfeature": 4,
+        "icon:condition.dnd-items-test-reactions-intercepting": 4,
+        "icon:condition.dnd-monsters-circus-fighter-conditions-circusperformer": 4,
+        "icon:condition.dnd-monsters-circus-fighter-conditions-dualwielder": 4,
+        "icon:condition.dnd-monsters-circus-fighter-conditions-elementalaffinity": 4,
+        "icon:condition.dnd-monsters-circus-fighter-conditions-elementalweaponmastery": 4,
+        "icon:condition.dnd-monsters-circus-fighter-conditions-tired": 4,
+        "icon:condition.dnd-monsters-skeleton-abilities-marked": 4,
+        "icon:condition.dnd-monsters-traits-biteproneriderfeature": 4,
+        "icon:condition.dnd-monsters-traits-bonusdamagefeature": 4,
+        "icon:condition.dnd-monsters-traits-conditionalsaveadvantagefeature": 4,
+        "icon:condition.dnd-monsters-traits-divineeminenceactive": 4,
+        "icon:condition.dnd-monsters-traits-ghoulclawsparalysisfeature": 4,
+        "icon:condition.dnd-monsters-traits-ghoulparalysiseffect": 4,
+        "icon:condition.dnd-monsters-traits-hitsaveriderfeature": 4,
+        "icon:condition.dnd-monsters-traits-keenperceptionfeature": 4,
+        "icon:condition.dnd-monsters-traits-leadershipaura": 4,
+        "icon:condition.dnd-monsters-traits-packtacticsfeature": 4,
+        "icon:condition.dnd-monsters-traits-parryfeature": 4,
+        "icon:condition.dnd-monsters-traits-rampageavailable": 4,
+        "icon:condition.dnd-monsters-traits-rampagefeature": 4,
+        "icon:condition.dnd-monsters-traits-sunlightsensitivityfeature": 4,
+        "icon:condition.dnd-monsters-traits-undeadfortitudefeature": 4,
+        "icon:condition.dnd-spells-abjuration-aideffect": 4,
+        "icon:condition.dnd-spells-abjuration-antimagicfieldzone": 4,
+        "icon:condition.dnd-spells-abjuration-banishedcondition": 4,
+        "icon:condition.dnd-spells-abjuration-beaconofhopeeffect": 4,
+        "icon:condition.dnd-spells-abjuration-deathwardeffect": 4,
+        "icon:condition.dnd-spells-abjuration-freedomofmovementeffect": 4,
+        "icon:condition.dnd-spells-abjuration-globezone": 4,
+        "icon:condition.dnd-spells-abjuration-magearmorcondition": 4,
+        "icon:condition.dnd-spells-abjuration-protectionfromenergyeffect": 4,
+        "icon:condition.dnd-spells-abjuration-protectionfrompoisoneffect": 4,
+        "icon:condition.dnd-spells-abjuration-resistanceeffect": 4,
+        "icon:condition.dnd-spells-abjuration-sanctuaryeffect": 4,
+        "icon:condition.dnd-spells-abjuration-shieldbuff": 4,
+        "icon:condition.dnd-spells-abjuration-shieldoffaitheffect": 4,
+        "icon:condition.dnd-spells-abjuration-stoneskineffect": 4,
+        "icon:condition.dnd-spells-conjuration-cloudkillzone": 4,
+        "icon:condition.dnd-spells-conjuration-darknesszone": 4,
+        "icon:condition.dnd-spells-conjuration-daylightzone": 4,
+        "icon:condition.dnd-spells-conjuration-fogcloudzone": 4,
+        "icon:condition.dnd-spells-conjuration-greasezone": 4,
+        "icon:condition.dnd-spells-conjuration-heroesfeastbuff": 4,
+        "icon:condition.dnd-spells-conjuration-incendiarycloudzone": 4,
+        "icon:condition.dnd-spells-conjuration-insectplaguezone": 4,
+        "icon:condition.dnd-spells-conjuration-nauseatedcondition": 4,
+        "icon:condition.dnd-spells-conjuration-sleetstormzone": 4,
+        "icon:condition.dnd-spells-conjuration-spiritguardiansslowed": 4,
+        "icon:condition.dnd-spells-conjuration-spiritguardianszone": 4,
+        "icon:condition.dnd-spells-conjuration-stinkingcloudzone": 4,
+        "icon:condition.dnd-spells-conjuration-webrestrained": 4,
+        "icon:condition.dnd-spells-conjuration-webzone": 4,
+        "icon:condition.dnd-spells-divination-guidanceeffect": 4,
+        "icon:condition.dnd-spells-divination-seeinvisibilityeffect": 4,
+        "icon:condition.dnd-spells-divination-trueseeingeffect": 4,
+        "icon:condition.dnd-spells-enchantment-baneeffect": 4,
+        "icon:condition.dnd-spells-enchantment-blesseffect": 4,
+        "icon:condition.dnd-spells-enchantment-commandfleeeffect": 4,
+        "icon:condition.dnd-spells-enchantment-commandgroveleffect": 4,
+        "icon:condition.dnd-spells-enchantment-commandhalteffect": 4,
+        "icon:condition.dnd-spells-enchantment-commandnextturneffect": 4,
+        "icon:condition.dnd-spells-enchantment-holdmonstereffect": 4,
+        "icon:condition.dnd-spells-enchantment-holdpersoneffect": 4,
+        "icon:condition.dnd-spells-enchantment-powerwordstuneffect": 4,
+        "icon:condition.dnd-spells-enchantment-sleepeffect": 4,
+        "icon:condition.dnd-spells-evocation-divinewordeffect": 4,
+        "icon:condition.dnd-spells-evocation-guidingboltmarked": 4,
+        "icon:condition.dnd-spells-evocation-gustofwindzone": 4,
+        "icon:condition.dnd-spells-evocation-icestormterrain": 4,
+        "icon:condition.dnd-spells-evocation-lighteffect": 4,
+        "icon:condition.dnd-spells-evocation-prismaticrestrained": 4,
+        "icon:condition.dnd-spells-evocation-rayoffrosteffect": 4,
+        "icon:condition.dnd-spells-evocation-sunburstblindedeffect": 4,
+        "icon:condition.dnd-spells-illusion-blureffect": 4,
+        "icon:condition.dnd-spells-illusion-colorsprayeffect": 4,
+        "icon:condition.dnd-spells-illusion-feareffect": 4,
+        "icon:condition.dnd-spells-illusion-hypnoticpatterneffect": 4,
+        "icon:condition.dnd-spells-illusion-mirrorimageeffect": 4,
+        "icon:condition.dnd-spells-illusion-silencedeafened": 4,
+        "icon:condition.dnd-spells-illusion-silencezone": 4,
+        "icon:condition.dnd-spells-necromancy-abilitycurseeffect": 4,
+        "icon:condition.dnd-spells-necromancy-attackcurseeffect": 4,
+        "icon:condition.dnd-spells-necromancy-blindnessdeafnesseffect": 4,
+        "icon:condition.dnd-spells-necromancy-chilltoucheffect": 4,
+        "icon:condition.dnd-spells-necromancy-damagecurseeffect": 4,
+        "icon:condition.dnd-spells-necromancy-eyebiteasleepeffect": 4,
+        "icon:condition.dnd-spells-necromancy-eyebitepanickedeffect": 4,
+        "icon:condition.dnd-spells-necromancy-inactioncurseeffect": 4,
+        "icon:condition.dnd-spells-necromancy-nohealing": 4,
+        "icon:condition.dnd-spells-necromancy-sickenedcondition": 4,
+        "icon:condition.dnd-spells-transmutation-darkvisioneffect": 4,
+        "icon:condition.dnd-spells-transmutation-enhanceabilityeffect": 4,
+        "icon:condition.dnd-spells-transmutation-enlargereduceeffect": 4,
+        "icon:condition.dnd-spells-transmutation-expeditiousretreateffect": 4,
+        "icon:condition.dnd-spells-transmutation-hasteeffect": 4,
+        "icon:condition.dnd-spells-transmutation-hastelethargyeffect": 4,
+        "icon:condition.dnd-spells-transmutation-jumpeffect": 4,
+        "icon:condition.dnd-spells-transmutation-regeneratingeffect": 4,
+        "icon:condition.dnd-spells-transmutation-slowedeffect": 4,
+        "icon:condition.dnd-spells-transmutation-spikegrowthzone": 4,
+        "icon:condition.dnd-tile-conditions-spiketrapcondition": 4,
+        "icon:condition.dnd-tile-conditions-tileeffectcondition": 4,
+        "icon:condition.dnd-tile-conditions-zonecontrolcondition": 4,
+        "icon:condition.dnd-tile-conditions-zonemarkercondition": 4,
+        "icon:condition.generic": 4,
+        "icon:item.acid-flask": 4,
+        "icon:item.armor-scraps": 4,
+        "icon:item.armored-boots": 4,
+        "icon:item.battleaxe": 4,
+        "icon:item.bite": 4,
+        "icon:item.bracers": 4,
+        "icon:item.breastplate": 4,
+        "icon:item.chain-coif": 4,
+        "icon:item.chain-mail": 4,
+        "icon:item.chain-shirt": 4,
+        "icon:item.circus-performer-leather": 4,
+        "icon:item.claws": 4,
+        "icon:item.cloth-armor": 4,
+        "icon:item.cloth-hood": 4,
+        "icon:item.cloth-shoes": 4,
+        "icon:item.club": 4,
+        "icon:item.common-clothes": 4,
+        "icon:item.costume": 4,
+        "icon:item.crown": 4,
+        "icon:item.dagger": 4,
+        "icon:item.double-bladed-sword": 4,
+        "icon:item.field-kit": 4,
+        "icon:item.fine-clothes": 4,
+        "icon:item.gauntlets": 4,
+        "icon:item.great-helm": 4,
+        "icon:item.greataxe": 4,
+        "icon:item.greatsword": 4,
+        "icon:item.half-plate": 4,
+        "icon:item.handaxe": 4,
+        "icon:item.heavy-crossbow": 4,
+        "icon:item.hide": 4,
+        "icon:item.hide-armor": 4,
+        "icon:item.holy-symbol": 4,
+        "icon:item.horned-helmet": 4,
+        "icon:item.incense": 4,
+        "icon:item.iron-helmet": 4,
+        "icon:item.javelin": 4,
+        "icon:item.leather": 4,
+        "icon:item.leather-armor": 4,
+        "icon:item.leather-boots": 4,
+        "icon:item.leather-gloves": 4,
+        "icon:item.leather-hood": 4,
+        "icon:item.leather-shoes": 4,
+        "icon:item.light-crossbow": 4,
+        "icon:item.light-hammer": 4,
+        "icon:item.longbow": 4,
+        "icon:item.longsword": 4,
+        "icon:item.mace": 4,
+        "icon:item.monster-hands": 4,
+        "icon:item.monster-helm": 4,
+        "icon:item.morningstar": 4,
+        "icon:item.natural-armor": 4,
+        "icon:item.padded": 4,
+        "icon:item.plate": 4,
+        "icon:item.plate-armor": 4,
+        "icon:item.potion-of-greater-invisibility": 4,
+        "icon:item.potion-of-haste": 4,
+        "icon:item.potion-of-healing": 4,
+        "icon:item.prayer-book": 4,
+        "icon:item.quarterstaff": 4,
+        "icon:item.rapier": 4,
+        "icon:item.ring-mail": 4,
+        "icon:item.robes": 4,
+        "icon:item.sandals": 4,
+        "icon:item.scale-mail": 4,
+        "icon:item.scimitar": 4,
+        "icon:item.scroll-of-fire-bolt": 4,
+        "icon:item.scroll-of-fireball": 4,
+        "icon:item.scroll-of-hold-person": 4,
+        "icon:item.scroll-of-invisibility": 4,
+        "icon:item.scroll-of-mage-armor": 4,
+        "icon:item.scroll-of-magic-missile": 4,
+        "icon:item.scroll-of-spike-growth": 4,
+        "icon:item.shield": 4,
+        "icon:item.shortbow": 4,
+        "icon:item.shortsword": 4,
+        "icon:item.sickle": 4,
+        "icon:item.slam": 4,
+        "icon:item.sling": 4,
+        "icon:item.spear": 4,
+        "icon:item.splint": 4,
+        "icon:item.splint-armor": 4,
+        "icon:item.studded-leather": 4,
+        "icon:item.torch": 4,
+        "icon:item.traveler-s-clothes": 4,
+        "icon:item.travelers-clothes": 4,
+        "icon:item.trident": 4,
+        "icon:item.vestments": 4,
+        "icon:item.wand-of-fire": 4,
+        "icon:item.wand-of-magic-missiles": 4,
+        "icon:item.warhammer": 4,
+        "icon:item.weapon-coat": 4,
+        "icon:item.weapon-coat-of-flame": 4,
+        "icon:item.weapon-coat-of-lightning": 4,
+        "icon:item.wizard-hat": 4,
+        "icon:item.wizard-s-hat": 4,
+        "icon:item.wooden-shield": 4,
+        "icon:object.arcane-device": 4,
+        "icon:object.arcane-machine-gun": 4,
+        "icon:object.barricade": 4,
+        "icon:object.boulder": 4,
+        "icon:object.campfire": 4,
+        "icon:object.chest": 4,
+        "icon:object.crate": 4,
+        "icon:object.directional-door": 4,
+        "icon:object.directional-wall": 4,
+        "icon:object.door": 4,
+        "icon:object.fireball-cannon": 4,
+        "icon:object.oil-barrel": 4,
+        "icon:object.trap-lever": 4,
+        "icon:object.wall-torch": 4,
+        "icon:reaction.counterspell": 4,
+        "icon:reaction.divine-smite": 4,
+        "icon:reaction.great-weapon-fighting": 4,
+        "icon:reaction.opportunity-attack-handler": 4,
+        "icon:reaction.shield": 4,
+        "icon:spell.acid-splash": 4,
+        "icon:spell.aegis-spark": 4,
+        "icon:spell.aid": 4,
+        "icon:spell.antimagic-field": 4,
+        "icon:spell.bane": 4,
+        "icon:spell.banishment": 4,
+        "icon:spell.beacon-of-hope": 4,
+        "icon:spell.bestow-curse": 4,
+        "icon:spell.bless": 4,
+        "icon:spell.blight": 4,
+        "icon:spell.blindness-deafness": 4,
+        "icon:spell.blur": 4,
+        "icon:spell.burning-hands": 4,
+        "icon:spell.call-lightning": 4,
+        "icon:spell.chain-lightning": 4,
+        "icon:spell.charm-person": 4,
+        "icon:spell.chill-touch": 4,
+        "icon:spell.circle-of-death": 4,
+        "icon:spell.cloudkill": 4,
+        "icon:spell.color-spray": 4,
+        "icon:spell.command": 4,
+        "icon:spell.cone-of-cold": 4,
+        "icon:spell.continual-flame": 4,
+        "icon:spell.cure-wounds": 4,
+        "icon:spell.darkness": 4,
+        "icon:spell.darkvision": 4,
+        "icon:spell.daylight": 4,
+        "icon:spell.death-ward": 4,
+        "icon:spell.dimension-door": 4,
+        "icon:spell.disintegrate": 4,
+        "icon:spell.divine-word": 4,
+        "icon:spell.eldritch-blast": 4,
+        "icon:spell.enhance-ability": 4,
+        "icon:spell.enlarge-reduce": 4,
+        "icon:spell.expeditious-retreat": 4,
+        "icon:spell.eyebite": 4,
+        "icon:spell.false-life": 4,
+        "icon:spell.fear": 4,
+        "icon:spell.finger-of-death": 4,
+        "icon:spell.fire-bolt": 4,
+        "icon:spell.fireball": 4,
+        "icon:spell.flame-strike": 4,
+        "icon:spell.fog-cloud": 4,
+        "icon:spell.freedom-of-movement": 4,
+        "icon:spell.globe-of-invulnerability": 4,
+        "icon:spell.grease": 4,
+        "icon:spell.greater-invisibility": 4,
+        "icon:spell.greater-restoration": 4,
+        "icon:spell.guardian-of-faith": 4,
+        "icon:spell.guidance": 4,
+        "icon:spell.guiding-bolt": 4,
+        "icon:spell.gust-of-wind": 4,
+        "icon:spell.harm": 4,
+        "icon:spell.haste": 4,
+        "icon:spell.heal": 4,
+        "icon:spell.healing-word": 4,
+        "icon:spell.hellish-rebuke": 4,
+        "icon:spell.heroes-feast": 4,
+        "icon:spell.hold-monster": 4,
+        "icon:spell.hold-person": 4,
+        "icon:spell.hypnotic-pattern": 4,
+        "icon:spell.ice-storm": 4,
+        "icon:spell.incendiary-cloud": 4,
+        "icon:spell.inflict-wounds": 4,
+        "icon:spell.insect-plague": 4,
+        "icon:spell.invisibility": 4,
+        "icon:spell.jump": 4,
+        "icon:spell.lesser-restoration": 4,
+        "icon:spell.light": 4,
+        "icon:spell.lightning-bolt": 4,
+        "icon:spell.mage-armor": 4,
+        "icon:spell.magic-missile": 4,
+        "icon:spell.mass-cure-wounds": 4,
+        "icon:spell.mass-heal": 4,
+        "icon:spell.mass-healing-word": 4,
+        "icon:spell.mirror-image": 4,
+        "icon:spell.misty-step": 4,
+        "icon:spell.necrotic-bless": 4,
+        "icon:spell.poison-spray": 4,
+        "icon:spell.power-word-kill": 4,
+        "icon:spell.power-word-stun": 4,
+        "icon:spell.prayer-of-healing": 4,
+        "icon:spell.prismatic-spray": 4,
+        "icon:spell.protection-from-energy": 4,
+        "icon:spell.protection-from-poison": 4,
+        "icon:spell.ray-of-frost": 4,
+        "icon:spell.regenerate": 4,
+        "icon:spell.remove-curse": 4,
+        "icon:spell.resistance": 4,
+        "icon:spell.sacred-flame": 4,
+        "icon:spell.sanctuary": 4,
+        "icon:spell.scorching-ray": 4,
+        "icon:spell.see-invisibility": 4,
+        "icon:spell.shatter": 4,
+        "icon:spell.shield-of-faith": 4,
+        "icon:spell.shocking-grasp": 4,
+        "icon:spell.silence": 4,
+        "icon:spell.sleep": 4,
+        "icon:spell.sleet-storm": 4,
+        "icon:spell.slow": 4,
+        "icon:spell.spike-growth": 4,
+        "icon:spell.spirit-guardians": 4,
+        "icon:spell.stinking-cloud": 4,
+        "icon:spell.stoneskin": 4,
+        "icon:spell.sunbeam": 4,
+        "icon:spell.sunburst": 4,
+        "icon:spell.telekinesis": 4,
+        "icon:spell.thaumaturgy": 4,
+        "icon:spell.thunderwave": 4,
+        "icon:spell.true-seeing": 4,
+        "icon:spell.true-strike": 4,
+        "icon:spell.web": 4,
+        "icon:trait.acolyte-proficiencies": 4,
+        "icon:trait.artificers-lore": 4,
+        "icon:trait.darkvision": 4,
+        "icon:trait.draconic-ancestry-acid-line": 4,
+        "icon:trait.draconic-ancestry-cold-cone": 4,
+        "icon:trait.draconic-ancestry-fire-cone": 4,
+        "icon:trait.draconic-ancestry-fire-line": 4,
+        "icon:trait.draconic-ancestry-lightning-line": 4,
+        "icon:trait.draconic-ancestry-poison-cone": 4,
+        "icon:trait.dwarven-combat-training": 4,
+        "icon:trait.dwarven-resilience": 4,
+        "icon:trait.dwarven-toughness": 4,
+        "icon:trait.elf-weapon-training": 4,
+        "icon:trait.fey-ancestry": 4,
+        "icon:trait.gnome-cunning": 4,
+        "icon:trait.half-orc-menacing": 4,
+        "icon:trait.half-orc-relentless-endurance": 4,
+        "icon:trait.half-orc-savage-attacks": 4,
+        "icon:trait.halfling-brave": 4,
+        "icon:trait.halfling-lucky": 4,
+        "icon:trait.halfling-nimbleness": 4,
+        "icon:trait.hellish-resistance": 4,
+        "icon:trait.keen-senses": 4,
+        "icon:trait.naturally-stealthy": 4,
+        "icon:trait.origin-languages": 4,
+        "icon:trait.origin-size-and-speed": 4,
+        "icon:trait.rock-gnome-tinker": 4,
+        "icon:trait.shelter-of-the-faithful": 4,
+        "icon:trait.stonecunning": 4,
+        "icon:trait.trance": 4,
+        "icon:ui.end-turn-medallion": 4,
+        "icon:ui.filter-actions": 4,
+        "icon:ui.filter-all": 4,
+        "icon:ui.filter-attacks": 4,
+        "icon:ui.filter-bonus": 4,
+        "icon:ui.filter-items": 4,
+        "icon:ui.filter-movement": 4,
+        "icon:ui.filter-reactions": 4,
+        "icon:ui.filter-spells": 4,
+        "icon:ui.page-next": 4,
+        "icon:ui.page-previous": 4,
+        "icon:ui.resource-action": 4,
+        "icon:ui.resource-bonus": 4,
+        "icon:ui.resource-movement": 4,
+        "icon:ui.resource-reaction": 4,
+        "icon:ui.waiting-medallion": 4,
+        "portrait:dragonborn-blue-m-02": 4,
+        "portrait:dragonborn-copper-f-01": 4,
+        "portrait:dragonborn-gold-m-01": 4,
+        "portrait:dragonborn-red-a-02": 4,
+        "portrait:dwarf-a-02": 4,
+        "portrait:dwarf-f-01": 4,
+        "portrait:dwarf-f-02": 4,
+        "portrait:dwarf-m-01": 4,
+        "portrait:elf-f-01": 4,
+        "portrait:elf-f-02": 4,
+        "portrait:elf-m-01": 4,
+        "portrait:elf-m-02": 4,
+        "portrait:gnome-a-02": 4,
+        "portrait:gnome-f-01": 4,
+        "portrait:gnome-m-01": 4,
+        "portrait:half-elf-f-01": 4,
+        "portrait:half-elf-m-01": 4,
+        "portrait:half-orc-f-01": 4,
+        "portrait:half-orc-m-01": 4,
+        "portrait:halfling-f-01": 4,
+        "portrait:halfling-m-01": 4,
+        "portrait:tiefling-a-02": 4,
+        "portrait:tiefling-f-01": 4,
+        "portrait:tiefling-m-01": 4,
+        "portrait:hero.barbarian_l5_berserker_torch.hero": 4,
+        "portrait:hero.fighter_2_sorcerer_3_spellblade.hero": 4,
+        "portrait:hero.fighter_l5_archer_torch.hero": 4,
+        "portrait:hero.fighter_l5_shield_torch.hero": 4,
+        "portrait:hero.sorcerer_l5_standard_torch.hero": 4,
+        "portrait:monsters.goblin_water_cell.monster_1": 4,
+        "portrait:monsters.goblin_water_cell.monster_2": 4,
+        "portrait:monsters.goblin_water_cell.monster_3": 4,
+        "portrait:monsters.skeleton_trio.monster_1": 4,
+        "portrait:monsters.skeleton_trio.monster_2": 4,
+        "portrait:monsters.skeleton_trio.monster_3": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_1": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_2": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_3": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_4": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_1": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_2": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_3": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_4": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_1": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_2": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_3": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_4": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_1": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_2": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_3": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_4": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_5": 4,
+        "portrait:monsters.srd_undead_crypt.monster_1": 4,
+        "portrait:monsters.srd_undead_crypt.monster_2": 4,
+        "portrait:monsters.srd_undead_crypt.monster_3": 4,
+        "portrait:monsters.srd_undead_crypt.monster_4": 4,
+        "skin:panel.normal": 4,
+        "skin:slot.normal": 4,
+        "skin:slot.hover": 4,
+        "skin:slot.selected": 4,
+        "skin:slot.disabled": 4,
+        "skin:button.normal": 4,
+        "skin:button.hover": 4,
+        "skin:button.pressed": 4,
+        "skin:button.disabled": 4,
+        "skin:tooltip.normal": 4,
+        "icon:spell.produce_flame": 4,
+        "icon:spell.ice_knife": 4,
+        "icon:spell.shillelagh": 4,
+        "icon:spell.barkskin": 4,
+        "icon:spell.longstrider": 4,
+        "icon:spell.conjure_animals": 4,
+        "icon:spell.conjure_fey": 4,
+        "icon:spell.conjure_fiend": 4,
+        "icon:spell.fire_shield": 4,
+        "icon:spell.wind_wall": 4,
+        "icon:spell.wall_of_fire": 4,
+        "icon:spell.wall_of_thorns": 4,
+        "icon:spell.wall_of_ice": 4,
+        "icon:spell.wall_of_stone": 4,
+        "icon:spell.wall_of_force": 4,
+        "icon:action.monster.wight.life_drain": 4,
+        "icon:action.summon.dismiss": 4,
+        "icon:action.item.ember_quiver": 4,
+        "icon:action.spell.fire_shield.dismiss": 4,
+        "icon:spell.acid_flask": 4,
+        "icon:action.monster.innate_invisibility": 4,
+        "icon:choice.fire-shield.warm": 4,
+        "icon:choice.fire-shield.chill": 4,
+        "icon:choice.energy.acid": 4,
+        "icon:choice.energy.cold": 4,
+        "icon:choice.energy.fire": 4,
+        "icon:choice.energy.lightning": 4,
+        "icon:choice.energy.thunder": 4,
+        "icon:choice.ability.strength": 4,
+        "icon:choice.ability.dexterity": 4,
+        "icon:choice.ability.constitution": 4,
+        "icon:choice.ability.intelligence": 4,
+        "icon:choice.ability.wisdom": 4,
+        "icon:choice.ability.charisma": 4,
+        "icon:choice.spirit-guardians.radiant": 4,
+        "icon:choice.spirit-guardians.necrotic": 4,
+        "icon:choice.summon.wolf": 4,
+        "icon:choice.summon.hound": 4,
+        "icon:choice.summon.boar": 4,
+        "icon:choice.summon.stag": 4,
+        "icon:choice.summon.jaguar": 4,
+        "icon:choice.summon.bison": 4,
+        "icon:choice.summon.ostrich": 4,
+        "icon:choice.summon.brown_bear": 4,
+        "icon:choice.summon.lion": 4,
+        "icon:choice.summon.tiger": 4,
+        "icon:choice.summon.polar_bear": 4,
+        "icon:choice.summon.rhinoceros": 4,
+        "icon:choice.summon.blue_raptor": 4,
+        "icon:choice.summon.stegosaurus": 4,
+        "icon:choice.summon.elephant": 4,
+        "icon:choice.summon.triceratops": 4,
+        "icon:choice.summon.mammoth": 4,
+        "icon:choice.summon.raptor": 4,
+        "icon:choice.summon.dretch": 4,
+        "icon:choice.summon.claw_mote_devil": 4,
+        "icon:choice.summon.corrosive_demon": 4,
+        "icon:choice.summon.dread_demon": 4,
+        "icon:choice.summon.huntsman_wing_devil": 4,
+        "icon:choice.summon.fellwing_devil": 4,
+        "icon:choice.shape.segment": 4,
+        "icon:choice.shape.ring": 4,
+        "icon:choice.shape.dome": 4,
+        "icon:choice.size.enlarge": 4,
+        "icon:choice.size.reduce": 4,
+        "icon:choice.side.left": 4,
+        "icon:choice.side.right": 4,
+        "icon:choice.side.inside": 4,
+        "icon:choice.side.outside": 4,
+        "icon:action.environment.control_lever.toggle": 4,
+        "icon:action.environment.escape_jaw.acrobatics": 4,
+        "icon:action.environment.escape_jaw.athletics": 4,
+        "icon:action.environment.storage_chest.close": 4,
+        "icon:action.environment.storage_chest.open": 4,
+        "icon:condition.consumable.weapon_coat.basic_poison": 4,
+        "icon:condition.environment.jaw_restrained": 4,
+        "icon:condition.summon_control": 4,
+        "icon:condition.summoned": 4,
+        "icon:condition.tile.residue": 4,
+        "icon:condition.spell.barkskin": 4,
+        "icon:condition.spell.eyebite.casting": 4,
+        "icon:condition.spell.fire_shield": 4,
+        "icon:condition.spell.fly": 4,
+        "icon:condition.spell.harm": 4,
+        "icon:condition.spell.longstrider": 4,
+        "icon:condition.spell.shillelagh": 4,
+        "icon:condition.spell.sunbeam.blinded": 4,
+        "icon:condition.spell.sunbeam": 4,
+        "icon:condition.spell.wall_of_fire.zone": 4,
+        "icon:condition.spell.wall_of_force.zone": 4,
+        "icon:condition.spell.wall_of_ice.frigid_air": 4,
+        "icon:condition.spell.wall_of_ice.zone": 4,
+        "icon:condition.spell.wall_of_stone.zone": 4,
+        "icon:condition.spell.wall_of_thorns.zone": 4,
+        "icon:condition.spell.wind_wall.zone": 4,
+        "icon:condition.wight.life_drain": 4,
+        "icon:action.attack": 4,
+        "skin:slot.pixel28": 4,
+        "portrait:dragonborn-blue-m-02:initiative": 4,
+        "portrait:dragonborn-blue-m-02:hud": 4,
+        "portrait:dragonborn-blue-m-02:sheet": 4,
+        "portrait:dragonborn-copper-f-01:initiative": 4,
+        "portrait:dragonborn-copper-f-01:hud": 4,
+        "portrait:dragonborn-copper-f-01:sheet": 4,
+        "portrait:dragonborn-gold-m-01:initiative": 4,
+        "portrait:dragonborn-gold-m-01:hud": 4,
+        "portrait:dragonborn-gold-m-01:sheet": 4,
+        "portrait:dragonborn-red-a-02:initiative": 4,
+        "portrait:dragonborn-red-a-02:hud": 4,
+        "portrait:dragonborn-red-a-02:sheet": 4,
+        "portrait:dwarf-a-02:initiative": 4,
+        "portrait:dwarf-a-02:hud": 4,
+        "portrait:dwarf-a-02:sheet": 4,
+        "portrait:dwarf-f-01:initiative": 4,
+        "portrait:dwarf-f-01:hud": 4,
+        "portrait:dwarf-f-01:sheet": 4,
+        "portrait:dwarf-f-02:initiative": 4,
+        "portrait:dwarf-f-02:hud": 4,
+        "portrait:dwarf-f-02:sheet": 4,
+        "portrait:dwarf-m-01:initiative": 4,
+        "portrait:dwarf-m-01:hud": 4,
+        "portrait:dwarf-m-01:sheet": 4,
+        "portrait:elf-f-01:initiative": 4,
+        "portrait:elf-f-01:hud": 4,
+        "portrait:elf-f-01:sheet": 4,
+        "portrait:elf-f-02:initiative": 4,
+        "portrait:elf-f-02:hud": 4,
+        "portrait:elf-f-02:sheet": 4,
+        "portrait:elf-m-01:initiative": 4,
+        "portrait:elf-m-01:hud": 4,
+        "portrait:elf-m-01:sheet": 4,
+        "portrait:elf-m-02:initiative": 4,
+        "portrait:elf-m-02:hud": 4,
+        "portrait:elf-m-02:sheet": 4,
+        "portrait:gnome-a-02:initiative": 4,
+        "portrait:gnome-a-02:hud": 4,
+        "portrait:gnome-a-02:sheet": 4,
+        "portrait:gnome-f-01:initiative": 4,
+        "portrait:gnome-f-01:hud": 4,
+        "portrait:gnome-f-01:sheet": 4,
+        "portrait:gnome-m-01:initiative": 4,
+        "portrait:gnome-m-01:hud": 4,
+        "portrait:gnome-m-01:sheet": 4,
+        "portrait:half-elf-f-01:initiative": 4,
+        "portrait:half-elf-f-01:hud": 4,
+        "portrait:half-elf-f-01:sheet": 4,
+        "portrait:half-elf-m-01:initiative": 4,
+        "portrait:half-elf-m-01:hud": 4,
+        "portrait:half-elf-m-01:sheet": 4,
+        "portrait:half-orc-f-01:initiative": 4,
+        "portrait:half-orc-f-01:hud": 4,
+        "portrait:half-orc-f-01:sheet": 4,
+        "portrait:half-orc-m-01:initiative": 4,
+        "portrait:half-orc-m-01:hud": 4,
+        "portrait:half-orc-m-01:sheet": 4,
+        "portrait:halfling-f-01:initiative": 4,
+        "portrait:halfling-f-01:hud": 4,
+        "portrait:halfling-f-01:sheet": 4,
+        "portrait:halfling-m-01:initiative": 4,
+        "portrait:halfling-m-01:hud": 4,
+        "portrait:halfling-m-01:sheet": 4,
+        "portrait:tiefling-a-02:initiative": 4,
+        "portrait:tiefling-a-02:hud": 4,
+        "portrait:tiefling-a-02:sheet": 4,
+        "portrait:tiefling-f-01:initiative": 4,
+        "portrait:tiefling-f-01:hud": 4,
+        "portrait:tiefling-f-01:sheet": 4,
+        "portrait:tiefling-m-01:initiative": 4,
+        "portrait:tiefling-m-01:hud": 4,
+        "portrait:tiefling-m-01:sheet": 4,
+        "portrait:hero.barbarian_l5_berserker_torch.hero:initiative": 4,
+        "portrait:hero.barbarian_l5_berserker_torch.hero:hud": 4,
+        "portrait:hero.barbarian_l5_berserker_torch.hero:sheet": 4,
+        "portrait:hero.fighter_2_sorcerer_3_spellblade.hero:initiative": 4,
+        "portrait:hero.fighter_2_sorcerer_3_spellblade.hero:hud": 4,
+        "portrait:hero.fighter_2_sorcerer_3_spellblade.hero:sheet": 4,
+        "portrait:hero.fighter_l5_archer_torch.hero:initiative": 4,
+        "portrait:hero.fighter_l5_archer_torch.hero:hud": 4,
+        "portrait:hero.fighter_l5_archer_torch.hero:sheet": 4,
+        "portrait:hero.fighter_l5_shield_torch.hero:initiative": 4,
+        "portrait:hero.fighter_l5_shield_torch.hero:hud": 4,
+        "portrait:hero.fighter_l5_shield_torch.hero:sheet": 4,
+        "portrait:hero.sorcerer_l5_standard_torch.hero:initiative": 4,
+        "portrait:hero.sorcerer_l5_standard_torch.hero:hud": 4,
+        "portrait:hero.sorcerer_l5_standard_torch.hero:sheet": 4,
+        "portrait:monsters.goblin_water_cell.monster_1:initiative": 4,
+        "portrait:monsters.goblin_water_cell.monster_1:hud": 4,
+        "portrait:monsters.goblin_water_cell.monster_1:sheet": 4,
+        "portrait:monsters.goblin_water_cell.monster_2:initiative": 4,
+        "portrait:monsters.goblin_water_cell.monster_2:hud": 4,
+        "portrait:monsters.goblin_water_cell.monster_2:sheet": 4,
+        "portrait:monsters.goblin_water_cell.monster_3:initiative": 4,
+        "portrait:monsters.goblin_water_cell.monster_3:hud": 4,
+        "portrait:monsters.goblin_water_cell.monster_3:sheet": 4,
+        "portrait:monsters.skeleton_trio.monster_1:initiative": 4,
+        "portrait:monsters.skeleton_trio.monster_1:hud": 4,
+        "portrait:monsters.skeleton_trio.monster_1:sheet": 4,
+        "portrait:monsters.skeleton_trio.monster_2:initiative": 4,
+        "portrait:monsters.skeleton_trio.monster_2:hud": 4,
+        "portrait:monsters.skeleton_trio.monster_2:sheet": 4,
+        "portrait:monsters.skeleton_trio.monster_3:initiative": 4,
+        "portrait:monsters.skeleton_trio.monster_3:hud": 4,
+        "portrait:monsters.skeleton_trio.monster_3:sheet": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_1:initiative": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_1:hud": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_1:sheet": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_2:initiative": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_2:hud": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_2:sheet": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_3:initiative": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_3:hud": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_3:sheet": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_4:initiative": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_4:hud": 4,
+        "portrait:monsters.srd_divine_cult_cell.monster_4:sheet": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_1:initiative": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_1:hud": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_1:sheet": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_2:initiative": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_2:hud": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_2:sheet": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_3:initiative": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_3:hud": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_3:sheet": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_4:initiative": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_4:hud": 4,
+        "portrait:monsters.srd_elite_mercenaries.monster_4:sheet": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_1:initiative": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_1:hud": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_1:sheet": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_2:initiative": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_2:hud": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_2:sheet": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_3:initiative": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_3:hud": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_3:sheet": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_4:initiative": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_4:hud": 4,
+        "portrait:monsters.srd_goblinoid_warband.monster_4:sheet": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_1:initiative": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_1:hud": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_1:sheet": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_2:initiative": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_2:hud": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_2:sheet": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_3:initiative": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_3:hud": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_3:sheet": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_4:initiative": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_4:hud": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_4:sheet": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_5:initiative": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_5:hud": 4,
+        "portrait:monsters.srd_low_cr_patrol.monster_5:sheet": 4,
+        "portrait:monsters.srd_undead_crypt.monster_1:initiative": 4,
+        "portrait:monsters.srd_undead_crypt.monster_1:hud": 4,
+        "portrait:monsters.srd_undead_crypt.monster_1:sheet": 4,
+        "portrait:monsters.srd_undead_crypt.monster_2:initiative": 4,
+        "portrait:monsters.srd_undead_crypt.monster_2:hud": 4,
+        "portrait:monsters.srd_undead_crypt.monster_2:sheet": 4,
+        "portrait:monsters.srd_undead_crypt.monster_3:initiative": 4,
+        "portrait:monsters.srd_undead_crypt.monster_3:hud": 4,
+        "portrait:monsters.srd_undead_crypt.monster_3:sheet": 4,
+        "portrait:monsters.srd_undead_crypt.monster_4:initiative": 4,
+        "portrait:monsters.srd_undead_crypt.monster_4:hud": 4,
+        "portrait:monsters.srd_undead_crypt.monster_4:sheet": 4,
+        "portrait:creature.wolf:initiative": 4,
+        "portrait:creature.wolf:hud": 4,
+        "portrait:creature.wolf": 4,
+        "portrait:creature.wolf:sheet": 4,
+        "portrait:creature.hound:initiative": 4,
+        "portrait:creature.hound:hud": 4,
+        "portrait:creature.hound": 4,
+        "portrait:creature.hound:sheet": 4,
+        "portrait:creature.boar:initiative": 4,
+        "portrait:creature.boar:hud": 4,
+        "portrait:creature.boar": 4,
+        "portrait:creature.boar:sheet": 4,
+        "portrait:creature.stag:initiative": 4,
+        "portrait:creature.stag:hud": 4,
+        "portrait:creature.stag": 4,
+        "portrait:creature.stag:sheet": 4,
+        "portrait:creature.jaguar:initiative": 4,
+        "portrait:creature.jaguar:hud": 4,
+        "portrait:creature.jaguar": 4,
+        "portrait:creature.jaguar:sheet": 4,
+        "portrait:creature.bison:initiative": 4,
+        "portrait:creature.bison:hud": 4,
+        "portrait:creature.bison": 4,
+        "portrait:creature.bison:sheet": 4,
+        "portrait:creature.ostrich:initiative": 4,
+        "portrait:creature.ostrich:hud": 4,
+        "portrait:creature.ostrich": 4,
+        "portrait:creature.ostrich:sheet": 4,
+        "portrait:creature.brown_bear:initiative": 4,
+        "portrait:creature.brown_bear:hud": 4,
+        "portrait:creature.brown_bear": 4,
+        "portrait:creature.brown_bear:sheet": 4,
+        "portrait:creature.lion:initiative": 4,
+        "portrait:creature.lion:hud": 4,
+        "portrait:creature.lion": 4,
+        "portrait:creature.lion:sheet": 4,
+        "portrait:creature.tiger:initiative": 4,
+        "portrait:creature.tiger:hud": 4,
+        "portrait:creature.tiger": 4,
+        "portrait:creature.tiger:sheet": 4,
+        "portrait:creature.polar_bear:initiative": 4,
+        "portrait:creature.polar_bear:hud": 4,
+        "portrait:creature.polar_bear": 4,
+        "portrait:creature.polar_bear:sheet": 4,
+        "portrait:creature.rhinoceros:initiative": 4,
+        "portrait:creature.rhinoceros:hud": 4,
+        "portrait:creature.rhinoceros": 4,
+        "portrait:creature.rhinoceros:sheet": 4,
+        "portrait:creature.blue_raptor:initiative": 4,
+        "portrait:creature.blue_raptor:hud": 4,
+        "portrait:creature.blue_raptor": 4,
+        "portrait:creature.blue_raptor:sheet": 4,
+        "portrait:creature.stegosaurus:initiative": 4,
+        "portrait:creature.stegosaurus:hud": 4,
+        "portrait:creature.stegosaurus": 4,
+        "portrait:creature.stegosaurus:sheet": 4,
+        "portrait:creature.elephant:initiative": 4,
+        "portrait:creature.elephant:hud": 4,
+        "portrait:creature.elephant": 4,
+        "portrait:creature.elephant:sheet": 4,
+        "portrait:creature.triceratops:initiative": 4,
+        "portrait:creature.triceratops:hud": 4,
+        "portrait:creature.triceratops": 4,
+        "portrait:creature.triceratops:sheet": 4,
+        "portrait:creature.mammoth:initiative": 4,
+        "portrait:creature.mammoth:hud": 4,
+        "portrait:creature.mammoth": 4,
+        "portrait:creature.mammoth:sheet": 4,
+        "portrait:creature.raptor:initiative": 4,
+        "portrait:creature.raptor:hud": 4,
+        "portrait:creature.raptor": 4,
+        "portrait:creature.raptor:sheet": 4,
+        "portrait:creature.dretch:initiative": 4,
+        "portrait:creature.dretch:hud": 4,
+        "portrait:creature.dretch": 4,
+        "portrait:creature.dretch:sheet": 4,
+        "portrait:creature.claw_mote_devil:initiative": 4,
+        "portrait:creature.claw_mote_devil:hud": 4,
+        "portrait:creature.claw_mote_devil": 4,
+        "portrait:creature.claw_mote_devil:sheet": 4,
+        "portrait:creature.corrosive_demon:initiative": 4,
+        "portrait:creature.corrosive_demon:hud": 4,
+        "portrait:creature.corrosive_demon": 4,
+        "portrait:creature.corrosive_demon:sheet": 4,
+        "portrait:creature.dread_demon:initiative": 4,
+        "portrait:creature.dread_demon:hud": 4,
+        "portrait:creature.dread_demon": 4,
+        "portrait:creature.dread_demon:sheet": 4,
+        "portrait:creature.huntsman_wing_devil:initiative": 4,
+        "portrait:creature.huntsman_wing_devil:hud": 4,
+        "portrait:creature.huntsman_wing_devil": 4,
+        "portrait:creature.huntsman_wing_devil:sheet": 4,
+        "portrait:creature.fellwing_devil:initiative": 4,
+        "portrait:creature.fellwing_devil:hud": 4,
+        "portrait:creature.fellwing_devil": 4,
+        "portrait:creature.fellwing_devil:sheet": 4,
+        "portrait:creature.goblin:initiative": 4,
+        "portrait:creature.goblin:hud": 4,
+        "portrait:creature.goblin": 4,
+        "portrait:creature.goblin:sheet": 4,
+        "portrait:creature.goblin_wispbinder:initiative": 4,
+        "portrait:creature.goblin_wispbinder:hud": 4,
+        "portrait:creature.goblin_wispbinder": 4,
+        "portrait:creature.goblin_wispbinder:sheet": 4,
+        "portrait:creature.goblin_reedshot:initiative": 4,
+        "portrait:creature.goblin_reedshot:hud": 4,
+        "portrait:creature.goblin_reedshot": 4,
+        "portrait:creature.goblin_reedshot:sheet": 4,
+        "portrait:creature.goblin_buckler_rat:initiative": 4,
+        "portrait:creature.goblin_buckler_rat:hud": 4,
+        "portrait:creature.goblin_buckler_rat": 4,
+        "portrait:creature.goblin_buckler_rat:sheet": 4,
+        "portrait:creature.goblin_longpoint:initiative": 4,
+        "portrait:creature.goblin_longpoint:hud": 4,
+        "portrait:creature.goblin_longpoint": 4,
+        "portrait:creature.goblin_longpoint:sheet": 4,
+        "portrait:creature.goblin_ironhide:initiative": 4,
+        "portrait:creature.goblin_ironhide:hud": 4,
+        "portrait:creature.goblin_ironhide": 4,
+        "portrait:creature.goblin_ironhide:sheet": 4,
+        "portrait:creature.goblin_briarling:initiative": 4,
+        "portrait:creature.goblin_briarling:hud": 4,
+        "portrait:creature.goblin_briarling": 4,
+        "portrait:creature.goblin_briarling:sheet": 4,
+        "portrait:creature.goblin_redcap:initiative": 4,
+        "portrait:creature.goblin_redcap:hud": 4,
+        "portrait:creature.goblin_redcap": 4,
+        "portrait:creature.goblin_redcap:sheet": 4,
+        "portrait:creature.goblin_quicktail:initiative": 4,
+        "portrait:creature.goblin_quicktail:hud": 4,
+        "portrait:creature.goblin_quicktail": 4,
+        "portrait:creature.goblin_quicktail:sheet": 4,
+        "portrait:creature.goblin_spearline:initiative": 4,
+        "portrait:creature.goblin_spearline:hud": 4,
+        "portrait:creature.goblin_spearline": 4,
+        "portrait:creature.goblin_spearline:sheet": 4,
+        "portrait:creature.goblin_packtrail:initiative": 4,
+        "portrait:creature.goblin_packtrail:hud": 4,
+        "portrait:creature.goblin_packtrail": 4,
+        "portrait:creature.goblin_packtrail:sheet": 4,
+        "portrait:creature.goblin_ashhide:initiative": 4,
+        "portrait:creature.goblin_ashhide:hud": 4,
+        "portrait:creature.goblin_ashhide": 4,
+        "portrait:creature.goblin_ashhide:sheet": 4,
+        "portrait:creature.goblin_thornrunner:initiative": 4,
+        "portrait:creature.goblin_thornrunner:hud": 4,
+        "portrait:creature.goblin_thornrunner": 4,
+        "portrait:creature.goblin_thornrunner:sheet": 4,
+        "portrait:creature.goblin_buckler_hex:initiative": 4,
+        "portrait:creature.goblin_buckler_hex:hud": 4,
+        "portrait:creature.goblin_buckler_hex": 4,
+        "portrait:creature.goblin_buckler_hex:sheet": 4,
+        "portrait:creature.goblin_gloomplate:initiative": 4,
+        "portrait:creature.goblin_gloomplate:hud": 4,
+        "portrait:creature.goblin_gloomplate": 4,
+        "portrait:creature.goblin_gloomplate:sheet": 4,
+        "portrait:creature.goblin_mossbreaker:initiative": 4,
+        "portrait:creature.goblin_mossbreaker:hud": 4,
+        "portrait:creature.goblin_mossbreaker": 4,
+        "portrait:creature.goblin_mossbreaker:sheet": 4,
+        "portrait:creature.goblin_gutterknife:initiative": 4,
+        "portrait:creature.goblin_gutterknife:hud": 4,
+        "portrait:creature.goblin_gutterknife": 4,
+        "portrait:creature.goblin_gutterknife:sheet": 4,
+        "icon:spell.fly": 4,
+        "portrait:creature.skeleton_warrior": 4,
+        "portrait:creature.skeleton_warrior:initiative": 4,
+        "portrait:creature.skeleton_warrior:hud": 4,
+        "portrait:creature.skeleton_warrior:sheet": 4,
+        "portrait:creature.skeleton_archer": 4,
+        "portrait:creature.skeleton_archer:initiative": 4,
+        "portrait:creature.skeleton_archer:hud": 4,
+        "portrait:creature.skeleton_archer:sheet": 4,
+        "portrait:creature.skeleton_warlock": 4,
+        "portrait:creature.skeleton_warlock:initiative": 4,
+        "portrait:creature.skeleton_warlock:hud": 4,
+        "portrait:creature.skeleton_warlock:sheet": 4
+      }
+    },
+    "game/data/item_appearances.json": {
+      "sha256": "0dd46e0ba4c0de5f90e6e65467bb91f037fd019f7722d8d845c4ebc8f8379045",
+      "fields": [
+        "version",
+        "hands",
+        "ground"
+      ],
+      "collections": {
+        "hands": 100,
+        "ground": 404
+      }
+    },
+    "game/data/item-materials.json": {
+      "sha256": "8d5e1a82c83f80744b4f5ae4f2372c5f0b5bc1326ec3ffeb7831140f8025b5f1",
+      "fields": [
+        "version",
+        "recipes"
+      ],
+      "collections": {
+        "recipes": 9
+      }
+    },
+    "game/data/world_bindings.json": {
+      "sha256": "41f351b45c133bea469c0c39c81030ff2488b149630c4a1b89e691937b76f498",
+      "fields": [
+        "residue_ground",
+        "schema_version",
+        "terrain_cliff",
+        "terrain_stairs",
+        "terrain",
+        "stone_wall_straight",
+        "stone_wall_corner",
+        "wood_wall_straight",
+        "wood_wall_corner",
+        "stone_door_frame",
+        "wood_door_closed",
+        "wood_door_open",
+        "props",
+        "spatial_effects",
+        "treatments",
+        "residue_surfaces",
+        "residue_wall_faces",
+        "residue_particles",
+        "spatial_media",
+        "liquid_surfaces",
+        "deposit_media",
+        "concentration_media",
+        "construction_media"
+      ],
+      "collections": {
+        "residue_ground": 4,
+        "terrain_cliff": 7,
+        "terrain_stairs": 5,
+        "terrain": 4,
+        "stone_wall_straight": 4,
+        "stone_wall_corner": 4,
+        "wood_wall_straight": 4,
+        "wood_wall_corner": 4,
+        "stone_door_frame": 4,
+        "wood_door_closed": 4,
+        "wood_door_open": 4,
+        "props": 4,
+        "spatial_effects": 11,
+        "treatments": 7,
+        "residue_surfaces": 1,
+        "residue_wall_faces": 2,
+        "residue_particles": 4,
+        "spatial_media": 25,
+        "liquid_surfaces": 5,
+        "deposit_media": 6,
+        "concentration_media": 1,
+        "construction_media": 3
+      }
+    }
+  },
+  "fixed_rigs": [
+    {
+      "source": "game/data/rigs/bison.json",
+      "rig_id": "smallscale.bison",
+      "content_refs": [
+        "content.neurodragon:creature:creature.bison@1"
+      ],
+      "cell": [
+        96,
+        96
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/blueraptor.json",
+      "rig_id": "smallscale.blueraptor",
+      "content_refs": [
+        "content.neurodragon:creature:creature.blue_raptor@1"
+      ],
+      "cell": [
+        64,
+        64
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Raptor Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Raptor run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "Raptor TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Raptor Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Raptor Attack1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Raptor Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/boar.json",
+      "rig_id": "smallscale.boar",
+      "content_refs": [
+        "content.neurodragon:creature:creature.boar@1"
+      ],
+      "cell": [
+        84,
+        84
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/brownbear.json",
+      "rig_id": "smallscale.brownbear",
+      "content_refs": [
+        "content.neurodragon:creature:creature.brown_bear@1"
+      ],
+      "cell": [
+        64,
+        64
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/demonbeast01.json",
+      "rig_id": "smallscale.demonbeast01",
+      "content_refs": [
+        "content.srd_5_1_cc:creature:creature.dretch@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body",
+        "effect"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack5": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack6": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Explode Copy",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "DemonBeast01Effect"
+            }
+          ]
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/demonbeast02.json",
+      "rig_id": "smallscale.demonbeast02",
+      "content_refs": [
+        "content.neurodragon:creature:creature.corrosive_demon@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body",
+        "effect"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack5": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack6": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Explode Copy",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "DemonBeast02Effect"
+            }
+          ]
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/demonbeast03.json",
+      "rig_id": "smallscale.demonbeast03",
+      "content_refs": [
+        "content.neurodragon:creature:creature.dread_demon@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body",
+        "effect"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack5": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack6": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Explode Copy",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "DemonBeast03Effect"
+            }
+          ]
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/demonbeast04.json",
+      "rig_id": "smallscale.demonbeast04",
+      "content_refs": [
+        "content.neurodragon:creature:creature.fellwing_devil@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body",
+        "effect"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Flight": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Explode Copy",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "DemonBeast4Effect"
+            }
+          ]
+        }
+      },
+      "body_context_count": 21,
+      "native_wings": true
+    },
+    {
+      "source": "game/data/rigs/demonbeast05.json",
+      "rig_id": "smallscale.demonbeast05",
+      "content_refs": [
+        "content.neurodragon:creature:creature.huntsman_wing_devil@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body",
+        "effect"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Jump": {
+          "source": "Jump",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Explode Copy",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "DemonBeast5Effect"
+            }
+          ]
+        }
+      },
+      "body_context_count": 21,
+      "native_wings": true
+    },
+    {
+      "source": "game/data/rigs/elephant.json",
+      "rig_id": "smallscale.elephant",
+      "content_refs": [
+        "content.neurodragon:creature:creature.elephant@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin01.json",
+      "rig_id": "smallscale.goblin01",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body",
+        "slash"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "BackFlip": {
+          "source": "BackFlip 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin02.json",
+      "rig_id": "smallscale.goblin02",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_wispbinder@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body",
+        "effect"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin02Effect"
+            }
+          ]
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin02Effect"
+            }
+          ]
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin02Effect"
+            }
+          ]
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 8,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin02Effect"
+            }
+          ]
+        },
+        "Attack5": {
+          "source": "Attack 5",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin02Effect"
+            }
+          ]
+        },
+        "Attack6": {
+          "source": "Attack 6",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin02Effect"
+            }
+          ]
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "PhysicalGesture": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 20,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin03.json",
+      "rig_id": "smallscale.goblin03",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_reedshot@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle 1 16bit",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin04.json",
+      "rig_id": "smallscale.goblin04",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_buckler_rat@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "BackFlip": {
+          "source": "BackFlip 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin05.json",
+      "rig_id": "smallscale.goblin05",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_longpoint@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin06.json",
+      "rig_id": "smallscale.goblin06",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_ironhide@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "BackFlip": {
+          "source": "BackFlip 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin07.json",
+      "rig_id": "smallscale.goblin07",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_briarling@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "BackFlip": {
+          "source": "BackFlip 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin08.json",
+      "rig_id": "smallscale.goblin08",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_redcap@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body",
+        "effect"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin08Effect"
+            }
+          ]
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin08Effect"
+            }
+          ]
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin08Effect"
+            }
+          ]
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 8,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin08Effect"
+            }
+          ]
+        },
+        "Attack5": {
+          "source": "Attack 5",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin08Effect"
+            }
+          ]
+        },
+        "Attack6": {
+          "source": "Attack 6",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin08Effect"
+            }
+          ]
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "PhysicalGesture": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 20,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin09.json",
+      "rig_id": "smallscale.goblin09",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_quicktail@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle 1 16bit",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin10.json",
+      "rig_id": "smallscale.goblin10",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_spearline@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin11.json",
+      "rig_id": "smallscale.goblin11",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_packtrail@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "Take Damage",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin12.json",
+      "rig_id": "smallscale.goblin12",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_ashhide@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "Take Damage",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin13.json",
+      "rig_id": "smallscale.goblin13",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_thornrunner@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "BackFlip": {
+          "source": "BackFlip 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin14.json",
+      "rig_id": "smallscale.goblin14",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_buckler_hex@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "BackFlip": {
+          "source": "BackFlip 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin15.json",
+      "rig_id": "smallscale.goblin15",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_gloomplate@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack5": {
+          "source": "Attack 5",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "BackFlip": {
+          "source": "BackFlip 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin16.json",
+      "rig_id": "smallscale.goblin16",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_mossbreaker@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "BackFlip": {
+          "source": "BackFlip 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/goblin17.json",
+      "rig_id": "smallscale.goblin17",
+      "content_refs": [
+        "content.neurodragon:creature:creature.goblin_gutterknife@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body",
+        "effect"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Walk": {
+          "source": "Walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Taunt": {
+          "source": "Taunt",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack 3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack4": {
+          "source": "Attack 4",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack5": {
+          "source": "Attack 5",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Goblin17Effect"
+            }
+          ]
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Block": {
+          "source": "Block",
+          "frames": 6,
+          "fps": 12,
+          "layers": []
+        },
+        "BackFlip": {
+          "source": "BackFlip 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Crouch": {
+          "source": "Crouch",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Die 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/greywolf.json",
+      "rig_id": "smallscale.greywolf",
+      "content_refs": [
+        "content.srd_5_1_cc:creature:creature.wolf@1"
+      ],
+      "cell": [
+        64,
+        64
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack6": {
+          "source": "Attack1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/imp05.json",
+      "rig_id": "smallscale.imp05",
+      "content_refs": [
+        "content.neurodragon:creature:creature.claw_mote_devil@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body",
+        "effect"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "CrouchWalk": {
+          "source": "Crouch walk",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Death": {
+          "source": "Explode",
+          "frames": 15,
+          "fps": 12,
+          "layers": [
+            {
+              "slot": "effect",
+              "category": "Imp5Effect"
+            }
+          ]
+        }
+      },
+      "body_context_count": 19,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/jaguar.json",
+      "rig_id": "smallscale.jaguar",
+      "content_refs": [
+        "content.neurodragon:creature:creature.jaguar@1"
+      ],
+      "cell": [
+        96,
+        96
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/lion.json",
+      "rig_id": "smallscale.lion",
+      "content_refs": [
+        "content.neurodragon:creature:creature.lion@1"
+      ],
+      "cell": [
+        96,
+        96
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/mammoth.json",
+      "rig_id": "smallscale.mammoth",
+      "content_refs": [
+        "content.neurodragon:creature:creature.mammoth@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/orc01.json",
+      "rig_id": "smallscale.orc01",
+      "content_refs": [
+        "content.srd_5_1_cc:creature:creature.orc@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Roll 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack 1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack 2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 1,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/ostrich.json",
+      "rig_id": "smallscale.ostrich",
+      "content_refs": [
+        "content.neurodragon:creature:creature.ostrich@1"
+      ],
+      "cell": [
+        64,
+        64
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/polarbear.json",
+      "rig_id": "smallscale.polarbear",
+      "content_refs": [
+        "content.neurodragon:creature:creature.polar_bear@1"
+      ],
+      "cell": [
+        96,
+        96
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/rhino.json",
+      "rig_id": "smallscale.rhino",
+      "content_refs": [
+        "content.neurodragon:creature:creature.rhinoceros@1"
+      ],
+      "cell": [
+        96,
+        96
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/shepherddog.json",
+      "rig_id": "smallscale.shepherddog",
+      "content_refs": [
+        "content.neurodragon:creature:creature.hound@1"
+      ],
+      "cell": [
+        64,
+        64
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/skeletonarcher05.json",
+      "rig_id": "smallscale.skeletonarcher05",
+      "content_refs": [
+        "content.neurodragon:creature:creature.skeleton_archer@1"
+      ],
+      "cell": [
+        128,
+        128
+      ],
+      "slots": [
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Rolling": {
+          "source": "Rolling",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "QuickShot",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 1,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/stag.json",
+      "rig_id": "smallscale.stag",
+      "content_refs": [
+        "content.neurodragon:creature:creature.stag@1"
+      ],
+      "cell": [
+        96,
+        96
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/stegosaurus.json",
+      "rig_id": "smallscale.stegosaurus",
+      "content_refs": [
+        "content.neurodragon:creature:creature.stegosaurus@1"
+      ],
+      "cell": [
+        64,
+        64
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/tiger.json",
+      "rig_id": "smallscale.tiger",
+      "content_refs": [
+        "content.neurodragon:creature:creature.tiger@1"
+      ],
+      "cell": [
+        96,
+        96
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack3": {
+          "source": "Attack3",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/triceratops.json",
+      "rig_id": "smallscale.triceratops",
+      "content_refs": [
+        "content.neurodragon:creature:creature.triceratops@1"
+      ],
+      "cell": [
+        64,
+        64
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    },
+    {
+      "source": "game/data/rigs/tyrannosaurus.json",
+      "rig_id": "smallscale.tyrannosaurus",
+      "content_refs": [
+        "content.neurodragon:creature:creature.raptor@1"
+      ],
+      "cell": [
+        64,
+        64
+      ],
+      "slots": [
+        "shadow",
+        "body"
+      ],
+      "clips": {
+        "Idle": {
+          "source": "Idle",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Run": {
+          "source": "Run",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "TakeDamage": {
+          "source": "TakeDamage",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Die": {
+          "source": "Die",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack1": {
+          "source": "Attack1",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        },
+        "Attack2": {
+          "source": "Attack2",
+          "frames": 15,
+          "fps": 12,
+          "layers": []
+        }
+      },
+      "body_context_count": 18,
+      "native_wings": false
+    }
+  ]
+}

@@ -85,7 +85,7 @@ def import_flame_travel(source: Path, *, preserved: Path, production: Path, repo
         layers[side][DIRECTIONS[-heading % 8]] = parts
     identity = "nature.produce.travel.directional"
     asset = {"assetId": identity, "displayName": "Produce Flame original moving head and short trail",
-        "kind": "projectile", "sheet": "/nature/produce-travel.png",
+        "sheet": "/nature/produce-travel.png",
         "frame": {"width": 192, "height": 192, "rows": 8, "cols": 64}, "fps": 32,
         "rowOrder": list(DIRECTIONS), "phases": {"travel": {"start": 0, "frames": 64, "fps": 32, "loop": True}},
         "anchor": {"x": .5, "y": .5}, "defaultScale": .5,

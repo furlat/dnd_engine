@@ -188,8 +188,8 @@
           "maximum": 9007199254740991
         },
         "player_schema_version": {
-          "const": 4,
-          "default": 4,
+          "const": 5,
+          "default": 5,
           "title": "Player Schema Version",
           "type": "integer",
           "minimum": -9007199254740991,
@@ -15787,6 +15787,11 @@
           },
           "title": "Extra Target Positions",
           "type": "array"
+        },
+        "prefer_safe": {
+          "default": true,
+          "title": "Prefer Safe",
+          "type": "boolean"
         }
       },
       "required": [

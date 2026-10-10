@@ -46,8 +46,7 @@ def import_bundle(source: Path, *, repo: Path = ROOT) -> None:
             cell = phase["cell"]
             anchor = {"x": phase["pivot"][0] / cell, "y": phase["pivot"][1] / cell}
             assets[identity] = {
-                "assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/support-spells/{name}/{depth}.png",
+                "assetId": identity, "displayName": identity, "sheet": f"/support-spells/{name}/{depth}.png",
                 "frame": {"width": cell, "height": cell, "rows": 8, "cols": phase["frames"]},
                 "fps": phase["fps"], "rowOrder": spell["directions"],
                 "phases": {"impact": {"start": 0, "frames": phase["frames"],

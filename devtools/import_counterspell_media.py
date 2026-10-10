@@ -50,8 +50,7 @@ def import_bundle(source: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
         }] for frame in bank["frames"]]
         count, fps = len(parts), bank["fps"]
         assets[identity] = {
-            "assetId": identity, "displayName": identity, "kind": "projectile",
-            "sheet": f"/counterspell-media/{key}.png",
+            "assetId": identity, "displayName": identity, "sheet": f"/counterspell-media/{key}.png",
             "frame": {"width": width, "height": height, "rows": 8, "cols": count},
             "fps": fps, "rowOrder": list(DIRECTIONS),
             "phases": {"impact": {"start": 0, "frames": count, "fps": fps, "loop": False}},

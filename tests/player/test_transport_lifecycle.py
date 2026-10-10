@@ -9,11 +9,11 @@ import httpx
 import pytest
 
 from dnd.player.audience import PlayerAudience
-from player_server import connection, host as owner, protocol as wire
-from player_server.app import create_app
-from player_server.config import SeatCredential, ServerConfig
-from player_server.recording import commit_records, stage_record
-from player_server.worker_protocol import Advance, Publication, Reply
+from server import connection, host as owner, protocol as wire
+from server.app import create_app
+from server.config import SeatCredential, ServerConfig
+from server.recording import commit_records, stage_record
+from server.worker_protocol import Advance, Publication, Reply
 
 
 def setup_host(tmp_path, seats=('a',)):

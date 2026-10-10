@@ -1,0 +1,378 @@
+[
+  {
+    "assetId": "fire.continual_flame.apply.back",
+    "displayName": "fire.continual_flame.apply.back",
+    "sheet": "/fire-media/continual-flame/apply/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        6571873,
+        9397360,
+        12491361,
+        14137464,
+        15717278,
+        16773320
+      ]
+    }
+  },
+  {
+    "assetId": "fire.continual_flame.apply.front",
+    "displayName": "fire.continual_flame.apply.front",
+    "sheet": "/fire-media/continual-flame/apply/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        6571873,
+        9397360,
+        12491361,
+        14137464,
+        15717278,
+        16773320
+      ]
+    }
+  },
+  {
+    "assetId": "fire.continual_flame.hold.back",
+    "displayName": "fire.continual_flame.hold.back",
+    "sheet": "/fire-media/continual-flame/hold/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        6571873,
+        9397360,
+        12491361,
+        14137464,
+        15717278,
+        16773320
+      ]
+    }
+  },
+  {
+    "assetId": "fire.continual_flame.hold.front",
+    "displayName": "fire.continual_flame.hold.front",
+    "sheet": "/fire-media/continual-flame/hold/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836483333
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        6571873,
+        9397360,
+        12491361,
+        14137464,
+        15717278,
+        16773320
+      ]
+    }
+  },
+  {
+    "assetId": "fire.flame_strike.finite.back",
+    "displayName": "fire.flame_strike.finite.back",
+    "sheet": "/fire-media/flame_strike/finite/back.png",
+    "frame": {
+      "width": 1024,
+      "height": 1024,
+      "rows": 8,
+      "cols": 96
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 96,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.7525907427691667
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "fire.flame_strike.finite.front",
+    "displayName": "fire.flame_strike.finite.front",
+    "sheet": "/fire-media/flame_strike/finite/front.png",
+    "frame": {
+      "width": 1024,
+      "height": 1024,
+      "rows": 8,
+      "cols": 96
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 96,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.7525907427691667
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        3679018,
+        7942441,
+        12339238,
+        15235113,
+        16169036,
+        16179093
+      ]
+    }
+  },
+  {
+    "assetId": "fire.scorching.travel",
+    "displayName": "fire.scorching.travel",
+    "sheet": "/fire_media/scorching/travel.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 14
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 14,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5625,
+    "palettePreview": {
+      "colors": [
+        4915712,
+        6554624,
+        7211009,
+        8653569,
+        9770502,
+        11541771,
+        13706513,
+        14955290,
+        16727329,
+        16732206,
+        16737082,
+        16742216,
+        16749661,
+        16758647
+      ]
+    }
+  },
+  {
+    "assetId": "fire.scorching.impact",
+    "displayName": "fire.scorching.impact",
+    "sheet": "/fire_media/scorching/impact.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 32
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 32,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5625,
+    "palettePreview": {
+      "colors": [
+        4915712,
+        6554624,
+        7211009,
+        8653569,
+        9770502,
+        11541771,
+        13706513,
+        14955290,
+        16727329,
+        16732206,
+        16737082,
+        16742216,
+        16749661,
+        16758647
+      ]
+    }
+  }
+]

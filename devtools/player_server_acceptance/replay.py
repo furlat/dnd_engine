@@ -20,7 +20,7 @@ from pydantic import TypeAdapter
 
 from dnd.player.facts import PlayerState
 from dnd.player.reduction import reduce_initialization, reduce_operation
-from player_server.protocol import InitializationResponse, PlayerOperation
+from server.protocol import InitializationResponse, PlayerOperation
 
 WORKING_BUDGET = 128 * 1024 * 1024
 STATE = TypeAdapter(PlayerState)

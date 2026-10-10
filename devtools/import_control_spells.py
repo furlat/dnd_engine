@@ -76,8 +76,7 @@ def import_bundle(source: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
             if not owns_selected_media(storage, identity, MEDIA.as_posix()):
                 continue
             assets[identity] = {
-                "assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/control-spells/{name}/{depth}.png",
+                "assetId": identity, "displayName": identity, "sheet": f"/control-spells/{name}/{depth}.png",
                 "frame": {"width": cell, "height": cell, "rows": 8, "cols": count},
                 "fps": fps, "rowOrder": list(DIRECTIONS),
                 "phases": {"impact": {"start": 0, "frames": count, "fps": fps, "loop": loop}},

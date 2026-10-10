@@ -1,0 +1,92 @@
+{
+  "date": "2026-10-08",
+  "note": "Source references only; no repositories copied, reset or edited. Dirty status excludes untracked files; re-check fully before implementation.",
+  "repositories": {
+    "engine": {
+      "path": "/mnt/c/users/tommaso/documents/dev/dnd_engine",
+      "head": "804b0f7e073c658b52609a8926dc98e5dffd79a3",
+      "tracked_changes": [
+        "M RECOVERY_PLAN.md",
+        " M agent_docs/NETWORK_SERVER_NEUROCLIENT_STUDIO_PLAN_2026-10-07.md",
+        " M agent_docs/NEUROCLIENT_AUTHORING_COVERAGE_2026-10-07.md"
+      ],
+      "inspected_source_hashes": {}
+    },
+    "neuroclient": {
+      "path": "/home/tommaso/Dev/NeuroClient",
+      "head": "d274f2d62ca9c1c5ed62a77841cacf6cc0347491",
+      "tracked_changes": [],
+      "inspected_source_hashes": {
+        "app/src/grid.ts": "0eb17e62cbe32eaf2c5a87e99e54ace771d64ef3487984f3d9b50a127de314ec",
+        "app/src/light.ts": "a56f65cd9195d66f82ad878d42d0d7778a44ba0bfc96811dd4937c8908ada561",
+        "app/src/render/worldDepth.ts": "c148052288e88e1bbd41bec3661718f5ef6a406dff49cff0a5a3dd53d91068c9",
+        "app/src/ui/boardViewportController.ts": "b0351df23664dac27a75e31a0fbb10bdcdaccc90e7e3e135d158ae06a25f7202",
+        "app/src/render/AnimatedEntity.ts": "9c411a9efbd5f1260c36f968b56ac3ca4e3edab89de6f73b4ffc1bfc331e1756",
+        "app/src/ui/studio/StudioModalBoundary.ts": "9eafa3e6aabb8bc6234ef4c9724fdd4a7f4cbbe1df96960d63bcd13c1902f4db",
+        "app/src/ui/studio/StudioPixiLifecycle.ts": "fde9cc6197d839241030d57d5acb3a64268c0d2cd2d6df00fb6111c01676507d",
+        "app/src/ui/studio/StudioPixiSurface.ts": "4f9d1d196023ca41d5a38f252759eb9ac68abdfa33f597f0cedcfa621eb83a2e",
+        "app/src/ui/actionBarModel.ts": "7393971b99bc713a3ceeca056508840220519cbcf10fcc994d0be0b9bf52d8f6",
+        "app/src/render/clips/GridMotion.ts": "302162d9d4a2a740d6074af6db6e91f3f638bec5050682fd29784e2629f7bcc4",
+        "app/src/render/destroyContainerChildren.ts": "afd68decf03158cee38ac19d026ccaa02a2fdb1de23fa5db1145231243ee6c9d",
+        "app/src/render/equipmentAdapter.ts": "1dc477e99da3e916cebf9fc6b5d9a39bc0d0358629486e27998eb9c69475c87d",
+        "app/src/ui/equipmentPanel.ts": "24c98f2361574218f3827b4e38d4dea8ac859ba43e29215822adafffc2371a26",
+        "app/src/render/equipmentVisuals.ts": "9305bd3f9f2915b4dba694478126ce7273d7ad28959da44b28733ec2a9e44f79",
+        "app/src/ui/initiativeBar.ts": "0b4a12f7e12922f07b6783f74921a2637c313e28c5f3eafd62e9aded3cccc61d",
+        "app/src/iso.ts": "14405b693efc516668eafe7ff15130b3f8ef2744bbd45556966c0d193aed028a",
+        "app/src/render/paletteMap.ts": "b066ba351285487ebc012052ca1b2f9e7d028cc1d67c2c55b0e82719c04b6a27",
+        "app/src/render/pretextLayout.ts": "8e4e6b7f4036a6fa76e91e07f550002614757044e38cb4357b01982f0229efb3",
+        "app/src/render/projectileEndpoints.ts": "7b6087d0f97fa411c72466395e54dc369ee00742ff6c0c971a3c36088620c23f",
+        "app/src/render/MultiTintFilter.ts": "84cb7f7c3c3155b2948fef6589cf0d05ab86896762270e3693dcbd411e49d9fc",
+        "app/src/render/SpriteAssetRegistry.ts": "8b35df73cef924aa1d9d7ee1e26db12bd5b469174322454cc74b00a26122e071",
+        "app/src/render/angleMath.ts": "0fbea7aa8983b43adc850dab018646029a727a10fed870152c711e07e4479cae",
+        "app/src/render/clips/ProjectileFx.ts": "bd3ebbf789810316ca2f5a4ef4f6fd3b1b65e7dab93bb5f1d8105ba2b60ce05d",
+        "app/src/render/conditionPresentation.ts": "b83d3c3df09ab9d2949dba1327e805d42e002e5857606060265c1c43f68ee287",
+        "app/src/render/connectorPresentation.ts": "12fbe79400b22a3b291657db33396bfc09a7f7535b64298d46be9b737e04596a",
+        "app/src/render/facing.ts": "15225c870e12107078ef40ac7c19a0ba1b10c3da551e345821bfa4286f927ae6",
+        "app/src/render/perfMetrics.ts": "25430f87395c3de256170bb796651bc549fd314a9980a65ca22a0e2f65ca780e",
+        "app/src/render/pixiRendering.ts": "227cd5cfeea8654b7143abce7b90f03cbfef8801403123ae9129510fbbededf5",
+        "app/src/render/presentationAssetService.ts": "8623eb057e433c30bb61607e3325ef9188e7c7e5176978f78974610d88d727bc",
+        "app/src/render/staticBoardSync.ts": "e7bb0ca230247adea6ed1a5da0017ee700960b0809f5ee2e22c6175be774346c",
+        "app/src/render/structuralEdgeOrder.ts": "ad1866c00a58c9e42b32ee20e19b9cbfa7360361ede06e0de5f83ff981d0ae0d",
+        "app/src/render/spellAuthoring/SpriteProjectileFx.ts": "7442332428cf356aebbd937f0ede801ae3e3f88d4690b259637390ac29f13f7f",
+        "app/src/tiles.ts": "7960d9cd29f4153e026743ebaf284e6c26ca05f38c7d0b91f85c0cb6c57310e1",
+        "app/src/ui/actionBar.ts": "459ea0ab4af914afb24b8f081160732e7bf0e53d343cec15b5b92f935ae6df6a",
+        "app/src/ui/combatHistoryPanel.ts": "81b52cd50d4ac2336956c4da030da72a5b055c1d72e2518114b7058c2c36ce07",
+        "app/src/ui/studio/StudioDocumentHistory.ts": "ede4f9651aba82c80df521aa9692bb64f97e32441021559091e359558155cc05",
+        "app/src/ui/studio/StudioInspectorControls.ts": "f62d2aeb8468f5702daed69bbc75dbf7bd464bf50b4c8f002086a2c17a792a6e",
+        "app/src/render/vfxFilters.ts": "e52d3be29362ca8b6a29d33bd37bbff41d96cded246879ffc51e39c0f07175cb",
+        "app/src/render/visualAnchors.ts": "7dd05cd0e24a219b920629708c6ce04f200f8c3c73f775792f1202cc33bdb5ad"
+      }
+    },
+    "neuromapeditor": {
+      "path": "/home/tommaso/Dev/NeuroMapEditor",
+      "head": "8f11814174c73945a2a77458f793d6ba6f29e467",
+      "tracked_changes": [
+        "M docs/ACTIVE_ASSET_LAYER_COVERAGE.md",
+        " M docs/ACTIVE_ASSET_LAYER_DIAGNOSTICS.json",
+        " M docs/CAUSAL_HEIGHT_ASSIGNMENT.md",
+        " M docs/PHASE_ONE_IMPLEMENTATION_RECORD.md",
+        " M src/editor/store.ts",
+        " M src/import/compilePhaseOne.ts",
+        " M src/model/causalHeight.ts",
+        " M src/model/enclosureRepair.ts",
+        " M src/style.css",
+        " M src/ui/EditorShell.ts",
+        " M tests/asset-layer-coverage.test.ts",
+        " M tests/causal-height.test.ts",
+        " M tests/editor-workflow-port.test.ts",
+        " M tests/enclosure-repair.test.ts",
+        " M tests/interaction-roundtrip.test.ts",
+        " M tests/phase-one-import.test.ts"
+      ],
+      "inspected_source_hashes": {
+        "README.md": "c2203a3daea48ef76041e5c6df020f4cdbc51219041d053ac3b4563a1b071816",
+        "src/model/types.ts": "bc1c8a081a0d99facb9f021c9fb27ee36773b01e7b3805e9e4dbf463740af3da",
+        "src/model/lattice.ts": "708e2fd1c4bab7a62153f74eb746fc1296edbb75fcbcb8611c8f5f215c33bf13",
+        "src/render/orderPhaseOne.ts": "366deeec841f95af3bbbf41e2fecb8439a8e84bbe9f8ceec7d773be321d81add",
+        "src/render/spritePresentation.ts": "0847b7b24bcb8000930a5c10578ed3ca6804ac2bb8371eac7989bd9fcb7a539e",
+        "src/render/alphaPicking.ts": "ab73db37253126eada5c07883c8480e8c2ed02138cebd4be760fb6b6f283231b"
+      }
+    }
+  }
+}

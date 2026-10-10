@@ -42,8 +42,7 @@ def import_bundle(source: Path, repo: Path = ROOT) -> None:
                 views[DIRECTIONS[q * 2 + 1]] = parts
             storage[asset_id] = {"phases": {"impact": {"layers": [
                 {"partsByFacing": views, "blendMode": "normal"}]}}}
-            assets[asset_id] = {"assetId": asset_id, "displayName": asset_id, "kind": "projectile",
-                "sheet": f"/globe/{name}/{side}", "frame": {"width": 448, "height": 448, "rows": 8, "cols": count},
+            assets[asset_id] = {"assetId": asset_id, "displayName": asset_id, "sheet": f"/globe/{name}/{side}", "frame": {"width": 448, "height": 448, "rows": 8, "cols": count},
                 "fps": 144, "rowOrder": list(DIRECTIONS),
                 "phases": {"impact": {"start": 0, "frames": count, "fps": 144, "loop": loop}},
                 "anchor": {"x": .5, "y": .5}, "defaultScale": .5,

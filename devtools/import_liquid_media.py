@@ -86,8 +86,7 @@ def import_bundle(source: Path, *, material: str, variant: int,
             identity = f"liquid.{material}.s{variant}.{channel}.{phase}"
             count = end - begin
             assets[identity] = {
-                "assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/liquid-media/{material}/s{variant}/{channel}/{phase}.png",
+                "assetId": identity, "displayName": identity, "sheet": f"/liquid-media/{material}/s{variant}/{channel}/{phase}.png",
                 "frame": {"width": 384, "height": 384, "rows": 8, "cols": count},
                 "fps": document["fps"], "rowOrder": list(DIRECTIONS),
                 "phases": {"impact": {"start": 0, "frames": count,

@@ -24,7 +24,7 @@ def pack(native:Path,stage:Path)->dict:
 
     def register(identity:str,row:dict,views:dict)->None:
         count,cell=row['frames'],row['cell']
-        asset={'assetId':identity,'displayName':identity,'kind':'projectile','sheet':'/'+identity+'.png',
+        asset={'assetId':identity,'displayName':identity,'sheet':'/'+identity+'.png',
             'frame':{'width':cell,'height':cell,'rows':8,'cols':count},'fps':32,'rowOrder':list(DIRECTIONS),
             'phases':{'impact':{'start':0,'frames':count,'fps':32,'loop':False}},
             'anchor':{'x':row['pivot'][0]/cell,'y':row['pivot'][1]/cell},'defaultScale':1,

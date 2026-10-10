@@ -36,7 +36,6 @@ GOBLIN_NIMBLE_HIDE_ACTION = "Nimble Escape: Hide"
 GOBLIN_NIMBLE_DISENGAGE_ACTION = "Nimble Escape: Disengage"
 
 GOBLIN_APPEARANCE = AppearanceConfig(
-    visual_scale=0.82,
     body_category="NakedBody",
     skin_tint=0x7A9A3A,
     head_category=None,

@@ -182,7 +182,7 @@ def import_production_gaps(source: Path, mesh_export: Path, *, preserved: Path,
         anchors = {facing: {"x": row["pivot"][0] / cell, "y": row["pivot"][1] / cell}
                    for facing, row in banks.items()}
         assets[group][identity] = {
-            "assetId": identity, "displayName": identity, "kind": "projectile", "sheet": f"/{identity}.png",
+            "assetId": identity, "displayName": identity, "sheet": f"/{identity}.png",
             "frame": {"width": cell, "height": cell, "rows": 8, "cols": count}, "fps": 32,
             "rowOrder": list(DIRECTIONS), "phases": {"impact": {"start": 0, "frames": count, "fps": 32, "loop": False}},
             "anchor": anchors["SE"], "anchorsByFacing": anchors, "defaultScale": 1,

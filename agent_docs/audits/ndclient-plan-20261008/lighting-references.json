@@ -1,0 +1,197 @@
+[
+  {
+    "repository": "https://github.com/haiyoucuv/pixijs-light2d",
+    "revision": "5a76653520d0d2ef56ddb6802d301d03cadf822d",
+    "commit_date": "2026-09-20T16:19:26+08:00",
+    "local_reference": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/ndclient-lighting-references-20261008/pixijs-light2d",
+    "packages_installed": false,
+    "runtime_executed": false,
+    "files": [
+      {
+        "path": "package.json",
+        "bytes": 1431,
+        "sha256": "7f4355697eb08d65fc04d8274c6bcbf9ad30b75fd8b89d4ac9db2c140dbc1ad6"
+      },
+      {
+        "path": "README.md",
+        "bytes": 5604,
+        "sha256": "f1b0c114c08fb192fd5702298799f5a36e8487a32b9f6769c33666642057d14b"
+      },
+      {
+        "path": "src/Light2DSystem.ts",
+        "bytes": 5982,
+        "sha256": "e176d533248c99bd5dd33f02a7da41c9b880c9ad51c676950718920d0c2d4385"
+      },
+      {
+        "path": "src/index.ts",
+        "bytes": 392,
+        "sha256": "8885d090a659a8a070b9bf5e9f4a114a7349380c0c228a260da17724f435d05d"
+      },
+      {
+        "path": "src/lights/AmbientLight.ts",
+        "bytes": 838,
+        "sha256": "436d19fb1086d34567617e28681b59aa8a6b858350aba8964e84d30fe1851eae"
+      },
+      {
+        "path": "src/lights/PointLight.ts",
+        "bytes": 1171,
+        "sha256": "1ee6c00cee83e754cae0d0ed39f7604c079231eb4489bbea04db1242f17fd8cc"
+      },
+      {
+        "path": "src/location/shadow/ShadowSystem.ts",
+        "bytes": 11546,
+        "sha256": "70fabe25715bf83805be62320bcdbba84b376b05b53aa7619a613c74c3e0d304"
+      },
+      {
+        "path": "src/location/shadow/caster/ShadowCaster.ts",
+        "bytes": 2222,
+        "sha256": "76a9ba95538ef83401bcbcec5f95bc4561269fbe31518ad819e4c1d684de642e"
+      },
+      {
+        "path": "src/scene/spine/LightSpine.ts",
+        "bytes": 3532,
+        "sha256": "8c0007c7e82f73cb04e71fd8d0ff504ac6f846d2175ce6379e0fef3ae6025b5d"
+      },
+      {
+        "path": "src/scene/spine/LightSpinePipe.ts",
+        "bytes": 14188,
+        "sha256": "9698034473aa2f3403e70a9c110c928cec9aadd2907eaa2e352867f99c1097a6"
+      },
+      {
+        "path": "src/scene/sprite/LightSprite.ts",
+        "bytes": 2058,
+        "sha256": "bd2f13f7381790e950a61dbaccae421ff9516adf7541dc84974e035284e1aa95"
+      },
+      {
+        "path": "src/scene/sprite/LightSpritePipe.ts",
+        "bytes": 14036,
+        "sha256": "570424b78aa5f90cb3f3b402a845a4eb8ef56fc46f173b1e78909f5afb711b8c"
+      },
+      {
+        "path": "src/shader/LightingShader.ts",
+        "bytes": 7475,
+        "sha256": "760c411fb07fab1c5cf59eccb8099a8fd285d76305d4aa4ab06a7e333dd3ac82"
+      }
+    ]
+  },
+  {
+    "repository": "https://github.com/pixijs-userland/lights",
+    "revision": "1e6a3e8263afbe36c6d2f6e48ef0d58f586f6a68",
+    "commit_date": "2024-12-19T19:54:20-05:00",
+    "local_reference": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/ndclient-lighting-references-20261008/pixi-lights",
+    "packages_installed": false,
+    "runtime_executed": false,
+    "files": [
+      {
+        "path": "package.json",
+        "bytes": 1973,
+        "sha256": "637c54ef3efae0589ffc55136b7f41bd2629f54bb3c50e54b82a92f8afa05609"
+      },
+      {
+        "path": "README.md",
+        "bytes": 2895,
+        "sha256": "e8cf035e6351fd1f77458ccdf94217fb62e877864a39f2d6ad35df6e08cef572"
+      },
+      {
+        "path": "src/LayerFinder.ts",
+        "bytes": 2056,
+        "sha256": "3cec773bb5b2fb3bca1e75ca159c8c954cdd1158b9af83dfdaa13e94fec07ac6"
+      },
+      {
+        "path": "src/index.ts",
+        "bytes": 208,
+        "sha256": "e8415703ee4272a48024dc4adbc122cc74fe7348770feba1cbc75891fe7c932b"
+      },
+      {
+        "path": "src/lights/ambientLight/AmbientLight.ts",
+        "bytes": 506,
+        "sha256": "d106004da1b83b3ab38dea755938a7db2141a4d57f48820f493e2cfaea50765f"
+      },
+      {
+        "path": "src/lights/ambientLight/AmbientLightShader.ts",
+        "bytes": 412,
+        "sha256": "4e849227935783d3071d45441c59640a3b83cec0d6339463bc6e6ede93cdfd04"
+      },
+      {
+        "path": "src/lights/ambientLight/ambient.frag.ts",
+        "bytes": 494,
+        "sha256": "65b955e3fbac76284749d15aeff25e75c98d696bb23b6d09187e6daa57e17ad1"
+      },
+      {
+        "path": "src/lights/ambientLight/index.ts",
+        "bytes": 70,
+        "sha256": "9ab9e9ebf01c81fe3715ffee55f85b6d728234360124a60703177f7f9e39cee1"
+      },
+      {
+        "path": "src/lights/directionalLight/DirectionalLight.ts",
+        "bytes": 1663,
+        "sha256": "a8b44f0562017c1a30c8e7bf3b11fba1645db192b0a44d658a313d87fa540048"
+      },
+      {
+        "path": "src/lights/directionalLight/DirectionalLightShader.ts",
+        "bytes": 558,
+        "sha256": "7585582b5b0356d59bfed0fc4936fa6655e11ff82b05c10c828f9f7d2842dac3"
+      },
+      {
+        "path": "src/lights/directionalLight/directional.frag.ts",
+        "bytes": 595,
+        "sha256": "2b26ba8151b3177ee966908998a59ec3e0c9a994bac3870e5e54a104133d3806"
+      },
+      {
+        "path": "src/lights/directionalLight/index.ts",
+        "bytes": 78,
+        "sha256": "47bf2d470288f91e79594acb3484416aad11c7434368c4078e910d609229a0dd"
+      },
+      {
+        "path": "src/lights/light/Light.ts",
+        "bytes": 4518,
+        "sha256": "194b10883d86ee7be0104f4c17fc16ff582ecaa198a74adb2c6ea81b268dd50d"
+      },
+      {
+        "path": "src/lights/light/LightShader.ts",
+        "bytes": 1226,
+        "sha256": "2e55b3f7bf24fd0f567b683f1a595a2e9b254edbc47f4ee80bd540d736a8aacb"
+      },
+      {
+        "path": "src/lights/light/ViewportQuad.ts",
+        "bytes": 802,
+        "sha256": "003d64889bb63b798d240f040c0ea3845243d822b487bb28b09c918687b75929"
+      },
+      {
+        "path": "src/lights/light/index.ts",
+        "bytes": 88,
+        "sha256": "dc90625b2f4502c9be3c10906256f1acdac3f844b3a239604abde15ccb0f1269"
+      },
+      {
+        "path": "src/lights/pointLight/PointLight.ts",
+        "bytes": 1427,
+        "sha256": "68f0bfce10fd108a375b5b7db46b7ffb60333ecc433643ba1d7a751fdd4104ee"
+      },
+      {
+        "path": "src/lights/pointLight/PointLightShader.ts",
+        "bytes": 475,
+        "sha256": "f1774488523117b2a8b50224ef345a651781b93f618a89549956472312a9d863"
+      },
+      {
+        "path": "src/lights/pointLight/index.ts",
+        "bytes": 66,
+        "sha256": "d77490fb32eb192520eb15594721242b676db2ea322895e57e400588131c14d4"
+      },
+      {
+        "path": "src/lights/pointLight/point.frag.ts",
+        "bytes": 899,
+        "sha256": "38da316efa4072652d12767a15f41783044bd34ff0094f7c1e9fc44c28b6aa98"
+      },
+      {
+        "path": "src/lights/shared.ts",
+        "bytes": 2071,
+        "sha256": "15c1ae476789c71fd617436ee5e17e57135b34b944f469ee2519163f86b6fad7"
+      },
+      {
+        "path": "src/mixins/Circle.ts",
+        "bytes": 1733,
+        "sha256": "c01874bc9faa3c12a6166c3fc2b22a6ce1a6ed87c730fa59a9b2449d1c0c5c4c"
+      }
+    ]
+  }
+]

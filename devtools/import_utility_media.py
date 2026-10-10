@@ -115,8 +115,7 @@ def import_utility_media(source: Path, *, preserved: Path, production: Path,
                     for frame in range(count)]
                 views[DIRECTIONS[2 * camera]] = parts
                 views[DIRECTIONS[2 * camera + 1]] = parts
-            asset = {"assetId": identity, "displayName": identity, "kind": "projectile",
-                "sheet": f"/utility/{program}/{phase}/{side}.png",
+            asset = {"assetId": identity, "displayName": identity, "sheet": f"/utility/{program}/{phase}/{side}.png",
                 "frame": {"width": 512, "height": 512, "rows": 8, "cols": count},
                 "fps": 32, "rowOrder": list(DIRECTIONS),
                 "phases": {"impact": {"start": 0, "frames": count, "fps": 32, "loop": phase == "hold"}},

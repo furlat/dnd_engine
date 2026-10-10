@@ -43,7 +43,7 @@ def import_bundle(source: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
         anchor = {"x": pivot[0] / cell[0], "y": pivot[1] / cell[1]}
         assets[identity] = {
             "assetId": identity, "displayName": name.replace("_", " ").title() + " · " + depth,
-            "kind": "projectile", "sheet": f"/pending-spells/{name}/{depth}.png",
+            "sheet": f"/pending-spells/{name}/{depth}.png",
             "frame": {"width": cell[0], "height": cell[1], "rows": 8, "cols": frames},
             "fps": fps, "rowOrder": directions,
             "phases": {"impact": {"start": 0, "frames": frames, "fps": fps, "loop": loop}},

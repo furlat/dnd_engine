@@ -34,7 +34,7 @@ def import_bundle(source: Path, *, repo: Path = ROOT, field_asset: str | None = 
         shutil.copyfile(source / row["sheet"], repo / relative)
         bindings["resources"][url] = relative.as_posix()
         assets[identity] = {
-            "assetId": identity, "displayName": row["displayName"], "kind": "projectile", "sheet": url,
+            "assetId": identity, "displayName": row["displayName"], "sheet": url,
             "frame": {"width": row["cell"], "height": row["cell"], "rows": len(row["rows"]), "cols": row["frames"]},
             "fps": row["fps"], "rowOrder": row["rows"],
             "phases": {"travel": {"start": 0, "frames": row["frames"], "fps": row["fps"], "loop": row["loop"]}},
@@ -139,8 +139,7 @@ def import_bundle(source: Path, *, repo: Path = ROOT, field_asset: str | None = 
             for page in source_pages:
                 page.close()
         assets[identity] = {
-            "assetId": identity, "displayName": projectile["displayName"] if phase == "travel" else f"{spell.title()} Area", "kind": "projectile",
-            "sheet": f"/authored-vfx/{spell}-{'projectile' if phase == 'travel' else 'area'}.png", "frame": {"width": width, "height": height, "rows": 8, "cols": asset["frames"]},
+            "assetId": identity, "displayName": projectile["displayName"] if phase == "travel" else f"{spell.title()} Area", "sheet": f"/authored-vfx/{spell}-{'projectile' if phase == 'travel' else 'area'}.png", "frame": {"width": width, "height": height, "rows": 8, "cols": asset["frames"]},
             "fps": asset["fps"], "rowOrder": list(DIRECTIONS),
             "phases": {phase: {"start": 0, "frames": asset["frames"], "fps": asset["fps"], "loop": asset["loop"]}},
             "anchor": anchors["S"], "anchorsByFacing": anchors, "defaultScale": 0.5,

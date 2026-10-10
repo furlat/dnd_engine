@@ -49,8 +49,7 @@ def import_materials(source: Path, *, preserved: Path, production: Path, repo: P
         "file": "game/assets/shared_conditions/restrained.png", "rect": [0, 0, 64, 48], "offset": [0, 0]}]],
         "blendMode": "normal"}]}}}
     assets = {row["assetId"]: row for row in json.loads((bundle / "projectile-assets.json").read_text())}
-    assets[identity] = {"assetId": identity, "displayName": "Restrained fetter cue", "kind": "projectile",
-        "sheet": "/shared-conditions/restrained.png", "frame": {"width": 64, "height": 48, "rows": 8, "cols": 1},
+    assets[identity] = {"assetId": identity, "displayName": "Restrained fetter cue", "sheet": "/shared-conditions/restrained.png", "frame": {"width": 64, "height": 48, "rows": 8, "cols": 1},
         "fps": 32, "rowOrder": ["S", "SE", "E", "NE", "N", "NW", "W", "SW"], "phases": {"impact": {"start": 0, "frames": 1, "fps": 32, "loop": True}},
         "anchor": {"x": .5, "y": 35/48}, "defaultScale": .5, "palettePreview": {"colors": [0x30434f, 0xffd47c]}}
     (bundle / "bindings.json").write_text(json.dumps(bindings, separators=(",", ":")) + "\n")

@@ -4,15 +4,15 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from player_server.app import create_app
-from player_server.config import SeatCredential, ServerConfig
-from player_server.protocol import protocol_identity, public_schema
-from player_server.recording import close_recording
+from server.app import create_app
+from server.config import SeatCredential, ServerConfig
+from server.protocol import protocol_identity, public_schema
+from server.recording import close_recording
 
 
 def source_owners(root: Path) -> dict[str, list[dict]]:
     owners: dict[str, list[dict]] = {}
-    for directory in ('dnd', 'player_server'):
+    for directory in ('dnd', 'server'):
         for path in sorted((root / directory).rglob('*.py')):
             for node in ast.parse(path.read_text()).body:
                 if isinstance(node, ast.ClassDef):

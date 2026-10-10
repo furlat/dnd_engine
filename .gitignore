@@ -67,3 +67,4 @@ Tomb of the Serpent_Kings v4.pdf
 *.psd
 *.aseprite
 agent_docs/audits/rendering-readiness-20261005/effective-catalog.json
+/game_obsolete/assets

@@ -8,6 +8,13 @@ GPU/readiness proof requirements below remain evidence. Instructions below to
 retain pygame window/UI or exclude TypeScript describe the previous destination,
 not the current proposal. No new migration is implemented by writing that plan.
 
+**October 8 representation correction:** the human also authorizes simpler extracted
+or static geometry/shaders and requires blood particles and ground effects in the
+pre-migration study. The [N−1 prerequisite](NDCLIENT_EFFECT_REPRESENTATION_PREFLIGHT_2026-10-08.md)
+supersedes requirements below to retain every full runtime plane or exactly reproduce
+CPU painter heuristics. Historical measurements remain evidence, not mandates for
+the same media representation in Pixi.
+
 Status: full implementation plan, revised October 7; **not an implemented migration**.
 The human requested this full plan after the initial feasibility study. Sections
 1–7 retain its evidence and correctness constraints; sections 8–14 specify the

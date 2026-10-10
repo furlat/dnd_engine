@@ -1,0 +1,119 @@
+[
+  {
+    "frame": "SE/0000.bin.gz",
+    "layer": "add",
+    "owner": 1,
+    "pixels": 70475,
+    "projection_error_px_p50": 0.0030566771911834855,
+    "p99": 0.005109575885941583,
+    "max": 0.03692290314391273
+  },
+  {
+    "frame": "SE/0000.bin.gz",
+    "layer": "add",
+    "owner": 2,
+    "pixels": 152,
+    "projection_error_px_p50": 1.0113335189624197,
+    "p99": 2.013248693035957,
+    "max": 2.0159607266215436
+  },
+  {
+    "frame": "SE/0000.bin.gz",
+    "layer": "add",
+    "owner": 3,
+    "pixels": 493,
+    "projection_error_px_p50": 5.382636425540273,
+    "p99": 11.696649842745995,
+    "max": 13.034592468400666
+  },
+  {
+    "frame": "SE/0029.bin.gz",
+    "layer": "normal",
+    "owner": 1,
+    "pixels": 419761,
+    "projection_error_px_p50": 0.012202032973287768,
+    "p99": 0.032391332838740274,
+    "max": 0.18885366794301944
+  },
+  {
+    "frame": "SE/0029.bin.gz",
+    "layer": "normal",
+    "owner": 2,
+    "pixels": 16,
+    "projection_error_px_p50": 0.9941753515913182,
+    "p99": 1.009449836711242,
+    "max": 1.0105207209820841
+  },
+  {
+    "frame": "SE/0029.bin.gz",
+    "layer": "add",
+    "owner": 1,
+    "pixels": 178283,
+    "projection_error_px_p50": 0.013099481562395727,
+    "p99": 0.3098686563107136,
+    "max": 0.999047788992551
+  },
+  {
+    "frame": "SE/0029.bin.gz",
+    "layer": "add",
+    "owner": 2,
+    "pixels": 3055,
+    "projection_error_px_p50": 1.2084227834486843,
+    "p99": 2.810370248643668,
+    "max": 2.9968872691839104
+  },
+  {
+    "frame": "SE/0029.bin.gz",
+    "layer": "add",
+    "owner": 3,
+    "pixels": 994,
+    "projection_error_px_p50": 2.996884408745383,
+    "p99": 6.70494188575894,
+    "max": 7.615524679033098
+  },
+  {
+    "frame": "SE/0049.bin.gz",
+    "layer": "normal",
+    "owner": 1,
+    "pixels": 569448,
+    "projection_error_px_p50": 0.01103818100853978,
+    "p99": 0.029859606140615464,
+    "max": 0.032669847773959766
+  },
+  {
+    "frame": "SE/0049.bin.gz",
+    "layer": "add",
+    "owner": 1,
+    "pixels": 216647,
+    "projection_error_px_p50": 0.01090764372986994,
+    "p99": 0.03033088417242337,
+    "max": 0.9991466963801133
+  },
+  {
+    "frame": "SE/0049.bin.gz",
+    "layer": "add",
+    "owner": 2,
+    "pixels": 384,
+    "projection_error_px_p50": 1.018433277432144,
+    "p99": 2.510965521575586,
+    "max": 2.9368007660653133
+  },
+  {
+    "frame": "SE/0049.bin.gz",
+    "layer": "add",
+    "owner": 3,
+    "pixels": 149,
+    "projection_error_px_p50": 2.8391679291852805,
+    "p99": 4.551522665482699,
+    "max": 4.980047412912897
+  },
+  {
+    "frame": "SE/0063.bin.gz",
+    "layer": "normal",
+    "owner": 1,
+    "pixels": 553904,
+    "projection_error_px_p50": 0.011046841638897367,
+    "p99": 0.03195461126622608,
+    "max": 0.03564312030664779
+  }
+]

@@ -1,7 +1,12 @@
 # Authoring coverage and migration disposition
 
-Companion to [the new server/client/Studio plan](NETWORK_SERVER_NEUROCLIENT_STUDIO_PLAN_2026-10-07.md).
-2026-10-07. Planning inventory, not implemented editor coverage.
+Companion to [the current NDClient plan](NDCLIENT_IMPLEMENTATION_PLAN_2026-10-08.md).
+Originally 2026-10-07; the October 8 source census confirms these field denominators.
+Planning inventory, not implemented editor coverage. The new client also includes
+the [complete asset and fixed-rig editor](NDCLIENT_ASSETS_AND_RIG_AUTHORING_2026-10-08.md),
+plus the new smooth icon bank. The derived release/media representation and lighting
+policy changes are specified by the current plan; they do not duplicate these
+existing source owners.
 
 Every row below has one canonical source owner. Studio edits that source and the
 same exporter/compiler resolves it for gameplay and preview. It must not serialize
@@ -141,13 +146,24 @@ This does not reinstate rejected bulky chrome: only selected accepted resources
 are used by the minimal UI. The pygame skin drawing function is not ported into
 the browser views automatically.
 
-The engine content manifest is delivered as static versioned metadata, not sent in
-each event. Existing item visual ledgers outside game/data (notably
+Native descriptor admission uses the delivered SDK: observed descriptors arrive in
+InitializationResponse/PlayerOperation `content_additions` and are folded before
+dependent lineages; the existing metadata endpoint supplies public descriptors.
+Do not install the complete private UIContentManifest from a presentation release.
+Static versioned artwork/binding metadata is a separate input, never authority to
+reveal native content or an unseen entity. Existing item visual ledgers outside game/data (notably
 `content_data/ledgers/neuroclient_authored_item_visuals.json`) remain their current
 canonical source and must be included in the export source map. Do not silently
 substitute the old NeuroClient generated equipment/palette files.
 
 ## Concrete Studio interaction
+
+The channel timeline is specified in master §8.2: preserve the Adobe/Godot-style
+hierarchical lanes, clips, curves and markers as a derived view of the actual
+compiled presentation and canonical authored fields. Every row has provenance;
+edits use the same typed source commands as the inspector. Recorded outcomes and
+derived times remain read-only. There is no separately saved Studio animation
+format or spell-specific timeline executor.
 
 Choose a content recipe, choose a real recorded action/fixture, inspect the compiled
 timeline and preview it. Select a body/media/material track to edit its typed fields.

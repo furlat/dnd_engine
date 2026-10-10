@@ -68,8 +68,7 @@ def import_holy_media(source: Path, *, preserved: Path, production: Path, repo: 
                 "rect": [((start+frame)%columns)*width,
                     row*height if heading_rows else ((start+frame)//columns)*height, width, height],
                 "offset": [0, 0]}] for frame in range(count)]
-        asset = {"assetId": identity, "displayName": identity, "kind": "projectile",
-            "sheet": "/"+identity+".png", "frame": {"width": width, "height": height,
+        asset = {"assetId": identity, "displayName": identity, "sheet": "/"+identity+".png", "frame": {"width": width, "height": height,
                 "rows": 8, "cols": count}, "fps": 32, "rowOrder": list(DIRECTIONS),
             "phases": {"impact": {"start": 0, "frames": count, "fps": 32, "loop": loop}},
             "anchor": {"x": pivot[0]/width, "y": pivot[1]/height}, "defaultScale": 1,

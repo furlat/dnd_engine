@@ -33,8 +33,7 @@ def _asset(identity: str, *, size: tuple[int, int], frames: int, fps: float,
     anchors = {direction: {"x": pivot[0] / size[0], "y": pivot[1] / size[1]}
                for direction, pivot in pivots.items()}
     return {
-        "assetId": identity, "displayName": identity, "kind": "projectile",
-        "sheet": f"/area-media/{identity}.png",
+        "assetId": identity, "displayName": identity, "sheet": f"/area-media/{identity}.png",
         "frame": {"width": size[0], "height": size[1], "rows": 8, "cols": frames},
         "fps": fps, "rowOrder": list(DIRECTIONS),
         "phases": {"impact": {"start": 0, "frames": frames, "fps": fps, "loop": False}},

@@ -132,7 +132,7 @@ from dnd.spells.necromancy import InflictWounds
 
 HitDieValue = Literal[4, 6, 8, 10, 12]
 WeaponDieValue = Literal[4, 6, 8, 10, 12, 20]
-_VISUAL_SCALE_BY_SIZE: dict[Size, float] = {
+_BEAST_VISUAL_SCALE_BY_SIZE: dict[Size, float] = {
     Size.TINY: 0.68,
     Size.SMALL: 0.82,
     Size.MEDIUM: 1.0,
@@ -1682,7 +1682,9 @@ def _default_srd_appearance(creature_type: CreatureType, size: Size) -> Appearan
     Returns:
         Presentation metadata independent from the creature's grid footprint.
     """
-    visual_scale = _VISUAL_SCALE_BY_SIZE[size]
+    # Only the authored beast presentation retains size-based enlargement.
+    # Other creature artwork already carries its natural proportions.
+    visual_scale = _BEAST_VISUAL_SCALE_BY_SIZE[size] if creature_type == CreatureType.BEAST else 1.0
     if creature_type == CreatureType.HUMANOID:
         return AppearanceConfig(visual_scale=visual_scale)
     return AppearanceConfig(

@@ -7,10 +7,10 @@ import httpx
 import pytest
 
 from devtools.player_server_acceptance.fixtures import configuration
-from player_server import connection, host as owner, protocol as wire, service
-from player_server.app import create_app
-from player_server.config import ServiceLimits
-from player_server.worker_protocol import EndGame
+from server import connection, host as owner, protocol as wire, service
+from server.app import create_app
+from server.config import ServiceLimits
+from server.worker_protocol import EndGame
 
 
 async def ready(host):

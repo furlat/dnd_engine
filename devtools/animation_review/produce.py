@@ -1,6 +1,9 @@
 """Explicit native scenario composition for new review captures."""
 
 from dnd.core.life_types import LifeState
+from dnd.types.materials import Material
+from devtools.animation_review.cases import SolidWallCase
+from tests.game.solid_wall_scenarios import solid_wall_history
 from devtools.animation_review.summoning_cases import summoning_history
 from devtools.animation_review.flight_cases import fly_lifetime_history
 from devtools.animation_review.creature_spell_cases import creature_spell_history
@@ -190,6 +193,9 @@ def produce(case: ReviewCase) -> CapturedHistory:
                 replace_grant=scenario.replace_grant, perspective=scenario.perspective)
         case WindowCase() as scenario:
             return window_history(family=scenario.family, program=scenario.program)
+        case SolidWallCase() as scenario:
+            return solid_wall_history(scenario.item_id, material=Material(scenario.material),
+                raised=scenario.raised, corner=scenario.corner)
         case DoorCase() as scenario:
             return door_destruction_history(item_id=scenario.item_id, program=scenario.program,
                 swing=scenario.swing, jammed=scenario.jammed, raised=scenario.raised)

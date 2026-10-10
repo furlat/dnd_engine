@@ -107,6 +107,7 @@ export async function preview(connection: Connection, body: C.PreviewRequest, si
   const echoed = result.request;
   if (result.state_revision !== body.state_revision || echoed.state_revision !== body.state_revision || echoed.correlation_id !== body.correlation_id ||
       echoed.actor_uuid !== body.actor_uuid || echoed.discovery_generation !== body.discovery_generation || echoed.selection.action_index !== body.selection.action_index ||
+      (echoed.selection.prefer_safe ?? true) !== (body.selection.prefer_safe ?? true) ||
       JSON.stringify(echoed.selection.target_indices) !== JSON.stringify(body.selection.target_indices) ||
       JSON.stringify(echoed.selection.extra_target_positions ?? []) !== JSON.stringify(body.selection.extra_target_positions ?? [])) throw new ProtocolError('Preview correlation mismatch');
   return result;

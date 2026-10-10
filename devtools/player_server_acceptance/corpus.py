@@ -22,7 +22,7 @@ from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.player.facts import PlayerFact, PlayerState
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.player.reduction import decode_player_sequence, encode_player_sequence, reduce_initialization, reduce_lineage
-from player_server.protocol import public_schema
+from server.protocol import public_schema
 
 CASES = ('conceal-greater-invisibility', 'support-cure-wounds', 'device-break-fireball',
     'spell-web-mage', 'spell-web-cannon', 'shove-success', 'shove-spikes-lethal',

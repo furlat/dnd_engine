@@ -1930,8 +1930,8 @@
             "maximum": 9007199254740991
           },
           "player_schema_version": {
-            "const": 4,
-            "default": 4,
+            "const": 5,
+            "default": 5,
             "title": "Player Schema Version",
             "type": "integer",
             "minimum": -9007199254740991,
@@ -7633,7 +7633,7 @@
             "type": "boolean"
           },
           "map_char": {
-            "default": "\u03c6",
+            "default": "φ",
             "description": "Text-map presentation glyph.",
             "title": "Map Char",
             "type": "string"
@@ -17529,6 +17529,11 @@
             },
             "title": "Extra Target Positions",
             "type": "array"
+          },
+          "prefer_safe": {
+            "default": true,
+            "title": "Prefer Safe",
+            "type": "boolean"
           }
         },
         "required": [

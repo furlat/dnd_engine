@@ -28,16 +28,16 @@ from dnd.core.events import EventQueue
 from dnd.player.commands import ActionSelection
 from dnd.player.session import close_session
 from devtools.player_server_acceptance.fixtures import configuration
-from player_server.protocol import ChoicesRequest, CommandRequest, EndTurnIntent, ExecuteSelectionIntent, PreviewRequest
-from player_server.worker import Runtime, dispatch, needs_advance, start
-from player_server.worker_protocol import Advance, Choices, Command, Preview, Start
+from server.protocol import ChoicesRequest, CommandRequest, EndTurnIntent, ExecuteSelectionIntent, PreviewRequest
+from server.worker import Runtime, dispatch, needs_advance, start
+from server.worker_protocol import Advance, Choices, Command, Preview, Start
 
 IMPORT_SECONDS = perf_counter() - IMPORT_STARTED
 
 
 def fingerprint() -> dict[str, Any]:
     root = Path(__file__).resolve().parents[2]
-    paths = ('uv.lock', 'pyproject.toml', 'player_server/worker.py', 'dnd/player/session.py',
+    paths = ('uv.lock', 'pyproject.toml', 'server/worker.py', 'dnd/player/session.py',
         'dnd/player/capture.py', 'dnd/player/application.py', 'dnd/player/facts.py',
         'dnd/player/projection.py', 'dnd/player/reduction.py', 'dnd/core/events.py',
         'dnd/core/action_types.py', 'dnd/core/base_actions.py')

@@ -11,9 +11,9 @@ from dnd.core.gridmap import get_map
 from dnd.player.commands import ActionSelection
 from dnd.player.session import close_session
 from dnd.runtime_reset import reset_engine_runtime
-from player_server.protocol import ChoicesRequest, CommandRequest, EndTurnIntent, ExecuteSelectionIntent, PreviewRequest
-from player_server.worker import dispatch, needs_advance, start
-from player_server.worker_protocol import Advance, Choices, Command, Preview, Start
+from server.protocol import ChoicesRequest, CommandRequest, EndTurnIntent, ExecuteSelectionIntent, PreviewRequest
+from server.worker import dispatch, needs_advance, start
+from server.worker_protocol import Advance, Choices, Command, Preview, Start
 
 
 def used_world(config, *, summon=False):

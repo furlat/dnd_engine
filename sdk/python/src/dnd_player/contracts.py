@@ -55,7 +55,7 @@ class PlayerCursor(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[4]]
+    player_schema_version: NotRequired[Literal[5]]
     schema_digest: str
 
 
@@ -1573,6 +1573,7 @@ class ActionSelection(TypedDict):
     action_index: int
     target_indices: list[int]
     extra_target_positions: NotRequired[list[list[ExtraTargetPosition]]]
+    prefer_safe: NotRequired[bool]
 
 
 class PreviewRequest(TypedDict):

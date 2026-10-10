@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from dnd.player.reduction import reduce_initialization, reduce_operation
-from player_server.protocol import InitializationResponse, PlayerOperation
+from server.protocol import InitializationResponse, PlayerOperation
 from devtools.player_server_acceptance.replay import check_group, check_hud, records, require, sdk
 
 

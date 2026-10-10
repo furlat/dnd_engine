@@ -108,7 +108,7 @@ def install_ignition(source: Path, packed: Path, *, preserved: Path, production:
             windows=(('application',0,48),('hold',48,64)) if name in NAMES else (('quench',0,80),)
             for phase,first,count in windows:
                 identity=f'surface.ignition.{name}.{phase}.{side}'
-                asset={'assetId':identity,'displayName':identity,'kind':'projectile','sheet':'/'+identity+'.png',
+                asset={'assetId':identity,'displayName':identity,'sheet':'/'+identity+'.png',
                     'frame':{'width':512,'height':512,'rows':8,'cols':count},'rowOrder':DIRECTIONS,'fps':32,
                     'phases':{'impact':{'start':0,'frames':count,'fps':32,'loop':phase=='hold'}},
                     'anchor':{'x':media['pivot'][0]/512,'y':media['pivot'][1]/512},'defaultScale':1,

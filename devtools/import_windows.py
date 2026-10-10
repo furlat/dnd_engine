@@ -54,7 +54,9 @@ def import_windows(source: Path, output: Path = ROOT, *, insert_source: Path) ->
                 "rect": [index*320, 0, 320, 320]}] for index, pose in enumerate(POSES)},
         }
         document["props"][f"environment.wall.fantasy_{family}"] = {
-            "intact": {"default": bank_id}, "destructions": {}, "occludes_actor_face": True,
+            "intact": {"default": bank_id},
+            "destructions": document["props"].get(f"environment.wall.fantasy_{family}", {}).get("destructions", {}),
+            "occludes_actor_face": True,
         }
     for bank_id, row in declarations["banks"].items():
         family, part, mode = row["family"], row["part"], row["mode"]

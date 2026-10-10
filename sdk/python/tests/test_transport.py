@@ -77,6 +77,35 @@ def run(coro):
     asyncio.run(coro)
 
 
+@pytest.mark.parametrize('requested,echoed', [
+    (None, True), (True, True), (False, False), (False, True), (True, False), (None, False),
+])
+def test_preview_echo_preserves_route_preference(requested, echoed):
+    async def check():
+        selection = {'action_index': 0, 'target_indices': [0]}
+        if requested is not None:
+            selection['prefer_safe'] = requested
+        body = {'actor_uuid': UUID, 'state_revision': 'r', 'discovery_generation': 1,
+            'correlation_id': UUID, 'selection': selection}
+
+        async def handle(request):
+            assert json.loads(request.content) == body
+            return httpx.Response(200, json={**SCOPE, 'kind': 'preview', 'state_revision': 'r',
+                'request': {**body, 'selection': {**selection, 'prefer_safe': echoed}},
+                'preview': {'can_confirm': True}})
+
+        async with httpx.AsyncClient(base_url='https://peer.invalid', transport=httpx.MockTransport(handle)) as http:
+            connection = sdk.Connection(http, {'kind': 'bootstrap', 'protocol': sdk.IDENTITY,
+                'status': status(), 'audience': None, 'encounter_name': 'test', 'content_revision': 'r'})
+            if echoed is (requested is not False):
+                result = await sdk.preview(connection, body)
+                assert result['request']['selection']['prefer_safe'] is echoed
+            else:
+                with pytest.raises(sdk.ProtocolError, match='Preview correlation mismatch'):
+                    await sdk.preview(connection, body)
+    run(check())
+
+
 def test_sse_split_utf8_crlf_multiline_comments_and_incomplete_eof():
     async def check():
         async def chunks():

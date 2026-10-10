@@ -18,6 +18,7 @@ class ActionSelection:
     action_index: Annotated[int, Field(strict=True, ge=0)]
     target_indices: tuple[Annotated[int, Field(strict=True, ge=0)], ...]
     extra_target_positions: tuple[tuple[Annotated[int, Field(strict=True)], Annotated[int, Field(strict=True)]], ...] = ()
+    prefer_safe: Annotated[bool, Field(strict=True)] = True
 
 
 @dataclass(frozen=True, slots=True)

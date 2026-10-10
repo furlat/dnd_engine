@@ -1,14 +1,19 @@
 # Production player contract
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
-owners and the finite `player_server/protocol.py` envelopes. It has 19 public roots,
-312 shared definitions and 1,612 object-field rows. `protocol-identity.json` binds
-protocol 1 and player schema 4 to the exact canonical schema digest.
+owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
+312 shared definitions and 1,613 object-field rows. `protocol-identity.json` binds
+protocol 1 and player schema 5 to the exact canonical schema digest.
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
 - `field-ledger.json`: each reachable field, required/default shape and source owner.
 - The Python and TypeScript packages carry the same schema and digest.
+
+`ActionSelection.prefer_safe` defaults to `true`. Set it to `false` to request
+the engine's normal movement route. Use the same selection for preview and
+execution; `selected_route` reports the actual path and policy, including the
+existing fallback when a safe route is unavailable.
 
 Regenerate these exports only after a real type-owner change:
 

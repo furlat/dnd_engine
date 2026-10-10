@@ -1,0 +1,509 @@
+[
+  {
+    "assetId": "recovered.acid_splash.dense.v1",
+    "displayName": "Acid Splash",
+    "sheet": "/authored-vfx/spell-recovery/recovered.acid_splash.dense.v1",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 127
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "fps": 24,
+        "loop": true
+      },
+      "impact": {
+        "start": 12,
+        "frames": 26,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4521796,
+        2271778,
+        8978278
+      ]
+    }
+  },
+  {
+    "assetId": "recovered.guiding_bolt.dense.v1",
+    "displayName": "Guiding Bolt",
+    "sheet": "/authored-vfx/spell-recovery/recovered.guiding_bolt.dense.v1",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 83
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 8,
+        "fps": 24,
+        "loop": false
+      },
+      "travel": {
+        "start": 8,
+        "frames": 12,
+        "fps": 24,
+        "loop": true
+      },
+      "impact": {
+        "start": 20,
+        "frames": 14,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        16443034,
+        12948031,
+        16774607
+      ]
+    }
+  },
+  {
+    "assetId": "recovered.eldritch_blast.dense.v1",
+    "displayName": "Eldritch Blast",
+    "sheet": "/authored-vfx/spell-recovery/recovered.eldritch_blast.dense.v1",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 332
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 32,
+        "fps": 32,
+        "loop": true
+      },
+      "impact": {
+        "start": 144,
+        "frames": 26,
+        "fps": 32,
+        "loop": false
+      },
+      "cast": {
+        "start": 260,
+        "frames": 16,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        0,
+        461840,
+        661535,
+        1124916,
+        1589580,
+        2055017,
+        2652038,
+        3708320,
+        5026748,
+        6671827,
+        5553886,
+        6868464,
+        8313082,
+        9887999,
+        1844012,
+        4345435,
+        7373457,
+        794180,
+        997244,
+        1465272,
+        2984160,
+        4629478,
+        6340342,
+        7852284
+      ]
+    }
+  },
+  {
+    "assetId": "shared.fireball.20ft-ground.smoke.v3.travel",
+    "displayName": "Fireball \u00b7 20-foot ground radius \u00b7 travel",
+    "sheet": "/authored-vfx/spell-recovery/shared.fireball.20ft-ground.smoke.v3.travel",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 12
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "fps": 24,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        0,
+        721409,
+        1836290,
+        3606786,
+        5771010,
+        8525828,
+        11675399,
+        14695946,
+        16407568,
+        16744472,
+        16754726,
+        16757802,
+        16761402,
+        16769136,
+        3084038,
+        5840650,
+        8664080,
+        11686424,
+        14383396,
+        16094760,
+        4593428,
+        7811110,
+        10830886,
+        13855024
+      ]
+    }
+  },
+  {
+    "assetId": "shared.fireball.20ft-ground.smoke.v3",
+    "displayName": "Fireball \u00b7 20-foot ground radius \u00b7 impact",
+    "sheet": "/authored-vfx/spell-recovery/shared.fireball.20ft-ground.smoke.v3",
+    "frame": {
+      "width": 1536,
+      "height": 1536,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        0,
+        721409,
+        1836290,
+        3606786,
+        5771010,
+        8525828,
+        11675399,
+        14695946,
+        16407568,
+        16744472,
+        16754726,
+        16757802,
+        16761402,
+        16769136,
+        3084038,
+        5840650,
+        8664080,
+        11686424,
+        14383396,
+        16094760,
+        4593428,
+        7811110,
+        10830886,
+        13855024
+      ]
+    }
+  },
+  {
+    "assetId": "sleep.projectile.v1",
+    "displayName": "Sleep Projectile",
+    "sheet": "/authored-vfx/sleep-projectile.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 12
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "fps": 24,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.75,
+    "palettePreview": {
+      "colors": [
+        790580,
+        1316948,
+        2105207,
+        3155606,
+        4403378,
+        5783241,
+        7361244,
+        9399787,
+        11768822
+      ]
+    }
+  },
+  {
+    "assetId": "sleep.area.v1",
+    "displayName": "Sleep Area",
+    "sheet": "/authored-vfx/sleep-area.png",
+    "frame": {
+      "width": 813,
+      "height": 389,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.4993849938499385,
+      "y": 0.49920779819047295
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.4993849938499385,
+        "y": 0.49920779819047295
+      },
+      "SE": {
+        "x": 0.4993849938499385,
+        "y": 0.49920779819047295
+      },
+      "S": {
+        "x": 0.4993849938499385,
+        "y": 0.49920779819047295
+      },
+      "SW": {
+        "x": 0.4993849938499385,
+        "y": 0.49920779819047295
+      },
+      "W": {
+        "x": 0.4993849938499385,
+        "y": 0.49920779819047295
+      },
+      "NW": {
+        "x": 0.4993849938499385,
+        "y": 0.49920779819047295
+      },
+      "N": {
+        "x": 0.4993849938499385,
+        "y": 0.49920779819047295
+      },
+      "NE": {
+        "x": 0.4993849938499385,
+        "y": 0.49920779819047295
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        790580,
+        1316948,
+        2105207,
+        3155606,
+        4403378,
+        5783241,
+        7361244,
+        9399787,
+        11768822
+      ]
+    }
+  },
+  {
+    "assetId": "web.projectile.v1",
+    "displayName": "Web Silk Shot",
+    "sheet": "/authored-vfx/web-projectile.png",
+    "frame": {
+      "width": 482,
+      "height": 276,
+      "rows": 8,
+      "cols": 144
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 32,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.4979253112033195,
+      "y": 0.4898254836814999
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.4979253112033195,
+        "y": 0.4898254836814999
+      },
+      "SE": {
+        "x": 0.4979253112033195,
+        "y": 0.4898254836814999
+      },
+      "S": {
+        "x": 0.4979253112033195,
+        "y": 0.4898254836814999
+      },
+      "SW": {
+        "x": 0.4979253112033195,
+        "y": 0.4898254836814999
+      },
+      "W": {
+        "x": 0.4979253112033195,
+        "y": 0.4898254836814999
+      },
+      "NW": {
+        "x": 0.4979253112033195,
+        "y": 0.4898254836814999
+      },
+      "N": {
+        "x": 0.4979253112033195,
+        "y": 0.4898254836814999
+      },
+      "NE": {
+        "x": 0.4979253112033195,
+        "y": 0.4898254836814999
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        13488839
+      ]
+    }
+  }
+]

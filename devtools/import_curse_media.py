@@ -80,8 +80,7 @@ def import_bundle(source: Path, *, source_root: Path, repo: Path = ROOT) -> tupl
                     views[DIRECTIONS[q * 2]] = parts
                     views[DIRECTIONS[q * 2 + 1]] = parts
                 cell = row["cell"]
-                assets[identity] = {"assetId": identity, "displayName": identity, "kind": "projectile",
-                    "sheet": f"/curse-media/{name}/{phase}/{side}.png",
+                assets[identity] = {"assetId": identity, "displayName": identity, "sheet": f"/curse-media/{name}/{phase}/{side}.png",
                     "frame": {"width": cell, "height": cell, "rows": 8, "cols": count},
                     "fps": 32, "rowOrder": list(DIRECTIONS),
                     "phases": {"impact": {"start": 0, "frames": count, "fps": 32, "loop": loop}},

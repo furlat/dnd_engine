@@ -1,0 +1,184 @@
+[
+  {
+    "assetId": "transport.dimension_door.finite.back",
+    "displayName": "transport.dimension_door.finite.back",
+    "sheet": "/transport_media/dimension_door/finite/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 88
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 88,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375672973334
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1055779,
+        1456451,
+        2120551,
+        3573652,
+        7321533,
+        10607064,
+        14283240
+      ]
+    }
+  },
+  {
+    "assetId": "transport.dimension_door.finite.front",
+    "displayName": "transport.dimension_door.finite.front",
+    "sheet": "/transport_media/dimension_door/finite/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 88
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 88,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375672973334
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1055779,
+        1456451,
+        2120551,
+        3573652,
+        7321533,
+        10607064,
+        14283240
+      ]
+    }
+  },
+  {
+    "assetId": "transport.banishment.finite.back",
+    "displayName": "transport.banishment.finite.back",
+    "sheet": "/transport_media/banishment/finite/back.png",
+    "frame": {
+      "width": 768,
+      "height": 768,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5577350269186666
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2174009,
+        3887203,
+        6850200,
+        10599363,
+        13688797,
+        16774097
+      ]
+    }
+  },
+  {
+    "assetId": "transport.banishment.finite.front",
+    "displayName": "transport.banishment.finite.front",
+    "sheet": "/transport_media/banishment/finite/front.png",
+    "frame": {
+      "width": 768,
+      "height": 768,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5577350269186666
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2174009,
+        3887203,
+        6850200,
+        10599363,
+        13688797,
+        16774097
+      ]
+    }
+  }
+]

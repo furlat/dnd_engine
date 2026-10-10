@@ -1,13 +1,95 @@
 """Lossless offline atlas repacking for registered paired native color banks."""
 
 import argparse
+import gzip
 import hashlib
 import json
 from pathlib import Path
+from collections.abc import Iterable, Mapping
 
 from PIL import Image
 
 from devtools.repack_support_media import _repack_layer
+
+
+def pack_coupled_frames(frames: Iterable[tuple[int, int, tuple[int, int], Mapping[str, tuple[bytes, int]]]],
+                        output: Path, *, prefix: str, max_side: int = 2048) -> tuple[list[list[dict]], dict[str, dict]]:
+    """Page consecutive raw frames, preserving exactly aligned numeric companions.
+
+    Oversized frames become lossless pieces with their original canvas offsets.
+    Only one decoded temporal page set is held while streaming the source bank.
+    Returned dimensions belong to the release resource records, not a new codec.
+    """
+    records: list[list[dict]] = []
+    resources: dict[str, dict] = {}
+    pending: list[tuple[int, int, int, int, dict[str, bytes]]] = []
+    addresses: list[dict] = []
+    layout: dict[str, int] | None = None
+    edge = x = y = row_height = used_width = used_height = 0
+    page_index = 0
+
+    def flush() -> None:
+        nonlocal page_index, x, y, row_height, used_width, used_height
+        if not pending:
+            return
+        assert layout is not None
+        files = {}
+        for name, bpp in layout.items():
+            page = bytearray(used_width * used_height * bpp)
+            for px, py, width, height, planes in pending:
+                source = planes[name]
+                for row in range(height):
+                    offset = ((py + row) * used_width + px) * bpp
+                    page[offset:offset + width * bpp] = source[row * width * bpp:(row + 1) * width * bpp]
+            relative = f'{prefix}/{page_index:04d}.{name}.gz'
+            path = output / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = gzip.compress(page, compresslevel=6, mtime=0)
+            path.write_bytes(payload)
+            resources[relative] = {'width': used_width, 'height': used_height,
+                'channels': bpp, 'decodedBytes': len(page), 'bytes': len(payload),
+                'sha256': hashlib.sha256(payload).hexdigest(),
+                'decodedSha256': hashlib.sha256(page).hexdigest(), 'encoding': 'raw_gzip'}
+            files[name] = relative
+        for address in addresses:
+            address['planes'] = files
+        page_index += 1
+        pending.clear(); addresses.clear()
+        x = y = row_height = used_width = used_height = 0
+
+    for width, height, offset, planes in frames:
+        current_layout = {name: bpp for name, (_, bpp) in planes.items()}
+        if not planes or min(width, height) <= 0 or any(bpp <= 0 for bpp in current_layout.values()):
+            raise ValueError('Coupled frames need positive dimensions and plane channels')
+        if layout is None:
+            layout = current_layout
+            edge = max_side
+            if edge < 1:
+                raise ValueError('Page side must be positive')
+        elif current_layout != layout:
+            raise ValueError('Companion layout changed within a frame bank')
+        if any(len(data) != width * height * bpp for data, bpp in planes.values()):
+            raise ValueError('Coupled plane length differs from registered dimensions')
+        parts = []
+        for top in range(0, height, edge):
+            for left in range(0, width, edge):
+                pw, ph = min(edge, width - left), min(edge, height - top)
+                if x + pw > edge:
+                    x, y, row_height = 0, y + row_height, 0
+                if y + ph > edge:
+                    flush()
+                pixels = {name: b''.join(data[((top + row) * width + left) * bpp:
+                                            ((top + row) * width + left + pw) * bpp]
+                                        for row in range(ph))
+                          for name, (data, bpp) in planes.items()}
+                part = {'rect': [x, y, pw, ph], 'offset': [offset[0] + left, offset[1] + top]}
+                parts.append(part); addresses.append(part)
+                pending.append((x, y, pw, ph, pixels))
+                used_width, used_height = max(used_width, x + pw), max(used_height, y + ph)
+                x, row_height = x + pw, max(row_height, ph)
+        records.append(parts)
+    flush()
+    return records, resources
 
 
 def repack_bank(source: Path, name: str, output: Path, *, page_size: int = 2048) -> dict:
@@ -16,8 +98,8 @@ def repack_bank(source: Path, name: str, output: Path, *, page_size: int = 2048)
     if output.exists() or output.is_relative_to(source):
         raise ValueError("Atlas staging must be new and outside the preserved source")
     row = json.loads((source / "media.json").read_text())[name]
-    if row["fps"] != 32 or set(row["cameras"]) != {"0", "1", "2", "3"}:
-        raise ValueError("Repacking requires a complete registered 32-FPS bank")
+    if row["fps"] <= 0 or not row["cameras"]:
+        raise ValueError("Repacking requires a positive authored rate and registered views")
     checksums = {relative.strip().removeprefix("./"): digest
         for digest, relative in (line.split(maxsplit=1)
             for line in (source / "SHA256SUMS").read_text().splitlines())}

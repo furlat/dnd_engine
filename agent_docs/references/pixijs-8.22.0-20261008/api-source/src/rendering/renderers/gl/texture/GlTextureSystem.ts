@@ -1,0 +1,724 @@
+import { DOMAdapter } from '../../../../environment/adapter';
+import { extensions, ExtensionType } from '../../../../extensions/Extensions';
+import { GCManagedHash } from '../../../../utils/data/GCManagedHash';
+import { Texture } from '../../shared/texture/Texture';
+import { isIntegerFormat } from '../../shared/texture/utils/isIntegerFormat';
+import { GlTexture } from './GlTexture';
+import { glUploadBufferImageResource } from './uploaders/glUploadBufferImageResource';
+import { glUploadCompressedTextureResource } from './uploaders/glUploadCompressedTextureResource';
+import { createGlUploadCubeTextureResource } from './uploaders/glUploadCubeTextureResource';
+import { glUploadImageResource } from './uploaders/glUploadImageResource';
+import { glUploadVideoResource } from './uploaders/glUploadVideoResource';
+import { applyStyleParams } from './utils/applyStyleParams';
+import { mapFormatToGlFormat } from './utils/mapFormatToGlFormat';
+import { mapFormatToGlInternalFormat } from './utils/mapFormatToGlInternalFormat';
+import { mapFormatToGlType } from './utils/mapFormatToGlType';
+import { mapViewDimensionToGlTarget } from './utils/mapViewDimensionToGlTarget';
+import { unpremultiplyAlpha } from './utils/unpremultiplyAlpha';
+
+import type { ICanvas } from '../../../../environment/canvas/ICanvas';
+import type { System } from '../../shared/system/System';
+import type { CanvasGenerator, GetPixelsOutput } from '../../shared/texture/GenerateCanvas';
+import type { TextureSource } from '../../shared/texture/sources/TextureSource';
+import type { BindableTexture } from '../../shared/texture/Texture';
+import type { TextureStyle } from '../../shared/texture/TextureStyle';
+import type { GlRenderingContext } from '../context/GlRenderingContext';
+import type { WebGLRenderer } from '../WebGLRenderer';
+import type { GLTextureUploader } from './uploaders/GLTextureUploader';
+
+const BYTES_PER_PIXEL = 4;
+
+/**
+ * The system for managing textures in WebGL.
+ * @category rendering
+ * @advanced
+ */
+export class GlTextureSystem implements System, CanvasGenerator
+{
+    /** @ignore */
+    public static extension = {
+        type: [
+            ExtensionType.WebGLSystem,
+        ],
+        name: 'texture',
+    } as const;
+
+    /**
+     * Optional uploaders registered via {@link ExtensionType.TextureUploaderWebGL}. Each entry is
+     * merged into {@link _uploads} at construction time, so import order matters: register the
+     * extension before creating the renderer.
+     * @internal
+     */
+    public static readonly uploadExtensions: Record<string, GLTextureUploader> = Object.create(null);
+
+    private readonly _renderer: WebGLRenderer;
+    private readonly _managedTextures: GCManagedHash<TextureSource>;
+    /**
+     * @deprecated since 8.15.0
+     */
+    public get managedTextures(): Readonly<TextureSource[]> { return Object.values(this._managedTextures.items); }
+
+    private _glSamplers: Record<string, WebGLSampler> = Object.create(null);
+
+    private _boundTextures: TextureSource[] = [];
+    /** Bit `n` is set while unit `n` may hold an integer-format texture; `resetState` sets every unit. */
+    private _integerUnits = 0;
+    private _activeTextureLocation = -1;
+
+    private _boundSamplers: Record<number, WebGLSampler> = Object.create(null);
+
+    private readonly _uploads: Record<string, GLTextureUploader>;
+
+    private _gl: GlRenderingContext;
+    private _mapFormatToInternalFormat: Record<string, number>;
+    private _mapFormatToType: Record<string, number>;
+    private _mapFormatToFormat: Record<string, number>;
+    private _mapViewDimensionToGlTarget: Record<TextureSource['viewDimension'], number | null>;
+
+    private _premultiplyAlpha = false;
+
+    // TODO - separate samplers will be a cool thing to add, but not right now!
+    private readonly _useSeparateSamplers = false;
+
+    constructor(renderer: WebGLRenderer)
+    {
+        this._renderer = renderer;
+
+        this._managedTextures = new GCManagedHash({
+            renderer,
+            type: 'resource',
+            onUnload: this.onSourceUnload.bind(this),
+            name: 'glTexture'
+        });
+
+        // our 2D uploaders..
+        const baseUploaders = {
+            image: glUploadImageResource,
+            buffer: glUploadBufferImageResource,
+            video: glUploadVideoResource,
+            compressed: glUploadCompressedTextureResource,
+            ...GlTextureSystem.uploadExtensions,
+        };
+
+        this._uploads = {
+            ...baseUploaders,
+            cube: createGlUploadCubeTextureResource(baseUploaders),
+        };
+    }
+
+    protected contextChange(gl: GlRenderingContext): void
+    {
+        this._gl = gl;
+
+        if (!this._mapFormatToInternalFormat)
+        {
+            // rebuild all our maps if they don't exist yet
+            this._mapFormatToInternalFormat = mapFormatToGlInternalFormat(gl, this._renderer.context.extensions);
+
+            this._mapFormatToType = mapFormatToGlType(gl);
+            this._mapFormatToFormat = mapFormatToGlFormat(gl);
+            this._mapViewDimensionToGlTarget = mapViewDimensionToGlTarget(gl);
+        }
+
+        this._managedTextures.removeAll(true);
+
+        this._glSamplers = Object.create(null);
+        this._boundSamplers = Object.create(null);
+        this._premultiplyAlpha = false;
+
+        for (let i = 0; i < 16; i++)
+        {
+            this.bind(Texture.EMPTY, i);
+        }
+    }
+
+    /**
+     * Initializes a texture source, if it has already been initialized nothing will happen.
+     * @param source - The texture source to initialize.
+     * @returns The initialized texture source.
+     */
+    public initSource(source: TextureSource)
+    {
+        this.bind(source);
+    }
+
+    public bind(texture: BindableTexture, location = 0)
+    {
+        const source = texture.source;
+
+        if (texture)
+        {
+            this.bindSource(source, location);
+
+            if (this._useSeparateSamplers)
+            {
+                this._bindSampler(source.style, location);
+            }
+        }
+        else
+        {
+            this.bindSource(null, location);
+
+            if (this._useSeparateSamplers)
+            {
+                this._bindSampler(null, location);
+            }
+        }
+    }
+
+    public bindSource(source: TextureSource, location = 0): void
+    {
+        const gl = this._gl;
+
+        source._gcLastUsed = this._renderer.gc.now;
+
+        if (this._boundTextures[location] !== source)
+        {
+            this._setBoundTexture(location, source);
+            this._activateLocation(location);
+
+            source ||= Texture.EMPTY.source;
+
+            // bind texture and source!
+            const glTexture = this.getGlSource(source);
+
+            gl.bindTexture(glTexture.target, glTexture.texture);
+        }
+    }
+
+    /**
+     * Binds the empty texture over every integer texture on unit `location` and above
+     *
+     * WebGL fails a draw when a float sampler's unit holds an integer texture, even if the shader
+     * never samples it. Call this after binding a batch's textures when the shader declares more
+     * samplers than the batch binds.
+     * @param location - The first texture unit to check.
+     */
+    public unbindIntegerTextures(location: number): void
+    {
+        // the mask covers units 0-31
+        if (location >= 32) return;
+
+        let units = (this._integerUnits >>> location) << location;
+
+        while (units)
+        {
+            const unit = 31 - Math.clz32(units);
+
+            units &= ~(1 << unit);
+
+            // clears the unit's bit through _setBoundTexture
+            this.bind(Texture.EMPTY, unit);
+        }
+    }
+
+    /**
+     * Records the source bound to a unit, keeping `_integerUnits` in step. Every per-unit write to
+     * `_boundTextures` goes through here so the two can't drift apart.
+     *
+     * A unit has a separate binding per target (2D, 2D array, cube), and the batch shaders sample
+     * the 2D target, so only a 2D source changes the unit's bit. Anything else, including null,
+     * leaves it as it was: a bit left set after the integer texture is gone only costs one extra
+     * `bind(Texture.EMPTY)` in `unbindIntegerTextures`, while a cleared bit over an integer texture
+     * fails the next batch.
+     * @param location - The texture unit.
+     * @param source - The source now bound there, or null.
+     */
+    private _setBoundTexture(location: number, source: TextureSource | null): void
+    {
+        this._boundTextures[location] = source;
+
+        // the mask covers units 0-31, every unit the batchers use; -1 is the active location before any bind
+        if (location < 0 || location > 31) return;
+
+        if (!source || source.viewDimension !== '2d') return;
+
+        if (isIntegerFormat(source.format))
+        {
+            this._integerUnits |= 1 << location;
+        }
+        else
+        {
+            this._integerUnits &= ~(1 << location);
+        }
+    }
+
+    private _bindSampler(style: TextureStyle, location = 0): void
+    {
+        const gl = this._gl;
+
+        if (!style)
+        {
+            this._boundSamplers[location] = null;
+            gl.bindSampler(location, null);
+
+            return;
+        }
+
+        const sampler = this._getGlSampler(style);
+
+        if (this._boundSamplers[location] !== sampler)
+        {
+            this._boundSamplers[location] = sampler;
+            gl.bindSampler(location, sampler);
+        }
+    }
+
+    public unbind(texture: BindableTexture): void
+    {
+        const source = texture.source;
+        const boundTextures = this._boundTextures;
+        const gl = this._gl;
+
+        for (let i = 0; i < boundTextures.length; i++)
+        {
+            if (boundTextures[i] === source)
+            {
+                this._activateLocation(i);
+
+                const glTexture = this.getGlSource(source);
+
+                gl.bindTexture(glTexture.target, null);
+                this._setBoundTexture(i, null);
+            }
+        }
+    }
+
+    private _activateLocation(location: number): void
+    {
+        if (this._activeTextureLocation !== location)
+        {
+            this._activeTextureLocation = location;
+            this._gl.activeTexture(this._gl.TEXTURE0 + location);
+        }
+    }
+
+    private _initSource(source: TextureSource): GlTexture
+    {
+        const gl = this._gl;
+
+        const glTexture = new GlTexture(gl.createTexture());
+
+        glTexture.type = this._mapFormatToType[source.format];
+        glTexture.internalFormat = this._mapFormatToInternalFormat[source.format];
+        glTexture.format = this._mapFormatToFormat[source.format];
+        glTexture.target = this._mapViewDimensionToGlTarget[source.viewDimension];
+
+        if (glTexture.target === null)
+        {
+            // eslint-disable-next-line max-len
+            throw new Error(`Unsupported view dimension: ${source.viewDimension} with this webgl version: ${this._renderer.context.webGLVersion}`);
+        }
+
+        if (source.autoGenerateMipmaps && (this._renderer.context.supports.nonPowOf2mipmaps || source.isPowerOfTwo))
+        {
+            const biggestDimension = Math.max(source.width, source.height, source.depth);
+
+            source.mipLevelCount = Math.floor(Math.log2(biggestDimension)) + 1;
+        }
+
+        source._gpuData[this._renderer.uid] = glTexture;
+
+        const added = this._managedTextures.add(source);
+
+        if (added)
+        {
+            source.on('update', this.onSourceUpdate, this);
+            source.on('resize', this.onSourceUpdate, this);
+            source.on('styleChange', this.onStyleChange, this);
+            source.on('updateMipmaps', this.onUpdateMipmaps, this);
+        }
+
+        this.onSourceUpdate(source);
+        this.updateStyle(source, false);
+
+        return glTexture;
+    }
+
+    protected onStyleChange(source: TextureSource): void
+    {
+        this.updateStyle(source, false);
+    }
+
+    protected updateStyle(source: TextureSource, firstCreation: boolean): void
+    {
+        const gl = this._gl;
+
+        const glTexture = this.getGlSource(source);
+
+        gl.bindTexture(glTexture.target, glTexture.texture);
+
+        this._setBoundTexture(this._activeTextureLocation, source);
+
+        applyStyleParams(
+            source.style,
+            gl,
+            source.mipLevelCount > 1,
+            this._renderer.context.extensions.anisotropicFiltering,
+            'texParameteri',
+            glTexture.target,
+            // will force a clamp to edge if the texture is not a power of two
+            !this._renderer.context.supports.nonPowOf2wrapping && !source.isPowerOfTwo,
+            firstCreation,
+        );
+    }
+
+    protected onSourceUnload(source: TextureSource, contextLost = false): void
+    {
+        const glTexture = source._gpuData[this._renderer.uid] as GlTexture;
+
+        if (!glTexture) return;
+
+        if (!contextLost)
+        {
+            this.unbind(source);
+            this._gl.deleteTexture(glTexture.texture);
+        }
+        source.off('update', this.onSourceUpdate, this);
+        source.off('resize', this.onSourceUpdate, this);
+        source.off('styleChange', this.onStyleChange, this);
+        source.off('updateMipmaps', this.onUpdateMipmaps, this);
+    }
+
+    protected onSourceUpdate(source: TextureSource): void
+    {
+        const gl = this._gl;
+
+        const glTexture = this.getGlSource(source);
+
+        gl.bindTexture(glTexture.target, glTexture.texture);
+
+        this._setBoundTexture(this._activeTextureLocation, source);
+
+        // integer texels have no alpha to premultiply, and a premultiplied 32-bit integer upload never returns in Chromium.
+        // 3D and array textures upload from buffers with texImage3D, which rejects premultiply (INVALID_OPERATION)
+        const premultipliedAlpha = source.alphaMode === 'premultiply-alpha-on-upload'
+            && !isIntegerFormat(source.format)
+            && glTexture.target !== gl.TEXTURE_3D
+            && glTexture.target !== gl.TEXTURE_2D_ARRAY;
+
+        if (this._premultiplyAlpha !== premultipliedAlpha)
+        {
+            this._premultiplyAlpha = premultipliedAlpha;
+            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultipliedAlpha);
+        }
+
+        if (this._uploads[source.uploadMethodId])
+        {
+            this._uploads[source.uploadMethodId].upload(source, glTexture, gl, this._renderer.context.webGLVersion);
+        }
+        else if (glTexture.target === gl.TEXTURE_2D)
+        {
+            // Allocate an "empty" texture (typical for RenderTexture) for the appropriate target.
+            // This allocates level 0 and, if needed, the full mip chain so any mip can be attached/rendered into (WebGL2).
+            this._initEmptyTexture2D(glTexture, source);
+        }
+        else if (glTexture.target === gl.TEXTURE_2D_ARRAY || glTexture.target === gl.TEXTURE_3D)
+        {
+            this._initEmptyTexture3D(glTexture, source);
+        }
+        else if (glTexture.target === gl.TEXTURE_CUBE_MAP)
+        {
+            this._initEmptyTextureCube(glTexture, source);
+        }
+        else
+        {
+            throw new Error('[GlTextureSystem] Unsupported texture target for empty allocation.');
+        }
+
+        // Keep the texture's mip range in sync with the declared mipLevelCount.
+        // This is required in WebGL2 for FBO attachments at mipLevel > 0 when using partial mip chains.
+        this._applyMipRange(glTexture, source);
+
+        if (source.autoGenerateMipmaps && source.mipLevelCount > 1)
+        {
+            this.onUpdateMipmaps(source, false);
+        }
+    }
+
+    protected onUpdateMipmaps(source: TextureSource, bind = true): void
+    {
+        if (bind) this.bindSource(source, 0);
+
+        const glTexture = this.getGlSource(source);
+
+        this._gl.generateMipmap(glTexture.target);
+    }
+
+    private _initEmptyTexture2D(glTexture: GlTexture, source: TextureSource): void
+    {
+        const gl = this._gl;
+
+        // Level 0
+        gl.texImage2D(
+            gl.TEXTURE_2D,
+            0,
+            glTexture.internalFormat,
+            source.pixelWidth,
+            source.pixelHeight,
+            0,
+            glTexture.format,
+            glTexture.type,
+            null,
+        );
+
+        // Mips (if requested)
+        let w = Math.max(source.pixelWidth >> 1, 1);
+        let h = Math.max(source.pixelHeight >> 1, 1);
+
+        for (let level = 1; level < source.mipLevelCount; level++)
+        {
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                level,
+                glTexture.internalFormat,
+                w,
+                h,
+                0,
+                glTexture.format,
+                glTexture.type,
+                null,
+            );
+
+            w = Math.max(w >> 1, 1);
+            h = Math.max(h >> 1, 1);
+        }
+    }
+
+    /**
+     * Allocates a texture with a depth: the layers of a 2D array or the slices of a 3D texture.
+     * Layer counts stay the same at every mip level; 3D depth halves like width and height.
+     * @param glTexture - The GL texture wrapper.
+     * @param source - The texture source describing the size.
+     */
+    private _initEmptyTexture3D(glTexture: GlTexture, source: TextureSource): void
+    {
+        const gl = this._gl;
+        const is3D = glTexture.target === gl.TEXTURE_3D;
+
+        let w = source.pixelWidth;
+        let h = source.pixelHeight;
+        let d = source.depthOrArrayLayers;
+
+        for (let level = 0; level < source.mipLevelCount; level++)
+        {
+            gl.texImage3D(
+                glTexture.target,
+                level,
+                glTexture.internalFormat,
+                w,
+                h,
+                d,
+                0,
+                glTexture.format,
+                glTexture.type,
+                null,
+            );
+
+            w = Math.max(w >> 1, 1);
+            h = Math.max(h >> 1, 1);
+            if (is3D) d = Math.max(d >> 1, 1);
+        }
+    }
+
+    private _initEmptyTextureCube(glTexture: GlTexture, source: TextureSource): void
+    {
+        const gl = this._gl;
+
+        const totalCubeFaces = 6;
+
+        // Level 0 (all faces)
+        for (let face = 0; face < totalCubeFaces; face++)
+        {
+            gl.texImage2D(
+                gl.TEXTURE_CUBE_MAP_POSITIVE_X + face,
+                0,
+                glTexture.internalFormat,
+                source.pixelWidth,
+                source.pixelHeight,
+                0,
+                glTexture.format,
+                glTexture.type,
+                null,
+            );
+        }
+
+        // Mips (if requested)
+        let w = Math.max(source.pixelWidth >> 1, 1);
+        let h = Math.max(source.pixelHeight >> 1, 1);
+
+        for (let level = 1; level < source.mipLevelCount; level++)
+        {
+            for (let face = 0; face < totalCubeFaces; face++)
+            {
+                gl.texImage2D(
+                    gl.TEXTURE_CUBE_MAP_POSITIVE_X + face,
+                    level,
+                    glTexture.internalFormat,
+                    w,
+                    h,
+                    0,
+                    glTexture.format,
+                    glTexture.type,
+                    null,
+                );
+            }
+
+            w = Math.max(w >> 1, 1);
+            h = Math.max(h >> 1, 1);
+        }
+    }
+
+    /**
+     * Applies a mip range to the currently-bound texture so WebGL2 considers the texture "mipmap complete"
+     * for the declared `mipLevelCount` (especially important for partial mip chains rendered via FBO).
+     * @param glTexture - The GL texture wrapper.
+     * @param source - The texture source describing mipLevelCount.
+     */
+    private _applyMipRange(glTexture: GlTexture, source: TextureSource): void
+    {
+        if (this._renderer.context.webGLVersion !== 2) return;
+
+        // Skip for single-mip textures: setting MAX_LEVEL=0 triggers an ANGLE Metal bug
+        // on iOS 18.0–18.1 (https://github.com/pixijs/pixijs/issues/11984).
+        if (source.mipLevelCount <= 1) return;
+
+        const gl = this._gl;
+        const maxLevel = Math.max((source.mipLevelCount | 0) - 1, 0);
+
+        gl.texParameteri(glTexture.target, gl.TEXTURE_BASE_LEVEL, 0);
+        gl.texParameteri(glTexture.target, gl.TEXTURE_MAX_LEVEL, maxLevel);
+    }
+
+    private _initSampler(style: TextureStyle): WebGLSampler
+    {
+        const gl = this._gl;
+
+        const glSampler = this._gl.createSampler();
+
+        this._glSamplers[style._resourceId] = glSampler;
+
+        applyStyleParams(
+            style,
+            gl,
+            this._boundTextures[this._activeTextureLocation].mipLevelCount > 1,
+            this._renderer.context.extensions.anisotropicFiltering,
+            'samplerParameteri',
+            glSampler,
+            false,
+            true,
+        );
+
+        return this._glSamplers[style._resourceId];
+    }
+
+    private _getGlSampler(sampler: TextureStyle): WebGLSampler
+    {
+        return this._glSamplers[sampler._resourceId] || this._initSampler(sampler);
+    }
+
+    public getGlSource(source: TextureSource): GlTexture
+    {
+        source._gcLastUsed = this._renderer.gc.now;
+
+        return source._gpuData[this._renderer.uid] as GlTexture || this._initSource(source);
+    }
+
+    public generateCanvas(texture: Texture): ICanvas
+    {
+        const { pixels, width, height } = this.getPixels(texture);
+
+        const canvas = DOMAdapter.get().createCanvas();
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+
+        if (ctx)
+        {
+            const imageData = ctx.createImageData(width, height);
+
+            imageData.data.set(pixels);
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        return canvas;
+    }
+
+    public getPixels(texture: Texture): GetPixelsOutput
+    {
+        const resolution = texture.source.resolution;
+        const frame = texture.frame;
+
+        const width = Math.max(Math.round(frame.width * resolution), 1);
+        const height = Math.max(Math.round(frame.height * resolution), 1);
+        const pixels = new Uint8Array(BYTES_PER_PIXEL * width * height);
+
+        const renderer = this._renderer;
+
+        const renderTarget = renderer.renderTarget.getRenderTarget(texture);
+        const glRenterTarget = renderer.renderTarget.getGpuRenderTarget(renderTarget);
+
+        const gl = renderer.gl;
+
+        renderer.renderTarget.adaptor.bindFramebuffer(glRenterTarget.resolveTargetFramebuffer);
+
+        gl.readPixels(
+            Math.round(frame.x * resolution),
+            Math.round(frame.y * resolution),
+            width,
+            height,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            pixels
+        );
+
+        // if (texture.source.premultiplyAlpha > 0)
+        // TODO - premultiplied alpha does not exist right now, need to add that back in!
+        // eslint-disable-next-line no-constant-condition
+        if (false)
+        {
+            unpremultiplyAlpha(pixels);
+        }
+
+        return { pixels: new Uint8ClampedArray(pixels.buffer), width, height };
+    }
+
+    public destroy(): void
+    {
+        // we copy the array as the array with a slice as onSourceDestroy
+        // will remove the source from the real managedTextures array
+        this._managedTextures.destroy();
+        this._glSamplers = null;
+        this._boundTextures = null;
+        this._boundSamplers = null;
+        this._mapFormatToInternalFormat = null;
+        this._mapFormatToType = null;
+        this._mapFormatToFormat = null;
+        (this._uploads as null) = null;
+        (this._renderer as null) = null;
+    }
+
+    public resetState(): void
+    {
+        const maxTextures = this._renderer.limits.maxTextures;
+
+        this._activeTextureLocation = -1;
+        // the context was used outside pixi, so nothing is known about what any unit holds. Forget the
+        // slots so the next bind is never skipped, and treat every unit as possibly integer until
+        // unbindIntegerTextures clears it
+        this._boundTextures.fill(null);
+        this._integerUnits = maxTextures >= 32 ? -1 : (1 << maxTextures) - 1;
+        this._boundSamplers = Object.create(null);
+
+        const gl = this._gl;
+
+        this._premultiplyAlpha = false;
+
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, this._premultiplyAlpha);
+    }
+}
+
+extensions.handleByMap(ExtensionType.TextureUploaderWebGL, GlTextureSystem.uploadExtensions);
+

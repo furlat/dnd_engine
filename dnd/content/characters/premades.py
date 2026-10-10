@@ -265,8 +265,6 @@ _SORCERER_SUPPLEMENT = (
 
 _BARBARIAN_APPEARANCE = CharacterAppearance(
     portrait_key="hero.barbarian_l5_berserker_torch.hero",
-    visual_scale=1.1,
-    visual_scale_x=1.1,
     skin_tint=0xD4AA78,
     head_category="Head17",
     hair_tint=0xD0BFA1,
@@ -281,8 +279,6 @@ _FIGHTER_APPEARANCE = CharacterAppearance(
 )
 _SORCERER_APPEARANCE = CharacterAppearance(
     portrait_key="hero.sorcerer_l5_standard_torch.hero",
-    visual_scale=0.9,
-    visual_scale_x=0.9,
     skin_tint=0xE6BC98,
     head_category="Head22",
     hair_tint=0x993F00,
