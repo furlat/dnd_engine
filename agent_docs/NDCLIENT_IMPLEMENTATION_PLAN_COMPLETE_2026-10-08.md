@@ -1,6 +1,8 @@
+OUR OBJECTIVE IS A COMPLETE IMPLEMENTATION
+
 # NDCLIENT IMPLEMENTATION PLAN — complete consolidated edition
 
-Date: 8 October 2026; updated after the committed preparation checkpoint on 10 October 2026.
+Date: 8 October 2026; scope and source references corrected on 10 October 2026 after the user's rollback and directory renaming.
 **Current status: the fresh repository, selected artwork and core tracked client
 authoring are prepared. The 10 October review's missing door/timber connection
 is now implemented in the existing typed authoring (§6.1). The asset/authoring
@@ -9,8 +11,9 @@ Complete application-release integration, client scaffold/SDK integration,
 renderer, Studio and UI are not implemented.** N0 is partial.
 
 **Committed starting point:** NDClient `df5397e` (`first push - pre implementation`)
-contains the completed tracked preparation; its working tree was clean before
-this documentation update. Artwork remains installed and Git-ignored. This is
+records the completed tracked preparation. It is a reference checkpoint, not an
+instruction to reset the user's current worktree or restore rolled-back code.
+Artwork remains installed and Git-ignored. This is
 the client checkpoint, not a claim that the separate engine worktree is committed
 or that a playable client exists. Do not recreate the repository, repeat asset
 intake or reopen the completed authoring connection.
@@ -19,10 +22,54 @@ intake or reopen the completed authoring connection.
 is the maintained document. The
 [NDClient repository copy](/home/tommaso/Dev/NDClient/agent_docs/NDCLIENT_IMPLEMENTATION_PLAN_COMPLETE_2026-10-08.md)
 contains the same specification for work in that repository. Update the master
-and refresh that copy together; the copy is not a second plan. In the repository
-copy, external evidence links point back to their existing engine locations.
+and refresh that copy together; the copy is not a second plan. Evidence links use
+the existing engine locations so both copies carry the same text.
 Unless prefixed with `NDClient/`, source-code paths refer to the engine repository;
 client `authoring/`, `.media/` and `tools/` paths are identified in their sections.
+
+## Working rules — read before choosing the next task
+
+1. **No backend changes are allowed.** Engine, server, wire schema, SDK and obsolete
+   Python applications are read-only inputs. Launching/configuring the delivered
+   service and using its SDK are allowed; changing its implementation is not.
+2. **Implement the agreed design; do not innovate around a mismatch.** If a planned
+   approach cannot work, do not invent another architecture, add hidden assumptions,
+   patch individual assets/spells, fabricate data or silently change requirements.
+3. **A noncritical uncertainty does not stop the project.** Record the affected
+   requirement, concrete evidence, what cannot yet work and the decision needed in
+   the existing status section (§12). Leave that part honestly incomplete and move
+   to the next specified, unblocked task. Do not turn the note into a new subsystem,
+   research campaign, provisional fix or automatic backend task.
+4. **Discuss genuine blockers with the user.** A blocker is a demonstrated missing
+   input/contradiction that prevents the dependent work, not an optional edge case
+   or a wish for more complete data. Explain it without taking a new approach;
+   continue independent planned work while the decision is pending.
+5. **Keep the whole delivery in view.** There is plenty of agreed work to do. Pick
+   the next task whose inputs and method are known before entering uncertain work.
+   Do not spend repeated turns perfecting one tiny detail while other required
+   components remain untouched. Report progress and limitations honestly; never
+   mark a skipped requirement complete or conceal it with a fallback.
+
+**Reading and execution order:** use the current status and §1.2 for the prepared
+inputs, then §10 for the next work item. Read its relevant contract in §§3–9 and
+existing source examples before editing. §11 supplies focused acceptance cases;
+§§13–14 keep complete coverage visible. Read history only for a specific needed
+fact. Repeatedly rereading this whole plan is not progress.
+
+**Scope for implementation:** NDClient source, its tracked authoring and client-side
+SDK capture/configuration tools only. Consume `dnd/`, `server/` and `sdk/` as delivered;
+this plan contains no engine, server, transport, projection or SDK implementation
+work. A missing native capability is reported to the user, not silently added or
+simulated in the client. Existing server launch/configuration and SDK consumption
+remain part of client integration. The implemented movement preference is already
+available (§4.8).
+
+**Source paths after renaming:** `server/` is the active thin service formerly named
+`player_server/`. `game_obsolete/`, `ai_obsolete/` and `server_obsolete/` are archived
+reference implementations. Active enemy AI remains in `dnd/ai/`. Do not revive,
+repair or migrate imports inside the archived packages to execute this plan.
+`devtools/player_server_acceptance/` is an existing tool directory, not the service
+package; its name has not changed.
 
 **Resume at §1.2 / N0:** connect the prepared authoring to application loading,
 source-derived TypeScript types and the current SDK, then build the one shared
@@ -41,7 +88,7 @@ preparation pass or standalone preview does not substitute for that work.
   have their delivered corrections connected to typed bank/door/library owners
   (§6.1). No new artwork or physical measurement is requested.
 - UI selection is smooth48 icons and 192×256 portraits only. Their existing UI
-  source sections are now adopted under `authoring/ui/`; §5.9 records the exact
+  source sections are now adopted under `authoring/ui/`; §5.7 records the exact
   mappings, choice values and remaining art gaps. Runtime UI is still pending.
 - Ordinary VFX and the completed Factory replacement delivery are copied:
   28 spell families, 193 paired banks, 400 media IDs and all 38 previously pending
@@ -51,8 +98,8 @@ preparation pass or standalone preview does not substitute for that work.
   files and bank semantics.** §5.1.1 records this implemented preparation and the
   remaining application integration.
 
-[ASSETS.md](../ASSETS.md) is the compact current location/selection guide;
-[the VFX intake](audits/NDCLIENT_VFX_ASSET_INTAKE_2026-10-09.md) records copy evidence.
+[ASSETS.md](/mnt/c/users/tommaso/documents/dev/dnd_engine/ASSETS.md) is the compact current location/selection guide;
+[the VFX intake](/mnt/c/users/tommaso/documents/dev/dnd_engine/agent_docs/audits/NDCLIENT_VFX_ASSET_INTAKE_2026-10-09.md) records copy evidence.
 The recovery and asset diaries are historical references, not extra instructions
 or documents to reread routinely. Further implementation follows the next
 user-authorized step; asset preparation has not silently resumed renderer work.
@@ -61,7 +108,7 @@ This is the single specification for the next NDClient implementation. It contai
 
 **Subsequent group D authorization and completion:** the user supplied
 `/mnt/c/Users/tommaso/Documents/assets/dnd-engine-icons-and-portraits/README.md`
-and requested production-size copies. The [intake record](audits/NDCLIENT_UI_ASSET_INTAKE_2026-10-09.md)
+and requested production-size copies. The [intake record](/mnt/c/users/tommaso/documents/dev/dnd_engine/agent_docs/audits/NDCLIENT_UI_ASSET_INTAKE_2026-10-09.md)
 locates 594 new icons (620 keys, 103 choices) and 661 new portraits: 43 exact
 existing creature associations, 186 unassigned NPC/source entries and 432
 selectable character portraits. Preserve the delivered replacement/choice and
@@ -80,7 +127,7 @@ The original `agent_docs/NDCLIENT_IMPLEMENTATION_PLAN_2026-10-08.md` was copied 
 as the implementation baseline. The later user-authorized fresh repository above
 now exists; reuse it and its prepared assets rather than recreating or resetting it.
 
-**Navigate this plan:** [Scope and completion](#0-completion-contract-and-scope) · [Sources/repository](#1-source-recovery-repository-and-assets-exact-starting-work) · [Coverage/types](#2-full-source-coverage-and-type-ownership) · [Architecture](#3-ownership-execution-and-minimum-duplication) · [Server/SDK/playback](#4-delivered-server-sdk-playback-and-recording-integration) · [Export/native amendments](#5-complete-presentation-release-and-remaining-owner-amendments) · [Renderer](#6-production-renderer-shared-data-geometry-material-and-composition) · [Assets](#7-asset-delivery-and-authored-rig-data) · [Studio](#8-studio-read-only-inspection-of-the-production-runtime) · [Player UI](#9-complete-player-ui-and-interaction) · [Implementation](#10-implementation-sequence-with-concrete-outputs) · [Verification](#11-verification-visual-scenarios-and-performance) · [Completion status](#12-delivery-status-and-acceptance-language) · [Renderer families](#13-complete-production-renderer-capability-coverage) · [Complaints/parity](#14-complaint-and-requirement-closure--migration-versus-existing-parity) · [Reviews](#15-review-responsibilities-and-recorded-disposition) · [Source evidence](#16-sourceapi-evidence-and-scope-boundary).
+**Navigate this plan:** [Scope and completion](#0-completion-contract-and-scope) · [Sources/repository](#1-source-recovery-repository-and-assets-exact-starting-work) · [Coverage/types](#2-full-source-coverage-and-type-ownership) · [Architecture](#3-ownership-execution-and-minimum-duplication) · [Server/SDK/playback](#4-delivered-server-sdk-playback-and-recording-integration) · [Authored presentation data](#5-complete-client-presentation-release) · [Renderer](#6-production-renderer-shared-data-geometry-material-and-composition) · [Assets](#7-asset-delivery-and-authored-rig-data) · [Studio](#8-studio-read-only-inspection-of-the-production-runtime) · [Player UI](#9-complete-player-ui-and-interaction) · [Implementation](#10-implementation-sequence-with-concrete-outputs) · [Verification](#11-verification-visual-scenarios-and-performance) · [Completion status](#12-delivery-status-and-acceptance-language) · [Renderer families](#13-complete-production-renderer-capability-coverage) · [Complaints/parity](#14-complaint-and-requirement-closure--migration-versus-existing-parity) · [Reviews](#15-review-responsibilities-and-recorded-disposition) · [Source evidence](#16-sourceapi-evidence-and-scope-boundary).
 
 ## 0. Completion contract and scope
 
@@ -94,7 +141,7 @@ The result is a playable browser client using the delivered server/SDK and a Stu
 | Full content | Every selected authored binding and dependency is installed and has an explicit supported consumer. Scene demand controls residency, not which content gets migrated. |
 | Studio | The existing Neuro Studio capabilities return: hierarchical source-aware layer tracks, preview thumbnails, meaningful time/rulers, actual event cases, read-only rig/action/spell/condition/world/material inspection. Canonical JSON is edited manually and reloaded through the same compiler; an editor/save UI is not required for this phase. |
 | Interface | A coherent minimal HUD with four icon blocks, small portraits, proper targeting and variants, useful inventory/details/reactions, and a readable, copyable, exact-math combat log. |
-| Responsiveness | Input and display do not wait for native turns, bulk JSON validation/reduction, file scans or texture decode. Actual stalls are attributed and repaired; correctness and complete delivery are not traded for an invented quota. |
+| Responsiveness | Input and display do not wait for native turns, bulk JSON validation/reduction, file scans or texture decode. Actual stalls are attributed; client stalls are repaired and upstream delays reported; correctness and complete delivery are not traded for an invented quota. |
 | Handoff | Repeatable server/client/Studio launch and source-edit workflow, an installed private asset release, source-only Git history, and an issue-indexed in-app review of the complete product. |
 
 ### 0.0 The production renderer is the central deliverable
@@ -119,7 +166,7 @@ Studio exposes this transformation explicitly. Its tracks, effects and timings a
 
 The shared runtime must consume every supported field and fact family before delivery is called complete. It has consistent principles: native ownership of outcomes; source ownership of visual semantics; authored registration of original art; support identity separate from physical elevation and composition role; one comparable depth space; one absolute clock; one displayed-state/resource commit; shared geometry for rendering and picking; and GPU evaluation of finite materials/particles. No spell/window/fixture-specific correction can override those principles to make one preview look plausible.
 
-Production draws are passive compiled views, not a second serialized world/event schema. They retain native/cause/occurrence identity, source binding/layer/frame, displayed transform, support/receiver, geometry/material/blend and dependencies. A new native fact or authored field is handled in its common owner. Play, Studio and any capture call those functions directly; sharing type declarations while maintaining independent render loops does not satisfy this design.
+Production draws are passive compiled views, not a second serialized world/event schema. They retain native/cause/occurrence identity, source binding/layer/frame, displayed transform, support/receiver, geometry/material/blend and dependencies. Existing native facts and client-authored fields are consumed through their common presentation owner; a missing native value is not an instruction to expand the API. Play, Studio and any capture call those functions directly; sharing type declarations while maintaining independent render loops does not satisfy this design.
 
 ### 0.1 Requirements that remain in force
 
@@ -140,26 +187,50 @@ There is no 8 MiB page-pair rule, universal decoded-memory ceiling, arbitrary lo
 
 No source feature is postponed behind a cosmetic “foundation complete” label. There is no second reduced scene format, fake ability button, preview-only event executor, full-grid clipping stencil, class-dependent body normalization, guessed compatibility or runtime XYZ-array reconstruction. No repeated schema generation on startup, ordinary asset installation, unrelated parameter edits or every test run.
 
-Historical Pygame failures are **parity/regression requirements**, not evidence that the deleted NDClient caused those earlier failures. Migration failures are separately identified below. Existing corrected engine behavior must be consumed, not reimplemented or reopened without a demonstrated defect.
+Historical Pygame failures are **parity/regression requirements**, not evidence that the deleted NDClient caused those earlier failures. Migration failures are separately identified below. Consume existing corrected engine behavior. A demonstrated native defect is reported separately to the user; it does not authorize a backend repair in this client plan.
 
 ### 0.3 Evidence and remaining uncertainty
 
 The accepted standalone Fireball demo at engine `.runtime/ndclient-fireball-proof/` is a useful, explicitly authorized result. It established smooth bounded Pixi rendering with the selected v4, real wall/floor assets, depth/normal data, receiving light and independent emission. The simple two-room native-reach example is a verified fixture reduction, not a general geometry or privacy algorithm. Do not rebuild this demo as the next deliverable or call its measurements production benchmarks.
 
-The server and TS/Python SDK are implemented. They need browser integration and the explicit existing-owner fact amendments below, not another server design. The deleted client is not an available implementation baseline. This plan is source/design work; plan approval cannot certify unbuilt geometry, live browser behavior, performance or art quality.
+The server and TS/Python SDK are implemented. This phase connects the browser to that existing contract without changing it. The deleted client is not an available implementation baseline. This plan is source/design work; plan approval cannot certify unbuilt geometry, live browser behavior, performance or art quality.
+
+The following input and scope decisions are settled; they must not be rediscovered
+as backend prerequisites during N0–N5:
+
+| Client requirement | Existing input / implementation decision |
+|---|---|
+| Authoring types and release | Use NDClient `authoring/schemas/*.schema.json` and tracked section indexes. Generate TS declarations locally. No Python type relocation, engine exporter repair or re-import is needed. |
+| Action selection and movement | `ActionSelection.prefer_safe` already defaults to true; preview and execution already forward it and both SDKs check the echo. Implement only the ordinary/Shift client controls and exact request reuse (§4.8). |
+| Interaction, inventory and character panels | Use `AvailableActionsResult.world_interactions`, native preview routes/targets, existing equip/unequip/toggle intents, `PlayerCharacterSheet.compatible_item_slots`, resources and handler details. No new endpoints or client rules. |
+| Area timing and damage | Use existing `SpellFact.resolved_area_positions`, `suppressions`, `area_geometry` and `AreaReachFact` stage/destruction links. These are received outcomes, not an exhaustive blocked-region map or pixel stencil. |
+| Cancellation | Use current `PlayerNode.canceled`, `ActionCancellation` and any actually supplied suppression/interception facts. Stop the canceled track; do not promise an exact provider/shell hit when the record contains none. |
+| Explosion coverage | Admitted cosmetic VFX can overlap dark/unseen space. Use registered depth for visible wall/surface composition; do not reconstruct undisclosed propagation or clip the plume by visibility cells. |
+| Elevation | Keep existing support heights, authored stair contacts and installed compatible assemblies. Independently walkable stacked supports are outside the delivered API; the renderer still handles layered visual surfaces at different heights. |
+| Studio cases | Configure existing `ServerConfig`/`EncounterRecipe` fields and drive current SDK commands from client capture tools. Record real responses. Do not expand native setup types or add engine test hooks to manufacture a case. |
+| Performance | Attribute server/network wait separately, keep browser input/rendering responsive, and repair client costs here. Native latency is evidence to report, not another backend optimization task. |
+
+Known source limits remain explicit: exact hidden 3D interiors cannot be recovered
+from RGBA-only art; unavailable closed light-blocking faces are not guessed; only
+supported authored rises/joins are used in required scenes. Use supplied companions
+where present and the defined cutout behavior elsewhere. Library-only art does not
+acquire new gameplay bindings. The two UI art gaps remain optional (§5.7); remaining
+spell world-light curves are deferred as agreed, with Fireball first (§6). These
+are stated limits, not demands for another source audit or a server extension.
+
 
 ## 1. Source recovery, repository and assets: exact starting work
 
 ### 1.1 Existing components to recover deliberately
 
-The [9 October environment migration handoff](audits/ndclient-environment-assets-20261009/README.md)
+The [9 October environment migration handoff](/mnt/c/users/tommaso/documents/dev/dnd_engine/agent_docs/audits/ndclient-environment-assets-20261009/README.md)
 consolidates the exact current engine, source-workshop, prefab and corrected editor
 inputs for this chapter, including actual registration/contact values and known
 gaps. It also records the subsequent user-authorized environment copy and exact
 local receipt. It creates no new bindings or implementation prerequisites;
 unselected artwork and unresolved authoring remain explicitly identified.
 
-The subsequent [9 October metadata delivery](audits/ndclient-environment-assets-20261009/README.md#missing-metadata-received--9-october)
+The subsequent [9 October metadata delivery](/mnt/c/users/tommaso/documents/dev/dnd_engine/agent_docs/audits/ndclient-environment-assets-20261009/README.md#missing-metadata-received--9-october)
 supplies all 60 named records: 3 disputed Misc, 30 additional Misc, 9 interiors,
 6 indoor-door assemblies and 12 decals. Exact JSON, schema notes and measurement
 evidence are retained in tracked `authoring/environment/source-records/`;
@@ -190,12 +261,12 @@ client selections and paths; raw Factory manifests are intake provenance only.
 | `/home/tommaso/Dev/NeuroClient/app/src` | Camera/input math, reusable grid/control helpers, icon-HUD/equipment/portrait layout, text/log widgets, timeline ruler/clip previews, read-only inspector grouping and source provenance | Old SDK/store/mapper, synthetic result cases, actor/global-state ownership, incomplete handlers, old ground-only depth calculation, crude multi-tint material behavior |
 | Neuro Studio `SpellStudioPreview.ts`, `StudioTimelinePixi.ts`, `StudioTimelineView.ts` | Actual `drawProjectileFramePreviews` / `drawActorLayerFramePreviews`, thumbnail beds, playhead/rulers/markers, source frame/FPS/direction display | Replacing them with a few generic bars; saving a second independent timeline; synthetic native outcomes |
 | `/home/tommaso/Dev/NeuroMapEditor/src` | Distinction between composition phase, spatial group/ZGrid identity, support elevation and source calibration; existing layered-world examples | Treating every editor layer as a new engine entity or blindly importing its many UI layers into runtime |
-| Current engine `game/animation_types.py`, `animation_data.py`, presentation grouping/retained/semantic owners | All authored fields, recipes, causal/timing/lifecycle meaning and owner-local semantic checks | Pygame surfaces, Python pixel loops, CPU per-pixel XYZ buffers, renderer callbacks as portable data |
-| Current `game/data/{assets.json,world_bindings.json,environment_art.json}` and their typed loaders | Authoritative registrations, pivots, contacts, faces, pose offsets, transitions, item/environment relationships | Guessing offsets from a PNG's bounding box, art names or a screenshot |
+| Archived Pygame `game_obsolete/animation_types.py`, `animation_data.py`, presentation grouping/retained/semantic owners | All authored fields, recipes, causal/timing/lifecycle meaning and owner-local semantic checks | Pygame surfaces, Python pixel loops, CPU per-pixel XYZ buffers, renderer callbacks as portable data |
+| Archived `game_obsolete/data/{assets.json,world_bindings.json,environment_art.json}` and their typed loaders | Authoritative registrations, pivots, contacts, faces, pose offsets, transitions, item/environment relationships | Guessing offsets from a PNG's bounding box, art names or a screenshot |
 | `/mnt/c/Users/tommaso/Documents/assets/environment-production-audit/placement-registration-53/` | Authored placement/registration evidence and already integrated patches | Applying integrated patches twice or replacing values with visual guesses |
 | `/mnt/c/Users/tommaso/Documents/assets/arena-study/prototype-v1/grid-kit/` and its constructor rules/delivery | Family adjacency, matching insert/wall assemblies, valid stairs/cliffs/closures and upper/lower composition | Combining unrelated door and wall families, open-sided elevated examples or unsupported stretched cliff pieces |
 | Engine `.runtime/ndclient-fireball-proof/` | Proven v4 decoding, registration, material/depth/normal/light math; native-reach fixture evidence | Its objective fixture knowledge, one-axis two-room shortcut, demo controls as final UI, or separate production renderer |
-| Current native `dnd/player`, `player_server`, `sdk/player-typescript` | Protocol, scoped facts, choices, content admission, reduction semantics, follower and receipts | Old transport proposals, parallel wire models, extra native simulation in browser |
+| Current native `dnd/player`, `server`, `sdk/player-typescript` | Protocol, scoped facts, choices, content admission, reduction semantics, follower and receipts | Old transport proposals, parallel wire models, extra native simulation in browser |
 
 Record the relevant source revision and any local changes used; a HEAD alone does not describe uncommitted working files. No working-file hashing campaign is required. Read relevant complete source functions and matching registrations before adapting them. “Ported” requires named original behavior and a demonstrated new consumer. A source path alone is not implementation evidence.
 
@@ -214,8 +285,7 @@ application and current SDK. Its finite outputs are:
    with TypeScript/Vite and the module DAG of §3; install the delivered
    `@neurodragon/player-sdk`. Preserve the working character material/review
    tool while connecting that material to the production renderer.
-   Generate authored TS types from the current
-   passive owners once. No new transport, ECS framework, plugin manager or actor
+   Generate authored TS types from the prepared client section schemas once. No new transport, ECS framework, plugin manager or actor
    hierarchy is required. Preserve useful old-client code references read-only;
    reuse existing snapshots rather than cloning another media library.
 2. Connect the existing `PresentationCatalogExport` sections to the application
@@ -233,7 +303,7 @@ application and current SDK. Its finite outputs are:
    body dimensions changed. UI metadata, exact assignments and relocated paths
    are also adopted in `authoring/ui/`. Connect these existing sections to the
    application loader; do not reload obsolete bindings from Pygame or rerun
-   intake. Preserve the two explicit artwork follow-ups in §5.9.
+   intake. Preserve the two explicit artwork follow-ups in §5.7.
 3. Serve the installed `.media/` directly at `/media/`; serve generated metadata
    from a separate ordinary static route. Keep both outside Vite's `public/`
    copying and application `dist/`. No asset-library copy or scan during startup.
@@ -249,10 +319,8 @@ application and current SDK. Its finite outputs are:
    depend on orphaned preview processes, Python rendering, boot-time schema
    generation or receipt files.
 
-The narrow native amendments in §§5.5/5.6/5.10/5.11 remain assigned to their
-existing owners. They block their affected behaviors, not unrelated renderer,
-UI or SDK integration. Ordinary asset/authoring work does not regenerate the
-player SDK. N0–N5 remain the complete delivery scope; no additional certification
+The delivered engine/server/SDK are inputs to this client work. Ordinary
+asset/authoring work does not regenerate the player SDK. N0–N5 remain the complete delivery scope; no additional certification
 or packing milestone is inserted between these steps.
 
 Installation coverage and runtime demand remain distinct. All selected artwork
@@ -280,7 +348,7 @@ The existing machine inventories (`audits/ndclient-plan-20261008/{source-invento
 
 Every field has one of three dispositions: canonical source values editable manually in JSON and inspectable in Studio; derived read-only values; or tool-only provenance. Every runtime field has a production consumer, not merely a generated type. Current Studio delivery is read-only: no browser save endpoint, draft document framework or editable timeline is required. Playback, seek, camera, track expansion and diagnostic inspection expose the production path; manual canonical edits are explicitly reloaded/recompiled. Studio and play cannot silently ignore values that the exporter successfully serialized. Source field dispositions are included later in this document.
 
-The browser receives a complete source-derived presentation release with separately addressable sections, plus subjective native SDK state. Static art availability never grants knowledge of unseen native entities or private descriptors. Native types never import rendering or authoring modules. Move an existing passive type to its family’s lower-level owner only when required for the import DAG; do not duplicate it beside each consumer.
+The browser receives a complete source-derived presentation release with separately addressable sections, plus subjective native SDK state. Static art availability never grants knowledge of unseen native entities or private descriptors. Native types never import rendering or authoring modules. Use the prepared client section schemas for authored types and import SDK wire types directly. Do not relocate engine/Pygame definitions or duplicate them beside each consumer.
 
 
 ### 2.1 New capabilities versus recovered behavior
@@ -321,7 +389,7 @@ Use ordinary modules exporting functions and passive records. Pixi objects are r
 | `src/app/` | Explicit composition of those functions for play or Studio | Global mutable registry, hidden ownership or environment-specific behavior in pure modules |
 | `tools/` | Client authoring assembly, explicit future asset intake and actual-server SDK capture before Studio opens | A new Studio tools server/save API, browser access to an objective world or runtime dependency on Python rendering |
 
-The import DAG starts with SDK types and source-derived authored types, then pure player/presentation functions, then renderer/UI adapters, then composition. Studio composes these same layers. Render/presentation types do not leak into native engine types. When a passive source type has the wrong import owner, move it to the appropriate lower-level family owner and update imports; do not clone it or evade the DAG with late imports/reflection.
+The import DAG starts with SDK types and source-derived authored types, then pure player/presentation functions, then renderer/UI adapters, then composition. Studio composes these same layers. Render/presentation types do not leak into native engine types. Client modules follow that DAG using the prepared section schemas and SDK exports. Archived Python imports are not a client dependency and are not repaired or rearranged.
 
 ### 3.1 Wire types, authored types and derived state
 
@@ -329,7 +397,7 @@ Import native API and fact types directly from `@neurodragon/player-sdk`. There 
 
 The package exports wire contracts, not a complete browser state implementation. A TS `PlayerState`/occurrence index and compiled presentation records are legitimate derived structures: they implement the existing Python semantics and selected GPU/presentation needs. They are not new server schemas. Neither those structures nor admitted SDK values need a JSON serialize/parse trip between client layers.
 
-Produce authored TS types from the existing Python authoring owners and their source-derived schema as an explicit maintenance operation. Validate external recordings/releases/API packets at their admission boundary. Do not repeatedly validate already-admitted values inside sampling/draw loops. An authored-field change updates its passive schema and derived authored TS types; only an actual native wire-contract change updates the player SDK. Ordinary asset imports, authoring value edits, launches, tests and commands do not regenerate the SDK.
+Produce authored TS types from the prepared NDClient `authoring/schemas/*.schema.json`, derived during the completed preparation, as an explicit client build operation. Validate external recordings/releases/API packets at their admission boundary. Do not repeatedly validate already-admitted values inside sampling/draw loops. A client-authored field change stays with its client schema and derived TS types. Consume the delivered SDK unchanged; no wire-contract update is planned. Ordinary asset imports, authoring value edits, launches, tests and commands do not regenerate the SDK.
 
 Python replay uses the actual `dnd/player/reduction.py`; it does not get a new test-only reducer. Browser play and Studio use one TS port of that owner. Cross-language differential tests compare the same scoped records and reducer semantics. This does not require a Python interpreter in the browser and does not justify a third simplified reducer.
 
@@ -357,20 +425,20 @@ Studio is read-only in this phase. Edit the tracked NDClient `authoring/` JSON, 
 
 Full spells, actors, geometry, lighting, particles, retained conditions and state transitions must progress through the live game path and the recorded Studio path alike. A polished timeline or a standalone scene that renders selected sprites cannot substitute for that coherent production renderer.
 
-**Source owners:** `sdk/player-typescript/src/index.ts` (`decode`, `Consumer`, `follow`); `dnd/player/reduction.py`; `game/presentation_group.py`; `game/presentation_retained.py`; `game/choreography.py`; `game/timing_evidence.py`.
+**Source owners:** `sdk/player-typescript/src/index.ts` (`decode`, `Consumer`, `follow`); `dnd/player/reduction.py`; `game_obsolete/presentation_group.py`; `game_obsolete/presentation_retained.py`; `game_obsolete/choreography.py`; `game_obsolete/timing_evidence.py`.
 
 ## 4. Delivered server, SDK, playback and recording integration
 
 ### 4.1 Install and connect to the service that exists
 
-Consume the ESM package at engine `sdk/player-typescript`, package name `@neurodragon/player-sdk`. Build/package that source once for local installation and pin the resulting package/revision through the normal dependency lockfile. An SDK owner change is deliberately rebuilt and installed; browser startup never invokes a generator or Python. The older `@neurodragon/dnd-engine-sdk`, Omni server, WebSocket store and old NeuroClient result mapper are not compatible replacements.
+Consume the ESM package at engine `sdk/player-typescript`, package name `@neurodragon/player-sdk`. Build/package that source once for local installation and pin the resulting package/revision through the normal dependency lockfile. Browser startup never invokes a generator or Python; building the delivered package is not permission to modify its owners. The older `@neurodragon/dnd-engine-sdk`, Omni server, WebSocket store and old NeuroClient result mapper are not compatible replacements.
 
-The current protocol identity is protocol 1 / player schema 4. Read and check its digest through the SDK's packaged `protocol-identity.json`; do not write another digest in application code. The explicit native amendments below require the owner-derived identity/types to be updated once together. Do not claim an amended client is compatible with an unchanged digest.
+The delivered protocol identity is protocol 1 / player schema 5, as recorded in `server/protocol.py` and `sdk/player-typescript/src/protocol-identity.json`. Let the SDK perform its packaged identity check; do not hardcode another digest or regenerate contracts for this client implementation. Inner recording/fact schema versions are separate values and remain unchanged.
 
 The native service can run on Windows or WSL independently of the WSL frontend. Use the existing launch/configuration path:
 
 ```text
-python -m player_server --config <private-server-config.json> --host <reachable-address> --port <server-port>
+python -m server --config <private-server-config.json> --host <reachable-address> --port <server-port>
 ```
 
 Configure the actual frontend origin in `ServerConfig.allowed_origins`; the current default is empty. Select an API port independently of the existing standalone Fireball proof. The browser uses an explicit API base URL that reaches the configured service. Windows/WSL networking must be checked on the actual machine rather than copying a stale adapter address. Do not create a proxy/rules service or bind the server publicly merely to conceal an incorrect local URL.
@@ -408,7 +476,7 @@ The SDK owns `Authorization: Bearer …`, `X-Game-Epoch`, `X-Audience-Id`, `X-At
 
 There is no current browser create-game, engine-pause, arbitrary displayed-state snapshot or live audience reassignment endpoint. Do not design UI dependencies on them. Operator configuration creates the encounter/controllers; the client attaches to what is configured.
 
-**Source owners:** `player_server/{README.md,__main__.py,config.py,app.py,protocol.py}`; `sdk/player-typescript/{README.md,package.json,src/index.ts}`; `sdk/protocol/README.md`.
+**Source owners:** `server/{README.md,__main__.py,config.py,app.py,protocol.py}`; `sdk/player-typescript/{README.md,package.json,src/index.ts}`; `sdk/protocol/README.md`.
 
 ### 4.2 Scope, audience and attachment
 
@@ -422,7 +490,7 @@ Bootstrap/status may be `starting`; show connection/preparation state and wait f
 
 `StatusSnapshot.boundary` contains `lifecycle`, `input_actor_uuid`, `state_revision` and optional reason/incident. The lifecycle is `starting`, `waiting_for_human`, `advancing`, `delivery_blocked`, `terminal`, `failed`, `closing` or `closed`. Keep those states visible in appropriate diagnostics without filling the normal HUD with engine prose. The snapshot also gives `published_cursor`, `final_cursor`, `catch_up_cursor`, `acknowledged_cursor`, `attachment_epoch`, `next_command_number` and `pending_command_numbers`.
 
-**Source owners:** `dnd/player/audience.py`; `dnd/player/projection.py`; `player_server/protocol.py`; `player_server/host.py`.
+**Source owners:** `dnd/player/audience.py`; `dnd/player/projection.py`; `server/protocol.py`; `server/host.py`.
 
 ### 4.3 Ingestion and ACK: preserve every admitted operation
 
@@ -442,7 +510,7 @@ No acknowledgement is sent for discarded/unpersisted records. A recording failur
 
 `ready`, `status` and `error` SSE records are control values, not numbered presentation operations. The server's authoritative boundary may change without inventing an animation. A terminal stream has a final cursor; finish presenting its retained prefix. A failed/closed stream keeps its valid recorded prefix inspectable while reporting the failure. Do not manufacture a completed encounter from a disconnected stream.
 
-**Source owners:** `sdk/player-typescript/src/index.ts` (`Consumer`, `consume`, `follow`, `waitForCursor`); `player_server/protocol.py`; `dnd/player/reduction.py`.
+**Source owners:** `sdk/player-typescript/src/index.ts` (`Consumer`, `consume`, `follow`, `waitForCursor`); `server/protocol.py`; `dnd/player/reduction.py`.
 
 ### 4.4 A complete causal reducer and compiler
 
@@ -457,13 +525,13 @@ Port the actual `dnd/player/reduction.py` invariants, not merely its common exam
 
 Every current `PlayerFact` variant needs its actual consequence: attack/spell/application and area-reach stages; path and movement steps, forced movement, jump/portal/shove; damage stages, healing, temporary HP, life/death saves; equipment/item/charge changes; conditions and concentration; spatial effects, world/mechanism/object damage and destruction; faction/turn/action/sensory changes; saves and cancellation. A legitimate nonvisual fact still participates in causal state/log/authority updates. An unimplemented variant is not a zero-duration success.
 
-Use `game/presentation_group.py` as the source for grouping consecutive reaction roots that refer to the following root. Grouping is a scheduling view; reduction remains in original admitted order and event ancestry is unchanged. Cast release, missile contacts, saves, reactions, damage, death, condition application, topology/light changes and aftermath must be scheduled from the source authored timing/evidence and native causes, including multiple applications/projectiles and nested interruptions.
+Use `game_obsolete/presentation_group.py` as the source for grouping consecutive reaction roots that refer to the following root. Grouping is a scheduling view; reduction remains in original admitted order and event ancestry is unchanged. Cast release, missile contacts, saves, reactions, damage, death, condition application, topology/light changes and aftermath must be scheduled from the source authored timing/evidence and native causes, including multiple applications/projectiles and nested interruptions.
 
 The action compiler must stop or alter the affected occurrence on its actual cancellation/interruption. It cannot let a character perform a planned jump after a lethal opportunity attack because a top-level motion track was compiled independently. Visual media can be sampled at the current clock, but required occurrences, contacts and state commits cannot be omitted under load.
 
 Retained visual state uses the six existing lifetime families: conditions, spatial effects, item effects, construction, concentration and deposits. Restore an existing lifetime at cold acquisition/seek without replaying its creation as a new cast. End/expire/suppress/resume/transfer each lifetime from its admitted event/state; do not rebuild it every frame, restart it upon camera rotation or revive it after historical expiry. Timeline/editor views inspect these same compiled and retained records.
 
-**Source owners:** `dnd/player/{facts.py,reduction.py,application.py,recorded.py}`; `game/{presentation_group.py,presentation_retained.py,choreography.py,timing_evidence.py}`; existing authored recipe owners covered in the source inventory.
+**Source owners:** `dnd/player/{facts.py,reduction.py,application.py,recorded.py}`; `game_obsolete/{presentation_group.py,presentation_retained.py,choreography.py,timing_evidence.py}`; existing authored recipe owners covered in the source inventory.
 
 ### 4.5 Separate native progress from displayed time
 
@@ -518,7 +586,7 @@ Restore presentation independently from its local displayed checkpoint/prefix. L
 
 When real storage capacity is exhausted, stop acceptance before ACKing another record. There is no client pause-native endpoint. The server may continue until its own existing spool policy applies. Expose that failure and recovery options without dropping occurrences, adding a new server control plane or imposing invented numerical budgets.
 
-**Source owners:** `sdk/player-typescript/src/index.ts`; `player_server/{host.py,config.py,README.md}`; `dnd/player/{recorded.py,reduction.py}`; derived clock metadata is the explicit client responsibility above.
+**Source owners:** `sdk/player-typescript/src/index.ts`; `server/{host.py,config.py,README.md}`; `dnd/player/{recorded.py,reduction.py}`; derived clock metadata is the explicit client responsibility above.
 
 ### 4.7 Prepare resources and publish one coherent displayed frame
 
@@ -551,9 +619,15 @@ Consume the fields that already carry behavior instead of rebuilding it from a l
 - `num_projectiles`, `allow_same_target`, `allocation_completion` (`selected_only` or `fill_primary`) and target selection data describe allocation. Preserve repeated target indices and order; do not assume distinct targets, always demand a maximum count, or distribute projectiles with client rules.
 - `interaction_affordance`, `connector_traversal`, `world_interactions`, handler details and item provenance feed their corresponding UI. World interactions are descriptors, not a substitute executable command.
 
-The current `ActionSelection` contains `action_index`, ordered `target_indices` and optional `extra_target_positions`. §5.11 adds the existing engine's `prefer_safe` option to this same shared selection contract. Those targets are native indices and coordinates; negative map coordinates are valid and unrelated to invalid list indices. Secondary targets use the selected primary's native target pool when supplied. Never regenerate pools from currently drawn entities.
+The current `ActionSelection` contains `action_index`, ordered `target_indices`, optional `extra_target_positions` and `prefer_safe` (default true). Preview, execution and SDK echo checks already support that same selection. Those targets are native indices and coordinates; negative map coordinates are valid and unrelated to invalid list indices. Secondary targets use the selected primary's native target pool when supplied. Never regenerate pools from currently drawn entities.
 
 For a changed selection call `preview()` with `{actor_uuid, state_revision, discovery_generation, correlation_id, selection}`. The SDK verifies the echoed request. Use `AvailableSelectionPreview.can_confirm`, `reason`, `effective_target_uuids`, `next_targets`, `next_positions`, `geometry`, `affected_positions` and `selected_route`. A route supplies its actual path, `cost_feet`, affordable endpoint, normal/safe policy, opportunity-attack exposures and hazard flag. Show that route and geometry. Do not have a separate UI pathfinder or approximate spell footprint decide the execution gesture.
+
+Ordinary movement sends `prefer_safe: true`; Shift sends `false`. A modifier change
+invalidates the local preview even on the same hovered tile; submit exactly the
+selection that produced the displayed current route. The returned route policy is
+a result, not a guarantee: safe preference may legitimately fall back to normal.
+Focus loss clears Shift. The feature is delivered; no backend or SDK task remains.
 
 A world click requiring approach uses the admitted native route and then refreshes discovery/preview at the reached state before executing the interaction. A door/window/trap/lever is not activated from an invented range because its descriptor exists. If the route or state changes, retain user intent only where it remains valid and ask the native preview again; do not send an old discovery index.
 
@@ -569,7 +643,7 @@ Command receipts are `pending`, `committed(cursor)`, `rejected(reason)`, `indete
 - Do not automatically turn `indeterminate`, expired history, a conflicting numbered payload or an unknown receipt into another spending action. Keep the unresolved identity visible for correct reconciliation.
 - One local command remains pending for its native admission lifecycle. Input/preview UI does not optimistically apply damage, decrement resources or remove an item. Actual displayed outcomes come from the admitted operation at their authored commits.
 
-**Source owners:** `dnd/core/base_actions.py` (`AvailableActionInfo`, `AvailableActionsResult`, `AvailableSelectionPreview`); `dnd/player/{commands.py,selection.py,session.py}`; `player_server/{protocol.py,host.py,worker.py}`; `sdk/player-typescript/src/index.ts`.
+**Source owners:** `dnd/core/base_actions.py` (`AvailableActionInfo`, `AvailableActionsResult`, `AvailableSelectionPreview`); `dnd/player/{commands.py,selection.py,session.py}`; `server/{protocol.py,host.py,worker.py}`; `sdk/player-typescript/src/index.ts`.
 
 ### 4.9 Teardown, privacy and stale callbacks
 
@@ -600,15 +674,11 @@ Use actual-server SDK recordings (§8.2.1), not a new fake browser rules generat
 
 Native, HTTP/stream, SDK admission, journaling, compilation, resource preparation, sampling and GPU work are separately attributable. Tests/builds can establish a boundary invariant; they do not establish visual quality or complete content support by their count. Run these checks when the corresponding implementation changes and once as integrated coverage, then move on to delivery rather than repeatedly regenerating schemas or rerunning unchanged gates.
 
-## 5. Complete presentation release and remaining owner amendments
+## 5. Complete client presentation release
 
-The native player schema already supplies height, slope, support, apertures,
-constructions, perception and causal facts. No broad gameplay-schema expansion is
-justified by this study. Most work below concerns presentation export and source authoring.
-There are three native presentation-fact amendments in §§5.5, 5.6 and 5.10:
-typed cancellation, partial-stair observation and reach evidence. §5.11 also exposes
-the already-implemented native route preference through the existing shared selection,
-worker and SDK echo checks; it adds no movement rule or alternate route algorithm.
+The native player schema supplies the current world and causal facts. This chapter
+connects prepared client authoring and its existing schemas to the application.
+It does not extend native facts or maintain an obsolete Python renderer.
 
 ### 5.1 One complete release
 
@@ -733,7 +803,7 @@ regeneration for ordinary authoring changes or repeated validation loop is neede
 
 ### 5.2 Existing source schema: retain, do not repeat the migration
 
-Current source inspection confirms that `PresentationCatalogExport` already contains the full cold catalog, assets, world, environment, item appearance/material/visuals/palettes, UI resources/presentation/choices/skin/fonts and byte planes. `catalog_documents`, `export_catalog` and `catalog_dependencies` are existing functions in `game/presentation_export.py`; they establish the original source shape and initial-seed path. Ongoing client assembly belongs to `NDClient/tools/build_authoring.py` over tracked client JSON. Its catalog/world/assets/environment, item/palette and UI sections are already assembled. Connect their release envelope/defaults, indexed dependencies and application loading; do not regenerate client authoring from the engine or add a second producer.
+Current source inspection confirms that `PresentationCatalogExport` already contains the full cold catalog, assets, world, environment, item appearance/material/visuals/palettes, UI resources/presentation/choices/skin/fonts and byte planes. `catalog_documents`, `export_catalog` and `catalog_dependencies` are existing functions in `game_obsolete/presentation_export.py`; they establish the original source shape and initial-seed path. Ongoing client assembly belongs to `NDClient/tools/build_authoring.py` over tracked client JSON. Its catalog/world/assets/environment, item/palette and UI sections are already assembled. Connect their release envelope/defaults, indexed dependencies and application loading; do not regenerate client authoring from the engine or add a second producer.
 
 `ProjectileFrame.rows` already accepts a positive integer; `AuthoredProjectileAsset.kind` has already been removed; `sheet` is already optional; `distinct_source_rows` already checks declared unique row coverage. `ImageResourceSource.geometry: MediaGeometry | None` also already exists. These source changes survived the deleted client. Preserve them, their IDs and current source revisions. No second remove-kind/relax-rows migration is required.
 
@@ -741,7 +811,7 @@ Keep the existing selected-media storage selectors: grid sheet, layer pattern, `
 
 The replacement/relocation import in §5.1.1 is complete. Remaining work is connecting the full existing release sections, their dependencies and client loading. Keep one client assembly path over tracked authoring and use its file/JSON-pointer index for inspection. The prepared artwork is reused. No second engine-side client release builder, reconstructed inheritance map, artwork checksum processing or library copy is required.
 
-Use existing typed media/geometry fields before adding one. Only actual missing fields described in the renderer contract require an owner-local schema change. Generate authored TS types from the resulting owner revision once; ordinary installs and parameter edits do not generate types. The player SDK changes only for actual native wire-contract changes, including the fact amendments and §5.11's existing route-option pass-through. Existing `game/export_schema.py` still emits an older `player-sequence-v2` artifact: that is not the new live browser transport boundary; the delivered SDK supplies current initialization/operation types.
+Use the prepared client media/geometry fields and section schemas, including defaults. Generate authored TS types from those schemas; ordinary installs and parameter edits do not generate types. The archived `game_obsolete/export_schema.py` is historical evidence, not an executable dependency or a schema repair task. Current initialization/operation types come from the delivered SDK.
 
 ### 5.3 Full materials on isolated layers
 
@@ -763,13 +833,13 @@ recolour the already-accepted external Godot effect without an authored instruct
 ### 5.4 Complete export, dependency closure and consumers
 
 The existing Python passive owners and `PresentationCatalogExport` define the
-shape; NDClient `authoring/` owns adopted client values. `game/presentation_export.py`
+shape; NDClient `authoring/` owns adopted client values. `game_obsolete/presentation_export.py`
 supplied the initial effective seed. `tools/build_authoring.py` is the current
 client assembly entry, already producing catalog/world/assets/environment, the
 four item/palette sections and five UI sections without engine imports.
 The current source-derived section schemas are in `authoring/schemas/*.schema.json`;
 use these for authored TS declarations, separately from SDK-owned wire types.
-The remaining envelope follows `game/presentation_export.py`: schema version 2,
+The remaining envelope follows `game_obsolete/presentation_export.py`: schema version 2,
 milliseconds, cells, five feet per elevation step and the existing default-empty
 `byte_planes` field. These are existing source values, not a new release schema.
 Complete release indexing/dependencies and application loading; do not add a competing exporter or
@@ -804,9 +874,8 @@ layers.
 Counts are the pinned planning inventory, with aliases and shared resources; they
 are not unique files. New source revisions update that same inventory once, rather
 than generating a rival list. Authoring types come from these existing owners.
-Where a passive source type currently lives beside Pygame code, move only that
-definition to its existing family's lower-level type module if necessary for the
-export import DAG; do not duplicate its model or port its image loader.
+The prepared client schemas already describe these records. No Python import
+DAG refactor, type extraction or old image-loader port is needed.
 
 The ordinary client assembly has a finite sequence:
 
@@ -858,9 +927,9 @@ The complete export uses the existing `PresentationCatalogExport` owner;
 it does not introduce `SceneRelease`. Its existing sections use typed references to
 existing `AssetDocument`, `WorldBindingsSource`, `EnvironmentDocument`, item
 appearance/palette/material/attachment documents, and the passive UI presentation,
-choice, skin and font declarations listed above. Move passive UI declarations to
-their dependency-neutral owner if necessary; do not import Pygame into the exporter
-or copy the native `UIContentManifest` into public artwork metadata.
+choice, skin and font declarations listed above. Use the prepared client UI section schemas; do not move Python declarations,
+import Pygame into the assembler or copy the native `UIContentManifest` into
+public artwork metadata.
 
 Keep the existing exported release/catalog revision. Resource records carry the
 existing resource ID, readable relative path, byte length and dimensions/format.
@@ -875,52 +944,7 @@ are being connected. No second partial-release format or demo renderer is needed
 Final delivery requires complete installation and supported consumers; partial
 availability is progress, never a completion claim.
 
-### 5.5 Typed protection cancellation: one actual native gap
-
-**Current source, not a proposed rewrite:** `dnd/types/spell_suppression.py::SpellSuppression` already contains `antimagic`, provider UUID, positions, optional provider ContentRef, `AoEPresentationGeometry` and anchor elevation. `SpellFact` already has area suppressions. `PlayerNode.cancellation` currently contains only `ActionCancellation(phase, action_economy_spent: bool, outcome_code)`; projection emits it only for an admitted canceled `ActionEvent`. `Event`/its capture header currently do not carry a typed protection cause, and Antimagic cancellation branches use status text. Those are the missing data, not missing server/SDK infrastructure.
-
-Make the following finite changes in their existing owners:
-
-1. Add `Event.cancellation_protection: SpellSuppression | None = None` in `dnd/core/events.py`. Reuse the cold type; do not import spell handlers or add another event/capture family. Preserve it in `cancel()`/event versions and in `dnd/player/capture.py::_event_header`.
-2. In existing `dnd/spells/abjuration.py` source/target/path/magical-transfer cancellation branches, populate it from the provider and protected positions those branches already computed. Set the stable Antimagic outcome `spell.antimagic_field.blocked`. Globe targeted cancellations use the same value while preserving their existing outcome code. Do not recalculate routes or change protection rules for renderer convenience.
-3. Replace the existing action-only cancellation value with a single `EventCancellation` at the existing `PlayerNode.cancellation` field: `phase`, `action_economy_spent: bool | None`, `outcome_code`, `protection: SpellSuppression | None`. Non-action cancellation uses `None` spending because the parent action owns any cost. Retain ordinary action cancellation semantics. Project non-action cancellations only where their fact itself is admitted. Do not retain an alias plus a second parallel cancellation model.
-4. Use one pure projection helper in `dnd/player/projection.py` for cancellation protection, existing spell/area suppressions, the staged reach values specified in §5.10 and current construction-suppression projection. Join against the **event-time admitted** `PerceivedSpatialEffect`; filter positions by the existing event-time position-admission predicate and copy permitted geometry/content/elevation from that contact. Preserve `antimagic` for disclosed providers. Do not look up the latest live provider to reconstruct historic geometry.
-5. If the provider is undisclosed, emit no provider identity, geometry, content or cell set. Redact its protection-specific outcome to the existing generic cancellation meaning. Do not infer a hidden field from a blocked endpoint or expose its location through a client hit effect. Admit any permitted provider ContentRef through the existing content-attribution/addition path before dependent nodes.
-6. Update the existing Python presentation adapter's old terminal-Globe consumption and the shared TS compiler to consume `node.cancellation.protection`. This is compatibility with the amended native value, not a wider Pygame repair task. Update the source-derived protocol identity and both SDKs once with the other required native field amendments; do not build a second API.
-
-Terminal cancellation is recorded once here. Partial area exclusions remain in `SpellFact.suppressions`/the applicable reach stage; they are not a canceled whole cast. Ongoing suppression/resume/expiry uses current condition/item/spatial facts. During staged playback, only the **active reach stage's** admitted suppression snapshot applies; applying the root's final union early would hide earlier legitimate visuals. At maintained-field takeover use that lifetime's admitted retained evidence and revision/commit timing.
-
-Presentation selects its authored response from the disclosed protection binding. When admitted geometry authorizes a boundary response, the visual trajectory may be intersected with that geometry for placement; it does not decide whether the native action succeeded. A canceled source cast does not fabricate a travelling projectile. A disclosed cancellation without usable boundary geometry receives an authored generic release/cancellation response rather than an invented dome hit. Nested magical transfer/forced movement respects its recorded phase and parent cost.
-
-Exercise known and hidden Antimagic at source, endpoint and path; canceled portal/forced movement; Globe targeted/partial area cases; provider movement/removal after capture; suppression expiry without revival. Verify the native projected fact in the Python reducer and preserve that same fact in actual-server SDK recordings for live-client/Studio comparison. These checks establish privacy and causality; they are not another per-spell rules engine.
-
-**Actual source locations:** `dnd/core/events.py` event header/cancellation; `dnd/player/capture.py::_event_header`; `dnd/spells/abjuration.py` Antimagic admission and Globe handlers; `dnd/player/facts.py::ActionCancellation`/`PlayerNode`; `dnd/player/projection.py` node construction and suppression projection; `dnd/types/spell_suppression.py`.
-
-### 5.6 Partial staircase observation: approved minimal native addition
-
-**Current source:** `WorldTileState` in `dnd/types/event_facts.py` already exposes position, elevation, surface kind and slope axis. It does not expose the run location/direction/length needed to place a whole-flight sprite when only an isolated middle/upper member is admitted. A partially visible stair is a valid exploration state, not bad map authoring.
-
-The user explicitly approved revealing a staircase's direction and length when a member is seen. Implement that exact additional assembly-shape observation, without broadening it into hidden support/world knowledge. Add optional `WorldTileState.observed_stair_run` with only:
-
-```text
-uphill_direction: CardinalDirection
-member_index: nonnegative integer, zero at the lowest member
-support_count: positive integer; member_index < support_count
-```
-
-For the current straight unit-rise flights, the admitted member already supplies position/elevation. Derive `lower_position = position - member_index * uphill_direction` and `lower_height = elevation_steps - member_index`. Do not serialize redundant lower coordinates, art IDs, a stair entity or a new traversal graph.
-
-A pure helper in `dnd/world_facts.py` derives the unambiguous straight monotonic run from the cold recorded support facts. `dnd/player/projection.py::_world_update` attaches the observation **before** comparing the observed tile with its remembered version. Do not use a live `GridMap` lookup during subjective projection, import artwork into native types or change pathfinding. Ambiguous, branched and non-unit runs do not acquire an invented straight-flight observation.
-
-The observation admits no neighboring tile UUIDs/records, materials, light, creatures, current visibility or movement permission. Derived member positions belong to visual placement only: they are not inserted into the reducer's tile/seen set, picking support map or SDK action targets. Preserve a remembered observation normally and do not refresh it while that member is unobserved. This is a conscious shape disclosure, not a claim that shape reveals nothing.
-
-Match the observed physical run to existing registered terrain `support_offsets` and authored stair contacts/face profiles. Its source silhouette/overhang may be drawn without declaring all covered cells known. Do not replace an unobserved part with a guessed flat floor or require hidden tile records to fit it. An unsupported registration is explicit. Old recordings without the new field can place a flight only when their admitted supports uniquely establish it; otherwise report the limitation and use a fresh actual-server SDK capture for partial-flight coverage rather than silently guessing.
-
-Add native cases starting with only a middle or an upper member observed, including later disclosure/remembering and each camera. Check exact shape-only projection, unchanged legal target sets and correct consumer placement using those same prerecorded records in Studio. Fold this field into the same deliberate native schema/SDK amendment as reach/cancellation. Do not reopen the server design or add stacked-floor gameplay: current native support-per-XY semantics remain the owner of gameplay, while rendering separately handles authored elevation and composition layers.
-
-**Actual source locations:** `dnd/types/event_facts.py::WorldTileState`; `dnd/world_facts.py`; `dnd/player/projection.py::_world_update`; current terrain profiles/contact registration and their release exports.
-
-### 5.7 Full AnimationData field disposition
+### 5.5 Full AnimationData field disposition
 
 The counts in the selected-content index describe effective identities, including
 aliases; they are not independent executable spells. Actual nested fields/types
@@ -990,7 +1014,7 @@ definitions, 1,051 storage records and 193 paired banks. They may share pictures
 or behavior; older engine counts are historical source evidence. The selected-content JSON
 lists every key; no requirement to create 1,112 new shaders follows from this.
 
-### 5.8 Full world/environment field disposition
+### 5.6 Full world/environment field disposition
 
 `AssetCatalog` is another current input: merely porting AnimationData would omit
 world art/materials. Its 15 fields have the following disposition:
@@ -1036,7 +1060,7 @@ addresses are derived; authored geometry/registration is editable with validatio
 values from opaque runtime dictionaries. No second environment source is generated
 from the old NeuroClient world store.
 
-### 5.9 UI data versus native content
+### 5.7 UI data versus native content
 
 `ui_media.json` and `ui_presentation.json` supply the existing typed UI source
 shapes. **Adoption is complete (9 October)** in client `authoring/ui/index.json`;
@@ -1088,424 +1112,10 @@ InitializationResponse/PlayerOperation `content_additions` and are folded before
 dependent lineages; the existing metadata endpoint supplies public descriptors.
 Do not install the complete private UIContentManifest from a presentation release.
 Static versioned artwork/binding metadata is a separate input, never authority to
-reveal native content or an unseen entity. Existing item visual ledgers outside game/data (notably
+reveal native content or an unseen entity. Existing item visual ledgers outside game_obsolete/data (notably
 `content_data/ledgers/neuroclient_authored_item_visuals.json`) supply the initial
 item-section values; preserve that provenance when adopting tracked client data. Do not silently
 substitute the old NeuroClient generated equipment/palette files.
-
-### 5.10 Native physical reach evidence and continuous exclusion compilation
-
-This is outstanding existing-owner work. Positive cells currently supplied by native facts cannot distinguish an obstacle from undisclosed space. The following exact contract records the existing resolution; it does not add another propagation simulation.
-
-#### 5.10 Native evidence fields and ownership
-
-Add these strict frozen passive values at `dnd/types/event_facts.py`, the existing
-shared event/world after-value owner. Position components are strict integers;
-UUIDs retain their existing encounter identity. The notation below is the field
-contract, not a new class hierarchy or runtime service:
-
-```python
-Position = tuple[StrictInt, StrictInt]
-
-ReachProviderRef:
-    kind: Literal["object", "tile", "spatial_effect"]
-    provider_uuid: UUID
-
-ReachBoundary:
-    edge: AdjacentEdgeKey
-    reached_from: Position
-    blockers: tuple[ReachProviderRef, ...]
-
-AreaReachEvidence:
-    reached_positions: tuple[Position, ...]
-    blocked_positions: tuple[Position, ...]
-    boundaries: tuple[ReachBoundary, ...]
-    occluders: tuple[ReachProviderRef, ...] = ()
-```
-
-`AdjacentEdgeKey` is reused from `dnd/core/world_edges.py`; its two endpoints are
-already cardinally adjacent and canonically ordered. `event_facts.py` already
-imports that module's `ElevationSurfaceKind` and `SlopeAxis`. `world_edges.py`
-imports only cold world/physical-access values and does not import event facts,
-events, the grid, actions or player projection. This addition preserves the import
-DAG: live producers and player facts import the passive owner, never the reverse.
-
-Positions are sorted and unique, and positive/negative sets are disjoint. Every
-boundary has nonempty unique blockers in canonical `(kind, UUID)` order;
-`reached_from` is its positive endpoint and the other endpoint is negative.
-Boundary rows sort by `(edge.first, edge.second, reached_from)` and are unique.
-`occluders` is a sorted unique set of provider witnesses for line-of-effect queries;
-connected evidence uses `boundaries` and leaves `occluders` empty. Line-of-effect
-evidence uses `occluders` and leaves `boundaries` empty. The existing parent
-`area_propagation` identifies the mode; do not add a second mode enum.
-An object reference resolves through existing `WorldObjectPlacement` and item
-state, a tile reference through `WorldTileState`, and a spatial-effect reference
-through existing perceived spatial facts. Do not embed copied placements, pixel
-dimensions, material meshes or a new world-geometry registry.
-
-| Existing owner | Exact addition | Meaning |
-|---|---|---|
-| `SpellEvent` in `dnd/actions.py`, `SpellFact` in `dnd/player/facts.py` | `reach_evidence: AreaReachEvidence \| None = None` | Snapshot for an **unstaged** area only; `None` for staged areas and old/unrecorded results |
-| `AreaReachEvent` in `dnd/core/events.py`, `AreaReachFact` in `dnd/player/facts.py` | `reach_evidence: AreaReachEvidence \| None = None` | Full physical snapshot for this stage, before its applications can alter topology |
-| Same area-reach event/fact owners | `suppressions: tuple[SpellSuppression, ...] = ()` | This stage's native suppression snapshot, reusing the existing suppression type and the separate attribution contract below |
-
-For staged casts, evidence belongs only to the stages. The root retains its
-existing final `resolved_area_positions` and causal children; do not duplicate
-the last stage's evidence onto it. Every stage carries a full snapshot because
-an audience may not have received earlier positive deltas. Existing public
-projection can remove/renumber stages, so accumulating only new cells cannot
-reconstruct a later disclosed stage. No second effect state, stage clock or wire
-envelope is introduced.
-
-`None` means no recorded physical evidence. Empty negative/boundary tuples mean
-**no disclosed exclusion**, which includes both an unobstructed result and withheld
-evidence. They never authorize treating an absent cell as blocked. `reached_positions`
-means physical reach before magical suppression. `blocked_positions` contains only
-existing native cells inside the original envelope that physical propagation did
-not reach. Protection is retained in `SpellSuppression`, not recast as a wall.
-
-#### 5.10 Capture the existing traversal, not another reach solution
-
-For the existing connected traversal, let `E` be its original geometric envelope
-intersected with existing map tiles and `R` its returned reached set. Record `R`
-and `E − R`. Missing map cells supply no negative evidence. Keep the current
-four-neighbor traversal, origin exception, terminal-cell rule and topology revision
-invalidation (`dnd/core/gridmap.py:connected_propagation_positions`).
-
-Alongside each cached rejected edge decision, retain the sufficient blocking
-providers found by the same boundary/spatial predicate. When a reached terminal
-cell stops expansion, retain its blocking tile/center-object providers. After the
-existing traversal, extract cardinal frontier edges with one endpoint in `R` and
-the other in `E − R`; this is a linear boundary extraction, not another flood fill.
-A rejected edge whose other side was eventually reached through an opening is not
-an exclusion frontier. A terminal cell remains positive; its outgoing frontier
-references the provider that stopped transmission. The origin's special permission
-to emit remains intact. Retain all sufficient blockers returned by that decision;
-projection below does not expose an undisclosed colocated blocker.
-
-The provider decisions remain in `is_blocking_propagation`,
-`_world_edge_channel_allows` and `spatial_crossing_allows`, including their existing
-cache invalidation. Keep their ordinary boolean callers compatible; the captured
-explanation is cold outcome data. Do not derive providers by raycasting artwork,
-retest changed topology after execution, or enlarge `get_affected_positions()`
-with negative cells and thereby change event dispatch/gameplay.
-
-Fireball records evidence after each `shape.compute_objective()` and before target
-applications, at `dnd/spells/evocation.py:Fireball._apply_target_applications`.
-Its existing topology-change loop supplies subsequent snapshots and destruction
-lineages. All current propagated area producers must attach evidence from their
-actual resolution; `None` is only for old records, genuinely nonpropagating effects
-or undisclosed evidence, not a permitted omission for a current supported spell.
-Existing capture deep-copies events at `dnd/player/capture.py`; extend the same
-strict export and regenerate the SDK once with the other finalized owner changes.
-
-#### 5.10 Line-of-effect areas use their own existing native result
-
-`AoEShape.compute_objective()` in `dnd/core/aoe.py` has two native propagation
-modes. They must not be rendered as though both were connected Fireball spread.
-For `line_of_effect`, the existing path calls `compute_propagation_fov`, choosing
-symmetric shadowcasting or `_compute_directional_fov` with supercover transitions.
-Keep those exact results and the current no-barrier fast path; no second traversal
-or different geometric rules decide damage.
-
-* Extend the existing propagation-cache entry to retain the blocking provider
-  witnesses beside its boolean result. The grid's `compute_fov` callback records
-  provider identities whenever its existing blocking predicate is true; directional
-  FOV records the provider witness for a rejected transition/terminal blocking
-  cell. Reuse the same cold `ReachProviderRef` and existing topology invalidation.
-  Do not run another FOV to identify causes after the spell has changed the world.
-* `AoEShape` retains optional cold `reach_evidence` alongside its existing
-  `affected_positions`: `R=geometric ∩ actualFov`, `E−R` physical negatives, and the
-  sorted unique queried blocking providers in `occluders`. No-barrier fast path
-  records R=E and empty negatives/occluders exactly as the engine resolved it.
-  Map absence outside E is not an occluder to disclose. Evidence caches share the
-  existing origin/radius/topology lifetime; ordinary set/boolean callers remain
-  compatible and consume the same result, not a competing computation.
-* `dnd/core/base_actions.py` publishes that snapshot beside its existing
-  `resolved_area_positions` assignment, before protection subtraction. This covers
-  standard cones/lines/radial areas including Burning Hands and Sunburst. The
-  existing manual resolution publishers in `spells/ice_knife.py`, `conjuration.py`
-  and `illusion.py` attach their resolved shape's snapshot at that same boundary;
-  retained zone presentation uses its existing shape computation. Fireball keeps
-  snapshots on its stages only. Generated wall assemblies use explicit construction
-  geometry, not a fabricated area-propagation record.
-* The geometry origin is the existing admitted `AoEPresentationGeometry` origin/
-  center captured from `computed_origin`; no client inference from the caster's
-  latest position is allowed. Missing permitted origin makes reach clipping unknown.
-* For this mode, release negatives/occluders only when **every queried blocker**
-  and its relevant placement/position is admitted at event time, together with
-  the origin. After that check, filter every negative sample by its own event-time
-  position admission, just as in connected mode. Otherwise both negatives and
-  occluders are empty, with no withheld-count/completeness flag or provider-count
-  side channel. Independently authorized positive samples remain. This conservative rule may omit cosmetic
-  exclusion under partial disclosure but never exposes an undisclosed occluder.
-
-The one continuous compiler below adds an origin-to-vertex supporting line for
-each registered end/jamb/silhouette vertex **only for `line_of_effect`**. These lines
-partition possible physical line-of-effect shadow boundaries; native positive and
-negative samples still label the faces. There is no client visibility/reach query.
-For a short wall in a fully disclosed cone, the region behind it can consequently
-carry negative samples separately from reached samples around its ends. Connected
-Fireball never receives these radial partitions: its frontiers/face geometry permit
-spread around ends and doors without the rejected explosion-origin wedge.
-
-The engine's discrete shadowcasting and a registered art silhouette are not an
-identical continuous model. A contradictory or unseeded face remains unknown;
-never move a boundary to a tile edge or delete positive artwork to force agreement.
-This explicitly prioritizes native admitted outcomes and preserved art over an
-invented exact fluid/shadow reconstruction. Acceptance includes a fully disclosed
-finite wall with both blocked and reached cone cells, an open aperture, all camera
-rotations, a hidden blocker, cached repeat and interruption/destruction. Missing
-current producer evidence is a contract failure, not a successful unknown fallback.
-
-#### 5.10 Persistent areas, cold discovery and retained revisions
-
-Transient cast/stage facts do not suffice for a cloud first observed after its
-cast. Add the same optional `reach_evidence: AreaReachEvidence | None` to existing
-`dnd/spatial/area_conditions.py::AreaCondition` and
-`dnd/types/senses.py::PerceivedSpatialEffect`. No new area state or observation
-stream is introduced. Capture the native value in the existing owner:
-
-1. `_compute_affected_positions()` copies its resolved `AoEShape.reach_evidence`
-   before `_apply_spell_protection()`. `resolve_condition_footprint()` retains
-   physical evidence independently from the protected subset. When a creator
-   supplies precomputed `affected_positions`, it must also supply evidence from
-   that same shape/query, not rerun reach during observation. Manual propagated
-   producers in conjuration/illusion/ice/evocation use this one contract. Deliberate
-   shapes without native propagation retain None; they do not pretend to be a
-   wall-clipped cloud. Missing evidence for a propagated selected area is an error
-   at its existing producer, not permission for a render fallback.
-2. `move_zone()` computes the replacement alongside its new native footprint and
-   restores the previous evidence with position/suppressions if the move rolls
-   back. Existing `observation_revision` publishes the changed value. Ordinary
-   topology change only changes evidence when the native owner actually recomputes
-   the footprint; the renderer must not expand an old cloud because a door opened.
-   Suppression/resume alters protection separately without rewriting physical reach.
-3. `get_spatial_observation()` includes **filtered** evidence only after its existing
-   visibility/discovery gate admits the effect. Cold acquisition, initial snapshot,
-   reconnect and an unobserved cast therefore retain the same current native
-   classification. Pure filtering is shared with transient/stage projection through
-   `project_area_reach_evidence` next to the cold evidence values in
-   `dnd/types/event_facts.py`. It receives passive allowed-position/provider sets,
-   propagation mode and origin-admission boolean; it imports no entities, senses,
-   grid, handler, player or renderer. Native observation and player projection
-   collect their permissions at their existing owners and call this same function.
-   It filters samples and enforces the full-frontier/full-occluder rules above.
-4. `PerceivedSpatialEffect` never stores objective unfiltered evidence. Party
-   reduction uses the existing observation/revision mechanism; it may union admitted
-   positives at the same admitted revision. It must not merge partial hidden cuts
-   from different observations into an allegedly complete negative cut. A complete
-   admitted evidence snapshot can be reused at that revision; otherwise exclusion
-   remains unknown. This intentionally conservative policy adds no party/world model.
-5. `dnd/player/projection.py::_observe_spatial_revisions` already compares admitted
-   values and remaps native revisions. The new filtered value participates in that
-   comparison; hidden-only changes cannot increment the public revision. Observed
-   loss of boundary authorization clears stale negatives and triggers an admitted
-   revision, even when the cloud's positive positions have not changed. Retained
-   historical observations keep their historical evidence; latest observations
-   cannot rewrite a previous clip. Removing the effect removes its active region
-   lease; backward seek restores it from the retained observation.
-
-The same presentation lifetime reads stage evidence while a witnessed cast is
-active, then retained spatial evidence for its maintained field. It does not render
-both as independent clouds. Cold discovery begins the existing settled/maintained
-phase rather than replaying an unwitnessed creation. No publication of a private
-native topology revision, hidden cut counts, later geometry or hidden provider
-identity is allowed. The new cold import in `senses.py` points to `event_facts.py`;
-the latter must remain independent of senses/player/live spatial modules.
-
-Mandatory lifecycle cases: Fog/Cloudkill/Darkness observed without their cast;
-move/suppress/resume/expire; newly disclosed or lost boundary; already-authorized
-party observers in separate rooms; native unchanged footprint after unrelated
-wall change; replay before/after relocation and reconnect with no root cast record.
-
-**Non-query footprint mutations have an explicit invalidation rule.** The common
-`SpatialCondition._change_footprint()` / `AreaCondition` mutation boundary must
-publish positions and evidence coherently. A fresh native shape computation passes
-its fresh evidence into that change. A translation, trim, replacement or activation
-arbitration that does **not** recompute propagation clears `AreaCondition.reach_evidence`
-to None before publishing the new observation revision. It must not translate
-stationary wall/provider witnesses with an attached cloud or retain old positive
-samples as though a trimmed cloud still occupied them. This applies to
-`relocate_anchor()`, `spatial/transitions.py`'s REMOVE_AFFECTED/replacement paths,
-and incumbent displacement during exclusive activation. The same native rollback
-restores the previous evidence alongside its previous position/footprint/suppressions.
-
-Use an optional cold evidence argument at the existing mutation boundary (default
-None = explicitly invalidated for that mutation), not a second cache, dirty-world
-watcher or query performed by the observer. Fresh `move_zone()` / initial shape
-resolution supplies its value explicitly. A no-op footprint change preserves the
-old snapshot unless the actual native shape/evidence changed, in which case publish
-the changed admitted revision. Provider destruction elsewhere alone cannot invent
-a footprint recomputation. The initial propagated-producer completeness requirement
-above does not forbid this intentional invalidation on a later non-query mutation.
-
-Explicit native removal remains an existing footprint/lifetime after-value and
-`SpatialEffectInteraction` cause. It is **not physical blocked-space evidence**:
-never put trimmed cells in `blocked_positions`, invent a wall there, or replay the
-creation. Ground receivers remove the actual changed membership; maintained-volume
-operators update their existing footprint/retirement contribution at the authored
-commit. Their admitted decorative fringes keep the normal source-registration
-policy; missing propagation evidence cannot become a new cell-alpha wall mask.
-Replacements use the replacement owner's admitted footprint and normal lifecycle.
-Add attached-anchor translation, partial cloud removal, exclusive displacement and
-failed relocation rollback to the same retained-area case; these are mandatory
-consistency cases for the single owner, not another representation subsystem.
-
-#### 5.10 Conservative audience projection is fixed
-
-For connected evidence apply the full-frontier rule below; line-of-effect uses
-the complete-occluder rule above. Both share the same cold value and no-completeness-
-flag policy. Negative evidence never creates permission to disclose a cast. The cast/area must
-already be admitted through its existing spell, positive reach or application
-facts. Use the audience's historical senses at this stage and the existing
-`_position_allowed` grants, not latest state or the union of later observations.
-Keep every independently authorized positive sample.
-
-Release negative/boundary evidence **only if the complete native exclusion
-frontier is disclosed**: both endpoints of every native frontier edge pass that
-stage's position authorization, and every provider reference in every boundary
-passes its existing current observation rule. Objects use the existing observation
-rule, including the rule that a seen supporting wall does not disclose a hidden
-insert; tiles and spatial effects use their existing admission owners. Remembered
-but currently unobserved provider state does not satisfy this predicate.
-
-If any frontier endpoint/provider fails, set both public `blocked_positions` and
-`boundaries` to `()`, while retaining independently admitted positives. Do not
-partially publish the cut, replace hidden UUIDs with anonymous planes, or add a
-completeness flag, hidden count or withholding reason to the protocol. If the
-complete frontier passes, retain its rows and filter negative samples by their
-own stage-time position authorization. The empty-frontier case adds no inferred
-exclusion: a subdivision face still needs an explicit negative sample.
-
-This all-or-nothing cut rule deliberately gives up some physical reach clipping
-in partially disclosed scenes. Unknown does not reject an admitted effect sample;
-ordinary disclosed solids, audience volume admission and camera depth still apply.
-The public empty negative/boundary tuples do not distinguish no exclusion from
-withheld evidence. Studio can report insufficient **received** evidence or missing
-registration, never the existence/count of hidden world facts.
-
-`_project_fact` currently drops an area stage when its new positive list is empty.
-Retain such a stage when its already-admitted public evidence/suppression snapshot
-changes, including clearing a previous exclusion to unknown. Do not introduce an
-otherwise undisclosed first stage merely to carry an all-empty snapshot. Continue
-to strip hidden previous/prerequisite lineage UUIDs and renumber public stages at
-the existing final projection pass (`dnd/player/projection.py`).
-
-#### 5.10 Continuous geometry compiler and shader
-
-Use one local planar arrangement, labelled by the received native samples:
-
-1. Resolve the stage's disclosed boundary witnesses and nearby displayed geometry
-   against their `WorldObjectPlacement`, authored finite front/back/end faces,
-   apertures, jambs and displayed leaf pose. A required missing registration makes
-   physical exclusion compilation unknown; it is not a guessed rectangular wall.
-2. Intersect the supporting lines of those footprint edges with the media's
-   registered world-space XY bounds, deduplicating coincident lines. Include end
-   and jamb faces: a long wall-face line alone would incorrectly extend a finite
-   wall's side classification past its tip. For line-of-effect evidence, also add
-   the admitted origin-to-registered-vertex lines described above; connected mode
-   never adds them. The media bounds come from the existing
-   client registration; the server neither knows nor exports artwork bounds.
-3. Split those bounds by the lines into convex faces. Assign admitted native
-   cell-center samples to faces. A free-space face with positive samples only is
-   reached; one with negative samples only is blocked; a face with neither or with
-   conflicting samples is unknown. A sample on a subdivision line labels every
-   incident free-space face; solid-interior samples do not label free space.
-   Missing required geometry makes exclusion unknown rather than strengthening it.
-4. Dissolve adjacent equal-state faces, preserve holes, and triangulate the resulting
-   blocked polygons. Internal cell seams never enter the geometry. Unknown/reached
-   faces do not reject artwork. Conflicting labels identify an actual evidence/
-   registration gap for Studio, not permission to guess a blocked face.
-5. Upload the compact continuous polygons/convex pieces under the existing scene
-   resource owner. At each represented sample, classify its unrotated ground coordinate against that data,
-   then independently perform solid, support, camera-depth and material tests.
-
-For a convex piece with outward unit normals and inequalities `n_i · p <= b_i`,
-membership requires every inequality at the unrotated ground coordinate `p`. For the
-camera-local reconstructed `P = (X,H,Z)` used in §6, compute
-`p = inverseQuarterRotate(q, (P.x, P.z))`. Native `(x,y)` cell positions, boundary
-footprints and exclusion polygons all use that same unrotated ground domain;
-never test `(P.x,P.y)`, which includes height. Keep full position and normals
-in a consistently transformed three-dimensional space for solid, camera and light tests.
-Use one calibrated world-unit epsilon
-derived from source registration for edge/solid agreement; do not snap to the
-camera or expand by a tile. On shared edges, physical-solid membership wins and
-blocked-region membership is inclusive. Dissolved nonconvex polygons retain their
-triangles/convex pieces; no per-pixel native path search is needed.
-
-This subdivision is geometric registration and labelling, not propagation. It
-never decides a target or reachable native cell. No visible-cell bitmap, staircase
-of cell squares, client propagation raycast or flood fill is produced. Origin-ray
-partitions are specific to native line-of-effect evidence; they are forbidden for
-connected spread, including Fireball.
-The finite faces are the same geometry used for camera composition, material
-receivers and picking. Source alpha/overhang remain the original artwork.
-
-#### 5.10 Outer fringe, low walls and stages: selected limits
-
-A native four-neighbor result does not specify a unique continuous blast volume.
-The selected visual continuation extends a known classification through its
-geometry-defined face, including decorative overhang beyond the mechanical
-envelope. A face with no admitted samples stays unknown and retains admitted
-artwork. The mechanical radius is never an image crop or extra clipping plane.
-
-If a finite wall ends just outside the radius, native reach cannot go around it:
-negative samples exclude the behind-wall strip. The region beyond the registered
-end plane has no in-envelope samples and is unknown, so a decorative flame tongue
-can survive around that distant end. This cosmetic continuation is an explicit
-limit; it creates no targets, damage, reach, light entitlement or revealed entities.
-Closing it would invent another propagation/continuation rule. If the end or open
-doorway is within native reach, positive samples on both sides remove that reach
-cut; the registered solid itself still rejects its interior. An open door outside
-the original envelope does not grant native reach into the other room.
-
-**Low-wall policy is vertical extrusion of the native 2D reach classification.**
-An explicitly blocked XY region rejects represented samples at every height.
-Registered base/top heights still govern finite solid intersections, support,
-camera occlusion and lighting; they do not reopen reach above a low cap. This can
-produce a visibly artificial vertical cutoff above a low wall. The current engine
-has no over-wall reach rule, and this plan does not claim natural smoke/fluid flow
-there (`dnd/core/world_edges.py:world_edge_contribution_allows`). Raised supports
-retain their own reconstructed heights without changing that native policy.
-
-Each stage replaces the active evidence snapshot after the maximum of its causal
-start and its disclosed prerequisites' destruction-clearance times, as in
-`game/choreography.py`'s `AreaReachFact` handling. Keep one original explosion
-clock. Backward seeking selects the earlier evidence and displayed geometry;
-never compile historical stages against the latest world. Canceled stages do not
-replace an admitted snapshot. No visible destruction prerequisite means no invented
-clearance animation or undisclosed dependency.
-
-Native storage and frontier extraction are `O(|E| + frontier)` beyond the existing
-traversal. A 20-foot sphere has a 9×9 bounding square: at most 648 bytes of int32 XY
-sample coordinates before protocol serialization, plus boundary/provider rows.
-For `n` distinct nearby registered supporting lines, arrangement output is worst
-case `O(n²)`; cardinal geometry is the corresponding sorted X/Y subdivision.
-Label placement, seam dissolution and triangulation happen on stage or relevant
-displayed geometry/registration change, not every frame. GPU bytes scale with
-merged polygon complexity, not map cells or artwork resolution. Reuse the existing
-instance/resource cache and historical ownership; camera panning does not rebuild
-the world-space region. Measure complex local arrangements in the combined workload;
-never silently truncate their polygons to make a frame budget pass.
-
-Production acceptance covers open overhang, finite/L/multiple walls, both sides,
-reachable/out-of-radius openings, surviving and serially destroyed barriers,
-terminal solids, low walls/raised support, partial/upper-only disclosure, four
-cameras and backward clearance seeking. These verify the selected rules and their
-named limitations; they are not a request to reopen algorithm selection.
-
-### 5.11 Expose the existing native movement preference, without another route API
-
-The 9 October executable-source comparison found a real transport omission. Native `dnd/player/session.py::{preview_player_selection,execute_player_action}` already accept `prefer_safe: bool = True`; preview caching includes it and execution revalidates and dispatches with the same value. The shared `ActionSelection` currently omits it, so a browser cannot deliberately request the normal route even though `selected_route.policy` describes the result. A response policy alone does not expose the choice.
-
-Add `prefer_safe: Annotated[bool, Field(strict=True)] = True` at the end of `dnd/player/commands.py::ActionSelection`. `player_server/protocol.py::{PreviewRequest,ExecuteSelectionIntent}` already reuse this type: do not duplicate the field on either envelope or introduce another selection DTO. In `player_server/worker.py`, forward the selection value to both native preview and execution calls. Preserve default behavior for existing callers.
-
-The two SDK preview-echo checks manually compare selection fields and must include this field: `sdk/player-typescript/src/index.ts` and `sdk/python/src/dnd_player/transport.py`. Compare omitted values as `True` on both sides. Python's current list-field comparison defaults to `[]`; blindly appending this boolean to that loop would wrongly reject an omitted request against the server-defaulted response. Incorporate this change into the same coordinated schema/SDK release as the three native presentation-fact amendments. Do not regenerate the SDK for subsequent UI or art edits.
-
-The ordinary preference is `True`; Shift requests `False` through the same preview. Modifier changes invalidate the prior preview even if the hovered tile has not changed. Execution carries the exact preference of the accepted displayed selection, never an independently sampled click-time flag. `prefer_safe=True` can fall back to normal when native rules cannot supply an affordable safe route: display the returned `selected_route.policy`, geometry, cost and exposures, not a promise of safety inferred from the request boolean. Focus loss clears the modifier and retires its old preview.
-
-Reuse `tests/player/test_session_admission_review.py::test_movement_preview_matches_execution_route_preference` as native behavior evidence. Add focused real-host/SDK cases for both values, omitted-default echo, stale modifier reply and the returned fallback policy; compare the submitted preview and actual committed movement. This is one missing option pass-through, not a pathfinding rewrite, extra route algorithm or new endpoint.
 
 ## 6. Production renderer: shared data, geometry, material and composition
 
@@ -1519,13 +1129,13 @@ Play and Studio use this same path. Neither supplies an alternative asset placem
 
 The source references are:
 
-- `game/projection.py`, `game/environment_draw.py`, `game/fixture_depth.py`, `game/scene_actors.py`, the motion/contact samplers, `game/asset_types.py`, `game/animation_types.py`, and their authored JSON owners.
+- `game_obsolete/projection.py`, `game_obsolete/environment_draw.py`, `game_obsolete/fixture_depth.py`, `game_obsolete/scene_actors.py`, the motion/contact samplers, `game_obsolete/asset_types.py`, `game_obsolete/animation_types.py`, and their authored JSON owners.
 - NeuroClient's existing projection, camera, grid, modular/fixed appearance and interaction functions. Its `render/worldDepth.ts` contains contact-depth bands and stable ties, not a complete solution for intersecting elevated geometry; do not copy its limitations as a new universal painter algorithm.
 - NeuroMapEditor's `src/model/{types,lattice}.ts`, `src/render/{orderPhaseOne,spritePresentation,alphaPicking}.ts` and `docs/PHASE_ONE_IMPLEMENTATION_RECORD.md`. Preserve its distinction between Z-grid identity, placement calibration and composition policy. Do not reinterpret composition order as physical elevation.
 - `agent_docs/PIXI_WALL_DOOR_ELEVATION_POSITIONING_HANDOFF_2026-10-08.md`, `NDCLIENT_ENVIRONMENT_ASSET_RECOVERY_HANDOFF_2026-10-08.md`, the actual `environment-production-audit` registrations and the selected `arena-study` delivery.
 - `agent_docs/audits/ndclient-plan-20261008/FIREBALL_PROOF.md` and the v4 Fireball handoff. These certify bounded prototype observations, not the full renderer.
 
-Current source already defines `MediaGeometry` (`plane`, `mesh`, `ellipsoid`, `ray_depth`), `ReceivingMaterial`, `VisualEmitter`, `PairedMediaSelection`, `PairedFrameBank`, `CaptureMatrices`, source/rest ownership planes and `ImageResourceSource.geometry`. The older foundation document says that last field must be added; that is stale. Extend these existing source owners only for a demonstrably absent distinction. Do not introduce a second asset registry, transformation language, material hierarchy, entity renderer class tree, renderer-specific world snapshot or handwritten copy of generated types.
+Current source already defines `MediaGeometry` (`plane`, `mesh`, `ellipsoid`, `ray_depth`), `ReceivingMaterial`, `VisualEmitter`, `PairedMediaSelection`, `PairedFrameBank`, `CaptureMatrices`, source/rest ownership planes and `ImageResourceSource.geometry`. The older foundation document says that last field must be added; that is stale. Consume their prepared client-schema equivalents; do not extend the archived Python owners. Do not introduce a second asset registry, transformation language, material hierarchy, entity renderer class tree, renderer-specific world snapshot or handwritten copy of generated types.
 
 This is a new GPU renderer, not a request to stop at Python/NeuroClient parity. Source registration, semantics, temporal behavior and existing successful controls are recovered. Canonical sampled depth/normals, material transfer, receiving/emitting light and physical cross-surface composition are new functionality. Whenever an asset supplies depth/normal channels, those channels take precedence and are actually consumed. A convenient constant cutout or fitted ellipsoid must never replace available measured channels. The fallbacks below exist only for source artwork that genuinely lacks that data and state their approximation explicitly.
 
@@ -1585,7 +1195,7 @@ Read source, not just its earlier screenshots:
 | `directLight`: Lambert term, range attenuation, light-to-point obstruction | Share the calculation between surfaces and VFX; supply displayed, admitted light/geometry data and the existing world policy. |
 | Effect's diagonal `uHostScale` plus `unCamera` | Replace with the full delivered source-to-local and occurrence transforms, and explicit normal transport. Do not assume every asset shares Fireball's capture camera or diagonal metric. |
 | 24 boxes, six lights, constant ambient, hard opacity cutoff, fixed depth range and 128 MiB cache | Proof settings only. Do not promote them to production limits, defaults, source metadata or acceptance gates. |
-| One-axis reach interval and hardcoded doorway pieces | Fixture-only. Production native reach, finite apertures and physical composition remain the separate contracts already specified in §§5.10/6. |
+| One-axis reach interval and hardcoded doorway pieces | Fixture-only. Consume existing area outcomes separately from finite apertures and physical camera composition (§6). The demo shortcut is not a general propagation implementation. |
 
 In particular, the proof's hardware depth expression includes `X+Z+H`; the common
 production depth convention above/below is `d=X+Z`. Use one production depth
@@ -1620,7 +1230,7 @@ file-path edits do not regenerate SDKs.
    solid or a complete arbitrary-direction light blocker.
 4. **Roles and coverage:** preserve typed support, shadow/component selection and
    receiver inheritance at the existing image/layer owner. Reuse current source
-   RGBA bounds/mask selection mechanics from `game/sprite_components.py`; keep
+   RGBA bounds/mask selection mechanics from `game_obsolete/sprite_components.py`; keep
    environment meanings such as solid fragment, ground shadow, dust, cloth and
    surface paint explicit. Neutral selection primitives must remain below their
    consumers in the import DAG, not create an `asset_types`↔`sprite_components`
@@ -1663,7 +1273,7 @@ is complete; do not implement a second importer or repeat it as a renderer task.
 
 **Implemented, 10 October.** The concrete implementation steps, passive field shapes, exact
 source inventory, coordinate conversions and completion checks are consolidated in
-[the assembly-authoring pre-phase plan](NDCLIENT_ASSEMBLY_AUTHORING_PREPHASE_PLAN_2026-10-10.md),
+[the assembly-authoring pre-phase plan](/mnt/c/users/tommaso/documents/dev/dnd_engine/agent_docs/NDCLIENT_ASSEMBLY_AUTHORING_PREPHASE_PLAN_2026-10-10.md),
 created at the user's request on 10 October. It records the completed data phase
 and exact field semantics; its implementation steps are not outstanding work.
 
@@ -1845,7 +1455,7 @@ An upper floor overhang, stair tread, lower floor, cliff return, door, table, bo
 
 #### The explicit same-support cutout rule
 
-The previous renderer already had a necessary semantic rule: `game/fixture_depth.py:_floor_below_contacts` puts a body's own support covering below that body and its contact shadow. Dropping that rule while adding physically varying floor depth causes exactly the chopped feet, prone sprites and buried prop bases reported in the deleted client. The new implementation preserves the behavior on the GPU, without copying Python's CPU image partitioning or merely adding a depth epsilon.
+The previous renderer already had a necessary semantic rule: `game_obsolete/fixture_depth.py:_floor_below_contacts` puts a body's own support covering below that body and its contact shadow. Dropping that rule while adding physically varying floor depth causes exactly the chopped feet, prone sprites and buried prop bases reported in the deleted client. The new implementation preserves the behavior on the GPU, without copying Python's CPU image partitioning or merely adding a depth epsilon.
 
 For an ordinary source sprite without per-pixel geometry, retain its original camera-facing cutout and source contact. Above its own receiving surface it uses its registered contact depth `d_c`. Its authored bottom overhang is represented as a depth-only continuation on that receiving surface. On a horizontal receiving surface of height `H_s`, its depth at a source-covered screen point is:
 
@@ -1922,15 +1532,13 @@ For the installed whole-flight stair, preserve `support_offsets`, lower anchor, 
 
 Each projected native support must coincide with that source contact after the registered transform. The installed G17 e/s art is a sloping whole-flight raster; its current four registered source corners and three contacts define a usable sloping depth proxy. The w/n art is a narrow edge-on stripe and uses the registered contact-chain continuation above. Keep this explicit representation rather than claiming that its generic face name `slope` provides separately measured tread/riser topology. There is no need to invent or export hypothetical individual steps just to replace the word "slope." Other stair artwork with actual registered treads/risers uses those surfaces, and newly supplied sampled depth takes precedence. Source contacts alone do not establish an unrelated family's width/side faces. The imported study's G16 edge lane and G17 width extension share the same rise; width extension does not mean stacking another rise. Do not emit a full intermediate flat floor over the flight.
 
-The current native schema cannot locate a partly disclosed whole flight from an isolated middle/upper member. The user explicitly approved disclosing the run's shape. Add optional `WorldTileState.observed_stair_run` with `uphill_direction`, `member_index` and `support_count` for the current straight unit-rise native runs. Derive the lower position/height from the admitted member; do not duplicate them. Projection derives this from recorded cold support facts and retains it with normal remembered state. It supplies no neighboring UUIDs, materials, light, creatures, visibility or permissions, and the renderer must not insert the implied positions into its actionable/seen tile set. Ambiguous/non-unit/branched runs receive no fabricated shape. The source profile must match the disclosed run; old recordings without enough data are honestly limited or recaptured, not normalized on load. This is part of the single already-planned source-derived SDK amendment, not another server redesign.
-
-The exact current source records and required authoring outputs are recorded in the calibration table below. This is bounded authoring in existing owners using the selected source families, not an open-ended search for another layering algorithm. Listing image paths or contact points alone does not certify missing face data.
+The calibration table below records the installed source data and remaining renderer consumers. Consume those prepared values; it does not request another authoring pass.
 
 ### Actors, gear, projectiles and condition media
 
 Use the existing modular rig layer order and fixed-sprite authoring. Do not normalize monsters to a shared silhouette height. The effective scale chain is original rig units → source-to-world conversion → explicitly authored appearance scale/width → gameplay size effect → common camera zoom. Apply each exactly once to the body, gear, feet, sockets, hit regions, shadows and attached effects.
 
-Remove unrequested class cosmetic scales at their source producer; do not rewrite historical recording appearance on load. Keep documented animal enlargements, explicit halfling/build appearance scales and authored Enlarge/Reduce. Current source does not prove a separate automatic halfling multiplier, so do not invent one. Retained `persistent.bodyScale` data and the existing transition interval supply a single shared scale sample for application, removal, suppression/resumption and seeking. No spell-name dispatch or duplicate scale table is needed.
+Do not add class-dependent cosmetic scales to client authoring or rendering. Preserve delivered gameplay size facts and do not rewrite historical recording appearance on load. Unexpected upstream scale values are reported, not patched in engine producers under this plan. Keep documented animal enlargements, explicit halfling/build appearance scales and authored Enlarge/Reduce. Current source does not prove a separate automatic halfling multiplier, so do not invent one. Retained `persistent.bodyScale` data and the existing transition interval supply a single shared scale sample for application, removal, suppression/resumption and seeking. No spell-name dispatch or duplicate scale table is needed.
 
 Equipment visibility is slot-specific. Hiding a casting main weapon must not hide the offhand unless that slot's policy says so. Each modular channel, mask, material, motion and socket remains an observable Studio track. Fixed goblin/animal/demon sources retain their authored poses and frame registrations; they are not modularized or warped to another camera.
 
@@ -1942,20 +1550,20 @@ Condition body material, body pose, ground effect and overhead marker are separa
 
 These are production capabilities already present in the inspected Pygame sources, not new condition rules or a request to port CPU drawing loops. They use the same passive compiled channels, GPU material/geometry paths, retained native owners and displayed clock as the rest of §6.
 
-- **Condition phase sampling:** retain source `startOffsetMs`, `phaseOffsetMs`, fade-in, sequential versus crossfaded application, sustain start, loop overlap, finite removal-bank crossfade and removal masks. Early removal samples the actual interrupted formation age; it must not finish forming first or restart the source bank. Activity and life-state eligibility apply to all contributing layers. Head-marker deduplication groups the same semantic symbol across owners, chooses a complete declared bank bundle, and leaves every owner's native lifetime intact. Different active symbols cycle deterministically on the displayed clock. Source: `game/condition_sampling.py::{sample_condition_media,_loop_samples,select_condition_markers}` and `condition_media_lifetime.py::sample_condition_lifetimes`.
-- **Additional body presentations:** consume the actual `liveCopies`, `bodyDistortion`, `bodyRamp`, `frozenPose` and `absenceEcho` operands from current condition recipes. Live copies mirror the presented body/gear and their native owner/count/consumption state, but do not become actors, legal targets or duplicate hit regions. Frozen pose retains the captured presentation frame rather than substituting frame zero. Distortion contours and their ramps are finite authored material/copy tracks; they are not a general camera warp. An absence echo can use its retained witnessed pose and separately admitted return pose only; it cannot reveal an unseen destination or keep a targetable actor alive. Source: `game/condition_media_lifetime.py`, `absence_media.py::{absence_poses,absence_draw_commands}`, and `animation_draw.py::{actor_draw_commands,condition_rig_layers}`.
-- **Historical body afterimages:** source-defined trail ages sample the same body/gear/condition pose resolver at those earlier displayed times. Retain only the source-required history and its necessary predecessor, not full per-frame worlds or screenshots. Cuts at relocation/portal transitions and loss of visual admission prevent a trail connecting separated positions or exposing an unseen segment. Camera rotation reprojects the same samples rather than accumulating a new screen-space trail. Source: `game/body_history.py::{retain_body_head,sample_body_trails}`. This is distinct from projectile/weapon trails and settled blood.
+- **Condition phase sampling:** retain source `startOffsetMs`, `phaseOffsetMs`, fade-in, sequential versus crossfaded application, sustain start, loop overlap, finite removal-bank crossfade and removal masks. Early removal samples the actual interrupted formation age; it must not finish forming first or restart the source bank. Activity and life-state eligibility apply to all contributing layers. Head-marker deduplication groups the same semantic symbol across owners, chooses a complete declared bank bundle, and leaves every owner's native lifetime intact. Different active symbols cycle deterministically on the displayed clock. Source: `game_obsolete/condition_sampling.py::{sample_condition_media,_loop_samples,select_condition_markers}` and `condition_media_lifetime.py::sample_condition_lifetimes`.
+- **Additional body presentations:** consume the actual `liveCopies`, `bodyDistortion`, `bodyRamp`, `frozenPose` and `absenceEcho` operands from current condition recipes. Live copies mirror the presented body/gear and their native owner/count/consumption state, but do not become actors, legal targets or duplicate hit regions. Frozen pose retains the captured presentation frame rather than substituting frame zero. Distortion contours and their ramps are finite authored material/copy tracks; they are not a general camera warp. An absence echo can use its retained witnessed pose and separately admitted return pose only; it cannot reveal an unseen destination or keep a targetable actor alive. Source: `game_obsolete/condition_media_lifetime.py`, `absence_media.py::{absence_poses,absence_draw_commands}`, and `animation_draw.py::{actor_draw_commands,condition_rig_layers}`.
+- **Historical body afterimages:** source-defined trail ages sample the same body/gear/condition pose resolver at those earlier displayed times. Retain only the source-required history and its necessary predecessor, not full per-frame worlds or screenshots. Cuts at relocation/portal transitions and loss of visual admission prevent a trail connecting separated positions or exposing an unseen segment. Camera rotation reprojects the same samples rather than accumulating a new screen-space trail. Source: `game_obsolete/body_history.py::{retain_body_head,sample_body_trails}`. This is distinct from projectile/weapon trails and settled blood.
 - **Appearance composition and selection:** canonical base appearance plus currently active source-owned overrides determines effective body/gear. Removing one contribution reveals remaining owners rather than restoring a stale snapshot. Respect existing helmet/head visibility, crown exceptions, slot-specific equipment hiding and compatible transient anatomy; an already winged rig does not acquire duplicate generated wings. Shadow, aura, accents, copies and excluded rig categories do not inflate physical actor picking. Preserve those semantics as declared rig/layer policy, not a new per-creature renderer.
-- **Independent readable feedback:** damage/heal amounts and outcome badges retain their recorded application identity, contact and authored duration even after the parent action head completes. Their source text/font/color/time remain unchanged by layout. Arrange concurrent text against actual visible actor bounds and other feedback, clamp to the usable viewport, and use a stable least-overlap fallback when crowded; do not shrink text to unreadability or use empty atlas padding as body bounds. Source: `game/feedback.py`, `playback_frame.py::sample_playback_frame`, and `animation_draw.py::{actor_screen_bounds,place_feedback_rect,arrange_feedback_commands}`. UI feedback is a screen-space annotation over the presented contact, not physical occlusion geometry or a second combat log.
-- **Environment endpoint state:** opening/closing, trap activation and cold/restored state select the actual declared source endpoint or state frame. Closing can sample the authored opening bank in reverse when that source selects it; a newly observed open door is already at its open endpoint. Wreck selection retains the source's open/closed/swing/mechanism/material/outcome and supported-item distinctions instead of a universal broken-prop image. Source: `game/environment_animation.py::{door_pose,trap_pose,remnant_bank}` and `environment_art.py`.
+- **Independent readable feedback:** damage/heal amounts and outcome badges retain their recorded application identity, contact and authored duration even after the parent action head completes. Their source text/font/color/time remain unchanged by layout. Arrange concurrent text against actual visible actor bounds and other feedback, clamp to the usable viewport, and use a stable least-overlap fallback when crowded; do not shrink text to unreadability or use empty atlas padding as body bounds. Source: `game_obsolete/feedback.py`, `playback_frame.py::sample_playback_frame`, and `animation_draw.py::{actor_screen_bounds,place_feedback_rect,arrange_feedback_commands}`. UI feedback is a screen-space annotation over the presented contact, not physical occlusion geometry or a second combat log.
+- **Environment endpoint state:** opening/closing, trap activation and cold/restored state select the actual declared source endpoint or state frame. Closing can sample the authored opening bank in reverse when that source selects it; a newly observed open door is already at its open endpoint. Wreck selection retains the source's open/closed/swing/mechanism/material/outcome and supported-item distinctions instead of a universal broken-prop image. Source: `game_obsolete/environment_animation.py::{door_pose,trap_pose,remnant_bank}` and `environment_art.py`.
 
 Acceptance adds server-recorded early application/removal, two simultaneous owners followed by one removal, consumed illusion copies, frozen pose, visible absence/return, a moving distortion trail crossing a portal or sight boundary, overlapping numeric feedback persisting into the next action, and cold acquisition of an open door/activated trap. Inspect and seek those same recordings in Studio; do not manufacture condition membership or outcomes there.
 
 The following source cases refine the existing renderer families; they do not add parallel effect systems:
 
-- **World-launched projectiles:** `game/mechanism_projectile.py::{mechanism_projectile_duration,mechanism_projectile_target,sample_mechanism_projectile}` uses an admitted mechanism's world origin, elevation and pose-dependent muzzle instead of an actor socket. The common trajectory channel supports both source kinds, retained target contacts, camera-independent travel duration, directional bank choice and permitted residual rotation. A hidden muzzle must not produce a revealing launch flash or synthesized caster; separately admitted travel/impact facts may still render.
-- **Portal transfer:** `game/portal_draw.py::{portal_draw_commands,_doorway_commands,clip_portal_bodies}` supplies entrance/exit front/back media and local aperture clipping during transfer. A body and its decorative copies/trails enter or emerge through that registered aperture; its contact shadow follows the actual transfer phase. Use the shared geometry/material path, not a global tile mask or copied CPU raster loop. One admitted endpoint never becomes a window into an undisclosed remote room.
-- **Prop disintegration:** `game/object_dust.py::object_dust_commands` retains the object's alpha silhouette, contact and deterministic seed for its retirement effect. Support this through the existing particle/material owner, separately from actor blood and wall debris. At the native destruction commit the retired prop is no longer an interactive/blocking object merely because decorative dust remains. No new CPU XYZ payload or second debris engine is required.
+- **World-launched projectiles:** `game_obsolete/mechanism_projectile.py::{mechanism_projectile_duration,mechanism_projectile_target,sample_mechanism_projectile}` uses an admitted mechanism's world origin, elevation and pose-dependent muzzle instead of an actor socket. The common trajectory channel supports both source kinds, retained target contacts, camera-independent travel duration, directional bank choice and permitted residual rotation. A hidden muzzle must not produce a revealing launch flash or synthesized caster; separately admitted travel/impact facts may still render.
+- **Portal transfer:** `game_obsolete/portal_draw.py::{portal_draw_commands,_doorway_commands,clip_portal_bodies}` supplies entrance/exit front/back media and local aperture clipping during transfer. A body and its decorative copies/trails enter or emerge through that registered aperture; its contact shadow follows the actual transfer phase. Use the shared geometry/material path, not a global tile mask or copied CPU raster loop. One admitted endpoint never becomes a window into an undisclosed remote room.
+- **Prop disintegration:** `game_obsolete/object_dust.py::object_dust_commands` retains the object's alpha silhouette, contact and deterministic seed for its retirement effect. Support this through the existing particle/material owner, separately from actor blood and wall debris. At the native destruction commit the retired prop is no longer an interactive/blocking object merely because decorative dust remains. No new CPU XYZ payload or second debris engine is required.
 - **Appearance-only updates:** the old NeuroClient's `AnimatedEntity` recomposition/patch/readiness methods show the needed behavior: preserve the active source clip/frame while changing equipment or temporary appearance layers, prepare the complete replacement atomically, and remove only an ending modifier's contribution. Do not restore an old tint/slot snapshot over more recent admitted changes or copy the old class/visibility-closure design.
 
 Exercise these with server-recorded device shots, partially witnessed portal transfers, prop destruction and overlapping appearance changes, including backward seek and camera changes.
@@ -2031,31 +1639,40 @@ For postprocessed glow pixels outside valid source surface depth, retain the glo
 
 For fractured/rest-anchored materials, retain the existing source-piece owner ID and per-frame current-to-rest transform. Sample current depth for camera composition, then derive rest coordinates only for the material that requires them. Use `M_rest * inverse(M_current)` for the supplied piece, not the rest position as its current camera depth. The source exporter already has current piece positions; preserve them in the compact source representation rather than adding a runtime rigid-body simulation.
 
-### Wall reach, camera occlusion and protection are distinct operations
+### Effect coverage, camera depth and existing outcomes
 
-The rendering order is: admit the effect from native subjective facts → sample its authored appearance/geometry → apply only disclosed mechanical reach/protection where required → compose against the camera's actual visible surfaces. Native hit cells do not become an image alpha stencil. A VFX plume remains whole where pixels overhang cells or reach evidence is unknown. Camera rotation must never alter the native set hit by a spell.
+An admitted effect samples its authored full appearance and registered geometry,
+then composes against the displayed scene in the shared depth space. Per-pixel
+wall/door depth determines front/behind; a sprite's screen bounding box or draw
+insertion order does not. Open apertures and displayed destruction state use their
+actual geometry. This is camera occlusion, not a second propagation simulation.
 
-The reach amendment in the single coordinated SDK revision carries the existing traversal's cold `AreaReachEvidence`: reached positions, blocked positions, and boundary/provider evidence actually needed for the disclosed negative region. Capture it during the original native query; do not traverse the world a second time to recreate it in the server or client. Staged Fireball carries the appropriate full evidence snapshot at each stage, including relevant destruction state; an unstaged action uses its existing root stage. Persistent area projections retain their correct revision, clear/recompute when the actual native footprint changes, and restore the prior evidence on rollback. An empty/absent producer is not mislabeled as a completed implementation.
+An explosion's cosmetic pixels may extend over dark/unseen regions. Do not use
+visible tiles, absent cells or the complement of received hit cells as an alpha
+stencil. This does not disclose hidden actors, items, terrain, lights or targets,
+change legal movement, or change which creatures were hit. Full physical blast
+stopping/deformation through every obstacle is not promised by this raster effect;
+registered scene depth and the supplied appearance remain the rendering inputs.
 
-The exact owner fields, native producers, lifetime rules and privacy projection are specified once in §5.10 of this document. That is the authoritative reach contract; the GPU consumer does not define another one.
+Consume existing `SpellFact.resolved_area_positions` and `AreaReachFact` stage,
+newly-reached positions and destruction prerequisites for causal timing and
+received outcomes. Preserve None versus an empty resolved result. Do not infer
+negative provider evidence from their absence, rerun propagation, or add a
+continuous blocked-region compiler requiring undisclosed information.
 
-Compile the admitted negative evidence into a continuous world region:
-
-1. Use the current registered finite wall/end/jamb/return planes and their disclosed provider identities to partition the bounded effect region. Use source geometry, not square tile clipping.
-2. For the line-of-effect operator, include its origin-to-boundary-vertex rays. Do not add those rays to connected flood-fill effects, which do not use that propagation law.
-3. Label the resulting finite faces from positive/negative evidence. Conflicting or insufficiently determined faces are unknown, not blocked.
-4. Dissolve adjacent equally labeled faces, preserve holes/apertures, and triangulate only the proven blocked region for GPU membership.
-5. Test the reconstructed effect sample against that continuous region and its admitted solid/protection geometry; then apply camera depth.
-
-This lets a ring approach a real wall without a premature origin wedge and keeps source overhang from being cut into cell-shaped chunks. A doorway is a physical aperture; the source sample can pass through it when the native evidence permits. Native reach remains currently two-dimensional: its negative region is vertically extruded where that is the selected spell rule. That can produce a vertical visual frontier for low obstacles; it is not a fluid simulation or invented over-wall spread. State that limitation rather than secretly changing mechanics.
-
-Protection follows actual delivered applicability. Globe and Antimagic are not interchangeable "all domes block every spell" geometry. For a disclosed shell interception, compute the projectile segment/sphere or appropriate supplied-shell intersection and put its existing impact media there. Antimagic suppression/resumption/expiry uses retained native cause and timing; do not invent an impact graphic for a suppression-only event. The existing planned typed cancellation/SpellSuppression facts feed both visible playback and log cause. Rendering cannot resurrect a suppressed effect because the latest map contains a sphere.
+Current cancellation and suppression facts control presentation lifetimes. A
+canceled action does not continue its canceled track; received suppression,
+resumption and expiry retain their actual timing. Only place a specific boundary
+impact when existing facts and admitted geometry identify that interception.
+Otherwise present the available cancellation outcome without inventing a dome hit,
+provider identity or traveling projectile. Globe and Antimagic are not interchangeable
+obstacles, and visible dome artwork alone cannot decide mechanical applicability.
 
 ### Materials, receiving light and emission
 
 Recover existing finite material operations and their source masks rather than replacing all material work with tint. This includes the already authored maximum-RGB/luminance transfer, bark, wither, fracture wave, energy burn, rising bands, etched burn, flowing film and frost families. Additional entries are ported from the actual source union/formula, not inferred from spell names. The per-fragment order is declared:
 
-`source decode → source palette/material operation → receiving light → authored emission → native-reach/physical composition → original blend`.
+`source decode → source palette/material operation → receiving light → authored emission → displayed physical-depth composition → original blend`.
 
 Original alpha/coverage is preserved unless that particular authored operation changes it. Equipment and body have their correct separate owned material modifiers. Shared immutable source pages do not cache another entity's material result. No camera-specific recolored image copies or CPU XYZ/color calculations are introduced.
 
@@ -2148,20 +1765,19 @@ The architecture and composition rules above are concrete. The following are act
 The earlier missing-export list is superseded by the 10 October delivery.
 Source measurements and historical qualifications remain in the supplied records;
 they are not new authoring tasks. Use current client selections and the following
-remaining consumers, with the one assembly connection defect called out explicitly.
+remaining consumers. The assembly-authoring connection is complete.
 
 | Existing owner/family | Current data and remaining action |
 |---|---|
 | D1 straight stone walls, D2 corners and wood wall families | New selected depth/normal/role registrations are installed. Consume them through shared geometry/material code. Preserve each family's compatible joining cross-section and suppress only internal faces of actually joined pieces. Visible receiving samples do not by themselves certify unseen closed light-blocking faces. |
 | D6 stone door frame | Sampled ray packet and aperture-preserving receiving mesh are installed. Consume the delivered arch; do not recreate the prototype's rectangular shell or three-box doorway approximation. |
-| G17 selected stairs | Existing three support offsets, twelve source contacts and new companions remain authoritative. Preserve top/foot joins and authored enclosing returns. The approved partial-stair native observation remains §5.6 work. No missing tread-export task or timber substitution. |
+| G17 selected stairs | Existing three support offsets, twelve source contacts and new companions remain authoritative. Preserve top/foot joins and authored enclosing returns. No missing tread-export task or timber substitution. |
 | Stone/earth/wood floor tops and skirts; G12/G13 cliffs and returns | Delivered geometry/normal/support metadata replaces the old missing-calibration tasks. Consume real support elevations, skirt/face registration and complete enclosure. Wall-corner and cliff-corner maps remain separate. |
 | Existing animated doors and destruction banks | Preserve existing RG16LE companions and their decoder where selected; consume new registered RG16BE/normal companions with their own byte meanings. Six generated indoor doors now carry the physical mount/camera/member data from §6.1; shared-renderer placement must consume it and still requires visual acceptance. |
 | Chest B1, plain table, covered table and other props | New companions are installed where supplied. Original pivots remain per-source: chest B1 `(192,271.36)`, plain table `(192,272)`, covered table `(192,204.5)`. Consume geometry plus role/support masks; unsupported cutout-only art uses the explicit same-support rule, not another object's pivot. |
-| Fractional timber flight | Delivered mount/tread/landing correction is stored in source records; connect the typed library metadata as §6.1 specifies. It remains library-only. No new native stair binding or change to G17. |
+| Fractional timber flight | Delivered mount/tread/landing correction is already connected to typed library metadata (§6.1); consume it. It remains library-only. No new native stair binding or change to G17. |
 | `world.residue_wall_faces` | Retain as deposit UV/source-face mappings on their corresponding physical receiving faces. These are neither full solid colliders nor a new material registry. |
 | `assets.water` and static companion references | Water mask/normal/ripple registrations and static `geometry_region`/sampling associations are restored. Implement their consumers; do not repeat metadata restoration or request new exports. |
-| World state and native area facts | Implement §5.6 partial-stair observation and §§5.5/5.10 cancellation/reach evidence in their current native owners. Preserve the one-support-per-XY gameplay boundary. |
 
 The complete installed library remains available. Existing source-compatible
 assembly selection must reach the consumer through typed current owners, not
@@ -2185,11 +1801,11 @@ Selection follows typed references from canonical source documents. It does not 
 
 | Family | Existing source authority | Required release and consumer behavior |
 |---|---|---|
-| Terrain, walls and architectural details | `game/data/assets.json`, `game/data/world_bindings.json`, environment registrations and source assembly records | Preserve source family, compatible adjoining pieces, physical placement, pose, pivot, scale, support/face registration, animated frames and source companions. Material names alone do not establish compatibility. |
-| Doors and windows | `game/data/environment_art.json` and named source receipts | Include frame, leaf and insert states, open/closed/break variants, parent/insert destruction, exact sample times and commits, selection/aperture masks and passage points. Physical pose and source-bank pose remain separate. |
+| Terrain, walls and architectural details | `game_obsolete/data/assets.json`, `game_obsolete/data/world_bindings.json`, environment registrations and source assembly records | Preserve source family, compatible adjoining pieces, physical placement, pose, pivot, scale, support/face registration, animated frames and source companions. Material names alone do not establish compatibility. |
+| Doors and windows | `game_obsolete/data/environment_art.json` and named source receipts | Include frame, leaf and insert states, open/closed/break variants, parent/insert destruction, exact sample times and commits, selection/aperture masks and passage points. Physical pose and source-bank pose remain separate. |
 | Props, traps and wrecks | Existing environment and prop registrations | Native state selects intact/engaged/open/broken/destroyed art and transition timing. Include all selected companions and post-destruction variants, not only intact banks. |
 | Modular characters | Root `BodyRig`, rig tables and layer registrations | Include all declared clips and facings, body/shadow/gear/Magic/Effect slots, masks, source palettes/materials, sockets, layer order and exclusions. Idle/Run alone is not support for a rig. |
-| Fixed goblins, animals, demons and monsters | `game/data/rigs/*.json` and exact creature associations | Use the same `BodyRig`/`BodyClip` sampling path. Preserve original shadows and accents, semantic aliases, native wing clips, rest anchors and accepted appearance scales. Baked equipment does not become removable modular art. |
+| Fixed goblins, animals, demons and monsters | `game_obsolete/data/rigs/*.json` and exact creature associations | Use the same `BodyRig`/`BodyClip` sampling path. Preserve original shadows and accents, semantic aliases, native wing clips, rest anchors and accepted appearance scales. Baked equipment does not become removable modular art. |
 | Equipped and ground items | Existing item appearance/material/attachment documents and `content_data/ledgers/neuroclient_authored_item_visuals.json` | Preserve exact owned item appearance across held, dropped, looted and re-equipped states, including coatings/enchantments. Do not substitute old generated NeuroClient equipment tables as canonical data. |
 | Spell, action, condition and lifecycle media | Current recipes, media registrations and storage selections | Include each selected phase/layer/direction and its dependencies. Preserve original source frame count, duration, uneven timing, crop/pivot, masks and companions. The historical source type name `projectile` does not restrict selection to flying sprites. |
 | Water, blood, deposits and residue | Current world/material/particle/release/landing registrations | Export the selected compact production representation, receivers and ownership without adding new chemistry or a particle simulation. Retain the full originals privately. |
@@ -2514,7 +2130,7 @@ A component is not recovered because a similarly named file exists. Its required
 
 ### 8.2 Cases and shared execution
 
-Studio is an offline input adapter and inspection workspace for the actual production renderer. It digests prerecorded test streams through the same TS subjective reducer, ancestry/index handling, causal compiler, retained presentation state, absolute-time sampler, renderer and resource owner used by the live game. Spell/action/condition/rig/item/world/material views select and inspect that shared machinery; they are not family preview renderers or another orchestrator. The complete displayed world, actors, equipment, materials, effects and commits must compose coherently through that production path. A complete timeline or a successful isolated clip cannot establish that the renderer is delivered.
+Studio is an offline input adapter and inspection workspace for the actual production renderer. It digests prerecorded test streams through the same TS subjective reducer, ancestry/index handling, causal compiler, retained presentation state, absolute-time sampler, renderer and resource owner used by live play. Spell/action/condition/rig/item/world/material views select and inspect that shared machinery; they are not family preview renderers or another orchestrator. The complete displayed world, actors, equipment, materials, effects and commits must compose coherently through that production path. A complete timeline or a successful isolated clip cannot establish that the renderer is delivered.
 
 A gameplay case contains the actual current SDK initialization and ordered operation payloads received from the running server, its authorized audience, admitted content, case label/interval/tags and pinned presentation release. Capture tools run beforehand, outside Studio, by driving the real host through the current SDK. Schema-valid synthetic records and direct native projected sequences are not accepted substitutes. Studio only reads the resulting recorded input. It does not connect or attach to the game server, open a live follower, query choices/previews/content, send gameplay commands or generate native events. No TypeScript preview helper fabricates success, damage, movement interruption, condition application or death. All descriptors needed by the case are admitted in its recorded data; missing content is a case error, not a reason to query the server. Native private recordings are not exposed as browser cases.
 
@@ -2524,11 +2140,11 @@ Only the source of input differs: the live game receives admitted operations fro
 
 #### 8.2.1 Gameplay examples originate at the actual server
 
-**Server-origin recording is mandatory, independently of schema validity.** Create a gameplay case by starting the current `player_server`, driving its real API with the current SDK, and recording the exact subjective initialization and operation payloads delivered to an authorized SDK consumer. Studio may then load those files as static local examples with the server stopped. No locally constructed event-shaped object, direct-engine export or wrapped legacy sequence qualifies as that capture.
+**Server-origin recording is mandatory, independently of schema validity.** Create a gameplay case by starting the current `server`, driving its real API with the current SDK, and recording the exact subjective initialization and operation payloads delivered to an authorized SDK consumer. Studio may then load those files as static local examples with the server stopped. No locally constructed event-shaped object, direct-engine export or wrapped legacy sequence qualifies as that capture.
 
 ```text
 existing ServerConfig / EncounterRecipe and native setup
-    → actual player_server host and engine worker
+    → actual server host and engine worker
     → current SDK choices / preview / command / receipt
     → authorized SDK follower receives real initialization and operations
     → save the raw received payloads and their complete scoped prefix
@@ -2539,8 +2155,8 @@ Use the existing owners, without a new scenario language or event-injection endp
 
 | Existing source owner | Actual role and required reuse |
 |---|---|
-| `player_server/config.py::ServerConfig`, `player_server/app.py::create_app`, ordinary server CLI | Run the real service/engine worker. Current encounter recipes, seat/controller configuration and private test seeds are already supported. |
-| `devtools/player_server_acceptance/fixtures.py::{configuration,combat_configuration}` | Existing actual native setups cover controller arrangements, the crypt, melee/ranged, Magic Missile, Scorching Ray, Fireball, Hold Person, Wall of Fire and Conjure Animals. Extend these existing native recipe/setup owners for missing cases. |
+| `server/config.py::ServerConfig`, `server/app.py::create_app`, ordinary server CLI | Run the real service/engine worker. Current encounter recipes, seat/controller configuration and private test seeds are already supported. |
+| `devtools/player_server_acceptance/fixtures.py::{configuration,combat_configuration}` | Existing actual native setups cover controller arrangements, the crypt, melee/ranged, Magic Missile, Scorching Ray, Fireball, Hold Person, Wall of Fire and Conjure Animals. Use their supported configuration as reference for client-side capture scripts; do not extend native setup owners. |
 | `devtools/player_server_acceptance/run.py::run_case` with `python_player.py`, `typescript_player.mjs`, `crypt_player.py` | Existing host launch, independent current-SDK command drivers and per-seat numbered raw capture files. The crypt driver uses the production Python reducer over received records to choose its next command; it does not invent outcomes. |
 | `devtools/player_server_acceptance/http_run.py`, `test_host.py`, `http_performance.py::client`, `combat_http.py::intent` | Another existing real-HTTP host/client lane, including repeated targets and spell/wall selections. Reuse the ordinary capture/driver functions without requiring its performance monitor, profiling, quotas, repeat-submission probes or deadlines for every Studio case. |
 | `devtools/player_server_acceptance/{http_replay,replay}.py` | Existing current-packet admission/prefix/reduction checks. Reuse a focused check when its boundary changes; do not turn each visual edit into a schema/benchmark ritual. |
@@ -2565,7 +2181,7 @@ The following are useful references but **not conforming server captures**:
 - `devtools/export_world_authoring.py` constructs a synthetic full-map observation/sequence. Keep any useful map-construction information as an offline source reference; do not feed its invented observer/event IDs or all-visible world into Studio as a gameplay stream.
 - Old NeuroClient `SpellStudioPreview.buildCurrentPreviewTransaction`, `ActionStudioPreview` and `ConditionStudioPreview.replay` use local subjective-frame builders before `compileStudioScenario`/SDK assertion. Recover timeline/thumbnail/inspection helpers and its separate real-recording import behavior, never those synthetic outcome generators or old wire types.
 
-No blanket geometry-case exception permits fake gameplay records. Registration diagnostics and asset-layer thumbnails inspect the actual source/rendered geometry of a real recorded scene without inventing native observations. Pure geometry unit tests can still test pure functions; they are not Studio server-stream evidence. A new gameplay recording is needed for a missing case, changed native behavior or an actual native fact/schema change. Ordinary material, timing, icon or UI changes reuse a compatible recording. The planned new reach/cancellation/stair fields require fresh real-host captures after implementation; historical bytes cannot prove fields they never contained.
+No blanket geometry-case exception permits fake gameplay records. Registration diagnostics and asset-layer thumbnails inspect the actual source/rendered geometry of a real recorded scene without inventing native observations. Pure geometry unit tests can still test pure functions; they are not Studio server-stream evidence. Capture a new real-host recording when a required current behavior lacks one. Ordinary material, timing, icon or UI changes reuse a compatible recording. Client-side capture scripts use supported configuration and public SDK calls; an unavailable setup/outcome is reported rather than unlocked by changing the engine or fabricating packets.
 
 ### 8.3 Hierarchical channel timeline, previews and clocks
 
@@ -2685,7 +2301,7 @@ Use the selected smooth icon bank and accepted portraits at exact existing conte
 - Normal world click uses the native unique default for movement/open/close/loot/lever/window/trap interactions. Idle context selection exposes native alternatives; canceling an active targeting gesture does not also activate that world alternative.
 - Ctrl force attack is an explicit current native mode, separate from Ctrl+C in selectable log text. World affordances stay on the world/context interaction, not extra action-bar rows.
 - Approach-and-interact retains its intent, uses the native safe approach, executes its admitted movement, then rediscovers the exact interaction. It never silently spends Dash or a bonus resource. Actor/blockage/door changes invalidate stale previews.
-- Ordinary route requests prefer safe; Shift deliberately requests normal through §5.11's existing selection contract. A modifier change refreshes the preview without requiring another hovered tile; release restores the preference. Display the native returned policy, including legitimate normal fallback. Submit the same preference that produced the displayed route; stale replies, UI capture and focus loss cannot silently change the committed route.
+- Ordinary route requests prefer safe; Shift deliberately requests normal through §4.8's existing selection contract. A modifier change refreshes the preview without requiring another hovered tile; release restores the preference. Display the native returned policy, including legitimate normal fallback. Submit the same preference that produced the displayed route; stale replies, UI capture and focus loss cannot silently change the committed route.
 - Known explored ground remains navigable according to native knowledge. Current loss of line of sight is not an invented client prohibition. Door reach and window traversal use the native incident-support/affordance result.
 - Grid, route and AoE feedback follow actual receiving supports and their elevations, between ground and occluding bodies/walls, rather than drawing as a screen overlay.
 
@@ -2693,7 +2309,7 @@ Use the selected smooth icon bank and accepted portraits at exact existing conte
 
 The compact bar has four groups: base actions including explicit melee and ranged attacks; spells; class abilities; and usable carried items. Absent groups do not consume space. Multiple rows are available when needed, with recognizable spacing and the same icon scale. No fake button is rendered as if it were actionable.
 
-When a group overflows its available rows/columns, retain an independent page for that group, compact controls and wheel ownership. Paging spells does not page inventory or zoom the map. Recover the visible-slot digit/minus/equals shortcuts and shifted row from `game/ui/action_bar.py` and encounter input. They dispatch the same currently painted enabled control as a click, with the same actor, discovery, page and focus checks; an old slot cannot survive a changed page/actor as an executable shortcut. Do not preserve old arbitrary column limits or add permanent filter rows, a drag/drop editor or a keybinding framework under the name of parity.
+When a group overflows its available rows/columns, retain an independent page for that group, compact controls and wheel ownership. Paging spells does not page inventory or zoom the map. Recover the visible-slot digit/minus/equals shortcuts and shifted row from `game_obsolete/ui/action_bar.py` and encounter input. They dispatch the same currently painted enabled control as a click, with the same actor, discovery, page and focus checks; an old slot cannot survive a changed page/actor as an executable shortcut. Do not preserve old arbitrary column limits or add permanent filter rows, a drag/drop editor or a keybinding framework under the name of parity.
 
 Melee/ranged selection is deliberate, including the recovered preference shortcut; the UI does not silently substitute another weapon. Group the single Dash verb with its native resource alternatives rather than inventing a Haste Dash action. A legal self action executes once with one click; unavailable actions cannot enter meaningless targeting or confirmation.
 
@@ -2723,7 +2339,7 @@ The character sheet displays admitted species/background/class levels, abilities
 
 The on-demand Abilities/spellbook panel supports search/filter of currently admitted spells/actions/items, their readable descriptions and real costs, selection of a legal family, and pin/unpin of supported shortcuts. It uses the current native action surface/category and exact reference. It does not reproduce the old action bar's many permanent filter rows. Abilities unavailable at the current displayed/authoritative state have a meaningful status rather than a fake flow.
 
-The automatic-reaction panel exposes current disclosed triggers, costs and native enabled toggles. It does not invent reaction variants or preview hidden conditions. The current `game/ui/panels.py` behaviors for sheet, ability library and reactions are required reference functionality; calling all three a generic details pane is insufficient.
+The automatic-reaction panel exposes current disclosed triggers, costs and native enabled toggles. It does not invent reaction variants or preview hidden conditions. The current `game_obsolete/ui/panels.py` behaviors for sheet, ability library and reactions are required reference functionality; calling all three a generic details pane is insufficient.
 
 An encounter has an intelligible finish. After its final admitted occurrence and feedback have been presented, show a compact dismissible/minimizable native outcome/reason; disable spending while retaining the final scene, camera, inventory/detail inspection and log. Receiving terminal state early does not skip the queued final attack/death. Only show victory/defeat when native data supplies that meaning: one observer's life state is not a team-result rule. Connection failures are distinct from a native terminal. This uses current terminal/session cleanup; it does not add a restart API, lobby, directory or statistics service.
 
@@ -2780,27 +2396,47 @@ These packages describe dependencies and completed functionality, not serial per
 
 | Package | Concrete output | Actual dependency and completion evidence |
 |---|---|---|
-| N0 — source boundary and setup (partial: repository/artwork/core authoring prepared) | Existing source-only WSL repository; existing SDK imported; complete canonical export/type boundary; complete selected private installation; exact native amendments | Copies and §6.1 assembly authoring complete; finish application integration. Real bootstrap/attachment/current operation/choice/receipt with configured CORS; source identities accounted for; clean source-only Git candidate. |
+| N0 — source boundary and setup (partial: repository/artwork/core authoring prepared) | Existing source-only WSL repository; existing SDK imported; complete canonical export/type boundary; complete selected private installation | Copies and §6.1 assembly authoring complete; finish application integration. Real bootstrap/attachment/current operation/choice/receipt with configured CORS; source identities accounted for; clean source-only Git candidate. |
 | N1 — common world and resource foundation | One projection/registration/support geometry path, depth/material/composition path, resource owner, presented picker and cutaway | N0 source data. Physically valid matched-family scenes from existing registrations; all four views, high/low supports and original art sizes. This package cannot close on flat floors and Idle/Run. |
 | N2 — complete event playback | One reducer/compiler/sampler, durable intake, retained lifetimes, independent absolute clock, atomic displayed frame/HUD/log | SDK types and ordinary source recipes; geometry integrates as available. Every current fact branch classified; recorded causal prefixes, resource delay/backlog/reload and subjective replay behave correctly. |
 | N3 — content and Studio | Every selected recipe/rig/environment/media binding supported; complete read-only layered timeline with source time and previews; full source/track inspection and manual-JSON reload | Shared N1/N2 runtime and canonical sources. Selected-identity matrix and actual source-edit/reload/source-semantic cases, including fixed rigs, item ownership and rare condition/removal paths. |
 | N4 — playable encounter and complete UI | Fighter/Sorcerer dungeon and all current click/target/choice/inventory/log/party/reaction workflows | Native choices and displayed projection. Real browser use across exploration and combat; no fake controls or automatic wrong weapon/resource spending. |
 | N5 — integrated repair and delivery | Full issue-indexed in-app review, measured startup/interaction/combined-effect behavior, repeatable launch/JSON-reload/install instructions | All functional coverage. Address real remaining failures, remove temporary competing code paths; final independent anti-slop and anti-OOP/ECS reviews. |
 
+### Work order and what to do when one item is blocked
+
+1. **Finish N0:** application scaffold, prepared schema/types and indexed release,
+   installed media serving, current SDK connection. No copying or reauthoring work.
+2. **Build N1 and N2 on those inputs:** registered world/resource/render functions
+   and the shared stream/reducer/compiler/sampler. Integrate them continuously;
+   do not finish a standalone world preview before connecting real event playback.
+3. **Connect N3 and N4 as shared capabilities land:** full authored content and
+   Studio tracks/inspection use the same path as playable interaction and UI.
+   Start with available real recordings and the existing crypt configuration;
+   additional family coverage fills the same production path.
+4. **Finish N5:** close recorded client defects, exercise the complete playable
+   encounter and Studio, and provide working launch instructions. Focused checks
+   accompany each meaningful change; final integration does not replace them.
+
+If one family or case cannot follow the agreed approach, apply the working rules
+above: document it in §12 and select an independent ready item from these tasks.
+Do not replan the architecture, touch the backend, build a substitute demo, or keep
+circling that case. Deferred issues stay visible for discussion with the user and
+cannot be counted as delivered. The same rule applies to review findings.
+
 ### N0 tasks and ownership
 
 1. §6.1's narrow door/timber authoring connection is complete; no new asset intake. Reuse completed repository/reference/media setup in §1 and extend its existing package/lockfile. Install the current SDK package without copying its generated models. Add the ordinary application scaffold and static routes; keep source references read-only.
-2. Use the existing passive owners and authored-schema export; `game/presentation_export.py` remains the original seed/reference, not a second current producer. §5.1.1's initial replacement/relocation import is complete; consume tracked client authoring and complete the full release shape, existing release/catalog revision, resource descriptors and tool-only source provenance. No media-content hashing is required. Reuse the prepared installation and existing storage/geometry types; add only actual missing owner fields specified here. No `SceneRelease`, reduced `Pick<AnimationData,…>` or hand-maintained client asset catalog.
-3. Implement the three specified native reach/cancellation/partial-stair presentation-fact amendments in their native owners; project historical subjective evidence. Also expose the existing route preference through the shared selection, worker calls and both SDK echo checks in §5.11. Regenerate/package current SDKs once for the combined actual schema change. Authoring schema changes are a separate source-derived export, not an excuse to regenerate the player SDK after every visual edit.
-4. Complete release indexing, resource dependencies and application loading in §5.4 over the already assembled client sections. Preserve accepted sheets and rates; do not re-copy artwork or rerun initial authoring import. Report unresolved references at their owning files; affected capabilities remain incomplete while unrelated consumers proceed.
-5. Establish SDK worker intake, durable journal, one TS reduction and source-derived types. Exercise bootstrap, attach, content admission, legal choice/preview/command, receipt and reconnect with the existing server. Do not introduce new endpoints to avoid learning delivered ones.
+2. Use the existing passive owners and authored-schema export; `game_obsolete/presentation_export.py` remains the original seed/reference, not a second current producer. §5.1.1's initial replacement/relocation import is complete; consume tracked client authoring and complete the full release shape, existing release/catalog revision, resource descriptors and tool-only source provenance. No media-content hashing is required. Reuse the prepared installation, client section schemas and existing storage/geometry types; no engine-side field changes. No `SceneRelease`, reduced `Pick<AnimationData,…>` or hand-maintained client asset catalog.
+3. Complete release indexing, resource dependencies and application loading in §5.4 over the already assembled client sections. Preserve accepted sheets and rates; do not re-copy artwork or rerun initial authoring import. Report unresolved references at their owning files; affected capabilities remain incomplete while unrelated consumers proceed.
+4. Establish SDK worker intake, durable journal, one TS reduction and source-derived types. Exercise bootstrap, attach, content admission, legal choice/preview/command, receipt and reconnect with the existing server. Do not introduce new endpoints to avoid learning delivered ones.
 
 ### N1 tasks and ownership
 
 1. Adapt source camera controls with one calibrated projection and inverse. Apply owner contact, pose/bank offset, source pivot/crop and elevation exactly once. Implement current world geometry from registered source data before judging draw order.
 2. Register support, wall, aperture, stair/cliff and prop surfaces in the common draw/light/pick geometry. Use the explicit support-aware cutout policy for art without detailed geometry. Recover compatible assemblies/adjacency; do not introduce new arbitrary scenes to conceal a mismatch.
 3. Build finite material operators, batching and solid/transparent composition. Integrate the accepted Fireball v4 math and other selected representations into this renderer, not a second proof app. Couple all planes and source interpretation to one resource owner.
-4. Produce the valid in-app foundation set described in §11. Use the same input/assets in Pygame for reference where its behavior exists; compare registration/order, not unrelated screenshot compositions. The old renderer may also have limitations, which must be stated specifically.
+4. Produce the valid in-app foundation set described in §11. Compare the recovered source registrations/order and available prior evidence for those same assets. Archived Pygame remains read-only; fixing its imports or restoring an executable Pygame app is not a prerequisite.
 5. Use the displayed scene for picking and automatic wall cutaway. Camera intent, resources, draw state, light and picker publish together. Ordinary pan/zoom changes transforms rather than rebuilding/decompressing the scene.
 
 ### N2 tasks and ownership
@@ -2817,7 +2453,7 @@ These packages describe dependencies and completed functionality, not serial per
 2. Restore actual Studio features from the named Neuro Studio components. Implement the read-only source/track views in §8, inline field disposition and thumbnail lanes as views of the production result. Derived/native values remain read-only; source inspection must identify the fields that actually produced the displayed tracks and render result.
 3. Exercise semantic motion/effect choices through actual source recipes. Shared gesture timings/sockets are authored once per animation/rig and reused; accepted effects are not redistributed arbitrarily to inflate variety.
 4. Expose source identity/values alongside the compiled tracks. After a manual NDClient authoring JSON edit, assemble changed metadata and reload/recompile the same prerecorded case. Keep active release and candidate reload distinct until preparation succeeds. Do not build a browser editing/save API, draft framework or new rig authoring UI in this phase.
-5. Use the actual-server SDK capture procedure in §8.2.1 for outcomes and lifecycle triggers. Extend existing native setup and small SDK command drivers for missing cases; never synthesize client events or all-map observations. Selected-content coverage and meaningful server-recorded family cases are complementary; neither replaces the other.
+5. Use the actual-server SDK capture procedure in §8.2.1 for outcomes and lifecycle triggers. Write client-side SDK capture drivers/configuration using the supported existing setup fields; never synthesize client events or all-map observations. Selected-content coverage and meaningful server-recorded family cases are complementary; neither replaces the other.
 
 ### N4 tasks and ownership
 
@@ -2828,7 +2464,7 @@ These packages describe dependencies and completed functionality, not serial per
 
 ### N5 tasks and completion
 
-Run focused tests after substantive changes, then the complete acceptance corpus once the required families are connected. Broaden/repeat only for changed behavior or real failures. Measure and repair native, network, worker, journal, resource, sample, GPU and UI costs separately. There is no SDK/type-generation dance around every test or asset edit.
+Run focused tests after substantive changes, then the complete acceptance corpus once the required families are connected. Broaden/repeat only for changed behavior or real failures. Measure native/network waits separately from worker, journal, resource, sample, GPU and UI costs. Repair client bottlenecks in this phase; report native or SDK defects without modifying their owners. There is no SDK/type-generation dance around every test or asset edit.
 
 Provide one working launch/install/edit workflow and an in-app case index for the full requirements. Remove superseded temporary parsers, reduced exports, debug defaults, duplicate formatters and preview-only executors. Do not delete source artwork/reference repositories to tidy the delivered code. Final reviewers inspect actual consumer coverage and exercised behavior; a test count, screenshot or build success is not a complete application.
 
@@ -2849,12 +2485,11 @@ The user reviews these in the running application. All cases use source-compatib
 | Props and equipment | Chest, table, statue, multi-cell prop and dropped equipment; original pivot/overhang, no floor cut, no alpha halo. A large table is placed/rotated legally rather than shrunk into the room. |
 | Enclosed raised room | Higher platform with every physically exposed side closed using valid cliff pieces, top-to-side joins/corners and stair returns. Different upper/lower floor art; actor/prop/wall at each support. |
 | Stairs | Lower/intermediate/upper contacts, real tread/riser or registered face shape, correct width lanes, both ascent/descent and all cameras. No intermediate flat floor painted over flight art. |
-| Partial stairs | Native record initially sees only a middle or upper member; allowed direction/length observation positions artwork without adding hidden tile/light/actor/target knowledge. |
 | Overlapping elevations | A lower actor and a separate raised receiver/wall overlap on screen; own support precedence never makes the lower actor draw over a physically nearer upper floor. Ground feedback stays on its receiver. |
 | Pose/size/flight | Original-size humanoid, explicitly enlarged animal, halfling/size effect if selected, prone/rest/death, jump and native wing flight. Sockets, gear, shadow and marker scale follow one chain; no standing revival in a prone death. |
 | Attack and trajectory | Shortbow and modular ranged weapons; hand/weapon release contact, fixed-rig accent, moving target, elevated diagonal shot, all camera banks; residual rotation only where authored/allowed. |
 | Volumes against surfaces | Selected Factory Fireball, Sunburst, Fog/Sleep and Globe with near/far sides, finite/L/angled walls, arch/window opening, upper receiver and overlapping bodies. Preserve source silhouettes; no tile-grid sawtooth or blast-centre hard shadow hack. |
-| Native reach/protection | Actual recorded solid wall versus doorway, staged break permitting later spread, known/unknown frontier, disclosed/hidden Antimagic/Globe; rendering consumes admitted stage evidence and never guesses hidden propagation. |
+| Effect depth and outcomes | Recorded wall versus open doorway, displayed break, full cosmetic plume at a dark boundary and existing suppression/cancellation. Actual damage/stage/lifetime follows received facts; unavailable provider/shell data does not produce an invented impact. |
 | Transparency/light | Two intersecting transparent effects with a body/wall, grazing alpha edges, stable tie order, combined radiance/transmittance; whole Fireball receives light and emits independently through its authored envelope. |
 | Blood/deposits/water | Concurrent impacts, fragments/vapor, airborne-to-ground continuity, wall/raised receiver, old versus fresh deposits, removal/seek/reobserve and existing liquid response without duplicate stain systems. |
 | Camera/sampling | Pan/zoom/resize/DPR/rotate while idle, casting and reloading source data; no skew/non-uniform body stretching, unstable pixel scale, incorrect RGB data interpretation or alpha fringes. |
@@ -2900,21 +2535,28 @@ UI assets, ordinary VFX, Factory replacements and tracked core authoring are
 prepared. Initial ID/path/replacement linkage and its passive schema are done.
 Environment, item/palette and UI section adoption is now complete, as are the
 registered Goblin/Demon/animal authoring connections in §7.4. UI artwork retains
-the two explicit, non-blocking artwork follow-ups in §5.9 (Skeleton Warrior
+the two explicit, non-blocking artwork follow-ups in §5.7 (Skeleton Warrior
 portrait and dedicated Unarmed icon). The assembler resolves 126,959 media references. Environment companion adoption
 in §6.1 includes both companions and the completed door/timber typed mount connection. Fireball’s accepted demo world-light curve is now authored
 on its existing impact storage; only its shared runtime consumer remains.
 Other spell light curves are deferred until Fireball is tested in that shared
 renderer, per the user's decision; no further emitter authoring is required to
 close this pre-phase.
-Remaining: connect release envelope/defaults, dependency indexing and TS types/loading, SDK/scaffold, native
-amendments and application consumers;
+Remaining: connect release envelope/defaults, dependency indexing and TS types/loading, SDK/scaffold and application consumers;
 N1–N5 remain planned. Existing backend/SDK/source and Fireball proof capabilities
 are reference inputs, not evidence that the recreated application works.
 
+**Uncertainties and blockers:** keep each new issue beside its existing capability
+or in this section with: affected requirement/source; observed contradiction;
+what remains incomplete; decision needed; and the independent task being continued.
+Do not create another tracker or speculative repair plan. The accepted source
+limits in §0.3 and deferred light/art work above already have a disposition; they
+are not requests for new decisions or reasons to stop N0. No implementation is
+started by this documentation update.
+
 During implementation, keep evidence beside the corresponding row here or in the existing machine coverage report: source owner, implemented consumer, native/visual/interaction case, observed result and any exact remaining defect. Do not create a competing plan or replace whole-product status with the latest locally fixed screenshot. Existing catalog identifiers remain the coverage denominator.
 
-Full completion requires the playable encounter, complete selected content, complete read-only Studio inspection and all interaction/ordering/history requirements. A disabled button, source JSON printed on screen, correct arithmetic without matched art, files copied without consumers, or a successful build is not completion. Show unresolved required failures honestly without relabeling the product complete; repair them in their existing owner.
+Full completion requires the playable encounter, complete selected content, complete read-only Studio inspection and all interaction/ordering/history requirements. A disabled button, source JSON printed on screen, correct arithmetic without matched art, files copied without consumers, or a successful build is not completion. Show unresolved required failures honestly without relabeling the product complete; repair client defects in their existing owner and report any native/source limitation separately.
 
 ## 13. Complete production renderer capability coverage
 
@@ -2934,7 +2576,7 @@ N3. Each capability first runs in the shared real-event path as its dependencies
 | R06 Palette/material | Finite shared GPU operations over isolated masks and authored donor textures; explicit override wins | Hand/Magic/Effect/external-VFX correspondence and item/body independence; N1/N3 |
 | R07 Media/resources | Existing source registration, compact derived delivery specified in §6, shared source/region views and bounded readiness | Coupled crop/pivot/mask alignment, first-use, four-camera switching and unload; N0/N1/N3 |
 | R08 Projectiles/beams | Absolute path/socket sampling, bank plus permitted residual alignment, release/arrival and child application timing | Oblique elevated Fireball/rays, beam source continuity, Magic Missile A/B/A, interception; N2/N3 |
-| R09 Areas/volumes | Compact registered geometry, actual ownership/exclusions, support/aperture and transparent composition; no floor-visibility stencil | Continuous Fireball/Sunburst/Sleep, inside/outside actors, suppressed or upper-only regions; N1/N3 |
+| R09 Areas/volumes | Compact registered geometry, received ownership/suppression, support/aperture and transparent composition; no floor-visibility stencil | Continuous Fireball/Sunburst/Sleep, inside/outside actors, received suppression and elevated surfaces; N1/N3 |
 | R10 Layer/blend ordering | Shared physical composition with stable ties, sibling order, normal/add/screen and complementary samples | Two transparent volumes and a body, checkerboard alpha, near/far crossing; N1/N3 |
 | R11 Directed materials | Finite authored ribbon/mesh/plasma operators and donor sampling | Existing noise ribbon, darkness mesh and plasma trail with moved/raised endpoints; N3 |
 | R12 Constructions | Source-authored paths/sections/rings/domes and formation/retirement commits | All installed wall types, arbitrary permitted angle, fire hot/safe side and dome destruction; N3 |
@@ -2960,8 +2602,8 @@ one-shots. No new sound content or independent audio-event schema is implied.
 All selected identities remain required, including aliases and rare outcome paths.
 An example proves its capability; catalog mapping/semantic validation establishes
 that every selected recipe and rig has a supported consumer. Both kinds of evidence
-are needed. New source content appearing during implementation is compared against
-the pinned inventory once and folded into its existing family, not silently omitted.
+are needed. An explicitly supplied new delivery updates the existing family inventory once.
+Do not automatically expand scope by continuously scanning unrelated upstream changes.
 
 ## 14. Complaint and requirement closure — migration versus existing parity
 
@@ -2980,7 +2622,7 @@ This table covers all 55 entries in the migration-only post-mortem ledger. Numbe
 | 10, 11 | Compact GPU representation for all effects including blood/ground, without Python pixel arrays or copied CPU algorithms | Combined effects and landing/deposit cases with attributed CPU/GPU/resource measurements |
 | 13, 25, 26, 27, 39 | One complete, source-grounded implementation specification and honest reviewer verdict | This file contains the actual decisions and feature coverage; no required companion chapters or inherited readiness claim |
 | 14, 18, 19, 20 | Keep accepted Fireball v4 and bounded demo findings, real assets, source timing and independent receiving/emission | Shared production integration with walls, openings, reach and other effects; no claim that the earlier prototype proves the whole client |
-| 17 | Do not crop admitted isometric art with missing cells or a hard tile mask; physical occlusion and known negative reach are distinct | Unknown frontier, nearby wall, open doorway and decorative-overhang cases without sawtooth cuts |
+| 17 | Do not crop admitted isometric art with missing cells or a hard tile mask; physical camera depth is separate from gameplay reach | Dark frontier, nearby wall, open doorway and decorative-overhang cases without visibility-stencil cuts |
 | 22, 24, 53 | Repo/ignore rules, selected copies and core authoring linkage are complete; finish SDK/full release/application integration | Reuse installed folders and tracked authoring. No repeated Git creation or copy campaign; installed/consumer/inspection coverage stays distinct |
 | 28, 29 | Remove speculative constraints and validation loops; complete required work with meaningful checks | No invented packing/time/byte gates or per-edit SDK regeneration; measured changes have a specific reason |
 | 31 | Prevent local-fix overfocus from replacing the full delivery | N0–N5 and complete R/UI/Studio coverage remain visible; status states exact completed and remaining capabilities |
@@ -2988,7 +2630,6 @@ This table covers all 55 entries in the migration-only post-mortem ledger. Numbe
 | 33, 41 | Use physically valid, enclosed raised examples and readable high/low support treatments | Real compatible cliff/stair side returns and top joins, distinct existing floor materials, all cameras |
 | 35, 36, 42 | Read existing art studies and match door/wall families, offsets and adjacency before inventing placement | Same registered input compared with working source renderer; all family-specific mounts and pose offsets consumed |
 | 38, 43 | Read the full relevant plan/source and incorporate new evidence durably | Current requirements updated in this one file; source handoff values reach the actual consumer, not only commentary |
-| 40 | Implement only the user-approved direction/length stair disclosure | Native projection case proves shape placement with no additional tile/actor/light/movement knowledge |
 | 44 | Review via running app | Reproducible launch plus navigable Studio cases; no forced export-video review workflow |
 | 46 | Correct projectile launch/alignment and fixed-rig layer meaning; no camera morphing | Real shortbow release socket, declared source bank, original goblin accent and four-camera path alignment |
 | 47, 48 | Correct camera/DPR/sampling and alpha conventions; preserve sprite proportions and edges | Smooth pan/resize/zoom with original scale, no chest halo or non-uniform transformation |
@@ -2997,7 +2638,7 @@ This table covers all 55 entries in the migration-only post-mortem ledger. Numbe
 
 ### 14.2 Earlier-system parity requirements for the new client
 
-These outcomes were requested while developing earlier renderers and remain required app behavior. They are not a claim that every original native defect is still open. Consume the current implemented native behavior, and only amend an owner when an actual new regression case demonstrates a defect.
+These outcomes were requested while developing earlier renderers and remain required app behavior. They are not a claim that every original native defect is still open. Consume current implemented native behavior. A newly demonstrated native defect is reported separately; this plan authorizes client implementation only.
 
 | ID | Required result in NDClient | Principal proof boundary |
 |---|---|---|
@@ -3068,14 +2709,14 @@ After consolidating the plan, three reviewers and the primary agent compared it 
 
 | Actual source checked | Concrete additions/disposition in this edition |
 |---|---|
-| `game/encounter_play.py`; `game/ui/{hud,action_bar,variants,targeting,layout}.py`; `game/controls.py` | §§9.2–9.4 now specify contextual cursors, action-economy indicators, independent block paging/current-slot hotkeys, conditional/reachable hover facets, neutral native positional targets, effective allocation counts, actor-local preferences, focus gestures, Escape precedence and independent UI scale. These remain functions/state in existing input/layout owners. |
-| `game/ui/{combat_log,panels}.py`; old `ui/{eventSidebar,combatHistoryPanel,tileInspector,conditionTooltip}.ts` | §9.6 adds category/participation filters with causal context, per-row/global detail, displayed-only selection/copy, stable reading anchors, typed roll adjustment history and displayed-time tile/condition dossiers. One log formatter; no narrative or objective-state fallback. |
+| `game_obsolete/encounter_play.py`; `game_obsolete/ui/{hud,action_bar,variants,targeting,layout}.py`; `game_obsolete/controls.py` | §§9.2–9.4 now specify contextual cursors, action-economy indicators, independent block paging/current-slot hotkeys, conditional/reachable hover facets, neutral native positional targets, effective allocation counts, actor-local preferences, focus gestures, Escape precedence and independent UI scale. These remain functions/state in existing input/layout owners. |
+| `game_obsolete/ui/{combat_log,panels}.py`; old `ui/{eventSidebar,combatHistoryPanel,tileInspector,conditionTooltip}.ts` | §9.6 adds category/participation filters with causal context, per-row/global detail, displayed-only selection/copy, stable reading anchors, typed roll adjustment history and displayed-time tile/condition dossiers. One log formatter; no narrative or objective-state fallback. |
 | Pygame `settled_end`; old `render/clips/EncounterResultClip.ts`, `ui/encounterResultShell.ts`, `engine/encounterResult.ts` | §9.4/§9.7 require the final queued outcome to be presented before a compact native terminal notice, with continued non-spending inspection. No old directory, summary or observer-survival-as-victory rule. Real-play FPS/frame-time display is required, though visibility is optional. |
-| Old `ui/targeting.ts`; current `dnd/player/{commands,session}.py`, `player_server/{protocol,worker}.py`, both SDK echo checks | §5.11 closes the actual absent request field for the already-implemented native safe/normal preference. §4.8/§9.2 bind preview and submission to that same selection. No second route solver or wire envelope. |
-| `game/{condition_sampling,condition_media_lifetime,absence_media,body_history,feedback,animation_draw,environment_animation}.py`; old `AnimatedEntity` and `ConditionOverlayController` | §6 explicitly retains application/removal/loop phases, early-removal source age, live copies/frozen poses/absence, historical trails, finite activity/life filters, independently lasting feedback, source-bound label layout, current appearance recomposition and environment endpoint frames. No extra actors, snapshot restoration or per-effect state machines. |
-| `game/{mechanism_projectile,portal_draw,object_dust}.py` | §6/§11 add world-muzzle trajectories, actual local portal-aperture body clipping and silhouette-based prop retirement to existing projectile/geometry/particle consumers. |
+| Old `ui/targeting.ts`; current `dnd/player/{commands,session}.py`, `server/{protocol,worker}.py`, both SDK echo checks | The delivered selection now includes `prefer_safe`; §4.8/§9.2 consume it for preview and submission without another API change. No second route solver or wire envelope. |
+| `game_obsolete/{condition_sampling,condition_media_lifetime,absence_media,body_history,feedback,animation_draw,environment_animation}.py`; old `AnimatedEntity` and `ConditionOverlayController` | §6 explicitly retains application/removal/loop phases, early-removal source age, live copies/frozen poses/absence, historical trails, finite activity/life filters, independently lasting feedback, source-bound label layout, current appearance recomposition and environment endpoint frames. No extra actors, snapshot restoration or per-effect state machines. |
+| `game_obsolete/{mechanism_projectile,portal_draw,object_dust}.py` | §6/§11 add world-muzzle trajectories, actual local portal-aperture body clipping and silhouette-based prop retirement to existing projectile/geometry/particle consumers. |
 | Old `ui/{SpellStudioPreview,ActionStudioPreview,conditionStudio/ConditionStudioPreview}.ts`, `ui/studio/{StudioScenarioCompiler,StudioEvidenceWorkspace,StudioPlayerReplayImport}.ts` | The wired legacy previews manufacture frame-shaped data; SDK assertion is not server provenance. Recover useful timeline/thumbnail/inspection/replay-import behavior, not those generators. §8.2.1 requires exact current host→SDK captures, offline replay and shared production consumers. |
-| `devtools/player_server_acceptance/{fixtures,run,http_run,http_performance,combat_http,python_player,crypt_player}.py`, `typescript_player.mjs`; `devtools/animation_review/{produce,capture}.py`; `devtools/export_world_authoring.py`; `dnd/player/recorded.py` | Existing real-host fixtures/drivers are usable capture foundations. Direct-engine reduction sequences and synthetic all-map authoring exports are not equivalent evidence. §8.2.1 distinguishes them and specifies extending current drivers for missing behaviors without a new transport, provenance service or mandatory benchmark ritual. |
+| `devtools/player_server_acceptance/{fixtures,run,http_run,http_performance,combat_http,python_player,crypt_player}.py`, `typescript_player.mjs`; `devtools/animation_review/{produce,capture}.py`; `devtools/export_world_authoring.py`; `dnd/player/recorded.py` | Existing real-host fixtures/drivers are usable capture foundations. Direct-engine reduction sequences and synthetic all-map authoring exports are not equivalent evidence. §8.2.1 distinguishes them and specifies client-side drivers over supported current configuration for missing recordings without a new transport, provenance service or mandatory benchmark ritual. |
 
 The wider scan also checked old camera/focus/viewport, grid/target feedback, static-board invalidation, modular rigs/equipment/anchors, conditions, recoloring, inventory/abilities/initiative, Studio lifecycle/transport/source coverage and connector/item details. Their applicable feature families already have owners in §§4–9 and R01–R23. The scan does **not** certify every legacy implementation as correct or suitable to copy. Old planar `worldDepth` bands/hash ties do not solve elevated physical composition; flat grid and latest-state picking are superseded. `connectorPresentation.ts` draws retained endpoint lines with interaction disabled, so it is not complete connector traversal. `itemDetails.ts` is a small presentation stub, not full inventory. Old maximum-target auto-submit, positive-only camera bounds, large portraits, opaque panels, actor classes/FSMs and captured previous-visibility closures must not override the current plan. Creation/lobby/directory products stay excluded.
 
@@ -3083,142 +2724,40 @@ Depth/normal material planes, physical VFX/wall composition and receiving/emitti
 
 ## 15. Review responsibilities and recorded disposition
 
-### Committed-preparation handoff update — 10 October 2026
+### 10 October scope cleanup
 
-NDClient `df5397e` is the committed preparation baseline. Anti-slop and
-anti-OOP/ECS reviewers checked the plan's current status, ownership and next
-steps against the prepared repository and existing source owners. Their findings
-were stale instructions to repeat door/timber linkage, companion adoption and
-section adoption; ambiguous authoring-schema versus SDK maintenance; and an
-old prohibition conflicting with the user's requested repository copy. The
-corrections are in §§0.1/1.2/3.1/5/6.1/10/12. Prepared data remains complete;
-application integration and shared runtime consumption remain unimplemented.
-No new architecture, quota, approval gate or asset operation was added.
-Both reviewers checked the final documentation delta and found no further
-substantive issue. The complete repository copy matches the master apart from
-resolved evidence-link paths; the local document links were checked.
+The primary agent checked the plan for direct and indirect requirements to modify
+engine/server/SDK code, undeclared inputs and choices deferred until implementation.
+Anti-slop and anti-OOP/ECS reviewers independently cross-checked those boundaries;
+the plan-adherence reviewer checked that this edit remained documentation-only.
 
-This update changes documentation only. Earlier data/projection results below
-remain results of the completed pre-phase, not fresh runtime acceptance. No
-runtime tests or benchmarks were rerun for this documentation change. External
-evidence remains at its existing source; the repository copy carries the complete
-specification with those links resolved, not another evidence/media library.
+Current preparation results remain in §§5–7/12; historical test counts are not
+acceptance of an unbuilt client.
 
-### 15.0 Full-plan review after environment intake — 10 October 2026
+The corrections remove backend implementation and regeneration tasks from setup,
+rendering, Studio capture, acceptance and delivery criteria, not just their original
+chapters. Current SDK movement preference is an input, client authoring schemas
+already live in NDClient, and archived renderers remain read-only references.
+§0.3 records existing inputs and accepted limits; it does not create another phase.
 
-Three independent reviewers covered rendering/geometry/assets, anti-slop/product
-coverage, and anti-OOP/ECS/SDK/temporal ownership. The primary agent checked the
-current assembler, source indexes, metadata sizes and cross-section consistency.
-The review used surviving code and current tracked authoring, not deleted-client
-assumptions or other chat threads. Findings and exact repairs are in this plan:
+During implementation, keep a plan-adherence sub-agent focused on the full delivery.
+Use anti-slop and anti-OOP/ECS reviews for concrete ownership/duplication defects;
+rendering and UI reviews inspect real consumers and behavior. Findings identify
+an actual contradiction or failing case. Review only changed requirements and
+identified defects; no repeating certification, checksum or SDK-regeneration cycle.
+No review finding authorizes a backend expansion or an improvised workaround.
+For noncritical uncertainty, record it and continue known planned work; discuss
+a necessary design change with the user before implementing it.
 
-| Finding | Correction and current disposition |
-|---|---|
-| **P1: delivered door/timber mounts are only inspection records; active transforms can remain stale** | §6.1 now specifies current bank contacts/camera registration, effective frame transforms, finite compatible door members and library-only timber supports. The typed authoring correction is **implemented** at those existing owners; its focused data/projection checks pass. No artwork/export request. §12 and the compact entry point correct the premature closure claim. |
-| **P1: coplanar opaque/transparent ordering was underspecified** | §6 requires one physical/semantic/identity comparator for opaque selection and transparent eligibility/peeling. It preserves floor/shadow/body order without depth offsets. Planned renderer work; no running implementation is claimed. |
-| **P2: section-level loading could eagerly parse the enlarged whole environment** | §5.4 and §7.6 explicitly load indexed metadata by current/upcoming dependency closure, as well as media. Existing IDs/member types remain the owners. Measured source bytes explain the issue; no numerical quota or packing project was added. |
-| **P2: old instructions repeat completed UI/item/companion adoption or request superseded calibration** | §§1/5/6 distinguish completed adoption and mount authoring from pending application consumers. The old imperative calibration list is replaced with a current consumer ledger. Extend the existing package/lockfile; do not recreate it. |
-| **P2: undefined “media-inclusive identity” could restart checksum work** | N0 uses the existing release/catalog revision and ordinary resource descriptors. No media hashing, new integrity registry or deduplication stage. |
-| **Current schema count was stale** | §§2/5/15 identify 55 AnimationData fields, including sheet_components. The 54-key client index omits only defaulted movement_reference_speed_feet; no missing character linkage or regeneration task was inferred from that count. |
+Final targeted readback found no remaining backend-work obligation in this
+cleanup. Anti-slop/adherence findings corrected accidental prose path replacements
+and a stale instruction to repeat calibration authoring. The ECS review confirmed
+that current event lifetimes, depth/lighting, geometry and the shared play/Studio
+path remain required. Local document links and removed-section references were
+checked; the NDClient copy matches this master. These are documentation checks,
+not runtime tests or a claim that every unbuilt component has been validated.
 
-The reviewers found no additional concrete defect in the checked SDK-owned stream/
-ACK boundary, one reducer with latest/displayed positions, recorded-server Studio
-path, current native amendments or enumerated UI workflows. This is bounded plan/
-source review, not visual or performance acceptance. No runtime code, artwork,
-authoring values or SDKs were changed or regenerated in this review, and no game
-tests or benchmarks were run. Fireball remains the first shared-light test; other
-spell emitters stay explicitly deferred. The subsequently implemented
-assembly-authoring connection is recorded in §6.1 and the linked scoped plan;
-the next implementation starts with the existing scaffold/shared path.
-Targeted rereads by the rendering and anti-slop reviewers found no further
-substantive defect in these corrections. The ECS reviewer also checked that
-metadata demand and assembly fields reuse existing owners and that camera
-registration remains separate from the door's physical-edge pose offset.
-
-**10 October environment data adoption:** copied 42,805 required companion files
-(1114.43 MiB), preserved original colour/IDs/pivots/clocks and legacy byte meanings,
-and retained seven assembly closures in source records. The later review above
-corrected the earlier assumption that this completed their runtime-facing linkage.
-That linkage was subsequently implemented through the bounded assembly plan,
-without another artwork copy. The 324 selected banks, static resources,
-device/hatch axes and 725 library families are connected in tracked client JSON.
-Independent data-ownership and plan-adherence reviews identified calibration-level
-support metadata that is now retained. D6’s source-cell tessellation was translated
-exactly into the existing mesh type; its vertices, triangles and aperture are unchanged.
-Thirteen passive-schema tests and fifteen installed-authoring tests passed; all
-126,959 media references resolve. The four empty spike-paint frames retain their
-parent role; legacy numeric utilities and existing water channels are preserved.
-No production renderer, visual acceptance or SDK regeneration is claimed.
-
-**10 October environment adoption/lighting planning review:** independent
-anti-slop and passive-data/ECS reviewers read §6.1 against the actual Fireball
-shader, current types and corrected delivery. Both passed its existing-owner,
-sampling, normal transport, role and scope decisions. The one identified wording
-conflict was corrected: a missing Fireball emitter must be authored at its current
-storage owner; the proof curve/intensity was not silently adopted as a default.
-The user subsequently explicitly requested reuse, now implemented as recorded
-above. No visual acceptance is claimed by this earlier planning review.
-
-**9 October post-migration reconciliation:** three independent reviewers checked
-ownership/ECS, renderer/data semantics, and setup/coverage. Their concrete findings
-were corrected in this document; targeted readback found no remaining identified
-contradiction in those changes. Repo creation, selected artwork,
-initial authoring import, paired owner fields and ID/path linkage are completed
-inputs. This update removes repeated copy/setup/adapter tasks, stale Pygame edit
-authority, mandatory working-file hashing and a separate provenance subsystem.
-At that checkpoint, environment/item/UI section adoption remained alongside
-application assembly/loading, SDK and shared renderer/playback work. Those source
-sections have since been adopted; current completion is recorded in §12. Source field defaults,
-current selected counts and new paired bank semantics are retained explicitly.
-The Fireball world-light emitter was named at its existing owner, and has since
-been populated from the accepted example at the user’s request; no new framework
-was introduced.
-
-**9 October UI adoption review:** independent contract/ECS and anti-slop reviewers
-checked the 620 exact icon mappings, all 103 delivered choice records and the
-portrait assignment/default boundary. No additional native content registry or
-runtime UI system was introduced. Six focused client/schema tests passed and
-the assembled authoring resolved all 80,027 media references. This completes
-source adoption only; it does not certify an implemented HUD.
-
-The reviews below are dated evidence, not recurring approval gates. The current
-pass checks plan consistency against the installed code/data; it does not claim
-runtime or visual acceptance of the unbuilt application.
-
-Three independent reviewers inspect the consolidated document itself:
-
-1. **Coverage / Studio / UI / assets:** all current features, source components, fields, rig families, asset installation and user complaint mapping. Explicitly rejects a reduced timeline, partial installer or fake controls.
-2. **Rendering / geometry / light:** exact projection/registration, supports and layer roles, physical composition, source-compatible assemblies, compact representations, reach/privacy, resource behavior and valid visual scenarios.
-3. **Anti-slop and anti-OOP/ECS / SDK / temporal architecture:** current protocol, one ownership path, no duplicated schemas/engines, correct worker and lifecycle boundaries, independent time, source-driven semantics and removal of speculative gates.
-
-Reviewers report concrete contradictory/missing requirements and their owner, rather than a generic “looks good.” Only changed requirements/found defects require another targeted review. This is not an indefinite certification cycle. Review findings and resolutions belong here; no additional companion plan is required to understand the result.
-
-### 15.1 Completed independent design reviews — 8 October 2026
-
-The three reviewers read the consolidated copy, relevant surviving source and their assigned coverage evidence. They did not inspect the deleted client or other chat threads. All findings below have been incorporated into this file.
-
-| Review | Findings and corrections incorporated | Bounded verdict |
-|---|---|---|
-| Coverage / Studio / UI / assets | Confirmed R01–R23, all 55 migration entries, P01–P31, current spell cases and complete selected assets/rigs. Added the previously underspecified End Turn control/Space behavior and local static provenance route. Removed stale browser-editing requirements. | No remaining identified feature-coverage omission within the reviewed source and complaint ledgers. Studio is offline/read-only over the full production path; complete play remains required. |
-| Anti-slop / anti-OOP/ECS / SDK / temporal ownership | Checked current protocol and SDK source, ACK versus consumer semantics, fresh init0, scope generations, one journal, worker/main ownership, native fact amendments and atomic displayed replacement. Corrected the overly broad “presentation-only changes” sentence and stale draft/editor language. | No remaining identified contract/ownership defect. No duplicate rules engine, wire schema, Studio executor, authoring service or repeated generation loop is prescribed. |
-| Rendering / geometry / light / resources | Preserved the useful current D1/D6/G17 registrations; named missing floor/cliff/corner/wood calibrations; distinguished receiving faces from closed solids and source edge continuation. Corrected ground testing to inverse-rotated `(P.x,P.z)` rather than height-bearing `P.xy`. Made actual supplied or recoverable authored geometry take precedence over proxies. Kept §5.10 as the single reach-schema owner. | The technical design is specific enough to implement; no remaining concrete design contradiction identified after these corrections. No further algorithm-selection study is a prerequisite for the specified work. |
-
-Historical review note: the earlier reviewer required offline conversion of recoverable XYZ/depth. The user's 9 October correction supersedes that migration route: old VFX XYZ banks are fully replaced, with no conversion/import fallback. Supplied new normal planes and calibrated surface normals are retained; any estimate declares its method/limits. That earlier review verdict is not evidence that the replacements are integrated or complete.
-
-The 8 October document review covered its then-current 53 AnimationData fields, 15 derived AssetCatalog fields, 24 WorldBindingsSource fields and all 55 migration entries. The current owner has 55 AnimationData fields after adding `paired_banks` and `sheet_components`; §5.7 includes both. These are source/coverage observations, not successful rendering or a recurring hash-validation requirement.
-
-**Historical 8 October verdict:** this was design acceptance, not implementation acceptance. Subsequent asset/authoring preparation is recorded in §12 and must not be repeated. No browser playthrough, performance benchmark or visual acceptance of the recreated application has occurred. Remaining source calibration limits, the three native fact amendments, §5.11 route pass-through and application packages remain explicit work; abandoned XYZ conversion is not one of those tasks. RGBA-only interiors, future stacked playable supports, undisclosed reach evidence and the current two-dimensional reach rule's low-wall vertical exclusion retain their explicitly described limits. No reviewer verdict converts those limits or unbuilt features into a completion claim.
-
-### 15.2 Follow-up source comparison and server-capture correction — 9 October 2026
-
-The prior design verdict was limited to the reviewed source/ledgers; it was not proof that umbrella descriptions captured every executable UI behavior. The requested subsequent source scan found the concrete omissions in §14.5. Pygame and old-NeuroClient reviewers supplied function-level evidence; the server/SDK anti-slop/ECS reviewer checked the actual capture paths and the narrow route-option omission. Those findings are integrated into the existing requirements, implementation tasks and acceptance cases, rather than external follow-up plans.
-
-The new server-only provenance requirement is stricter than the previous “native execution” wording. Direct engine-produced recordings remain useful test/setup references, but they do not satisfy Studio gameplay provenance. Current server fixtures, SDK follower records and one offline replay path supply that provenance without another API, synthetic generator or client-side rules engine. Existing source schemas, functional owners and SDK model ownership remain authoritative; no new hierarchy or framework is justified by this comparison.
-
-Targeted readback of the integrated additions found no remaining identified omission within the Pygame or old-NeuroClient source findings. The anti-slop/anti-OOP reviewer caught stale summary wording that still limited SDK changes to three fact amendments and ambiguous native-capture language; §§4.10/5/5.2/5.5/5.6 were corrected to include §5.11 and actual-server provenance. Its remaining ownership review found one shared selection, one capture/replay path and no new duplicate system. These are bounded source/design conclusions, not a claim of perfect or executed software.
-
-This follow-up is a source/design review only. No server capture command, game, benchmark or SDK generation was run. The protected original master remains unchanged; this consolidated copy contains the current requirements.
-
+This document update is not a runtime, visual or performance acceptance result.
 
 ## 16. Source/API evidence and scope boundary
 
