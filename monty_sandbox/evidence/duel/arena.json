@@ -1,0 +1,11 @@
+{
+  "mcp_url": "http://127.0.0.1:18894/mcp",
+  "game_port": 18893,
+  "mcp_port": 18894,
+  "seats": [
+    "amber",
+    "blue"
+  ],
+  "seed": 7,
+  "recorded": true
+}

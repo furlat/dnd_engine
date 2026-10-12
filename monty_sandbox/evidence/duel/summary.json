@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-12",
+  "fixture": "one authored skeleton per external seat",
+  "seed": 7,
+  "winner": "amber",
+  "agents": {
+    "amber": "parent agent",
+    "blue": "independent blue_opponent subagent"
+  },
+  "seats": {
+    "amber": {
+      "committed_commands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "mcp_calls": 10,
+      "host_calls": 26,
+      "final_cursor": 21,
+      "boundary": {
+        "lifecycle": "terminal",
+        "input_actor_uuid": null,
+        "state_revision": null,
+        "reason": null,
+        "incident_id": null
+      }
+    },
+    "blue": {
+      "committed_commands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "mcp_calls": 20,
+      "host_calls": 39,
+      "final_cursor": 21,
+      "boundary": {
+        "lifecycle": "terminal",
+        "input_actor_uuid": null,
+        "state_revision": null,
+        "reason": null,
+        "incident_id": null
+      }
+    }
+  },
+  "first_goblin_duel": {
+    "winner": "amber",
+    "opening_damage": 8,
+    "blue_commands": 0,
+    "reason_for_rematch": "Blue was defeated before its first turn"
+  },
+  "tests": "4 passed",
+  "trace": "events.jsonl",
+  "scope": "Local feasibility demonstration; no game server changes"
+}

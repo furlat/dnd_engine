@@ -1,0 +1,82 @@
+{
+  "source_session": "7494f85a-6ffc-4fd7-a68a-dbbcc88050ab",
+  "fresh_session": "90fdeeeb-47da-4077-8a84-15f09fa1e589",
+  "games": [
+    {
+      "game_ref": "cc7f55e9-197a-4b2a-a176-d9849adc3c4a",
+      "identity": {
+        "game_id": "monty-trial",
+        "game_epoch": "4ffd1eee-2eb0-4324-b0d0-afe25a9575a2",
+        "audience_id": "e0c36e57-95e7-46be-8391-7f125034029c"
+      },
+      "mode": "archived",
+      "record_count": 12,
+      "attack_count": 6,
+      "deaths": [
+        "\u2620 {bold red:Blue scout 2} has been defeated!",
+        "\u2620 {bold red:Blue scout 1} has been defeated!"
+      ],
+      "boundary": {
+        "lifecycle": "terminal",
+        "input_actor_uuid": null,
+        "state_revision": null,
+        "reason": null,
+        "incident_id": null
+      },
+      "cursor": {
+        "game_id": "monty-trial",
+        "game_epoch": "4ffd1eee-2eb0-4324-b0d0-afe25a9575a2",
+        "audience_id": "e0c36e57-95e7-46be-8391-7f125034029c",
+        "sequence": 11
+      },
+      "committed_commands": 3
+    },
+    {
+      "game_ref": "2508a0b7-08eb-41e5-9c00-1df73d81b59b",
+      "identity": {
+        "game_id": "monty-trial",
+        "game_epoch": "94ada3f3-f48c-4602-94cc-5ef1f7f70cf6",
+        "audience_id": "016b4395-38cf-4021-b65b-dff17e5630be"
+      },
+      "mode": "archived",
+      "record_count": 36,
+      "attack_count": 13,
+      "deaths": [
+        "\u2620 {bold red:Blue scout 2} has been defeated!",
+        "\u2620 {bold red:Blue scout 1} has been defeated!"
+      ],
+      "boundary": {
+        "lifecycle": "terminal",
+        "input_actor_uuid": null,
+        "state_revision": null,
+        "reason": null,
+        "incident_id": null
+      },
+      "cursor": {
+        "game_id": "monty-trial",
+        "game_epoch": "94ada3f3-f48c-4602-94cc-5ef1f7f70cf6",
+        "audience_id": "016b4395-38cf-4021-b65b-dff17e5630be",
+        "sequence": 35
+      },
+      "committed_commands": 13
+    }
+  ],
+  "same_sandbox_across_games": true,
+  "same_native_game_id_different_epochs": true,
+  "archives_read_after_servers_stopped": true,
+  "archived_actions_rejected": true,
+  "source_session_closed_before_import": true,
+  "exported_sources": [
+    "scouts"
+  ],
+  "fresh_games": [],
+  "unsaved_globals_absent": true,
+  "real_old_refs_rejected": true,
+  "restored_feature_result": {
+    "attacks": [
+      "Fresh sample attack"
+    ],
+    "deaths": []
+  },
+  "game_server_changes": false
+}

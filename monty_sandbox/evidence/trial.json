@@ -1,0 +1,21 @@
+{
+  "game": "monty-trial",
+  "fixture": "human_vs_ai",
+  "seed": 2,
+  "game_port": 18891,
+  "mcp_port": 18892,
+  "result": "Amber defeated both Blue scouts; terminal reached",
+  "commands_committed": 3,
+  "final_cursor": {
+    "game_id": "monty-trial",
+    "game_epoch": "c821284d-fd8a-4faa-88cf-28c486798f9f",
+    "audience_id": "cedbd88c-4705-437e-bd1f-47f20a9d751a",
+    "sequence": 11
+  },
+  "records": 12,
+  "record_bytes": 858245,
+  "mcp_reconnect_preserved_globals": true,
+  "two_live_clients_isolated": true,
+  "duplicate_seat_refused": true,
+  "replayed_attack_request_did_not_reexecute": true
+}

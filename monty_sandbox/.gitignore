@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.pytest_cache/
+evidence/**/dashboard.html
+evidence/**/dashboard.svg
+evidence/**/dashboard.txt

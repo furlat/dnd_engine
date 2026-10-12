@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+arena_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$arena_dir/.."
+exec "$arena_dir/.venv/bin/python" -m monty_sandbox.cli "$@"
