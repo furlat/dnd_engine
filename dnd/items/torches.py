@@ -331,9 +331,12 @@ class Torch(UsableItem):
             parent_event=parent_event,
             phase=EventPhase.DECLARATION,
         )
-        flame_event.phase_to(EventPhase.EFFECT).phase_to(
-            EventPhase.COMPLETION,
+        effect = flame_event.phase_to(EventPhase.EFFECT)
+        self.publish_location_state(
+            ItemLocation.INVENTORY, owner_uuid=carrier_entity_uuid,
+            container_uuid=self.stored_in_uuid, parent_event=effect,
         )
+        effect.phase_to(EventPhase.COMPLETION)
 
     def extinguish(self, parent_event: Optional[UUID] = None) -> None:
         """Remove this torch's temporary light."""
@@ -346,6 +349,15 @@ class Torch(UsableItem):
                 parent_event=parent_event,
             )
             self._light_source_uuid = None
+
+        owner = Entity.get(self.owner_uuid) if self.owner_uuid is not None else None
+        if owner is not None and owner.creation_committed:
+            self.publish_location_state(
+                ItemLocation.INVENTORY, owner_uuid=self.owner_uuid,
+                container_uuid=self.stored_in_uuid,
+                parent_event=(EventQueue.get_event_by_uuid(parent_event)
+                    if parent_event is not None else None),
+            )
 
     def is_exposed_flame(self) -> bool:
         """Return whether the torch is currently burning."""

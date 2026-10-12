@@ -104,7 +104,11 @@ def _visual_loadout(actor: ActorState) -> VisualLoadout:
             visual_variant_id=items[identity].visual_variant_id,
             equipped_visual_policy=items[identity].equipped_visual_policy,
             item_effects=items[identity].item_effects,
-            suppression_provider_uuids=items[identity].suppression_provider_uuids)
+            suppression_provider_uuids=items[identity].suppression_provider_uuids,
+            is_lit=items[identity].is_lit,
+            very_bright_radius_feet=items[identity].very_bright_radius_feet,
+            bright_radius_feet=items[identity].bright_radius_feet,
+            dim_radius_feet=items[identity].dim_radius_feet)
         for slot, identity in actor.equipment))
 
 
@@ -704,6 +708,9 @@ def _floor_item(item: ItemPresentationState, residues: tuple[ObjectResidueState,
         supported_by_uuid=item.supported_by_uuid,
         blocks_propagation=item.blocks_propagation,
         is_open=item.is_open, is_lit=item.is_lit, is_engaged=item.is_engaged,
+        very_bright_radius_feet=item.very_bright_radius_feet,
+        bright_radius_feet=item.bright_radius_feet,
+        dim_radius_feet=item.dim_radius_feet,
         surface_residues=residues, current_hit_points=item.current_hit_points, maximum_hit_points=item.maximum_hit_points,
         concentration_capacity=item.concentration_capacity, concentration_slots=item.concentration_slots,
         door_mechanism=item.door_mechanism, door_swing=item.door_swing, remnant_state=item.remnant_state,
@@ -787,8 +794,14 @@ def _observed_object(world: PresentationTarget, remembered: PlayerState, identit
             suppressions.append(retained_suppression.model_copy(update={"positions": tuple(sorted(admitted))}))
     item = obj.item.model_copy(update={"remnant_state": _observed_remnant(obj.item.remnant_state, known_objects),
         "construction_suppressions": tuple(suppressions)})
+    contact = senses.objects.get(identity) if senses is not None else None
+    contained_items = None
+    if (obj.contained_items is not None and (item.is_open is True or item.integrity is ItemIntegrity.DESTROYED)
+            and contact is not None and contact.visual):
+        contained_items = tuple(_floor_item(child, ()) for child in obj.contained_items)
     return PlayerObject(placement=obj.placement, item=_floor_item(item,
-        tuple(retained[identity] for identity in sorted(retained, key=str))))
+        tuple(retained[identity] for identity in sorted(retained, key=str))),
+        contained_items=contained_items)
 
 
 def _world_update(world: PresentationTarget, remembered: PlayerState, event_uuid: UUID) -> WorldUpdate | None:
@@ -799,11 +812,17 @@ def _world_update(world: PresentationTarget, remembered: PlayerState, event_uuid
                   and remembered.tiles.get(position) != world.tiles[position])
     observed = {identity: _observed_object(world, remembered, identity)
                 for identity in world.objects if _object_observed(world, identity)}
-    objects = tuple(observed[identity] for identity in sorted(observed, key=str)
-                    if remembered.objects.get(identity) != observed[identity])
     removed = tuple(identity for identity, obj in remembered.objects.items()
                     if identity not in observed
                     and any(position in senses.visible for position in obj.placement.positions))
+    changed = {identity: value for identity, value in observed.items()
+               if remembered.objects.get(identity) != value}
+    # Remembered silhouettes may remain out of sight. Contents are current
+    # observations, so losing the grant clears them without exposing new state.
+    for identity, previous in remembered.objects.items():
+        if identity not in observed and identity not in removed and previous.contained_items is not None:
+            changed[identity] = replace(previous, contained_items=None)
+    objects = tuple(changed[identity] for identity in sorted(changed, key=str))
     connectors = tuple(row for row in world.world.connectors
                        if all(point in senses.visible for point in row.endpoints))
     if not tiles and not objects and not removed and connectors == remembered.connectors:
@@ -1111,14 +1130,19 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                         and node.resolution_ref.lineage_uuid in disclosed else None)
              for node, event in zip(nodes, events, strict=True)]
     observations = [replace(row, actor=_disclosed_actor(row.actor, disclosed)) for row in observations]
-    updates = [replace(row, objects=tuple(replace(obj, item=replace(obj.item,
-        concentration_slots=_disclosed_slots(obj.item.concentration_slots, disclosed))) for obj in row.objects))
+    updates = [replace(row, objects=tuple(_disclosed_object(obj, disclosed) for obj in row.objects))
         for row in updates]
     remembered.actors = {key: _disclosed_actor(actor, disclosed) for key, actor in remembered.actors.items()}
-    remembered.objects = {key: replace(obj, item=replace(obj.item,
-        concentration_slots=_disclosed_slots(obj.item.concentration_slots, disclosed)))
-        for key, obj in remembered.objects.items()}
+    remembered.objects = {key: _disclosed_object(obj, disclosed) for key, obj in remembered.objects.items()}
     return tuple(nodes), tuple(observations), tuple(updates)
+
+
+def _disclosed_object(obj: PlayerObject, disclosed: set[UUID]) -> PlayerObject:
+    return replace(obj, item=replace(obj.item,
+        concentration_slots=_disclosed_slots(obj.item.concentration_slots, disclosed)),
+        contained_items=tuple(replace(item,
+            concentration_slots=_disclosed_slots(item.concentration_slots, disclosed))
+            for item in obj.contained_items) if obj.contained_items is not None else None)
 
 
 def _public_condition(condition: ConditionFact, cursors: dict[int, int], versions: dict[UUID, int], *, owned: bool) -> ConditionFact:
@@ -1279,7 +1303,11 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
     observations = tuple(replace(row, actor=_public_actor_sources(row.actor, state.public_cursors, state.public_versions))
                          for row in observations)
     updates = tuple(replace(row, objects=tuple(replace(obj, item=replace(obj.item,
-        item_effects=_public_item_effects(obj.item.item_effects, state.public_cursors))) for obj in row.objects)) for row in updates)
+        item_effects=_public_item_effects(obj.item.item_effects, state.public_cursors)),
+        contained_items=tuple(replace(item,
+            item_effects=_public_item_effects(item.item_effects, state.public_cursors))
+            for item in obj.contained_items) if obj.contained_items is not None else None)
+        for obj in row.objects)) for row in updates)
     return tuple(result), tuple(rows), observations, updates
 
 

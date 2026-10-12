@@ -694,7 +694,7 @@ def test_every_authored_world_starts_with_one_exact_cold_fact(
                 )
             )
             if isinstance(storage, Inventory)
-            else ()
+            else None
         )
         assert objects_by_uuid[item.uuid] == WorldObjectState(
             placement=placement,

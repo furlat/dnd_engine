@@ -1,14 +1,10 @@
 OUR OBJECTIVE IS A COMPLETE IMPLEMENTATION
 
-# NDCLIENT IMPLEMENTATION PLAN — complete consolidated edition
+# NDCLIENT IMPLEMENTATION PLAN — complete consolidated edition · v2
 
-Date: 8 October 2026; scope and source references corrected on 10 October 2026 after the user's rollback and directory renaming.
-**Current status: the fresh repository, selected artwork and core tracked client
-authoring are prepared. The 10 October review's missing door/timber connection
-is now implemented in the existing typed authoring (§6.1). The asset/authoring
-pre-phase and initial replacement/relocation adapter are complete.
-Complete application-release integration, client scaffold/SDK integration,
-renderer, Studio and UI are not implemented.** N0 is partial.
+Date: 10 October 2026 · revision 2. This version corrects ordinary rendering and interaction to use Pixi scene layers, authored support/contact order and native hit areas. Depth/normals remain inputs for actual lighting and selected spell interactions, not mandatory visibility or picking for all artwork. The [detailed renderer plan](/home/tommaso/Dev/NDClient/agent_docs/NDCLIENT_PIXI_RENDERER_PLAN_2026-10-10_v2.md) is the renderer chapter of this specification. The [previous edition](/home/tommaso/Dev/NDClient/agent_docs/archive/ndclient-plans/2026-10-10-before-pixi-v2/NDCLIENT_IMPLEMENTATION_PLAN_COMPLETE_2026-10-08.md) is archived unchanged.
+
+**Execution:** complete this plan update and review, then resume the agreed client implementation. No additional approval is required. Preparation is complete and N0–N4 have partial client consumers; the current compositor has reported visual and performance failures and must not be treated as accepted. §12 retains implementation history with that qualification; N0–N5 remain the complete client objective.
 
 **Committed starting point:** NDClient `df5397e` (`first push - pre implementation`)
 records the completed tracked preparation. It is a reference checkpoint, not an
@@ -18,9 +14,9 @@ the client checkpoint, not a claim that the separate engine worktree is committe
 or that a playable client exists. Do not recreate the repository, repeat asset
 intake or reopen the completed authoring connection.
 
-**Plan location:** the [engine master](/mnt/c/users/tommaso/documents/dev/dnd_engine/agent_docs/NDCLIENT_IMPLEMENTATION_PLAN_COMPLETE_2026-10-08.md)
+**Plan location:** the [engine master](/mnt/c/users/tommaso/documents/dev/dnd_engine/agent_docs/NDCLIENT_IMPLEMENTATION_PLAN_COMPLETE_2026-10-10_v2.md)
 is the maintained document. The
-[NDClient repository copy](/home/tommaso/Dev/NDClient/agent_docs/NDCLIENT_IMPLEMENTATION_PLAN_COMPLETE_2026-10-08.md)
+[NDClient repository copy](/home/tommaso/Dev/NDClient/agent_docs/NDCLIENT_IMPLEMENTATION_PLAN_COMPLETE_2026-10-10_v2.md)
 contains the same specification for work in that repository. Update the master
 and refresh that copy together; the copy is not a second plan. Evidence links use
 the existing engine locations so both copies carry the same text.
@@ -101,10 +97,10 @@ preparation pass or standalone preview does not substitute for that work.
 [ASSETS.md](/mnt/c/users/tommaso/documents/dev/dnd_engine/ASSETS.md) is the compact current location/selection guide;
 [the VFX intake](/mnt/c/users/tommaso/documents/dev/dnd_engine/agent_docs/audits/NDCLIENT_VFX_ASSET_INTAKE_2026-10-09.md) records copy evidence.
 The recovery and asset diaries are historical references, not extra instructions
-or documents to reread routinely. Further implementation follows the next
-user-authorized step; asset preparation has not silently resumed renderer work.
+or documents to reread routinely. Asset preparation is complete. After this plan update and review, continue the
+agreed client implementation without reopening intake or adding an approval gate.
 
-This is the single specification for the next NDClient implementation. It contains the required behavior, existing source owners, rendering algorithms, Studio and UI features, asset installation, network integration, delivery sequence and acceptance cases. Source files and historical documents linked as evidence do not contain additional mandatory plan chapters: the implementation requirements are here.
+This is the general specification for the next NDClient implementation; the [renderer plan v2](/home/tommaso/Dev/NDClient/agent_docs/NDCLIENT_PIXI_RENDERER_PLAN_2026-10-10_v2.md) supplies its detailed rendering execution chapter. It contains the required behavior, existing source owners, rendering algorithms, Studio and UI features, asset installation, network integration, delivery sequence and acceptance cases. Source files and historical documents linked as evidence do not contain additional mandatory plan chapters: the implementation requirements are here and in that explicitly linked renderer chapter.
 
 **Subsequent group D authorization and completion:** the user supplied
 `/mnt/c/Users/tommaso/Documents/assets/dnd-engine-icons-and-portraits/README.md`
@@ -159,12 +155,12 @@ Studio: recorded server initialization + operations ───┘
     → compiled timed presentation tracks and retained state commits
     → absolute-time sample of world, bodies, equipment, effects and UI state
     → registered support/surface geometry + resource readiness
-    → common depth/material/light composition → animated Pixi scene
+    → persistent Pixi layers and authored ordering, with selected materials/lights → animated Pixi scene
 ```
 
 Studio exposes this transformation explicitly. Its tracks, effects and timings are the production presentation program itself viewed through an interface. It does not manufacture a preview program, call the game server to discover test outcomes, or substitute simplified scene data. Scrubbing changes the same presentation time that drives the renderer. The game host supplies live records; the Studio host supplies prerecorded records. That input-source difference is not a second executor or renderer special case.
 
-The shared runtime must consume every supported field and fact family before delivery is called complete. It has consistent principles: native ownership of outcomes; source ownership of visual semantics; authored registration of original art; support identity separate from physical elevation and composition role; one comparable depth space; one absolute clock; one displayed-state/resource commit; shared geometry for rendering and picking; and GPU evaluation of finite materials/particles. No spell/window/fixture-specific correction can override those principles to make one preview look plausible.
+The shared runtime must consume the supported fact and authored-feature families before delivery is called complete. Its principles are native ownership of outcomes, source ownership of visual semantics, original-art registration, support identity separate from elevation and draw phase, one absolute display clock, coherent state/resource publication, and the same functions for play and Studio. Ordinary drawing uses Pixi Sprite/Container layers and camera-aware contact order; specialized GPU materials, lighting, particles and spell interactions use their actual authored inputs. Shared coordinates do not require every contribution to compete in a depth buffer. Pointer interaction uses displayed transforms and authored hit areas, not a new universal geometry picker.
 
 Production draws are passive compiled views, not a second serialized world/event schema. They retain native/cause/occurrence identity, source binding/layer/frame, displayed transform, support/receiver, geometry/material/blend and dependencies. Existing native facts and client-authored fields are consumed through their common presentation owner; a missing native value is not an instruction to expand the API. Play, Studio and any capture call those functions directly; sharing type declarations while maintaining independent render loops does not satisfy this design.
 
@@ -368,7 +364,7 @@ and existing environment depth are distinct from these retired VFX XYZ banks.
 
 Depth/normal inputs, shared GPU material evaluation, surface-aware occlusion and receiving/emitted light are new production capabilities. They are not claimed as already solved in Pygame or NeuroClient. Those references supply placement, source registration, interaction and temporal behavior; they do not supply the finished new GPU renderer.
 
-Every supported VFX with exported depth/normal channels uses those actual channels through the common source registration and material/depth passes. Available channels must not be discarded in favor of a generic flat quad or fitted dome. Walls and other registered surfaces use exported depth/normals where supplied, or derive equivalent quantities from their explicitly registered geometry. Numeric channels remain raw and calibrated, separate from appearance color and alpha interpretation. The read-only Studio exposes source color, depth, normals, sampled geometry and timed effect tracks from that same production machinery.
+Keep all selected depth/normal channels and their registration. Consume them in the lighting and authored spell operators that actually need them; ordinary drawing or picking does not require a depth pass merely because a source has companions. When an operator needs measured geometry, use the supplied channels instead of inventing a flat/dome substitute. Walls and other registered surfaces supply their calibrated faces or exported channels to the relevant lighting/spell calculation. Numeric planes remain raw and calibrated, separate from appearance color/alpha. Studio can inspect these source channels alongside timed tracks without imposing their evaluation on every ordinary draw.
 
 Any supported source-authored approximate shape remains explicitly approximate. It cannot substitute for a required replacement that has not arrived, justify recovering a retired XYZ bank, or override supplied measured channels. Channel/component count follows the new source's actual semantics; Fireball's two bands are not a mandatory format for every effect.
 
@@ -590,7 +586,7 @@ When real storage capacity is exhausted, stop acceptance before ACKing another r
 
 ### 4.7 Prepare resources and publish one coherent displayed frame
 
-Resource readiness applies to the **candidate displayed state**, not only whatever actors existed before the next commit. Preparation gathers the current frame, all state changes inside the next prepared group, transition-only media, newly admitted actors/equipment, world changes, lights/materials, before/after poses and any paired planes needed by their selected camera/frame.
+Resource readiness applies to the candidate displayed sample. Compile its operation metadata and dependency list once; prepare distinct needed sources and companions incrementally, including the forthcoming transition actors/equipment/media and selected camera. Do not rebuild/upload a complete scene at every patch or block initial display on preparing every historical moment. Timeline structure can appear before its source pixels are ready.
 
 Perform a displayed replacement in this order:
 
@@ -599,7 +595,7 @@ Perform a displayed replacement in this order:
 3. Publish the candidate time, player/retained state, projection, drawn content, picking, light/visibility and HUD together at one frame boundary.
 4. Release resources no longer needed after that swap. Dispose canceled candidates without touching the still-displayed owner's leases.
 
-If not ready, keep the previous complete frame/state/time. Continue network work, UI and camera intent; do not advance invisible state behind a frozen image. Requested camera/seek/release and displayed camera/seek/release are distinct until commit. Picking must use the projection actually drawn, not the requested rotation whose images are still loading.
+If a reached sample is not ready, hold the previous coherent frame/state/cursor at that boundary. Resume from that position without skipping phases or commits, resetting effect starts or discarding retained tails. Continue network work, UI and camera intent; do not advance invisible state behind a frozen image. Requested camera/seek/release and displayed camera/seek/release are distinct until commit. Picking must use the projection actually drawn, not the requested rotation whose images are still loading.
 
 Use one rendering resource owner with explicit demand/lease records; texture interpretation includes resource URL/revision, dimensions/layout, encoding, sampling and alpha convention. Public identical payloads can share bytes, while a numeric plane and a color texture cannot accidentally share incompatible TextureSource settings merely because their URL matches. Registered frame planes are acquired/swapped together. There is no separate loader per spell, actor, Studio pane or camera.
 
@@ -1125,7 +1121,7 @@ The data path is:
 
 `native subjective facts + existing authored presentation data → shared pure presentation sampling → passive visible draws/receivers → Pixi resources and GPU execution`.
 
-Play and Studio use this same path. Neither supplies an alternative asset placement algorithm, scene renderer, animation clock or spell-name switch. Native code retains traversal, collision, spell propagation, light/perception authority and action legality. GPU geometry controls visual composition and cosmetic lighting; it does not become a second game engine.
+Play and Studio use this same path. Neither supplies an alternative asset placement algorithm, scene renderer, animation clock or spell-name switch. Native code retains traversal, collision, spell propagation, light/perception authority and action legality. Ordinary Pixi ordering controls scene visibility; selected GPU geometry supports lighting and authored spell interactions; it does not become a second game engine.
 
 The source references are:
 
@@ -1137,7 +1133,7 @@ The source references are:
 
 Current source already defines `MediaGeometry` (`plane`, `mesh`, `ellipsoid`, `ray_depth`), `ReceivingMaterial`, `VisualEmitter`, `PairedMediaSelection`, `PairedFrameBank`, `CaptureMatrices`, source/rest ownership planes and `ImageResourceSource.geometry`. The older foundation document says that last field must be added; that is stale. Consume their prepared client-schema equivalents; do not extend the archived Python owners. Do not introduce a second asset registry, transformation language, material hierarchy, entity renderer class tree, renderer-specific world snapshot or handwritten copy of generated types.
 
-This is a new GPU renderer, not a request to stop at Python/NeuroClient parity. Source registration, semantics, temporal behavior and existing successful controls are recovered. Canonical sampled depth/normals, material transfer, receiving/emitting light and physical cross-surface composition are new functionality. Whenever an asset supplies depth/normal channels, those channels take precedence and are actually consumed. A convenient constant cutout or fitted ellipsoid must never replace available measured channels. The fallbacks below exist only for source artwork that genuinely lacks that data and state their approximation explicitly.
+Use Pixi as the renderer. Recover the successful ordinary scene/layer structure, original source registration, temporal behavior and controls from the existing implementations. Depth/normals, receiving/emitted light and selected VFX/wall interactions extend that structure. Having a companion map does not prohibit an ordinary Sprite or require fragment-depth visibility. Retain supplied measured channels for consumers that need them; do not replace those measurements with guessed geometry. No general intersecting-volume or geometric-order solver is required in advance of an actual unresolved case.
 
 ### 6.1 Environment companion adoption and shared lighting — 10 October decision
 
@@ -1199,8 +1195,8 @@ Read source, not just its earlier screenshots:
 
 In particular, the proof's hardware depth expression includes `X+Z+H`; the common
 production depth convention above/below is `d=X+Z`. Use one production depth
-function throughout surfaces, effects and composition; do not mix these formulas
-between shader families. The fixture's numeric range is not a world extent.
+function throughout participating lighting and depth-enabled effect consumers;
+do not mix these formulas within that comparison. Ordinary scene order is separate. The fixture's numeric range is not a world extent.
 
 #### Minimum source shape, without a second binding system
 
@@ -1294,9 +1290,10 @@ remain later implementation work; data completion alone does not claim them.
 
 #### One material/light calculation, three different geometric questions
 
-- **Camera ordering:** reconstructed visible samples compete in the shared world
-  depth/composition path. Authored support, layer order and same-support treatment
-  still apply; depth maps do not replace source placement or map elevation.
+- **Camera ordering:** ordinary Pixi layers, support relationships, camera-oriented
+  contacts and source sibling order draw the scene. Depth comparison is limited
+  to selected spell/surface interactions that need it; it is not the default
+  ordering mechanism for floors, bodies, original shadows or props.
 - **Receiving illumination:** compute light direction at `P_world`, use the
   decoded/transformed normal, then apply the existing `ReceivingMaterial` and
   `WorldLightingPolicy`. The environment colour is already shaded artwork, not
@@ -1346,13 +1343,7 @@ averaged mipmaps. Normal/depth bytes never use the colour sampler's filtering.
 Keep existing colour filtering and uniform camera zoom; do not fix data sampling
 by degrading colour motion or changing the isometric projection.
 
-Registered surfaces use the shared
-[Mesh/Shader path](https://pixijs.com/8.x/guides/components/scene-objects/mesh) and
-[depth/blend state](https://pixijs.download/v8.22.0/docs/rendering.State.html).
-Lighting evaluates in the surface/effect fragment path, not a fullscreen filter
-per asset. This does not promise one total pass: opaque/transparent composition
-and shared bloom retain their separately justified passes. No CPU full-frame
-XYZ/normal reconstruction, recolouring, GPU readback or per-camera texture copies.
+Use ordinary Pixi Sprite/Container drawing by default. A registered surface that needs normal-aware light or another authored material may use the shared [Mesh/Shader path](https://pixijs.com/8.x/guides/components/scene-objects/mesh) in the same scene order. Share shader programs, while keeping mutable per-occurrence/per-view values separate. A custom shader is not a reason to enable depth testing. Lighting evaluates in the relevant surface/effect path, not a fullscreen filter per asset; only actual effects such as shared bloom justify their additional targets/passes. No CPU full-frame XYZ/normal reconstruction, recolouring, routine GPU readback or per-camera texture copies.
 
 The next implementation is deliberately staged within the existing milestones:
 
@@ -1361,8 +1352,8 @@ The next implementation is deliberately staged within the existing milestones:
    do not repeat copying or intake. Assembly placement consumption is addressed
    explicitly below; it must not be inferred from a companion map.
 2. **Connect N1/N3 renderer:** load raw channels, sample them on the selected
-   colour frame, reconstruct geometry and consume it for shared ordering and
-   lighting. Derive finite light-blocking geometry from displayed authored state;
+   colour frame, reconstruct geometry for lighting and the selected spell
+   interactions that need it. Ordinary drawing retains Pixi scene ordering. Derive finite light-blocking geometry from displayed authored state;
    cache it by its actual consumed changes, not by pan/zoom. Reuse existing
    production functions in Studio; this is not a new isolated preview engine.
 3. **Review in the live application:** use the finite cases below, then continue
@@ -1411,7 +1402,7 @@ At an unzoomed image-space point `(u,v)`, a depth `d` defines the view ray point
 R(u,v,d) = ((d+u/64)/2, (32d-v)/64, (d-u/64)/2)
 ```
 
-All depth sources convert into this one comparable world coordinate before depth testing. A sprite rectangle's bottom, screen Y, source PNG height, asset ID and composition layer are not replacements for `d`.
+When a selected lighting/spell operation requires a reconstructed point or depth comparison, convert its participating sources into this common coordinate. This formula is not the ordinary draw-order key. Basic scene order uses support/layer relationships and camera-oriented ground contact; actual image placement still includes full elevation. PNG dimensions and sprite-rectangle bottoms do not replace source contacts.
 
 For source pixel `s`, placement is the existing registration:
 
@@ -1451,53 +1442,21 @@ Every derived world contribution retains these distinctions from its existing so
 
 The engine currently delivers one `WorldTileState` support per XY, with `elevation_steps`, `surface_kind` and optional slope axis. `WorldObjectPlacement` supplies base/top height, covered support tile identities, footprint and boundary orientation. Ground/flying occupancy is not a stacked-floor identifier. The renderer must draw multiple visual pieces at different heights over the same XY, but this phase does not fabricate independently walkable stacked floors which the current native protocol does not represent. NeuroMapEditor's independent Z-grids remain richer authoring input; a source assembly requiring stacked playable supports is explicitly outside the current engine capability.
 
-An upper floor overhang, stair tread, lower floor, cliff return, door, table, body, shadow and effect can nevertheless share screen pixels and XY. Their physical surfaces participate in the same depth coordinate. No global `all floors first`, `all upper layers last`, or screen-Y-only rule is sufficient.
+An upper floor, stairs, lower floor, wall, body, shadow and effect can share screen pixels. Preserve their support and assembly relationships rather than putting every floor globally first or every higher elevation globally last. The renderer chapter specifies the ordinary Pixi hierarchy and source-derived contact order.
 
-#### The explicit same-support cutout rule
+#### Own-support precedence and elevation
 
-The previous renderer already had a necessary semantic rule: `game_obsolete/fixture_depth.py:_floor_below_contacts` puts a body's own support covering below that body and its contact shadow. Dropping that rule while adding physically varying floor depth causes exactly the chopped feet, prone sprites and buried prop bases reported in the deleted client. The new implementation preserves the behavior on the GPU, without copying Python's CPU image partitioning or merely adding a depth epsilon.
+Recover the established behavior: a supporting floor and its ground coverings draw below their supported body/prop and original contact shadow. This is an explicit layer/order relationship. Remove the old `d_visual=max(d_contact,d_receiver)` continuation, support-patch fragment tests and universal physical-depth tie policy; they are not prerequisites for correctly standing on a floor.
 
-For an ordinary source sprite without per-pixel geometry, retain its original camera-facing cutout and source contact. Above its own receiving surface it uses its registered contact depth `d_c`. Its authored bottom overhang is represented as a depth-only continuation on that receiving surface. On a horizontal receiving surface of height `H_s`, its depth at a source-covered screen point is:
+For connected flat support, floor tops precede receiving deposits/grid feedback, source shadows and spatial objects. Raised support/assembly units participate in spatial order with lower-world objects; keep their own floor/detail/body relationships and their separately ordered retaining faces, walls and inserts. Do not cache a whole room and its actors into one indivisible image.
 
-```text
-d_s(u,v) = (v + 64 H_s) / 32
-d_visual(u,v) = max(d_c, d_s(u,v))
-```
+Use the reference painter semantics: camera-oriented ground contact (excluding elevation only from that sort projection), lateral tie, source phase/direction/sibling order and stable identity. Wall/door edge contact affects the sort key; it does not replace the source owner-contact mount/pivot. Full physical height still determines screen placement. Update order when contacts, membership, support or camera quarter change; common pan/zoom does not change that order.
 
-This is a registered 2.5D cutout proxy. It changes neither screen vertices nor UVs, colors, alpha, dimensions, animation frames or sprite silhouette. It says that art extending below the contact line lies on top of its receiving support, rather than physically underneath it. It is not body morphing, an invented character size, an arbitrary depth offset or a new physical collider.
+Prone/dead bodies, tables and source shadows retain their full original silhouette and contact. Grounded motion uses displayed support and installed stair contacts; jumps separate the body's displayed height from its ground shadow. Landing restores the actual support relationship. No depth epsilon, source-image deformation or CPU image partitioner is needed for these ordinary relationships.
 
-Apply the continuation only to the actor/prop's declared receiving surface and its admitted continuous support patch. A support patch is derived from actual touching source surfaces with compatible support identity/height and no native structural separation; it is not every tile at a matching numeric height. Ground overlays and contact shadows sample those same physical receiving faces directly. A table or chest without a depth companion uses the same explicit supported-cutout policy and its existing corrected pivot/footprint; it does not require a new depth export merely to stand correctly on a floor.
+Preserve finite faces, masks, source polygons and sampled geometry for source inspection, lighting and actual spell interactions. They do not mandate nearest-edge/contact-chain per-pixel depth proxies for drawing or selecting every stair/wall. Do not invent physical thickness from raster overhangs, or reinterpret deposit UV mappings as complete wall meshes.
 
-This patch membership selects a depth formula; it never becomes an alpha/discard mask. At a boundary with no own receiver, retain the original cutout sample instead of deleting it. Neighboring coplanar receiver faces have the same `d_s`, so crossing their cell seam cannot create a depth seam. At a true step/wall boundary, the independent physical surface decides what occludes the remaining art. Do not clamp an overhang to a different-height neighboring floor merely because its projected pixel covers that tile.
-
-Keep the meanings of the sampled values explicit: `P_visual=R(u,v,d_visual)` is the cutout's approximate render/light receiving point; support identity/contact selects its native baseline light; its original declared cutout normal controls diffuse response. None of these inferred cutout samples become native occupancy, spell reach, a solid light blocker or a substitute for a provided physical mesh. Registered-depth media instead supplies a genuine registered surface sample to both camera composition and its receiving light. A source-edge raster continuation is likewise kept separate from the finite physical faces used as blockers.
-
-For a sloped receiving plane with equation `n·P+c=0`, solve `n·R(u,v,d_s)+c=0`. Use the receiving continuation only when the contact-cutout point is below that admitted receiving face and the view ray enters its upper half-space. Treads are their authored individual finite faces, not one invented ramp. A registered edge-on/vertical face is not a receiving floor and is handled by the separate source-face rule below. A pixel outside the declared receiving patch keeps its cutout depth; this does not cut away its artwork.
-
-Resolve actual coplanar contributions by semantic ties, not physical depth bias: support top → owned settled ground coating/grid/ground feedback → contact shadow → supported body/prop. Body and equipment then retain the source rig's authored sibling order. A wall/door's frame/leaf and material siblings retain their source assembly order only where their physical depths coincide. Semantic ties never reorder different physical surfaces.
-
-Consequences are specified rather than left to later discovery:
-
-- A body's own flat floor cannot chop off source pixels below its contact line.
-- A real upper floor still has `d_upper > d_s` at overlapping pixels and correctly covers the lower supported body. Its underside/edge is drawn only if supplied by the selected assembly. The lower body's support exception does not apply to the upper floor.
-- A wall behind the cutout remains behind it; a nearer calibrated wall face remains in front. Door frame, current leaf and aperture retain their different depths.
-- Grounded motion samples the receiving surfaces associated with the displayed movement position. Crossing a stair uses the native retained support contacts and authored tread faces. It does not interpolate an arbitrary ground height solely to fit the art.
-- Prone, sleeping, dying and dead actors use their authored frame and contact/pivot. The supported-cutout continuation prevents floor clipping without flattening or rotating the source image.
-- During free flight/jump, the body uses the displayed world contact/height and its free cutout proxy. It does not acquire a fabricated receiver at its flight height or borrow the floor from the latest server position. A ground shadow remains a separately registered receiver contribution. The body switches back to the actual receiving-support rule at its presented landing event. Interrupted/no-takeoff motion never enters the airborne path.
-- Registered depth/mesh companions override the cutout approximation. Their physical points are not clamped onto the floor; invalid source penetration is reported as registration/asset evidence rather than concealed by a generic correction.
-- A large prop whose provided geometry spans several receiving supports retains that footprint and those surfaces. A cutout-only prop provides approximate interpenetration behavior, as it did in the reference renderers. Its contact, full silhouette and floor precedence are supported; exact volumetric intersection through its interior is not claimed. No renderer can recover an exact hidden 3D shape from RGBA alone. Use existing registered depth/mesh when that interaction matters, or a source-calibrated finite surface at the existing image owner. Do not invent geometry from the PNG bounding rectangle.
-
-This policy is derived at presentation time from existing support, role and geometry data. It is not an additional asset registry or a new event schema. The old numeric `support_height_steps` alone is insufficient to identify all receiving relationships; the client already has tile/placement/support identities and must preserve them in its passive derived draw record.
-
-#### Finite source faces and edge-on artwork
-
-World physical faces and their raster coverage are related but not identical. Some authored pixels remain visible at a mathematically edge-on face. An instruction to require empty artwork for a parallel ray would discard source data and is removed.
-
-Use a registered depth companion when present. Otherwise use the selected `MeshGeometry` vertices, UVs, face IDs and source polygons. The source polygon identifies which original pixels belong to a face. Inside a nondegenerate source UV triangle, interpolate that triangle's world depth and normal from its calibrated vertices. It remains valid for source art that deliberately gives a physically narrow face visible raster width; the art is not squeezed to zero pixels. For a source-degenerate edge continuation, the existing face polygon bounds the art and the nearest point on the registered source edge gives its clamped endpoint interpolation. The face's own normal and stable sibling order are retained. This is a depth proxy for an authored edge, not an invented finite wall thickness.
-
-For the actual G17 w/n flight, use the supplied lower/middle/upper contact chain as that edge-depth registration: project each source-covered pixel onto the nearest segment in the authored source contact chain, clamp to the segment and interpolate the corresponding world support contact/depth. This chooses the flight's registered center support path when the ideal sloping plane is edge-on, instead of ambiguously choosing one of several collapsed side edges. Its visible narrow source stripe stays intact. With a new sampled depth companion, the source samples replace this approximation automatically.
-
-Use the physical face for actual cosmetic light barriers and world intersections. Its source-edge continuation supplies raster depth/picking only. `residue_wall_faces` is a source-face mapping for deposits, not automatically a complete 3D wall mesh: lift it into a physical plane only where that plane and source calibration are known. This avoids both deleting edge art and pretending a 2D source polygon contains missing 3D information.
+These rules are not a claim to solve arbitrary interpenetrating bridges or cyclic transparent overlaps. If an actual supported scene exposes a failure, record it and discuss the correction while continuing other known work. No general ordering solver, OIT system or speculative corner-case preparation is part of this phase. Partial staircase disclosure retains the user's explicit deferral; do not reopen it as a prerequisite.
 
 ### Environment assembly: use the author's actual pieces
 
@@ -1515,7 +1474,7 @@ The environment selection function consumes native state plus a source-compatibl
 
 #### Floors, retaining faces and stairs
 
-Floor tops and their source edge skirts use their different registered surfaces. Equal-height neighboring tops form a continuous floor; their skirts do not paint across those tops because they now compete at the correct depth. Do not erase all edge art to hide a sorting bug.
+Floor tops and retaining/edge members use authored support and component order. Equal-height neighboring tops form a continuous floor. Do not add retaining faces on internal same-height joins, paint a skirt over a neighboring top, or erase source pixels to conceal bad placement. Separate components/masks only where the source supplies them; no new image-splitting task.
 
 Select a retaining face only from a known physical support-height difference or an explicit native boundary. A visibility frontier is not a physical cliff. Use authored `upper_support_offset`, `rise_steps`, side returns and corner profiles. No blanket lower earth floor is generated below each raised tile. A known raised example must close all exposed physical perimeter faces, including stair side returns; a partly disclosed map must not manufacture an enclosure across unknown space.
 
@@ -1568,38 +1527,30 @@ The following source cases refine the existing renderer families; they do not ad
 
 Exercise these with server-recorded device shots, partially witnessed portal transfers, prop destruction and overlapping appearance changes, including backward seek and camera changes.
 
-### GPU compositor and shader families
+### Pixi scene and finite shader families
 
-Use a common world render group for its transform/lifetime and a separate screen UI. Pixi `RenderLayer`/container order is useful for semantic/UI grouping, but cannot solve intersecting world geometry alone. Physically composited world media uses shared explicit `Mesh` geometry/shaders/state; ordinary `Sprite` is sufficient for UI and already-resolved flat composites. Sharing a compiled shader alone does not make independent custom meshes batched; compatible draws must share buffers/attributes and state deliberately.
+Use one Pixi Application/canvas with a persistent world root for common pan/zoom and a separate screen UI. Sprite/Container drawing is the default for world artwork, not just the HUD. Ordinary child order and `sortableChildren`/`zIndex` organize spatial units; RenderLayer is available when logical parenting and draw order differ. These are scene layers inside one canvas, not one canvas per elevation. Raised support details stay with their spatial assembly rather than a global ground pass. Body-adjacent media retains its authored position among body/equipment layers.
 
-The finite shader/path families are:
+Keep existing display handles and shared TextureSources/frame views. Change transforms, frames, material values or affected membership; do not rebuild a scratch container/pass list on every camera update. Reuse compatible ordinary batching without changing meaningful order. Shader programs and compatible geometry may be shared; mutable per-occurrence or live/preview material inputs must remain separate.
 
-| Family | Source inputs | Result |
-|---|---|---|
-| Registered static/animated surface | Source UV/frame, calibrated mesh/plane or depth, masks, normal/material | Floor, stair, wall, prop, frame/leaf and finite construction surface |
-| Supported/free cutout | Source layer, contact/support, source registration, rig sibling order | Bodies, gear, cutout props, ordinary flat cast/marker/projectile art |
-| Compact volumetric sample | C/T appearance, scalar depth or ellipsoid sample, optional normal/owner plane | Fireball/cloud/dome/burst contributions at comparable physical depth |
-| Finite ribbon/mesh | Existing authored path/noise/material parameters, absolute time | Beams, trails, orbits, intake, darkness/plasma/ribbon effects |
-| Receiver material/deposit | Receiving face UV, historical contribution fields, material clock | Water, ground conditions, blood, soot, frost, runes and settled residue |
-| Analytic particle | Existing release/landing template attributes, absolute time | Blood, bone/vapor/spark particles without per-particle CPU images |
-| Shared composition | Physical/visual depth, original blend operator, stable sibling key | Opaque/transparent resolve and optional bloom |
-| Highlight/feedback | Same displayed source mask or receiving surface | Silhouette outline, ground/path/AoE feedback and cutaway selection |
+| Contribution | Pixi path and retained inputs |
+|---|---|
+| Ordinary world/actor art | Sprite/Container with authored frame, pivot, scale, source siblings and support/contact order |
+| Palette/material or receiving light | Specific Mesh/material or bounded Filter only where the authored operator needs it; ordinary scene order still applies |
+| Selected depth-enabled spells | Registered appearance, actual compact depth/normal data and bounded demonstrated wall/surface comparison in Pixi-managed effect drawing |
+| Beam/ribbon/construction | Existing finite path/mesh/material parameters sampled at displayed time |
+| Particles/deposits | Existing analytic attributes and receiver-local fields; their required finite shader operations, not a general depth compositor |
+| Highlight/feedback | Current authored hit/outline or receiving surface, at its correct scene layer |
 
-These are finite functions over the existing union data, not a new DSL or renderer class per spell. Reuse same sampling/material helpers in the appropriate shader stages.
+These remain finite functions over existing passive records. No class per spell, renderer plugin or duplicate scene schema is introduced.
 
-#### Opaque and transparent ordering
+#### Ordinary visibility and specialized depth
 
-1. Derive the displayed registered contributions and conservative overlap bounds. Use one lexicographic sample order `(physicalDepthCode, semantic/sibling order, stable contributor identity)` in every pass. Physical depth is primary; at equal depth the authored support order puts floor below its shadow and the shadow below the supported body/gear. Identity resolves only remaining ties.
-2. Draw truly opaque samples into common world color/depth, retaining the winning sample's tie order alongside its depth (or resolving the same-depth group coherently). Only final opacity exactly one belongs here. Fractional antialiasing, fades, clouds and additive media remain transparent. A bright additive pixel with zero alpha must not disappear merely because alpha is zero.
-3. Sort disjoint transparent depth intervals directly. For locally overlapping contributions whose depth order can cross, use local depth peeling with that same full sample order, a separate previous-peel texture and current render target. In the logical larger-depth-is-nearer convention, retain the greatest opaque key and select transparent keys strictly in front of it. Front-to-back peels select the greatest remaining transparent key strictly below the previous peel key. Hardware depth mapping must preserve that logical comparator. Depth-only LESS would drop a valid floor shadow; depth-only LEQUAL would allow that shadow to paint over coplanar body pixels. Neither is sufficient alone. Preserve original normal/add/screen operators in the selected order; use no artificial depth offset to encode semantic ties.
-4. Bound a crossing group's work from its actual finite participating primitive/contribution count, with a conservative per-pixel intersection bound. There is no invented global four-layer truncation. Do not synchronously read GPU queries to decide every next peel; use known finite scene data. Optimize bounds and compatible batches if measured cost requires it.
-5. Composite the world result and optional bloom, then the independent UI.
+Draw ordinary contributions back-to-front in their prescribed scene order with the original normal/add/screen blend semantics and alpha interpretation. Supporting floor, shadow, body, gear and ground feedback do not compete for a physical-depth winner. Original shadows are artwork, not new generated silhouettes. Remove the custom ordinary-colour interpolation; use Pixi's native texture sampling policy.
 
-Do not sample a texture attached to the framebuffer currently being written; disabling depth writes does not make a feedback loop legal. Depth near/far normalization is shared across participating passes. The world convention has larger `d` nearer; hardware depth mapping converts that once to the chosen comparison convention. Coplanar semantic order is explicit, rather than a collection of arbitrary tiny z offsets.
+Do not implement global/local depth peeling, overlap-region dispatch, a universal opaque-world prepass, per-pixel floor/body continuation or a substitute general crossing solver. Additional passes/targets belong only to an actual authored effect/light need. Preserve the selected Fireball's registered bands, emission and demonstrated wall/light interaction without sending unrelated tiles/actors through that path. Record a real unresolved exceptional overlap rather than silently building infrastructure for it.
 
-Opaque and transparent use the same per-fragment source registration, support cutout continuation and physical geometry. A global opaque floor prepass plus an unqualified constant-depth body is specifically forbidden because it reintroduces the reported floor clipping. Cutaway-faded wall color leaves the opaque path and participates as transparent color while its physical blocker representation remains intact.
-
-The pipeline may use several passes. The Fireball proof's small pass count is evidence about that prototype, not a promise that lighting, material evaluation, depth resolution and all scene transparency fit into one pass. Use floating render targets only where the radiance/blend representation requires them, and test the actual WebGL2 attachment/renderability/blend capability used. Do not require unrelated float extensions as a blanket gate.
+Any selected multipass effect must use legal Pixi-managed targets and state: do not sample the attachment currently being written. Keep participating calibration/depth conventions consistent, and require float target capabilities only where that actual source representation needs them. A specialized effect is not a blanket hardware-extension gate for an ordinary scene.
 
 ### Compact media representations and exact sampling
 
@@ -1635,17 +1586,13 @@ The older environment RG16LE contact companion instead decodes `R+256*G`, uses i
 
 The source exporter emits color/transmittance and depth/normal companions in one declared frame/camera/basis registration, preserving the actual distinct source component/blend layers. Static walls/props can supply the same registered scalar depth/normal contract when exported; they do not require a separate wall-specific shader implementation. Regular calibrated geometry can derive depth/normals without redundant textures. The client reports which supplied channels were loaded and consumed; a type field or copied companion file is not evidence that the renderer used it. No RGB/luminance threshold reconstructs fake depth or normals. Existing source albedo/emission separation is honored when supplied, while combined appearance retains the documented bounded relighting approximation.
 
-For postprocessed glow pixels outside valid source surface depth, retain the glow's own pixel view ray and intersect a tangent continuation from the nearest valid registered sample. Do not copy that neighboring pixel's XYZ directly, because it lies on a different view ray and recreates the misregistered wall cuts. The source supplies/derives the local valid continuation. There is no universal sixteen-source-pixel admission gate; the actual source fit/error is recorded where meaningful.
+Preserve postprocessed glow outside valid source surface depth. Only where an actual selected depth-enabled effect needs a continuation, use its existing source-qualified continuation on that pixel's own view ray. Do not copy another pixel's XYZ onto it or add nearest-sample tangent reconstruction as a general requirement for ordinary art. If an actual interaction lacks usable geometry, record the limitation without cutting the original silhouette or starting a new export/solver task. There is no arbitrary source-fringe admission gate.
 
-For fractured/rest-anchored materials, retain the existing source-piece owner ID and per-frame current-to-rest transform. Sample current depth for camera composition, then derive rest coordinates only for the material that requires them. Use `M_rest * inverse(M_current)` for the supplied piece, not the rest position as its current camera depth. The source exporter already has current piece positions; preserve them in the compact source representation rather than adding a runtime rigid-body simulation.
+For fractured/rest-anchored materials, retain the existing piece owner and per-frame current-to-rest transform. Derive rest coordinates only for the material that needs them, using `M_rest * inverse(M_current)` for that piece. If a selected lighting/depth-enabled effect also consumes current geometry, use its current registered samples, not rest coordinates as camera depth. Ordinary layer drawing does not require that depth calculation. Preserve supplied piece data without a runtime rigid-body simulation or new export requirement.
 
 ### Effect coverage, camera depth and existing outcomes
 
-An admitted effect samples its authored full appearance and registered geometry,
-then composes against the displayed scene in the shared depth space. Per-pixel
-wall/door depth determines front/behind; a sprite's screen bounding box or draw
-insertion order does not. Open apertures and displayed destruction state use their
-actual geometry. This is camera occlusion, not a second propagation simulation.
+An admitted effect samples its full authored appearance and keeps its placement, layer and blend semantics in the Pixi scene. For selected depth-enabled interactions such as the demonstrated Fireball beside a wall/open door, compare the registered effect samples with the relevant displayed surface geometry. This bounded camera-occlusion calculation does not replace ordinary scene order or become a second propagation simulation. Open apertures and destruction use displayed state, not future server state.
 
 An explosion's cosmetic pixels may extend over dark/unseen regions. Do not use
 visible tiles, absent cells or the complement of received hit cells as an alpha
@@ -1672,7 +1619,7 @@ obstacles, and visible dome artwork alone cannot decide mechanical applicability
 
 Recover existing finite material operations and their source masks rather than replacing all material work with tint. This includes the already authored maximum-RGB/luminance transfer, bark, wither, fracture wave, energy burn, rising bands, etched burn, flowing film and frost families. Additional entries are ported from the actual source union/formula, not inferred from spell names. The per-fragment order is declared:
 
-`source decode → source palette/material operation → receiving light → authored emission → displayed physical-depth composition → original blend`.
+`source decode → source palette/material operation → receiving light → authored emission → Pixi scene order (selected effect-depth comparison where needed) → original blend`.
 
 Original alpha/coverage is preserved unless that particular authored operation changes it. Equipment and body have their correct separate owned material modifiers. Shared immutable source pages do not cache another entity's material result. No camera-specific recolored image copies or CPU XYZ/color calculations are introduced.
 
@@ -1694,7 +1641,7 @@ I_receive = I_base + min(I_direct, max(0, directCeiling-I_base))
 
 The selected material's diffuse reflectance controls its direct response. The shadow/visibility term tests a light-to-receiver segment against the same current calibrated finite blocking faces and apertures used elsewhere; camera occlusion is a different ray/test. Derive the compact barrier list when its consumed displayed geometry/state changes. Pan/zoom does not rebuild it. Walls joined for a continuous receiving surface do not fill an aperture's shadow geometry.
 
-Geometry supplies normals for known planes/meshes; a second full-size normal texture is unnecessary there. Compact irregular effect depth can carry oct8 normals in BA. A cutout-only body/prop uses its declared billboard surface normal for cosmetic diffuse response, transformed with its camera/source basis; a depth-only bottom continuation does not suddenly turn its material normal into an upward-facing floor normal. The native baseline still comes from its displayed support/contact. This is explicitly flat-surface lighting for art without a normal companion, not a claim of anatomical or carved-surface relief. Existing supplied normals take precedence; absent normals do not trigger mandatory new artwork exports.
+Geometry supplies normals for known planes/meshes; a second full-size normal texture is unnecessary there. Compact irregular effect depth can carry oct8 normals in BA. A cutout-only body/prop uses its declared billboard surface normal for cosmetic diffuse response, transformed with its camera/source basis; its ground-support association does not turn that material normal into an upward-facing floor normal. The native baseline still comes from its displayed support/contact. This is explicitly flat-surface lighting for art without a normal companion, not a claim of anatomical or carved-surface relief. Existing supplied normals take precedence; absent normals do not trigger mandatory new artwork exports.
 
 The whole combined Fireball can receive light while emitting light. Decode the selected Factory appearance as radiance/opacity with its declared radiance scale, then apply the bounded source-defined diffuse contribution; no old separate smoke system is recovered merely to receive light. Emission is a separate authored timeline curve with position/color/intensity/range keys.
 
@@ -1734,7 +1681,7 @@ P_xy(t) = S_xy + V_xy*t
 P_h(t)  = S_h + V_h*t - 0.5*g*t*t
 ```
 
-Use the actually presented injured body's contact, including interrupted movement. Preserve the existing critical-flight styling, non-red/bone/vapor/frozen response and original release law; a longer dramatic flight does not increase deposited native amount. A shared custom mesh supplies world depth and the same particle/deposit sampling functions. Pixi ParticleContainer is optional for simple independent cosmetic sprites; it is not adopted as an extra adapter layer for particles requiring this custom analytic depth/material pipeline.
+Use the actually presented injured body's contact, including interrupted movement. Preserve the existing critical-flight styling, non-red/bone/vapor/frozen response and original release law; a longer dramatic flight does not increase deposited native amount. A shared Pixi mesh can evaluate those analytic particle/deposit functions and participate in the appropriate scene order. This is not a requirement to supply per-fragment world depth or a general collision/occlusion solver. Pixi ParticleContainer remains available for simple independent cosmetic sprites; do not introduce an extra adapter layer merely to rename the existing finite analytic path.
 
 The source's `particle_schedule`/`landed_fraction` is shared by air motion and deposition so a mark appears when its own particle arrives. Receiving deposits are keyed to actual support/face local UVs. Wall soot stays on the registered wall face; it does not tint an entire provider or use the floor's UVs.
 
@@ -1746,9 +1693,9 @@ Chunk shape, gutter and texel density are concrete tunable implementation choice
 
 ### Picking, grid, highlights and automatic cutaway
 
-Use the same displayed samples for world draw, source alpha hit testing, receiving-surface selection, highlight and visual light inputs. Native SDK facts decide eligibility. Rotating the camera changes projection and source pose, not whether a disclosed door exists.
+Start with Pixi pointer events and authored hit areas. Use displayed object transforms, selected frame/pose registration and actual support heights. Props/doors/actors expose their meaningful interactive area; floor targets use the projected diamond or authored top/tread polygon. These hits identify the displayed object/actor/support; existing SDK facts and previews decide eligibility and legality. Decorative shadows/effects must not capture commands.
 
-Floor picking intersects actual admitted receiving surfaces and chooses the visible exposed valid support. Source alpha picking handles props/doors; keep the authored meaningful hit region distinct from decorative canopy overhang or a coarse collision cell. Use existing CPU source masks/compact geometry where available; do not read the entire framebuffer on each mouse move.
+Do not require a separate CPU source-mask picker, a mask copy of every image, or GPU ID/depth readback for ordinary hover/click. Exact alpha testing is optional only after a demonstrated selection failure with the authored hit areas; document that case before extending the mechanism. RenderLayer ordering is not a 3D picker: verify intended target precedence where logical parenting differs from drawing. Camera rotation changes projection/view bank, not which disclosed doors exist. Keep targets behind automatically faded covering walls reachable.
 
 Grid, movement path, AoE and impact feedback lie on the selected receiving top/tread faces. Their tie order is above ground appearance and below supported bodies, walls and props. They are not a fullscreen grid overlay or an unoccluded green polygon. Target previews use the native targeting/choice contract and preview facts; the renderer does not recompute a different path/area algorithm.
 
@@ -1774,7 +1721,7 @@ remaining consumers. The assembly-authoring connection is complete.
 | G17 selected stairs | Existing three support offsets, twelve source contacts and new companions remain authoritative. Preserve top/foot joins and authored enclosing returns. No missing tread-export task or timber substitution. |
 | Stone/earth/wood floor tops and skirts; G12/G13 cliffs and returns | Delivered geometry/normal/support metadata replaces the old missing-calibration tasks. Consume real support elevations, skirt/face registration and complete enclosure. Wall-corner and cliff-corner maps remain separate. |
 | Existing animated doors and destruction banks | Preserve existing RG16LE companions and their decoder where selected; consume new registered RG16BE/normal companions with their own byte meanings. Six generated indoor doors now carry the physical mount/camera/member data from §6.1; shared-renderer placement must consume it and still requires visual acceptance. |
-| Chest B1, plain table, covered table and other props | New companions are installed where supplied. Original pivots remain per-source: chest B1 `(192,271.36)`, plain table `(192,272)`, covered table `(192,204.5)`. Consume geometry plus role/support masks; unsupported cutout-only art uses the explicit same-support rule, not another object's pivot. |
+| Chest B1, plain table, covered table and other props | New companions are installed where supplied. Original pivots remain per-source: chest B1 `(192,271.36)`, plain table `(192,272)`, covered table `(192,204.5)`. Consume geometry plus role/support masks; cutout-only art uses ordinary own-support layer precedence, not another object's pivot. |
 | Fractional timber flight | Delivered mount/tread/landing correction is already connected to typed library metadata (§6.1); consume it. It remains library-only. No new native stair binding or change to G17. |
 | `world.residue_wall_faces` | Retain as deposit UV/source-face mappings on their corresponding physical receiving faces. These are neither full solid colliders nor a new material registry. |
 | `assets.water` and static companion references | Water mask/normal/ripple registrations and static `geometry_region`/sampling associations are restored. Implement their consumers; do not repeat metadata restoration or request new exports. |
@@ -1972,8 +1919,9 @@ material operators. Implement those consumers using their existing records.
 `StudioActorLayer`/`RigLayer`; implement its consumer, not another authoring extension
 or parallel hand/glow material type or preset store.
 Production sampling derives controls from the authored appearance/condition/action
-owners and consumes companions once. Clean-body coverage supplies physical
-selection/outline masks; ground shadows retain their receiving support independently
+owners and consumes companions once. Clean-body coverage supplies visual outline
+and material masks; ordinary interaction uses Pixi authored hit areas, without
+mandatory per-pixel selection. Ground shadows retain their receiving support independently
 of airborne body/effect colour. These are required consumer connections before
 calling the character animation path integrated, not reasons to repeat asset intake.
 
@@ -2024,7 +1972,7 @@ Missing required rig contexts stay explicit and use the existing canonical seman
 
 ### 7.5 Environment and item data support
 
-The read-only environment inspector exposes the selected source-compatible assembly; owner versus boundary edge; physical versus bank pose; committed support/base height; per-pose source frames/pivots; sample times; selection/aperture/depth/normal registration; separate parent/insert/leaf; release/state-change/clearance frames; destruction-without-attachment variants; passage points; and authored stair/cliff contacts. Preview actual transitions with actors on both sides and four cameras. Use the same derived physical data as production drawing, lighting and picking. This inspects production visual/environment data; it neither rewrites NeuroMapEditor nor implicitly adds stacked gameplay supports to the backend.
+The read-only environment inspector exposes the selected source-compatible assembly; owner versus boundary edge; physical versus bank pose; committed support/base height; per-pose source frames/pivots; sample times; selection/aperture/depth/normal registration; separate parent/insert/leaf; release/state-change/clearance frames; destruction-without-attachment variants; passage points; and authored stair/cliff contacts. Preview actual transitions with actors on both sides and four cameras. Use the same displayed state and source registration as production. Drawing uses scene order, lighting uses its applicable geometry, and pointer interaction uses authored hit areas; these consumers do not require one per-pixel algorithm. This inspects production visual/environment data; it neither rewrites NeuroMapEditor nor implicitly adds stacked gameplay supports to the backend.
 
 The read-only item inspector displays existing appearance, attachment and material sources. It compares held, floor and re-equipped presentation for the same owned item, including coatings/enchantments. Native item rules/statistics remain read-only. Shared recipes, per-item effects and source art are distinct; an item material edit cannot mutate an unrelated body or another item's cached appearance.
 
@@ -2185,7 +2133,7 @@ No blanket geometry-case exception permits fake gameplay records. Registration d
 
 ### 8.3 Hierarchical channel timeline, previews and clocks
 
-Recover the animator workspace: expandable channel list aligned with shared ruler, clips/curves/markers, playhead, loop range and selected-source inspector beside the production viewport. The timeline is a derived view of actual compiled occurrences and canonical authored fields, not another executable animation format.
+Recover NeuroClient’s animator visual treatment: dark preview beds, source-label panes, restrained channel colours, expandable real source layers, thumbnails, shared ruler and playhead. The map occupies the entire upper workspace; the timeline stays below. Inspector, received events and combat log open on demand over the map without resizing or recentering it. Do not reserve a permanent inspector column. Asset loading/editing panels, clip editing and browser save controls are excluded; authored JSON is edited externally. The timeline is a derived view of actual compiled occurrences and canonical authored fields, not another executable animation format.
 
 | Channel group | Required visible content |
 |---|---|
@@ -2200,7 +2148,9 @@ Group by actual occurrence, owner and cause. Repeated A/B/A applications have di
 
 **Sprite-backed clips show actual frame thumbnails.** Recover the existing actor-layer and projectile-phase strip capability. Thumbnails use the selected source clip/phase/facing and current resolved palette/material, preserving full-cell registration. Their positions correspond to samples on that lane's actual source-to-presentation time mapping. Selecting a sample reveals source frame/sample time and resolved time. The inspector can compare the original layer with the resolved composition. Empty source intervals, missing resources and intentionally hidden diagnostic layers are distinct states.
 
-Thumbnail generation uses production sampling and the same texture sources/material functions. It does not decode every asset, create a second animation scheduler or cache full candidate worlds. Draw the visible rows/samples and update their static thumbnails when selection, revision, facing or layout changes; moving the playhead alone does not rebuild every strip. Sample density follows visible lane space/zoom, not a project-wide count copied from the old UI. For procedural/material channels without source pictures, display their actual supported curves/parameters and a production-sampled preview where useful, not fabricated sprites pretending to be source frames.
+Thumbnail generation uses production sampling, TextureSources and material functions with separate preview display handles and mutable material inputs. Cache GPU-resident previews for demanded visible rows/samples and show them in the same application canvas's clipped timeline viewport. Do not reparent or mutate live scene objects, synchronously extract/readPixels for routine thumbnails, create a separate WebGL context per lane or add another animation clock. Selection/source/material/view changes invalidate affected samples; playhead movement alone does not rebuild every strip. Shader/tint/particle channels show their actual sampled result on the relevant source, with meaningful values/curves; empty colored bars are insufficient.
+
+Derive tracks from compiled metadata, not GPU prepared objects. Keep the selected operation's tracks visible before Play, during preparation, while paused and at its end. Divider resize updates layout/clipping in the scheduled frame without blanking the scene. The recording selector identifies actual existing scene/action variety; renamed duplicate scenes are not additional coverage. Record missing examples explicitly without starting a speculative capture campaign.
 
 Resolved seconds/milliseconds form the common ruler. Selected channels also expose source frames or uneven sample times, source FPS and effective playback rate. Measured render FPS is a separate diagnostic. Source-frame stepping follows the selected track's real sample boundaries; there is no fictitious global 24/30 FPS editor clock. Release/contact/commit/removal markers indicate whether their value is authored or derived from recorded causality.
 
@@ -2292,7 +2242,7 @@ Use the selected smooth icon bank and accepted portraits at exact existing conte
 - WASD/drag pan, cursor-anchored wheel zoom, Q/E rotation, optional G grid and fullscreen/window resize recover the useful existing browser behavior. Camera changes update transforms/culling rather than decoding or rebuilding the world.
 - Pointer focus and capture are explicit. Typing/searching/scrolling in a panel cannot move the camera or issue a world command. Focus loss releases Alt/Ctrl/drag state; a modal/Studio owns its input until closed.
 - Escape consumes the most local transient interaction: choices/context popup, targeting/approach, panel/pinned tooltip, then the application menu. Dismissal never falls through into a world command. User UI scale is adjustable independently of camera zoom through the shared layout; it changes neither world projection nor sprite proportions. No native-process restart or new browser menu framework is implied.
-- The presented-scene picker uses the same transforms, physical coverage and cutaway policy as drawing. It returns an admitted object/actor/support identity; it does not decide native action legality.
+- Pixi pointer interaction uses displayed transforms and authored object/support hit areas, with the current cutaway policy. It returns the displayed object/actor/support identity; native choices/preview decide legality. No general CPU alpha-mask picker or GPU ID readback is required; add precise silhouette testing only for a demonstrated need.
 - Contextual cursors use that same presented hit and current native preview: text selection, enabled UI/interaction, admitted attack/target, ordinary movement and unavailable action. Hovering does not issue a command or trigger a second authority query, and artwork alone cannot mark an action legal.
 - An explicitly offered native `next_positions` coordinate can use a neutral target handle where no terrain/object has been disclosed. This does not create an observed tile, occupant, light state, name or hidden elevation. Received supports use real geometry; a protocol plane coordinate denotes that selection plane, not an invented hidden floor. A scene-only picker must not make such an admitted positional option unreachable.
 - Hover outlines the actual visible silhouette rather than padded image bounds. Committing a spending gesture clears targeting highlights; they do not remain over the whole attack animation.
@@ -2388,16 +2338,20 @@ Use the actual app, recorded events and real pointer/keyboard actions. These cas
 | Encounter finish | Terminal received during queued final damage/death waits for its presented completion. Compact result uses only native meaning; final scene/log remain inspectable and spending is disabled. No fabricated team result, restart API or statistics service. |
 | Frame-time display | The toggleable real-play FPS/frame-time counter measures the same scene while panning/casting; it needs no alternate render path. |
 
-Implement a compact toggleable FPS/frame-time display during actual play: visibility is the player's choice, but providing it is required. Use actual browser timings from the shared loop, not Pygame constants or a diagnostic-only renderer. The same instrumentation measures cold/warm startup, first/repeat interactions, camera movement and combined effects, separating native/network, browser reduction, resource preparation, compiler/sample and GPU work. No unspecified startup target, guessed memory quota, repeated full-suite ritual or prerecorded video substitutes for actual responsiveness and complete functionality.
+Show a compact FPS/frame-time counter at the top right of the map by default in both play and Studio; the player may hide it. Use actual browser timings from the shared loop, not Pygame constants or a diagnostic-only renderer. The same instrumentation measures cold/warm startup, first/repeat interactions, camera movement and combined effects, separating native/network, browser reduction, resource preparation, compiler/sample and GPU work. No unspecified startup target, guessed memory quota, repeated full-suite ritual or prerecorded video substitutes for actual responsiveness and complete functionality.
 
 ## 10. Implementation sequence with concrete outputs
+
+**Next work:** after this plan update and review, follow [renderer plan v2 §14](/home/tommaso/Dev/NDClient/agent_docs/NDCLIENT_PIXI_RENDERER_PLAN_2026-10-10_v2.md#14-implementation-order) for the rendering repair within N1–N3, then continue the full scope below. Retain working reduction/compilation/source functions; do not rewrite the backend or build another demo. Native Pixi interaction/hit areas are the default, not a new CPU picker.
+
+Use one application-owned frame loop. Paused unchanged views need no busy redraw; camera/sample/resource/layout changes request a frame. Keep existing decoded/uploaded source reuse, incremental worker decoding and uploads; explicitly prepare shader companion textures. Pixi Prepare does not compile arbitrary shaders: first-use compilation belongs to the actual needed Pixi draw path and is measured separately. Do not do synchronous readback, bulk decode or repeated scene-wide preparation in the frame loop. The detailed renderer chapter defines readiness, previews and cache invalidation without arbitrary quotas.
 
 These packages describe dependencies and completed functionality, not serial permission gates. Independent UI/source-inspection work can proceed while geometry consumers are implemented. Use the complete production types/runtime from the beginning; an available family can run before another is finished without creating a second reduced release or demo renderer. The whole scope stays visible in the coverage matrix.
 
 | Package | Concrete output | Actual dependency and completion evidence |
 |---|---|---|
 | N0 — source boundary and setup (partial: repository/artwork/core authoring prepared) | Existing source-only WSL repository; existing SDK imported; complete canonical export/type boundary; complete selected private installation | Copies and §6.1 assembly authoring complete; finish application integration. Real bootstrap/attachment/current operation/choice/receipt with configured CORS; source identities accounted for; clean source-only Git candidate. |
-| N1 — common world and resource foundation | One projection/registration/support geometry path, depth/material/composition path, resource owner, presented picker and cutaway | N0 source data. Physically valid matched-family scenes from existing registrations; all four views, high/low supports and original art sizes. This package cannot close on flat floors and Idle/Run. |
+| N1 — common world and resource foundation | One projection/registration/support model, persistent Pixi layer scene, selected materials/lights, resource owner, native pointer interaction and cutaway | N0 source data. Physically valid matched-family scenes from existing registrations; all four views, high/low supports and original art sizes. This package cannot close on flat floors and Idle/Run. |
 | N2 — complete event playback | One reducer/compiler/sampler, durable intake, retained lifetimes, independent absolute clock, atomic displayed frame/HUD/log | SDK types and ordinary source recipes; geometry integrates as available. Every current fact branch classified; recorded causal prefixes, resource delay/backlog/reload and subjective replay behave correctly. |
 | N3 — content and Studio | Every selected recipe/rig/environment/media binding supported; complete read-only layered timeline with source time and previews; full source/track inspection and manual-JSON reload | Shared N1/N2 runtime and canonical sources. Selected-identity matrix and actual source-edit/reload/source-semantic cases, including fixed rigs, item ownership and rare condition/removal paths. |
 | N4 — playable encounter and complete UI | Fighter/Sorcerer dungeon and all current click/target/choice/inventory/log/party/reaction workflows | Native choices and displayed projection. Real browser use across exploration and combat; no fake controls or automatic wrong weapon/resource spending. |
@@ -2434,10 +2388,10 @@ cannot be counted as delivered. The same rule applies to review findings.
 ### N1 tasks and ownership
 
 1. Adapt source camera controls with one calibrated projection and inverse. Apply owner contact, pose/bank offset, source pivot/crop and elevation exactly once. Implement current world geometry from registered source data before judging draw order.
-2. Register support, wall, aperture, stair/cliff and prop surfaces in the common draw/light/pick geometry. Use the explicit support-aware cutout policy for art without detailed geometry. Recover compatible assemblies/adjacency; do not introduce new arbitrary scenes to conceal a mismatch.
-3. Build finite material operators, batching and solid/transparent composition. Integrate the accepted Fireball v4 math and other selected representations into this renderer, not a second proof app. Couple all planes and source interpretation to one resource owner.
+2. Connect support, wall, aperture, stair/cliff and prop registrations to ordinary Pixi scene layers and authored contact order. Keep geometry for lighting and selected spell operators. Own-support precedence is a layer relationship, not fragment-depth continuation. Recover compatible assemblies/adjacency.
+3. Connect finite material operators and compatible Pixi batching without a generic opaque/transparent solver. Integrate the accepted Fireball registration/light math and selected bounded wall interactions into this same renderer. Keep raw companions and source interpretation in the shared resource owner.
 4. Produce the valid in-app foundation set described in §11. Compare the recovered source registrations/order and available prior evidence for those same assets. Archived Pygame remains read-only; fixing its imports or restoring an executable Pygame app is not a prerequisite.
-5. Use the displayed scene for picking and automatic wall cutaway. Camera intent, resources, draw state, light and picker publish together. Ordinary pan/zoom changes transforms rather than rebuilding/decompressing the scene.
+5. Connect Pixi pointer events/authored hit areas and automatic wall cutaway to the displayed scene. Camera intent, resources, draw state, light and picker publish together. Ordinary pan/zoom changes transforms rather than rebuilding/decompressing the scene.
 
 ### N2 tasks and ownership
 
@@ -2490,7 +2444,7 @@ The user reviews these in the running application. All cases use source-compatib
 | Attack and trajectory | Shortbow and modular ranged weapons; hand/weapon release contact, fixed-rig accent, moving target, elevated diagonal shot, all camera banks; residual rotation only where authored/allowed. |
 | Volumes against surfaces | Selected Factory Fireball, Sunburst, Fog/Sleep and Globe with near/far sides, finite/L/angled walls, arch/window opening, upper receiver and overlapping bodies. Preserve source silhouettes; no tile-grid sawtooth or blast-centre hard shadow hack. |
 | Effect depth and outcomes | Recorded wall versus open doorway, displayed break, full cosmetic plume at a dark boundary and existing suppression/cancellation. Actual damage/stage/lifetime follows received facts; unavailable provider/shell data does not produce an invented impact. |
-| Transparency/light | Two intersecting transparent effects with a body/wall, grazing alpha edges, stable tie order, combined radiance/transmittance; whole Fireball receives light and emits independently through its authored envelope. |
+| Transparency/light | Actual authored source layers/blends and selected Fireball/wall interaction retain their silhouettes and stable order; whole Fireball receives light and emits through its authored envelope. Record unresolved exceptional transparent crossings for discussion, without making a general solver a prerequisite. |
 | Blood/deposits/water | Concurrent impacts, fragments/vapor, airborne-to-ground continuity, wall/raised receiver, old versus fresh deposits, removal/seek/reobserve and existing liquid response without duplicate stain systems. |
 | Camera/sampling | Pan/zoom/resize/DPR/rotate while idle, casting and reloading source data; no skew/non-uniform body stretching, unstable pixel scale, incorrect RGB data interpretation or alpha fringes. |
 | Detailed condition/body phases | Finite application, loop crossfade and early removal, frozen pose, live copies, absence echo, historical trails and independently lasting feedback preserve source ages/owners. Head/helmet/crown/wings and owner-only appearance changes keep the current clip/frame without decorative hit targets. |
@@ -2525,34 +2479,202 @@ Fix actual repeated decoding/upload, geometry rebuilds, global dirty propagation
 
 ## 12. Delivery status and acceptance language
 
-Current checkpoint, committed in NDClient at `df5397e` on 10 October: **asset copying and
-tracked authoring preparation, including the reviewed assembly connection, are
-complete (§6.1).** The earlier premature closure was corrected by connecting the
-actual values, not by treating source records as runtime data. **N0 remains
-partial** for application setup/integration. Fresh Git repository, ignored organized
-media, full selected Smallscale library, Fantasy environment/metadata, selected
-UI assets, ordinary VFX, Factory replacements and tracked core authoring are
-prepared. Initial ID/path/replacement linkage and its passive schema are done.
-Environment, item/palette and UI section adoption is now complete, as are the
-registered Goblin/Demon/animal authoring connections in §7.4. UI artwork retains
-the two explicit, non-blocking artwork follow-ups in §5.7 (Skeleton Warrior
-portrait and dedicated Unarmed icon). The assembler resolves 126,959 media references. Environment companion adoption
-in §6.1 includes both companions and the completed door/timber typed mount connection. Fireball’s accepted demo world-light curve is now authored
-on its existing impact storage; only its shared runtime consumer remains.
-Other spell light curves are deferred until Fireball is tested in that shared
-renderer, per the user's decision; no further emitter authoring is required to
-close this pre-phase.
-Remaining: connect release envelope/defaults, dependency indexing and TS types/loading, SDK/scaffold and application consumers;
-N1–N5 remain planned. Existing backend/SDK/source and Fireball proof capabilities
-are reference inputs, not evidence that the recreated application works.
+**Revision 2 status:** the renderer replacement is planned, not implemented. Ordinary fragment-depth/peeling visibility, GPU ID picking and synchronous preview extraction in the current code are superseded mechanisms, not accepted foundations. The [a–e investigation](/home/tommaso/Dev/NDClient/agent_docs/NDCLIENT_REVIEW_COMPLAINTS_A_TO_E_2026-10-10.md) records the current scale/artifact/loading/interaction complaints and measurement limits. No runtime checks were performed for this documentation revision.
 
-**Uncertainties and blockers:** keep each new issue beside its existing capability
-or in this section with: affected requirement/source; observed contradiction;
-what remains incomplete; decision needed; and the independent task being continued.
-Do not create another tracker or speculative repair plan. The accepted source
-limits in §0.3 and deferred light/art work above already have a disposition; they
-are not requests for new decisions or reasons to stop N0. No implementation is
-started by this documentation update.
+The implementation observations below predate this correction. They preserve what was connected/tested then, not proof of current visual or performance acceptance and not instructions to retain the rejected compositor. Preserve useful source/reduction/material work; use the active renderer chapter for its replacement. Reviewer completion does not certify the running app.
+
+Preparation remains complete at the committed `df5397e` baseline. No new artwork
+intake, backend implementation or SDK regeneration is part of current work.
+
+Current client implementation (10 October; uncommitted):
+
+- **N0 partial:** existing typed authoring release/index, demand loading, current
+  packaged SDK, worker intake/reduction, durable original-record journal and
+  displayed-position restoration are connected. Immutable metadata revisions,
+  per-session revision pinning and explicit authoring reload are connected. A
+  candidate is prepared through the same pipeline and published only after
+  success; failure preserves the current scene. Legacy URL-only recordings are
+  explicitly unpinned. Broader integration acceptance remains open.
+- **N1 partial:** calibrated projection/registration, ray-depth and normals,
+  support-aware floor composition, palette/embedded-character controls, source
+  resources, actual Fireball emitter and GPU picking are connected. Ordinary
+  terrain, stairs/cliff source selection and native route/AoE feedback have
+  consumers. Full matched assembly placement, stair support/light/pick integration,
+  and remaining geometry consumers remain open. Automatic wall cutaway and
+  pick-through share calibrated depth against visible receiving support; doors
+  retain their own direct interaction identity. Transparent
+  composition now partitions occupied screen regions, orders disjoint depth
+  intervals directly and peels crossing contributors locally. Compatible repeated
+  static floors now use GPU instancing through the same material/depth shader.
+  Actual grid-on scene output matches individual draws byte-for-byte in all four
+  cameras; broader batching and measured performance remain open. This is not N1 acceptance.
+- **N2 partial:** shared native reduction, event-time commits, walking/reaction
+  branches, attack, sprite-spell and ordinary anchored-spell tracks, damage feedback, item/actor observation,
+  retained idle/flame clocks, authored door/destruction tracks and saved partial
+  playback are connected. Condition application/hold/release, suppression, retained
+  owner dates and source layers now use a shared absolute sampler and Studio
+  inspection channels. Owned equipment/ground appearances use their source
+  palettes, coatings, suppression, glints and emission. Item attachment phases
+  retain their effect identity across held/carried/floor placement and animated
+  environment bodies. These share source sampling and Studio channels.
+  Native class/item body actions use authored release, body/equipment and finite
+  media clocks. Healing numbers use the received actual amount; damage flashes
+  use their authored frame/palette/duration and the shared body material path.
+  Broader body-material/copy/response consumers, remaining movement
+  and recipe families, all reaction outcomes and full historical-clock acceptance
+  remain open. No client-owned gameplay simulation was added.
+- **N3/N4 partial:** Studio reads real SDK recordings and shows production tracks,
+  source-frame thumbnails and source inspection. Live UI has the four bar groups,
+  native choices/variants/ordered targets, initial inventory/details/reactions,
+  party/initiative, exact native combat-log content and native preview input.
+  Required content families, complete Studio diagnostics and end-to-end
+  interaction workflows still need implementation and acceptance. N5 is pending.
+
+Evidence so far: actual unchanged-server recordings of crypt movement, ranged
+attacks and a premade Sorcerer's Fireball; native Python reducer-prefix comparison;
+focused movement/rewind/retained-scene and admission checks. Headless browser
+checks use software WebGL and are not hardware performance evidence. Asset
+registration and UI requirements in §§11/13/14 remain the acceptance denominator.
+The actual crypt potion-of-Haste recording additionally covers retained condition
+formation and movement. Focused type/reduction/playback checks pass. Continuous
+Haste playback stalled under headless software WebGL; a paused sample loaded,
+but smooth playback is unresolved. Expired condition media retire on prepared
+scene replacement; an idle prepared scene still retains their resource leases.
+An actual Handaxe drop verifies owned identity, inventory removal and the authored
+ground row/pivot/scale in all four cameras. Studio thumbnail readbacks now stop
+during playback and reuse one target set; opaque submissions skip known
+translucency and partition caching uses the same rounded bounds as its consumer.
+The same-frame grid instability was traced to derivatives after fragment discard
+and corrected before accepting floor instancing (2,392 → 1,863 draw submissions
+in three views; 2,600 → 2,025 in the fourth). This is not a hardware FPS result.
+Native jump, flight/connector and forced-motion consumers are being connected;
+actual jump and Dash records now cover continuous body/ground contact separation
+and finite movement tails across subsequent native operations. Tails preserve
+the original source date/contact and expire during idle without extending the
+movement join. The actual Dash browser sample loads with 13 channels and no
+reported browser error. Flight/window/forced-motion visual cases, nested forced
+movement and support receivers across elevation changes remain open.
+Retained spatial cloud/area source windows, shared maintained-media sampling
+and Studio channels are connected for their current supported placements.
+Actual Fog Cloud creation/movement/concentration-removal records pass formation,
+retention, camera-plane registration, removal fade and no-resurrection checks.
+The field commits at its authored formation anchor and does not restart on a
+later movement command. Actual Healing Word/Bless/Burning Hands records pass
+recipient state timing, native numeric outcomes and selected source-media
+checks; Burning Hands loads in the production Studio renderer with depth/normal
+planes. Arc/directed/child-weapon delivery, finite material envelopes and
+transport-specific attachments remain explicit incomplete spell consumers.
+Actual Action Surge, Second Wind and Haste-potion records pass shared action
+body/media/equipment timing and native healing checks. The selected potion
+source has a missing strip.effect2.special1.phase1 reference; it remains an
+explicit authoring gap, with no fabricated replacement.
+Explicit JSON reload was exercised in the browser: modified movement timing was
+published, a failing candidate retained the prior usable scene, and a concurrent
+camera change retained the displayed clock. The temporary source edit was restored.
+Native cell modules and straight wall modules now use the authored banks and
+original footprint/height data, including witnessed per-cell retirement. Actual
+Wall of Fire segment/removal records pass four-camera source/depth/normal checks.
+Whole-ring media are omitted with an explicit issue when only part of the native
+ring footprint is disclosed; no false complete ring or tile-shaped image clipping
+is added. Ring segments, safe-side tint, wall assemblies, orbit/motes/recipient
+placement, suppression geometry and remaining response families remain open.
+
+Automatic cutaway passed actual crypt GPU/picking checks in all four cameras:
+covering wall samples fade over visible receiving support, the same samples
+yield floor picks, and doors remain directly selectable. Its receiving pass is
+cached per changed scene/camera (49 additional submissions during preparation,
+none in the unchanged frame); this is software-WebGL correctness evidence.
+Inventory uses native visual-loadout slots and exact discovered item commands.
+Actual SDK and live control checks cover equip/unequip/reequip, Handaxe drop and
+pickup, potion consumption, native HP/charge/bonus-action updates, and reaction
+preference changes. These establish those workflows, not full N4 acceptance.
+Explicit melee/ranged preference and native allocation/undisclosed-support
+preview consumers are connected; broader multi-target interaction acceptance
+remains open. The full live crypt browser is slow under software WebGL; native
+Fighter-to-Sorcerer turn commands work, but hardware throughput is not established.
+
+Further connected client slices (still partial N2–N4):
+
+- Periodic result/life/death-save feedback uses existing causal dates and shared
+  damage/healing/body consumers. Received pre-result state plus actual sampled
+  motion contacts supplies later nested feedback; a delayed damage-owned body
+  response retains its previous presented pose until its authored start. Five
+  existing native suites pass. Exact later-step injury and delayed lethal Fire
+  Bolt captures are not available and those scenarios remain unverified.
+- Blood uses native release/contribution records, authored material templates,
+  analytic GPU flight/vapor and cached receiving fields on actual floor/stair
+  geometry. Burning Hands passes air/settled/rewind browser checks with no shader
+  errors; settled fields stop redrawing. All-camera envelopes and native amounts
+  pass focused tests. Other body-release material variants share this consumer but lack
+  equivalent native visual evidence; soot and water/ice transitions remain open.
+- Per-actor shortcut pinning, ability filters and nonspending world inspection
+  are connected. Native-record browser checks cover actor changes, pin changes,
+  displayed door updates and pickup invalidation. Full rendered right-click and
+  broader interaction acceptance remain open. Live Fighter → Sorcerer → Fighter
+  native turn commands work; software WebGL remains unsuitable for claiming
+  hardware throughput.
+- Studio now recovers NeuroClient track-label/preview-bed styling around its
+  actual production channels, with horizontal zoom, source-layer expansion,
+  lazy read-only fields, subjective received-event ancestry and the shared native
+  combat log. No objective store, fake events, editing or asset-loading workspace
+  was added. Review corrections cover visible-only thumbnail allocation, resize
+  refresh and keyboard focus. At 960×720, pointer checks confirm the full upper
+  map keeps its width when overlays open; layer expansion, timeline zoom/scrub,
+  event selection and log rows work. A following software-WebGL screenshot
+  capture timed out; this does not establish native-GPU performance acceptance.
+  Full typed canonical-source inspectors and remaining diagnostic coverage remain
+  unfinished; this is not complete N3 acceptance.
+
+Specific unresolved inputs/limitations (continue independent specified work):
+
+- Finite body-material shader connection: the accepted reference applies these
+  effects after composing current body and gear (`game_obsolete/animation_draw.py`,
+  finite-material stage). Wither uses the composite alpha>180 silhouette bounds;
+  edge treatments read its neighboring alpha, and source-over treatments may
+  change alpha. Current `TREAT_BODY` runs separately on modular layers. Merely
+  sharing bounds does not make nonlinear colour ramps commute with blending.
+  Keep the authored timing helper and explicit unsupported-consumer diagnostic;
+  do not claim a per-layer approximation is equivalent. Exact connection needs
+  a combined body/gear colour-and-mask input (excluding separate shadow/accent)
+  that preserves existing world depth/lighting/ownership. Discuss that renderer
+  connection before extending it; continue other specified consumers meanwhile.
+  The standalone authored-envelope sampler is tested. The ordinary resource
+  worker now accepts the actual WebP colour donors as well as PNG; browser
+  decode/reuse checks passed. Numeric depth packets keep their existing path.
+  No unfinished material track/renderer integration remains wired into play.
+- Normal combat-log entries come from native `PlayerNode.combat_log`, so their
+  event and ancestry attribution is available. Game and Studio now share a
+  displayed-log projection using compiled event commits; ready child entries
+  appear until the exact native parent summary is complete and replaces them.
+  Rewind reconstructs that same visible prefix. Typed roll details show received
+  dice, totals, modifiers and adjustments without recalculation. Only standalone
+  `CombatLogAppend` records lack finer event attribution and remain at their
+  declared operation boundary. Do not infer matches or change the backend.
+  Original-packet tests cover Shortbow, Second Wind and Burning Hands timing,
+  grouping, direct prefix equality and backward seek; the canonical reducer is
+  unchanged. Shared roll-detail browser checks cover native dice/modifiers,
+  copying and participant-filter reset on rewind.
+- Ordinary Fantasy A1/C1/C3/C5 doors already consume their authored leaf/frame
+  registration. The remaining assembly gap concerns six indoor variants:
+  their banks already include frame and leaf, but compatible headers/partitions
+  lack a declared native-occurrence visual assignment. Current generic wall
+  selection is D1/C1; for example, Elegant requires D5/D8 or F5/F8. Native object
+  identity/material/support data does not select between those visual families.
+  Supplier stencil offsets are asset-relative registration, not permission to
+  shift gameplay supports or manufacture adjacent walls/floors. Preserve this
+  noncritical authoring/scenario decision for discussion; do not add another
+  frame, invent bindings or change the backend. Continue other specified work.
+- Partial staircase disclosure remains accepted/deferred; it is not a backend task.
+  Other light-emitter curves remain deferred by the user until shared Fireball
+  testing. Skeleton Warrior portrait and dedicated Unarmed art remain the two
+  previously accepted nonblocking artwork follow-ups.
+
+Review corrections are being implemented in the existing owners: earliest-only
+entry observation staging; canceled attack guard; trap-state invalidation; native
+creature accent enable/opacity/tint; continuous displayed cosmetic clock; retained
+predecessor reuse; resource unbinding before destruction. Their presence does not
+close the broader capability or whole-game acceptance. Record newly discovered
+source contradictions here; do not substitute local perfection for N0–N5 delivery.
 
 During implementation, keep evidence beside the corresponding row here or in the existing machine coverage report: source owner, implemented consumer, native/visual/interaction case, observed result and any exact remaining defect. Do not create a competing plan or replace whole-product status with the latest locally fixed screenshot. Existing catalog identifiers remain the coverage denominator.
 
@@ -2569,15 +2691,15 @@ N3. Each capability first runs in the shared real-event path as its dependencies
 | ID / capability | Current implementation responsibility | Decisive case / closure stage |
 |---|---|---|
 | R01 Camera/projection | Adapt existing camera/math; explicit world, support, source, camera and screen spaces; high-DPI and inverse picking | Four views of elevated contact, pointer zoom and negative coordinates; N1 |
-| R02 Ground/world | Retained support/face geometry with current animated terrain banks; grid and feedback participate in physical order | Slopes, upper/lower floors, floor holes and grid below actors/walls; N1/N3 |
+| R02 Ground/world | Retained support/face geometry with current animated terrain banks; grid and feedback use own-support layers and camera-aware scene order | Slopes, upper/lower floors, floor holes and grid below actors/walls; N1/N3 |
 | R03 Boundaries/devices | Registered wall/door/window/prop/trap state and aperture geometry; displayed state commits update draw/pick/light together | Open, break, parent/insert destruction and threshold from four views; N1/N3 |
 | R04 Body rigs | Shared modular/fixed clip sampler and layer operations; source frames, original accents, sockets, explicit scales | Every one of 44 rigs mapped; native wing flight, wolf 200%, prone death without standing; N3 |
 | R05 Equipment/floor items | Existing item identity, attachment and material data; same owned appearance across locations | Coated/enhanced item equipped, dropped, looted and re-equipped; no ghost floor copy; N3 |
 | R06 Palette/material | Finite shared GPU operations over isolated masks and authored donor textures; explicit override wins | Hand/Magic/Effect/external-VFX correspondence and item/body independence; N1/N3 |
 | R07 Media/resources | Existing source registration, compact derived delivery specified in §6, shared source/region views and bounded readiness | Coupled crop/pivot/mask alignment, first-use, four-camera switching and unload; N0/N1/N3 |
 | R08 Projectiles/beams | Absolute path/socket sampling, bank plus permitted residual alignment, release/arrival and child application timing | Oblique elevated Fireball/rays, beam source continuity, Magic Missile A/B/A, interception; N2/N3 |
-| R09 Areas/volumes | Compact registered geometry, received ownership/suppression, support/aperture and transparent composition; no floor-visibility stencil | Continuous Fireball/Sunburst/Sleep, inside/outside actors, received suppression and elevated surfaces; N1/N3 |
-| R10 Layer/blend ordering | Shared physical composition with stable ties, sibling order, normal/add/screen and complementary samples | Two transparent volumes and a body, checkerboard alpha, near/far crossing; N1/N3 |
+| R09 Areas/volumes | Preserve appearance, received ownership/suppression and source layers; use registered depth/normals for selected spell/light interactions, without a floor-visibility stencil or general transparency solver | Continuous Fireball/Sunburst/Sleep, inside/outside actors, received suppression and elevated surfaces; N1/N3 |
+| R10 Layer/blend ordering | Pixi layers, support/contact ordering, stable authored siblings and normal/add/screen; preserve actual source bands | Flat/raised supports, bodies/shadows and selected Fireball/wall case; record unresolved exceptional crossings rather than requiring a general solver; N1/N3 |
 | R11 Directed materials | Finite authored ribbon/mesh/plasma operators and donor sampling | Existing noise ribbon, darkness mesh and plasma trail with moved/raised endpoints; N3 |
 | R12 Constructions | Source-authored paths/sections/rings/domes and formation/retirement commits | All installed wall types, arbitrary permitted angle, fire hot/safe side and dome destruction; N3 |
 | R13 Particles/trails/intake | Analytic seeded tracks and bounded shared geometry; item/weapon/body attachment follows presented sockets | Blood/bone/vapor, critical/multiple victims, weapon trail, orbit/intake and backwards seek; N3 |
@@ -2588,7 +2710,7 @@ N3. Each capability first runs in the shared real-event path as its dependencies
 | R18 Deposits/ground/water | Native contribution ownership; receiver-local settled coverage and finite changing materials | Fresh/old stains, wall soot, raised floor, response/removal, witnessed break, rewind; N3 |
 | R19 Spatial contacts | Recorded entry/exit/activation/response facts resolve existing recipe primitives | Hot-side spread before feedback, ignition/extinguish already implemented, suppression; N3 |
 | R20 Temporal orchestration | One typed reduction/index, causal compiler, retained facts and absolute sampler; no animation-owned gameplay | Delayed resources, slow/pause, queued AI, reconnect/reload and historical scene/HUD/log agreement; N2 |
-| R21 Picking/highlights | Presented supports/physical masks and common transform/occlusion/cutaway policy | Known door/item set stable across cameras, click through cutaway, Alt, Ctrl attack; N1/N4 |
+| R21 Picking/highlights | Pixi pointer events, authored object/support hit areas and displayed transform/cutaway policy | Known door/item set stable across cameras, click through cutaway, Alt, Ctrl attack; N1/N4 |
 | R22 Player UI | Recovered/adapted Pixi widgets and DOM text panels on shared displayed views and exact SDK gestures | Complete interaction matrix, four bar blocks, multi-target/variants, inventory, copied exact log; N4 |
 | R23 Studio/capture/replay | Same production runtime, actual SDK recordings, canonical source inspection/manual reload and optional capture | Load/seek/inspect actual spell/action/condition/rig/world case; manual JSON reload uses the same production compiler; N2/N3/N5 |
 
@@ -2616,11 +2738,11 @@ This table covers all 55 entries in the migration-only post-mortem ledger. Numbe
 | 01, 07, 21, 51 | Recover full spell/action/condition/fixed-rig Studio on current actual events, with every authored channel, frame previews and proper source/resolved timing | Complete read-only Studio stream/track/source inspection and inline field ledger, not colored bars or a JSON inspector |
 | 02, 03, 12 | Selectively recover working NeuroClient capabilities in a new clean repository; neither wholesale old architecture nor tiny rewrite that discards features | Named source-to-new-consumer mapping for camera, grid, HUD, inventory, timeline and inspectors |
 | 04, 15, 23 | Use checked Pixi APIs and finite data representations suited to the effects; Godot supplies offline data | Component decisions and actual shared-source/batch/material/resource implementation |
-| 05, 08, 30, 37, 45, 48, 49 | Use composition roles AND receiving supports/elevations AND physical depth, with authored faces/contacts; floors cannot cut feet, props or reactions | All layer/elevation scenarios in §11, arbitrary insertion order and four cameras, verified registrations |
-| 06, 16 | Shared physical geometry for depth/light/picking; native effective-light/disclosure data remains authoritative | Wall/arch/raised receiver, source-depth, receiving/emitting and hidden-provider cases |
+| 05, 08, 30, 37, 45, 48, 49 | Use Pixi layers, receiving supports/elevations and authored contacts; floors cannot cut feet, props or reactions. Depth is reserved for actual light/spell needs | All layer/elevation scenarios in §11, arbitrary insertion order and four cameras, verified registrations |
+| 06, 16 | Share displayed state/registration; use geometry for lighting/selected spells and authored hit areas for Pixi interaction. Native effective-light/disclosure data remains authoritative | Wall/arch/raised receiver, source-depth, receiving/emitting and hidden-provider cases |
 | 09 | Display cursor independent of native progress; every admitted event can animate | Pause/slow/queued-AI/backlog/reload cases with HUD/log/world at the same displayed time |
 | 10, 11 | Compact GPU representation for all effects including blood/ground, without Python pixel arrays or copied CPU algorithms | Combined effects and landing/deposit cases with attributed CPU/GPU/resource measurements |
-| 13, 25, 26, 27, 39 | One complete, source-grounded implementation specification and honest reviewer verdict | This file contains the actual decisions and feature coverage; no required companion chapters or inherited readiness claim |
+| 13, 25, 26, 27, 39 | One complete, source-grounded implementation specification and honest reviewer verdict | This file owns complete feature coverage and explicitly links the renderer v2 execution chapter; archived plans add no hidden requirements or readiness claim |
 | 14, 18, 19, 20 | Keep accepted Fireball v4 and bounded demo findings, real assets, source timing and independent receiving/emission | Shared production integration with walls, openings, reach and other effects; no claim that the earlier prototype proves the whole client |
 | 17 | Do not crop admitted isometric art with missing cells or a hard tile mask; physical camera depth is separate from gameplay reach | Dark frontier, nearby wall, open doorway and decorative-overhang cases without visibility-stencil cuts |
 | 22, 24, 53 | Repo/ignore rules, selected copies and core authoring linkage are complete; finish SDK/full release/application integration | Reuse installed folders and tracked authoring. No repeated Git creation or copy campaign; installed/consumer/inspection coverage stays distinct |
@@ -2633,7 +2755,7 @@ This table covers all 55 entries in the migration-only post-mortem ledger. Numbe
 | 44 | Review via running app | Reproducible launch plus navigable Studio cases; no forced export-video review workflow |
 | 46 | Correct projectile launch/alignment and fixed-rig layer meaning; no camera morphing | Real shortbow release socket, declared source bank, original goblin accent and four-camera path alignment |
 | 47, 48 | Correct camera/DPR/sampling and alpha conventions; preserve sprite proportions and edges | Smooth pan/resize/zoom with original scale, no chest halo or non-uniform transformation |
-| 50, 52, 54 | Honor stop/deletion boundaries | Planning does not inspect or recreate the deleted application; future implementation starts only when authorized |
+| 50, 52, 54 | Honor stop/deletion boundaries | Do not recreate a deleted application or override a future stop request; the current client implementation is already authorized to resume after this plan review |
 | 55 | Keep phase and evidence scope correct | Migration complaints above, previous-system parity below; no unsupported deleted-code diagnosis presented as fact |
 
 ### 14.2 Earlier-system parity requirements for the new client
@@ -2718,11 +2840,15 @@ After consolidating the plan, three reviewers and the primary agent compared it 
 | Old `ui/{SpellStudioPreview,ActionStudioPreview,conditionStudio/ConditionStudioPreview}.ts`, `ui/studio/{StudioScenarioCompiler,StudioEvidenceWorkspace,StudioPlayerReplayImport}.ts` | The wired legacy previews manufacture frame-shaped data; SDK assertion is not server provenance. Recover useful timeline/thumbnail/inspection/replay-import behavior, not those generators. §8.2.1 requires exact current host→SDK captures, offline replay and shared production consumers. |
 | `devtools/player_server_acceptance/{fixtures,run,http_run,http_performance,combat_http,python_player,crypt_player}.py`, `typescript_player.mjs`; `devtools/animation_review/{produce,capture}.py`; `devtools/export_world_authoring.py`; `dnd/player/recorded.py` | Existing real-host fixtures/drivers are usable capture foundations. Direct-engine reduction sequences and synthetic all-map authoring exports are not equivalent evidence. §8.2.1 distinguishes them and specifies client-side drivers over supported current configuration for missing recordings without a new transport, provenance service or mandatory benchmark ritual. |
 
-The wider scan also checked old camera/focus/viewport, grid/target feedback, static-board invalidation, modular rigs/equipment/anchors, conditions, recoloring, inventory/abilities/initiative, Studio lifecycle/transport/source coverage and connector/item details. Their applicable feature families already have owners in §§4–9 and R01–R23. The scan does **not** certify every legacy implementation as correct or suitable to copy. Old planar `worldDepth` bands/hash ties do not solve elevated physical composition; flat grid and latest-state picking are superseded. `connectorPresentation.ts` draws retained endpoint lines with interaction disabled, so it is not complete connector traversal. `itemDetails.ts` is a small presentation stub, not full inventory. Old maximum-target auto-submit, positive-only camera bounds, large portraits, opaque panels, actor classes/FSMs and captured previous-visibility closures must not override the current plan. Creation/lobby/directory products stay excluded.
+The wider scan also checked old camera/focus/viewport, grid/target feedback, static-board invalidation, modular rigs/equipment/anchors, conditions, recoloring, inventory/abilities/initiative, Studio lifecycle/transport/source coverage and connector/item details. Their applicable feature families already have owners in §§4–9 and R01–R23. The scan does **not** certify every legacy implementation as correct or suitable to copy. Recover the old persistent scene, ordinary layers and contact ordering, adding current authored support/elevation placement. These rules are not a claim to solve arbitrary intersections. Latest-state picking remains wrong when the displayed state is older; ordinary Pixi hit areas use displayed registration. `connectorPresentation.ts` draws retained endpoint lines with interaction disabled, so it is not complete connector traversal. `itemDetails.ts` is a small presentation stub, not full inventory. Old maximum-target auto-submit, positive-only camera bounds, large portraits, opaque panels, actor classes/FSMs and captured previous-visibility closures must not override the current plan. Creation/lobby/directory products stay excluded.
 
 Depth/normal material planes, physical VFX/wall composition and receiving/emitting light remain new capabilities specified in §§5–7; this parity scan does not demote them to whatever the older renderers could do. Likewise, source identity/consumer coverage and server-recorded behavioral cases are complementary: existing actual-server captures cover a subset, not every installed spell, condition, rig and environment state. N2/N3 extend those cases through the real server as their consumers land. No claim of an already-complete capture corpus is made.
 
 ## 15. Review responsibilities and recorded disposition
+
+### Renderer revision 2 — 10 October
+
+Anti-slop and anti-OOP/ECS reviewers checked this version and the linked renderer chapter. Their corrections to optional silhouette picking, specialized depth consumers, crossing cases and chapter ownership are incorporated. The change preserves full client capabilities while removing universal physical-depth visibility, peeling, numerical own-floor continuation and mandatory custom CPU mask picking. Native Pixi scene layers and authored hit areas are the starting point; specific supplied depth/normal consumers remain. Older review dispositions below are historical and do not override this correction. Resume the agreed implementation after this plan update and review; no renewed authorization gate is added.
 
 ### 10 October scope cleanup
 
@@ -2761,7 +2887,7 @@ This document update is not a runtime, visual or performance acceptance result.
 
 ## 16. Source/API evidence and scope boundary
 
-Existing repository source and the user's explicit requirements are authoritative inputs. The preserved original and historical companion files explain provenance; this consolidated file owns current execution instructions. The post-mortem is migration-only. Do not read other chat threads or contact artwork threads as part of implementation; refer to the supplied source handoffs.
+Existing repository source and the user's explicit requirements are authoritative inputs. The preserved original and historical companion files explain provenance; this consolidated file and its explicitly linked renderer chapter own current execution instructions. The post-mortem is migration-only. Do not read other chat threads or contact artwork threads as part of implementation; refer to the supplied source handoffs.
 
 Current official Pixi documentation was rechecked for the implementation choices below. Pinned local API source at `agent_docs/references/pixijs-8.22.0-20261008/` resolves discrepancies in moving guide examples.
 
@@ -2769,7 +2895,7 @@ Current official Pixi documentation was rechecked for the implementation choices
 |---|---|
 | Loading and texture views | [Assets](https://pixijs.com/8.x/guides/components/assets) and [Textures](https://pixijs.com/8.x/guides/components/textures): reuse loaded sources and frame views; extend numeric-plane parsing deliberately. Promise-based loading does not imply CPU work is off-thread. |
 | Layer roles | [Render Layers](https://pixijs.com/8.x/guides/concepts/render-layers): control ordering separately from parenting; this does not supply world elevation or intersecting-volume depth. Restore layer attachment deliberately after removal. |
-| Physical geometry/materials | [Mesh](https://pixijs.com/8.x/guides/components/scene-objects/mesh): use explicit geometry/shaders/state and group compatible draws. A custom mesh does not automatically batch like ordinary sprites. |
+| Specialized geometry/materials | [Mesh](https://pixijs.com/8.x/guides/components/scene-objects/mesh): ordinary Sprite/Container drawing is the default; use explicit geometry/shaders/state only for a material/effect that needs them. A custom mesh does not automatically batch like ordinary sprites. |
 | Composed effects | [Filters](https://pixijs.com/8.x/guides/components/filters): reserve composed-image passes for effects that need them; source-local palette/mask treatment lives in shared material shaders. |
 | Time | [Render loop](https://pixijs.com/8.x/guides/concepts/render-loop): application presentation time is explicit; do not equate ticker elapsed time, source FPS and server progress. |
 

@@ -348,6 +348,19 @@ BATTLEFIELDS: tuple[BattlefieldDefinition, ...] = (
         )),
     ),
     BattlefieldDefinition(
+        battlefield_id="battlefield.lantern_gallery", title="The Lantern Gallery",
+        width=73, height=39, light_level="darkness",
+        tags=("interior", "exploration", "loot", "trap", "large"),
+        capabilities=("closed-door", "container-lid", "wall-torches", "spike-traps", "furniture"),
+        preview=BattlefieldPreview(objects=(
+            _preview_object((7,6),"door","Crypt passage",blocked_directions=("east",),is_open=False),
+            _preview_object((12,6),"door","Burial hall",blocked_directions=("west",),is_open=False),
+            _preview_object((20,6),"door","Gallery passage",blocked_directions=("east",),is_open=False),
+            _preview_object((24,6),"door","Lantern gallery",blocked_directions=("west",),is_open=False),
+            _preview_object((69,34),"loot_chest","Curator's cache"),
+        )),
+    ),
+    BattlefieldDefinition(
         battlefield_id="battlefield.storehouse_demo", title="Occupied Storehouse",
         width=13, height=9, light_level="darkness",
         tags=("interior", "door", "furniture", "demo"),
@@ -690,13 +703,18 @@ def _build_standard_hazards(
     )
 
 
-def _build_lantern_crypt(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
+def _build_lantern_crypt(
+    definition: BattlefieldDefinition, grid: GridMap, *, gallery: bool = False,
+) -> BuiltBattlefield:
     """An entry camp, trapped side vault and sealed burial hall, using native props."""
     entry={(x,y) for x in range(1,8) for y in range(2,9)}
     passage={(x,y) for x in range(8,12) for y in range(5,8)}
     hall={(x,y) for x in range(12,21) for y in range(2,11)}
     vault={(x,y) for x in range(4,8) for y in range(9,13)}
     cells=entry|passage|hall|vault
+    if gallery:
+        cells |= {(x,y) for x in range(21,24) for y in range(5,8)}
+        cells |= {(x,y) for x in range(24,72) for y in range(2,38)}
     for x,y in sorted(cells):
         grid.set_tile(x,y,name="Crypt flagstones",surface=TileSurface(base_material=Material.STONE),
             default_light=LightLevel.DARKNESS)
@@ -743,6 +761,12 @@ def _build_lantern_crypt(definition: BattlefieldDefinition, grid: GridMap) -> Bu
         torch.dim_radius_feet=15
         torch.mount(position,lit=False)
         objects[f"torch_{index}"]=torch.uuid
+    # Both statues face the burial hall centre at (16, 6), independent of
+    # camera rotation or the current positions of its occupants.
+    statue_facings = {
+        "statue_north": CardinalDirection.NORTH,
+        "statue_south": CardinalDirection.SOUTH,
+    }
     for key,item_id,position in (
         ("bed","environment.furniture.bed",(2,7)),
         ("desk","environment.furniture.writing_desk",(2,4)),
@@ -754,17 +778,97 @@ def _build_lantern_crypt(definition: BattlefieldDefinition, grid: GridMap) -> Bu
         ("vault_crates","environment.furniture.barrel_cluster",(4,12)),
     ):
         item=build_world_prop(item_id,defer_behaviors=True)
-        item.place_on_grid(position)
+        item.place_on_grid(position, orientation=statue_facings.get(key))
         objects[key]=item.uuid
     trap_uuid=uuid4()
     lever=build_trap_lever(trap_uuid)
     lever.name="Vault trap lever"
     lever.place_on_grid((6,7))
     objects["trap_lever"]=lever.uuid
+    notable_positions={"entry":(3,5),"supplies":(3,3),"vault_trap":(5,10),
+        "cache":(6,11),"passage":(8,6),"burial_hall":(12,6)}
+    if gallery:
+        _furnish_lantern_gallery(objects)
+        notable_positions.update({"gallery_entry":(26,6),"gallery_nave":(46,6),
+            "gallery_centre":(46,20),"gallery_far":(68,20),"gallery_guardian":(68,33)})
     return BuiltBattlefield(definition=definition,environment=None,
-        notable_positions={"entry":(3,5),"supplies":(3,3),"vault_trap":(5,10),
-            "cache":(6,11),"passage":(8,6),"burial_hall":(12,6)},
+        notable_positions=notable_positions,
         object_uuids=objects,spike_traps=((trap_uuid,((5,10),(6,10))),))
+
+
+def _furnish_lantern_gallery(objects: dict[str, UUID]) -> None:
+    """A colonnaded nave, reading bays and stores around unobstructed aisles."""
+    for key,column,direction in (("gallery_passage_door",20,CardinalDirection.EAST),
+                                  ("gallery_door",24,CardinalDirection.WEST)):
+        for y in range(5,8):
+            if y == 6:
+                door=build_directional_door(display_name="Gallery passage" if column==20 else "Lantern gallery door")
+                door.place_on_grid((column,y),boundary_direction=direction)
+                objects[key]=door.uuid
+            else:
+                wall=build_directional_wall(display_name="Gallery portal wall",blocked_channels=STANDARD_BLOCKING_CHANNELS)
+                wall.place_on_grid((column,y),boundary_direction=direction)
+
+    furniture: list[tuple[str, str, tuple[int,int], CardinalDirection]] = []
+    for y in (12,28):
+        for x in (32,40,48,56,64):
+            furniture.append((f"gallery_column_{x}_{y}","slender_monument",(x,y),CardinalDirection.EAST))
+        for x,facing in ((28,CardinalDirection.EAST),(68,CardinalDirection.WEST)):
+            furniture.append((f"gallery_statue_{x}_{y}","winged_statue" if y==12 else "animal_statue",(x,y),facing))
+    for x in (33,39,45,51,57,63):
+        for y,facing in ((16,CardinalDirection.NORTH),(24,CardinalDirection.SOUTH)):
+            furniture.append((f"gallery_bench_{x}_{y}","stone_bench",(x,y),facing))
+    for x in (29,31,33,35,37,39,41,43,57,59,61,63,65,67,69):
+        furniture.append((f"gallery_books_{x}","bookshelf",(x,3),CardinalDirection.NORTH))
+    for x in (30,36,42,58,64):
+        furniture.append((f"gallery_desk_{x}","writing_desk",(x,8),CardinalDirection.SOUTH))
+        furniture.append((f"gallery_seat_{x}","wooden_chair",(x,9),CardinalDirection.SOUTH))
+    for x in (31,37,43):
+        furniture.append((f"gallery_table_{x}","table",(x,33),CardinalDirection.EAST))
+        for y in (31,35):
+            furniture.append((f"gallery_dining_bench_{x}_{y}","wooden_bench",(x,y),CardinalDirection.EAST))
+    for x in (58,62,66,70):
+        for y,kind in ((31,"crate_stack"),(35,"barrel_cluster")):
+            furniture.append((f"gallery_stores_{x}_{y}",kind,(x,y),CardinalDirection.WEST))
+    for key,kind,position,facing in (
+        ("gallery_alchemy","alchemy_bench",(51,34),CardinalDirection.SOUTH),
+        ("gallery_ingredients","ingredient_shelves",(53,36),CardinalDirection.SOUTH),
+        ("gallery_counter","preparation_counter",(55,34),CardinalDirection.SOUTH),
+        ("gallery_tools","storage_shelving",(70,28),CardinalDirection.WEST),
+        ("gallery_pottery","pottery_group",(26,34),CardinalDirection.EAST),
+        ("gallery_manifest","notice_board",(26,4),CardinalDirection.EAST),
+    ):
+        furniture.append((key,kind,position,facing))
+    for key,kind,position,facing in furniture:
+        item=build_world_prop("environment.furniture."+kind,defer_behaviors=True)
+        item.place_on_grid(position,orientation=facing)
+        objects[key]=item.uuid
+
+    for key,name,position in (
+        ("gallery_entry_cache","Gallery supplies",(28,20)),
+        ("gallery_library_cache","Archivist's chest",(58,4)),
+        ("gallery_dining_cache","Steward's chest",(42,36)),
+        ("gallery_curator_cache","Curator's cache",(69,34)),
+    ):
+        chest=build_storage_chest(name,include_loot_all_action=True,is_open=False)
+        chest.chest_inventory.source_entity_uuid=chest.uuid
+        chest.chest_inventory.add_item(build_healing_potion(chest.uuid,heal_amount=8))
+        chest.place_on_grid(position)
+        objects[key]=chest.uuid
+
+    torch_positions = [(x,y) for x in (26,34,42,50,58,66,70) for y in (2,37)]
+    torch_positions += [(x,y) for x in (24,71) for y in (10,18,26,34)]
+    torch_positions += [(x,y) for x in (41,57) for y in (12,28)]
+    for x,y in torch_positions:
+        torch=build_wall_torch()
+        torch.bright_radius_feet=15
+        torch.dim_radius_feet=15
+        torch.mount((x,y),lit=False)
+        objects[f"gallery_torch_{x}_{y}"]=torch.uuid
+
+
+def _build_lantern_gallery(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
+    return _build_lantern_crypt(definition,grid,gallery=True)
 
 
 def _build_storehouse_demo(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
@@ -1245,6 +1349,7 @@ BattlefieldBuilder = Callable[
 ]
 
 _BUILDERS: dict[str, BattlefieldBuilder] = {
+    "battlefield.lantern_gallery": _build_lantern_gallery,
     "battlefield.lantern_crypt": _build_lantern_crypt,
     "battlefield.storehouse_demo": _build_storehouse_demo,
     "battlefield.environment_controls": _build_environment_controls,

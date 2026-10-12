@@ -5512,6 +5512,7 @@ class Entity(BaseBlock):
             item_stack_count=item_stack_count,
             item_charge_cost=item_charge_cost,
             fixed_healing=template.get_fixed_healing(self),
+            loot_item_uuid=description_facts.loot_item_uuid,
         )
         for target in valid_targets:
             if target.target_uuid is not None:

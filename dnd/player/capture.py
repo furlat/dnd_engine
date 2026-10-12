@@ -30,6 +30,7 @@ from dnd.core.events import (
     EventPhase,
     EventQueue,
     EventType,
+    ExposedFlameEvent,
     ForcedMovementEvent,
     PortalTransferEvent, MechanismActivationEvent,
     HealEvent,
@@ -667,7 +668,7 @@ def _retained_event(event: Event, audience: PlayerAudience,
             copied = event.model_copy(update=common)
         case EquipmentEvent() | ItemResourceChangeEvent() | ItemHoldingsReleasedEvent():
             copied = event.model_copy(update=common)
-        case ItemLocationStateEvent() | ItemDestructionEvent():
+        case ItemLocationStateEvent() | ItemDestructionEvent() | ExposedFlameEvent():
             copied = event.model_copy(update=common)
         case _:
             copied = _event_header(event).model_copy(update=common)

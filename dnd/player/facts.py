@@ -107,6 +107,10 @@ class VisualItem:
     equipped_visual_policy: EquippedVisualPolicy
     item_effects: tuple[ItemEffectPresentationState, ...] = ()
     suppression_provider_uuids: tuple[UUID, ...] = ()
+    is_lit: bool | None = None
+    very_bright_radius_feet: Annotated[int, Field(ge=0)] | None = None
+    bright_radius_feet: Annotated[int, Field(ge=0)] | None = None
+    dim_radius_feet: Annotated[int, Field(ge=0)] | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -636,6 +640,9 @@ class FloorItem:
     boundary_structure: BoundaryStructure | None
     is_open: bool | None
     is_lit: bool | None
+    very_bright_radius_feet: Annotated[int, Field(ge=0)] | None = None
+    bright_radius_feet: Annotated[int, Field(ge=0)] | None = None
+    dim_radius_feet: Annotated[int, Field(ge=0)] | None = None
     stack_count: int = 1
     is_pickable: bool = True
     item_effects: tuple[ItemEffectPresentationState, ...] = ()
@@ -664,6 +671,8 @@ class FloorItem:
 class PlayerObject:
     placement: WorldObjectPlacement
     item: FloorItem
+    # Current observed contents only; None never means an observed empty chest.
+    contained_items: tuple[FloorItem, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

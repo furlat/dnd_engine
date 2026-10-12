@@ -43,6 +43,9 @@ def admitted_content(catalog: UIContentManifest, state: PlayerState,
         known.update(_actor_content(actor))
     known.update(row.item.item_id for row in state.objects.values())
     known.update(effect.behavior_id for row in state.objects.values() for effect in row.item.item_effects)
+    known.update(item.item_id for row in state.objects.values() for item in row.contained_items or ())
+    known.update(effect.behavior_id for row in state.objects.values() for item in row.contained_items or ()
+        for effect in item.item_effects)
     if state.senses is not None:
         known.update(row.content_ref.content_id for row in state.senses.spatial_effects.values())
     for lineage in lineages:
@@ -51,6 +54,9 @@ def admitted_content(catalog: UIContentManifest, state: PlayerState,
         for update in lineage.world_updates:
             known.update(row.item.item_id for row in update.objects)
             known.update(effect.behavior_id for row in update.objects for effect in row.item.item_effects)
+            known.update(item.item_id for row in update.objects for item in row.contained_items or ())
+            known.update(effect.behavior_id for row in update.objects for item in row.contained_items or ()
+                for effect in item.item_effects)
         for node in lineage.events:
             fact = node.fact
             if isinstance(fact, (ActionFact, AttackFact, SpellFact)) and fact.behavior_id is not None:

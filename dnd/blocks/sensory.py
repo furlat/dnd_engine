@@ -15,7 +15,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.gridmap import SpatialConditionOwner, get_map
-from dnd.core.geometry import supercover_line
+from dnd.core.geometry import grid_distance_feet, supercover_line
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
 from dnd.core.events import (
@@ -688,7 +688,7 @@ class SpatialSensesSystem:
             tile = grid.get_tile(*position)
             if tile is None:
                 continue
-            distance = senses.get_feet_distance(position)
+            distance = grid_distance_feet(origin, position)
             obscurements = grid.get_optical_obscurements_on_route(
                 origin,
                 position,
@@ -781,7 +781,7 @@ class SpatialSensesSystem:
                     continue
                 contact = self._resolve_contact(
                     owner,
-                    senses,
+                    origin,
                     subject,
                     position,
                     position in visible,
@@ -797,7 +797,7 @@ class SpatialSensesSystem:
                     continue
                 contact = self._resolve_contact(
                     owner,
-                    senses,
+                    origin,
                     subject,
                     position,
                     position in visible,
@@ -809,7 +809,7 @@ class SpatialSensesSystem:
                     previous = object_contacts.get(object_uuid)
                     if previous is not None:
                         chosen = min((previous, contact), key=lambda row: (
-                            not row.visual, senses.get_feet_distance(row.position), row.position,
+                            not row.visual, grid_distance_feet(origin, row.position), row.position,
                         ))
                         established = set(previous.special_senses) | set(contact.special_senses)
                         contact = PerceivedContact(
@@ -845,7 +845,7 @@ class SpatialSensesSystem:
             ))
             contact = self._resolve_contact(
                 owner,
-                senses,
+                origin,
                 subject,
                 placement.position,
                 False,
@@ -1052,7 +1052,7 @@ class SpatialSensesSystem:
                 obscurements = grid.get_optical_obscurements_on_route(
                     origin, position, excluded_owner_uuid=identity)
                 normal, special = cls._visual_route_modes(modes, ordinary_sight,
-                    senses.get_feet_distance(position), obscurements, tile.resolved_light_level)
+                    grid_distance_feet(origin, position), obscurements, tile.resolved_light_level)
                 if normal or special:
                     if planes:
                         upper_surfaces.append(VolumeSurfaceSight(position=position, lower_height_planes=planes))
@@ -1141,7 +1141,7 @@ class SpatialSensesSystem:
     def _resolve_contact(
         self,
         owner: BaseBlock,
-        senses: Senses,
+        observer_position: Tuple[int, int],
         subject: BaseBlock,
         position: Tuple[int, int],
         cell_visual: bool,
@@ -1169,7 +1169,7 @@ class SpatialSensesSystem:
         visual = False
         special: Set[SensesType] = set()
         for evidence_position, evidence_visual, evidence_modes in evidence:
-            distance = senses.get_feet_distance(evidence_position)
+            distance = grid_distance_feet(observer_position, evidence_position)
             invisibility_bypassed = not subject.is_invisible or any((
                 self._sense_in_range(modes, SensesType.TRUESIGHT, distance),
                 self._sense_in_range(modes, SensesType.SEE_INVISIBLE, distance),
@@ -1337,6 +1337,11 @@ class SpatialSensesSystem:
                     event.event_type in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL)
                     and event.target_entity_uuid == observer_uuid
                 )
+                or (
+                    isinstance(event, SpatialChangeEvent)
+                    and event.event_type is EventType.SPATIAL_ENTITY_ENTERED
+                    and event.entity_uuid == observer_uuid
+                )
             )
             tile_refresh = (
                 isinstance(event, SpatialChangeEvent)
@@ -1353,6 +1358,9 @@ class SpatialSensesSystem:
                 and field.occupancy_revision == get_map().occupancy_revision
                 and self._field_is_current(observer_uuid, senses)
             ):
+                # A child light completion can already have refreshed the moving
+                # observer at this committed position. Reuse only a fully current
+                # field; the parent still publishes its own delta/path boundary.
                 # Inert tile after-values and residue membership do not change contacts
                 # when field and occupancy revisions still match. Refresh their
                 # hazards without resolving every visible cell again.
@@ -1438,7 +1446,7 @@ class SpatialSensesSystem:
             position = cast(Tuple[int, int], subject.get_position())
             if subject_uuid in get_map().get_entities_at(position):
                 contact = self._resolve_contact(
-                    owner, senses, subject, position, position in senses.visible,
+                    owner, senses.position, subject, position, position in senses.visible,
                     field.visual_modes.get(position, set()), field.nonvisual_positions,
                     field.modes,
                 )

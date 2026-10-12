@@ -30,7 +30,7 @@ from dnd.core.content.runtime import EffectiveHandlerPresentation
 from dnd.core.events import (
     AreaReachEvent, AttackD20RollResultEvent, D20Event, D20RollResultEvent, DamageAppliedEvent,
     DamageRollResultEvent, DeathEvent, DeathSaveEvent, EncounterEndEvent,
-    EncounterEvent, EncounterStartEvent, EntityCreatedEvent, EntityFactionChangedEvent, Event, EventPhase,
+    EncounterEvent, EncounterStartEvent, EntityCreatedEvent, EntityFactionChangedEvent, Event, EventPhase, ExposedFlameEvent,
     ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
     ItemDestructionEvent, LifeStateChangeEvent, ReviveEvent, RoundEndEvent, RoundEvent, RoundStartEvent,
     SavingThrowD20RollResultEvent, SavingThrowEvent, SensoryUpdateEvent,
@@ -48,7 +48,7 @@ EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
     AttackEvent, SpellEvent, MovementEvent, JumpEvent, TraverseConnectorEvent, ShoveEvent, CounterspellReactionEvent,
     EquipmentEvent, WeaponEquipEvent, WeaponUnequipEvent, ArmorEquipEvent,
     ArmorUnequipEvent, ShieldEquipEvent, ShieldUnequipEvent, ItemLocationStateEvent,
-    ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemDestructionEvent,
+    ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemDestructionEvent, ExposedFlameEvent,
     D20Event, SavingThrowEvent, SkillCheckEvent, D20RollResultEvent,
     AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     DamageRollResultEvent, HealRollResultEvent, TakeDamageEvent, DamageAppliedEvent,

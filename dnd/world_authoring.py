@@ -106,7 +106,7 @@ def project_world_object(
             )
         )
         if isinstance(storage, Inventory)
-        else ()
+        else None
     )
     return WorldObjectState(
         placement=placement,

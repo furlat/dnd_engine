@@ -176,6 +176,7 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _original(environment_interactables.CloseChestAction, "action.environment.storage_chest.close", "Close Chest", "Close the adjacent chest independently of its contents."),
     _original(environment_interactables.ToggleLeverAction, "action.environment.control_lever.toggle", "Toggle Lever", "Move a reusable lever and request its linked light or door state."),
     _original(environment_interactables.LootAllAction, "action.environment.storage_chest.loot_all", "Loot All", "Transfer every accessible item from the container."),
+    _original(environment_interactables.LootItemAction, "action.environment.storage_chest.loot", "Loot", "Transfer one selected accessible item from the container."),
     _original(environment_interactables.OpenDoorAction, "action.environment.door.open", "Open Door", "Open the adjacent door."),
     _original(environment_interactables.PullLeverAction, "action.environment.trap_lever.pull", "Pull Lever", "Set the linked trap's mechanical state through its placed lever."),
     _original(environment_interactables.RestAction, "action.environment.campfire.rest", "Rest", "Rest beside the campfire."),

@@ -10,6 +10,7 @@ from dnd.core.base_actions import (
     ActionEvent,
     TargetType,
     Cost,
+    ActionDiscoveryDescription,
 )
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
@@ -483,6 +484,55 @@ class LootAllAction(BaseAction):
         return self.source_item_contact_error(subjective=subjective)
 
 
+class LootItemAction(BaseAction):
+    """Transfer one exact child of an accessible chest through native inventory."""
+
+    name: str = "Loot"
+    target_type: TargetType = TargetType.SELF
+    costs: List[Cost] = Field(default_factory=list)
+    loot_item_uuid: UUID
+
+    def get_discovery_template_name(self) -> str:
+        return f"Loot__child_{self.loot_item_uuid}"
+
+    def describe_discovery(self) -> ActionDiscoveryDescription:
+        return ActionDiscoveryDescription(loot_item_uuid=self.loot_item_uuid)
+
+    def source_item_error(self, *, subjective: bool = False) -> Optional[str]:
+        chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
+        if not isinstance(chest, StorageChest) or not chest.has_accessible_contents():
+            return "Chest contents are unavailable"
+        child = chest.chest_inventory.items.get(self.loot_item_uuid)
+        if (child is None or child.stored_in_uuid != chest.chest_inventory.uuid
+                or not child.is_pickable or child.intrinsic_owner_uuid is not None):
+            return "Item no longer belongs to this chest"
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None or not entity.inventory.can_add(child):
+            return "Inventory cannot accept this item"
+        if subjective and not chest.contents_visible_to(self.source_entity_uuid):
+            return "Chest contents are not visible"
+        return self.source_item_contact_error(subjective=subjective)
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        error = self.source_item_error()
+        if error is not None:
+            return declaration_event.cancel(status_message=error)
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        error = self.source_item_error()
+        if error is not None:
+            return execution_event.cancel(status_message=error)
+        chest = BaseBlock.get(self.source_item_uuid)
+        entity = Entity.get(self.source_entity_uuid)
+        assert isinstance(chest, StorageChest) and entity is not None
+        child = chest.chest_inventory.items[self.loot_item_uuid]
+        name = child.name
+        if not entity.loot_item(child, parent_event=execution_event):
+            return execution_event.cancel(status_message="Item transfer was rejected")
+        return execution_event.phase_to(EventPhase.EFFECT, status_message=f"Looted {name}")
+
+
 class StorageChest(UsableItem):
     """A fixed container with an independent lid and optional looting/breakage."""
 
@@ -514,20 +564,31 @@ class StorageChest(UsableItem):
         if not self.is_active:
             if not self.chest_inventory.items:
                 return []
-            return [self.bind_dynamic_use_action(template.model_copy(deep=True, update={
+            actions = [self.bind_dynamic_use_action(template.model_copy(deep=True, update={
                 "uuid": uuid4(), "source_entity_uuid": user_entity_uuid,
                 "source_item_uuid": self.uuid,
                 "source_item_presentation": self.to_item_presentation_state(),
             })) for template in self.use_action_templates if isinstance(template, LootAllAction)]
-        lid_action = CloseChestAction if self.is_open else OpenChestAction
-        actions = [self.bind_dynamic_use_action(lid_action(
-            source_entity_uuid=user_entity_uuid,
-            source_item_uuid=self.uuid,
-            template=True,
-        ))]
-        if self.is_open and self.chest_inventory.items:
-            actions.extend(super().get_use_actions(user_entity_uuid))
+        else:
+            lid_action = CloseChestAction if self.is_open else OpenChestAction
+            actions = [self.bind_dynamic_use_action(lid_action(
+                source_entity_uuid=user_entity_uuid,
+                source_item_uuid=self.uuid,
+                template=True,
+            ))]
+            if self.is_open and self.chest_inventory.items:
+                actions.extend(super().get_use_actions(user_entity_uuid))
+        if self.has_accessible_contents() and self.contents_visible_to(user_entity_uuid):
+            actions.extend(self.bind_dynamic_use_action(LootItemAction(
+                source_entity_uuid=user_entity_uuid, source_item_uuid=self.uuid,
+                loot_item_uuid=child.uuid, name=f"Loot {child.name}", template=True,
+            )) for child in self.chest_inventory.items.values() if child.is_pickable)
         return actions
+
+    def contents_visible_to(self, user_entity_uuid: UUID) -> bool:
+        entity = Entity.get(user_entity_uuid)
+        contact = entity.senses.objects.get(self.uuid) if entity is not None else None
+        return contact is not None and contact.visual
 
     def has_accessible_contents(self) -> bool:
         return bool(self.chest_inventory.items) and (not self.is_active or self.is_open)

@@ -695,7 +695,8 @@ class WorldObjectState(BaseModel):
 
     placement: WorldObjectPlacement
     item: ItemPresentationState
-    contained_items: Tuple[ItemPresentationState, ...] = ()
+    # None is no storage capability; an empty tuple is an empty container.
+    contained_items: Tuple[ItemPresentationState, ...] | None = None
 
     @model_validator(mode="after")
     def validate_placement_identity(self) -> Self:

@@ -18,8 +18,9 @@ from server.config import SeatCredential, ServerConfig
 
 
 def configuration(mode: str, directory: Path) -> ServerConfig:
-    if mode == 'crypt':
-        return ServerConfig(game_id='crypt', encounter_id='encounter.lantern_crypt',
+    if mode in ('crypt', 'crypt_gallery'):
+        encounter = 'encounter.lantern_gallery' if mode == 'crypt_gallery' else 'encounter.lantern_crypt'
+        return ServerConfig(game_id=mode, encounter_id=encounter,
             credentials=(SeatCredential(seat_id='Expedition', token=secrets.token_urlsafe(32)),),
             spool_directory=directory/'spool', test_seed=0)
     sides = ('amber', 'blue')

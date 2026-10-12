@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from dnd.blocks.base_item import ItemResourceChangeEvent, ItemLocationStateEvent
+from dnd.blocks.base_item import ItemResourceChangeEvent, ItemLocationStateEvent, ItemHoldingsReleasedEvent
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.events import (
     Event, SpatialChangeEvent, SpatialChangeType, SpatialEffectChangeEvent, TileElevationChangeEvent,
@@ -56,6 +56,19 @@ def _put_object(world: WorldFacts, identity: UUID, value: WorldObjectState | Non
             world.boundaries.setdefault((value.placement.position, direction), set()).add(identity)
 
 
+def _remove_contained_item(world: WorldFacts, identity: UUID) -> bool:
+    """Recorded membership identifies the source, including older owner stamps."""
+    changed = False
+    for owner, obj in tuple(world.objects.items()):
+        if obj.contained_items is None:
+            continue
+        retained = tuple(item for item in obj.contained_items if item.item_uuid != identity)
+        if retained != obj.contained_items:
+            _put_object(world, owner, obj.model_copy(update={"contained_items": retained}))
+            changed = True
+    return changed
+
+
 def world_event_positions(
     world: WorldFacts, event: Event, condition: ConditionFact | None = None,
 ) -> set[tuple[int, int]]:
@@ -79,6 +92,8 @@ def world_event_positions(
             identity = event.item_state.item_uuid
             if event.world_placement is not None:
                 positions.update(event.world_placement.positions)
+        case ItemHoldingsReleasedEvent():
+            identity = event.item_uuid
         case ItemResourceChangeEvent():
             identity = event.item_uuid
         case TileElevationChangeEvent():
@@ -101,8 +116,12 @@ def world_event_positions(
                 positions.add(event.resulting_tile.position)
             if event.resulting_item is not None:
                 identity = event.resulting_item.item_uuid
-    if identity is not None and (obj := world.objects.get(identity)) is not None:
-        positions.update(obj.placement.positions)
+    if identity is not None:
+        if (obj := world.objects.get(identity)) is not None:
+            positions.update(obj.placement.positions)
+        for obj in world.objects.values():
+            if any(item.item_uuid == identity for item in obj.contained_items or ()):
+                positions.update(obj.placement.positions)
     return positions | {
         (x + dx, y + dy) for x, y in positions for dx, dy in CARDINAL_DELTAS.values()
     }
@@ -147,15 +166,25 @@ def apply_world_fact(
                     world.connectors[event.connector_uuid] = event.after
                 elif event.after is None:
                     world.connectors.pop(event.connector_uuid, None)
+        case ItemHoldingsReleasedEvent():
+            return _remove_contained_item(world, event.item_uuid)
         case ItemLocationStateEvent():
             identity = event.item_state.item_uuid
+            _remove_contained_item(world, identity)
+            owner = world.objects.get(event.owner_uuid) if event.owner_uuid is not None else None
+            if (owner is not None and owner.contained_items is not None
+                    and event.location is ItemLocation.INVENTORY):
+                _put_object(world, owner.item.item_uuid, owner.model_copy(update={
+                    "contained_items": tuple(sorted((*owner.contained_items, event.item_state),
+                        key=lambda item: str(item.item_uuid))),
+                }))
             if event.location is ItemLocation.FLOOR:
                 if event.world_placement is None:
                     raise ValueError("floor item fact requires its recorded placement")
                 previous = world.objects.get(identity)
                 _put_object(world, identity, WorldObjectState(
                     placement=event.world_placement, item=event.item_state,
-                    contained_items=previous.contained_items if previous is not None else (),
+                    contained_items=previous.contained_items if previous is not None else None,
                 ))
             else:
                 _put_object(world, identity, None)
@@ -240,7 +269,7 @@ def apply_world_fact(
                     item = item.model_copy(update=item_updates)
                 _put_object(world, event.object_uuid, WorldObjectState(
                     item=item, placement=placement,
-                    contained_items=previous.contained_items if previous is not None else (),
+                    contained_items=previous.contained_items if previous is not None else None,
                 ))
             else:
                 return False

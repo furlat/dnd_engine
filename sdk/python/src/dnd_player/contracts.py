@@ -6,97 +6,27 @@ from __future__ import annotations
 from typing import Literal, NotRequired, TypedDict
 
 
-class HealthResponse(TypedDict):
-    kind: NotRequired[Literal['health']]
-    status: NotRequired[Literal['ok']]
+class ActionAffordance(TypedDict):
+    surface: NotRequired[Literal['action_bar', 'world', 'inventory']]
+    binding: NotRequired[Literal['target', 'source_item', 'connector']]
+    default_priority: NotRequired[int]
 
 
-class BoundaryState(TypedDict):
-    lifecycle: Literal[
-        'starting',
-        'waiting_for_human',
-        'advancing',
-        'delivery_blocked',
-        'terminal',
-        'failed',
-        'closing',
-        'closed',
-    ]
-    input_actor_uuid: str | None
-    state_revision: str | None
-    reason: NotRequired[
-        Literal[
-            'recording_capacity',
-            'catch_up',
-            'reader_backpressure',
-            'worker_failure',
-            'capture_failure',
-            'contract_failure',
-            'recording_failure',
-            'host_close',
-        ]
-        | None
-    ]
-    incident_id: NotRequired[str | None]
+type ActionAvailabilityStatus = Literal[
+    'available',
+    'source_unaffordable',
+    'requirements_unmet',
+    'no_valid_targets',
+    'target_cost_unaffordable',
+]
 
 
-class PlayerAudience(TypedDict):
-    controlled: list[str]
-    observers: list[str]
-    revision: NotRequired[int]
+type ActionCategory = Literal['ability', 'attack', 'spell', 'movement']
 
 
-class PlayerCursor(TypedDict):
-    game_id: str
-    game_epoch: str
-    audience_id: str
-    sequence: int
-
-
-class ProtocolIdentity(TypedDict):
-    protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[5]]
-    schema_digest: str
-
-
-class StatusSnapshot(TypedDict):
-    game_id: str
-    game_epoch: str
-    audience_id: str
-    boundary: BoundaryState
-    published_cursor: PlayerCursor | None
-    final_cursor: PlayerCursor | None
-    attachment_epoch: str | None
-    catch_up_cursor: PlayerCursor | None
-    acknowledged_cursor: PlayerCursor | None
-    next_command_number: int
-    pending_command_numbers: list[int]
-
-
-class BootstrapResponse(TypedDict):
-    kind: NotRequired[Literal['bootstrap']]
-    protocol: ProtocolIdentity
-    status: StatusSnapshot
-    audience: PlayerAudience | None
-    encounter_name: str
-    content_revision: str | None
-
-
-class StatusResponse(TypedDict):
-    kind: NotRequired[Literal['status']]
-    status: StatusSnapshot
-
-
-class AttachmentRequest(TypedDict):
-    acquisition_id: str
-    expected_attachment_epoch: str | None
-
-
-class AttachmentResponse(TypedDict):
-    kind: NotRequired[Literal['attachment']]
-    acquisition_id: str
-    attachment_epoch: str
-    status: StatusSnapshot
+type ActionInformationOperation = Literal[
+    'reveal_region', 'change_light', 'grant_sense', 'conceal_region'
+]
 
 
 class ActionLogData(TypedDict):
@@ -113,6 +43,55 @@ class ActionReaction(TypedDict):
     triggered_lineage_uuid: str | None
     succeeded: bool
     automatic: bool
+
+
+type ExtraTargetPosition = int
+
+
+class ActionSelection(TypedDict):
+    action_index: int
+    target_indices: list[int]
+    extra_target_positions: NotRequired[list[list[ExtraTargetPosition]]]
+    prefer_safe: NotRequired[bool]
+
+
+type ActionSetupDuration = Literal['current_turn', 'until_next_turn', 'until_removed']
+
+
+type ActionSetupMaintenanceFailure = Literal['remove_setup']
+
+
+type ActionSetupMaintenanceTrigger = Literal['revealing_action']
+
+
+type ActionTopologyOperation = Literal['create_blocker', 'remove_blocker']
+
+
+class ActionVariantFacet(TypedDict):
+    key: Literal[
+        'form', 'side', 'radius', 'ability', 'damage_type', 'movement', 'width', 'rank'
+    ]
+    value: str
+    label: str
+
+
+type ActionWorldEffectAnchor = Literal[
+    'actor', 'selected_target', 'selected_position', 'selected_object'
+]
+
+
+type ActionWorldEffectCertainty = Literal['guaranteed', 'conditional']
+
+
+type ActionWorldEffectScope = Literal[
+    'target', 'region', 'frontier', 'magical_darkness', 'hazard_region'
+]
+
+
+type ActionWorldEffectShape = Literal['sphere']
+
+
+type AdvantageStatus = Literal['None', 'Advantage', 'Disadvantage']
 
 
 class AppearanceConfig(TypedDict):
@@ -160,6 +139,11 @@ class AreaReachFact(TypedDict):
     prerequisite_destruction_lineages: list[str]
 
 
+class AttachmentRequest(TypedDict):
+    acquisition_id: str
+    expected_attachment_epoch: str | None
+
+
 type TargetPositionItem = int
 
 
@@ -176,16 +160,87 @@ class AvailableHandlerInfo(TypedDict):
     trigger_event: str
 
 
-type Background = Literal['background.acolyte', 'background.adventurer']
+type NextPosition = int
 
 
-type Position = int
+type AffectedPosition = int
 
 
 type PositionItem = int
 
 
+type PathItem = int
+
+
+type SafePathItem = int
+
+
+type ContactPosition = int
+
+
+type Background = Literal['background.acolyte', 'background.adventurer']
+
+
+class BaseCost(TypedDict):
+    name: NotRequired[str]
+    cost_type: Literal[
+        'actions',
+        'bonus_actions',
+        'reactions',
+        'movement',
+        'spell_slot_1',
+        'spell_slot_2',
+        'spell_slot_3',
+        'spell_slot_4',
+        'spell_slot_5',
+        'spell_slot_6',
+        'spell_slot_7',
+        'spell_slot_8',
+        'spell_slot_9',
+    ]
+    cost: int
+    resource_name: NotRequired[str | None]
+    resource_cost: NotRequired[int]
+
+
+type BodyPart = Literal[
+    'Head', 'Body', 'Hands', 'Legs', 'Feet', 'Amulet', 'Ring', 'Cloak', 'Backpack'
+]
+
+
+type Position = int
+
+
 type DepositedPositionItem = int
+
+
+class BoundaryState(TypedDict):
+    lifecycle: Literal[
+        'starting',
+        'waiting_for_human',
+        'advancing',
+        'delivery_blocked',
+        'terminal',
+        'failed',
+        'closing',
+        'closed',
+    ]
+    input_actor_uuid: str | None
+    state_revision: str | None
+    reason: NotRequired[
+        Literal[
+            'recording_capacity',
+            'catch_up',
+            'reader_backpressure',
+            'worker_failure',
+            'capture_failure',
+            'contract_failure',
+            'recording_failure',
+            'host_close',
+        ]
+        | None
+    ]
+    incident_id: NotRequired[str | None]
 
 
 type BoundaryStructureKind = Literal[
@@ -204,6 +259,13 @@ type CharacterSubclass = Literal[
     'subclass.fighter.champion',
     'subclass.sorcerer.draconic_bloodline',
 ]
+
+
+class ChoicesRequest(TypedDict):
+    actor_uuid: str
+    state_revision: str
+    force_attack: bool
+    correlation_id: str
 
 
 class ClassChoiceSelection(TypedDict):
@@ -280,13 +342,13 @@ class ConePresentationGeometry(TypedDict):
 type ConnectorActionCostType = Literal['actions', 'bonus_actions']
 
 
+type ConnectorDestinationStatus = Literal['known_clear', 'known_blocked', 'unknown']
+
+
 type StartPositionItem = int
 
 
 type EndPositionItem = int
-
-
-type PathItem = int
 
 
 type RequestedEndPositionItem = int
@@ -356,6 +418,16 @@ class CylinderPresentationGeometry(TypedDict):
     center: list[CenterItem]
     radius_feet: int
     height_feet: int
+
+
+class DamageRollProfile(TypedDict):
+    dice_count: int
+    die_size: int
+    flat_bonus: NotRequired[int]
+    damage_type: str
+    save_dc: NotRequired[int | None]
+    save_ability: NotRequired[str | None]
+    double_on_critical: NotRequired[bool]
 
 
 class DamageTakenLogData(TypedDict):
@@ -452,6 +524,14 @@ class EmptyLogData(TypedDict):
     kind: NotRequired[Literal['empty']]
 
 
+class EndTurnIntent(TypedDict):
+    kind: NotRequired[Literal['end_turn']]
+
+
+class EntityDestinationSelection(TypedDict):
+    kind: NotRequired[Literal['entity_destination']]
+
+
 class EntitySpottedLogData(TypedDict):
     kind: NotRequired[Literal['entity_spotted']]
     observer_name: str
@@ -478,1250 +558,6 @@ type EquipmentRenderLayer = Literal[
 
 
 type EquippedVisualPolicy = Literal['visible', 'hidden']
-
-
-type EventPhase = Literal['declaration', 'execution', 'effect', 'completion', 'cancel']
-
-
-class EventResolutionRef(TypedDict):
-    kind: NotRequired[Literal['event']]
-    lineage_uuid: str
-
-
-type EventType = Literal[
-    'base_action',
-    'attack',
-    'movement',
-    'step_movement',
-    'forced_movement',
-    'portal_transfer',
-    'mechanism_activation',
-    'ability_check',
-    'saving_throw',
-    'skill_check',
-    'inflicted_damage',
-    'take_damage',
-    'damage_applied',
-    'heal',
-    'temporary_hit_points_changed',
-    'cast_spell',
-    'attack_miss',
-    'attack_hit',
-    'attack_critical',
-    'condition_application',
-    'condition_removal',
-    'condition_state_changed',
-    'weapon_equip',
-    'weapon_unequip',
-    'armor_equip',
-    'armor_unequip',
-    'shield_equip',
-    'shield_unequip',
-    'item_location_state',
-    'item_holdings_released',
-    'item_destruction',
-    'item_charge_consumption',
-    'world_initialized',
-    'world_modified',
-    'entity_created',
-    'entity_faction_changed',
-    'summon_admission',
-    'entity_level_added',
-    'entity_level_removed',
-    'trigger_event',
-    'dice_roll',
-    'd20_roll_result',
-    'attack_d20_roll',
-    'save_d20_roll',
-    'check_d20_roll',
-    'damage_roll_result',
-    'heal_roll_result',
-    'enemy_spotted',
-    'enemy_killed',
-    'enemy_engaged',
-    'spatial_entity_entered',
-    'spatial_entity_left',
-    'spatial_tile_changed',
-    'spatial_object_placed',
-    'spatial_object_removed',
-    'spatial_perceivability_changed',
-    'spatial_light_changed',
-    'spatial_object_changed',
-    'traversal_connector_changed',
-    'movement_collision',
-    'sensory_update',
-    'spatial_effect_changed',
-    'spatial_effect_interaction',
-    'area_reached',
-    'fire_exposure',
-    'exposed_flame_ignited',
-    'wind_exposure',
-    'encounter_start',
-    'encounter_end',
-    'round_start',
-    'round_end',
-    'turn_start',
-    'turn_end',
-    'life_state_change',
-    'revive',
-    'death_save',
-    'instant_death',
-    'death',
-]
-
-
-class FactionFact(TypedDict):
-    kind: NotRequired[Literal['faction']]
-    entity_uuid: str
-    faction_after: str | None
-    control_lost: NotRequired[bool]
-
-
-class FontConversion(TypedDict):
-    direction: Literal['slot_to_points', 'points_to_slot']
-    slot_level: NotRequired[int | None]
-    sorcery_points_delta: NotRequired[int | None]
-    spell_slots_delta: NotRequired[int | None]
-
-
-type DisclosedPathItem = int
-
-
-class ForcedMovementLogData(TypedDict):
-    kind: NotRequired[Literal['forced_movement']]
-    type: NotRequired[Literal['forced_movement']]
-    cause: str
-    direction: list[DirectionItem]
-    intended_distance: int
-    actual_distance: int
-    blocked: bool
-    blocked_by: str | None
-    start_position: list[StartPositionItem] | None
-    end_position: list[EndPositionItem] | None
-
-
-type HandlerDispatchOutcome = Literal[
-    'no_effect', 'emitted_events', 'modified_event', 'canceled_event'
-]
-
-
-class HazardDetectedLogData(TypedDict):
-    kind: NotRequired[Literal['hazard_detected']]
-    observer_name: str
-    observer_uuid: str
-    hazard_name: str
-    position: list[PositionItem] | None
-    passive_perception: int
-    stealth_dc: int
-
-
-class HealFact(TypedDict):
-    kind: NotRequired[Literal['heal']]
-    source_entity_uuid: str | None
-    target_entity_uuid: str
-    actual_healing: int
-    was_blocked: bool
-    resulting_normal_hp: int | None
-    resulting_temporary_hp: int | None
-    source_condition_uuid: NotRequired[str | None]
-
-
-class HealLogData(TypedDict):
-    kind: NotRequired[Literal['heal']]
-    entity_name: str
-    entity_uuid: str
-    amount: int
-    source_description: str
-
-
-class IndomitableReroll(TypedDict):
-    condition_uuid: NotRequired[str | None]
-    succeeded: bool
-
-
-class ItemConcentrationSlot(TypedDict):
-    slot_uuid: str
-    cast_lineage_uuid: NotRequired[str | None]
-    spell_id: NotRequired[str | None]
-    spell_name: str
-
-
-class ItemEffectChangeFact(TypedDict):
-    kind: NotRequired[Literal['item_effect']]
-    item_uuid: str
-    effect_uuid: str
-    event_type: EventType
-
-
-type ItemIntegrity = Literal['intact', 'destroyed']
-
-
-type ItemPresentationKind = Literal['item', 'usable', 'weapon', 'armor', 'shield']
-
-
-type ItemRarity = Literal['common', 'uncommon', 'rare', 'very_rare', 'legendary']
-
-
-type ItemResourceChange = Literal['consume', 'recharge']
-
-
-class JumpMovementLogData(TypedDict):
-    entity_name: str
-    entity_uuid: str
-    start_position: list[StartPositionItem]
-    end_position: list[EndPositionItem]
-    path: NotRequired[list[list[PathItem]]]
-    distance_feet: NotRequired[int]
-    movement_cost: NotRequired[int]
-    requested_end_position: NotRequired[list[RequestedEndPositionItem] | None]
-    termination_reason: NotRequired[str]
-    controller_revalidation: NotRequired[bool]
-    controller_revalidation_reason: NotRequired[str | None]
-    kind: NotRequired[Literal['jump_movement']]
-    movement_type: NotRequired[Literal['jump']]
-    objective_end_position: list[ObjectiveEndPositionItem]
-    start_elevation_feet: int
-    requested_end_elevation_feet: int
-    end_elevation_feet: int
-
-
-type LandingKind = Literal['ground', 'fall', 'controlled', 'impact']
-
-
-type LifeState = Literal['alive', 'dying', 'stable', 'dead']
-
-
-type LifeStateChangeReason = Literal[
-    'damage',
-    'massive_damage',
-    'instant_death',
-    'death_save_failures',
-    'stabilization',
-    'healing',
-    'revival',
-    'direct_state_check',
-]
-
-
-type LightLevel = Literal[0, 1, 2, 3, 4]
-
-
-class LinePresentationGeometry(TypedDict):
-    shape: NotRequired[Literal['line']]
-    origin: list[OriginItem]
-    direction: list[DirectionItem]
-    length_feet: int
-    width_feet: int
-
-
-type Material = Literal[
-    'earth',
-    'sand',
-    'stone',
-    'wood',
-    'metal',
-    'fabric',
-    'glass',
-    'water',
-    'ice',
-    'vegetation',
-]
-
-
-class MaterialDepositSource(TypedDict):
-    deposit_uuid: str
-    origin: list[OriginItem]
-    radius_cells: int
-
-
-type OriginPositionItem = int
-
-
-type AffectedPosition = int
-
-
-class MechanismActivationFact(TypedDict):
-    kind: NotRequired[Literal['mechanism_activation']]
-    mechanism_uuid: str | None
-    mechanism_content_id: str
-    target_entity_uuid: str | None
-    origin_position: list[OriginPositionItem] | None
-    direction: list[DirectionItem]
-    affected_positions: list[list[AffectedPosition]]
-    end_position: list[EndPositionItem] | None
-    committed: bool
-
-
-class ModifierBreakdown(TypedDict):
-    name: str
-    value: int
-    source: NotRequired[str]
-
-
-class MovementLogData(TypedDict):
-    entity_name: str
-    entity_uuid: str
-    start_position: list[StartPositionItem]
-    end_position: list[EndPositionItem]
-    path: NotRequired[list[list[PathItem]]]
-    distance_feet: NotRequired[int]
-    movement_cost: NotRequired[int]
-    requested_end_position: NotRequired[list[RequestedEndPositionItem] | None]
-    termination_reason: NotRequired[str]
-    controller_revalidation: NotRequired[bool]
-    controller_revalidation_reason: NotRequired[str | None]
-    kind: NotRequired[Literal['movement']]
-
-
-type MovementMode = Literal['walking', 'flying', 'swimming', 'burrowing']
-
-
-type MovementProvocationPolicy = Literal['ordinary_exit', 'does_not_provoke']
-
-
-type MovementTrajectory = Literal['path', 'direct_arc', 'connector_transfer']
-
-
-type TargetEntryIndice = int
-
-
-type AoeCenterItem = int
-
-
-class MultiEntityLogData(TypedDict):
-    kind: NotRequired[Literal['multi_entity_action']]
-    action_name: str
-    caster_name: str
-    total_targets: NotRequired[int]
-    target_names: NotRequired[list[str]]
-    total_damage: NotRequired[int]
-    per_target_damage: NotRequired[list[int]]
-    saves_succeeded: NotRequired[int]
-    saves_failed: NotRequired[int]
-    target_entry_indices: NotRequired[list[TargetEntryIndice]]
-    aoe_shape: NotRequired[str | None]
-    aoe_center: NotRequired[list[AoeCenterItem] | None]
-
-
-class ObjectDamageFact(TypedDict):
-    kind: NotRequired[Literal['object_damage']]
-    object_uuid: str
-    applied_damage: int
-    resulting_hp: int
-    damage_type: DamageType | None
-
-
-class ObjectResidueState(TypedDict):
-    condition_uuid: str
-    residue_id: str
-    description: str
-    faces: list[CardinalDirection]
-
-
-type MinimumPositionItem = int
-
-
-class ObjectSectionVolume(TypedDict):
-    minimum_position: list[MinimumPositionItem]
-    base_height_steps: int
-
-
-class ObservedChangeRef(TypedDict):
-    source_event_uuid: str
-    source_index: int
-    resolution_ref: NotRequired[EventResolutionRef | ApplicationResolutionRef | None]
-    field: Literal[
-        'position',
-        'visibility',
-        'light',
-        'hazards',
-        'senses',
-        'paths',
-        'entity_contact',
-        'object_contact',
-        'spatial_effect',
-    ]
-    owner_uuid: str
-
-
-type ObservedPathSegment = int
-
-
-class ObservedMovementLogData(TypedDict):
-    kind: NotRequired[Literal['observed_movement']]
-    type: NotRequired[Literal['movement']]
-    entity_name: str
-    entity_uuid: str
-    movement_type: NotRequired[str | None]
-    observation_complete: bool
-    observed_path_segments: list[list[list[ObservedPathSegment]]]
-    observed_distance_feet: float
-    start_position: NotRequired[list[StartPositionItem] | None]
-    end_position: NotRequired[list[EndPositionItem] | None]
-    path: NotRequired[list[list[PathItem]]]
-    distance_feet: NotRequired[float | None]
-    movement_cost: NotRequired[float | None]
-
-
-type OccupancyLayer = Literal['ground', 'air', 'underground']
-
-
-class OriginChoiceSelection(TypedDict):
-    choice_id: str
-    values: list[str]
-
-
-class OutcomeProtection(TypedDict):
-    protection_id: str
-    blocked_effect_ids: NotRequired[list[str]]
-
-
-type AnchorPositionItem = int
-
-
-type VisibleVolumePosition = int
-
-
-type LastVisualPositionItem = int
-
-
-type Ability = int
-
-
-class PlayerResource(TypedDict):
-    key: str
-    label: str
-    current: int
-    maximum: int
-
-
-type Bound = int
-
-
-class PlayerWorld(TypedDict):
-    battlefield_id: str
-    battlefield_name: str
-    bounds: list[Bound]
-    width: int
-    height: int
-
-
-class PortalTransferFact(TypedDict):
-    kind: NotRequired[Literal['portal_transfer']]
-    target_entity_uuid: str
-    portal_uuid: str | None
-    start_position: list[StartPositionItem] | None
-    end_position: list[EndPositionItem] | None
-    committed: bool
-    portal_content_id: NotRequired[str | None]
-
-
-class RelentlessRageIntervention(TypedDict):
-    condition_uuid: NotRequired[str | None]
-    succeeded: bool
-
-
-type RemainsDisposition = Literal['intact', 'disintegrated']
-
-
-class ResidueEllipse(TypedDict):
-    center: list[float]
-    radius_x: float
-    radius_y: float
-    angle: NotRequired[float]
-
-
-class RollModificationLogFact(TypedDict):
-    operation: Literal['replace', 'append']
-    handler_name: str
-    packet_index: NotRequired[int | None]
-    previous_total: NotRequired[int | None]
-    final_total: int
-    reason: str
-    packet_damage_type: NotRequired[str | None]
-    packet_dice: NotRequired[str | None]
-
-
-class SavingThrowFact(TypedDict):
-    kind: NotRequired[Literal['saving_throw']]
-    target_entity_uuid: str
-    ability_name: Literal[
-        'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'
-    ]
-    succeeded: bool
-    effect_id: str | None
-    indomitable_reroll: NotRequired[IndomitableReroll | None]
-
-
-class SavingThrowLogData(TypedDict):
-    kind: NotRequired[Literal['saving_throw']]
-    entity_name: str
-    entity_uuid: str
-    ability: str
-    dc: int
-    roll: DiceRollDisplay
-    bonus_breakdown: NotRequired[list[ModifierBreakdown]]
-    advantage_breakdown: NotRequired[list[ModifierBreakdown]]
-    success: bool
-    source_name: NotRequired[str | None]
-
-
-type SensesType = Literal[
-    'Blindsight',
-    'Darkvision',
-    'Tremorsense',
-    'Truesight',
-    'Devils Sight',
-    'See Invisible',
-]
-
-
-type ObserverPositionItem = int
-
-
-type VisibleCellsAddedItem = int
-
-
-type VisibleCellsRemovedItem = int
-
-
-type SeenCellsAddedItem = int
-
-
-class ShoveFact(TypedDict):
-    kind: NotRequired[Literal['shove']]
-    source_entity_uuid: str
-    target_entity_uuid: str
-    behavior_id: str | None
-    contest_success: bool | None
-    push_distance: int
-    knocked_prone: bool
-
-
-type PushDirectionItem = int
-
-
-class ShoveLogData(TypedDict):
-    kind: NotRequired[Literal['shove']]
-    action_type: NotRequired[Literal['shove']]
-    target_weight: int
-    max_shove_weight: int
-    contest_success: bool | None
-    push_distance: int
-    push_direction: list[PushDirectionItem]
-    end_position: list[EndPositionItem] | None
-    knocked_prone: bool
-    blocked_by: str | None
-    is_ally: bool
-
-
-type Size = Literal['Tiny', 'Small', 'Medium', 'Large', 'Huge', 'Gargantuan']
-
-
-class SkillCheckLogData(TypedDict):
-    kind: NotRequired[Literal['skill_check']]
-    entity_name: str
-    entity_uuid: str
-    skill: str
-    dc: NotRequired[int | None]
-    roll: DiceRollDisplay
-    bonus_breakdown: NotRequired[list[ModifierBreakdown]]
-    advantage_breakdown: NotRequired[list[ModifierBreakdown]]
-    success: NotRequired[bool | None]
-
-
-type SlopeAxis = Literal['north_south', 'east_west']
-
-
-type SpatialChangeType = Literal[
-    'entity_entered',
-    'entity_left',
-    'tile_changed',
-    'tile_created',
-    'tile_removed',
-    'object_placed',
-    'object_removed',
-    'perceivability_changed',
-    'light_changed',
-    'object_changed',
-    'movement_collision',
-]
-
-
-class SpatialDamageSource(TypedDict):
-    spatial_effect_uuid: str
-    position: list[PositionItem]
-    target_position: list[TargetPositionItem]
-    base_height_steps: int
-    exposure: Literal['contact', 'radiated_heat']
-
-
-type SpatialDisposition = Literal['present', 'absent', 'return_pending', 'home_plane']
-
-
-type SpatialEffectChangeOperation = Literal[
-    'created',
-    'footprint_changed',
-    'revealed',
-    'state_changed',
-    'removed',
-    'transformed',
-]
-
-
-type SpatialEffectInteractionOperation = Literal[
-    'ignite', 'douse', 'freeze', 'electrify', 'vaporize', 'disperse'
-]
-
-
-type SpatialEffectLayer = Literal['ground_surface', 'cloud', 'field']
-
-
-type RemovedPosition = int
-
-
-class SpatialInteractionLogData(TypedDict):
-    kind: NotRequired[Literal['spatial_interaction']]
-    operation: SpatialEffectInteractionOperation
-    intensity: Literal['minor', 'moderate', 'strong']
-    affected_positions: list[list[AffectedPosition]]
-    source_item_id: str | None
-
-
-type Species = Literal[
-    'species.dragonborn',
-    'species.dwarf',
-    'species.elf',
-    'species.gnome',
-    'species.half_elf',
-    'species.half_orc',
-    'species.halfling',
-    'species.human',
-    'species.tiefling',
-]
-
-
-type SpeciesVariant = Literal[
-    'species_variant.dwarf.hill',
-    'species_variant.elf.high',
-    'species_variant.gnome.rock',
-    'species_variant.halfling.lightfoot',
-]
-
-
-class SpellDamageLogData(TypedDict):
-    kind: NotRequired[Literal['spell_damage']]
-    spell_name: str
-    target_name: str
-    damage: int
-    damage_type: str
-
-
-type SourcePositionItem = int
-
-
-type AoePositionItem = int
-
-
-type ResolvedAreaPosition = int
-
-
-class SpellInterruptionLogData(TypedDict):
-    kind: NotRequired[Literal['spell_interruption']]
-    outcome_code: str
-    counterspeller_name: str
-    counterspeller_uuid: str
-    original_caster_name: str
-    original_caster_uuid: str
-    spell_name: str
-    incoming_spell_level: int
-    counterspell_slot_level: int
-    automatic: bool
-    check_total: NotRequired[int | None]
-    check_dc: NotRequired[int | None]
-    succeeded: bool
-
-
-class SpherePresentationGeometry(TypedDict):
-    shape: NotRequired[Literal['sphere']]
-    center: list[CenterItem]
-    radius_feet: int
-
-
-type FromPositionItem = int
-
-
-type ToPositionItem = int
-
-
-class StepFact(TypedDict):
-    kind: NotRequired[Literal['step']]
-    source_entity_uuid: str
-    from_position: list[FromPositionItem]
-    to_position: list[ToPositionItem]
-    from_elevation_feet: int
-    to_elevation_feet: int
-    disclosed_path: list[list[DisclosedPathItem]]
-    trajectory: MovementTrajectory
-    provocation_policy: MovementProvocationPolicy
-    committed: bool
-    resolved_speed_feet: NotRequired[int | None]
-    movement_mode: NotRequired[MovementMode | None]
-    from_layer: NotRequired[OccupancyLayer | None]
-    to_layer: NotRequired[OccupancyLayer | None]
-
-
-class StepMovementLogData(TypedDict):
-    kind: NotRequired[Literal['step_movement']]
-    type: NotRequired[Literal['step_movement']]
-    from_position: list[FromPositionItem]
-    to_position: list[ToPositionItem]
-    path_index: int
-    movement_cost: float
-    trajectory: MovementTrajectory
-    disclosed_path: list[list[DisclosedPathItem]]
-    from_elevation_feet: int
-    to_elevation_feet: int
-    provocation_policy: MovementProvocationPolicy
-    committed: bool
-
-
-type SummonDepartureCause = Literal[
-    'expired', 'dismissed', 'defeated', 'sustain_lost', 'closed'
-]
-
-
-type SummonManifestation = Literal['natural', 'fey_spirit', 'fiend']
-
-
-class SurfaceLayer(TypedDict):
-    material: Material
-    description: NotRequired[str]
-
-
-class TemporaryHitPointsGrant(TypedDict):
-    instance_uuid: str
-    source_id: NotRequired[str | None]
-
-
-class TileSurface(TypedDict):
-    base_material: Material
-    layers: NotRequired[list[SurfaceLayer]]
-    description: NotRequired[str]
-
-
-type TrapState = Literal['ready', 'activated', 'deactivated']
-
-
-type TraversalConnectorKind = Literal[
-    'ladder', 'rope', 'lift', 'vertical_stairs', 'passage'
-]
-
-
-class TurnFact(TypedDict):
-    kind: NotRequired[Literal['turn']]
-    event_type: EventType
-    entity_uuid: str | None
-    round_number: int | None
-
-
-class TurnLogData(TypedDict):
-    kind: NotRequired[Literal['turn']]
-    entity_name: str
-    entity_uuid: str
-    round_number: int
-    turn_index: int | None
-
-
-class UnknownMovementLogData(TypedDict):
-    kind: NotRequired[Literal['unknown_movement']]
-    type: NotRequired[Literal['movement']]
-    observed: NotRequired[Literal[True]]
-
-
-class UnlocatedMovementLogData(TypedDict):
-    kind: NotRequired[Literal['unlocated_movement']]
-    type: NotRequired[Literal['movement']]
-    observation_complete: NotRequired[Literal[False]]
-
-
-class VersionRow(TypedDict):
-    source_index: int
-    event_uuid: str
-    lineage_uuid: str
-
-
-type VisualLoadoutSlot = Literal[
-    'weapon_melee_main',
-    'weapon_melee_off',
-    'weapon_ranged_main',
-    'weapon_ranged_off',
-    'helmet',
-    'body_armor',
-    'gauntlets',
-    'greaves',
-    'boots',
-    'amulet',
-    'cloak',
-    'backpack',
-    'ring_left',
-    'ring_right',
-]
-
-
-type LowerHeightPlane = list[float]
-
-
-class VolumeSurfaceSight(TypedDict):
-    position: list[PositionItem]
-    lower_height_planes: list[LowerHeightPlane]
-
-
-class WallDome(TypedDict):
-    form: NotRequired[Literal['dome']]
-    center: list[float]
-    radius_feet: float
-
-
-type Point = list[float]
-
-
-class WallPolyline(TypedDict):
-    form: NotRequired[Literal['polyline']]
-    points: list[Point]
-
-
-class WallRing(TypedDict):
-    form: NotRequired[Literal['ring']]
-    center: list[float]
-    radius_feet: float
-
-
-class WallSegment(TypedDict):
-    form: NotRequired[Literal['segment']]
-    start: list[float]
-    end: list[float]
-
-
-type WeaponSet = Literal['none', 'melee', 'ranged']
-
-
-type WeaponSlot = Literal['MELEE_MAIN', 'MELEE_OFF', 'RANGED_MAIN', 'RANGED_OFF']
-
-
-type EndpointItem = int
-
-
-type Endpoint = list[EndpointItem]
-
-
-type Endpoint1Item = int
-
-
-type Endpoint1 = list[Endpoint1Item]
-
-
-type EndpointElevationsfoot = int
-
-
-class WorldConnectorState(TypedDict):
-    connector_uuid: str
-    authored_id: str
-    kind: TraversalConnectorKind
-    presentation_key: str
-    endpoints: list[Endpoint | Endpoint1]
-    support_tile_uuids: list[str]
-    endpoint_elevations_feet: list[EndpointElevationsfoot]
-    movement_cost_feet: int
-    action_cost_type: NotRequired[ConnectorActionCostType | None]
-    action_cost_amount: NotRequired[int]
-    bidirectional: bool
-    enabled: bool
-    provocation_policy: ConnectorProvocationPolicy
-
-
-type WorldEdgeChannel = Literal['movement', 'optical', 'propagation']
-
-
-type RemovedBand = int
-
-
-class WorldObjectSupport(TypedDict):
-    position: list[PositionItem]
-    tile_uuid: str
-
-
-type WorldPlacementKind = Literal['center', 'boundary']
-
-
-class AckRequest(TypedDict):
-    cursor: PlayerCursor
-
-
-class AckResponse(TypedDict):
-    kind: NotRequired[Literal['ack']]
-    cursor: PlayerCursor
-    catch_up_cursor: PlayerCursor
-
-
-class ChoicesRequest(TypedDict):
-    actor_uuid: str
-    state_revision: str
-    force_attack: bool
-    correlation_id: str
-
-
-class ActionAffordance(TypedDict):
-    surface: NotRequired[Literal['action_bar', 'world', 'inventory']]
-    binding: NotRequired[Literal['target', 'source_item', 'connector']]
-    default_priority: NotRequired[int]
-
-
-type ActionAvailabilityStatus = Literal[
-    'available',
-    'source_unaffordable',
-    'requirements_unmet',
-    'no_valid_targets',
-    'target_cost_unaffordable',
-]
-
-
-type ActionCategory = Literal['ability', 'attack', 'spell', 'movement']
-
-
-type ActionInformationOperation = Literal[
-    'reveal_region', 'change_light', 'grant_sense', 'conceal_region'
-]
-
-
-type ActionSetupDuration = Literal['current_turn', 'until_next_turn', 'until_removed']
-
-
-type ActionSetupMaintenanceFailure = Literal['remove_setup']
-
-
-type ActionSetupMaintenanceTrigger = Literal['revealing_action']
-
-
-type ActionTopologyOperation = Literal['create_blocker', 'remove_blocker']
-
-
-class ActionVariantFacet(TypedDict):
-    key: Literal[
-        'form', 'side', 'radius', 'ability', 'damage_type', 'movement', 'width', 'rank'
-    ]
-    value: str
-    label: str
-
-
-type ActionWorldEffectAnchor = Literal[
-    'actor', 'selected_target', 'selected_position', 'selected_object'
-]
-
-
-type ActionWorldEffectCertainty = Literal['guaranteed', 'conditional']
-
-
-type ActionWorldEffectScope = Literal[
-    'target', 'region', 'frontier', 'magical_darkness', 'hazard_region'
-]
-
-
-type ActionWorldEffectShape = Literal['sphere']
-
-
-type AdvantageStatus = Literal['None', 'Advantage', 'Disadvantage']
-
-
-type SafePathItem = int
-
-
-type ContactPosition = int
-
-
-class AvailableWorldInteraction(TypedDict):
-    subject_uuid: str
-    behavior_id: str
-    label: str
-    description: NotRequired[str]
-    default_priority: NotRequired[int]
-    contact_positions: NotRequired[list[list[ContactPosition]]]
-    connector_uuid: NotRequired[str | None]
-    template_name: NotRequired[str | None]
-    configured_action_ref: NotRequired[ContentRef | None]
-    variant_facets: NotRequired[list[ActionVariantFacet]]
-    reason: NotRequired[str | None]
-
-
-class BaseCost(TypedDict):
-    name: NotRequired[str]
-    cost_type: Literal[
-        'actions',
-        'bonus_actions',
-        'reactions',
-        'movement',
-        'spell_slot_1',
-        'spell_slot_2',
-        'spell_slot_3',
-        'spell_slot_4',
-        'spell_slot_5',
-        'spell_slot_6',
-        'spell_slot_7',
-        'spell_slot_8',
-        'spell_slot_9',
-    ]
-    cost: int
-    resource_name: NotRequired[str | None]
-    resource_cost: NotRequired[int]
-
-
-type ConnectorDestinationStatus = Literal['known_clear', 'known_blocked', 'unknown']
-
-
-class DamageRollProfile(TypedDict):
-    dice_count: int
-    die_size: int
-    flat_bonus: NotRequired[int]
-    damage_type: str
-    save_dc: NotRequired[int | None]
-    save_ability: NotRequired[str | None]
-    double_on_critical: NotRequired[bool]
-
-
-class EntityDestinationSelection(TypedDict):
-    kind: NotRequired[Literal['entity_destination']]
-
-
-class InformationEffectProfile(TypedDict):
-    operation: ActionInformationOperation
-    certainty: ActionWorldEffectCertainty
-    anchor: ActionWorldEffectAnchor
-    scope: ActionWorldEffectScope
-    shape: NotRequired[ActionWorldEffectShape | None]
-    radius_feet: NotRequired[int | None]
-    sense_type: NotRequired[str | None]
-
-
-class OpportunityAttackExposure(TypedDict):
-    reactor_uuid: str
-    reactor_name: str
-    from_position: list[FromPositionItem]
-    to_position: list[ToPositionItem]
-
-
-type OutcomeApplicationScope = Literal['allocated_targets', 'each_affected_entity']
-
-
-type OutcomeResolution = Literal['automatic', 'attack_roll', 'saving_throw', 'unknown']
-
-
-class PositionPathSelection(TypedDict):
-    kind: NotRequired[Literal['path']]
-    max_length_feet: float
-    max_segments: NotRequired[int]
-    allow_origin_start: NotRequired[bool]
-    origin_start_offset_cells: NotRequired[int]
-
-
-class SinglePositionSelection(TypedDict):
-    kind: NotRequired[Literal['single']]
-
-
-type TargetEffectDisposition = Literal['beneficial', 'harmful', 'neutral']
-
-
-type TargetType = Literal[
-    'self',
-    'entity',
-    'creature_or_object',
-    'position',
-    'position_path',
-    'position_los',
-    'position_aoe',
-    'multi_entity',
-    'object',
-]
-
-
-class TopologyEffectProfile(TypedDict):
-    operation: ActionTopologyOperation
-    certainty: ActionWorldEffectCertainty
-    anchor: ActionWorldEffectAnchor
-    scope: ActionWorldEffectScope
-    shape: NotRequired[ActionWorldEffectShape | None]
-    radius_feet: NotRequired[int | None]
-    affects_movement: NotRequired[bool]
-    affects_vision: NotRequired[bool]
-    affects_hazards: NotRequired[bool]
-
-
-type DestinationPositionItem = int
-
-
-class TraversalConnectorCommand(TypedDict):
-    connector_uuid: str
-    connector_revision: int
-    connector_digest: str
-    source_position: list[SourcePositionItem]
-    destination_position: list[DestinationPositionItem]
-
-
-type ExtraTargetPosition = int
-
-
-class ActionSelection(TypedDict):
-    action_index: int
-    target_indices: list[int]
-    extra_target_positions: NotRequired[list[list[ExtraTargetPosition]]]
-    prefer_safe: NotRequired[bool]
-
-
-class PreviewRequest(TypedDict):
-    actor_uuid: str
-    state_revision: str
-    discovery_generation: int
-    correlation_id: str
-    selection: ActionSelection
-
-
-type NextPosition = int
-
-
-type PathItem12Item = int
-
-
-type PathItem12 = list[PathItem12Item]
-
-
-type AffordableEndpointItem = int
-
-
-class SelectedRoute(TypedDict):
-    path: list[PathItem12]
-    cost_feet: float
-    affordable_endpoint: list[AffordableEndpointItem]
-    policy: Literal['normal', 'safe']
-    opportunity_attack_exposures: list[OpportunityAttackExposure]
-    is_hazardous: bool
-
-
-type BodyPart = Literal[
-    'Head', 'Body', 'Hands', 'Legs', 'Feet', 'Amulet', 'Ring', 'Cloak', 'Backpack'
-]
-
-
-class EndTurnIntent(TypedDict):
-    kind: NotRequired[Literal['end_turn']]
-
-
-class ExecuteSelectionIntent(TypedDict):
-    kind: NotRequired[Literal['execute_selection']]
-    discovery_generation: int
-    selection: ActionSelection
-
-
-type RingSlot = Literal['Left Ring', 'Right Ring']
-
-
-class ToggleHandler(TypedDict):
-    handler_uuid: str
-    enabled: bool
-
-
-class ToggleHandlerIntent(TypedDict):
-    kind: NotRequired[Literal['toggle_handler']]
-    discovery_generation: int
-    handler: ToggleHandler
-
-
-class UnequipItem(TypedDict):
-    slot: WeaponSlot | BodyPart | RingSlot
-
-
-class CommittedReceipt(TypedDict):
-    game_id: str
-    game_epoch: str
-    audience_id: str
-    command_number: int
-    kind: NotRequired[Literal['committed']]
-    cursor: PlayerCursor
-
-
-class ExpiredReceipt(TypedDict):
-    game_id: str
-    game_epoch: str
-    audience_id: str
-    command_number: int
-    kind: NotRequired[Literal['expired']]
-
-
-class IndeterminateReceipt(TypedDict):
-    game_id: str
-    game_epoch: str
-    audience_id: str
-    command_number: int
-    kind: NotRequired[Literal['indeterminate']]
-    incident_id: str
-
-
-class PendingReceipt(TypedDict):
-    game_id: str
-    game_epoch: str
-    audience_id: str
-    command_number: int
-    kind: NotRequired[Literal['pending']]
-
-
-class RejectedReceipt(TypedDict):
-    game_id: str
-    game_epoch: str
-    audience_id: str
-    command_number: int
-    kind: NotRequired[Literal['rejected']]
-    reason: Literal[
-        'stale_state',
-        'stale_discovery',
-        'not_your_turn',
-        'actor_unavailable',
-        'invalid_selection',
-        'unavailable_action',
-        'invalid_item',
-        'invalid_slot',
-        'invalid_handler',
-    ]
-
-
-class UnknownReceipt(TypedDict):
-    game_id: str
-    game_epoch: str
-    audience_id: str
-    command_number: int
-    kind: NotRequired[Literal['unknown']]
-
-
-class ReceiptResponse(TypedDict):
-    kind: NotRequired[Literal['receipt']]
-    receipt: (
-        PendingReceipt
-        | CommittedReceipt
-        | RejectedReceipt
-        | IndeterminateReceipt
-        | ExpiredReceipt
-        | UnknownReceipt
-    )
-
-
-class StreamReady(TypedDict):
-    kind: NotRequired[Literal['ready']]
-    protocol: ProtocolIdentity
-    after: PlayerCursor
-    head: PlayerCursor
-    status: StatusSnapshot
-
-
-class StreamStatus(TypedDict):
-    kind: NotRequired[Literal['stream_status']]
-    status: StatusSnapshot
 
 
 class ErrorAttachmentConflict(TypedDict):
@@ -1755,15 +591,6 @@ class ErrorBusy(TypedDict):
     http_status: NotRequired[Literal[429]]
     retryable: NotRequired[Literal[True]]
     retry_after_ms: NotRequired[int]
-
-
-class ErrorCatchUpRequired(TypedDict):
-    kind: NotRequired[Literal['error']]
-    incident_id: NotRequired[str | None]
-    code: NotRequired[Literal['catch_up_required']]
-    http_status: NotRequired[Literal[409]]
-    retryable: NotRequired[Literal[False]]
-    required_cursor: PlayerCursor
 
 
 class ErrorCommandConflict(TypedDict):
@@ -1903,15 +730,6 @@ class ErrorResponseTooLarge(TypedDict):
     retryable: NotRequired[Literal[False]]
 
 
-class ErrorResumeUnavailable(TypedDict):
-    kind: NotRequired[Literal['error']]
-    incident_id: NotRequired[str | None]
-    code: NotRequired[Literal['resume_unavailable']]
-    http_status: NotRequired[Literal[410]]
-    retryable: NotRequired[Literal[False]]
-    earliest_cursor: PlayerCursor | None
-
-
 class ErrorStaleDiscovery(TypedDict):
     kind: NotRequired[Literal['error']]
     incident_id: NotRequired[str | None]
@@ -1945,7 +763,1108 @@ class ErrorUnauthenticated(TypedDict):
     retryable: NotRequired[Literal[False]]
 
 
-type ApiError = ErrorInvalidRequest | ErrorUnauthenticated | ErrorForbidden | ErrorGameNotFound | ErrorEpochMismatch | ErrorAudienceMismatch | ErrorAttachmentReplaced | ErrorAttachmentConflict | ErrorCommandConflict | ErrorCommandNumber | ErrorStaleState | ErrorStaleDiscovery | ErrorNotYourTurn | ErrorCatchUpRequired | ErrorQuerySuperseded | ErrorInvalidCursor | ErrorResumeUnavailable | ErrorProtocolMismatch | ErrorRequestTooLarge | ErrorResponseTooLarge | ErrorBusy | ErrorStarting | ErrorRecordingCapacity | ErrorGameTerminal | ErrorGameFailed | ErrorGameClosed | ErrorInternalFailure
+type EventPhase = Literal['declaration', 'execution', 'effect', 'completion', 'cancel']
+
+
+class EventResolutionRef(TypedDict):
+    kind: NotRequired[Literal['event']]
+    lineage_uuid: str
+
+
+type EventType = Literal[
+    'base_action',
+    'attack',
+    'movement',
+    'step_movement',
+    'forced_movement',
+    'portal_transfer',
+    'mechanism_activation',
+    'ability_check',
+    'saving_throw',
+    'skill_check',
+    'inflicted_damage',
+    'take_damage',
+    'damage_applied',
+    'heal',
+    'temporary_hit_points_changed',
+    'cast_spell',
+    'attack_miss',
+    'attack_hit',
+    'attack_critical',
+    'condition_application',
+    'condition_removal',
+    'condition_state_changed',
+    'weapon_equip',
+    'weapon_unequip',
+    'armor_equip',
+    'armor_unequip',
+    'shield_equip',
+    'shield_unequip',
+    'item_location_state',
+    'item_holdings_released',
+    'item_destruction',
+    'item_charge_consumption',
+    'world_initialized',
+    'world_modified',
+    'entity_created',
+    'entity_faction_changed',
+    'summon_admission',
+    'entity_level_added',
+    'entity_level_removed',
+    'trigger_event',
+    'dice_roll',
+    'd20_roll_result',
+    'attack_d20_roll',
+    'save_d20_roll',
+    'check_d20_roll',
+    'damage_roll_result',
+    'heal_roll_result',
+    'enemy_spotted',
+    'enemy_killed',
+    'enemy_engaged',
+    'spatial_entity_entered',
+    'spatial_entity_left',
+    'spatial_tile_changed',
+    'spatial_object_placed',
+    'spatial_object_removed',
+    'spatial_perceivability_changed',
+    'spatial_light_changed',
+    'spatial_object_changed',
+    'traversal_connector_changed',
+    'movement_collision',
+    'sensory_update',
+    'spatial_effect_changed',
+    'spatial_effect_interaction',
+    'area_reached',
+    'fire_exposure',
+    'exposed_flame_ignited',
+    'wind_exposure',
+    'encounter_start',
+    'encounter_end',
+    'round_start',
+    'round_end',
+    'turn_start',
+    'turn_end',
+    'life_state_change',
+    'revive',
+    'death_save',
+    'instant_death',
+    'death',
+]
+
+
+class ExecuteSelectionIntent(TypedDict):
+    kind: NotRequired[Literal['execute_selection']]
+    discovery_generation: int
+    selection: ActionSelection
+
+
+class ExpiredReceipt(TypedDict):
+    game_id: str
+    game_epoch: str
+    audience_id: str
+    command_number: int
+    kind: NotRequired[Literal['expired']]
+
+
+class FactionFact(TypedDict):
+    kind: NotRequired[Literal['faction']]
+    entity_uuid: str
+    faction_after: str | None
+    control_lost: NotRequired[bool]
+
+
+class FontConversion(TypedDict):
+    direction: Literal['slot_to_points', 'points_to_slot']
+    slot_level: NotRequired[int | None]
+    sorcery_points_delta: NotRequired[int | None]
+    spell_slots_delta: NotRequired[int | None]
+
+
+type DisclosedPathItem = int
+
+
+class ForcedMovementLogData(TypedDict):
+    kind: NotRequired[Literal['forced_movement']]
+    type: NotRequired[Literal['forced_movement']]
+    cause: str
+    direction: list[DirectionItem]
+    intended_distance: int
+    actual_distance: int
+    blocked: bool
+    blocked_by: str | None
+    start_position: list[StartPositionItem] | None
+    end_position: list[EndPositionItem] | None
+
+
+type HandlerDispatchOutcome = Literal[
+    'no_effect', 'emitted_events', 'modified_event', 'canceled_event'
+]
+
+
+class HazardDetectedLogData(TypedDict):
+    kind: NotRequired[Literal['hazard_detected']]
+    observer_name: str
+    observer_uuid: str
+    hazard_name: str
+    position: list[PositionItem] | None
+    passive_perception: int
+    stealth_dc: int
+
+
+class HealFact(TypedDict):
+    kind: NotRequired[Literal['heal']]
+    source_entity_uuid: str | None
+    target_entity_uuid: str
+    actual_healing: int
+    was_blocked: bool
+    resulting_normal_hp: int | None
+    resulting_temporary_hp: int | None
+    source_condition_uuid: NotRequired[str | None]
+
+
+class HealLogData(TypedDict):
+    kind: NotRequired[Literal['heal']]
+    entity_name: str
+    entity_uuid: str
+    amount: int
+    source_description: str
+
+
+class HealthResponse(TypedDict):
+    kind: NotRequired[Literal['health']]
+    status: NotRequired[Literal['ok']]
+
+
+class IndeterminateReceipt(TypedDict):
+    game_id: str
+    game_epoch: str
+    audience_id: str
+    command_number: int
+    kind: NotRequired[Literal['indeterminate']]
+    incident_id: str
+
+
+class IndomitableReroll(TypedDict):
+    condition_uuid: NotRequired[str | None]
+    succeeded: bool
+
+
+class InformationEffectProfile(TypedDict):
+    operation: ActionInformationOperation
+    certainty: ActionWorldEffectCertainty
+    anchor: ActionWorldEffectAnchor
+    scope: ActionWorldEffectScope
+    shape: NotRequired[ActionWorldEffectShape | None]
+    radius_feet: NotRequired[int | None]
+    sense_type: NotRequired[str | None]
+
+
+class ItemConcentrationSlot(TypedDict):
+    slot_uuid: str
+    cast_lineage_uuid: NotRequired[str | None]
+    spell_id: NotRequired[str | None]
+    spell_name: str
+
+
+class ItemEffectChangeFact(TypedDict):
+    kind: NotRequired[Literal['item_effect']]
+    item_uuid: str
+    effect_uuid: str
+    event_type: EventType
+
+
+type ItemIntegrity = Literal['intact', 'destroyed']
+
+
+type ItemPresentationKind = Literal['item', 'usable', 'weapon', 'armor', 'shield']
+
+
+type ItemRarity = Literal['common', 'uncommon', 'rare', 'very_rare', 'legendary']
+
+
+type ItemResourceChange = Literal['consume', 'recharge']
+
+
+class JumpMovementLogData(TypedDict):
+    entity_name: str
+    entity_uuid: str
+    start_position: list[StartPositionItem]
+    end_position: list[EndPositionItem]
+    path: NotRequired[list[list[PathItem]]]
+    distance_feet: NotRequired[int]
+    movement_cost: NotRequired[int]
+    requested_end_position: NotRequired[list[RequestedEndPositionItem] | None]
+    termination_reason: NotRequired[str]
+    controller_revalidation: NotRequired[bool]
+    controller_revalidation_reason: NotRequired[str | None]
+    kind: NotRequired[Literal['jump_movement']]
+    movement_type: NotRequired[Literal['jump']]
+    objective_end_position: list[ObjectiveEndPositionItem]
+    start_elevation_feet: int
+    requested_end_elevation_feet: int
+    end_elevation_feet: int
+
+
+type LandingKind = Literal['ground', 'fall', 'controlled', 'impact']
+
+
+type LifeState = Literal['alive', 'dying', 'stable', 'dead']
+
+
+type LifeStateChangeReason = Literal[
+    'damage',
+    'massive_damage',
+    'instant_death',
+    'death_save_failures',
+    'stabilization',
+    'healing',
+    'revival',
+    'direct_state_check',
+]
+
+
+type LightLevel = Literal[0, 1, 2, 3, 4]
+
+
+class LinePresentationGeometry(TypedDict):
+    shape: NotRequired[Literal['line']]
+    origin: list[OriginItem]
+    direction: list[DirectionItem]
+    length_feet: int
+    width_feet: int
+
+
+type Material = Literal[
+    'earth',
+    'sand',
+    'stone',
+    'wood',
+    'metal',
+    'fabric',
+    'glass',
+    'water',
+    'ice',
+    'vegetation',
+]
+
+
+class MaterialDepositSource(TypedDict):
+    deposit_uuid: str
+    origin: list[OriginItem]
+    radius_cells: int
+
+
+type OriginPositionItem = int
+
+
+class MechanismActivationFact(TypedDict):
+    kind: NotRequired[Literal['mechanism_activation']]
+    mechanism_uuid: str | None
+    mechanism_content_id: str
+    target_entity_uuid: str | None
+    origin_position: list[OriginPositionItem] | None
+    direction: list[DirectionItem]
+    affected_positions: list[list[AffectedPosition]]
+    end_position: list[EndPositionItem] | None
+    committed: bool
+
+
+class ModifierBreakdown(TypedDict):
+    name: str
+    value: int
+    source: NotRequired[str]
+
+
+class MovementLogData(TypedDict):
+    entity_name: str
+    entity_uuid: str
+    start_position: list[StartPositionItem]
+    end_position: list[EndPositionItem]
+    path: NotRequired[list[list[PathItem]]]
+    distance_feet: NotRequired[int]
+    movement_cost: NotRequired[int]
+    requested_end_position: NotRequired[list[RequestedEndPositionItem] | None]
+    termination_reason: NotRequired[str]
+    controller_revalidation: NotRequired[bool]
+    controller_revalidation_reason: NotRequired[str | None]
+    kind: NotRequired[Literal['movement']]
+
+
+type MovementMode = Literal['walking', 'flying', 'swimming', 'burrowing']
+
+
+type MovementProvocationPolicy = Literal['ordinary_exit', 'does_not_provoke']
+
+
+type MovementTrajectory = Literal['path', 'direct_arc', 'connector_transfer']
+
+
+type TargetEntryIndice = int
+
+
+type AoeCenterItem = int
+
+
+class MultiEntityLogData(TypedDict):
+    kind: NotRequired[Literal['multi_entity_action']]
+    action_name: str
+    caster_name: str
+    total_targets: NotRequired[int]
+    target_names: NotRequired[list[str]]
+    total_damage: NotRequired[int]
+    per_target_damage: NotRequired[list[int]]
+    saves_succeeded: NotRequired[int]
+    saves_failed: NotRequired[int]
+    target_entry_indices: NotRequired[list[TargetEntryIndice]]
+    aoe_shape: NotRequired[str | None]
+    aoe_center: NotRequired[list[AoeCenterItem] | None]
+
+
+class ObjectDamageFact(TypedDict):
+    kind: NotRequired[Literal['object_damage']]
+    object_uuid: str
+    applied_damage: int
+    resulting_hp: int
+    damage_type: DamageType | None
+
+
+class ObjectResidueState(TypedDict):
+    condition_uuid: str
+    residue_id: str
+    description: str
+    faces: list[CardinalDirection]
+
+
+type MinimumPositionItem = int
+
+
+class ObjectSectionVolume(TypedDict):
+    minimum_position: list[MinimumPositionItem]
+    base_height_steps: int
+
+
+class ObservedChangeRef(TypedDict):
+    source_event_uuid: str
+    source_index: int
+    resolution_ref: NotRequired[EventResolutionRef | ApplicationResolutionRef | None]
+    field: Literal[
+        'position',
+        'visibility',
+        'light',
+        'hazards',
+        'senses',
+        'paths',
+        'entity_contact',
+        'object_contact',
+        'spatial_effect',
+    ]
+    owner_uuid: str
+
+
+type ObservedPathSegment = int
+
+
+class ObservedMovementLogData(TypedDict):
+    kind: NotRequired[Literal['observed_movement']]
+    type: NotRequired[Literal['movement']]
+    entity_name: str
+    entity_uuid: str
+    movement_type: NotRequired[str | None]
+    observation_complete: bool
+    observed_path_segments: list[list[list[ObservedPathSegment]]]
+    observed_distance_feet: float
+    start_position: NotRequired[list[StartPositionItem] | None]
+    end_position: NotRequired[list[EndPositionItem] | None]
+    path: NotRequired[list[list[PathItem]]]
+    distance_feet: NotRequired[float | None]
+    movement_cost: NotRequired[float | None]
+
+
+type OccupancyLayer = Literal['ground', 'air', 'underground']
+
+
+type FromPositionItem = int
+
+
+type ToPositionItem = int
+
+
+class OpportunityAttackExposure(TypedDict):
+    reactor_uuid: str
+    reactor_name: str
+    from_position: list[FromPositionItem]
+    to_position: list[ToPositionItem]
+
+
+class OriginChoiceSelection(TypedDict):
+    choice_id: str
+    values: list[str]
+
+
+type OutcomeApplicationScope = Literal['allocated_targets', 'each_affected_entity']
+
+
+class OutcomeProtection(TypedDict):
+    protection_id: str
+    blocked_effect_ids: NotRequired[list[str]]
+
+
+type OutcomeResolution = Literal['automatic', 'attack_roll', 'saving_throw', 'unknown']
+
+
+class PendingReceipt(TypedDict):
+    game_id: str
+    game_epoch: str
+    audience_id: str
+    command_number: int
+    kind: NotRequired[Literal['pending']]
+
+
+type AnchorPositionItem = int
+
+
+type VisibleVolumePosition = int
+
+
+type LastVisualPositionItem = int
+
+
+class PlayerAudience(TypedDict):
+    controlled: list[str]
+    observers: list[str]
+    revision: NotRequired[int]
+
+
+type Ability = int
+
+
+class PlayerCursor(TypedDict):
+    game_id: str
+    game_epoch: str
+    audience_id: str
+    sequence: int
+
+
+class PlayerResource(TypedDict):
+    key: str
+    label: str
+    current: int
+    maximum: int
+
+
+type Bound = int
+
+
+class PlayerWorld(TypedDict):
+    battlefield_id: str
+    battlefield_name: str
+    bounds: list[Bound]
+    width: int
+    height: int
+
+
+class PortalTransferFact(TypedDict):
+    kind: NotRequired[Literal['portal_transfer']]
+    target_entity_uuid: str
+    portal_uuid: str | None
+    start_position: list[StartPositionItem] | None
+    end_position: list[EndPositionItem] | None
+    committed: bool
+    portal_content_id: NotRequired[str | None]
+
+
+class PositionPathSelection(TypedDict):
+    kind: NotRequired[Literal['path']]
+    max_length_feet: float
+    max_segments: NotRequired[int]
+    allow_origin_start: NotRequired[bool]
+    origin_start_offset_cells: NotRequired[int]
+
+
+class PreviewRequest(TypedDict):
+    actor_uuid: str
+    state_revision: str
+    discovery_generation: int
+    correlation_id: str
+    selection: ActionSelection
+
+
+class ProtocolIdentity(TypedDict):
+    protocol_version: NotRequired[Literal[1]]
+    player_schema_version: NotRequired[Literal[6]]
+    schema_digest: str
+
+
+class RejectedReceipt(TypedDict):
+    game_id: str
+    game_epoch: str
+    audience_id: str
+    command_number: int
+    kind: NotRequired[Literal['rejected']]
+    reason: Literal[
+        'stale_state',
+        'stale_discovery',
+        'not_your_turn',
+        'actor_unavailable',
+        'invalid_selection',
+        'unavailable_action',
+        'invalid_item',
+        'invalid_slot',
+        'invalid_handler',
+    ]
+
+
+class RelentlessRageIntervention(TypedDict):
+    condition_uuid: NotRequired[str | None]
+    succeeded: bool
+
+
+type RemainsDisposition = Literal['intact', 'disintegrated']
+
+
+class ResidueEllipse(TypedDict):
+    center: list[float]
+    radius_x: float
+    radius_y: float
+    angle: NotRequired[float]
+
+
+type RingSlot = Literal['Left Ring', 'Right Ring']
+
+
+class RollModificationLogFact(TypedDict):
+    operation: Literal['replace', 'append']
+    handler_name: str
+    packet_index: NotRequired[int | None]
+    previous_total: NotRequired[int | None]
+    final_total: int
+    reason: str
+    packet_damage_type: NotRequired[str | None]
+    packet_dice: NotRequired[str | None]
+
+
+class SavingThrowFact(TypedDict):
+    kind: NotRequired[Literal['saving_throw']]
+    target_entity_uuid: str
+    ability_name: Literal[
+        'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'
+    ]
+    succeeded: bool
+    effect_id: str | None
+    indomitable_reroll: NotRequired[IndomitableReroll | None]
+
+
+class SavingThrowLogData(TypedDict):
+    kind: NotRequired[Literal['saving_throw']]
+    entity_name: str
+    entity_uuid: str
+    ability: str
+    dc: int
+    roll: DiceRollDisplay
+    bonus_breakdown: NotRequired[list[ModifierBreakdown]]
+    advantage_breakdown: NotRequired[list[ModifierBreakdown]]
+    success: bool
+    source_name: NotRequired[str | None]
+
+
+type PathItem12Item = int
+
+
+type PathItem12 = list[PathItem12Item]
+
+
+type AffordableEndpointItem = int
+
+
+class SelectedRoute(TypedDict):
+    path: list[PathItem12]
+    cost_feet: float
+    affordable_endpoint: list[AffordableEndpointItem]
+    policy: Literal['normal', 'safe']
+    opportunity_attack_exposures: list[OpportunityAttackExposure]
+    is_hazardous: bool
+
+
+type SensesType = Literal[
+    'Blindsight',
+    'Darkvision',
+    'Tremorsense',
+    'Truesight',
+    'Devils Sight',
+    'See Invisible',
+]
+
+
+type ObserverPositionItem = int
+
+
+type VisibleCellsAddedItem = int
+
+
+type VisibleCellsRemovedItem = int
+
+
+type SeenCellsAddedItem = int
+
+
+class ShoveFact(TypedDict):
+    kind: NotRequired[Literal['shove']]
+    source_entity_uuid: str
+    target_entity_uuid: str
+    behavior_id: str | None
+    contest_success: bool | None
+    push_distance: int
+    knocked_prone: bool
+
+
+type PushDirectionItem = int
+
+
+class ShoveLogData(TypedDict):
+    kind: NotRequired[Literal['shove']]
+    action_type: NotRequired[Literal['shove']]
+    target_weight: int
+    max_shove_weight: int
+    contest_success: bool | None
+    push_distance: int
+    push_direction: list[PushDirectionItem]
+    end_position: list[EndPositionItem] | None
+    knocked_prone: bool
+    blocked_by: str | None
+    is_ally: bool
+
+
+class SinglePositionSelection(TypedDict):
+    kind: NotRequired[Literal['single']]
+
+
+type Size = Literal['Tiny', 'Small', 'Medium', 'Large', 'Huge', 'Gargantuan']
+
+
+class SkillCheckLogData(TypedDict):
+    kind: NotRequired[Literal['skill_check']]
+    entity_name: str
+    entity_uuid: str
+    skill: str
+    dc: NotRequired[int | None]
+    roll: DiceRollDisplay
+    bonus_breakdown: NotRequired[list[ModifierBreakdown]]
+    advantage_breakdown: NotRequired[list[ModifierBreakdown]]
+    success: NotRequired[bool | None]
+
+
+type SlopeAxis = Literal['north_south', 'east_west']
+
+
+type SpatialChangeType = Literal[
+    'entity_entered',
+    'entity_left',
+    'tile_changed',
+    'tile_created',
+    'tile_removed',
+    'object_placed',
+    'object_removed',
+    'perceivability_changed',
+    'light_changed',
+    'object_changed',
+    'movement_collision',
+]
+
+
+class SpatialDamageSource(TypedDict):
+    spatial_effect_uuid: str
+    position: list[PositionItem]
+    target_position: list[TargetPositionItem]
+    base_height_steps: int
+    exposure: Literal['contact', 'radiated_heat']
+
+
+type SpatialDisposition = Literal['present', 'absent', 'return_pending', 'home_plane']
+
+
+type SpatialEffectChangeOperation = Literal[
+    'created',
+    'footprint_changed',
+    'revealed',
+    'state_changed',
+    'removed',
+    'transformed',
+]
+
+
+type SpatialEffectInteractionOperation = Literal[
+    'ignite', 'douse', 'freeze', 'electrify', 'vaporize', 'disperse'
+]
+
+
+type SpatialEffectLayer = Literal['ground_surface', 'cloud', 'field']
+
+
+type RemovedPosition = int
+
+
+class SpatialInteractionLogData(TypedDict):
+    kind: NotRequired[Literal['spatial_interaction']]
+    operation: SpatialEffectInteractionOperation
+    intensity: Literal['minor', 'moderate', 'strong']
+    affected_positions: list[list[AffectedPosition]]
+    source_item_id: str | None
+
+
+type Species = Literal[
+    'species.dragonborn',
+    'species.dwarf',
+    'species.elf',
+    'species.gnome',
+    'species.half_elf',
+    'species.half_orc',
+    'species.halfling',
+    'species.human',
+    'species.tiefling',
+]
+
+
+type SpeciesVariant = Literal[
+    'species_variant.dwarf.hill',
+    'species_variant.elf.high',
+    'species_variant.gnome.rock',
+    'species_variant.halfling.lightfoot',
+]
+
+
+class SpellDamageLogData(TypedDict):
+    kind: NotRequired[Literal['spell_damage']]
+    spell_name: str
+    target_name: str
+    damage: int
+    damage_type: str
+
+
+type SourcePositionItem = int
+
+
+type AoePositionItem = int
+
+
+type ResolvedAreaPosition = int
+
+
+class SpellInterruptionLogData(TypedDict):
+    kind: NotRequired[Literal['spell_interruption']]
+    outcome_code: str
+    counterspeller_name: str
+    counterspeller_uuid: str
+    original_caster_name: str
+    original_caster_uuid: str
+    spell_name: str
+    incoming_spell_level: int
+    counterspell_slot_level: int
+    automatic: bool
+    check_total: NotRequired[int | None]
+    check_dc: NotRequired[int | None]
+    succeeded: bool
+
+
+class SpherePresentationGeometry(TypedDict):
+    shape: NotRequired[Literal['sphere']]
+    center: list[CenterItem]
+    radius_feet: int
+
+
+class StatusSnapshot(TypedDict):
+    game_id: str
+    game_epoch: str
+    audience_id: str
+    boundary: BoundaryState
+    published_cursor: PlayerCursor | None
+    final_cursor: PlayerCursor | None
+    attachment_epoch: str | None
+    catch_up_cursor: PlayerCursor | None
+    acknowledged_cursor: PlayerCursor | None
+    next_command_number: int
+    pending_command_numbers: list[int]
+
+
+class StepFact(TypedDict):
+    kind: NotRequired[Literal['step']]
+    source_entity_uuid: str
+    from_position: list[FromPositionItem]
+    to_position: list[ToPositionItem]
+    from_elevation_feet: int
+    to_elevation_feet: int
+    disclosed_path: list[list[DisclosedPathItem]]
+    trajectory: MovementTrajectory
+    provocation_policy: MovementProvocationPolicy
+    committed: bool
+    resolved_speed_feet: NotRequired[int | None]
+    movement_mode: NotRequired[MovementMode | None]
+    from_layer: NotRequired[OccupancyLayer | None]
+    to_layer: NotRequired[OccupancyLayer | None]
+
+
+class StepMovementLogData(TypedDict):
+    kind: NotRequired[Literal['step_movement']]
+    type: NotRequired[Literal['step_movement']]
+    from_position: list[FromPositionItem]
+    to_position: list[ToPositionItem]
+    path_index: int
+    movement_cost: float
+    trajectory: MovementTrajectory
+    disclosed_path: list[list[DisclosedPathItem]]
+    from_elevation_feet: int
+    to_elevation_feet: int
+    provocation_policy: MovementProvocationPolicy
+    committed: bool
+
+
+class StreamReady(TypedDict):
+    kind: NotRequired[Literal['ready']]
+    protocol: ProtocolIdentity
+    after: PlayerCursor
+    head: PlayerCursor
+    status: StatusSnapshot
+
+
+class StreamStatus(TypedDict):
+    kind: NotRequired[Literal['stream_status']]
+    status: StatusSnapshot
+
+
+type SummonDepartureCause = Literal[
+    'expired', 'dismissed', 'defeated', 'sustain_lost', 'closed'
+]
+
+
+type SummonManifestation = Literal['natural', 'fey_spirit', 'fiend']
+
+
+class SurfaceLayer(TypedDict):
+    material: Material
+    description: NotRequired[str]
+
+
+type TargetEffectDisposition = Literal['beneficial', 'harmful', 'neutral']
+
+
+type TargetType = Literal[
+    'self',
+    'entity',
+    'creature_or_object',
+    'position',
+    'position_path',
+    'position_los',
+    'position_aoe',
+    'multi_entity',
+    'object',
+]
+
+
+class TemporaryHitPointsGrant(TypedDict):
+    instance_uuid: str
+    source_id: NotRequired[str | None]
+
+
+class TileSurface(TypedDict):
+    base_material: Material
+    layers: NotRequired[list[SurfaceLayer]]
+    description: NotRequired[str]
+
+
+class ToggleHandler(TypedDict):
+    handler_uuid: str
+    enabled: bool
+
+
+class ToggleHandlerIntent(TypedDict):
+    kind: NotRequired[Literal['toggle_handler']]
+    discovery_generation: int
+    handler: ToggleHandler
+
+
+class TopologyEffectProfile(TypedDict):
+    operation: ActionTopologyOperation
+    certainty: ActionWorldEffectCertainty
+    anchor: ActionWorldEffectAnchor
+    scope: ActionWorldEffectScope
+    shape: NotRequired[ActionWorldEffectShape | None]
+    radius_feet: NotRequired[int | None]
+    affects_movement: NotRequired[bool]
+    affects_vision: NotRequired[bool]
+    affects_hazards: NotRequired[bool]
+
+
+type TrapState = Literal['ready', 'activated', 'deactivated']
+
+
+type DestinationPositionItem = int
+
+
+class TraversalConnectorCommand(TypedDict):
+    connector_uuid: str
+    connector_revision: int
+    connector_digest: str
+    source_position: list[SourcePositionItem]
+    destination_position: list[DestinationPositionItem]
+
+
+type TraversalConnectorKind = Literal[
+    'ladder', 'rope', 'lift', 'vertical_stairs', 'passage'
+]
+
+
+class TurnFact(TypedDict):
+    kind: NotRequired[Literal['turn']]
+    event_type: EventType
+    entity_uuid: str | None
+    round_number: int | None
+
+
+class TurnLogData(TypedDict):
+    kind: NotRequired[Literal['turn']]
+    entity_name: str
+    entity_uuid: str
+    round_number: int
+    turn_index: int | None
+
+
+class UnknownMovementLogData(TypedDict):
+    kind: NotRequired[Literal['unknown_movement']]
+    type: NotRequired[Literal['movement']]
+    observed: NotRequired[Literal[True]]
+
+
+class UnknownReceipt(TypedDict):
+    game_id: str
+    game_epoch: str
+    audience_id: str
+    command_number: int
+    kind: NotRequired[Literal['unknown']]
+
+
+class UnlocatedMovementLogData(TypedDict):
+    kind: NotRequired[Literal['unlocated_movement']]
+    type: NotRequired[Literal['movement']]
+    observation_complete: NotRequired[Literal[False]]
+
+
+class VersionRow(TypedDict):
+    source_index: int
+    event_uuid: str
+    lineage_uuid: str
+
+
+type VisualLoadoutSlot = Literal[
+    'weapon_melee_main',
+    'weapon_melee_off',
+    'weapon_ranged_main',
+    'weapon_ranged_off',
+    'helmet',
+    'body_armor',
+    'gauntlets',
+    'greaves',
+    'boots',
+    'amulet',
+    'cloak',
+    'backpack',
+    'ring_left',
+    'ring_right',
+]
+
+
+type LowerHeightPlane = list[float]
+
+
+class VolumeSurfaceSight(TypedDict):
+    position: list[PositionItem]
+    lower_height_planes: list[LowerHeightPlane]
+
+
+class WallDome(TypedDict):
+    form: NotRequired[Literal['dome']]
+    center: list[float]
+    radius_feet: float
+
+
+type Point = list[float]
+
+
+class WallPolyline(TypedDict):
+    form: NotRequired[Literal['polyline']]
+    points: list[Point]
+
+
+class WallRing(TypedDict):
+    form: NotRequired[Literal['ring']]
+    center: list[float]
+    radius_feet: float
+
+
+class WallSegment(TypedDict):
+    form: NotRequired[Literal['segment']]
+    start: list[float]
+    end: list[float]
+
+
+type WeaponSet = Literal['none', 'melee', 'ranged']
+
+
+type WeaponSlot = Literal['MELEE_MAIN', 'MELEE_OFF', 'RANGED_MAIN', 'RANGED_OFF']
+
+
+type EndpointItem = int
+
+
+type Endpoint = list[EndpointItem]
+
+
+type Endpoint1Item = int
+
+
+type Endpoint1 = list[Endpoint1Item]
+
+
+type EndpointElevationsfoot = int
+
+
+class WorldConnectorState(TypedDict):
+    connector_uuid: str
+    authored_id: str
+    kind: TraversalConnectorKind
+    presentation_key: str
+    endpoints: list[Endpoint | Endpoint1]
+    support_tile_uuids: list[str]
+    endpoint_elevations_feet: list[EndpointElevationsfoot]
+    movement_cost_feet: int
+    action_cost_type: NotRequired[ConnectorActionCostType | None]
+    action_cost_amount: NotRequired[int]
+    bidirectional: bool
+    enabled: bool
+    provocation_policy: ConnectorProvocationPolicy
+
+
+type WorldEdgeChannel = Literal['movement', 'optical', 'propagation']
+
+
+type RemovedBand = int
+
+
+class WorldObjectSupport(TypedDict):
+    position: list[PositionItem]
+    tile_uuid: str
+
+
+type WorldPlacementKind = Literal['center', 'boundary']
+
+
+class AckRequest(TypedDict):
+    cursor: PlayerCursor
+
+
+class AckResponse(TypedDict):
+    kind: NotRequired[Literal['ack']]
+    cursor: PlayerCursor
+    catch_up_cursor: PlayerCursor
 
 
 class ActionCancellation(TypedDict):
@@ -1963,6 +1882,55 @@ class ActionFact(TypedDict):
     source_item_uuid: NotRequired[str | None]
     reaction: NotRequired[ActionReaction | None]
     font_conversion: NotRequired[FontConversion | None]
+
+
+class ActionOutcomeProfile(TypedDict):
+    effect_id: NotRequired[str | None]
+    resolution: OutcomeResolution
+    applications: NotRequired[int]
+    application_scope: NotRequired[OutcomeApplicationScope]
+    damage_rolls: NotRequired[list[DamageRollProfile]]
+    attack_bonus: NotRequired[int | None]
+    advantage: NotRequired[AdvantageStatus]
+    critical_threshold: NotRequired[int]
+    critical_extra_dice: NotRequired[int]
+    save_dc: NotRequired[int | None]
+    save_ability: NotRequired[str | None]
+    half_damage_on_save: NotRequired[bool]
+    scope: NotRequired[Literal['actor_baseline']]
+
+
+class ActionSetupMaintenanceProfile(TypedDict):
+    trigger: ActionSetupMaintenanceTrigger
+    skill_name: str
+    initial_dc: int
+    dc_increment_per_success: NotRequired[int]
+    check_bonus: int
+    check_advantage: NotRequired[AdvantageStatus]
+    failure: ActionSetupMaintenanceFailure
+
+
+class ActionTargetEffectBranchProfile(TypedDict):
+    effect_id: str
+    disposition: TargetEffectDisposition
+    included_creature_types: NotRequired[list[str]]
+    excluded_creature_types: NotRequired[list[str]]
+    resolution: OutcomeResolution
+    save_dc: NotRequired[int | None]
+    save_ability: NotRequired[str | None]
+    condition_fact_ids: NotRequired[list[str]]
+    condition_semantic_keys: NotRequired[list[str]]
+
+
+class ActionTargetEffectProfile(TypedDict):
+    semantic_id: str
+    branches: list[ActionTargetEffectBranchProfile]
+
+
+class ActionWorldEffectProfile(TypedDict):
+    semantic_id: str
+    information_effects: NotRequired[list[InformationEffectProfile]]
+    topology_effects: NotRequired[list[TopologyEffectProfile]]
 
 
 class AppliedClassLevel(TypedDict):
@@ -2008,6 +1976,49 @@ class AppliedOriginState(TypedDict):
     choices: NotRequired[list[OriginChoiceSelection]]
 
 
+class AttachmentResponse(TypedDict):
+    kind: NotRequired[Literal['attachment']]
+    acquisition_id: str
+    attachment_epoch: str
+    status: StatusSnapshot
+
+
+class AvailableTarget(TypedDict):
+    target_kind: NotRequired[Literal['creature', 'object']]
+    index: int
+    target_uuid: NotRequired[str | None]
+    position: NotRequired[list[PositionItem] | None]
+    target_name: NotRequired[str | None]
+    distance: NotRequired[int | None]
+    path_cost: NotRequired[int | None]
+    extra_target_uuids: NotRequired[list[str] | None]
+    secondary_targets: NotRequired[list[AvailableTarget] | None]
+    is_path_hazardous: NotRequired[bool]
+    safe_path_cost: NotRequired[int | None]
+    path: NotRequired[list[list[PathItem]] | None]
+    safe_path: NotRequired[list[list[SafePathItem]] | None]
+    opportunity_attack_exposures: NotRequired[list[OpportunityAttackExposure]]
+    safe_path_opportunity_attack_exposures: NotRequired[list[OpportunityAttackExposure]]
+    affected_entity_uuids: NotRequired[list[str] | None]
+    affected_entity_names: NotRequired[list[str] | None]
+    affected_count: NotRequired[int | None]
+    affected_positions: NotRequired[list[list[AffectedPosition]] | None]
+
+
+class AvailableWorldInteraction(TypedDict):
+    subject_uuid: str
+    behavior_id: str
+    label: str
+    description: NotRequired[str]
+    default_priority: NotRequired[int]
+    contact_positions: NotRequired[list[list[ContactPosition]]]
+    connector_uuid: NotRequired[str | None]
+    template_name: NotRequired[str | None]
+    configured_action_ref: NotRequired[ContentRef | None]
+    variant_facets: NotRequired[list[ActionVariantFacet]]
+    reason: NotRequired[str | None]
+
+
 class BodyReleaseRegion(TypedDict):
     ellipse: ResidueEllipse
     positions: list[list[Position]]
@@ -2026,11 +2037,29 @@ class BodyReleaseResult(TypedDict):
     secondary_damage_type: NotRequired[DamageType | None]
 
 
+class BootstrapResponse(TypedDict):
+    kind: NotRequired[Literal['bootstrap']]
+    protocol: ProtocolIdentity
+    status: StatusSnapshot
+    audience: PlayerAudience | None
+    encounter_name: str
+    content_revision: str | None
+
+
 class BoundaryStructure(TypedDict):
     structure: BoundaryStructureKind
     material: Material
     blocked_channels: list[WorldEdgeChannel]
     contact_passage: NotRequired[ContactPassage]
+
+
+class CommittedReceipt(TypedDict):
+    game_id: str
+    game_epoch: str
+    audience_id: str
+    command_number: int
+    kind: NotRequired[Literal['committed']]
+    cursor: PlayerCursor
 
 
 class ConditionDurationSummary(TypedDict):
@@ -2093,6 +2122,21 @@ class ConnectorMovementLogData(TypedDict):
     connector_kind: TraversalConnectorKind
     connector_presentation_key: str
     connector_provocation_policy: ConnectorProvocationPolicy
+
+
+class ConnectorTraversalDiscovery(TypedDict):
+    command: TraversalConnectorCommand
+    authored_id: str
+    kind: TraversalConnectorKind
+    presentation_key: str
+    source_elevation_feet: int
+    destination_elevation_feet: int
+    movement_cost_feet: int
+    action_cost_type: NotRequired[ConnectorActionCostType | None]
+    action_cost_amount: NotRequired[int]
+    bidirectional: bool
+    provocation_policy: ConnectorProvocationPolicy
+    destination_status: ConnectorDestinationStatus
 
 
 class ContentAttribution(TypedDict):
@@ -2162,11 +2206,34 @@ class EntityStatsState(TypedDict):
     spatial_disposition: NotRequired[SpatialDisposition]
 
 
+class EquipItem(TypedDict):
+    item_uuid: str
+    slot: WeaponSlot | BodyPart | RingSlot
+
+
 class EquipmentSpritePresentation(TypedDict):
     equipment_slot: VisualLoadoutSlot
     render_layer: EquipmentRenderLayer
     sprite_key: str
     tint_rgb: int
+
+
+class ErrorCatchUpRequired(TypedDict):
+    kind: NotRequired[Literal['error']]
+    incident_id: NotRequired[str | None]
+    code: NotRequired[Literal['catch_up_required']]
+    http_status: NotRequired[Literal[409]]
+    retryable: NotRequired[Literal[False]]
+    required_cursor: PlayerCursor
+
+
+class ErrorResumeUnavailable(TypedDict):
+    kind: NotRequired[Literal['error']]
+    incident_id: NotRequired[str | None]
+    code: NotRequired[Literal['resume_unavailable']]
+    http_status: NotRequired[Literal[410]]
+    retryable: NotRequired[Literal[False]]
+    earliest_cursor: PlayerCursor | None
 
 
 class ForcedMovementFact(TypedDict):
@@ -2286,6 +2353,18 @@ class PlayerHUDSnapshot(TypedDict):
     sheets: list[PlayerCharacterSheet]
 
 
+class ReceiptResponse(TypedDict):
+    kind: NotRequired[Literal['receipt']]
+    receipt: (
+        PendingReceipt
+        | CommittedReceipt
+        | RejectedReceipt
+        | IndeterminateReceipt
+        | ExpiredReceipt
+        | UnknownReceipt
+    )
+
+
 class ResidueContribution(TypedDict):
     ellipses: list[ResidueEllipse]
     amount: NotRequired[int]
@@ -2359,6 +2438,11 @@ class SpellSaveLogData(TypedDict):
     target_hp_after: NotRequired[int | None]
 
 
+class StatusResponse(TypedDict):
+    kind: NotRequired[Literal['status']]
+    status: StatusSnapshot
+
+
 class TemporaryHitPointsFact(TypedDict):
     kind: NotRequired[Literal['temporary_hit_points']]
     entity_uuid: str
@@ -2375,6 +2459,10 @@ class TileResidueState(TypedDict):
     contributions: NotRequired[list[ResidueContribution]]
 
 
+class UnequipItem(TypedDict):
+    slot: WeaponSlot | BodyPart | RingSlot
+
+
 class VisualItem(TypedDict):
     slot: str
     item_uuid: str
@@ -2385,6 +2473,10 @@ class VisualItem(TypedDict):
     equipped_visual_policy: EquippedVisualPolicy
     item_effects: NotRequired[list[ItemEffectPresentationState]]
     suppression_provider_uuids: NotRequired[list[str]]
+    is_lit: NotRequired[bool | None]
+    very_bright_radius_feet: NotRequired[int | None]
+    bright_radius_feet: NotRequired[int | None]
+    dim_radius_feet: NotRequired[int | None]
 
 
 class VisualLoadout(TypedDict):
@@ -2444,130 +2536,27 @@ class WorldTileState(TypedDict):
     residues: NotRequired[list[TileResidueState]]
 
 
-class ActionOutcomeProfile(TypedDict):
-    effect_id: NotRequired[str | None]
-    resolution: OutcomeResolution
-    applications: NotRequired[int]
-    application_scope: NotRequired[OutcomeApplicationScope]
-    damage_rolls: NotRequired[list[DamageRollProfile]]
-    attack_bonus: NotRequired[int | None]
-    advantage: NotRequired[AdvantageStatus]
-    critical_threshold: NotRequired[int]
-    critical_extra_dice: NotRequired[int]
-    save_dc: NotRequired[int | None]
-    save_ability: NotRequired[str | None]
-    half_damage_on_save: NotRequired[bool]
-    scope: NotRequired[Literal['actor_baseline']]
+type ApiError = ErrorInvalidRequest | ErrorUnauthenticated | ErrorForbidden | ErrorGameNotFound | ErrorEpochMismatch | ErrorAudienceMismatch | ErrorAttachmentReplaced | ErrorAttachmentConflict | ErrorCommandConflict | ErrorCommandNumber | ErrorStaleState | ErrorStaleDiscovery | ErrorNotYourTurn | ErrorCatchUpRequired | ErrorQuerySuperseded | ErrorInvalidCursor | ErrorResumeUnavailable | ErrorProtocolMismatch | ErrorRequestTooLarge | ErrorResponseTooLarge | ErrorBusy | ErrorStarting | ErrorRecordingCapacity | ErrorGameTerminal | ErrorGameFailed | ErrorGameClosed | ErrorInternalFailure
 
 
-class ActionSetupMaintenanceProfile(TypedDict):
-    trigger: ActionSetupMaintenanceTrigger
-    skill_name: str
-    initial_dc: int
-    dc_increment_per_success: NotRequired[int]
-    check_bonus: int
-    check_advantage: NotRequired[AdvantageStatus]
-    failure: ActionSetupMaintenanceFailure
-
-
-class ActionTargetEffectBranchProfile(TypedDict):
-    effect_id: str
-    disposition: TargetEffectDisposition
-    included_creature_types: NotRequired[list[str]]
-    excluded_creature_types: NotRequired[list[str]]
-    resolution: OutcomeResolution
-    save_dc: NotRequired[int | None]
-    save_ability: NotRequired[str | None]
+class ActionSelfSetupProfile(TypedDict):
+    semantic_id: str
+    duration: ActionSetupDuration
+    maximum_duration_rounds: NotRequired[int | None]
     condition_fact_ids: NotRequired[list[str]]
-    condition_semantic_keys: NotRequired[list[str]]
-
-
-class ActionTargetEffectProfile(TypedDict):
-    semantic_id: str
-    branches: list[ActionTargetEffectBranchProfile]
-
-
-class ActionWorldEffectProfile(TypedDict):
-    semantic_id: str
-    information_effects: NotRequired[list[InformationEffectProfile]]
-    topology_effects: NotRequired[list[TopologyEffectProfile]]
-
-
-class AvailableTarget(TypedDict):
-    target_kind: NotRequired[Literal['creature', 'object']]
-    index: int
-    target_uuid: NotRequired[str | None]
-    position: NotRequired[list[PositionItem] | None]
-    target_name: NotRequired[str | None]
-    distance: NotRequired[int | None]
-    path_cost: NotRequired[int | None]
-    extra_target_uuids: NotRequired[list[str] | None]
-    secondary_targets: NotRequired[list[AvailableTarget] | None]
-    is_path_hazardous: NotRequired[bool]
-    safe_path_cost: NotRequired[int | None]
-    path: NotRequired[list[list[PathItem]] | None]
-    safe_path: NotRequired[list[list[SafePathItem]] | None]
-    opportunity_attack_exposures: NotRequired[list[OpportunityAttackExposure]]
-    safe_path_opportunity_attack_exposures: NotRequired[list[OpportunityAttackExposure]]
-    affected_entity_uuids: NotRequired[list[str] | None]
-    affected_entity_names: NotRequired[list[str] | None]
-    affected_count: NotRequired[int | None]
-    affected_positions: NotRequired[list[list[AffectedPosition]] | None]
-
-
-class ConnectorTraversalDiscovery(TypedDict):
-    command: TraversalConnectorCommand
-    authored_id: str
-    kind: TraversalConnectorKind
-    presentation_key: str
-    source_elevation_feet: int
-    destination_elevation_feet: int
-    movement_cost_feet: int
-    action_cost_type: NotRequired[ConnectorActionCostType | None]
-    action_cost_amount: NotRequired[int]
-    bidirectional: bool
-    provocation_policy: ConnectorProvocationPolicy
-    destination_status: ConnectorDestinationStatus
-
-
-class AvailableSelectionPreview(TypedDict):
-    can_confirm: bool
-    reason: NotRequired[str | None]
-    effective_target_uuids: NotRequired[list[str]]
-    next_targets: NotRequired[list[AvailableTarget]]
-    next_positions: NotRequired[list[list[NextPosition]]]
-    geometry: NotRequired[
-        SpherePresentationGeometry
-        | ConePresentationGeometry
-        | LinePresentationGeometry
-        | CubePresentationGeometry
-        | CylinderPresentationGeometry
-        | WallPresentationGeometry
-        | WallAssemblyPresentationGeometry
-        | None
-    ]
-    affected_positions: NotRequired[list[list[AffectedPosition]]]
-    selected_route: NotRequired[SelectedRoute | None]
-
-
-class PreviewResponse(TypedDict):
-    game_id: str
-    game_epoch: str
-    audience_id: str
-    kind: NotRequired[Literal['preview']]
-    state_revision: str
-    request: PreviewRequest
-    preview: AvailableSelectionPreview
-
-
-class EquipItem(TypedDict):
-    item_uuid: str
-    slot: WeaponSlot | BodyPart | RingSlot
-
-
-class UnequipIntent(TypedDict):
-    kind: NotRequired[Literal['unequip']]
-    item: UnequipItem
+    active_condition_semantic_keys: NotRequired[list[str]]
+    increases_weapon_damage: NotRequired[bool]
+    resistance_damage_types: NotRequired[list[str]]
+    grants_bonus_action_attack: NotRequired[bool]
+    grants_outgoing_attack_advantage: NotRequired[bool]
+    grants_incoming_attack_advantage: NotRequired[bool]
+    grants_incoming_attack_disadvantage: NotRequired[bool]
+    armor_class_bonus: NotRequired[int]
+    movement_speed_multiplier: NotRequired[float]
+    extra_actions_per_turn: NotRequired[int]
+    grants_invisibility: NotRequired[bool]
+    incapacitates_on_removal: NotRequired[bool]
+    maintenance: NotRequired[ActionSetupMaintenanceProfile | None]
 
 
 class AttackFact(TypedDict):
@@ -2612,100 +2601,6 @@ class AttackLogData(TypedDict):
     is_opportunity_attack: NotRequired[bool]
     is_long_range: NotRequired[bool]
     is_threatened: NotRequired[bool]
-
-
-class CombatLogEntry(TypedDict):
-    entry_type: CombatLogEntryType
-    source_name: str
-    source_uuid: str
-    target_name: NotRequired[str | None]
-    target_uuid: NotRequired[str | None]
-    compact: str
-    verbose: str
-    detailed: str
-    data: (
-        AttackLogData
-        | MovementLogData
-        | JumpMovementLogData
-        | ConnectorMovementLogData
-        | SavingThrowLogData
-        | SpellSaveLogData
-        | SpellInterruptionLogData
-        | SkillCheckLogData
-        | EntitySpottedLogData
-        | HazardDetectedLogData
-        | DamageTakenLogData
-        | HealLogData
-        | ActionLogData
-        | TurnLogData
-        | MultiEntityLogData
-        | RollModificationLogData
-        | EmptyLogData
-        | ConditionRemovedLogData
-        | DeathLogData
-        | SpellDamageLogData
-        | DeathSaveLogData
-        | ShoveLogData
-        | StepMovementLogData
-        | ForcedMovementLogData
-        | ObservedMovementLogData
-        | UnlocatedMovementLogData
-        | UnknownMovementLogData
-        | SpatialChangeLogData
-        | SpatialInteractionLogData
-    )
-    success: NotRequired[bool | None]
-    sub_entries: NotRequired[list[CombatLogEntry]]
-
-
-class ContentPresentation(TypedDict):
-    icon_key: NotRequired[str | None]
-    portrait_key: NotRequired[str | None]
-    sprite_key: NotRequired[str | None]
-    visual_variant_key: NotRequired[str | None]
-    tint_rgb: NotRequired[int | None]
-    vfx_profile: NotRequired[str | None]
-    audio_key: NotRequired[str | None]
-    ui_group: NotRequired[str | None]
-    equipment_sprites: NotRequired[list[EquipmentSpritePresentation]]
-
-
-class SpellSuppression(TypedDict):
-    antimagic: NotRequired[bool]
-    provider_uuid: str
-    positions: list[list[Position]]
-    provider_content_ref: NotRequired[ContentRef | None]
-    area_geometry: NotRequired[
-        SpherePresentationGeometry
-        | ConePresentationGeometry
-        | LinePresentationGeometry
-        | CubePresentationGeometry
-        | CylinderPresentationGeometry
-        | WallPresentationGeometry
-        | WallAssemblyPresentationGeometry
-        | None
-    ]
-    anchor_elevation_steps: NotRequired[int | None]
-
-
-class ActionSelfSetupProfile(TypedDict):
-    semantic_id: str
-    duration: ActionSetupDuration
-    maximum_duration_rounds: NotRequired[int | None]
-    condition_fact_ids: NotRequired[list[str]]
-    active_condition_semantic_keys: NotRequired[list[str]]
-    increases_weapon_damage: NotRequired[bool]
-    resistance_damage_types: NotRequired[list[str]]
-    grants_bonus_action_attack: NotRequired[bool]
-    grants_outgoing_attack_advantage: NotRequired[bool]
-    grants_incoming_attack_advantage: NotRequired[bool]
-    grants_incoming_attack_disadvantage: NotRequired[bool]
-    armor_class_bonus: NotRequired[int]
-    movement_speed_multiplier: NotRequired[float]
-    extra_actions_per_turn: NotRequired[int]
-    grants_invisibility: NotRequired[bool]
-    incapacitates_on_removal: NotRequired[bool]
-    maintenance: NotRequired[ActionSetupMaintenanceProfile | None]
 
 
 class AvailableActionInfo(TypedDict):
@@ -2767,6 +2662,7 @@ class AvailableActionInfo(TypedDict):
     allow_same_target: NotRequired[bool | None]
     is_item_use: NotRequired[bool]
     source_item_uuid: NotRequired[str | None]
+    loot_item_uuid: NotRequired[str | None]
     item_stack_count: NotRequired[int | None]
     item_charge_cost: NotRequired[int]
     fixed_healing: NotRequired[int | None]
@@ -2788,6 +2684,26 @@ class AvailableActionsResult(TypedDict):
     handler_details: NotRequired[list[AvailableHandlerInfo]]
 
 
+class AvailableSelectionPreview(TypedDict):
+    can_confirm: bool
+    reason: NotRequired[str | None]
+    effective_target_uuids: NotRequired[list[str]]
+    next_targets: NotRequired[list[AvailableTarget]]
+    next_positions: NotRequired[list[list[NextPosition]]]
+    geometry: NotRequired[
+        SpherePresentationGeometry
+        | ConePresentationGeometry
+        | LinePresentationGeometry
+        | CubePresentationGeometry
+        | CylinderPresentationGeometry
+        | WallPresentationGeometry
+        | WallAssemblyPresentationGeometry
+        | None
+    ]
+    affected_positions: NotRequired[list[list[AffectedPosition]]]
+    selected_route: NotRequired[SelectedRoute | None]
+
+
 class ChoicesResponse(TypedDict):
     game_id: str
     game_epoch: str
@@ -2799,9 +2715,106 @@ class ChoicesResponse(TypedDict):
     choices: AvailableActionsResult
 
 
+class CombatLogEntry(TypedDict):
+    entry_type: CombatLogEntryType
+    source_name: str
+    source_uuid: str
+    target_name: NotRequired[str | None]
+    target_uuid: NotRequired[str | None]
+    compact: str
+    verbose: str
+    detailed: str
+    data: (
+        AttackLogData
+        | MovementLogData
+        | JumpMovementLogData
+        | ConnectorMovementLogData
+        | SavingThrowLogData
+        | SpellSaveLogData
+        | SpellInterruptionLogData
+        | SkillCheckLogData
+        | EntitySpottedLogData
+        | HazardDetectedLogData
+        | DamageTakenLogData
+        | HealLogData
+        | ActionLogData
+        | TurnLogData
+        | MultiEntityLogData
+        | RollModificationLogData
+        | EmptyLogData
+        | ConditionRemovedLogData
+        | DeathLogData
+        | SpellDamageLogData
+        | DeathSaveLogData
+        | ShoveLogData
+        | StepMovementLogData
+        | ForcedMovementLogData
+        | ObservedMovementLogData
+        | UnlocatedMovementLogData
+        | UnknownMovementLogData
+        | SpatialChangeLogData
+        | SpatialInteractionLogData
+    )
+    success: NotRequired[bool | None]
+    sub_entries: NotRequired[list[CombatLogEntry]]
+
+
+class ContentPresentation(TypedDict):
+    icon_key: NotRequired[str | None]
+    portrait_key: NotRequired[str | None]
+    sprite_key: NotRequired[str | None]
+    visual_variant_key: NotRequired[str | None]
+    tint_rgb: NotRequired[int | None]
+    vfx_profile: NotRequired[str | None]
+    audio_key: NotRequired[str | None]
+    ui_group: NotRequired[str | None]
+    equipment_sprites: NotRequired[list[EquipmentSpritePresentation]]
+
+
 class EquipIntent(TypedDict):
     kind: NotRequired[Literal['equip']]
     item: EquipItem
+
+
+class PreviewResponse(TypedDict):
+    game_id: str
+    game_epoch: str
+    audience_id: str
+    kind: NotRequired[Literal['preview']]
+    state_revision: str
+    request: PreviewRequest
+    preview: AvailableSelectionPreview
+
+
+class SpellSuppression(TypedDict):
+    antimagic: NotRequired[bool]
+    provider_uuid: str
+    positions: list[list[Position]]
+    provider_content_ref: NotRequired[ContentRef | None]
+    area_geometry: NotRequired[
+        SpherePresentationGeometry
+        | ConePresentationGeometry
+        | LinePresentationGeometry
+        | CubePresentationGeometry
+        | CylinderPresentationGeometry
+        | WallPresentationGeometry
+        | WallAssemblyPresentationGeometry
+        | None
+    ]
+    anchor_elevation_steps: NotRequired[int | None]
+
+
+class UnequipIntent(TypedDict):
+    kind: NotRequired[Literal['unequip']]
+    item: UnequipItem
+
+
+class CombatLogAppend(TypedDict):
+    generation: str
+    observer_uuid: str
+    encounter_log_index: int
+    operation_end_cursor: int
+    entry: CombatLogEntry
 
 
 class CommandRequest(TypedDict):
@@ -2817,14 +2830,6 @@ class CommandRequest(TypedDict):
     )
 
 
-class CombatLogAppend(TypedDict):
-    generation: str
-    observer_uuid: str
-    encounter_log_index: int
-    operation_end_cursor: int
-    entry: CombatLogEntry
-
-
 class ContentDescriptor(TypedDict):
     display_name: str
     description: NotRequired[str]
@@ -2834,6 +2839,12 @@ class ContentDescriptor(TypedDict):
     ordering: NotRequired[ContentOrdering]
     related_content_refs: NotRequired[list[ContentRef]]
     ref: ContentRef
+
+
+class ContentResponse(TypedDict):
+    kind: NotRequired[Literal['content']]
+    revision: str
+    descriptors: list[ContentDescriptor]
 
 
 class FloorItem(TypedDict):
@@ -2846,6 +2857,9 @@ class FloorItem(TypedDict):
     boundary_structure: BoundaryStructure | None
     is_open: bool | None
     is_lit: bool | None
+    very_bright_radius_feet: NotRequired[int | None]
+    bright_radius_feet: NotRequired[int | None]
+    dim_radius_feet: NotRequired[int | None]
     stack_count: NotRequired[int]
     is_pickable: NotRequired[bool]
     item_effects: NotRequired[list[ItemEffectPresentationState]]
@@ -3006,6 +3020,7 @@ class PerceivedSpatialEffect(TypedDict):
 class PlayerObject(TypedDict):
     placement: WorldObjectPlacement
     item: FloorItem
+    contained_items: NotRequired[list[FloorItem] | None]
 
 
 class SensoryFact(TypedDict):
@@ -3075,12 +3090,6 @@ class WorldUpdate(TypedDict):
     objects: list[PlayerObject]
     objects_removed: list[str]
     connectors: list[WorldConnectorState]
-
-
-class ContentResponse(TypedDict):
-    kind: NotRequired[Literal['content']]
-    revision: str
-    descriptors: list[ContentDescriptor]
 
 
 class ConditionFact(TypedDict):
@@ -3192,6 +3201,19 @@ class PlayerNode(TypedDict):
     content_attributions: NotRequired[list[ContentAttribution]]
 
 
+class PlayerInitialization(TypedDict):
+    generation: str
+    observer_uuid: str
+    world: PlayerWorld
+    nodes: list[PlayerNode]
+    version_rows: list[VersionRow]
+    end_cursor: int
+    observations: list[PlayerObservation]
+    world_updates: list[WorldUpdate]
+    hud_snapshot: NotRequired[PlayerHUDSnapshot | None]
+    audience: NotRequired[PlayerAudience | None]
+
+
 class PlayerLineage(TypedDict):
     generation: str
     observer_uuid: str
@@ -3219,19 +3241,6 @@ class PlayerOperation(TypedDict):
     state_revision: str
     command_number: int | None
     boundary: BoundaryState
-
-
-class PlayerInitialization(TypedDict):
-    generation: str
-    observer_uuid: str
-    world: PlayerWorld
-    nodes: list[PlayerNode]
-    version_rows: list[VersionRow]
-    end_cursor: int
-    observations: list[PlayerObservation]
-    world_updates: list[WorldUpdate]
-    hud_snapshot: NotRequired[PlayerHUDSnapshot | None]
-    audience: NotRequired[PlayerAudience | None]
 
 
 class InitializationResponse(TypedDict):

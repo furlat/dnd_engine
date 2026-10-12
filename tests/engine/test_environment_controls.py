@@ -113,7 +113,7 @@ def test_chest_lid_controls_loot_and_stays_usable_when_empty(operator: Entity) -
         assert recorded.objects[chest.uuid].item.is_open is expected_open
         assert gem.uuid in chest.chest_inventory.items
 
-    assert available_names(operator, chest.uuid) == {"Close Chest", "Loot All"}
+    assert {"Close Chest", "Loot All"} <= available_names(operator, chest.uuid)
     stale_loot = next(action for action in chest.get_use_actions(operator.uuid) if action.name == "Loot All")
     use(operator, chest.uuid, "Close Chest")
     refused = stale_loot.instantiate().apply()

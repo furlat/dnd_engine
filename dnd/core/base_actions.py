@@ -259,6 +259,7 @@ class ActionDiscoveryDescription(BaseModel):
     cast_at_level: int | None = None
     is_spell_variant: bool = False
     damage_types: tuple[DamageType, ...] = ()
+    loot_item_uuid: UUID | None = None
 
 
 class ActionOutcomeProfile(BaseModel):
@@ -2765,6 +2766,7 @@ class AvailableActionInfo(BaseModel):
     allow_same_target: Optional[bool] = Field(default=None, description="Whether same target can be selected multiple times")
     is_item_use: bool = Field(default=False, description="True for use actions from items")
     source_item_uuid: Optional[UUID] = Field(default=None, description="Item providing this action")
+    loot_item_uuid: UUID | None = Field(default=None, description="Exact contained item transferred by this discovered loot action.")
     item_stack_count: Optional[int] = Field(default=None, description="Stack count of source item (for display, only set when > 1)")
     item_charge_cost: int = Field(
         default=0,

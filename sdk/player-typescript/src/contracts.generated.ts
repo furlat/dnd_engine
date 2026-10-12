@@ -29,7 +29,7 @@ export type Kind = "health";
 export type Status = "ok";
 export type Kind1 = "bootstrap";
 export type ProtocolVersion = 1;
-export type PlayerSchemaVersion = 5;
+export type PlayerSchemaVersion = 6;
 export type SchemaDigest = string;
 export type GameId = string;
 export type GameEpoch = string;
@@ -612,6 +612,10 @@ export type VisualVariantId = string | null;
 export type EquippedVisualPolicy = "visible" | "hidden";
 export type ItemEffects1 = ItemEffectPresentationState[];
 export type SuppressionProviderUuids1 = string[];
+export type IsLit = boolean | null;
+export type VeryBrightRadiusFeet = number | null;
+export type BrightRadiusFeet = number | null;
+export type DimRadiusFeet = number | null;
 export type Layers = VisualItem[];
 export type ArmorClass = number;
 export type ControlledItems = ItemPresentationState[] | null;
@@ -788,10 +792,10 @@ export type IsEngaged = boolean | null;
 export type BlocksMovement = boolean;
 export type BlocksOptics = boolean;
 export type BlocksPropagation = boolean;
-export type IsLit = boolean | null;
-export type VeryBrightRadiusFeet = number | null;
-export type BrightRadiusFeet = number | null;
-export type DimRadiusFeet = number | null;
+export type IsLit1 = boolean | null;
+export type VeryBrightRadiusFeet1 = number | null;
+export type BrightRadiusFeet1 = number | null;
+export type DimRadiusFeet1 = number | null;
 export type Kind21 = "condition";
 export type TargetEntityUuid8 = string;
 /**
@@ -1213,7 +1217,10 @@ export type VisualItemName2 = string;
 export type VisualVariantId2 = string | null;
 export type MapChar1 = string;
 export type IsOpen1 = boolean | null;
-export type IsLit1 = boolean | null;
+export type IsLit2 = boolean | null;
+export type VeryBrightRadiusFeet2 = number | null;
+export type BrightRadiusFeet2 = number | null;
+export type DimRadiusFeet2 = number | null;
 export type StackCount1 = number;
 export type IsPickable1 = boolean;
 export type ItemEffects3 = ItemEffectPresentationState[];
@@ -2284,6 +2291,7 @@ export type SpatialDisposition1 = "present" | "absent" | "return_pending" | "hom
 export type Observations = PlayerObservation[];
 export type EventUuid3 = string;
 export type Tiles = WorldTileState[];
+export type ContainedItems = FloorItem[] | null;
 export type Objects = PlayerObject[];
 export type ObjectsRemoved = string[];
 export type ConnectorUuid1 = string;
@@ -2978,6 +2986,10 @@ export type IsItemUse = boolean;
  * Item providing this action
  */
 export type SourceItemUuid3 = string | null;
+/**
+ * Exact contained item transferred by this discovered loot action.
+ */
+export type LootItemUuid = string | null;
 /**
  * Stack count of source item (for display, only set when > 1)
  */
@@ -3919,6 +3931,10 @@ export interface VisualItem {
   equipped_visual_policy: EquippedVisualPolicy;
   item_effects?: ItemEffects1;
   suppression_provider_uuids?: SuppressionProviderUuids1;
+  is_lit?: IsLit;
+  very_bright_radius_feet?: VeryBrightRadiusFeet;
+  bright_radius_feet?: BrightRadiusFeet;
+  dim_radius_feet?: DimRadiusFeet;
 }
 /**
  * Immutable item data needed to materialize an equipment/inventory row.
@@ -3986,10 +4002,10 @@ export interface ItemPresentationState {
   blocks_movement?: BlocksMovement;
   blocks_optics?: BlocksOptics;
   blocks_propagation?: BlocksPropagation;
-  is_lit?: IsLit;
-  very_bright_radius_feet?: VeryBrightRadiusFeet;
-  bright_radius_feet?: BrightRadiusFeet;
-  dim_radius_feet?: DimRadiusFeet;
+  is_lit?: IsLit1;
+  very_bright_radius_feet?: VeryBrightRadiusFeet1;
+  bright_radius_feet?: BrightRadiusFeet1;
+  dim_radius_feet?: DimRadiusFeet1;
 }
 /**
  * Physical configuration at destruction, retained by inert remains.
@@ -4433,7 +4449,10 @@ export interface FloorItem {
   map_char: MapChar1;
   boundary_structure: BoundaryStructure | null;
   is_open: IsOpen1;
-  is_lit: IsLit1;
+  is_lit: IsLit2;
+  very_bright_radius_feet?: VeryBrightRadiusFeet2;
+  bright_radius_feet?: BrightRadiusFeet2;
+  dim_radius_feet?: DimRadiusFeet2;
   stack_count?: StackCount1;
   is_pickable?: IsPickable1;
   item_effects?: ItemEffects3;
@@ -5180,6 +5199,7 @@ export interface WorldUpdate {
 export interface PlayerObject {
   placement: WorldObjectPlacement;
   item: FloorItem;
+  contained_items?: ContainedItems;
 }
 /**
  * Complete renderer-neutral state of one admitted connector.
@@ -5385,6 +5405,7 @@ export interface AvailableActionInfo {
   allow_same_target?: AllowSameTarget;
   is_item_use?: IsItemUse;
   source_item_uuid?: SourceItemUuid3;
+  loot_item_uuid?: LootItemUuid;
   item_stack_count?: ItemStackCount;
   item_charge_cost?: ItemChargeCost;
   fixed_healing?: FixedHealing;

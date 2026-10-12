@@ -3,7 +3,7 @@
 Updated 10 October 2026. Previously selected asset copying and core tracked authoring preparation are complete. The next
 work is application integration using these installed inputs. The Goblin/Demon leaf material and
 asset review are implemented; game renderer, UI and SDK integration have not started in the recreated `/home/tommaso/Dev/NDClient` repository.
-The [implementation plan](agent_docs/NDCLIENT_IMPLEMENTATION_PLAN_COMPLETE_2026-10-08.md)
+The [implementation plan](agent_docs/NDCLIENT_IMPLEMENTATION_PLAN_COMPLETE_2026-10-10_v2.md)
 owns implementation; this file owns current artwork selection and locations.
 
 ## Installed folder layout
@@ -75,6 +75,17 @@ All Windows asset sources are under `/mnt/c/Users/tommaso/Documents/assets/`
   for Blender prop/trap tools. The received `data-authoring-2026-10-09/` supplies
   missing contacts, dimensions and assembly evidence. `arena-study/` and
   `environment-production-audit/` retain placement/adjacency studies.
+- **Modular character geometry, full component delivery (12 October):**
+  [selected handoff](/mnt/c/Users/tommaso/Documents/assets/fantasy-unified-catalog/modular-character-geometry-2026-10-11/full-components/exports/queue/package/HANDOFF.md)
+  and its `catalog.json` supersede the earlier fixed-outfit experiment. The index
+  covers all 3,888 originals: 3,410 nonempty body sheets have paired estimated
+  optical depth/normals and masks; 130 empty and 348 shadow/effect sheets remain
+  explicitly excluded. Godot references the delivered final `output_reference`
+  files directly through a compact per-source registration; no artwork is copied
+  or regenerated. Current/upcoming selected components load on demand. Preserve
+  original alpha, tint, layer order, placement and timing; unsupported pixels use
+  flat receiving light. This is qualified visible-surface lighting, not certified
+  independent hidden geometry, physical sorting or game elevation.
 - **UI source and assignments:**
   [dnd-engine-icons-and-portraits/README.md](/mnt/c/Users/tommaso/Documents/assets/dnd-engine-icons-and-portraits/README.md).
 - **Preserved original packs:** `/home/tommaso/Dev/neurodragon_art/sources/`,
@@ -100,7 +111,7 @@ renderer support remains future work. Pygame behavior/bindings in `game/data/`
 were not overwritten. NDClient edits now belong to the tracked `authoring/` copy;
 no new creature assignments follow merely from copying artwork.
 
-The existing-ID connection in [master plan §5.1.1](agent_docs/NDCLIENT_IMPLEMENTATION_PLAN_COMPLETE_2026-10-08.md#511-connect-canonical-recipes-to-the-prepared-artwork)
+The existing-ID connection in [master plan §5.1.1](agent_docs/NDCLIENT_IMPLEMENTATION_PLAN_COMPLETE_2026-10-10_v2.md#511-connect-canonical-recipes-to-the-prepared-artwork)
 is prepared: `tools/import_vfx_authoring.py` seeded the full effective authoring
 once, using existing Python owners plus paired-bank fields. It refuses overwrites.
 `tools/build_authoring.py` reads client JSON without the engine or receipts and
