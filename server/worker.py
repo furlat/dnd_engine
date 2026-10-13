@@ -21,8 +21,9 @@ from dnd.player.commands import ActionSelection, CommandRejected
 from dnd.player.content import UIContentManifest
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.selection import selection_target_pool
+from dnd.player.choice_projection import project_selection_preview
 from dnd.player.session import (Session, advance_controller, close_session, create_authored_session, create_session,
-    discover_player_actions, end_player_turn, equip_player_item, execute_player_action,
+    _player_choices_for_transport, end_player_turn, equip_player_item, execute_player_action,
     preview_player_selection, toggle_player_handler, unequip_player_item)
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_catalog import encounter_recipe
@@ -110,7 +111,7 @@ def authorize(runtime: Runtime, seat: str, actor: UUID, revision: str) -> None:
 
 def retained_selection(runtime: Runtime, seat: str, actor: UUID, generation: int, selection: ActionSelection):
     cache = runtime.session.discovery
-    choices = cache.detached
+    choices = cache.original
     if (cache.seat_id != seat or cache.generation != generation or cache.revision != cache.discovery_revision
             or cache.cursor != EventQueue.event_cursor() or choices is None or choices.entity_uuid != actor):
         raise CommandRejected('stale_discovery')
@@ -134,15 +135,15 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
         publication = runtime.publications[request.seat_id]
         response = ChoicesResponse(**publication.cursor.model_dump(exclude={'sequence'}),
             state_revision=publication.state_revision, correlation_id=query.correlation_id, force_attack=query.force_attack,
-            choices=discover_player_actions(session, query.actor_uuid, force_attack=query.force_attack, seat_id=request.seat_id))
+            choices=_player_choices_for_transport(session, query.actor_uuid, force_attack=query.force_attack, seat_id=request.seat_id))
         return Reply(has_response=True), (), response
     if isinstance(request, Preview):
         query = request.request
         row, selected = retained_selection(runtime, request.seat_id, query.actor_uuid, query.discovery_generation, query.selection)
         response = PreviewResponse(**runtime.publications[request.seat_id].cursor.model_dump(exclude={'sequence'}),
             state_revision=query.state_revision, request=query,
-            preview=preview_player_selection(session, query.actor_uuid, row, selected, query.selection.extra_target_positions,
-                prefer_safe=query.selection.prefer_safe))
+            preview=project_selection_preview(preview_player_selection(session, query.actor_uuid, row, selected, query.selection.extra_target_positions,
+                prefer_safe=query.selection.prefer_safe)))
         return Reply(has_response=True), (), response
     previous_hud = {seat: view.latest.hud_snapshot for seat, view in runtime.audiences.items()}
     if isinstance(request, Advance):
@@ -155,10 +156,10 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
             case intent if intent.kind == 'execute_selection':
                 row, selected = retained_selection(runtime, request.seat_id, command.actor_uuid,
                     intent.discovery_generation, intent.selection)
-                if not selected:
+                if not selected or any(target.target_uuid is None for target in selected[1:]):
                     raise CommandRejected('invalid_selection')
                 operation = execute_player_action(session, command.actor_uuid, row, selected[0],
-                    extra_target_uuids=tuple(target.target_uuid for target in selected[1:] if target.target_uuid is not None),
+                    extra_target_uuids=tuple(target.target_uuid for target in selected[1:]),
                     extra_target_positions=intent.selection.extra_target_positions,
                     prefer_safe=intent.selection.prefer_safe)
             case intent if intent.kind == 'end_turn':

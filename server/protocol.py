@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
-from dnd.core.base_actions import AvailableActionsResult, AvailableSelectionPreview
+from dnd.player.choices import PlayerChoices, PlayerSelectionPreview
 from dnd.core.content.descriptors import ContentDescriptor
 from dnd.player.audience import PlayerAudience
 from dnd.player.commands import ActionSelection, EquipItem, UnequipItem, ToggleHandler
@@ -41,7 +41,7 @@ class PlayerCursor(Identity):
 
 class ProtocolIdentity(Wire):
     protocol_version: Literal[1] = 1
-    player_schema_version: Literal[6] = 6
+    player_schema_version: Literal[8] = 8
     schema_digest: Annotated[str, Field(pattern='^[0-9a-f]{64}$')]
 
 
@@ -132,7 +132,7 @@ class ChoicesResponse(Identity):
     state_revision: Token
     correlation_id: UUID
     force_attack: Annotated[bool, Field(strict=True)]
-    choices: AvailableActionsResult
+    choices: PlayerChoices
 
 
 class PreviewRequest(Wire):
@@ -147,7 +147,7 @@ class PreviewResponse(Identity):
     kind: Literal['preview'] = 'preview'
     state_revision: Token
     request: PreviewRequest
-    preview: AvailableSelectionPreview
+    preview: PlayerSelectionPreview
 
 
 class ExecuteSelectionIntent(Wire):

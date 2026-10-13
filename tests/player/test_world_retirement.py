@@ -31,9 +31,10 @@ def used_world(config, *, summon=False):
         reply, records, discovered = dispatch(runtime, Choices(seat_id=seat, request=ChoicesRequest(
             actor_uuid=actor, state_revision=publication.state_revision,
             force_attack=False, correlation_id=uuid4())))
-        row = next(row for row in discovered.choices.all_actions
-            if row.behavior_id == 'spell.conjure_animals' and row.can_afford and row.valid_targets)
-        selection = ActionSelection(action_index=row.discovery_index, target_indices=(row.valid_targets[0].index,),
+        row = next(row for row in (*discovered.choices.entity_actions, *discovered.choices.position_actions,
+            *discovered.choices.self_actions, *discovered.choices.object_actions)
+            if row.behavior_id == 'spell.conjure_animals' and row.can_afford and discovered.choices.target_sets[row.target_set])
+        selection = ActionSelection(action_index=row.discovery_index, target_indices=(discovered.choices.target_sets[row.target_set][0].index,),
             extra_target_positions=())
         for _ in range(12):
             reply, records, response = dispatch(runtime, Preview(seat_id=seat, request=PreviewRequest(
@@ -42,7 +43,7 @@ def used_world(config, *, summon=False):
             if response.preview.can_confirm:
                 break
             selection = selection.model_copy(update={'extra_target_positions':
-                (*selection.extra_target_positions, response.preview.next_positions[0])})
+                (*selection.extra_target_positions, response.preview.positions[response.preview.next_positions[0]])})
         assert response.preview.can_confirm
         reply, records, response = dispatch(runtime, Command(seat_id=seat, request=CommandRequest(
             command_number=1, actor_uuid=actor, state_revision=publication.state_revision,

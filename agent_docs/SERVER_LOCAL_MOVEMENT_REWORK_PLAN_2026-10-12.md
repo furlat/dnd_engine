@@ -2119,3 +2119,546 @@ scope and evidence. Any production compiled module/build dependency requires
 human architectural guidance under HOW_TO_TEST.MD after a concrete result and
 proposal are available. A failed or small-gain experiment is not justification
 for adding a deployment requirement. The target and diagnostic cleanup remain open.
+
+### Checkpoint 31: authorized numeric C++ pilot
+
+The human committed the baseline as e4d3a879281 and on 2026-10-13 explicitly
+approved proceeding, while correctly asking whether native Python subjectivity
+checks would limit the benefit. They will: native admission, concealment, hazard
+and contextual callbacks remain authoritative, and per-step observation/history
+boundaries stay intact. No claim that a FOV kernel alone reaches9.5 ms.
+
+The first pilot replaces only sparse FOV envelope construction and target
+filtering after the current Python owner acquires support, opaque centers and
+failed native crossings. Preserve the unknown-crossing fallback, Python radius
+and support selection, opaque-terminal visibility, holes, quadrant axes/corner
+ties and exact target order. Compact relative numeric inputs are local to this
+call. Keep each quadrant's own separating scale and half-open rank intervals.
+Use Python arbitrary-integer subtraction while packing, then narrow only bounded
+relative coordinates. Signed64 safety requires M(2M+1)+1 times(2M+2), plus1,
+to fit; M<=1,321,122 is sufficient. Unsupported extents fall back only to the
+existing pure numeric tail, so native predicates are not invoked twice.
+
+Behavior/boundary: public GridMap optical and propagation FOV must return the
+same ordered cells for current native world inputs, while taking less time.
+Inputs include native walls/doors/holes/opaque terminals, both channels, fresh
+mutations and negative/very large translated origins. Verify against the existing
+public geometry tests and a same-world exact comparison before live Gallery.
+Temporary diagnostics distinguish Python acquisition, C++ packing, numeric
+kernel and return-value construction, and include all of them in wall latency.
+No persistent native world cache, new ECS owner, event reification, GIL-release
+concurrency or Python rule bypass. Anti-OOP/numeric review and adherence/anti-slop
+review cover actual source and measurement; broader integration depends on a
+worthwhile measured whole-command gain, not just kernel speed.
+
+The previous isolated untyped Cython experiment passed84 native cases and all58
+Gallery command/receipt bindings plus29moves/116steps. Its one ordinary worker
+sample59.314 ms remains separate from production62.224 ms (different observer
+order). Same-world12-query FOV batches show Python totals7.688/7.437/7.160/7.157
+and compiled10.684/6.118/5.953/5.819 ms, every ordered output equal. Retain the
+first compiled slow sample. These results do not justify adopting that untyped
+build; the next pilot changes numeric representation and measures conversions.
+
+The CP31 isolated C++ pilot is now built under
+`.runtime/server-latency/cpp-experiment/`; normal server imports are unchanged.
+It uses the CPython C API and C++17, retains the GIL, performs arbitrary-Python-int
+relative subtraction before signed64 narrowing, and returns references to the
+original target tuples. The generated Python adapter preserves native acquisition
+and the original numeric fallback exactly. Independent actual-source numerical,
+anti-OOP and adherence reviews approve this boundary. The experimental workers
+preserve the ordinary PYTHONUNBUFFERED environment; compilation occurs before
+worker startup, not in a command. The standard Gallery source manifest does not
+include ignored experiment sources/binaries, so it is not claimed to establish
+native-artifact startup provenance. Source, generator and build log are retained.
+
+Validation:159 existing native geometry/optics/sensory/light/replay/discovery/
+passive-value cases pass in10.21s. Eight added public FOV cases pass in both
+Python(1.84s) and C++(1.76s): both channels, translated negative/2**80 origins,
+holes/current boundary edits, and extents1,321,122/1,321,123 across the integer
+fast-path guard. These assert public ordered geometry, not private call counts.
+
+Six alternating same-world12-query plain batches retain every output and sample.
+Python totals8.939/7.169/7.055/7.209/6.921/7.032ms; C++ totals
+4.766/5.061/4.688/4.676/4.714/4.668ms. Medians7.111876→4.700655ms
+include native acquisition and conversion: a34% FOV-owner improvement, not a
+whole-command claim. Separate phase-timed batches show the six complete C++
+bridges0.458/0.426ms, with packing0.250/0.240, kernel0.177/0.166,
+output0.008/0.007ms; residual call/cleanup/diagnostic overhead remains included.
+Extension-only imports in three fresh CPython3.13.12 processes cost
+3.763/3.696/3.899ms on this WSL checkout. These exclude process/game startup;
+no startup speed improvement or cross-platform ABI support is claimed.
+
+Four planned ordinary Gallery samples, all with normal history/GC, are retained:
+- C++ first(S→F): worker55.681, receipt91.955, consumed91.970ms.
+- Python control(F→S): worker58.359, receipt88.630, consumed88.644ms.
+- C++ repeat(S→F): worker58.265, receipt89.720, consumed89.735ms.
+- Python repeat(F→S): worker59.390, receipt73.145, consumed91.130ms.
+All complete58commands/100records. Different observer order prevents claiming a
+controlled whole-command gain, and receipt latency has no demonstrated win.
+
+C++ coarse command50: measured window60.820ms, dispatch59.533, execute47.236,
+move_light36.911, six recomputes21.626, twelve directional FOV calls7.867,
+application capture12.138(lineages4.179/projection6.215). Nested totals overlap;
+GC1.479ms is included. Six recomputes leave14.405ms outside their FOV wrapper.
+The full profile is145.492ms and is not a plain speed result. Its native bridge
+six-call total0.556ms includes packing0.265/kernel0.198/output0.011; unchanged
+Python enumeration8.385 and input acquisition4.049 dominate the12-call FOV
+13.558ms phase. The preview now exposes this experimental coarse/call-tree data
+and all four ordinary samples, separately from the committed production reference.
+
+The numerical pilot establishes a useful pure-geometry saving, but this narrow
+boundary does not justify claiming9.5ms or requiring a native production build
+on the strength of a small, unpaired worker change. Retain the isolated pilot
+and public regression coverage; no production C++ adoption in this checkpoint.
+Python contact/admission/hazard checks, per-step native history and publication
+remain authoritative. Independent ordered-record review follows; final target,
+retained-history scaling qualification and diagnostic removal remain open.
+
+Independent CP31 validation confirms all six lanes'58 command/receipt-journal
+bindings and ordered clocks, plus29 moves/116 committed StepFacts/580 feet per
+lane with exact chosen-path legs, final positions and HUD spending. Semantic
+commands and movement values match the previous retained route across native
+observer-order cohorts. The attempted whole-packet comparator is insufficient
+for exact order validation: it recursively sorted several named lists, including
+observed_changes, and reordered contiguous same-event observations. Its earlier
+"full ordered packet parity" conclusion is withdrawn. No source contract has
+established those permutations as harmless; normalized equivalence is not used
+as proof of complete ordered packet parity. Keep strict packet ordering open,
+separately from the passing public FOV, command, receipt and movement checks.
+Final adherence/anti-slop review supports isolated retention and no production
+native build based on these measurements.
+
+The human subsequently requested removal of the C++ changes without a convincing
+whole-command gain. The isolated sources, wrappers, binary/build output and eight
+pilot-only test additions have been removed; measurement JSON/logs remain as
+historical evidence. Production never imported that pilot. CP31's build and test
+statements describe the completed experiment, not currently retained code.
+
+### Checkpoint 32: event-associated tile field updates (server and SDK only)
+
+The human explicitly authorizes this protocol/SDK scope extension, superseding
+section1's protocol exclusion for this change only. NDClient changes belong to
+its own work; deliver a concrete client handoff. Keep all prior gameplay, mutable
+history, disclosure, per-step event and temporal-order requirements. No native
+C++ dependency is retained.
+
+Requested behavior: stop repeating unchanged known-tile fields on the wire.
+Boundary: production projection→recorded public operation→canonical reduction
+and Python/TypeScript SDK validation. Inputs: first discovery, successive visible
+lighting/terrain changes, explicit clears, same-cell tile replacement, hidden
+mutation and later rediscovery. Expected output: identical admitted state after
+every event and identical causal order; full records for first discovery or
+changed tile identity, compact typed field updates for already-known tiles,
+smaller actual encoded records with conversion/projection/reduction costs measured.
+
+Add an event-associated tile_changes collection to WorldUpdate alongside full
+tiles. Each row carries position and a typed changes object. Omitted properties
+mean unchanged; explicit null (only where the underlying field allows it), empty
+collections, false and zero are actual after-values. Replace nested field values
+as wholes; no recursive patch language, reflection adapter, generic command
+framework or second gameplay state. Full records retain new/replaced tile IDs;
+patches never create unknown cells or disclose hidden mutations. Keep each
+WorldUpdate's native event association and every intermediate light update.
+
+Canonical reduction must retain old snapshots and validate prior-cell presence
+in the exact event-ordered operation before any owned-current seat commits.
+A tile introduced earlier in that operation is a valid base; a future record is
+not. stage_lineage may supply missing full binding records as today but must not
+apply future field updates. Do not introduce whole remembered-map scans to
+validate a small changed-cell set.
+
+Regenerate the schema, protocol identity and both SDK declarations from real
+owners; SDK transport remains reducer-free. Advance existing relevant version
+identities for the changed contract. Validation covers native projection/cold
+replay at every event, missing-base failure before owned-current mutation,
+omission versus null/empty/false/zero, initialization/replacement/hidden knowledge,
+and both SDK schema acceptance/rejection. Measure actual Gallery packet bytes,
+worker/projection, SDK validation/reduction and committed receipt separately.
+Do not turn the quoted42% byte estimate into a latency claim.
+
+Plan-adherence/anti-slop and anti-OOP reviewers validate this plan and actual
+source. The handoff documents wire examples, event application order, new/full
+versus changed tiles, version identity and required client reducer work. Do not
+change NDClient visibility membership, duplicate reduction, rendering or inputs.
+
+CP32 implemented and independently approved. `WorldTileChanges` contains the15
+explicit nonidentity fields with their existing constraints. Projection compares
+only supplied candidate cells after visibility admission; full records carry
+first disclosure and identity replacement. Canonical reduction reconstructs a
+new complete tile value and retains earlier snapshots. Preflight checks only
+touched positions in exact event order before any seat's current state commits;
+future field updates are excluded from binding staging. No native gameplay,
+history identity, handler dispatch or NDClient implementation changed.
+
+HTTP player schema6→7; saved `PlayerSequence` schema4→5. Both SDKs and the shared
+schema/OpenAPI/field ledger are regenerated from their owners:314definitions,
+1640fields,19public roots. Exact schema digest is
+`d4b60ad287e4ed2676a02d407715ad0340af9b58fab06e4d371d662ae3065a94`.
+Python codegen0.83.0 runs from an isolated tool cache; its explicit
+`--no-use-closed-typed-dict` option preserves stdlib TypedDicts and existing SDK
+runtime dependencies. The shared Python3.13.12 environment was not synchronized.
+
+Validation:104selected Python cases pass in8.43s, TypeScript build and32tests
+pass. The final20focused Python cases pass in4.28s, including two additional
+application-boundary cases for a later seat missing a tile base in detached and
+exclusive-current modes. Both preserve every seat's latest state, committed log
+count and admission metadata on failure. The initial ambient-light fixture did
+not emit an event because carried sources already made the tile VERY_BRIGHT;
+using a native dim-light cap reaches the intended observable update. Passive
+spatial fixtures also now specify their matching native event_type explicitly.
+
+Actual ordinary Gallery command50 (Fighter→Sorcerer) contains37full new tiles and
+214light-only field rows. Original response bytes are107,069 versus185,291 for
+the equivalent old full-tile shape:78,222bytes/42.2% removed. Those214rows alone
+occupy10,914bytes instead of89,238. All100records total5,189,849bytes versus
+6,301,170 (17.6% removed). The equivalent current-schema full form includes
+empty tile_changes collections and is185,399bytes; this distinction is retained
+in the byte audit rather than silently omitted from timing comparisons.
+
+Reproducible same-record audit:
+`.runtime/server-latency/audit_tile_fields.py` and `tile-fields-audit.json`.
+It expands each patch from the preceding remembered tile at that native event,
+changes only tiles/tile_changes, preserves every other array and identity, and
+compares all237world-event tile maps and all100canonical reduced packet states.
+There are2929field rows across this route. Both forms pass the Python SDK schema;
+all58semantic commands match the prior Python route and all58receipt/journal
+bindings and ordered clocks validate. This is exact representation equivalence,
+not independent parity against old native projection. No causal array sorting
+or UUID normalization is used.
+
+Eight alternating in-process samples of the same command50 packet compare
+current-schema full records with compact records, normal GC, all samples kept.
+Median full→compact: SDK decode2.142→1.171ms, typed parse1.362→0.887ms,
+canonical reduction3.062→4.026ms, combined6.495→6.057ms. The consumer's extra
+tile reconstruction is real and included. This diagnostic excludes network,
+recording I/O and command execution, so it is not an end-to-end gain claim.
+
+Two ordinary complete production Gallery runs are retained:
+- CP32first, F→S: worker70.361527ms, receipt102.758079ms,
+  consumed102.774009ms,100records/5,189,849bytes.
+- CP32repeat, S→F: worker61.935859ms, receipt89.292593ms,
+  consumed89.306143ms,100records/5,195,706bytes.
+Both finish58commands at(68,20),1761disclosed tiles and360objects. Normal GC,
+mutable native history and1ms receipt polling remain enabled. Different native
+observer orders and limited samples preclude a controlled latency claim. The
+repeat does not establish a worker gain over the prior58.359/59.390ms Python
+controls;9.5ms remains open.
+
+CP32coarse command50 is70.010881ms including1.749541msGC: execute54.850ms,
+six observer recomputes26.460ms, twelve directional FOV calls11.587ms,
+application capture13.967ms (lineages4.540/projection7.334). Nested totals overlap.
+The separate full profile is170.688882ms including6.051621msGC. It records
+214field comparisons0.303ms inclusive and428producer/reducer patch model copies
+4.009ms including fine wrappers. apply_world_update totals4.422ms:
+producer2.120 and canonical reducer2.302ms. Projection already has complete
+after-values, so its reconstruction is duplicate conversion work; retain this
+measurement explicitly. No additional ownership adapter or alternate reducer
+was introduced for this small measured ceiling.
+
+Anti-OOP and plan-adherence/anti-slop reviewers approve actual source, tests and
+the [client handoff](../sdk/protocol/README.md#client-handoff-event-associated-tile-field-updates).
+Both SDK READMEs link the handoff. A newly launched server from this checkout
+uses the implementation; clients need the regenerated schema7 SDK and their
+event reducer updated. The live preview now displays CP32ordinary samples,
+coarse attribution and the detailed call tree, with the removed C++ pilot
+explicitly historical. CP32server/SDK scope is complete; the broader9.5ms goal,
+retained-history GC work, sustained qualification and final diagnostic removal
+remain open.
+
+### Checkpoint 33: investigate choices after movement
+
+The human subsequently requested a complete plan for the chosen approach.
+The governing implementation plan for this scope is now
+[Player action discovery: shared legal choices and on-demand effects](PLAYER_ACTION_DISCOVERY_REWORK_PLAN_2026-10-13.md).
+The investigation chronology and measurements remain below; the new plan
+consolidates the latest subject/position/multi-target decisions.
+
+The human reports a Gallery move where controls become ready almost three
+seconds after animation, with approximately2.5seconds of client validation and
+normalization for a2.4MB choices reply. They specifically suspect AoE position
+enumeration and wall/object targets. These timings are supplied evidence, not
+yet reproduced by this server/SDK investigation. Client playback scheduling and
+normalization stay outside this thread's edits.
+
+Requested behavior: identify the real computation and repeated data behind
+choices latency so subsequent work removes unnecessary work while preserving
+native legality and subjectivity. Boundary: existing choices request through
+native discovery, detach/cache ownership, encoded reply and SDK admission.
+Input: the existing live Gallery route and its actual choices replies, followed
+by same-reply validation diagnostics. Expected output: reproducible timings by
+owner, byte/count census by action/target/field and specific rework candidates;
+retain exact valid targets, unavailable reasons, indexes, ordering and previews.
+
+Instrument the current owners temporarily; keep diagnostic runs separate from
+ordinary timings. Record native collection phases, whole-result dump/validation
+copies, JSON encoding, pipe/HTTP and SDK decode/validation independently. Count
+AoE positions, affected cells/entities, wall/object targets, paths and repeated
+default fields. Do not mistake necessary output volume for a whole-map scan or
+remove targets based on the hypothesis alone. This initially authorized only
+investigation. The human subsequently authorized fixing both computation and
+server/SDK delivery, proposed attaching spell targetability to tiles, and required
+that approach to be properly studied. This extends CP33 to the staged rework
+below. NDClient edits remain excluded. Preserve native legal targets, subjective
+checks, exact action/target indexes and order, unavailable reasons, selection
+previews and stale-state rejection. Plan-adherence/anti-slop, anti-OOP and SDK
+reviewers validate the design before changes to the wire representation.
+
+#### CP33 evidence and first-principles design
+
+The unchanged production Gallery route reproduced a 2,399,276-byte choices
+response immediately after command54 moves the Sorcerer to (40,20). It contains
+4,199 targets: Fireball contributes 962,989 bytes / 1,288 aims; three Burning
+Hands slot variants contribute 416,390 bytes each / 897 aims each. These four
+AoE rows occupy 92.20% of the response. Fire Bolt has 140 object targets,
+including 82 walls, and occupies 69,435 bytes (2.89%). Walls are legitimate
+targets, but they are not the main payload cause in this case. The three Burning
+Hands target lists are exactly equal, while their action/slot metadata differs.
+Native discovery already reuses their geometry and preview rows. Serialization
+expands the repeated values again.
+
+Choices55 phase instrumentation, without cProfile: dispatch301.589ms,
+encode9.713ms; native top-level phases212.542ms (entity actions112.408ms,
+AoE75.567ms). Two whole-result dumps cost39.312ms and two validations36.413ms.
+The remaining13.323ms dispatch is unattributed, not labeled as GC. These are
+diagnostic timings. Python SDK decode38.231ms; Node TypeScript SDK first decode
+285.943ms including lazy validator compilation, warm decodes10.027–20.778ms.
+The SDK parses and validates once and does not normalize. This does not reproduce
+or disprove the reported browser2.5-second validation/normalization delay.
+
+The source separates three different kinds of data:
+
+| Data | Owner and lifetime | Rework consequence |
+|---|---|---|
+| Disclosed tiles and objects | Existing event-associated world projection | Keep sparse updates from CP32; do not add a second spell-legality owner here |
+| Current action eligibility and exact targets | Actor, action variant and retained discovery generation | Range, origin, visibility, occupancy, resources, conditions and custom rules must be evaluated at their native owner |
+| Per-aim effects/geometry | Current native AoE footprint and subjective preview caches | Share already-equal ordered values in the response; do not collapse distinct aim indexes based on equal footprints |
+
+Permanent tile spell flags are insufficient: item-sourced spells may use a
+different origin; Misty Step requires subjective walkability and an empty landing;
+Call Lightning can include the caster's cell; creature filters and handler-backed
+placement admission also depend on current state outside the tile. Inverting
+action→targets into tile→spells alone preserves the same relation size and adds
+update dependencies. A transfer delta does not save discovery computation if the
+server still rebuilds that relation to compare it.
+
+Candidate designs, in implementation order:
+
+1. Bound point queries to their actual question. `Entity.is_threatened` currently
+   obtains every threatened visible cell from each enemy only to test the actor's
+   cell. Use the existing `candidate_positions` argument with that one cell.
+   Preserve the same visibility, distance, weapon access, close-pressure cap and
+   native barrier checks; no new cache. The separate profiled Fighter choices56
+   spends210.667ms in203 `is_threatened` calls and makes328,548 distance calls
+   across discovery. Validate with existing diagonal/ranged-disadvantage,
+   window-access and long-reach endpoint cases, then repeat the Gallery diagnostic.
+2. Preserve sharing through one current-discovery response. Study sparse target
+   fields, response-local exact ordered target sets and footprints with integer
+   references. No permanent registry, hashes, new endpoint or tile legality cache.
+   Keep every action and target index. Compare bytes, construction, validation and
+   client lookup/expansion cost, including secondary target pools and empty lists.
+   Explicit-schema-default omission alone measures1,511,392bytes; a diagnostic
+   target/footprint-pool form measures1,033,977bytes and reconstructs all original
+   values exactly. Neither estimate is an implemented protocol or latency gain.
+3. Study removing duplicate public-model conversions with explicit ownership.
+   `cache.original` retains native execution templates, `cache.detached` protects
+   admitted values, and public callers may mutate their returned DTO. Preserve
+   these boundaries. Do not simply return either retained mutable model.
+4. Consider cross-request target deltas or selected-action/aim queries only after
+   measuring remaining cost and churn. They are alternative deeper designs, not
+   automatic additions to pooling. Lazy discovery affects current complete-target
+   availability, especially `aoe_require_targets`; the existing preview reads a
+   retained aim's footprint. New concurrent queries also meet the host's
+   one-pending-query-per-seat supersession rule. Document these exact consequences
+   before any such change; do not silently change client interaction semantics.
+
+Representation acceptance: actual recorded responses must reconstruct exact
+values, indexes, ordering and secondary pools; both SDKs must admit generated
+contracts and reject invalid references; retained selection/preview/execute and
+stale rejection must continue to work. Computation acceptance: focused native
+rule tests and unchanged Gallery choices/route outcomes, followed by honest
+before/after timings with profiled and ordinary samples separated. No hidden
+targets, event/history changes, frontend work or unmeasured 9.5ms claim.
+
+Temporary artifacts are `.runtime/server-latency/checkpoint33-choices/`, the
+`choices33_{worker,host,gallery}.py` drivers and the existing HTML preview. The
+preview must distinguish CP33 choices timings from CP32 movement receipt times.
+
+#### CP33 preferred design after human feedback: shared candidates and legal positions
+
+The human subsequently proposed keeping precise legal creature/object targets
+and aim positions, letting the client predict affected walls/creatures, and
+sending one shared position array with the spells legal there. They explicitly
+asked to account for multiple-target selection. This supersedes eager footprint
+pooling as the preferred design. It does not authorize changing native legality
+or trusting client predictions during execution. Scope remains server/SDK plus
+client handoff; native AI's existing rich discovery stays available.
+
+The response should represent one current discovery, not update permanent tile
+attributes. Keep the existing game/epoch/audience, state revision, correlation,
+actor, force-attack and discovery-generation identity. Within that response:
+
+1. A subject table identifies creatures and objects once (UUID, kind, disclosed
+   label). Include every native admitted subject, not only enemies; allied/self
+   options and force-attack policy retain their existing meaning.
+2. A position table stores each coordinate once. Aim positions and subject
+   contact positions are distinct uses of that table; an object UUID is not a
+   replacement for an admitted contact point on a multicell wall.
+3. Exact action variants reference ordered eligibility sets. Each link retains
+   its native target index, subject/position references and action-dependent
+   distance, cost or continuation data. Share only equal sets. The inverse
+   position→legal-actions view is the same relation; it may be indexed once by
+   the SDK if needed, not sent again as a second authoritative relation.
+4. AoE rules/shape are described once per action or shared equal descriptor.
+   Current ordinary AoE action metadata is insufficient for client geometry;
+   this needs an explicit descriptor, including the origin/aim relationship and
+   propagation mode. Reuse native presentation geometry definitions where they
+   fit. Unknown/custom prediction support must not alter native eligibility.
+5. Optional per-aim footprint and recipient details are deferred explicitly,
+   never represented as a computed empty blast. Client predictions use disclosed
+   world data and are presentation only. The existing selected-prefix Preview
+   remains the exact subjective-result boundary; extend it to compute the chosen
+   AoE's footprint and affected-creature summary rather than reading absent
+   precomputed fields. Execution still works without a prior Preview and uses
+   native objective resolution. No added query endpoint is needed.
+
+The legal relation has real size: reversing actions→positions to positions→actions
+does not by itself turn all work into O(number of positions). Shared sets remove
+identical variant memberships; optional detail deferral removes the larger
+aim-count × footprint/recipient work. Use each stage's actual input/output size,
+not a promise of constant-time discovery. Cross-request deltas are not part of
+this design. On the actual six-cell move, none of590 common Burning Hands aim
+rows remain unchanged; Fireball retains1,030 common aims but only17 complete rows
+unchanged. Distances, indexes and subjective footprints genuinely change.
+
+**Native computation seam.** In `_compute_aoe_at_position`, the sole rejection
+after footprint/recipient computation is an empty recipient list when
+`aoe_require_targets=True`. Fireball and Burning Hands set it False. For that
+path, keep source affordability, exact native/custom candidate positions,
+existing aim compaction, distance and action metadata; construct light admitted
+aim rows without solving every blast. Apply the same behavior to the existing
+item-use AoE discovery path. Required-target actions retain the necessary eager
+admission computation. Separate current detailed versus deferred preview cache
+entries/ownership so a later rich native/AI request cannot receive incomplete
+data. Keep native templates and exact admitted indexes retained for execution;
+no bypass of per-target checks on creature/object actions.
+
+**Multiple targets are ordered selections, not independent flags.** Preserve
+the current action count, repetition and allocation completion metadata. Magic
+Missile and Scorching Ray can repeat targets and fill unused allocation into the
+primary target. Chain Lightning uses distinct recipients and secondary contacts
+within30feet of the original primary, potentially outside caster primary range.
+Acid Splash also restricts a pair's separation. A subject's presence in a set
+does not prove an arbitrary combination valid. Retain primary-specific secondary
+sets and their local index meanings: None inherits the primary pool; an empty
+list permits no secondaries. The same secondary index can name different targets
+under different primaries. Preserve existing ordered-prefix Preview, confirmable
+status, legal next candidates and path/entity-destination continuations. Do not
+flatten secondary-only candidates into primary eligibility or replace command
+target indexes with global table IDs.
+
+**Measured representation studies, not a deployed contract.** The reproducible
+offline `study_choices33.py` reverses sparse fields and shared sets/footprints
+exactly for all58captured replies, with no target/index/array sorting. Choices55:
+full2,399,276bytes; sparse1,511,392; shared target sets1,047,355; adding footprint
+references1,033,830. The additional footprint table saves only13,525bytes after
+target-set sharing and is not the preferred next mechanism. Naive Python
+deepcopy/JSON-key packing and reversal cost median303.73/279.79ms over seven
+samples: reject that implementation; moving the same expanded graph into an SDK
+normalizer defeats the task. Gzip-level1 reduces the original bytes to164,438,
+but leaves the decoded graph/computation untouched; it is not the requested
+structural fix.
+
+`study_choices33_relation.py` prototypes the human's preferred form with deferred
+AoE details: 231,294bytes (90.36% below2,399,276),1,347 coordinates,142 subject
+identities and8shared target sets. Every one of4,199 target occurrences retains
+exact membership/index/identity/contact/distance and other non-preview fields.
+This estimate includes the existing action metadata but not the new prediction
+descriptor; final bytes and end-to-end timings remain unmeasured. This particular
+packet contains no secondary pools, so it is not multi-target validation.
+
+**Implementation and acceptance sequence.** First finalize the passive wire
+records and SDK lookup/selection helpers against actual compound-selection cases;
+avoid a duplicate native rules hierarchy. Then separate admitted aims from optional
+preview work at the existing native owner, retain complete AI discovery and add
+selected-preview computation. Project the current discovery directly into shared
+wire values once, preserving public-call mutation isolation and private execution
+templates, rather than constructing/detaching/packing the old full response.
+Regenerate both SDK schemas/types and provide a client handoff describing exact
+membership, local prediction, selected previews and stale-prefix handling.
+
+Acceptance covers native rich/deferred target parity, unavailable reasons,
+hidden/blocked propagation, empty-area casts, required-target AoEs, item origins,
+force-attack/seat fences, same-generation repeat requests, stale selection and
+execution without preview. Compound cases must include repeated allocations,
+Chain Lightning branches, an empty secondary pool, invalid pairs, movement route
+choice and entity-destination/path continuations. Malformed or wrong-kind table
+references must be rejected by both SDKs; lookups must not expand every shared
+row. Measure discovery, projection/encoding, actual bytes, SDK admission/lookup
+and selected-preview latency separately, including cold/warm behavior. Keep the
+movement9.5ms clock separate. Anti-slop/plan-adherence, anti-OOP and SDK reviewers
+approve this direction and its boundaries; production wire edits have not begun.
+
+**Point-query implementation evidence.** The production `is_threatened` change
+uses the existing one-candidate query.26focused native tests pass. The initially
+broader selection passed27cases and failed one nearby-door admission case; that
+same case fails with the original threat implementation restored in memory,
+so it remains unrelated and unchanged. The complete repeated Gallery diagnostic
+matches all58command semantics and route summaries. Fighter choices56 retains
+203threat calls but drops their profiled inclusive time210.666→3.192ms; whole
+profiled dispatch858.084→609.725ms. Sorcerer choices55 rises301.589→343.729ms in
+the paired run. These establish removed threat work, not a general latency win;
+ordinary timing and same-state exact choices parity remain separate checks.
+
+The subsequent same-runtime audit compares all58live Gallery choices against
+fresh native discovery using the original threat implementation: all40,472target
+occurrences and full result values/indexes/order match, with unchanged event
+cursors. Only the discovery transport stamps are copied to the control result;
+no arrays are sorted or identities normalized. The audit is a validation run,
+not ordinary timing evidence.
+
+### Checkpoint 34 — shared choices and selected effects implemented
+
+The human authorized the separately reviewed
+[action-discovery plan](PLAYER_ACTION_DISCOVERY_REWORK_PLAN_2026-10-13.md).
+Its implementation now runs in the ordinary Python server and both player SDKs.
+Schema 8 introduces shared subject/position tables and exact ordered target
+sets, with selected subjective AoE effects through Preview. Optional area effects
+are skipped at native discovery, and direct commands do not materialize them
+before authoritative execution. Required-target membership, native rich AI
+discovery, mutable history and the earlier ordered tile field updates remain.
+Saved PlayerSequence schema stays 5. No C++ module or build step is required.
+
+Actual choices 55: 2,399,276 → 267,836 bytes, 88.8% smaller, preserving all 4,199
+primary occurrences through 142 subjects, 1,347 coordinates and eight exact sets.
+Ordinary-worker choices request samples are 188.55 / 193.21 / 191.11 ms versus
+362.25 ms in the matching earlier Sorcerer→Fighter cohort. The final Python SDK
+decode sample is 5.31 ms. These are query clocks; the corresponding movement
+command 50 receipts are 102.16 / 74.14 / 98.50 ms. The 9.5 ms movement target and
+long-history GC tails remain unresolved.
+
+The native audit compares 58 Gallery queries and 40,472 target occurrences
+against rich discovery in the same world, preserving metadata, ordered indexes
+and non-preview values without events or RNG changes. Final compact/native,
+compound, schema, session and contact batch: 46 passed. SDK suites: 82 Python,
+55 TypeScript plus build. Live HTTP fights exercise Fireball, repeated missiles
+and a two-vertex wall, with six audience streams / 176 records passing cold SDK
+and native replay. The Gallery audit separately checks 400 current records and
+232 command receipt/cursor/clock bindings across four CP34 lanes. Final-lane
+tile fields match synthetic full records at 273 world-event prefixes and every
+one of 100 reduced states. These are qualified checks, not an independent
+old-native ordered-event parity claim or a full-suite pass.
+
+Bounded studies cover visible aim count, selected footprint, equal slot
+variants, subjects/secondary branches, unrelated map width and real retained
+saving-throw history. The selected Fireball worker preview costs 0.912–0.990 ms;
+repeat costs 0.096–0.141 ms. No optional solve occurs during direct command
+admission. A separate traced allocation comparison decreases current query
+allocations 1.94 MB → 0.49 MB; it excludes world/history and is not RSS. Detailed
+scopes, outliers, residual object-contact costs and evidence paths are in the
+action-discovery plan, section 10.
+
+Frontend migration is documented in [the protocol handoff](../sdk/protocol/README.md).
+Restart the server from this checkout and update/rebuild the player SDK together;
+the identity handshake rejects the old schema. The frontend must use shared
+lookups and response-local Preview coordinates, keep UI selection state separate
+and retain correlation/generation/prefix checks. NDClient was not edited here.

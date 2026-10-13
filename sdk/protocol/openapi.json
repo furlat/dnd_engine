@@ -2718,6 +2718,92 @@
         "title": "AdvantageStatus",
         "type": "string"
       },
+      "AoEAimingGeometry": {
+        "additionalProperties": false,
+        "description": "One native shape at a reference aim, reusable for client prediction.",
+        "properties": {
+          "geometry": {
+            "discriminator": {
+              "mapping": {
+                "cone": "#/components/schemas/ConePresentationGeometry",
+                "cube": "#/components/schemas/CubePresentationGeometry",
+                "cylinder": "#/components/schemas/CylinderPresentationGeometry",
+                "line": "#/components/schemas/LinePresentationGeometry",
+                "sphere": "#/components/schemas/SpherePresentationGeometry",
+                "wall": "#/components/schemas/WallPresentationGeometry",
+                "wall_assembly": "#/components/schemas/WallAssemblyPresentationGeometry"
+              },
+              "propertyName": "shape"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SpherePresentationGeometry"
+              },
+              {
+                "$ref": "#/components/schemas/ConePresentationGeometry"
+              },
+              {
+                "$ref": "#/components/schemas/LinePresentationGeometry"
+              },
+              {
+                "$ref": "#/components/schemas/CubePresentationGeometry"
+              },
+              {
+                "$ref": "#/components/schemas/CylinderPresentationGeometry"
+              },
+              {
+                "$ref": "#/components/schemas/WallPresentationGeometry"
+              },
+              {
+                "$ref": "#/components/schemas/WallAssemblyPresentationGeometry"
+              }
+            ],
+            "title": "Geometry"
+          },
+          "reference_target": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "title": "Reference Target",
+            "type": "array"
+          },
+          "origin_mode": {
+            "enum": [
+              "aim",
+              "fixed"
+            ],
+            "title": "Origin Mode",
+            "type": "string"
+          },
+          "propagation": {
+            "enum": [
+              "line_of_effect",
+              "connected"
+            ],
+            "title": "Propagation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "geometry",
+          "reference_target",
+          "origin_mode",
+          "propagation"
+        ],
+        "title": "AoEAimingGeometry",
+        "type": "object"
+      },
       "AppearanceConfig": {
         "properties": {
           "portrait_key": {
@@ -3514,580 +3600,6 @@
         "title": "AttackOutcome",
         "type": "string"
       },
-      "AvailableActionInfo": {
-        "description": "Information about an available action and its valid targets.\n\nThis is returned by Entity.get_available_actions() and contains everything\nneeded to display the action in UI and execute it.",
-        "properties": {
-          "discovery_generation": {
-            "default": 0,
-            "title": "Discovery Generation",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "discovery_index": {
-            "default": 0,
-            "title": "Discovery Index",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "discovery_runtime": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Discovery Runtime"
-          },
-          "discovery_actor_uuid": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Discovery Actor Uuid"
-          },
-          "template_name": {
-            "description": "Engine command token for execution; never authored presentation identity.",
-            "title": "Template Name",
-            "type": "string"
-          },
-          "semantic_key": {
-            "default": "action.unclassified",
-            "description": "Rules/mechanics family key retained for policy and diagnosis; never authored presentation identity.",
-            "title": "Semantic Key",
-            "type": "string"
-          },
-          "behavior_id": {
-            "description": "Primitive executable-rule identity.",
-            "title": "Behavior Id",
-            "type": "string"
-          },
-          "provided_by_id": {
-            "description": "Primitive direct-provider identity.",
-            "title": "Provided By Id",
-            "type": "string"
-          },
-          "origin_root_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Optional durable primitive root of the provider chain.",
-            "title": "Origin Root Id"
-          },
-          "configured_action_ref": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ContentRef"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Exact authored configuration for a parameterized action. Clients resolve this catalog row instead of inferring a variant from execution tokens, display names, or outcome identifiers."
-          },
-          "target_type": {
-            "$ref": "#/components/schemas/TargetType",
-            "description": "What kind of target this action needs"
-          },
-          "position_selection": {
-            "anyOf": [
-              {
-                "discriminator": {
-                  "mapping": {
-                    "entity_destination": "#/components/schemas/EntityDestinationSelection",
-                    "path": "#/components/schemas/PositionPathSelection",
-                    "single": "#/components/schemas/SinglePositionSelection"
-                  },
-                  "propertyName": "kind"
-                },
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/SinglePositionSelection"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PositionPathSelection"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EntityDestinationSelection"
-                  }
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Position input required after choosing a discovery target.",
-            "title": "Position Selection"
-          },
-          "availability_status": {
-            "$ref": "#/components/schemas/ActionAvailabilityStatus",
-            "description": "Closed reason this authored row is executable or unavailable; clients never infer the reason from an empty target list."
-          },
-          "valid_targets": {
-            "description": "Currently executable targets with stable indices. Target-bound costs are evaluated before a target enters this list.",
-            "items": {
-              "$ref": "#/components/schemas/AvailableTarget"
-            },
-            "title": "Valid Targets",
-            "type": "array"
-          },
-          "can_afford": {
-            "description": "Whether the neutral source permission gate and all target-independent action-economy or named-resource costs permit execution. Consult availability_status for target-bound costs and requirements.",
-            "title": "Can Afford",
-            "type": "boolean"
-          },
-          "display_name": {
-            "description": "Human-readable name (e.g., 'Scimitar')",
-            "title": "Display Name",
-            "type": "string"
-          },
-          "description": {
-            "default": "",
-            "description": "Action description",
-            "title": "Description",
-            "type": "string"
-          },
-          "cost_type": {
-            "description": "Type of cost (actions, bonus_actions, etc.)",
-            "enum": [
-              "actions",
-              "bonus_actions",
-              "reactions",
-              "movement",
-              "spell_slot_1",
-              "spell_slot_2",
-              "spell_slot_3",
-              "spell_slot_4",
-              "spell_slot_5",
-              "spell_slot_6",
-              "spell_slot_7",
-              "spell_slot_8",
-              "spell_slot_9"
-            ],
-            "title": "Cost Type",
-            "type": "string"
-          },
-          "cost_amount": {
-            "default": 1,
-            "description": "Cost amount (usually 1)",
-            "title": "Cost Amount",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "restricted_action_budget": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Restricted budget funding this otherwise ordinary action, e.g. Haste.",
-            "title": "Restricted Action Budget"
-          },
-          "costs": {
-            "description": "Target-independent action-economy and named-resource costs for this row; selected movement cost is carried by target.path_cost.",
-            "items": {
-              "$ref": "#/components/schemas/BaseCost"
-            },
-            "title": "Costs",
-            "type": "array"
-          },
-          "weapon_slot": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Weapon slot for attacks",
-            "title": "Weapon Slot"
-          },
-          "weapon_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Weapon name for display (e.g., 'Scimitar')",
-            "title": "Weapon Name"
-          },
-          "damage_types": {
-            "description": "Damage type labels this action can deal when known.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Damage Types",
-            "type": "array"
-          },
-          "outcome_profile": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ActionOutcomeProfile"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Actor-baseline stochastic outcome model when declared by the action rule."
-          },
-          "self_setup_profile": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ActionSelfSetupProfile"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Engine-declared logical self-setup outcome when available."
-          },
-          "target_effect_profile": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ActionTargetEffectProfile"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Engine-declared conditional effects over selected targets."
-          },
-          "world_effect_profile": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ActionWorldEffectProfile"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Engine-declared information and topology effects."
-          },
-          "performs_attack": {
-            "default": false,
-            "title": "Performs Attack",
-            "type": "boolean"
-          },
-          "action_category": {
-            "$ref": "#/components/schemas/ActionCategory",
-            "default": "ability",
-            "description": "Classification of this action"
-          },
-          "base_template_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Registered execution-token family when it differs from template_name; never authored presentation identity.",
-            "title": "Base Template Name"
-          },
-          "spell_level": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Base spell level for spell actions.",
-            "title": "Spell Level"
-          },
-          "cast_at_level": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Spell slot level used by this action row.",
-            "title": "Cast At Level"
-          },
-          "is_spell_variant": {
-            "default": false,
-            "description": "Whether this row represents a generated spell variant.",
-            "title": "Is Spell Variant",
-            "type": "boolean"
-          },
-          "requires_concentration": {
-            "default": false,
-            "description": "Whether executing this action starts or maintains concentration.",
-            "title": "Requires Concentration",
-            "type": "boolean"
-          },
-          "num_projectiles": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Number of projectiles/targets for MULTI_ENTITY actions",
-            "title": "Num Projectiles"
-          },
-          "allow_same_target": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Whether same target can be selected multiple times",
-            "title": "Allow Same Target"
-          },
-          "is_item_use": {
-            "default": false,
-            "description": "True for use actions from items",
-            "title": "Is Item Use",
-            "type": "boolean"
-          },
-          "source_item_uuid": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Item providing this action",
-            "title": "Source Item Uuid"
-          },
-          "loot_item_uuid": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Exact contained item transferred by this discovered loot action.",
-            "title": "Loot Item Uuid"
-          },
-          "item_stack_count": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Stack count of source item (for display, only set when > 1)",
-            "title": "Item Stack Count"
-          },
-          "item_charge_cost": {
-            "default": 0,
-            "description": "Finite source-item charges consumed by successful execution.",
-            "minimum": 0,
-            "title": "Item Charge Cost",
-            "type": "integer",
-            "maximum": 9007199254740991
-          },
-          "fixed_healing": {
-            "anyOf": [
-              {
-                "minimum": 0,
-                "type": "integer",
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Deterministic hit points restored when declared by the action rule.",
-            "title": "Fixed Healing"
-          },
-          "allocation_completion": {
-            "default": "selected_only",
-            "enum": [
-              "selected_only",
-              "fill_primary"
-            ],
-            "title": "Allocation Completion",
-            "type": "string"
-          },
-          "variant_facets": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ActionVariantFacet"
-            },
-            "title": "Variant Facets",
-            "type": "array"
-          },
-          "interaction_affordance": {
-            "$ref": "#/components/schemas/ActionAffordance"
-          },
-          "connector_traversal": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ConnectorTraversalDiscovery"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          }
-        },
-        "required": [
-          "template_name",
-          "behavior_id",
-          "provided_by_id",
-          "target_type",
-          "availability_status",
-          "can_afford",
-          "display_name",
-          "cost_type"
-        ],
-        "title": "AvailableActionInfo",
-        "type": "object",
-        "additionalProperties": false
-      },
-      "AvailableActionsResult": {
-        "description": "Complete available actions query result.\n\nReturned by Entity.get_available_actions(). Groups actions by type for\neasy iteration and UI rendering.",
-        "properties": {
-          "discovery_generation": {
-            "default": 0,
-            "title": "Discovery Generation",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "entity_uuid": {
-            "description": "UUID of the entity these actions are for",
-            "format": "uuid",
-            "title": "Entity Uuid",
-            "type": "string"
-          },
-          "entity_actions": {
-            "description": "Actions targeting entities (Attack)",
-            "items": {
-              "$ref": "#/components/schemas/AvailableActionInfo"
-            },
-            "title": "Entity Actions",
-            "type": "array"
-          },
-          "position_actions": {
-            "description": "Actions targeting positions (Move)",
-            "items": {
-              "$ref": "#/components/schemas/AvailableActionInfo"
-            },
-            "title": "Position Actions",
-            "type": "array"
-          },
-          "self_actions": {
-            "description": "Self-targeting actions (Dash, Dodge, etc.)",
-            "items": {
-              "$ref": "#/components/schemas/AvailableActionInfo"
-            },
-            "title": "Self Actions",
-            "type": "array"
-          },
-          "object_actions": {
-            "description": "Actions targeting objects (Pick Up, interactions)",
-            "items": {
-              "$ref": "#/components/schemas/AvailableActionInfo"
-            },
-            "title": "Object Actions",
-            "type": "array"
-          },
-          "remaining_movement": {
-            "default": 0,
-            "description": "Remaining movement in feet",
-            "title": "Remaining Movement",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "world_interactions": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/AvailableWorldInteraction"
-            },
-            "title": "World Interactions",
-            "type": "array"
-          },
-          "handler_details": {
-            "description": "Player-toggleable event handlers and their current state.",
-            "items": {
-              "$ref": "#/components/schemas/AvailableHandlerInfo"
-            },
-            "title": "Handler Details",
-            "type": "array"
-          }
-        },
-        "required": [
-          "entity_uuid"
-        ],
-        "title": "AvailableActionsResult",
-        "type": "object",
-        "additionalProperties": false
-      },
       "AvailableHandlerInfo": {
         "description": "Player-toggleable event handler exposed with available actions.",
         "properties": {
@@ -4145,469 +3657,6 @@
           "trigger_event"
         ],
         "title": "AvailableHandlerInfo",
-        "type": "object",
-        "additionalProperties": false
-      },
-      "AvailableSelectionPreview": {
-        "additionalProperties": false,
-        "description": "Detached result of inspecting one admitted ordered selection prefix.",
-        "properties": {
-          "can_confirm": {
-            "title": "Can Confirm",
-            "type": "boolean"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Reason"
-          },
-          "effective_target_uuids": {
-            "default": [],
-            "items": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "title": "Effective Target Uuids",
-            "type": "array"
-          },
-          "next_targets": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/AvailableTarget"
-            },
-            "title": "Next Targets",
-            "type": "array"
-          },
-          "next_positions": {
-            "default": [],
-            "items": {
-              "maxItems": 2,
-              "minItems": 2,
-              "prefixItems": [
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                }
-              ],
-              "type": "array"
-            },
-            "title": "Next Positions",
-            "type": "array"
-          },
-          "geometry": {
-            "anyOf": [
-              {
-                "discriminator": {
-                  "mapping": {
-                    "cone": "#/components/schemas/ConePresentationGeometry",
-                    "cube": "#/components/schemas/CubePresentationGeometry",
-                    "cylinder": "#/components/schemas/CylinderPresentationGeometry",
-                    "line": "#/components/schemas/LinePresentationGeometry",
-                    "sphere": "#/components/schemas/SpherePresentationGeometry",
-                    "wall": "#/components/schemas/WallPresentationGeometry",
-                    "wall_assembly": "#/components/schemas/WallAssemblyPresentationGeometry"
-                  },
-                  "propertyName": "shape"
-                },
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/SpherePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/LinePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CubePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CylinderPresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/WallPresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/WallAssemblyPresentationGeometry"
-                  }
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Geometry"
-          },
-          "affected_positions": {
-            "default": [],
-            "items": {
-              "maxItems": 2,
-              "minItems": 2,
-              "prefixItems": [
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                }
-              ],
-              "type": "array"
-            },
-            "title": "Affected Positions",
-            "type": "array"
-          },
-          "selected_route": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SelectedRoute"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          }
-        },
-        "required": [
-          "can_confirm"
-        ],
-        "title": "AvailableSelectionPreview",
-        "type": "object"
-      },
-      "AvailableTarget": {
-        "description": "A valid target for an action, with index for selection.\n\nUsed in CLI/UI patterns like 'attack 0' or 'move 3' to select targets.",
-        "properties": {
-          "target_kind": {
-            "default": "creature",
-            "enum": [
-              "creature",
-              "object"
-            ],
-            "title": "Target Kind",
-            "type": "string"
-          },
-          "index": {
-            "description": "Index for selection (e.g., 'attack 0')",
-            "title": "Index",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "target_uuid": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "For ENTITY actions",
-            "title": "Target Uuid"
-          },
-          "position": {
-            "anyOf": [
-              {
-                "maxItems": 2,
-                "minItems": 2,
-                "prefixItems": [
-                  {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  }
-                ],
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Grid cell for POSITION targets and entity/object target cells",
-            "title": "Position"
-          },
-          "target_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Entity name if ENTITY action",
-            "title": "Target Name"
-          },
-          "distance": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Distance in feet",
-            "title": "Distance"
-          },
-          "path_cost": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Exact selected-target movement cost for a position action.",
-            "title": "Path Cost"
-          },
-          "extra_target_uuids": {
-            "anyOf": [
-              {
-                "items": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Additional targets for MULTI_ENTITY actions",
-            "title": "Extra Target Uuids"
-          },
-          "secondary_targets": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/AvailableTarget"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Secondary Targets"
-          },
-          "is_path_hazardous": {
-            "default": false,
-            "description": "Whether shortest path crosses a hazardous tile",
-            "title": "Is Path Hazardous",
-            "type": "boolean"
-          },
-          "safe_path_cost": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Movement cost of safe alternative path (None if no safe path)",
-            "title": "Safe Path Cost"
-          },
-          "path": {
-            "anyOf": [
-              {
-                "items": {
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "prefixItems": [
-                    {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    }
-                  ],
-                  "type": "array"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Shortest path to this target",
-            "title": "Path"
-          },
-          "safe_path": {
-            "anyOf": [
-              {
-                "items": {
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "prefixItems": [
-                    {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    }
-                  ],
-                  "type": "array"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Safe alternative path avoiding hazards",
-            "title": "Safe Path"
-          },
-          "opportunity_attack_exposures": {
-            "description": "Visible hostile threat boundaries crossed by the shortest path.",
-            "items": {
-              "$ref": "#/components/schemas/OpportunityAttackExposure"
-            },
-            "title": "Opportunity Attack Exposures",
-            "type": "array"
-          },
-          "safe_path_opportunity_attack_exposures": {
-            "description": "Visible hostile threat boundaries crossed by the safe alternative path.",
-            "items": {
-              "$ref": "#/components/schemas/OpportunityAttackExposure"
-            },
-            "title": "Safe Path Opportunity Attack Exposures",
-            "type": "array"
-          },
-          "affected_entity_uuids": {
-            "anyOf": [
-              {
-                "items": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "UUIDs of entities affected by AoE",
-            "title": "Affected Entity Uuids"
-          },
-          "affected_entity_names": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Names of entities affected by AoE",
-            "title": "Affected Entity Names"
-          },
-          "affected_count": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Number of entities affected by AoE",
-            "title": "Affected Count"
-          },
-          "affected_positions": {
-            "anyOf": [
-              {
-                "items": {
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "prefixItems": [
-                    {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    }
-                  ],
-                  "type": "array"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "All positions in AoE shape (for map preview)",
-            "title": "Affected Positions"
-          }
-        },
-        "required": [
-          "index"
-        ],
-        "title": "AvailableTarget",
         "type": "object",
         "additionalProperties": false
       },
@@ -5187,6 +4236,76 @@
         "title": "CharacterSubclass",
         "type": "string"
       },
+      "ChoiceExposure": {
+        "additionalProperties": false,
+        "properties": {
+          "reactor_uuid": {
+            "format": "uuid",
+            "title": "Reactor Uuid",
+            "type": "string"
+          },
+          "reactor_name": {
+            "title": "Reactor Name",
+            "type": "string"
+          },
+          "from_position": {
+            "minimum": 0,
+            "title": "From Position",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "to_position": {
+            "minimum": 0,
+            "title": "To Position",
+            "type": "integer",
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "reactor_uuid",
+          "reactor_name",
+          "from_position",
+          "to_position"
+        ],
+        "title": "ChoiceExposure",
+        "type": "object"
+      },
+      "ChoiceSubject": {
+        "additionalProperties": false,
+        "properties": {
+          "uuid": {
+            "format": "uuid",
+            "title": "Uuid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "creature",
+              "object"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          }
+        },
+        "required": [
+          "uuid",
+          "kind"
+        ],
+        "title": "ChoiceSubject",
+        "type": "object"
+      },
       "ChoicesRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5261,7 +4380,7 @@
             "type": "boolean"
           },
           "choices": {
-            "$ref": "#/components/schemas/AvailableActionsResult"
+            "$ref": "#/components/schemas/PlayerChoices"
           }
         },
         "required": [
@@ -13987,6 +13106,586 @@
         "type": "object",
         "additionalProperties": false
       },
+      "PlayerAction": {
+        "additionalProperties": false,
+        "properties": {
+          "discovery_generation": {
+            "default": 0,
+            "title": "Discovery Generation",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "discovery_index": {
+            "default": 0,
+            "title": "Discovery Index",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "discovery_runtime": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Discovery Runtime"
+          },
+          "discovery_actor_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Discovery Actor Uuid"
+          },
+          "template_name": {
+            "description": "Engine command token for execution; never authored presentation identity.",
+            "title": "Template Name",
+            "type": "string"
+          },
+          "semantic_key": {
+            "default": "action.unclassified",
+            "description": "Rules/mechanics family key retained for policy and diagnosis; never authored presentation identity.",
+            "title": "Semantic Key",
+            "type": "string"
+          },
+          "behavior_id": {
+            "description": "Primitive executable-rule identity.",
+            "title": "Behavior Id",
+            "type": "string"
+          },
+          "provided_by_id": {
+            "description": "Primitive direct-provider identity.",
+            "title": "Provided By Id",
+            "type": "string"
+          },
+          "origin_root_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional durable primitive root of the provider chain.",
+            "title": "Origin Root Id"
+          },
+          "configured_action_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContentRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Exact authored configuration for a parameterized action. Clients resolve this catalog row instead of inferring a variant from execution tokens, display names, or outcome identifiers."
+          },
+          "target_type": {
+            "$ref": "#/components/schemas/TargetType",
+            "description": "What kind of target this action needs"
+          },
+          "position_selection": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "entity_destination": "#/components/schemas/EntityDestinationSelection",
+                    "path": "#/components/schemas/PositionPathSelection",
+                    "single": "#/components/schemas/SinglePositionSelection"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SinglePositionSelection"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PositionPathSelection"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EntityDestinationSelection"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Position input required after choosing a discovery target.",
+            "title": "Position Selection"
+          },
+          "availability_status": {
+            "$ref": "#/components/schemas/ActionAvailabilityStatus",
+            "description": "Closed reason this authored row is executable or unavailable; clients never infer the reason from an empty target list."
+          },
+          "can_afford": {
+            "description": "Whether the neutral source permission gate and all target-independent action-economy or named-resource costs permit execution. Consult availability_status for target-bound costs and requirements.",
+            "title": "Can Afford",
+            "type": "boolean"
+          },
+          "display_name": {
+            "description": "Human-readable name (e.g., 'Scimitar')",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "description": "Action description",
+            "title": "Description",
+            "type": "string"
+          },
+          "cost_type": {
+            "description": "Type of cost (actions, bonus_actions, etc.)",
+            "enum": [
+              "actions",
+              "bonus_actions",
+              "reactions",
+              "movement",
+              "spell_slot_1",
+              "spell_slot_2",
+              "spell_slot_3",
+              "spell_slot_4",
+              "spell_slot_5",
+              "spell_slot_6",
+              "spell_slot_7",
+              "spell_slot_8",
+              "spell_slot_9"
+            ],
+            "title": "Cost Type",
+            "type": "string"
+          },
+          "cost_amount": {
+            "default": 1,
+            "description": "Cost amount (usually 1)",
+            "title": "Cost Amount",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "restricted_action_budget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Restricted budget funding this otherwise ordinary action, e.g. Haste.",
+            "title": "Restricted Action Budget"
+          },
+          "costs": {
+            "description": "Target-independent action-economy and named-resource costs for this row; selected movement cost is carried by target.path_cost.",
+            "items": {
+              "$ref": "#/components/schemas/BaseCost"
+            },
+            "title": "Costs",
+            "type": "array"
+          },
+          "weapon_slot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Weapon slot for attacks",
+            "title": "Weapon Slot"
+          },
+          "weapon_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Weapon name for display (e.g., 'Scimitar')",
+            "title": "Weapon Name"
+          },
+          "damage_types": {
+            "description": "Damage type labels this action can deal when known.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Damage Types",
+            "type": "array"
+          },
+          "outcome_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActionOutcomeProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Actor-baseline stochastic outcome model when declared by the action rule."
+          },
+          "self_setup_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActionSelfSetupProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Engine-declared logical self-setup outcome when available."
+          },
+          "target_effect_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActionTargetEffectProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Engine-declared conditional effects over selected targets."
+          },
+          "world_effect_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActionWorldEffectProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Engine-declared information and topology effects."
+          },
+          "performs_attack": {
+            "default": false,
+            "title": "Performs Attack",
+            "type": "boolean"
+          },
+          "action_category": {
+            "$ref": "#/components/schemas/ActionCategory",
+            "default": "ability",
+            "description": "Classification of this action"
+          },
+          "base_template_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Registered execution-token family when it differs from template_name; never authored presentation identity.",
+            "title": "Base Template Name"
+          },
+          "spell_level": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Base spell level for spell actions.",
+            "title": "Spell Level"
+          },
+          "cast_at_level": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Spell slot level used by this action row.",
+            "title": "Cast At Level"
+          },
+          "is_spell_variant": {
+            "default": false,
+            "description": "Whether this row represents a generated spell variant.",
+            "title": "Is Spell Variant",
+            "type": "boolean"
+          },
+          "requires_concentration": {
+            "default": false,
+            "description": "Whether executing this action starts or maintains concentration.",
+            "title": "Requires Concentration",
+            "type": "boolean"
+          },
+          "num_projectiles": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Number of projectiles/targets for MULTI_ENTITY actions",
+            "title": "Num Projectiles"
+          },
+          "allow_same_target": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Whether same target can be selected multiple times",
+            "title": "Allow Same Target"
+          },
+          "is_item_use": {
+            "default": false,
+            "description": "True for use actions from items",
+            "title": "Is Item Use",
+            "type": "boolean"
+          },
+          "source_item_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Item providing this action",
+            "title": "Source Item Uuid"
+          },
+          "loot_item_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Exact contained item transferred by this discovered loot action.",
+            "title": "Loot Item Uuid"
+          },
+          "item_stack_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Stack count of source item (for display, only set when > 1)",
+            "title": "Item Stack Count"
+          },
+          "item_charge_cost": {
+            "default": 0,
+            "description": "Finite source-item charges consumed by successful execution.",
+            "minimum": 0,
+            "title": "Item Charge Cost",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "fixed_healing": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer",
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Deterministic hit points restored when declared by the action rule.",
+            "title": "Fixed Healing"
+          },
+          "allocation_completion": {
+            "default": "selected_only",
+            "enum": [
+              "selected_only",
+              "fill_primary"
+            ],
+            "title": "Allocation Completion",
+            "type": "string"
+          },
+          "variant_facets": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ActionVariantFacet"
+            },
+            "title": "Variant Facets",
+            "type": "array"
+          },
+          "interaction_affordance": {
+            "$ref": "#/components/schemas/ActionAffordance"
+          },
+          "connector_traversal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConnectorTraversalDiscovery"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "target_set": {
+            "minimum": 0,
+            "title": "Target Set",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "area_preview": {
+            "default": "not_applicable",
+            "enum": [
+              "not_applicable",
+              "deferred"
+            ],
+            "title": "Area Preview",
+            "type": "string"
+          },
+          "aiming": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AoEAimingGeometry"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "range_origin": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Range Origin"
+          },
+          "area_include_self": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Area Include Self"
+          },
+          "area_target_filter": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all",
+                  "enemies",
+                  "allies",
+                  "self_or_allies"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Area Target Filter"
+          },
+          "area_include_dead": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Area Include Dead"
+          }
+        },
+        "required": [
+          "template_name",
+          "behavior_id",
+          "provided_by_id",
+          "target_type",
+          "availability_status",
+          "can_afford",
+          "display_name",
+          "cost_type",
+          "target_set"
+        ],
+        "title": "PlayerAction",
+        "type": "object"
+      },
       "PlayerActor": {
         "properties": {
           "uuid": {
@@ -14429,6 +14128,142 @@
         "title": "PlayerCharacterSheet",
         "type": "object",
         "additionalProperties": false
+      },
+      "PlayerChoices": {
+        "additionalProperties": false,
+        "properties": {
+          "subjects": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChoiceSubject"
+            },
+            "title": "Subjects",
+            "type": "array"
+          },
+          "positions": {
+            "default": [],
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Positions",
+            "type": "array"
+          },
+          "target_sets": {
+            "default": [],
+            "items": {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "position": "#/components/schemas/PositionBinding",
+                    "self": "#/components/schemas/SelfBinding",
+                    "subject": "#/components/schemas/SubjectBinding"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SubjectBinding"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PositionBinding"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SelfBinding"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Target Sets",
+            "type": "array"
+          },
+          "discovery_generation": {
+            "minimum": 0,
+            "title": "Discovery Generation",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "entity_uuid": {
+            "format": "uuid",
+            "title": "Entity Uuid",
+            "type": "string"
+          },
+          "entity_actions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlayerAction"
+            },
+            "title": "Entity Actions",
+            "type": "array"
+          },
+          "position_actions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlayerAction"
+            },
+            "title": "Position Actions",
+            "type": "array"
+          },
+          "self_actions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlayerAction"
+            },
+            "title": "Self Actions",
+            "type": "array"
+          },
+          "object_actions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlayerAction"
+            },
+            "title": "Object Actions",
+            "type": "array"
+          },
+          "remaining_movement": {
+            "default": 0,
+            "title": "Remaining Movement",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "world_interactions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AvailableWorldInteraction"
+            },
+            "title": "World Interactions",
+            "type": "array"
+          },
+          "handler_details": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AvailableHandlerInfo"
+            },
+            "title": "Handler Details",
+            "type": "array"
+          }
+        },
+        "required": [
+          "discovery_generation",
+          "entity_uuid"
+        ],
+        "title": "PlayerChoices",
+        "type": "object"
       },
       "PlayerCursor": {
         "additionalProperties": false,
@@ -15175,6 +15010,211 @@
         "type": "object",
         "additionalProperties": false
       },
+      "PlayerSelectionPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "subjects": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChoiceSubject"
+            },
+            "title": "Subjects",
+            "type": "array"
+          },
+          "positions": {
+            "default": [],
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Positions",
+            "type": "array"
+          },
+          "target_sets": {
+            "default": [],
+            "items": {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "position": "#/components/schemas/PositionBinding",
+                    "self": "#/components/schemas/SelfBinding",
+                    "subject": "#/components/schemas/SubjectBinding"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SubjectBinding"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PositionBinding"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SelfBinding"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Target Sets",
+            "type": "array"
+          },
+          "can_confirm": {
+            "title": "Can Confirm",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "effective_target_uuids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Effective Target Uuids",
+            "type": "array"
+          },
+          "next_target_set": {
+            "minimum": 0,
+            "title": "Next Target Set",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "next_positions": {
+            "default": [],
+            "items": {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            "title": "Next Positions",
+            "type": "array"
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "cone": "#/components/schemas/ConePresentationGeometry",
+                    "cube": "#/components/schemas/CubePresentationGeometry",
+                    "cylinder": "#/components/schemas/CylinderPresentationGeometry",
+                    "line": "#/components/schemas/LinePresentationGeometry",
+                    "sphere": "#/components/schemas/SpherePresentationGeometry",
+                    "wall": "#/components/schemas/WallPresentationGeometry",
+                    "wall_assembly": "#/components/schemas/WallAssemblyPresentationGeometry"
+                  },
+                  "propertyName": "shape"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SpherePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ConePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LinePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CubePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CylinderPresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WallPresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WallAssemblyPresentationGeometry"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Geometry"
+          },
+          "area_preview": {
+            "default": "not_applicable",
+            "enum": [
+              "not_applicable",
+              "deferred",
+              "computed"
+            ],
+            "title": "Area Preview",
+            "type": "string"
+          },
+          "affected_positions": {
+            "default": [],
+            "items": {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            "title": "Affected Positions",
+            "type": "array"
+          },
+          "affected_entity_uuids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Affected Entity Uuids",
+            "type": "array"
+          },
+          "affected_entity_names": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Affected Entity Names",
+            "type": "array"
+          },
+          "selected_route": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelectedRoute"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "can_confirm",
+          "next_target_set"
+        ],
+        "title": "PlayerSelectionPreview",
+        "type": "object"
+      },
       "PlayerWorld": {
         "properties": {
           "battlefield_id": {
@@ -15340,6 +15380,162 @@
         "type": "object",
         "additionalProperties": false
       },
+      "PositionBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "minimum": 0,
+            "title": "Index",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "distance": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Distance"
+          },
+          "path_cost": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Path Cost"
+          },
+          "extra_target_uuids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Extra Target Uuids"
+          },
+          "secondary_set": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer",
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Secondary Set"
+          },
+          "is_path_hazardous": {
+            "default": false,
+            "title": "Is Path Hazardous",
+            "type": "boolean"
+          },
+          "safe_path_cost": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Safe Path Cost"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "items": {
+                  "minimum": 0,
+                  "type": "integer",
+                  "maximum": 9007199254740991
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Path"
+          },
+          "safe_path": {
+            "anyOf": [
+              {
+                "items": {
+                  "minimum": 0,
+                  "type": "integer",
+                  "maximum": 9007199254740991
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Safe Path"
+          },
+          "opportunity_attack_exposures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChoiceExposure"
+            },
+            "title": "Opportunity Attack Exposures",
+            "type": "array"
+          },
+          "safe_path_opportunity_attack_exposures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChoiceExposure"
+            },
+            "title": "Safe Path Opportunity Attack Exposures",
+            "type": "array"
+          },
+          "kind": {
+            "const": "position",
+            "title": "Kind",
+            "type": "string"
+          },
+          "position": {
+            "minimum": 0,
+            "title": "Position",
+            "type": "integer",
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "index",
+          "kind",
+          "position"
+        ],
+        "title": "PositionBinding",
+        "type": "object"
+      },
       "PositionPathSelection": {
         "additionalProperties": false,
         "description": "Ordered vertices with an authored segment/length budget.",
@@ -15455,7 +15651,7 @@
             "$ref": "#/components/schemas/PreviewRequest"
           },
           "preview": {
-            "$ref": "#/components/schemas/AvailableSelectionPreview"
+            "$ref": "#/components/schemas/PlayerSelectionPreview"
           }
         },
         "required": [
@@ -15481,8 +15677,8 @@
             "maximum": 9007199254740991
           },
           "player_schema_version": {
-            "const": 6,
-            "default": 6,
+            "const": 8,
+            "default": 8,
             "title": "Player Schema Version",
             "type": "integer",
             "minimum": -9007199254740991,
@@ -16083,6 +16279,155 @@
           "is_hazardous"
         ],
         "title": "SelectedRoute",
+        "type": "object"
+      },
+      "SelfBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "minimum": 0,
+            "title": "Index",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "distance": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Distance"
+          },
+          "path_cost": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Path Cost"
+          },
+          "extra_target_uuids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Extra Target Uuids"
+          },
+          "secondary_set": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer",
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Secondary Set"
+          },
+          "is_path_hazardous": {
+            "default": false,
+            "title": "Is Path Hazardous",
+            "type": "boolean"
+          },
+          "safe_path_cost": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Safe Path Cost"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "items": {
+                  "minimum": 0,
+                  "type": "integer",
+                  "maximum": 9007199254740991
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Path"
+          },
+          "safe_path": {
+            "anyOf": [
+              {
+                "items": {
+                  "minimum": 0,
+                  "type": "integer",
+                  "maximum": 9007199254740991
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Safe Path"
+          },
+          "opportunity_attack_exposures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChoiceExposure"
+            },
+            "title": "Opportunity Attack Exposures",
+            "type": "array"
+          },
+          "safe_path_opportunity_attack_exposures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChoiceExposure"
+            },
+            "title": "Safe Path Opportunity Attack Exposures",
+            "type": "array"
+          },
+          "kind": {
+            "const": "self",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "kind"
+        ],
+        "title": "SelfBinding",
         "type": "object"
       },
       "SenseMode": {
@@ -18448,6 +18793,176 @@
         "title": "StreamStatus",
         "type": "object"
       },
+      "SubjectBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "minimum": 0,
+            "title": "Index",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "distance": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Distance"
+          },
+          "path_cost": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Path Cost"
+          },
+          "extra_target_uuids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Extra Target Uuids"
+          },
+          "secondary_set": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer",
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Secondary Set"
+          },
+          "is_path_hazardous": {
+            "default": false,
+            "title": "Is Path Hazardous",
+            "type": "boolean"
+          },
+          "safe_path_cost": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Safe Path Cost"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "items": {
+                  "minimum": 0,
+                  "type": "integer",
+                  "maximum": 9007199254740991
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Path"
+          },
+          "safe_path": {
+            "anyOf": [
+              {
+                "items": {
+                  "minimum": 0,
+                  "type": "integer",
+                  "maximum": 9007199254740991
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Safe Path"
+          },
+          "opportunity_attack_exposures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChoiceExposure"
+            },
+            "title": "Opportunity Attack Exposures",
+            "type": "array"
+          },
+          "safe_path_opportunity_attack_exposures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChoiceExposure"
+            },
+            "title": "Safe Path Opportunity Attack Exposures",
+            "type": "array"
+          },
+          "kind": {
+            "const": "subject",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subject": {
+            "minimum": 0,
+            "title": "Subject",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "position": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer",
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Position"
+          }
+        },
+        "required": [
+          "index",
+          "kind",
+          "subject"
+        ],
+        "title": "SubjectBinding",
+        "type": "object"
+      },
       "SummonDepartureCause": {
         "enum": [
           "expired",
@@ -18577,6 +19092,38 @@
           "instance_uuid"
         ],
         "title": "TemporaryHitPointsGrant",
+        "type": "object",
+        "additionalProperties": false
+      },
+      "TileFieldUpdate": {
+        "properties": {
+          "position": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "title": "Position",
+            "type": "array"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/WorldTileChanges"
+          }
+        },
+        "required": [
+          "position",
+          "changes"
+        ],
+        "title": "TileFieldUpdate",
         "type": "object",
         "additionalProperties": false
       },
@@ -19982,6 +20529,92 @@
         "title": "WorldPlacementKind",
         "type": "string"
       },
+      "WorldTileChanges": {
+        "additionalProperties": false,
+        "description": "Present fields replace known tile values; omitted fields are unchanged.",
+        "properties": {
+          "surface": {
+            "$ref": "#/components/schemas/TileSurface"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "blocks_optics": {
+            "title": "Blocks Optics",
+            "type": "boolean"
+          },
+          "blocks_propagation": {
+            "title": "Blocks Propagation",
+            "type": "boolean"
+          },
+          "walking_cost": {
+            "minimum": 0,
+            "title": "Walking Cost",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "flying_cost": {
+            "minimum": 0,
+            "title": "Flying Cost",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "swimming_cost": {
+            "minimum": 0,
+            "title": "Swimming Cost",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "burrowing_cost": {
+            "minimum": 0,
+            "title": "Burrowing Cost",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "elevation_steps": {
+            "title": "Elevation Steps",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "surface_kind": {
+            "$ref": "#/components/schemas/ElevationSurfaceKind"
+          },
+          "slope_axis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlopeAxis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default_light": {
+            "$ref": "#/components/schemas/LightLevel"
+          },
+          "resolved_light": {
+            "$ref": "#/components/schemas/LightLevel"
+          },
+          "condition_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Condition Names",
+            "type": "array"
+          },
+          "residues": {
+            "items": {
+              "$ref": "#/components/schemas/TileResidueState"
+            },
+            "title": "Residues",
+            "type": "array"
+          }
+        },
+        "title": "WorldTileChanges",
+        "type": "object"
+      },
       "WorldTileState": {
         "additionalProperties": false,
         "description": "Complete renderer-neutral state of one admitted support Tile.",
@@ -20144,6 +20777,14 @@
               "$ref": "#/components/schemas/WorldConnectorState"
             },
             "title": "Connectors",
+            "type": "array"
+          },
+          "tile_changes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TileFieldUpdate"
+            },
+            "title": "Tile Changes",
             "type": "array"
           }
         },

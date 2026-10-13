@@ -23,7 +23,7 @@ from dnd.core.creature_types import DamageType, Size
 from dnd.core.creature_types import AttackOutcome
 from dnd.core.effect_types import ObjectSectionVolume, ObservedChangeRef, ApplicationMembership, ResolutionRef, EffectPropagationLink
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
-from dnd.types.event_facts import EventPhase, EventType, LandingKind, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState
+from dnd.types.event_facts import EventPhase, EventType, LandingKind, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState, WorldTileChanges
 from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot, ItemResourceChange, ItemEffectPresentationState,
     ItemIntegrity, ItemPresentationKind, ItemPresentationState, ItemRemnantState)
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
@@ -676,12 +676,19 @@ class PlayerObject:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class TileFieldUpdate:
+    position: tuple[int, int]
+    changes: WorldTileChanges
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class WorldUpdate:
     event_uuid: UUID
     tiles: tuple[WorldTileState, ...]
     objects: tuple[PlayerObject, ...]
     objects_removed: tuple[UUID, ...]
     connectors: tuple[WorldConnectorState, ...]
+    tile_changes: tuple[TileFieldUpdate, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -730,7 +737,7 @@ class PlayerInitialization:
 
 class PlayerSequence(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal[4] = 4
+    schema_version: Literal[5] = 5
     initialization: PlayerInitialization
     lineages: tuple[PlayerLineage, ...]
     combat_log_appends: tuple[CombatLogAppend, ...] = ()

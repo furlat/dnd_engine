@@ -118,7 +118,7 @@ Concrete working configurations are in
 ## Protocol
 
 The authoritative export is [sdk/protocol](../sdk/protocol/README.md): protocol 1,
-player schema 5. Both SDKs validate the same digest and types. Transport operations,
+player schema 8. Both SDKs validate the same digest and types. Transport operations,
 disclosed event occurrence indices and native private history indices are distinct.
 Native history indices never become public sequence counters.
 
@@ -133,6 +133,9 @@ Native history indices never become public sequence counters.
    do this after the awaited callback. Catch up before submitting a new command.
 5. Query native choices and previews using the current state revision. Keep the
    returned discovery generation, ordered target indices and position choices.
+   Choices share subject/position tables and ordered target sets. Every Preview
+   resolves references against its own tables. Optional AoE effects are computed
+   for a selected Preview; valid commands do not require a prior preview.
    The server never reconstructs a second path or spell targeting algorithm.
 6. Submit the next command number. A pending receipt is not gameplay success.
    A committed receipt points to its public operation; `wait_for_cursor` /
@@ -149,6 +152,11 @@ projection. Known event-time names survive loss of sight and death. Logs carry
 original typed rolls, modifiers and ordered child references; neither host nor SDK
 rerolls or synthesizes mechanics. New permitted content descriptors arrive before
 the shared reducer consumes facts referring to them.
+
+Deploy the server and updated player SDK together. Agent workspaces using the
+[Monty sandbox](../monty_sandbox/README.md) also need its installed SDK refreshed
+and old saved helper source migrated; the launcher does not rebuild that package.
+The protocol handoff documents shared lookups and ordered tile field changes.
 
 ## Bounds and failure behavior
 

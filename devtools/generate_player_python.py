@@ -48,7 +48,8 @@ def main() -> None:
         subprocess.run([args.codegen, '--input', str(adapted), '--input-file-type', 'jsonschema',
             '--output', str(destination), '--output-model-type', 'typing.TypedDict',
             '--target-python-version', '3.12', '--use-standard-collections', '--use-union-operator',
-            '--enum-field-as-literal', 'all', '--disable-timestamp'], check=True)
+            '--enum-field-as-literal', 'all', '--disable-timestamp',
+            '--no-use-closed-typed-dict'], check=True)
 
 
 if __name__ == '__main__':

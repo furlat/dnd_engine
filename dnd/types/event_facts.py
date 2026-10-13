@@ -1,7 +1,7 @@
 """Shared passive event vocabulary and world after-values."""
 
 from enum import Enum
-from typing import Tuple, Optional
+from typing import Annotated, Tuple, Optional, TypedDict
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 from dnd.types.materials import TileSurface
@@ -171,6 +171,28 @@ class WorldTileState(BaseModel):
     resolved_light: LightLevel
     condition_names: Tuple[str, ...] = ()
     residues: tuple[TileResidueState, ...] = ()
+
+
+class WorldTileChanges(TypedDict, total=False):
+    """Present fields replace known tile values; omitted fields are unchanged."""
+
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
+    surface: TileSurface
+    name: str
+    blocks_optics: bool
+    blocks_propagation: bool
+    walking_cost: Annotated[StrictInt, Field(ge=0)]
+    flying_cost: Annotated[StrictInt, Field(ge=0)]
+    swimming_cost: Annotated[StrictInt, Field(ge=0)]
+    burrowing_cost: Annotated[StrictInt, Field(ge=0)]
+    elevation_steps: StrictInt
+    surface_kind: ElevationSurfaceKind
+    slope_axis: Optional[SlopeAxis]
+    default_light: LightLevel
+    resolved_light: LightLevel
+    condition_names: Tuple[str, ...]
+    residues: tuple[TileResidueState, ...]
 
 
 

@@ -35,6 +35,7 @@ from dnd.conditions import (
 from dnd.blocks.base_item import UsableItem
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
+from dnd.core.aoe import snapshot_aoe_presentation_geometry
 
 STANDARD_ENTITY_HANDLER_NAMES = {
     "HasAttacked Tracker",
@@ -259,6 +260,7 @@ def get_available_actions(
     *,
     legal_only: bool = False,
     target_filter: str = "enemies",
+    include_aoe_preview: bool = True,
 ) -> AvailableActionsResult:
     """Get all available actions for an entity.
 
@@ -271,7 +273,8 @@ def get_available_actions(
     Returns:
         Grouped actions and valid targets.
     """
-    return entity.get_available_actions(legal_only=legal_only, target_filter=target_filter)
+    return entity.get_available_actions(legal_only=legal_only, target_filter=target_filter,
+        include_aoe_preview=include_aoe_preview)
 
 
 def _parse_spell_variant_template_name(template_name: str) -> Tuple[str, Optional[int]]:
@@ -597,6 +600,7 @@ def preview_available_selection(
     selected_targets: tuple[AvailableTarget, ...] = (),
     extra_target_positions: tuple[Tuple[int, int], ...] = (), *,
     prefer_safe: bool = True,
+    include_aoe_effects: bool = True,
 ) -> AvailableSelectionPreview:
     """Inspect an ordered discovery prefix without instantiation or events.
 
@@ -649,13 +653,39 @@ def preview_available_selection(
         next_positions = (tuple(get_extra_position_options(entity, action_info, primary,
                            list(extra_target_positions)))
                           if selection is not None and selection.kind in ("path", "entity_destination") else ())
-        identities = tuple(bound.get_all_targets()) if primary.target_uuid is not None else ()
+        identities = (tuple(bound.get_all_targets())
+            if primary.target_uuid is not None and action_info.target_type is not TargetType.POSITION_AOE
+            else ())
+        geometry = bound.get_selection_geometry()
+        area_preview = "not_applicable"
+        affected_positions = tuple(primary.affected_positions or ())
+        affected_entity_uuids: tuple[UUID, ...] = ()
+        affected_entity_names: tuple[str, ...] = ()
+        if action_info.target_type is TargetType.POSITION_AOE:
+            area_preview = "deferred"
+            affected_positions = ()
+            if include_aoe_effects:
+                area_target = (primary if primary.affected_positions is not None
+                    else entity.preview_aoe_target(template, primary,
+                        include_dead=action_info._aoe_include_dead))
+                area_preview = "computed"
+                affected_positions = tuple(area_target.affected_positions or ())
+                affected_entity_uuids = tuple(area_target.affected_entity_uuids or ())
+                affected_entity_names = tuple(area_target.affected_entity_names or ())
+                if template.aoe_shape is not None and primary.position is not None:
+                    try:
+                        geometry = snapshot_aoe_presentation_geometry(template.aoe_shape,
+                            entity.position, target_override=primary.position)
+                    except (TypeError, ValueError):
+                        geometry = None
         return AvailableSelectionPreview(can_confirm=reason is None, reason=reason,
             selected_route=(_selected_movement_route(entity, primary, prefer_safe=prefer_safe)
                 if isinstance(template, Move) else None),
             effective_target_uuids=identities, next_targets=tuple(next_targets),
-            next_positions=next_positions, geometry=bound.get_selection_geometry(),
-            affected_positions=tuple(primary.affected_positions or ()))
+            next_positions=next_positions, geometry=geometry,
+            affected_positions=affected_positions, area_preview=area_preview,
+            affected_entity_uuids=affected_entity_uuids,
+            affected_entity_names=affected_entity_names)
     except ValueError as error:
         return AvailableSelectionPreview(can_confirm=False, reason=str(error))
 

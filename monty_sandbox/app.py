@@ -24,8 +24,8 @@ All game functions require game_ref. There is no implicit current game.
   await game_list() -> {games: [{game_ref, seat, identity, mode, record_count}, ...]}
   await game_read(game_ref) -> status, cursor, audience, recording counts, recent commands, mode
   await game_events(game_ref, after=-1, limit=16) -> records, next_after, has_more
-  await game_choices(game_ref, force_attack=False) -> native ChoicesResponse
-  await game_preview(game_ref, actor_uuid, state_revision, discovery_generation, selection) -> native PreviewResponse
+  await game_choices(game_ref, force_attack=False) -> schema-8 ChoicesResponse
+  await game_preview(game_ref, actor_uuid, state_revision, discovery_generation, selection) -> schema-8 PreviewResponse
   await game_act(game_ref, actor_uuid, state_revision, intent) -> receipt, observation
   await game_receipt(game_ref) -> resolves that game's saved unresolved command
   await game_wait(game_ref, timeout_seconds=20) -> observation at our input/terminal boundary or timeout
@@ -33,11 +33,25 @@ Finished games can be archived with archive_game(session_id, game_ref). Their re
 remain available offline; choices/preview/act/receipt/wait reject archived references.
 Refs are local to this workspace, with native game_id + game_epoch + audience_id identity.
 Choices contain entity_actions, position_actions, self_actions, object_actions.
+Each action references choices['target_sets'][action['target_set']]. Each binding has kind
+'subject', 'position' or 'self'. Subject bindings reference choices['subjects'][binding['subject']]
+(uuid, kind, optional name). A binding's optional position references choices['positions'].
+Read optional distance with binding.get('distance'); false path hazard and empty exposure
+lists can also be omitted. Keep these shared values read-only; store selection state separately.
 Use native discovery_index, target index, state_revision and discovery_generation unchanged.
+Table offsets are lookups, never replacement target indexes. A primary's secondary_set
+overrides its secondary pool; absent inherits the action pool, an explicit empty set has none.
 Selection = {action_index: int, target_indices: [int, ...], extra_target_positions: []}.
 Execute intent = {kind: 'execute_selection', discovery_generation: int, selection: selection}.
 End-turn intent = {kind: 'end_turn'}. Other native intents remain supported.
-Targets are ordered and may repeat; preview reports can_confirm and next_targets.
+Targets are ordered and may repeat. Preview reports can_confirm and next_target_set;
+resolve preview['target_sets'][preview['next_target_set']] against Preview's own subjects
+and positions. next_positions and affected_positions also index that Preview's positions,
+including coordinates not present in Choices. Never resolve Preview offsets against Choices.
+Optional AoE effects are deferred in Choices; Preview computes the selected subjective area.
+A valid direct command needs no prior Preview; use Preview for compound selections or exact effects.
+Raw world_updates contain full tiles and tile_changes. Apply each change to its known tile
+in event order; omitted fields stay unchanged and explicit null clears a value.
 Rediscover after state changes; do not reuse stale action indexes. Data is only this seat's view.
 Only print output and the final expression enter model context. Filter large values in Python.
 Variables/functions persist. Each execute needs a unique request_id; retry the SAME id and code

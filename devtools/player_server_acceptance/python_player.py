@@ -5,7 +5,8 @@ import os
 from pathlib import Path
 from uuid import uuid4
 
-from dnd_player import (ApiError, Follower, acknowledge, attach, choices, connect, follow,
+from dnd_player import (ApiError, Follower, acknowledge, action_options, attach, binding_position,
+    choices, connect, follow, selection_for,
     preview, receipt, status, submit_command, wait_for_cursor)
 
 
@@ -48,17 +49,20 @@ async def play():
                 query = {'actor_uuid': actor, 'state_revision': revision, 'force_attack': False, 'correlation_id': str(uuid4())}
                 discovered = await choices(connection, query)
                 actions = discovered['choices']
-                candidates = [row for row in actions['entity_actions'] if row['performs_attack'] and row['can_afford'] and row['valid_targets']]
+                selected = next(((row, action_options(actions, row)[0])
+                    for row in actions.get('entity_actions', ()) if row['performs_attack']
+                    and row['can_afford'] and action_options(actions, row)), None)
                 intent = {'kind': 'end_turn'}
-                if not candidates:
-                    movement = next((row for row in actions['position_actions'] if row['behavior_id'] == 'action.move' and row['can_afford'] and row['valid_targets']), None)
+                if selected is None:
+                    movement = next((row for row in actions.get('position_actions', ())
+                        if row['behavior_id'] == 'action.move' and row['can_afford'] and action_options(actions, row)), None)
                     if movement is not None:
-                        target = min(movement['valid_targets'], key=lambda t: abs(t['position'][0] - 7) + abs(t['position'][1] - 7))
-                        movement = dict(movement, valid_targets=[target])
-                        candidates = [movement]
-                if candidates:
-                    row = candidates[0]
-                    selection = {'action_index': row['discovery_index'], 'target_indices': [row['valid_targets'][0]['index']], 'extra_target_positions': []}
+                        target = min(action_options(actions, movement), key=lambda option:
+                            abs(binding_position(actions, option)[0] - 7) + abs(binding_position(actions, option)[1] - 7))
+                        selected = movement, target
+                if selected is not None:
+                    row, target = selected
+                    selection = selection_for(row, [target])
                     result = await preview(connection, {'actor_uuid': actor, 'state_revision': revision,
                         'discovery_generation': actions['discovery_generation'], 'correlation_id': str(uuid4()), 'selection': selection})
                     if not result['preview']['can_confirm']:

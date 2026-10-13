@@ -130,7 +130,7 @@ def choices_request(runtime: Runtime):
 def movement(runtime: Runtime, choices):
     seat, publication = owner(runtime)
     for row in choices.choices.position_actions:
-        if row.behavior_id != 'action.move' or not row.can_afford or not row.valid_targets:
+        if row.behavior_id != 'action.move' or not row.can_afford:
             continue
         # Fixture workload takes a legal offered neighbouring endpoint; the
         # retained native selection and preview decide affordability/legality.
@@ -138,7 +138,9 @@ def movement(runtime: Runtime, choices):
         home_x = 6 if actor.faction == 'amber' else 9
         away_x = 5 if actor.faction == 'amber' else 10
         home_y = 6 if actor.name.endswith('1') else 8
-        targets = [target for target in row.valid_targets if target.position in ((home_x, home_y), (away_x, home_y))]
+        targets = [target for target in choices.choices.target_sets[row.target_set]
+            if target.kind == 'position' and choices.choices.positions[target.position]
+            in ((home_x, home_y), (away_x, home_y))]
         if not targets:
             continue
         target = min(targets, key=lambda target: (target.distance or 0, target.index))

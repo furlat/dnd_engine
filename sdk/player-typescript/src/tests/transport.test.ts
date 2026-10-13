@@ -119,7 +119,7 @@ test('overflowing JSON number is rejected', () => {
 test('preview correlation also checks actor and ordered selection', async t => {
   const body: sdk.PreviewRequest = {actor_uuid: uuid, state_revision: 'r', discovery_generation: 1, correlation_id: uuid, selection: {action_index: 0, target_indices: [1, 1, 2]}};
   const server = peer(t, []);
-  t.mock.method(globalThis, 'fetch', async () => Response.json({...scope, kind: 'preview', state_revision: 'r', request: {...body, selection: {...body.selection, target_indices: [1, 2, 1]}}, preview: {can_confirm: true}}));
+  t.mock.method(globalThis, 'fetch', async () => Response.json({...scope, kind: 'preview', state_revision: 'r', request: {...body, selection: {...body.selection, target_indices: [1, 2, 1]}}, preview: {can_confirm: true, target_sets: [[]], next_target_set: 0}}));
   await assert.rejects(sdk.preview(server.connection, body), sdk.ProtocolError);
 });
 for (const [requested, echoed] of [[undefined, true], [true, true], [false, false], [false, true], [true, false], [undefined, false]] as const) {
@@ -131,7 +131,7 @@ for (const [requested, echoed] of [[undefined, true], [true, true], [false, fals
     t.mock.method(globalThis, 'fetch', async (_input: string, options: RequestInit) => {
       assert.deepEqual(JSON.parse(options.body as string), body);
       return Response.json({...scope, kind: 'preview', state_revision: 'r',
-        request: {...body, selection: {...selection, prefer_safe: echoed}}, preview: {can_confirm: true}});
+        request: {...body, selection: {...selection, prefer_safe: echoed}}, preview: {can_confirm: true, target_sets: [[]], next_target_set: 0}});
     });
     if (echoed === (requested ?? true)) {
       const result = await sdk.preview(server.connection, body);
@@ -144,7 +144,7 @@ for (const [requested, echoed] of [[undefined, true], [true, true], [false, fals
 
 test('choices for a different actor are rejected', async t => {
   const body: sdk.ChoicesRequest = {actor_uuid: uuid, state_revision: 'r', force_attack: false, correlation_id: uuid}; const server = peer(t, []);
-  t.mock.method(globalThis, 'fetch', async () => Response.json({...scope, kind: 'choices', state_revision: 'r', force_attack: false, correlation_id: uuid, choices: {entity_uuid: '00000000-0000-4000-8000-000000000002'}}));
+  t.mock.method(globalThis, 'fetch', async () => Response.json({...scope, kind: 'choices', state_revision: 'r', force_attack: false, correlation_id: uuid, choices: {entity_uuid: '00000000-0000-4000-8000-000000000002', discovery_generation: 1}}));
   await assert.rejects(sdk.choices(server.connection, body), sdk.ProtocolError);
 });
 test('incomplete EOF reconnects from consumed cursor', async t => {
@@ -180,4 +180,24 @@ test('safe integer limits, signed coordinates, Unicode and unknown versions/tags
 test('cursor wait deadline releases its registration', async t => {
   const server = peer(t, []); const follower = sdk.createFollower(server.connection, async () => {});
   await assert.rejects(sdk.waitForCursor(follower, cursor(1), {timeout: 0}), /timed out/); assert.equal(follower.waiters.size, 0);
+});
+
+
+test('tile field updates preserve omissions and explicit clears', () => {
+  for (const changes of [
+    {resolved_light: 2},
+    {slope_axis: null, condition_names: [], residues: [], blocks_optics: false, walking_cost: 0, resolved_light: 0},
+  ]) {
+    const value = {position: [-47, 20], changes};
+    const decoded = sdk.decode<sdk.TileFieldUpdate>('TileFieldUpdate', encoder.encode(JSON.stringify(value)));
+    assert.deepEqual(decoded, value);
+    assert.equal('name' in decoded.changes, false);
+  }
+});
+
+test('tile field updates reject invalid values and identity fields', () => {
+  for (const changes of [
+    {resolved_light: null}, {condition_names: null}, {walking_cost: -1},
+    {walking_cost: true}, {walking_cost: 1.5}, {tile_uuid: uuid}, {position: [1, 0]}, {unknown: 1},
+  ]) assert.throws(() => sdk.decode('TileFieldUpdate', encoder.encode(JSON.stringify({position: [1, 0], changes}))), sdk.ProtocolError);
 });

@@ -94,6 +94,9 @@ type ActionWorldEffectShape = Literal['sphere']
 type AdvantageStatus = Literal['None', 'Advantage', 'Disadvantage']
 
 
+type ReferenceTargetItem = int
+
+
 class AppearanceConfig(TypedDict):
     portrait_key: NotRequired[str | None]
     presentation_kind: NotRequired[Literal['layered', 'placeholder']]
@@ -160,21 +163,6 @@ class AvailableHandlerInfo(TypedDict):
     trigger_event: str
 
 
-type NextPosition = int
-
-
-type AffectedPosition = int
-
-
-type PositionItem = int
-
-
-type PathItem = int
-
-
-type SafePathItem = int
-
-
 type ContactPosition = int
 
 
@@ -209,6 +197,9 @@ type BodyPart = Literal[
 
 
 type Position = int
+
+
+type PositionItem = int
 
 
 type DepositedPositionItem = int
@@ -259,6 +250,19 @@ type CharacterSubclass = Literal[
     'subclass.fighter.champion',
     'subclass.sorcerer.draconic_bloodline',
 ]
+
+
+class ChoiceExposure(TypedDict):
+    reactor_uuid: str
+    reactor_name: str
+    from_position: int
+    to_position: int
+
+
+class ChoiceSubject(TypedDict):
+    uuid: str
+    kind: Literal['creature', 'object']
+    name: NotRequired[str | None]
 
 
 class ChoicesRequest(TypedDict):
@@ -349,6 +353,9 @@ type StartPositionItem = int
 
 
 type EndPositionItem = int
+
+
+type PathItem = int
 
 
 type RequestedEndPositionItem = int
@@ -1058,6 +1065,9 @@ class MaterialDepositSource(TypedDict):
 type OriginPositionItem = int
 
 
+type AffectedPosition = int
+
+
 class MechanismActivationFact(TypedDict):
     kind: NotRequired[Literal['mechanism_activation']]
     mechanism_uuid: str | None
@@ -1227,6 +1237,9 @@ type AnchorPositionItem = int
 type VisibleVolumePosition = int
 
 
+type RangeOriginItem = int
+
+
 type LastVisualPositionItem = int
 
 
@@ -1274,6 +1287,22 @@ class PortalTransferFact(TypedDict):
     portal_content_id: NotRequired[str | None]
 
 
+class PositionBinding(TypedDict):
+    index: int
+    distance: NotRequired[int | None]
+    path_cost: NotRequired[int | None]
+    extra_target_uuids: NotRequired[list[str] | None]
+    secondary_set: NotRequired[int | None]
+    is_path_hazardous: NotRequired[bool]
+    safe_path_cost: NotRequired[int | None]
+    path: NotRequired[list[int] | None]
+    safe_path: NotRequired[list[int] | None]
+    opportunity_attack_exposures: NotRequired[list[ChoiceExposure]]
+    safe_path_opportunity_attack_exposures: NotRequired[list[ChoiceExposure]]
+    kind: Literal['position']
+    position: int
+
+
 class PositionPathSelection(TypedDict):
     kind: NotRequired[Literal['path']]
     max_length_feet: float
@@ -1292,7 +1321,7 @@ class PreviewRequest(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[6]]
+    player_schema_version: NotRequired[Literal[8]]
     schema_digest: str
 
 
@@ -1368,22 +1397,37 @@ class SavingThrowLogData(TypedDict):
     source_name: NotRequired[str | None]
 
 
-type PathItem12Item = int
+type PathItem10Item = int
 
 
-type PathItem12 = list[PathItem12Item]
+type PathItem10 = list[PathItem10Item]
 
 
 type AffordableEndpointItem = int
 
 
 class SelectedRoute(TypedDict):
-    path: list[PathItem12]
+    path: list[PathItem10]
     cost_feet: float
     affordable_endpoint: list[AffordableEndpointItem]
     policy: Literal['normal', 'safe']
     opportunity_attack_exposures: list[OpportunityAttackExposure]
     is_hazardous: bool
+
+
+class SelfBinding(TypedDict):
+    index: int
+    distance: NotRequired[int | None]
+    path_cost: NotRequired[int | None]
+    extra_target_uuids: NotRequired[list[str] | None]
+    secondary_set: NotRequired[int | None]
+    is_path_hazardous: NotRequired[bool]
+    safe_path_cost: NotRequired[int | None]
+    path: NotRequired[list[int] | None]
+    safe_path: NotRequired[list[int] | None]
+    opportunity_attack_exposures: NotRequired[list[ChoiceExposure]]
+    safe_path_opportunity_attack_exposures: NotRequired[list[ChoiceExposure]]
+    kind: Literal['self']
 
 
 type SensesType = Literal[
@@ -1629,6 +1673,23 @@ class StreamReady(TypedDict):
 class StreamStatus(TypedDict):
     kind: NotRequired[Literal['stream_status']]
     status: StatusSnapshot
+
+
+class SubjectBinding(TypedDict):
+    index: int
+    distance: NotRequired[int | None]
+    path_cost: NotRequired[int | None]
+    extra_target_uuids: NotRequired[list[str] | None]
+    secondary_set: NotRequired[int | None]
+    is_path_hazardous: NotRequired[bool]
+    safe_path_cost: NotRequired[int | None]
+    path: NotRequired[list[int] | None]
+    safe_path: NotRequired[list[int] | None]
+    opportunity_attack_exposures: NotRequired[list[ChoiceExposure]]
+    safe_path_opportunity_attack_exposures: NotRequired[list[ChoiceExposure]]
+    kind: Literal['subject']
+    subject: int
+    position: NotRequired[int | None]
 
 
 type SummonDepartureCause = Literal[
@@ -1981,28 +2042,6 @@ class AttachmentResponse(TypedDict):
     acquisition_id: str
     attachment_epoch: str
     status: StatusSnapshot
-
-
-class AvailableTarget(TypedDict):
-    target_kind: NotRequired[Literal['creature', 'object']]
-    index: int
-    target_uuid: NotRequired[str | None]
-    position: NotRequired[list[PositionItem] | None]
-    target_name: NotRequired[str | None]
-    distance: NotRequired[int | None]
-    path_cost: NotRequired[int | None]
-    extra_target_uuids: NotRequired[list[str] | None]
-    secondary_targets: NotRequired[list[AvailableTarget] | None]
-    is_path_hazardous: NotRequired[bool]
-    safe_path_cost: NotRequired[int | None]
-    path: NotRequired[list[list[PathItem]] | None]
-    safe_path: NotRequired[list[list[SafePathItem]] | None]
-    opportunity_attack_exposures: NotRequired[list[OpportunityAttackExposure]]
-    safe_path_opportunity_attack_exposures: NotRequired[list[OpportunityAttackExposure]]
-    affected_entity_uuids: NotRequired[list[str] | None]
-    affected_entity_names: NotRequired[list[str] | None]
-    affected_count: NotRequired[int | None]
-    affected_positions: NotRequired[list[list[AffectedPosition]] | None]
 
 
 class AvailableWorldInteraction(TypedDict):
@@ -2516,6 +2555,24 @@ class WorldObjectPlacement(TypedDict):
     removed_bands: NotRequired[list[list[RemovedBand]]]
 
 
+class WorldTileChanges(TypedDict):
+    surface: NotRequired[TileSurface]
+    name: NotRequired[str]
+    blocks_optics: NotRequired[bool]
+    blocks_propagation: NotRequired[bool]
+    walking_cost: NotRequired[int]
+    flying_cost: NotRequired[int]
+    swimming_cost: NotRequired[int]
+    burrowing_cost: NotRequired[int]
+    elevation_steps: NotRequired[int]
+    surface_kind: NotRequired[ElevationSurfaceKind]
+    slope_axis: NotRequired[SlopeAxis | None]
+    default_light: NotRequired[LightLevel]
+    resolved_light: NotRequired[LightLevel]
+    condition_names: NotRequired[list[str]]
+    residues: NotRequired[list[TileResidueState]]
+
+
 class WorldTileState(TypedDict):
     tile_uuid: str
     position: list[PositionItem]
@@ -2557,6 +2614,21 @@ class ActionSelfSetupProfile(TypedDict):
     grants_invisibility: NotRequired[bool]
     incapacitates_on_removal: NotRequired[bool]
     maintenance: NotRequired[ActionSetupMaintenanceProfile | None]
+
+
+class AoEAimingGeometry(TypedDict):
+    geometry: (
+        SpherePresentationGeometry
+        | ConePresentationGeometry
+        | LinePresentationGeometry
+        | CubePresentationGeometry
+        | CylinderPresentationGeometry
+        | WallPresentationGeometry
+        | WallAssemblyPresentationGeometry
+    )
+    reference_target: list[ReferenceTargetItem]
+    origin_mode: Literal['aim', 'fixed']
+    propagation: Literal['line_of_effect', 'connected']
 
 
 class AttackFact(TypedDict):
@@ -2601,118 +2673,6 @@ class AttackLogData(TypedDict):
     is_opportunity_attack: NotRequired[bool]
     is_long_range: NotRequired[bool]
     is_threatened: NotRequired[bool]
-
-
-class AvailableActionInfo(TypedDict):
-    discovery_generation: NotRequired[int]
-    discovery_index: NotRequired[int]
-    discovery_runtime: NotRequired[str | None]
-    discovery_actor_uuid: NotRequired[str | None]
-    template_name: str
-    semantic_key: NotRequired[str]
-    behavior_id: str
-    provided_by_id: str
-    origin_root_id: NotRequired[str | None]
-    configured_action_ref: NotRequired[ContentRef | None]
-    target_type: TargetType
-    position_selection: NotRequired[
-        SinglePositionSelection
-        | PositionPathSelection
-        | EntityDestinationSelection
-        | None
-    ]
-    availability_status: ActionAvailabilityStatus
-    valid_targets: NotRequired[list[AvailableTarget]]
-    can_afford: bool
-    display_name: str
-    description: NotRequired[str]
-    cost_type: Literal[
-        'actions',
-        'bonus_actions',
-        'reactions',
-        'movement',
-        'spell_slot_1',
-        'spell_slot_2',
-        'spell_slot_3',
-        'spell_slot_4',
-        'spell_slot_5',
-        'spell_slot_6',
-        'spell_slot_7',
-        'spell_slot_8',
-        'spell_slot_9',
-    ]
-    cost_amount: NotRequired[int]
-    restricted_action_budget: NotRequired[str | None]
-    costs: NotRequired[list[BaseCost]]
-    weapon_slot: NotRequired[str | None]
-    weapon_name: NotRequired[str | None]
-    damage_types: NotRequired[list[str]]
-    outcome_profile: NotRequired[ActionOutcomeProfile | None]
-    self_setup_profile: NotRequired[ActionSelfSetupProfile | None]
-    target_effect_profile: NotRequired[ActionTargetEffectProfile | None]
-    world_effect_profile: NotRequired[ActionWorldEffectProfile | None]
-    performs_attack: NotRequired[bool]
-    action_category: NotRequired[ActionCategory]
-    base_template_name: NotRequired[str | None]
-    spell_level: NotRequired[int | None]
-    cast_at_level: NotRequired[int | None]
-    is_spell_variant: NotRequired[bool]
-    requires_concentration: NotRequired[bool]
-    num_projectiles: NotRequired[int | None]
-    allow_same_target: NotRequired[bool | None]
-    is_item_use: NotRequired[bool]
-    source_item_uuid: NotRequired[str | None]
-    loot_item_uuid: NotRequired[str | None]
-    item_stack_count: NotRequired[int | None]
-    item_charge_cost: NotRequired[int]
-    fixed_healing: NotRequired[int | None]
-    allocation_completion: NotRequired[Literal['selected_only', 'fill_primary']]
-    variant_facets: NotRequired[list[ActionVariantFacet]]
-    interaction_affordance: NotRequired[ActionAffordance]
-    connector_traversal: NotRequired[ConnectorTraversalDiscovery | None]
-
-
-class AvailableActionsResult(TypedDict):
-    discovery_generation: NotRequired[int]
-    entity_uuid: str
-    entity_actions: NotRequired[list[AvailableActionInfo]]
-    position_actions: NotRequired[list[AvailableActionInfo]]
-    self_actions: NotRequired[list[AvailableActionInfo]]
-    object_actions: NotRequired[list[AvailableActionInfo]]
-    remaining_movement: NotRequired[int]
-    world_interactions: NotRequired[list[AvailableWorldInteraction]]
-    handler_details: NotRequired[list[AvailableHandlerInfo]]
-
-
-class AvailableSelectionPreview(TypedDict):
-    can_confirm: bool
-    reason: NotRequired[str | None]
-    effective_target_uuids: NotRequired[list[str]]
-    next_targets: NotRequired[list[AvailableTarget]]
-    next_positions: NotRequired[list[list[NextPosition]]]
-    geometry: NotRequired[
-        SpherePresentationGeometry
-        | ConePresentationGeometry
-        | LinePresentationGeometry
-        | CubePresentationGeometry
-        | CylinderPresentationGeometry
-        | WallPresentationGeometry
-        | WallAssemblyPresentationGeometry
-        | None
-    ]
-    affected_positions: NotRequired[list[list[AffectedPosition]]]
-    selected_route: NotRequired[SelectedRoute | None]
-
-
-class ChoicesResponse(TypedDict):
-    game_id: str
-    game_epoch: str
-    audience_id: str
-    kind: NotRequired[Literal['choices']]
-    state_revision: str
-    correlation_id: str
-    force_attack: bool
-    choices: AvailableActionsResult
 
 
 class CombatLogEntry(TypedDict):
@@ -2776,6 +2736,124 @@ class EquipIntent(TypedDict):
     item: EquipItem
 
 
+class PlayerAction(TypedDict):
+    discovery_generation: NotRequired[int]
+    discovery_index: NotRequired[int]
+    discovery_runtime: NotRequired[str | None]
+    discovery_actor_uuid: NotRequired[str | None]
+    template_name: str
+    semantic_key: NotRequired[str]
+    behavior_id: str
+    provided_by_id: str
+    origin_root_id: NotRequired[str | None]
+    configured_action_ref: NotRequired[ContentRef | None]
+    target_type: TargetType
+    position_selection: NotRequired[
+        SinglePositionSelection
+        | PositionPathSelection
+        | EntityDestinationSelection
+        | None
+    ]
+    availability_status: ActionAvailabilityStatus
+    can_afford: bool
+    display_name: str
+    description: NotRequired[str]
+    cost_type: Literal[
+        'actions',
+        'bonus_actions',
+        'reactions',
+        'movement',
+        'spell_slot_1',
+        'spell_slot_2',
+        'spell_slot_3',
+        'spell_slot_4',
+        'spell_slot_5',
+        'spell_slot_6',
+        'spell_slot_7',
+        'spell_slot_8',
+        'spell_slot_9',
+    ]
+    cost_amount: NotRequired[int]
+    restricted_action_budget: NotRequired[str | None]
+    costs: NotRequired[list[BaseCost]]
+    weapon_slot: NotRequired[str | None]
+    weapon_name: NotRequired[str | None]
+    damage_types: NotRequired[list[str]]
+    outcome_profile: NotRequired[ActionOutcomeProfile | None]
+    self_setup_profile: NotRequired[ActionSelfSetupProfile | None]
+    target_effect_profile: NotRequired[ActionTargetEffectProfile | None]
+    world_effect_profile: NotRequired[ActionWorldEffectProfile | None]
+    performs_attack: NotRequired[bool]
+    action_category: NotRequired[ActionCategory]
+    base_template_name: NotRequired[str | None]
+    spell_level: NotRequired[int | None]
+    cast_at_level: NotRequired[int | None]
+    is_spell_variant: NotRequired[bool]
+    requires_concentration: NotRequired[bool]
+    num_projectiles: NotRequired[int | None]
+    allow_same_target: NotRequired[bool | None]
+    is_item_use: NotRequired[bool]
+    source_item_uuid: NotRequired[str | None]
+    loot_item_uuid: NotRequired[str | None]
+    item_stack_count: NotRequired[int | None]
+    item_charge_cost: NotRequired[int]
+    fixed_healing: NotRequired[int | None]
+    allocation_completion: NotRequired[Literal['selected_only', 'fill_primary']]
+    variant_facets: NotRequired[list[ActionVariantFacet]]
+    interaction_affordance: NotRequired[ActionAffordance]
+    connector_traversal: NotRequired[ConnectorTraversalDiscovery | None]
+    target_set: int
+    area_preview: NotRequired[Literal['not_applicable', 'deferred']]
+    aiming: NotRequired[AoEAimingGeometry | None]
+    range_origin: NotRequired[list[RangeOriginItem] | None]
+    area_include_self: NotRequired[bool | None]
+    area_target_filter: NotRequired[
+        Literal['all', 'enemies', 'allies', 'self_or_allies'] | None
+    ]
+    area_include_dead: NotRequired[bool | None]
+
+
+class PlayerChoices(TypedDict):
+    subjects: NotRequired[list[ChoiceSubject]]
+    positions: NotRequired[list[list[Position]]]
+    target_sets: NotRequired[list[list[SubjectBinding | PositionBinding | SelfBinding]]]
+    discovery_generation: int
+    entity_uuid: str
+    entity_actions: NotRequired[list[PlayerAction]]
+    position_actions: NotRequired[list[PlayerAction]]
+    self_actions: NotRequired[list[PlayerAction]]
+    object_actions: NotRequired[list[PlayerAction]]
+    remaining_movement: NotRequired[int]
+    world_interactions: NotRequired[list[AvailableWorldInteraction]]
+    handler_details: NotRequired[list[AvailableHandlerInfo]]
+
+
+class PlayerSelectionPreview(TypedDict):
+    subjects: NotRequired[list[ChoiceSubject]]
+    positions: NotRequired[list[list[Position]]]
+    target_sets: NotRequired[list[list[SubjectBinding | PositionBinding | SelfBinding]]]
+    can_confirm: bool
+    reason: NotRequired[str | None]
+    effective_target_uuids: NotRequired[list[str]]
+    next_target_set: int
+    next_positions: NotRequired[list[int]]
+    geometry: NotRequired[
+        SpherePresentationGeometry
+        | ConePresentationGeometry
+        | LinePresentationGeometry
+        | CubePresentationGeometry
+        | CylinderPresentationGeometry
+        | WallPresentationGeometry
+        | WallAssemblyPresentationGeometry
+        | None
+    ]
+    area_preview: NotRequired[Literal['not_applicable', 'deferred', 'computed']]
+    affected_positions: NotRequired[list[int]]
+    affected_entity_uuids: NotRequired[list[str]]
+    affected_entity_names: NotRequired[list[str]]
+    selected_route: NotRequired[SelectedRoute | None]
+
+
 class PreviewResponse(TypedDict):
     game_id: str
     game_epoch: str
@@ -2783,7 +2861,7 @@ class PreviewResponse(TypedDict):
     kind: NotRequired[Literal['preview']]
     state_revision: str
     request: PreviewRequest
-    preview: AvailableSelectionPreview
+    preview: PlayerSelectionPreview
 
 
 class SpellSuppression(TypedDict):
@@ -2804,9 +2882,25 @@ class SpellSuppression(TypedDict):
     anchor_elevation_steps: NotRequired[int | None]
 
 
+class TileFieldUpdate(TypedDict):
+    position: list[PositionItem]
+    changes: WorldTileChanges
+
+
 class UnequipIntent(TypedDict):
     kind: NotRequired[Literal['unequip']]
     item: UnequipItem
+
+
+class ChoicesResponse(TypedDict):
+    game_id: str
+    game_epoch: str
+    audience_id: str
+    kind: NotRequired[Literal['choices']]
+    state_revision: str
+    correlation_id: str
+    force_attack: bool
+    choices: PlayerChoices
 
 
 class CombatLogAppend(TypedDict):
@@ -3090,6 +3184,7 @@ class WorldUpdate(TypedDict):
     objects: list[PlayerObject]
     objects_removed: list[str]
     connectors: list[WorldConnectorState]
+    tile_changes: NotRequired[list[TileFieldUpdate]]
 
 
 class ConditionFact(TypedDict):

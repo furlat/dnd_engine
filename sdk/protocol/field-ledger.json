@@ -1675,6 +1675,122 @@
     }
   },
   {
+    "field": "AoEAimingGeometry.geometry",
+    "schema_pointer": "/$defs/AoEAimingGeometry/properties/geometry",
+    "owners": [
+      {
+        "file": "dnd/core/presentation_geometry.py",
+        "line": 172
+      }
+    ],
+    "required": true,
+    "schema": {
+      "discriminator": {
+        "mapping": {
+          "cone": "#/$defs/ConePresentationGeometry",
+          "cube": "#/$defs/CubePresentationGeometry",
+          "cylinder": "#/$defs/CylinderPresentationGeometry",
+          "line": "#/$defs/LinePresentationGeometry",
+          "sphere": "#/$defs/SpherePresentationGeometry",
+          "wall": "#/$defs/WallPresentationGeometry",
+          "wall_assembly": "#/$defs/WallAssemblyPresentationGeometry"
+        },
+        "propertyName": "shape"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SpherePresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/ConePresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/LinePresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/CubePresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/CylinderPresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/WallPresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/WallAssemblyPresentationGeometry"
+        }
+      ],
+      "title": "Geometry"
+    }
+  },
+  {
+    "field": "AoEAimingGeometry.reference_target",
+    "schema_pointer": "/$defs/AoEAimingGeometry/properties/reference_target",
+    "owners": [
+      {
+        "file": "dnd/core/presentation_geometry.py",
+        "line": 173
+      }
+    ],
+    "required": true,
+    "schema": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      ],
+      "title": "Reference Target",
+      "type": "array"
+    }
+  },
+  {
+    "field": "AoEAimingGeometry.origin_mode",
+    "schema_pointer": "/$defs/AoEAimingGeometry/properties/origin_mode",
+    "owners": [
+      {
+        "file": "dnd/core/presentation_geometry.py",
+        "line": 174
+      }
+    ],
+    "required": true,
+    "schema": {
+      "enum": [
+        "aim",
+        "fixed"
+      ],
+      "title": "Origin Mode",
+      "type": "string"
+    }
+  },
+  {
+    "field": "AoEAimingGeometry.propagation",
+    "schema_pointer": "/$defs/AoEAimingGeometry/properties/propagation",
+    "owners": [
+      {
+        "file": "dnd/core/presentation_geometry.py",
+        "line": 175
+      }
+    ],
+    "required": true,
+    "schema": {
+      "enum": [
+        "line_of_effect",
+        "connected"
+      ],
+      "title": "Propagation",
+      "type": "string"
+    }
+  },
+  {
     "field": "AppearanceConfig.portrait_key",
     "schema_pointer": "/$defs/AppearanceConfig/properties/portrait_key",
     "owners": [
@@ -3159,1167 +3275,6 @@
     }
   },
   {
-    "field": "AvailableActionInfo.discovery_generation",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/discovery_generation",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2652
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": 0,
-      "title": "Discovery Generation",
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991
-    }
-  },
-  {
-    "field": "AvailableActionInfo.discovery_index",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/discovery_index",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2653
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": 0,
-      "title": "Discovery Index",
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991
-    }
-  },
-  {
-    "field": "AvailableActionInfo.discovery_runtime",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/discovery_runtime",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2654
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "format": "uuid",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Discovery Runtime"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.discovery_actor_uuid",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/discovery_actor_uuid",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2655
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "format": "uuid",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Discovery Actor Uuid"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.template_name",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/template_name",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2656
-      }
-    ],
-    "required": true,
-    "schema": {
-      "description": "Engine command token for execution; never authored presentation identity.",
-      "title": "Template Name",
-      "type": "string"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.semantic_key",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/semantic_key",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2662
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": "action.unclassified",
-      "description": "Rules/mechanics family key retained for policy and diagnosis; never authored presentation identity.",
-      "title": "Semantic Key",
-      "type": "string"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.behavior_id",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/behavior_id",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2669
-      }
-    ],
-    "required": true,
-    "schema": {
-      "description": "Primitive executable-rule identity.",
-      "title": "Behavior Id",
-      "type": "string"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.provided_by_id",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/provided_by_id",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2670
-      }
-    ],
-    "required": true,
-    "schema": {
-      "description": "Primitive direct-provider identity.",
-      "title": "Provided By Id",
-      "type": "string"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.origin_root_id",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/origin_root_id",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2671
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Optional durable primitive root of the provider chain.",
-      "title": "Origin Root Id"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.configured_action_ref",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/configured_action_ref",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2675
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ContentRef"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Exact authored configuration for a parameterized action. Clients resolve this catalog row instead of inferring a variant from execution tokens, display names, or outcome identifiers."
-    }
-  },
-  {
-    "field": "AvailableActionInfo.target_type",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/target_type",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2683
-      }
-    ],
-    "required": true,
-    "schema": {
-      "$ref": "#/$defs/TargetType",
-      "description": "What kind of target this action needs"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.position_selection",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/position_selection",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2684
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "discriminator": {
-            "mapping": {
-              "entity_destination": "#/$defs/EntityDestinationSelection",
-              "path": "#/$defs/PositionPathSelection",
-              "single": "#/$defs/SinglePositionSelection"
-            },
-            "propertyName": "kind"
-          },
-          "oneOf": [
-            {
-              "$ref": "#/$defs/SinglePositionSelection"
-            },
-            {
-              "$ref": "#/$defs/PositionPathSelection"
-            },
-            {
-              "$ref": "#/$defs/EntityDestinationSelection"
-            }
-          ]
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Position input required after choosing a discovery target.",
-      "title": "Position Selection"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.availability_status",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/availability_status",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2687
-      }
-    ],
-    "required": true,
-    "schema": {
-      "$ref": "#/$defs/ActionAvailabilityStatus",
-      "description": "Closed reason this authored row is executable or unavailable; clients never infer the reason from an empty target list."
-    }
-  },
-  {
-    "field": "AvailableActionInfo.valid_targets",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/valid_targets",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2693
-      }
-    ],
-    "required": false,
-    "schema": {
-      "description": "Currently executable targets with stable indices. Target-bound costs are evaluated before a target enters this list.",
-      "items": {
-        "$ref": "#/$defs/AvailableTarget"
-      },
-      "title": "Valid Targets",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.can_afford",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/can_afford",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2700
-      }
-    ],
-    "required": true,
-    "schema": {
-      "description": "Whether the neutral source permission gate and all target-independent action-economy or named-resource costs permit execution. Consult availability_status for target-bound costs and requirements.",
-      "title": "Can Afford",
-      "type": "boolean"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.display_name",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/display_name",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2708
-      }
-    ],
-    "required": true,
-    "schema": {
-      "description": "Human-readable name (e.g., 'Scimitar')",
-      "title": "Display Name",
-      "type": "string"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.description",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/description",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2709
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": "",
-      "description": "Action description",
-      "title": "Description",
-      "type": "string"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.cost_type",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/cost_type",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2710
-      }
-    ],
-    "required": true,
-    "schema": {
-      "description": "Type of cost (actions, bonus_actions, etc.)",
-      "enum": [
-        "actions",
-        "bonus_actions",
-        "reactions",
-        "movement",
-        "spell_slot_1",
-        "spell_slot_2",
-        "spell_slot_3",
-        "spell_slot_4",
-        "spell_slot_5",
-        "spell_slot_6",
-        "spell_slot_7",
-        "spell_slot_8",
-        "spell_slot_9"
-      ],
-      "title": "Cost Type",
-      "type": "string"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.cost_amount",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/cost_amount",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2711
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": 1,
-      "description": "Cost amount (usually 1)",
-      "title": "Cost Amount",
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991
-    }
-  },
-  {
-    "field": "AvailableActionInfo.restricted_action_budget",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/restricted_action_budget",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2712
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Restricted budget funding this otherwise ordinary action, e.g. Haste.",
-      "title": "Restricted Action Budget"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.costs",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/costs",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2715
-      }
-    ],
-    "required": false,
-    "schema": {
-      "description": "Target-independent action-economy and named-resource costs for this row; selected movement cost is carried by target.path_cost.",
-      "items": {
-        "$ref": "#/$defs/BaseCost"
-      },
-      "title": "Costs",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.weapon_slot",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/weapon_slot",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2722
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Weapon slot for attacks",
-      "title": "Weapon Slot"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.weapon_name",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/weapon_name",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2723
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Weapon name for display (e.g., 'Scimitar')",
-      "title": "Weapon Name"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.damage_types",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/damage_types",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2724
-      }
-    ],
-    "required": false,
-    "schema": {
-      "description": "Damage type labels this action can deal when known.",
-      "items": {
-        "type": "string"
-      },
-      "title": "Damage Types",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.outcome_profile",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/outcome_profile",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2725
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ActionOutcomeProfile"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Actor-baseline stochastic outcome model when declared by the action rule."
-    }
-  },
-  {
-    "field": "AvailableActionInfo.self_setup_profile",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/self_setup_profile",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2729
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ActionSelfSetupProfile"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Engine-declared logical self-setup outcome when available."
-    }
-  },
-  {
-    "field": "AvailableActionInfo.target_effect_profile",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/target_effect_profile",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2733
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ActionTargetEffectProfile"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Engine-declared conditional effects over selected targets."
-    }
-  },
-  {
-    "field": "AvailableActionInfo.world_effect_profile",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/world_effect_profile",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2737
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ActionWorldEffectProfile"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Engine-declared information and topology effects."
-    }
-  },
-  {
-    "field": "AvailableActionInfo.performs_attack",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/performs_attack",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2741
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": false,
-      "title": "Performs Attack",
-      "type": "boolean"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.action_category",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/action_category",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2742
-      }
-    ],
-    "required": false,
-    "schema": {
-      "$ref": "#/$defs/ActionCategory",
-      "default": "ability",
-      "description": "Classification of this action"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.base_template_name",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/base_template_name",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2743
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Registered execution-token family when it differs from template_name; never authored presentation identity.",
-      "title": "Base Template Name"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.spell_level",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/spell_level",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2750
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Base spell level for spell actions.",
-      "title": "Spell Level"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.cast_at_level",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/cast_at_level",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2751
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Spell slot level used by this action row.",
-      "title": "Cast At Level"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.is_spell_variant",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/is_spell_variant",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2752
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": false,
-      "description": "Whether this row represents a generated spell variant.",
-      "title": "Is Spell Variant",
-      "type": "boolean"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.requires_concentration",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/requires_concentration",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2753
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": false,
-      "description": "Whether executing this action starts or maintains concentration.",
-      "title": "Requires Concentration",
-      "type": "boolean"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.num_projectiles",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/num_projectiles",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2765
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Number of projectiles/targets for MULTI_ENTITY actions",
-      "title": "Num Projectiles"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.allow_same_target",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/allow_same_target",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2766
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Whether same target can be selected multiple times",
-      "title": "Allow Same Target"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.is_item_use",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/is_item_use",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2767
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": false,
-      "description": "True for use actions from items",
-      "title": "Is Item Use",
-      "type": "boolean"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.source_item_uuid",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/source_item_uuid",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2768
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "format": "uuid",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Item providing this action",
-      "title": "Source Item Uuid"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.loot_item_uuid",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/loot_item_uuid",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2769
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "format": "uuid",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Exact contained item transferred by this discovered loot action.",
-      "title": "Loot Item Uuid"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.item_stack_count",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/item_stack_count",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2770
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Stack count of source item (for display, only set when > 1)",
-      "title": "Item Stack Count"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.item_charge_cost",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/item_charge_cost",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2771
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": 0,
-      "description": "Finite source-item charges consumed by successful execution.",
-      "minimum": 0,
-      "title": "Item Charge Cost",
-      "type": "integer",
-      "maximum": 9007199254740991
-    }
-  },
-  {
-    "field": "AvailableActionInfo.fixed_healing",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/fixed_healing",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2776
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer",
-          "maximum": 9007199254740991
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Deterministic hit points restored when declared by the action rule.",
-      "title": "Fixed Healing"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.allocation_completion",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/allocation_completion",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2781
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": "selected_only",
-      "enum": [
-        "selected_only",
-        "fill_primary"
-      ],
-      "title": "Allocation Completion",
-      "type": "string"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.variant_facets",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/variant_facets",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2782
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/ActionVariantFacet"
-      },
-      "title": "Variant Facets",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.interaction_affordance",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/interaction_affordance",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2783
-      }
-    ],
-    "required": false,
-    "schema": {
-      "$ref": "#/$defs/ActionAffordance"
-    }
-  },
-  {
-    "field": "AvailableActionInfo.connector_traversal",
-    "schema_pointer": "/$defs/AvailableActionInfo/properties/connector_traversal",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2784
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ConnectorTraversalDiscovery"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    }
-  },
-  {
-    "field": "AvailableActionsResult.discovery_generation",
-    "schema_pointer": "/$defs/AvailableActionsResult/properties/discovery_generation",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2875
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": 0,
-      "title": "Discovery Generation",
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991
-    }
-  },
-  {
-    "field": "AvailableActionsResult.entity_uuid",
-    "schema_pointer": "/$defs/AvailableActionsResult/properties/entity_uuid",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2876
-      }
-    ],
-    "required": true,
-    "schema": {
-      "description": "UUID of the entity these actions are for",
-      "format": "uuid",
-      "title": "Entity Uuid",
-      "type": "string"
-    }
-  },
-  {
-    "field": "AvailableActionsResult.entity_actions",
-    "schema_pointer": "/$defs/AvailableActionsResult/properties/entity_actions",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2877
-      }
-    ],
-    "required": false,
-    "schema": {
-      "description": "Actions targeting entities (Attack)",
-      "items": {
-        "$ref": "#/$defs/AvailableActionInfo"
-      },
-      "title": "Entity Actions",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableActionsResult.position_actions",
-    "schema_pointer": "/$defs/AvailableActionsResult/properties/position_actions",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2878
-      }
-    ],
-    "required": false,
-    "schema": {
-      "description": "Actions targeting positions (Move)",
-      "items": {
-        "$ref": "#/$defs/AvailableActionInfo"
-      },
-      "title": "Position Actions",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableActionsResult.self_actions",
-    "schema_pointer": "/$defs/AvailableActionsResult/properties/self_actions",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2879
-      }
-    ],
-    "required": false,
-    "schema": {
-      "description": "Self-targeting actions (Dash, Dodge, etc.)",
-      "items": {
-        "$ref": "#/$defs/AvailableActionInfo"
-      },
-      "title": "Self Actions",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableActionsResult.object_actions",
-    "schema_pointer": "/$defs/AvailableActionsResult/properties/object_actions",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2880
-      }
-    ],
-    "required": false,
-    "schema": {
-      "description": "Actions targeting objects (Pick Up, interactions)",
-      "items": {
-        "$ref": "#/$defs/AvailableActionInfo"
-      },
-      "title": "Object Actions",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableActionsResult.remaining_movement",
-    "schema_pointer": "/$defs/AvailableActionsResult/properties/remaining_movement",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2881
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": 0,
-      "description": "Remaining movement in feet",
-      "title": "Remaining Movement",
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991
-    }
-  },
-  {
-    "field": "AvailableActionsResult.world_interactions",
-    "schema_pointer": "/$defs/AvailableActionsResult/properties/world_interactions",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2882
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/AvailableWorldInteraction"
-      },
-      "title": "World Interactions",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableActionsResult.handler_details",
-    "schema_pointer": "/$defs/AvailableActionsResult/properties/handler_details",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2883
-      }
-    ],
-    "required": false,
-    "schema": {
-      "description": "Player-toggleable event handlers and their current state.",
-      "items": {
-        "$ref": "#/$defs/AvailableHandlerInfo"
-      },
-      "title": "Handler Details",
-      "type": "array"
-    }
-  },
-  {
     "field": "AvailableHandlerInfo.name",
     "schema_pointer": "/$defs/AvailableHandlerInfo/properties/name",
     "owners": [
@@ -4441,750 +3396,12 @@
     }
   },
   {
-    "field": "AvailableSelectionPreview.can_confirm",
-    "schema_pointer": "/$defs/AvailableSelectionPreview/properties/can_confirm",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2842
-      }
-    ],
-    "required": true,
-    "schema": {
-      "title": "Can Confirm",
-      "type": "boolean"
-    }
-  },
-  {
-    "field": "AvailableSelectionPreview.reason",
-    "schema_pointer": "/$defs/AvailableSelectionPreview/properties/reason",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2843
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Reason"
-    }
-  },
-  {
-    "field": "AvailableSelectionPreview.effective_target_uuids",
-    "schema_pointer": "/$defs/AvailableSelectionPreview/properties/effective_target_uuids",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2844
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": [],
-      "items": {
-        "format": "uuid",
-        "type": "string"
-      },
-      "title": "Effective Target Uuids",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableSelectionPreview.next_targets",
-    "schema_pointer": "/$defs/AvailableSelectionPreview/properties/next_targets",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2845
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/AvailableTarget"
-      },
-      "title": "Next Targets",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableSelectionPreview.next_positions",
-    "schema_pointer": "/$defs/AvailableSelectionPreview/properties/next_positions",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2846
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": [],
-      "items": {
-        "maxItems": 2,
-        "minItems": 2,
-        "prefixItems": [
-          {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          }
-        ],
-        "type": "array"
-      },
-      "title": "Next Positions",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableSelectionPreview.geometry",
-    "schema_pointer": "/$defs/AvailableSelectionPreview/properties/geometry",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2847
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "discriminator": {
-            "mapping": {
-              "cone": "#/$defs/ConePresentationGeometry",
-              "cube": "#/$defs/CubePresentationGeometry",
-              "cylinder": "#/$defs/CylinderPresentationGeometry",
-              "line": "#/$defs/LinePresentationGeometry",
-              "sphere": "#/$defs/SpherePresentationGeometry",
-              "wall": "#/$defs/WallPresentationGeometry",
-              "wall_assembly": "#/$defs/WallAssemblyPresentationGeometry"
-            },
-            "propertyName": "shape"
-          },
-          "oneOf": [
-            {
-              "$ref": "#/$defs/SpherePresentationGeometry"
-            },
-            {
-              "$ref": "#/$defs/ConePresentationGeometry"
-            },
-            {
-              "$ref": "#/$defs/LinePresentationGeometry"
-            },
-            {
-              "$ref": "#/$defs/CubePresentationGeometry"
-            },
-            {
-              "$ref": "#/$defs/CylinderPresentationGeometry"
-            },
-            {
-              "$ref": "#/$defs/WallPresentationGeometry"
-            },
-            {
-              "$ref": "#/$defs/WallAssemblyPresentationGeometry"
-            }
-          ]
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Geometry"
-    }
-  },
-  {
-    "field": "AvailableSelectionPreview.affected_positions",
-    "schema_pointer": "/$defs/AvailableSelectionPreview/properties/affected_positions",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2848
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": [],
-      "items": {
-        "maxItems": 2,
-        "minItems": 2,
-        "prefixItems": [
-          {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          }
-        ],
-        "type": "array"
-      },
-      "title": "Affected Positions",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableSelectionPreview.selected_route",
-    "schema_pointer": "/$defs/AvailableSelectionPreview/properties/selected_route",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2849
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/SelectedRoute"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    }
-  },
-  {
-    "field": "AvailableTarget.target_kind",
-    "schema_pointer": "/$defs/AvailableTarget/properties/target_kind",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2610
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": "creature",
-      "enum": [
-        "creature",
-        "object"
-      ],
-      "title": "Target Kind",
-      "type": "string"
-    }
-  },
-  {
-    "field": "AvailableTarget.index",
-    "schema_pointer": "/$defs/AvailableTarget/properties/index",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2611
-      }
-    ],
-    "required": true,
-    "schema": {
-      "description": "Index for selection (e.g., 'attack 0')",
-      "title": "Index",
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991
-    }
-  },
-  {
-    "field": "AvailableTarget.target_uuid",
-    "schema_pointer": "/$defs/AvailableTarget/properties/target_uuid",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2612
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "format": "uuid",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "For ENTITY actions",
-      "title": "Target Uuid"
-    }
-  },
-  {
-    "field": "AvailableTarget.position",
-    "schema_pointer": "/$defs/AvailableTarget/properties/position",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2613
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "maxItems": 2,
-          "minItems": 2,
-          "prefixItems": [
-            {
-              "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991
-            },
-            {
-              "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991
-            }
-          ],
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Grid cell for POSITION targets and entity/object target cells",
-      "title": "Position"
-    }
-  },
-  {
-    "field": "AvailableTarget.target_name",
-    "schema_pointer": "/$defs/AvailableTarget/properties/target_name",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2614
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Entity name if ENTITY action",
-      "title": "Target Name"
-    }
-  },
-  {
-    "field": "AvailableTarget.distance",
-    "schema_pointer": "/$defs/AvailableTarget/properties/distance",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2615
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Distance in feet",
-      "title": "Distance"
-    }
-  },
-  {
-    "field": "AvailableTarget.path_cost",
-    "schema_pointer": "/$defs/AvailableTarget/properties/path_cost",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2616
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Exact selected-target movement cost for a position action.",
-      "title": "Path Cost"
-    }
-  },
-  {
-    "field": "AvailableTarget.extra_target_uuids",
-    "schema_pointer": "/$defs/AvailableTarget/properties/extra_target_uuids",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2620
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "items": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Additional targets for MULTI_ENTITY actions",
-      "title": "Extra Target Uuids"
-    }
-  },
-  {
-    "field": "AvailableTarget.secondary_targets",
-    "schema_pointer": "/$defs/AvailableTarget/properties/secondary_targets",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2621
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "items": {
-            "$ref": "#/$defs/AvailableTarget"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Secondary Targets"
-    }
-  },
-  {
-    "field": "AvailableTarget.is_path_hazardous",
-    "schema_pointer": "/$defs/AvailableTarget/properties/is_path_hazardous",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2622
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": false,
-      "description": "Whether shortest path crosses a hazardous tile",
-      "title": "Is Path Hazardous",
-      "type": "boolean"
-    }
-  },
-  {
-    "field": "AvailableTarget.safe_path_cost",
-    "schema_pointer": "/$defs/AvailableTarget/properties/safe_path_cost",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2623
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Movement cost of safe alternative path (None if no safe path)",
-      "title": "Safe Path Cost"
-    }
-  },
-  {
-    "field": "AvailableTarget.path",
-    "schema_pointer": "/$defs/AvailableTarget/properties/path",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2624
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "type": "array"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Shortest path to this target",
-      "title": "Path"
-    }
-  },
-  {
-    "field": "AvailableTarget.safe_path",
-    "schema_pointer": "/$defs/AvailableTarget/properties/safe_path",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2625
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "type": "array"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Safe alternative path avoiding hazards",
-      "title": "Safe Path"
-    }
-  },
-  {
-    "field": "AvailableTarget.opportunity_attack_exposures",
-    "schema_pointer": "/$defs/AvailableTarget/properties/opportunity_attack_exposures",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2626
-      }
-    ],
-    "required": false,
-    "schema": {
-      "description": "Visible hostile threat boundaries crossed by the shortest path.",
-      "items": {
-        "$ref": "#/$defs/OpportunityAttackExposure"
-      },
-      "title": "Opportunity Attack Exposures",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableTarget.safe_path_opportunity_attack_exposures",
-    "schema_pointer": "/$defs/AvailableTarget/properties/safe_path_opportunity_attack_exposures",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2630
-      }
-    ],
-    "required": false,
-    "schema": {
-      "description": "Visible hostile threat boundaries crossed by the safe alternative path.",
-      "items": {
-        "$ref": "#/$defs/OpportunityAttackExposure"
-      },
-      "title": "Safe Path Opportunity Attack Exposures",
-      "type": "array"
-    }
-  },
-  {
-    "field": "AvailableTarget.affected_entity_uuids",
-    "schema_pointer": "/$defs/AvailableTarget/properties/affected_entity_uuids",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2634
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "items": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "UUIDs of entities affected by AoE",
-      "title": "Affected Entity Uuids"
-    }
-  },
-  {
-    "field": "AvailableTarget.affected_entity_names",
-    "schema_pointer": "/$defs/AvailableTarget/properties/affected_entity_names",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2635
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Names of entities affected by AoE",
-      "title": "Affected Entity Names"
-    }
-  },
-  {
-    "field": "AvailableTarget.affected_count",
-    "schema_pointer": "/$defs/AvailableTarget/properties/affected_count",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2636
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Number of entities affected by AoE",
-      "title": "Affected Count"
-    }
-  },
-  {
-    "field": "AvailableTarget.affected_positions",
-    "schema_pointer": "/$defs/AvailableTarget/properties/affected_positions",
-    "owners": [
-      {
-        "file": "dnd/core/base_actions.py",
-        "line": 2637
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "type": "array"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "All positions in AoE shape (for map preview)",
-      "title": "Affected Positions"
-    }
-  },
-  {
     "field": "AvailableWorldInteraction.subject_uuid",
     "schema_pointer": "/$defs/AvailableWorldInteraction/properties/subject_uuid",
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2856
+        "line": 2862
       }
     ],
     "required": true,
@@ -5200,7 +3417,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2857
+        "line": 2863
       }
     ],
     "required": true,
@@ -5215,7 +3432,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2858
+        "line": 2864
       }
     ],
     "required": true,
@@ -5230,7 +3447,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2859
+        "line": 2865
       }
     ],
     "required": false,
@@ -5246,7 +3463,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2860
+        "line": 2866
       }
     ],
     "required": false,
@@ -5264,7 +3481,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2861
+        "line": 2867
       }
     ],
     "required": false,
@@ -5297,7 +3514,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2862
+        "line": 2868
       }
     ],
     "required": false,
@@ -5321,7 +3538,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2863
+        "line": 2869
       }
     ],
     "required": false,
@@ -5344,7 +3561,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2864
+        "line": 2870
       }
     ],
     "required": false,
@@ -5366,7 +3583,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2865
+        "line": 2871
       }
     ],
     "required": false,
@@ -5385,7 +3602,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2866
+        "line": 2872
       }
     ],
     "required": false,
@@ -6072,6 +4289,129 @@
     }
   },
   {
+    "field": "ChoiceExposure.reactor_uuid",
+    "schema_pointer": "/$defs/ChoiceExposure/properties/reactor_uuid",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 26
+      }
+    ],
+    "required": true,
+    "schema": {
+      "format": "uuid",
+      "title": "Reactor Uuid",
+      "type": "string"
+    }
+  },
+  {
+    "field": "ChoiceExposure.reactor_name",
+    "schema_pointer": "/$defs/ChoiceExposure/properties/reactor_name",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 27
+      }
+    ],
+    "required": true,
+    "schema": {
+      "title": "Reactor Name",
+      "type": "string"
+    }
+  },
+  {
+    "field": "ChoiceExposure.from_position",
+    "schema_pointer": "/$defs/ChoiceExposure/properties/from_position",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 28
+      }
+    ],
+    "required": true,
+    "schema": {
+      "minimum": 0,
+      "title": "From Position",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "ChoiceExposure.to_position",
+    "schema_pointer": "/$defs/ChoiceExposure/properties/to_position",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 29
+      }
+    ],
+    "required": true,
+    "schema": {
+      "minimum": 0,
+      "title": "To Position",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "ChoiceSubject.uuid",
+    "schema_pointer": "/$defs/ChoiceSubject/properties/uuid",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 19
+      }
+    ],
+    "required": true,
+    "schema": {
+      "format": "uuid",
+      "title": "Uuid",
+      "type": "string"
+    }
+  },
+  {
+    "field": "ChoiceSubject.kind",
+    "schema_pointer": "/$defs/ChoiceSubject/properties/kind",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 20
+      }
+    ],
+    "required": true,
+    "schema": {
+      "enum": [
+        "creature",
+        "object"
+      ],
+      "title": "Kind",
+      "type": "string"
+    }
+  },
+  {
+    "field": "ChoiceSubject.name",
+    "schema_pointer": "/$defs/ChoiceSubject/properties/name",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 21
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Name"
+    }
+  },
+  {
     "field": "ChoicesRequest.actor_uuid",
     "schema_pointer": "/$defs/ChoicesRequest/properties/actor_uuid",
     "owners": [
@@ -6260,7 +4600,7 @@
     ],
     "required": true,
     "schema": {
-      "$ref": "#/$defs/AvailableActionsResult"
+      "$ref": "#/$defs/PlayerChoices"
     }
   },
   {
@@ -7692,7 +6032,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 35
+        "line": 36
       }
     ],
     "required": false,
@@ -7709,7 +6049,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 36
+        "line": 37
       }
     ],
     "required": true,
@@ -7738,7 +6078,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 37
+        "line": 38
       }
     ],
     "required": true,
@@ -7767,7 +6107,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 38
+        "line": 39
       }
     ],
     "required": true,
@@ -7785,7 +6125,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 39
+        "line": 40
       }
     ],
     "required": true,
@@ -9212,7 +7552,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 55
+        "line": 56
       }
     ],
     "required": false,
@@ -9229,7 +7569,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 56
+        "line": 57
       }
     ],
     "required": true,
@@ -9258,7 +7598,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 57
+        "line": 58
       }
     ],
     "required": false,
@@ -9295,7 +7635,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 58
+        "line": 59
       }
     ],
     "required": true,
@@ -9313,7 +7653,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 59
+        "line": 60
       }
     ],
     "required": true,
@@ -9328,7 +7668,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 74
+        "line": 75
       }
     ],
     "required": false,
@@ -9345,7 +7685,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 75
+        "line": 76
       }
     ],
     "required": true,
@@ -9374,7 +7714,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 76
+        "line": 77
       }
     ],
     "required": true,
@@ -9391,7 +7731,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 77
+        "line": 78
       }
     ],
     "required": true,
@@ -18619,7 +16959,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 45
+        "line": 46
       }
     ],
     "required": false,
@@ -18636,7 +16976,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 46
+        "line": 47
       }
     ],
     "required": true,
@@ -18665,7 +17005,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 47
+        "line": 48
       }
     ],
     "required": true,
@@ -18694,7 +17034,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 48
+        "line": 49
       }
     ],
     "required": true,
@@ -18712,7 +17052,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 49
+        "line": 50
       }
     ],
     "required": true,
@@ -21695,6 +20035,1151 @@
     }
   },
   {
+    "field": "PlayerAction.discovery_generation",
+    "schema_pointer": "/$defs/PlayerAction/properties/discovery_generation",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": 0,
+      "title": "Discovery Generation",
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "PlayerAction.discovery_index",
+    "schema_pointer": "/$defs/PlayerAction/properties/discovery_index",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": 0,
+      "title": "Discovery Index",
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "PlayerAction.discovery_runtime",
+    "schema_pointer": "/$defs/PlayerAction/properties/discovery_runtime",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Discovery Runtime"
+    }
+  },
+  {
+    "field": "PlayerAction.discovery_actor_uuid",
+    "schema_pointer": "/$defs/PlayerAction/properties/discovery_actor_uuid",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Discovery Actor Uuid"
+    }
+  },
+  {
+    "field": "PlayerAction.template_name",
+    "schema_pointer": "/$defs/PlayerAction/properties/template_name",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": true,
+    "schema": {
+      "description": "Engine command token for execution; never authored presentation identity.",
+      "title": "Template Name",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PlayerAction.semantic_key",
+    "schema_pointer": "/$defs/PlayerAction/properties/semantic_key",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": "action.unclassified",
+      "description": "Rules/mechanics family key retained for policy and diagnosis; never authored presentation identity.",
+      "title": "Semantic Key",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PlayerAction.behavior_id",
+    "schema_pointer": "/$defs/PlayerAction/properties/behavior_id",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": true,
+    "schema": {
+      "description": "Primitive executable-rule identity.",
+      "title": "Behavior Id",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PlayerAction.provided_by_id",
+    "schema_pointer": "/$defs/PlayerAction/properties/provided_by_id",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": true,
+    "schema": {
+      "description": "Primitive direct-provider identity.",
+      "title": "Provided By Id",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PlayerAction.origin_root_id",
+    "schema_pointer": "/$defs/PlayerAction/properties/origin_root_id",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional durable primitive root of the provider chain.",
+      "title": "Origin Root Id"
+    }
+  },
+  {
+    "field": "PlayerAction.configured_action_ref",
+    "schema_pointer": "/$defs/PlayerAction/properties/configured_action_ref",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContentRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Exact authored configuration for a parameterized action. Clients resolve this catalog row instead of inferring a variant from execution tokens, display names, or outcome identifiers."
+    }
+  },
+  {
+    "field": "PlayerAction.target_type",
+    "schema_pointer": "/$defs/PlayerAction/properties/target_type",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": true,
+    "schema": {
+      "$ref": "#/$defs/TargetType",
+      "description": "What kind of target this action needs"
+    }
+  },
+  {
+    "field": "PlayerAction.position_selection",
+    "schema_pointer": "/$defs/PlayerAction/properties/position_selection",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "discriminator": {
+            "mapping": {
+              "entity_destination": "#/$defs/EntityDestinationSelection",
+              "path": "#/$defs/PositionPathSelection",
+              "single": "#/$defs/SinglePositionSelection"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SinglePositionSelection"
+            },
+            {
+              "$ref": "#/$defs/PositionPathSelection"
+            },
+            {
+              "$ref": "#/$defs/EntityDestinationSelection"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Position input required after choosing a discovery target.",
+      "title": "Position Selection"
+    }
+  },
+  {
+    "field": "PlayerAction.availability_status",
+    "schema_pointer": "/$defs/PlayerAction/properties/availability_status",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": true,
+    "schema": {
+      "$ref": "#/$defs/ActionAvailabilityStatus",
+      "description": "Closed reason this authored row is executable or unavailable; clients never infer the reason from an empty target list."
+    }
+  },
+  {
+    "field": "PlayerAction.can_afford",
+    "schema_pointer": "/$defs/PlayerAction/properties/can_afford",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": true,
+    "schema": {
+      "description": "Whether the neutral source permission gate and all target-independent action-economy or named-resource costs permit execution. Consult availability_status for target-bound costs and requirements.",
+      "title": "Can Afford",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "PlayerAction.display_name",
+    "schema_pointer": "/$defs/PlayerAction/properties/display_name",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": true,
+    "schema": {
+      "description": "Human-readable name (e.g., 'Scimitar')",
+      "title": "Display Name",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PlayerAction.description",
+    "schema_pointer": "/$defs/PlayerAction/properties/description",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": "",
+      "description": "Action description",
+      "title": "Description",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PlayerAction.cost_type",
+    "schema_pointer": "/$defs/PlayerAction/properties/cost_type",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": true,
+    "schema": {
+      "description": "Type of cost (actions, bonus_actions, etc.)",
+      "enum": [
+        "actions",
+        "bonus_actions",
+        "reactions",
+        "movement",
+        "spell_slot_1",
+        "spell_slot_2",
+        "spell_slot_3",
+        "spell_slot_4",
+        "spell_slot_5",
+        "spell_slot_6",
+        "spell_slot_7",
+        "spell_slot_8",
+        "spell_slot_9"
+      ],
+      "title": "Cost Type",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PlayerAction.cost_amount",
+    "schema_pointer": "/$defs/PlayerAction/properties/cost_amount",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": 1,
+      "description": "Cost amount (usually 1)",
+      "title": "Cost Amount",
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "PlayerAction.restricted_action_budget",
+    "schema_pointer": "/$defs/PlayerAction/properties/restricted_action_budget",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Restricted budget funding this otherwise ordinary action, e.g. Haste.",
+      "title": "Restricted Action Budget"
+    }
+  },
+  {
+    "field": "PlayerAction.costs",
+    "schema_pointer": "/$defs/PlayerAction/properties/costs",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "description": "Target-independent action-economy and named-resource costs for this row; selected movement cost is carried by target.path_cost.",
+      "items": {
+        "$ref": "#/$defs/BaseCost"
+      },
+      "title": "Costs",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerAction.weapon_slot",
+    "schema_pointer": "/$defs/PlayerAction/properties/weapon_slot",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Weapon slot for attacks",
+      "title": "Weapon Slot"
+    }
+  },
+  {
+    "field": "PlayerAction.weapon_name",
+    "schema_pointer": "/$defs/PlayerAction/properties/weapon_name",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Weapon name for display (e.g., 'Scimitar')",
+      "title": "Weapon Name"
+    }
+  },
+  {
+    "field": "PlayerAction.damage_types",
+    "schema_pointer": "/$defs/PlayerAction/properties/damage_types",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "description": "Damage type labels this action can deal when known.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Damage Types",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerAction.outcome_profile",
+    "schema_pointer": "/$defs/PlayerAction/properties/outcome_profile",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ActionOutcomeProfile"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Actor-baseline stochastic outcome model when declared by the action rule."
+    }
+  },
+  {
+    "field": "PlayerAction.self_setup_profile",
+    "schema_pointer": "/$defs/PlayerAction/properties/self_setup_profile",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ActionSelfSetupProfile"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Engine-declared logical self-setup outcome when available."
+    }
+  },
+  {
+    "field": "PlayerAction.target_effect_profile",
+    "schema_pointer": "/$defs/PlayerAction/properties/target_effect_profile",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ActionTargetEffectProfile"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Engine-declared conditional effects over selected targets."
+    }
+  },
+  {
+    "field": "PlayerAction.world_effect_profile",
+    "schema_pointer": "/$defs/PlayerAction/properties/world_effect_profile",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ActionWorldEffectProfile"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Engine-declared information and topology effects."
+    }
+  },
+  {
+    "field": "PlayerAction.performs_attack",
+    "schema_pointer": "/$defs/PlayerAction/properties/performs_attack",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": false,
+      "title": "Performs Attack",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "PlayerAction.action_category",
+    "schema_pointer": "/$defs/PlayerAction/properties/action_category",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/ActionCategory",
+      "default": "ability",
+      "description": "Classification of this action"
+    }
+  },
+  {
+    "field": "PlayerAction.base_template_name",
+    "schema_pointer": "/$defs/PlayerAction/properties/base_template_name",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Registered execution-token family when it differs from template_name; never authored presentation identity.",
+      "title": "Base Template Name"
+    }
+  },
+  {
+    "field": "PlayerAction.spell_level",
+    "schema_pointer": "/$defs/PlayerAction/properties/spell_level",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Base spell level for spell actions.",
+      "title": "Spell Level"
+    }
+  },
+  {
+    "field": "PlayerAction.cast_at_level",
+    "schema_pointer": "/$defs/PlayerAction/properties/cast_at_level",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Spell slot level used by this action row.",
+      "title": "Cast At Level"
+    }
+  },
+  {
+    "field": "PlayerAction.is_spell_variant",
+    "schema_pointer": "/$defs/PlayerAction/properties/is_spell_variant",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": false,
+      "description": "Whether this row represents a generated spell variant.",
+      "title": "Is Spell Variant",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "PlayerAction.requires_concentration",
+    "schema_pointer": "/$defs/PlayerAction/properties/requires_concentration",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": false,
+      "description": "Whether executing this action starts or maintains concentration.",
+      "title": "Requires Concentration",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "PlayerAction.num_projectiles",
+    "schema_pointer": "/$defs/PlayerAction/properties/num_projectiles",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Number of projectiles/targets for MULTI_ENTITY actions",
+      "title": "Num Projectiles"
+    }
+  },
+  {
+    "field": "PlayerAction.allow_same_target",
+    "schema_pointer": "/$defs/PlayerAction/properties/allow_same_target",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Whether same target can be selected multiple times",
+      "title": "Allow Same Target"
+    }
+  },
+  {
+    "field": "PlayerAction.is_item_use",
+    "schema_pointer": "/$defs/PlayerAction/properties/is_item_use",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": false,
+      "description": "True for use actions from items",
+      "title": "Is Item Use",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "PlayerAction.source_item_uuid",
+    "schema_pointer": "/$defs/PlayerAction/properties/source_item_uuid",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Item providing this action",
+      "title": "Source Item Uuid"
+    }
+  },
+  {
+    "field": "PlayerAction.loot_item_uuid",
+    "schema_pointer": "/$defs/PlayerAction/properties/loot_item_uuid",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Exact contained item transferred by this discovered loot action.",
+      "title": "Loot Item Uuid"
+    }
+  },
+  {
+    "field": "PlayerAction.item_stack_count",
+    "schema_pointer": "/$defs/PlayerAction/properties/item_stack_count",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Stack count of source item (for display, only set when > 1)",
+      "title": "Item Stack Count"
+    }
+  },
+  {
+    "field": "PlayerAction.item_charge_cost",
+    "schema_pointer": "/$defs/PlayerAction/properties/item_charge_cost",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": 0,
+      "description": "Finite source-item charges consumed by successful execution.",
+      "minimum": 0,
+      "title": "Item Charge Cost",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "PlayerAction.fixed_healing",
+    "schema_pointer": "/$defs/PlayerAction/properties/fixed_healing",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer",
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Deterministic hit points restored when declared by the action rule.",
+      "title": "Fixed Healing"
+    }
+  },
+  {
+    "field": "PlayerAction.allocation_completion",
+    "schema_pointer": "/$defs/PlayerAction/properties/allocation_completion",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": "selected_only",
+      "enum": [
+        "selected_only",
+        "fill_primary"
+      ],
+      "title": "Allocation Completion",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PlayerAction.variant_facets",
+    "schema_pointer": "/$defs/PlayerAction/properties/variant_facets",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ActionVariantFacet"
+      },
+      "title": "Variant Facets",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerAction.interaction_affordance",
+    "schema_pointer": "/$defs/PlayerAction/properties/interaction_affordance",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/ActionAffordance"
+    }
+  },
+  {
+    "field": "PlayerAction.connector_traversal",
+    "schema_pointer": "/$defs/PlayerAction/properties/connector_traversal",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ConnectorTraversalDiscovery"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "PlayerAction.target_set",
+    "schema_pointer": "/$defs/PlayerAction/properties/target_set",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 92
+      }
+    ],
+    "required": true,
+    "schema": {
+      "minimum": 0,
+      "title": "Target Set",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "PlayerAction.area_preview",
+    "schema_pointer": "/$defs/PlayerAction/properties/area_preview",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 93
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": "not_applicable",
+      "enum": [
+        "not_applicable",
+        "deferred"
+      ],
+      "title": "Area Preview",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PlayerAction.aiming",
+    "schema_pointer": "/$defs/PlayerAction/properties/aiming",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 94
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AoEAimingGeometry"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "PlayerAction.range_origin",
+    "schema_pointer": "/$defs/PlayerAction/properties/range_origin",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 95
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Range Origin"
+    }
+  },
+  {
+    "field": "PlayerAction.area_include_self",
+    "schema_pointer": "/$defs/PlayerAction/properties/area_include_self",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 96
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Area Include Self"
+    }
+  },
+  {
+    "field": "PlayerAction.area_target_filter",
+    "schema_pointer": "/$defs/PlayerAction/properties/area_target_filter",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 97
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "enum": [
+            "all",
+            "enemies",
+            "allies",
+            "self_or_allies"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Area Target Filter"
+    }
+  },
+  {
+    "field": "PlayerAction.area_include_dead",
+    "schema_pointer": "/$defs/PlayerAction/properties/area_include_dead",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 98
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Area Include Dead"
+    }
+  },
+  {
     "field": "PlayerActor.uuid",
     "schema_pointer": "/$defs/PlayerActor/properties/uuid",
     "owners": [
@@ -22146,7 +21631,7 @@
     "owners": [
       {
         "file": "dnd/player/audience.py",
-        "line": 16
+        "line": 17
       }
     ],
     "required": true,
@@ -22165,7 +21650,7 @@
     "owners": [
       {
         "file": "dnd/player/audience.py",
-        "line": 17
+        "line": 18
       }
     ],
     "required": true,
@@ -22184,7 +21669,7 @@
     "owners": [
       {
         "file": "dnd/player/audience.py",
-        "line": 18
+        "line": 19
       }
     ],
     "required": false,
@@ -22569,6 +22054,263 @@
     }
   },
   {
+    "field": "PlayerChoices.subjects",
+    "schema_pointer": "/$defs/PlayerChoices/properties/subjects",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 101
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ChoiceSubject"
+      },
+      "title": "Subjects",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerChoices.positions",
+    "schema_pointer": "/$defs/PlayerChoices/properties/positions",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 101
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Positions",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerChoices.target_sets",
+    "schema_pointer": "/$defs/PlayerChoices/properties/target_sets",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 101
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "items": {
+          "discriminator": {
+            "mapping": {
+              "position": "#/$defs/PositionBinding",
+              "self": "#/$defs/SelfBinding",
+              "subject": "#/$defs/SubjectBinding"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SubjectBinding"
+            },
+            {
+              "$ref": "#/$defs/PositionBinding"
+            },
+            {
+              "$ref": "#/$defs/SelfBinding"
+            }
+          ]
+        },
+        "type": "array"
+      },
+      "title": "Target Sets",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerChoices.discovery_generation",
+    "schema_pointer": "/$defs/PlayerChoices/properties/discovery_generation",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 102
+      }
+    ],
+    "required": true,
+    "schema": {
+      "minimum": 0,
+      "title": "Discovery Generation",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "PlayerChoices.entity_uuid",
+    "schema_pointer": "/$defs/PlayerChoices/properties/entity_uuid",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 103
+      }
+    ],
+    "required": true,
+    "schema": {
+      "format": "uuid",
+      "title": "Entity Uuid",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PlayerChoices.entity_actions",
+    "schema_pointer": "/$defs/PlayerChoices/properties/entity_actions",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 104
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PlayerAction"
+      },
+      "title": "Entity Actions",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerChoices.position_actions",
+    "schema_pointer": "/$defs/PlayerChoices/properties/position_actions",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 105
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PlayerAction"
+      },
+      "title": "Position Actions",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerChoices.self_actions",
+    "schema_pointer": "/$defs/PlayerChoices/properties/self_actions",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 106
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PlayerAction"
+      },
+      "title": "Self Actions",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerChoices.object_actions",
+    "schema_pointer": "/$defs/PlayerChoices/properties/object_actions",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 107
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PlayerAction"
+      },
+      "title": "Object Actions",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerChoices.remaining_movement",
+    "schema_pointer": "/$defs/PlayerChoices/properties/remaining_movement",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 108
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": 0,
+      "title": "Remaining Movement",
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "PlayerChoices.world_interactions",
+    "schema_pointer": "/$defs/PlayerChoices/properties/world_interactions",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 109
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/AvailableWorldInteraction"
+      },
+      "title": "World Interactions",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerChoices.handler_details",
+    "schema_pointer": "/$defs/PlayerChoices/properties/handler_details",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 110
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/AvailableHandlerInfo"
+      },
+      "title": "Handler Details",
+      "type": "array"
+    }
+  },
+  {
     "field": "PlayerCursor.game_id",
     "schema_pointer": "/$defs/PlayerCursor/properties/game_id",
     "owners": [
@@ -22726,7 +22468,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 719
+        "line": 726
       }
     ],
     "required": true,
@@ -22742,7 +22484,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 720
+        "line": 727
       }
     ],
     "required": true,
@@ -22758,7 +22500,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 721
+        "line": 728
       }
     ],
     "required": true,
@@ -22772,7 +22514,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 722
+        "line": 729
       }
     ],
     "required": true,
@@ -22790,7 +22532,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 723
+        "line": 730
       }
     ],
     "required": true,
@@ -22808,7 +22550,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 724
+        "line": 731
       }
     ],
     "required": true,
@@ -22825,7 +22567,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 725
+        "line": 732
       }
     ],
     "required": true,
@@ -22843,7 +22585,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 726
+        "line": 733
       }
     ],
     "required": true,
@@ -22861,7 +22603,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 727
+        "line": 734
       }
     ],
     "required": false,
@@ -22883,7 +22625,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 728
+        "line": 735
       }
     ],
     "required": false,
@@ -22905,7 +22647,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 698
+        "line": 705
       }
     ],
     "required": true,
@@ -22921,7 +22663,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 699
+        "line": 706
       }
     ],
     "required": true,
@@ -22937,7 +22679,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 700
+        "line": 707
       }
     ],
     "required": true,
@@ -22953,7 +22695,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 701
+        "line": 708
       }
     ],
     "required": true,
@@ -22974,7 +22716,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 702
+        "line": 709
       }
     ],
     "required": true,
@@ -22992,7 +22734,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 703
+        "line": 710
       }
     ],
     "required": true,
@@ -23010,7 +22752,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 704
+        "line": 711
       }
     ],
     "required": true,
@@ -23027,7 +22769,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 705
+        "line": 712
       }
     ],
     "required": true,
@@ -23044,7 +22786,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 706
+        "line": 713
       }
     ],
     "required": false,
@@ -23063,7 +22805,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 707
+        "line": 714
       }
     ],
     "required": false,
@@ -23082,7 +22824,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 708
+        "line": 715
       }
     ],
     "required": false,
@@ -23104,7 +22846,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 709
+        "line": 716
       }
     ],
     "required": false,
@@ -23895,12 +23637,360 @@
     }
   },
   {
+    "field": "PlayerSelectionPreview.subjects",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/subjects",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 113
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ChoiceSubject"
+      },
+      "title": "Subjects",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.positions",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/positions",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 113
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Positions",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.target_sets",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/target_sets",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 113
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "items": {
+          "discriminator": {
+            "mapping": {
+              "position": "#/$defs/PositionBinding",
+              "self": "#/$defs/SelfBinding",
+              "subject": "#/$defs/SubjectBinding"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SubjectBinding"
+            },
+            {
+              "$ref": "#/$defs/PositionBinding"
+            },
+            {
+              "$ref": "#/$defs/SelfBinding"
+            }
+          ]
+        },
+        "type": "array"
+      },
+      "title": "Target Sets",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.can_confirm",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/can_confirm",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 114
+      }
+    ],
+    "required": true,
+    "schema": {
+      "title": "Can Confirm",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.reason",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/reason",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 115
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.effective_target_uuids",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/effective_target_uuids",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 116
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Effective Target Uuids",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.next_target_set",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/next_target_set",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 117
+      }
+    ],
+    "required": true,
+    "schema": {
+      "minimum": 0,
+      "title": "Next Target Set",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.next_positions",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/next_positions",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 118
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "minimum": 0,
+        "type": "integer",
+        "maximum": 9007199254740991
+      },
+      "title": "Next Positions",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.geometry",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/geometry",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 119
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "discriminator": {
+            "mapping": {
+              "cone": "#/$defs/ConePresentationGeometry",
+              "cube": "#/$defs/CubePresentationGeometry",
+              "cylinder": "#/$defs/CylinderPresentationGeometry",
+              "line": "#/$defs/LinePresentationGeometry",
+              "sphere": "#/$defs/SpherePresentationGeometry",
+              "wall": "#/$defs/WallPresentationGeometry",
+              "wall_assembly": "#/$defs/WallAssemblyPresentationGeometry"
+            },
+            "propertyName": "shape"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SpherePresentationGeometry"
+            },
+            {
+              "$ref": "#/$defs/ConePresentationGeometry"
+            },
+            {
+              "$ref": "#/$defs/LinePresentationGeometry"
+            },
+            {
+              "$ref": "#/$defs/CubePresentationGeometry"
+            },
+            {
+              "$ref": "#/$defs/CylinderPresentationGeometry"
+            },
+            {
+              "$ref": "#/$defs/WallPresentationGeometry"
+            },
+            {
+              "$ref": "#/$defs/WallAssemblyPresentationGeometry"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Geometry"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.area_preview",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/area_preview",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 120
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": "not_applicable",
+      "enum": [
+        "not_applicable",
+        "deferred",
+        "computed"
+      ],
+      "title": "Area Preview",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.affected_positions",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/affected_positions",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 121
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "minimum": 0,
+        "type": "integer",
+        "maximum": 9007199254740991
+      },
+      "title": "Affected Positions",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.affected_entity_uuids",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/affected_entity_uuids",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 122
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Affected Entity Uuids",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.affected_entity_names",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/affected_entity_names",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 123
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Affected Entity Names",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlayerSelectionPreview.selected_route",
+    "schema_pointer": "/$defs/PlayerSelectionPreview/properties/selected_route",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 124
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SelectedRoute"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
     "field": "PlayerWorld.battlefield_id",
     "schema_pointer": "/$defs/PlayerWorld/properties/battlefield_id",
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 689
+        "line": 696
       }
     ],
     "required": true,
@@ -23915,7 +24005,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 690
+        "line": 697
       }
     ],
     "required": true,
@@ -23930,7 +24020,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 691
+        "line": 698
       }
     ],
     "required": true,
@@ -23969,7 +24059,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 692
+        "line": 699
       }
     ],
     "required": true,
@@ -23986,7 +24076,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 693
+        "line": 700
       }
     ],
     "required": true,
@@ -24161,6 +24251,293 @@
       ],
       "default": null,
       "title": "Portal Content Id"
+    }
+  },
+  {
+    "field": "PositionBinding.index",
+    "schema_pointer": "/$defs/PositionBinding/properties/index",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 69
+      }
+    ],
+    "required": true,
+    "schema": {
+      "minimum": 0,
+      "title": "Index",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "PositionBinding.distance",
+    "schema_pointer": "/$defs/PositionBinding/properties/distance",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 69
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Distance"
+    }
+  },
+  {
+    "field": "PositionBinding.path_cost",
+    "schema_pointer": "/$defs/PositionBinding/properties/path_cost",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 69
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Path Cost"
+    }
+  },
+  {
+    "field": "PositionBinding.extra_target_uuids",
+    "schema_pointer": "/$defs/PositionBinding/properties/extra_target_uuids",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 69
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extra Target Uuids"
+    }
+  },
+  {
+    "field": "PositionBinding.secondary_set",
+    "schema_pointer": "/$defs/PositionBinding/properties/secondary_set",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 69
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer",
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Secondary Set"
+    }
+  },
+  {
+    "field": "PositionBinding.is_path_hazardous",
+    "schema_pointer": "/$defs/PositionBinding/properties/is_path_hazardous",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 69
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": false,
+      "title": "Is Path Hazardous",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "PositionBinding.safe_path_cost",
+    "schema_pointer": "/$defs/PositionBinding/properties/safe_path_cost",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 69
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Safe Path Cost"
+    }
+  },
+  {
+    "field": "PositionBinding.path",
+    "schema_pointer": "/$defs/PositionBinding/properties/path",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 69
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Path"
+    }
+  },
+  {
+    "field": "PositionBinding.safe_path",
+    "schema_pointer": "/$defs/PositionBinding/properties/safe_path",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 69
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Safe Path"
+    }
+  },
+  {
+    "field": "PositionBinding.opportunity_attack_exposures",
+    "schema_pointer": "/$defs/PositionBinding/properties/opportunity_attack_exposures",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 69
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ChoiceExposure"
+      },
+      "title": "Opportunity Attack Exposures",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PositionBinding.safe_path_opportunity_attack_exposures",
+    "schema_pointer": "/$defs/PositionBinding/properties/safe_path_opportunity_attack_exposures",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 69
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ChoiceExposure"
+      },
+      "title": "Safe Path Opportunity Attack Exposures",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PositionBinding.kind",
+    "schema_pointer": "/$defs/PositionBinding/properties/kind",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 70
+      }
+    ],
+    "required": true,
+    "schema": {
+      "const": "position",
+      "title": "Kind",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PositionBinding.position",
+    "schema_pointer": "/$defs/PositionBinding/properties/position",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 71
+      }
+    ],
+    "required": true,
+    "schema": {
+      "minimum": 0,
+      "title": "Position",
+      "type": "integer",
+      "maximum": 9007199254740991
     }
   },
   {
@@ -24436,7 +24813,7 @@
     ],
     "required": true,
     "schema": {
-      "$ref": "#/$defs/AvailableSelectionPreview"
+      "$ref": "#/$defs/PlayerSelectionPreview"
     }
   },
   {
@@ -24469,8 +24846,8 @@
     ],
     "required": false,
     "schema": {
-      "const": 6,
-      "default": 6,
+      "const": 8,
+      "default": 8,
       "title": "Player Schema Version",
       "type": "integer",
       "minimum": -9007199254740991,
@@ -25357,7 +25734,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2830
+        "line": 2833
       }
     ],
     "required": true,
@@ -25390,7 +25767,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2831
+        "line": 2834
       }
     ],
     "required": true,
@@ -25405,7 +25782,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2832
+        "line": 2835
       }
     ],
     "required": true,
@@ -25434,7 +25811,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2833
+        "line": 2836
       }
     ],
     "required": true,
@@ -25453,7 +25830,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2834
+        "line": 2837
       }
     ],
     "required": true,
@@ -25471,13 +25848,283 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2835
+        "line": 2838
       }
     ],
     "required": true,
     "schema": {
       "title": "Is Hazardous",
       "type": "boolean"
+    }
+  },
+  {
+    "field": "SelfBinding.index",
+    "schema_pointer": "/$defs/SelfBinding/properties/index",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 74
+      }
+    ],
+    "required": true,
+    "schema": {
+      "minimum": 0,
+      "title": "Index",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "SelfBinding.distance",
+    "schema_pointer": "/$defs/SelfBinding/properties/distance",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 74
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Distance"
+    }
+  },
+  {
+    "field": "SelfBinding.path_cost",
+    "schema_pointer": "/$defs/SelfBinding/properties/path_cost",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 74
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Path Cost"
+    }
+  },
+  {
+    "field": "SelfBinding.extra_target_uuids",
+    "schema_pointer": "/$defs/SelfBinding/properties/extra_target_uuids",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 74
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extra Target Uuids"
+    }
+  },
+  {
+    "field": "SelfBinding.secondary_set",
+    "schema_pointer": "/$defs/SelfBinding/properties/secondary_set",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 74
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer",
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Secondary Set"
+    }
+  },
+  {
+    "field": "SelfBinding.is_path_hazardous",
+    "schema_pointer": "/$defs/SelfBinding/properties/is_path_hazardous",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 74
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": false,
+      "title": "Is Path Hazardous",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "SelfBinding.safe_path_cost",
+    "schema_pointer": "/$defs/SelfBinding/properties/safe_path_cost",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 74
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Safe Path Cost"
+    }
+  },
+  {
+    "field": "SelfBinding.path",
+    "schema_pointer": "/$defs/SelfBinding/properties/path",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 74
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Path"
+    }
+  },
+  {
+    "field": "SelfBinding.safe_path",
+    "schema_pointer": "/$defs/SelfBinding/properties/safe_path",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 74
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Safe Path"
+    }
+  },
+  {
+    "field": "SelfBinding.opportunity_attack_exposures",
+    "schema_pointer": "/$defs/SelfBinding/properties/opportunity_attack_exposures",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 74
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ChoiceExposure"
+      },
+      "title": "Opportunity Attack Exposures",
+      "type": "array"
+    }
+  },
+  {
+    "field": "SelfBinding.safe_path_opportunity_attack_exposures",
+    "schema_pointer": "/$defs/SelfBinding/properties/safe_path_opportunity_attack_exposures",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 74
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ChoiceExposure"
+      },
+      "title": "Safe Path Opportunity Attack Exposures",
+      "type": "array"
+    }
+  },
+  {
+    "field": "SelfBinding.kind",
+    "schema_pointer": "/$defs/SelfBinding/properties/kind",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 75
+      }
+    ],
+    "required": true,
+    "schema": {
+      "const": "self",
+      "title": "Kind",
+      "type": "string"
     }
   },
   {
@@ -28685,7 +29332,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 27
+        "line": 28
       }
     ],
     "required": false,
@@ -28702,7 +29349,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 28
+        "line": 29
       }
     ],
     "required": true,
@@ -28731,7 +29378,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 29
+        "line": 30
       }
     ],
     "required": true,
@@ -29609,6 +30256,318 @@
     }
   },
   {
+    "field": "SubjectBinding.index",
+    "schema_pointer": "/$defs/SubjectBinding/properties/index",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 63
+      }
+    ],
+    "required": true,
+    "schema": {
+      "minimum": 0,
+      "title": "Index",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "SubjectBinding.distance",
+    "schema_pointer": "/$defs/SubjectBinding/properties/distance",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 63
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Distance"
+    }
+  },
+  {
+    "field": "SubjectBinding.path_cost",
+    "schema_pointer": "/$defs/SubjectBinding/properties/path_cost",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 63
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Path Cost"
+    }
+  },
+  {
+    "field": "SubjectBinding.extra_target_uuids",
+    "schema_pointer": "/$defs/SubjectBinding/properties/extra_target_uuids",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 63
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extra Target Uuids"
+    }
+  },
+  {
+    "field": "SubjectBinding.secondary_set",
+    "schema_pointer": "/$defs/SubjectBinding/properties/secondary_set",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 63
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer",
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Secondary Set"
+    }
+  },
+  {
+    "field": "SubjectBinding.is_path_hazardous",
+    "schema_pointer": "/$defs/SubjectBinding/properties/is_path_hazardous",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 63
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": false,
+      "title": "Is Path Hazardous",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "SubjectBinding.safe_path_cost",
+    "schema_pointer": "/$defs/SubjectBinding/properties/safe_path_cost",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 63
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Safe Path Cost"
+    }
+  },
+  {
+    "field": "SubjectBinding.path",
+    "schema_pointer": "/$defs/SubjectBinding/properties/path",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 63
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Path"
+    }
+  },
+  {
+    "field": "SubjectBinding.safe_path",
+    "schema_pointer": "/$defs/SubjectBinding/properties/safe_path",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 63
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Safe Path"
+    }
+  },
+  {
+    "field": "SubjectBinding.opportunity_attack_exposures",
+    "schema_pointer": "/$defs/SubjectBinding/properties/opportunity_attack_exposures",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 63
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ChoiceExposure"
+      },
+      "title": "Opportunity Attack Exposures",
+      "type": "array"
+    }
+  },
+  {
+    "field": "SubjectBinding.safe_path_opportunity_attack_exposures",
+    "schema_pointer": "/$defs/SubjectBinding/properties/safe_path_opportunity_attack_exposures",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 63
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ChoiceExposure"
+      },
+      "title": "Safe Path Opportunity Attack Exposures",
+      "type": "array"
+    }
+  },
+  {
+    "field": "SubjectBinding.kind",
+    "schema_pointer": "/$defs/SubjectBinding/properties/kind",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 64
+      }
+    ],
+    "required": true,
+    "schema": {
+      "const": "subject",
+      "title": "Kind",
+      "type": "string"
+    }
+  },
+  {
+    "field": "SubjectBinding.subject",
+    "schema_pointer": "/$defs/SubjectBinding/properties/subject",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 65
+      }
+    ],
+    "required": true,
+    "schema": {
+      "minimum": 0,
+      "title": "Subject",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "SubjectBinding.position",
+    "schema_pointer": "/$defs/SubjectBinding/properties/position",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 66
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer",
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Position"
+    }
+  },
+  {
     "field": "SurfaceLayer.material",
     "schema_pointer": "/$defs/SurfaceLayer/properties/material",
     "owners": [
@@ -29747,6 +30706,49 @@
       ],
       "default": null,
       "title": "Source Id"
+    }
+  },
+  {
+    "field": "TileFieldUpdate.position",
+    "schema_pointer": "/$defs/TileFieldUpdate/properties/position",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 680
+      }
+    ],
+    "required": true,
+    "schema": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      ],
+      "title": "Position",
+      "type": "array"
+    }
+  },
+  {
+    "field": "TileFieldUpdate.changes",
+    "schema_pointer": "/$defs/TileFieldUpdate/properties/changes",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 681
+      }
+    ],
+    "required": true,
+    "schema": {
+      "$ref": "#/$defs/WorldTileChanges"
     }
   },
   {
@@ -31053,7 +32055,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 133
+        "line": 134
       }
     ],
     "required": false,
@@ -31070,7 +32072,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 134
+        "line": 135
       }
     ],
     "required": false,
@@ -31089,7 +32091,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 135
+        "line": 136
       }
     ],
     "required": true,
@@ -31126,7 +32128,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 136
+        "line": 137
       }
     ],
     "required": true,
@@ -31143,7 +32145,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 137
+        "line": 138
       }
     ],
     "required": true,
@@ -31159,7 +32161,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 138
+        "line": 139
       }
     ],
     "required": true,
@@ -31175,7 +32177,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 124
+        "line": 125
       }
     ],
     "required": false,
@@ -31192,7 +32194,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 125
+        "line": 126
       }
     ],
     "required": true,
@@ -31217,7 +32219,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 126
+        "line": 127
       }
     ],
     "required": true,
@@ -31234,7 +32236,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 110
+        "line": 111
       }
     ],
     "required": false,
@@ -31251,7 +32253,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 111
+        "line": 112
       }
     ],
     "required": true,
@@ -31280,7 +32282,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 146
+        "line": 147
       }
     ],
     "required": false,
@@ -31297,7 +32299,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 147
+        "line": 148
       }
     ],
     "required": true,
@@ -31326,7 +32328,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 148
+        "line": 149
       }
     ],
     "required": true,
@@ -31344,7 +32346,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 149
+        "line": 150
       }
     ],
     "required": true,
@@ -31360,7 +32362,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 150
+        "line": 151
       }
     ],
     "required": true,
@@ -31376,7 +32378,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 151
+        "line": 152
       }
     ],
     "required": false,
@@ -31405,7 +32407,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 101
+        "line": 102
       }
     ],
     "required": false,
@@ -31422,7 +32424,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 102
+        "line": 103
       }
     ],
     "required": true,
@@ -31447,7 +32449,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 103
+        "line": 104
       }
     ],
     "required": true,
@@ -31463,7 +32465,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 85
+        "line": 86
       }
     ],
     "required": false,
@@ -31480,7 +32482,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 86
+        "line": 87
       }
     ],
     "required": true,
@@ -31505,7 +32507,7 @@
     "owners": [
       {
         "file": "dnd/core/presentation_geometry.py",
-        "line": 87
+        "line": 88
       }
     ],
     "required": true,
@@ -31530,7 +32532,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 182
+        "line": 204
       }
     ],
     "required": true,
@@ -31546,7 +32548,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 183
+        "line": 205
       }
     ],
     "required": true,
@@ -31561,7 +32563,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 184
+        "line": 206
       }
     ],
     "required": true,
@@ -31575,7 +32577,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 185
+        "line": 207
       }
     ],
     "required": true,
@@ -31590,7 +32592,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 186
+        "line": 208
       }
     ],
     "required": true,
@@ -31643,7 +32645,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 187
+        "line": 209
       }
     ],
     "required": true,
@@ -31670,7 +32672,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 188
+        "line": 210
       }
     ],
     "required": true,
@@ -31699,7 +32701,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 189
+        "line": 211
       }
     ],
     "required": true,
@@ -31716,7 +32718,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 190
+        "line": 212
       }
     ],
     "required": false,
@@ -31738,7 +32740,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 191
+        "line": 213
       }
     ],
     "required": false,
@@ -31756,7 +32758,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 192
+        "line": 214
       }
     ],
     "required": true,
@@ -31771,7 +32773,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 193
+        "line": 215
       }
     ],
     "required": true,
@@ -31786,7 +32788,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 194
+        "line": 216
       }
     ],
     "required": true,
@@ -32062,6 +33064,249 @@
       "format": "uuid",
       "title": "Tile Uuid",
       "type": "string"
+    }
+  },
+  {
+    "field": "WorldTileChanges.surface",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/surface",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 181
+      }
+    ],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/TileSurface"
+    }
+  },
+  {
+    "field": "WorldTileChanges.name",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/name",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 182
+      }
+    ],
+    "required": false,
+    "schema": {
+      "title": "Name",
+      "type": "string"
+    }
+  },
+  {
+    "field": "WorldTileChanges.blocks_optics",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/blocks_optics",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 183
+      }
+    ],
+    "required": false,
+    "schema": {
+      "title": "Blocks Optics",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "WorldTileChanges.blocks_propagation",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/blocks_propagation",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 184
+      }
+    ],
+    "required": false,
+    "schema": {
+      "title": "Blocks Propagation",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "WorldTileChanges.walking_cost",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/walking_cost",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 185
+      }
+    ],
+    "required": false,
+    "schema": {
+      "minimum": 0,
+      "title": "Walking Cost",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "WorldTileChanges.flying_cost",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/flying_cost",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 186
+      }
+    ],
+    "required": false,
+    "schema": {
+      "minimum": 0,
+      "title": "Flying Cost",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "WorldTileChanges.swimming_cost",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/swimming_cost",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 187
+      }
+    ],
+    "required": false,
+    "schema": {
+      "minimum": 0,
+      "title": "Swimming Cost",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "WorldTileChanges.burrowing_cost",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/burrowing_cost",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 188
+      }
+    ],
+    "required": false,
+    "schema": {
+      "minimum": 0,
+      "title": "Burrowing Cost",
+      "type": "integer",
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "WorldTileChanges.elevation_steps",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/elevation_steps",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 189
+      }
+    ],
+    "required": false,
+    "schema": {
+      "title": "Elevation Steps",
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "WorldTileChanges.surface_kind",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/surface_kind",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 190
+      }
+    ],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/ElevationSurfaceKind"
+    }
+  },
+  {
+    "field": "WorldTileChanges.slope_axis",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/slope_axis",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 191
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SlopeAxis"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  {
+    "field": "WorldTileChanges.default_light",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/default_light",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 192
+      }
+    ],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/LightLevel"
+    }
+  },
+  {
+    "field": "WorldTileChanges.resolved_light",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/resolved_light",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 193
+      }
+    ],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/LightLevel"
+    }
+  },
+  {
+    "field": "WorldTileChanges.condition_names",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/condition_names",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 194
+      }
+    ],
+    "required": false,
+    "schema": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Condition Names",
+      "type": "array"
+    }
+  },
+  {
+    "field": "WorldTileChanges.residues",
+    "schema_pointer": "/$defs/WorldTileChanges/properties/residues",
+    "owners": [
+      {
+        "file": "dnd/types/event_facts.py",
+        "line": 195
+      }
+    ],
+    "required": false,
+    "schema": {
+      "items": {
+        "$ref": "#/$defs/TileResidueState"
+      },
+      "title": "Residues",
+      "type": "array"
     }
   },
   {
@@ -32361,7 +33606,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 680
+        "line": 686
       }
     ],
     "required": true,
@@ -32377,7 +33622,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 681
+        "line": 687
       }
     ],
     "required": true,
@@ -32395,7 +33640,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 682
+        "line": 688
       }
     ],
     "required": true,
@@ -32413,7 +33658,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 683
+        "line": 689
       }
     ],
     "required": true,
@@ -32432,7 +33677,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 684
+        "line": 690
       }
     ],
     "required": true,
@@ -32441,6 +33686,25 @@
         "$ref": "#/$defs/WorldConnectorState"
       },
       "title": "Connectors",
+      "type": "array"
+    }
+  },
+  {
+    "field": "WorldUpdate.tile_changes",
+    "schema_pointer": "/$defs/WorldUpdate/properties/tile_changes",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 691
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/TileFieldUpdate"
+      },
+      "title": "Tile Changes",
       "type": "array"
     }
   }

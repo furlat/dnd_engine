@@ -15,8 +15,9 @@ from unittest.mock import patch
 from uuid import UUID, uuid4
 
 from dnd_player import transport
-from dnd_player import (Follower, attach, choices, connect, follow,
-    preview, receipt, status, submit_command, wait_for_cursor)
+from dnd_player import (Follower, action_options, all_actions, attach, binding_path, binding_position,
+    binding_subject, binding_value, choices, connect, follow, next_options,
+    preview, receipt, selection_for, status, submit_command, wait_for_cursor)
 from dnd.player.facts import PlayerState
 from dnd.player.reduction import reduce_initialization, reduce_operation
 from server.protocol import InitializationResponse, PlayerOperation
@@ -34,18 +35,23 @@ ROUTE = (
 SELECTION_POLICY = 'semantic-ties-v1'
 
 
-def target_key(target):
-    return (target['target_name'] or '', tuple(target['position'] or ()), target['target_kind'])
+def target_key(domains, target):
+    subject = binding_subject(domains, target)
+    return (subject.get('name') or '' if subject else '',
+        tuple(binding_position(domains, target) or ()), subject['kind'] if subject else 'creature')
 
 
 def action_key(row):
-    return (row['behavior_id'], row['provided_by_id'], row['origin_root_id'] or '',
-        row['template_name'].split('__item_')[0], row['display_name'], row['weapon_slot'] or '')
+    return (row['behavior_id'], row['provided_by_id'], row.get('origin_root_id') or '',
+        row['template_name'].split('__item_')[0], row['display_name'], row.get('weapon_slot') or '')
 
 
-def target_description(target):
-    return {'kind': target['target_kind'], 'name': target['target_name'],
-        'position': target['position'], 'path': target['path'], 'safe_path': target['safe_path']}
+def target_description(domains, target):
+    subject = binding_subject(domains, target)
+    return {'kind': subject['kind'] if subject else 'creature',
+        'name': subject.get('name') if subject else None,
+        'position': binding_position(domains, target),
+        'path': binding_path(domains, target), 'safe_path': binding_path(domains, target, safe=True)}
 
 
 def observer_order(state):
@@ -54,19 +60,20 @@ def observer_order(state):
 
 
 def rows(discovered):
-    return [row for key in ('entity_actions', 'position_actions', 'self_actions', 'object_actions')
-        for row in discovered[key] if row['can_afford'] and row['valid_targets']]
+    return [row for row in all_actions(discovered)
+        if row['can_afford'] and action_options(discovered, row)]
 
 
-def move_toward(available, current, destinations):
+def move_toward(discovered, available, current, destinations):
     if not destinations:
         return None
     distance = lambda p: min(abs(p[0]-d[0])+abs(p[1]-d[1]) for d in destinations)
     offered = [(row, target) for row in available if row['behavior_id'] == 'action.move'
-        for target in row['valid_targets'] if target['position'] is not None
-        and distance(target['position']) < distance(current)]
-    return min(offered, key=lambda pair: (distance(pair[1]['position']), pair[1]['path_cost'] or 0,
-        target_key(pair[1]), action_key(pair[0])), default=None)
+        for target in action_options(discovered, row)
+        if (position := binding_position(discovered, target)) is not None
+        and distance(position) < distance(current)]
+    return min(offered, key=lambda pair: (distance(binding_position(discovered, pair[1])),
+        binding_value(pair[1], 'path_cost') or 0, target_key(discovered, pair[1]), action_key(pair[0])), default=None)
 
 
 def select(state, actor, discovered, stage, leader):
@@ -77,16 +84,15 @@ def select(state, actor, discovered, stage, leader):
         and value.normal_hp > 0 and value.name != 'Gallery Curator'}
     attacks = [(row, target) for row in available
         if row['performs_attack'] or row['behavior_id'] == 'spell.magic_missile'
-        for target in row['valid_targets'] if target['target_uuid'] in enemies]
+        for target in action_options(discovered, row)
+        if (subject := binding_subject(discovered, target)) is not None and subject['uuid'] in enemies]
     if attacks:
         return min(attacks, key=lambda pair: (pair[0]['behavior_id'] != 'spell.magic_missile',
-            pair[0]['behavior_id'] != 'spell.fire_bolt', pair[1]['distance'] or 0,
-            target_key(pair[1]), action_key(pair[0]))), stage
+            pair[0]['behavior_id'] != 'spell.fire_bolt', binding_value(pair[1], 'distance') or 0,
+            target_key(discovered, pair[1]), action_key(pair[0]))), stage
     if actor != leader:
-        # The other original hero stays with the expedition, using offered paths.
         destination = state.actors[UUID(leader)].last_visual_position
-        selected = move_toward(available, current, (destination,))
-        return selected, stage
+        return move_toward(discovered, available, current, (destination,)), stage
     name, goal = ROUTE[stage]
     if goal == 'open':
         identity = next((str(key) for key, value in state.objects.items() if value.item.name == name), None)
@@ -97,17 +103,18 @@ def select(state, actor, discovered, stage, leader):
         for row in available:
             if row['behavior_id'] != option['behavior_id'] or row['template_name'] != option['template_name']:
                 continue
-            target = next((target for target in row['valid_targets']
-                if row['source_item_uuid'] == identity or target['target_uuid'] == identity), None)
+            target = next((target for target in action_options(discovered, row)
+                if row.get('source_item_uuid') == identity or
+                (subject := binding_subject(discovered, target)) is not None and subject['uuid'] == identity), None)
             if target is not None:
                 return (row, target), stage + 1
-        selected = move_toward(available, current, option['contact_positions'])
+        selected = move_toward(discovered, available, current, option['contact_positions'])
     else:
-        selected = move_toward(available, current, (goal,))
+        selected = move_toward(discovered, available, current, (goal,))
     if selected is not None:
         return selected, stage
     dash = next((row for row in available if row['behavior_id'] == 'action.dash'), None)
-    return ((dash, dash['valid_targets'][0]) if dash else None), stage
+    return ((dash, action_options(discovered, dash)[0]) if dash else None), stage
 
 
 async def record(url, token, output, diagnostic_commands=(), reference_trace=None, coarse_timing=False,
@@ -227,9 +234,8 @@ async def record(url, token, output, diagnostic_commands=(), reference_trace=Non
                 semantic_action = {'actor_name': state.actors[UUID(actor)].name, 'kind': 'end_turn'}
                 if selected is not None:
                     row, target = selected
-                    selected_targets.append(target_description(target))
-                    selection = {'action_index': row['discovery_index'], 'target_indices': [target['index']],
-                        'extra_target_positions': []}
+                    selected_targets.append(target_description(discovered, target))
+                    selection = selection_for(row, [target])
                     for _ in range(12):
                         preview_start = perf_counter_ns()
                         result = await preview(connection, {'actor_uuid': actor, 'state_revision': revision,
@@ -239,12 +245,12 @@ async def record(url, token, output, diagnostic_commands=(), reference_trace=Non
                         preview_calls += 1
                         if result['preview']['can_confirm']:
                             break
-                        options = result['preview']['next_targets']
+                        options = next_options(result['preview'])
                         if not options:
                             raise RuntimeError(f'Native preview rejected route selection: {result}')
-                        chosen = min(options, key=target_key)
+                        chosen = min(options, key=lambda target: target_key(result['preview'], target))
                         selection['target_indices'].append(chosen['index'])
-                        selected_targets.append(target_description(chosen))
+                        selected_targets.append(target_description(result['preview'], chosen))
                     else:
                         raise RuntimeError('Native preview selection did not complete')
                     intent = {'kind': 'execute_selection', 'discovery_generation': discovered['discovery_generation'],

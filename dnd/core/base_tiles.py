@@ -191,6 +191,20 @@ class Tile(BaseBlock):
             for object_uuid in band.object_uuids
         }
 
+    def has_boundary_objects(self, direction: CardinalDirection,
+                             height: Optional[int] = None) -> bool:
+        """Read current side occupancy without creating a defensive UUID set."""
+        bands = self._boundary_object_bands.get(direction)
+        if not bands:
+            return False
+        if height is not None:
+            band = bands.get(height)
+            return band is not None and bool(band.object_uuids)
+        for band in bands.values():
+            if band.object_uuids:
+                return True
+        return False
+
     def _replace_center_object_band(
         self,
         height: int,

@@ -10,6 +10,7 @@ import pytest
 from dnd.conditions import Poisoned
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EmptyLogData
 from dnd.core.events import EventPhase, EventQueue
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.player.application import capture_application_operation, initialize_audiences
 from dnd.player.content_composition import ui_content_manifest
@@ -17,6 +18,7 @@ from dnd.player.facts import PlayerUpdate
 from dnd.player.reduction import apply_current_operation, prepare_current_operation, reduce_operation
 from dnd.player.session import Operation, close_session, create_session, snapshot_player_hud
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.types.world import LightLevel
 
 
 @pytest.fixture
@@ -167,3 +169,38 @@ def test_out_of_order_later_seat_withholds_all_current_states_and_admission_meta
     assert {seat: (runtime.known_names, runtime.known_content_ids, runtime.known_content_keys,
         runtime.known_connector_ids, runtime.known_connector_values, runtime.content_catalog)
         for seat, runtime in owned.items()} == metadata
+
+
+@pytest.mark.parametrize('exclusive', [False, True])
+def test_later_seat_missing_tile_base_withholds_all_current_states_and_metadata(session, exclusive):
+    audience = next(iter(session.seats.values()))
+    session.seats.clear()
+    session.seats.update(first=audience, second=audience)
+    catalog = ui_content_manifest()
+    runtimes, _ = initialize_audiences(session, catalog, exclusive_current=exclusive)
+    position = session.game.entities[session.player_uuids[0]].position
+    assert runtimes['first'].latest.tiles[position].resolved_light is not LightLevel.DIM_LIGHT
+    # Fault injection at the public reduction boundary: this seat has lost a
+    # previously disclosed base. Its producer still correctly emits a field update.
+    del runtimes['second'].latest.tiles[position]
+    before = {seat: deepcopy(runtime.latest) for seat, runtime in runtimes.items()}
+    counts = {seat: runtime.committed_log_count for seat, runtime in runtimes.items()}
+    metadata = {seat: (dict(runtime.known_names), set(runtime.known_content_ids),
+        set(runtime.known_content_keys), runtime.known_connector_ids, runtime.known_connector_values,
+        runtime.content_catalog) for seat, runtime in runtimes.items()}
+    start = EventQueue.event_cursor()
+    # Carried sources already make this cell VERY_BRIGHT; an ambient change
+    # would be masked. A native cap changes the resolved, observable value.
+    assert get_map().apply_light_modifier(uuid4(), {position}, LightLevel.DIM_LIGHT, cap=True) == {position}
+    operation = Operation(start_cursor=start, end_cursor=EventQueue.event_cursor(),
+        roots=tuple(event for _, event in EventQueue.iter_events_since(start)
+            if event.parent_lineage is None and event.phase is EventPhase.COMPLETION),
+        hud_by_seat=tuple((seat, snapshot_player_hud(session, audience=value))
+            for seat, value in session.seats.items()))
+    with pytest.raises(ValueError, match='already known tile'):
+        capture_application_operation(runtimes, operation, catalog)
+    assert {seat: runtime.latest for seat, runtime in runtimes.items()} == before
+    assert {seat: runtime.committed_log_count for seat, runtime in runtimes.items()} == counts
+    assert {seat: (runtime.known_names, runtime.known_content_ids, runtime.known_content_keys,
+        runtime.known_connector_ids, runtime.known_connector_values, runtime.content_catalog)
+        for seat, runtime in runtimes.items()} == metadata

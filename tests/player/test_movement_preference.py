@@ -37,9 +37,10 @@ def test_previewed_route_is_the_committed_route(preference):
         revision = runtime.publications["party"].state_revision
         _, _, discovered = dispatch(runtime, Choices(seat_id="party", request=ChoicesRequest(
             actor_uuid=actor.uuid, state_revision=revision, force_attack=False, correlation_id=uuid4())))
+        domains = discovered.choices
         move = next(row for row in discovered.choices.position_actions if row.behavior_id == "action.move"
-            and any(target.position == (x - 3, y) for target in row.valid_targets))
-        target = next(row for row in move.valid_targets if row.position == (x - 3, y))
+            and any(domains.positions[target.position] == (x - 3, y) for target in domains.target_sets[row.target_set]))
+        target = next(row for row in domains.target_sets[move.target_set] if domains.positions[row.position] == (x - 3, y))
         assert target.path is not None and target.safe_path is not None and target.path != target.safe_path
         selection = {"action_index": move.discovery_index, "target_indices": [target.index]}
         if preference is not None:
@@ -54,7 +55,7 @@ def test_previewed_route_is_the_committed_route(preference):
         route = response.preview.selected_route
         assert response.preview.can_confirm and route is not None
         assert route.policy == ("normal" if preference is False else "safe")
-        assert route.path == tuple(target.path if preference is False else target.safe_path)
+        assert route.path == tuple(domains.positions[index] for index in (target.path if preference is False else target.safe_path))
         assert response.request.selection.prefer_safe is (preference is not False)
         command = {"command_number": 1, "actor_uuid": str(actor.uuid), "state_revision": revision,
             "intent": {"kind": "execute_selection", "discovery_generation": body["discovery_generation"],
@@ -66,7 +67,7 @@ def test_previewed_route_is_the_committed_route(preference):
             and node.fact.source_entity_uuid == actor.uuid}
         assert tuple((step.from_position, step.to_position) for step in steps.values()) == tuple(
             zip(route.path, route.path[1:]))
-        assert actor.position == target.position
+        assert actor.position == domains.positions[target.position]
         assert actor.action_economy.movement_remaining() == before[2] - route.cost_feet
     finally:
         close_session(runtime.session)

@@ -32,6 +32,7 @@ from dnd.core.events import (
 from dnd.core.life_types import RemainsDisposition
 from dnd.core.item_types import ItemConcentrationSlot, ItemEffectPresentationState, ItemIntegrity, ItemLocation, ItemPresentationState, ItemRemnantState
 from dnd.types.world import CardinalDirection
+from dnd.types.event_facts import WorldTileChanges, WorldTileState
 from dnd.types.class_features import FontConversion
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult, ObjectResidueState
 from dnd.types.summoning import SummonDepartureCause
@@ -46,7 +47,7 @@ from dnd.player.facts import (
     MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage,
     PlayerNode, PlayerObject, PlayerObservation, PlayerState, PlayerHUDSnapshot, CombatLogAppend,
     PlayerWorld, SensoryFact, ShoveFact, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
-    VersionRow, VisualItem, VisualLoadout, WorldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
+    VersionRow, VisualItem, VisualLoadout, WorldUpdate, TileFieldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
 )
 from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
@@ -867,14 +868,60 @@ def _remember_object(index: WorldProjectionIndex, before: PlayerObject | None,
             index.remembered_positions.setdefault(position, set()).add(identity)
 
 
+def _tile_changes(before: WorldTileState, after: WorldTileState) -> WorldTileChanges:
+    changes: WorldTileChanges = {}
+    if before.surface != after.surface:
+        changes['surface'] = after.surface
+    if before.name != after.name:
+        changes['name'] = after.name
+    if before.blocks_optics != after.blocks_optics:
+        changes['blocks_optics'] = after.blocks_optics
+    if before.blocks_propagation != after.blocks_propagation:
+        changes['blocks_propagation'] = after.blocks_propagation
+    if before.walking_cost != after.walking_cost:
+        changes['walking_cost'] = after.walking_cost
+    if before.flying_cost != after.flying_cost:
+        changes['flying_cost'] = after.flying_cost
+    if before.swimming_cost != after.swimming_cost:
+        changes['swimming_cost'] = after.swimming_cost
+    if before.burrowing_cost != after.burrowing_cost:
+        changes['burrowing_cost'] = after.burrowing_cost
+    if before.elevation_steps != after.elevation_steps:
+        changes['elevation_steps'] = after.elevation_steps
+    if before.surface_kind != after.surface_kind:
+        changes['surface_kind'] = after.surface_kind
+    if before.slope_axis != after.slope_axis:
+        changes['slope_axis'] = after.slope_axis
+    if before.default_light != after.default_light:
+        changes['default_light'] = after.default_light
+    if before.resolved_light != after.resolved_light:
+        changes['resolved_light'] = after.resolved_light
+    if before.condition_names != after.condition_names:
+        changes['condition_names'] = after.condition_names
+    if before.residues != after.residues:
+        changes['residues'] = after.residues
+    return changes
+
+
 def _world_update(world: PresentationTarget, remembered: PlayerState, event_uuid: UUID,
                   positions: set[tuple[int, int]], object_positions: set[tuple[int, int]], identities: set[UUID],
                   index: WorldProjectionIndex) -> WorldUpdate | None:
     senses = world.senses
     if senses is None or world.world is None:
         return None
-    tiles = tuple(world.tiles[position] for position in sorted(positions) if position in senses.visible and position in world.tiles
-                  and remembered.tiles.get(position) != world.tiles[position])
+    tiles = []
+    tile_changes = []
+    for position in sorted(positions):
+        if position not in senses.visible or position not in world.tiles:
+            continue
+        current = world.tiles[position]
+        previous = remembered.tiles.get(position)
+        if previous is None or previous.tile_uuid != current.tile_uuid:
+            tiles.append(current)
+        elif previous != current:
+            changes = _tile_changes(previous, current)
+            if changes:
+                tile_changes.append(TileFieldUpdate(position=position, changes=changes))
     identities.update(world_objects_at(world.recorded_world, object_positions))
     for position in object_positions:
         identities.update(index.remembered_positions.get(position, ()))
@@ -906,10 +953,10 @@ def _world_update(world: PresentationTarget, remembered: PlayerState, event_uuid
     objects = tuple(changed[identity] for identity in sorted(changed, key=str))
     connectors = tuple(row for row in world.world.connectors
                        if all(point in senses.visible for point in row.endpoints))
-    if not tiles and not objects and not removed and connectors == remembered.connectors:
+    if not tiles and not tile_changes and not objects and not removed and connectors == remembered.connectors:
         return None
-    update = WorldUpdate(event_uuid=event_uuid, tiles=tiles, objects=objects,
-                         objects_removed=removed, connectors=connectors)
+    update = WorldUpdate(event_uuid=event_uuid, tiles=tuple(tiles), objects=objects,
+                         objects_removed=removed, connectors=connectors, tile_changes=tuple(tile_changes))
     for identity in removed:
         _remember_object(index, remembered.objects[identity], None)
     for obj in objects:

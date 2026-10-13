@@ -21,12 +21,14 @@ from dnd.content.characters.builds import CharacterBuild, create_character, reso
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.controller import HumanController
-from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, AvailableSelectionPreview
+from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, AvailableSelectionPreview, TargetType
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.blocks.equipment import EquippableItem
 from dnd.player.facts import PlayerCharacterSheet, PlayerHUDSnapshot, PlayerResource, CombatLogAppend
 from dnd.player.audience import PlayerAudience, SeatAssignment
 from dnd.player.commands import CommandRejected
+from dnd.player.choices import PlayerChoices
+from dnd.player.choice_projection import capture_choices
 from dnd.subjective_combat_log import project_combat_log
 from dnd.core.combat_log import CombatLogEntry
 from typing import Callable
@@ -58,8 +60,9 @@ class DiscoveryCache:
     seat_id: str | None = None
     force_attack: bool = False
     original: AvailableActionsResult | None = None
-    detached: AvailableActionsResult | None = None
-    previews: OrderedDict[tuple[int, tuple[int, ...], tuple[tuple[int, int], ...], bool], tuple[AvailableSelectionPreview, int]] = field(default_factory=OrderedDict)
+    compact: PlayerChoices | None = None
+    rich_complete: bool = False
+    previews: OrderedDict[tuple[int, tuple[int, ...], tuple[tuple[int, int], ...], bool, bool], tuple[AvailableSelectionPreview, int]] = field(default_factory=OrderedDict)
 
 
 @dataclass(slots=True)
@@ -319,41 +322,72 @@ def _current_player(session: Session, actor_uuid: UUID) -> Entity:
     return actor
 
 
-def discover_player_actions(session: Session, actor_uuid: UUID, *, force_attack: bool = False, seat_id: str | None = None) -> AvailableActionsResult:
-    """Return current engine choices, including their typed unavailable reasons."""
+def _player_choices_for_transport(session: Session, actor_uuid: UUID, *, force_attack: bool = False,
+                                  seat_id: str | None = None) -> PlayerChoices:
+    """Worker-owned snapshot, encoded immediately; public callers use rich copies."""
     actor = _current_player(session, actor_uuid)
     cache = session.discovery
     seat_id = seat_id or next(key for key, audience in session.seats.items() if audience.controls(actor_uuid))
     if seat_id not in session.seats or not session.seats[seat_id].controls(actor_uuid):
         raise CommandRejected("This actor is not controlled by this seat")
-    if (cache.detached is not None and cache.detached.entity_uuid == actor_uuid
+    if (cache.compact is not None and cache.compact.entity_uuid == actor_uuid
             and cache.seat_id == seat_id and cache.force_attack == force_attack
             and cache.discovery_revision == cache.revision and cache.cursor == EventQueue.event_cursor()):
-        return AvailableActionsResult.model_validate(cache.detached.model_dump())
-    cache.generation = cache.seat_generations.get(seat_id, 0) + 1
-    if cache.generation > (1 << 53) - 1:
+        return cache.compact
+    generation = cache.seat_generations.get(seat_id, 0) + 1
+    if generation > (1 << 53) - 1:
         raise OverflowError("Discovery counter capacity exhausted")
-    cache.seat_generations[seat_id] = cache.generation
-    original = get_available_actions(actor, target_filter="all" if force_attack else "enemies")
-    original.discovery_generation = cache.generation
+    original = get_available_actions(actor, target_filter="all" if force_attack else "enemies", include_aoe_preview=False)
+    original.discovery_generation = generation
     for index, row in enumerate(original.all_actions):
-        row.discovery_generation = cache.generation
+        row.discovery_generation = generation
         row.discovery_index = index
         row.discovery_runtime = EventQueue.generation_id()
         row.discovery_actor_uuid = actor.uuid
-    cache.original = original
-    cache.detached = AvailableActionsResult.model_validate(original.model_dump())
+    retained, compact = capture_choices(original, actor.position)
+    cache.generation = generation
+    cache.seat_generations[seat_id] = generation
+    cache.original, cache.compact = retained, compact
+    cache.rich_complete = False
     cache.cursor = EventQueue.event_cursor()
     cache.discovery_revision = cache.revision
     cache.seat_id = seat_id
     cache.force_attack = force_attack
     cache.previews.clear()
-    return AvailableActionsResult.model_validate(cache.detached.model_dump())
+    return compact
+
+
+def discover_player_actions(session: Session, actor_uuid: UUID, *, force_attack: bool = False,
+                            seat_id: str | None = None) -> AvailableActionsResult:
+    """Detached rich native values, enriched within the same admission generation."""
+    _player_choices_for_transport(session, actor_uuid, force_attack=force_attack, seat_id=seat_id)
+    cache = session.discovery
+    original = cache.original
+    assert original is not None
+    if not cache.rich_complete:
+        actor = _current_player(session, actor_uuid)
+        enriched: dict[int, AvailableTarget] = {}
+        for row in original.all_actions:
+            if row.target_type == TargetType.POSITION_AOE and row.execution_template is not None:
+                targets = []
+                for target in row.valid_targets:
+                    if target.affected_positions is None:
+                        ready = enriched.get(id(target))
+                        if ready is None:
+                            ready = actor.preview_aoe_target(row.execution_template, target,
+                                include_dead=row._aoe_include_dead)
+                            enriched[id(target)] = ready
+                        targets.append(ready)
+                    else:
+                        targets.append(target)
+                row.valid_targets = targets
+        cache.rich_complete = True
+    return AvailableActionsResult.model_validate(original.model_dump())
 
 
 def _retained_row(session: Session, action: AvailableActionInfo) -> AvailableActionInfo:
     cache = session.discovery
-    if (cache.original is None or cache.detached is None
+    if (cache.original is None
             or action.discovery_actor_uuid != cache.original.entity_uuid
             or action.discovery_runtime != EventQueue.generation_id()
             or action.discovery_generation != cache.generation
@@ -368,11 +402,11 @@ def _retained_row(session: Session, action: AvailableActionInfo) -> AvailableAct
 def preview_player_selection(session: Session, actor_uuid: UUID, action: AvailableActionInfo,
                              selected: tuple[AvailableTarget, ...] = (),
                              positions: tuple[tuple[int, int], ...] = (), *,
-                             prefer_safe: bool = True) -> AvailableSelectionPreview:
+                             prefer_safe: bool = True, include_aoe_effects: bool = True) -> AvailableSelectionPreview:
     actor = _current_player(session, actor_uuid)
     original = _retained_row(session, action)
     key = (original.discovery_index,
-           tuple(target.index for target in selected), positions, prefer_safe)
+           tuple(target.index for target in selected), positions, prefer_safe, include_aoe_effects)
     cache = session.discovery.previews
     if key not in cache:
         primary = next((target for target in original.valid_targets if selected and target.index == selected[0].index), None)
@@ -387,7 +421,8 @@ def preview_player_selection(session: Session, actor_uuid: UUID, action: Availab
             raise CommandRejected("This target is not admitted")
         if positions and original.position_selection is None:
             raise CommandRejected("This action does not select additional positions")
-        value = preview_available_selection(actor, original, retained, positions, prefer_safe=prefer_safe)
+        value = preview_available_selection(actor, original, retained, positions, prefer_safe=prefer_safe,
+            include_aoe_effects=include_aoe_effects)
         size = len(value.model_dump_json().encode())
         if size > 8 * 1024 * 1024:
             return value.model_copy(deep=True)
@@ -441,7 +476,7 @@ def execute_player_action(
         raise CommandRejected("This allocation is not admitted")
     selected = (retained, *(by_uuid[identity] for identity in extra_target_uuids))
     preview = preview_player_selection(session, actor_uuid, original, selected, extra_target_positions,
-        prefer_safe=prefer_safe)
+        prefer_safe=prefer_safe, include_aoe_effects=False)
     if not preview.can_confirm:
         raise CommandRejected(preview.reason or "This selection is incomplete")
     start = EventQueue.event_cursor()

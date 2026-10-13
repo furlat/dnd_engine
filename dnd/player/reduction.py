@@ -88,6 +88,11 @@ def copy_target(target: PlayerState) -> PlayerState:
 
 def apply_world_update(target: PlayerState, update: WorldUpdate) -> None:
     target.tiles.update((row.position, row) for row in update.tiles)
+    for row in update.tile_changes:
+        previous = target.tiles.get(row.position)
+        if previous is None:
+            raise ValueError("Tile field update requires an already known tile")
+        target.tiles[row.position] = previous.model_copy(update=row.changes)
     for identity in update.objects_removed:
         target.objects.pop(identity, None)
     target.objects.update((row.item.item_uuid, row) for row in update.objects)
@@ -486,6 +491,7 @@ def prepare_current_operation(target: PlayerState, update: PlayerUpdate, *,
     loaded: set[UUID] = set()
     members = dict(target.perception.members)
     sensory: dict[UUID, PreparedSensoryDelta] = {}
+    introduced_tiles: set[tuple[int, int]] = set()
 
     def load_actor(identity: UUID | None) -> None:
         if identity is None or identity in loaded:
@@ -511,10 +517,17 @@ def prepare_current_operation(target: PlayerState, update: PlayerUpdate, *,
         indexes = {row.event_uuid: row.source_index for row in lineage.version_rows}
         pending = iter(sorted(lineage.observations, key=lambda row: indexes[row.event_uuid]))
         observation = next(pending, None)
+        world_updates = {row.event_uuid: row for row in lineage.world_updates}
         for node in lineage.events:
             while observation is not None and indexes[observation.event_uuid] <= indexes[node.uuid]:
                 observe(observation)
                 observation = next(pending, None)
+            world_update = world_updates.get(node.uuid)
+            if world_update is not None:
+                introduced_tiles.update(row.position for row in world_update.tiles)
+                for row in world_update.tile_changes:
+                    if row.position not in introduced_tiles and row.position not in target.tiles:
+                        raise ValueError("Tile field update requires an already known tile")
             if node.canceled or node.fact is None:
                 continue
             source_cursor = indexes[node.uuid]

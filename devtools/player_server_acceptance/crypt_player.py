@@ -5,7 +5,8 @@ import os
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from dnd_player import (Follower, acknowledge, attach, choices, connect, follow,
+from dnd_player import (Follower, acknowledge, action_options, all_actions, attach, binding_position,
+    binding_subject, binding_value, choices, connect, follow, next_options, selection_for,
     preview, receipt, status, submit_command, wait_for_cursor)
 from dnd.player.facts import PlayerState
 from dnd.player.reduction import reduce_initialization, reduce_operation
@@ -23,16 +24,15 @@ STEPS = (
 
 
 def available_rows(discovered):
-    return [row for key in ('entity_actions', 'position_actions', 'self_actions', 'object_actions')
-            for row in discovered[key] if row['can_afford'] and row['valid_targets']]
+    return [row for row in all_actions(discovered) if row['can_afford'] and action_options(discovered, row)]
 
 
 def move_toward(discovered, current, destinations):
     distance = lambda p: min(abs(p[0]-d[0])+abs(p[1]-d[1]) for d in destinations)
     candidates = [(row, target) for row in available_rows(discovered) if row['behavior_id'] == 'action.move'
-        for target in row['valid_targets'] if target['position'] is not None
-        and distance(target['position']) < distance(current)]
-    return min(candidates, key=lambda pair: (distance(pair[1]['position']), pair[1]['path_cost'] or 0), default=None)
+        for target in action_options(discovered, row)
+        if (position := binding_position(discovered, target)) is not None and distance(position) < distance(current)]
+    return min(candidates, key=lambda pair: (distance(binding_position(discovered, pair[1])), binding_value(pair[1], 'path_cost') or 0), default=None)
 
 
 def planned_selection(state, actor, discovered, stage, leader):
@@ -48,7 +48,7 @@ def planned_selection(state, actor, discovered, stage, leader):
             return move_toward(discovered, current, (verb,)), stage
         if name == 'potion':
             row = next((r for r in rows if r['behavior_id']=='action.item.potion_healing.drink'), None)
-            return ((row, row['valid_targets'][0]) if row else None), stage+1 if row else stage
+            return ((row, action_options(discovered, row)[0]) if row else None), stage+1 if row else stage
         identity = next((str(key) for key, value in state.objects.items() if value.item.name == name), None)
         option = next((o for o in discovered['world_interactions'] if o['subject_uuid']==identity
             and (o['behavior_id'].endswith('.'+verb) or verb=='loot' and 'loot' in o['behavior_id'])), None)
@@ -57,8 +57,8 @@ def planned_selection(state, actor, discovered, stage, leader):
         for row in rows:
             if row['behavior_id'] != option['behavior_id'] or row['template_name'] != option['template_name']:
                 continue
-            target = next((t for t in row['valid_targets'] if row['source_item_uuid']==identity
-                           or t['target_uuid']==identity), None)
+            target = next((t for t in action_options(discovered, row) if row.get('source_item_uuid') == identity
+                           or (subject := binding_subject(discovered, t)) is not None and subject['uuid'] == identity), None)
             if target is not None:
                 return (row, target), stage+1
         return move_toward(discovered, current, option['contact_positions']), stage
@@ -66,10 +66,11 @@ def planned_selection(state, actor, discovered, stage, leader):
                and value.present and value.normal_hp > 0}
     attacks = [(row, target) for row in rows
         if row['performs_attack'] or row['behavior_id']=='spell.magic_missile'
-        for target in row['valid_targets'] if target['target_uuid'] in enemies]
+        for target in action_options(discovered, row)
+        if (subject := binding_subject(discovered, target)) is not None and subject['uuid'] in enemies]
     if attacks:
         return min(attacks, key=lambda pair: (pair[0]['behavior_id']!='spell.magic_missile',
-            pair[0]['behavior_id']!='spell.fire_bolt', pair[1]['distance'] or 0)), stage
+            pair[0]['behavior_id']!='spell.fire_bolt', binding_value(pair[1], 'distance') or 0)), stage
     # Move through the already opened passage using native offered routes.
     destination = (7, 6) if current[0] < 7 else (12, 6) if current[0] < 12 else (16, 6)
     return move_toward(discovered, current, (destination,)), stage
@@ -127,8 +128,7 @@ async def play():
                 label = 'End turn'
                 if selected is not None:
                     row,target = selected
-                    selection = {'action_index':row['discovery_index'],'target_indices':[target['index']],
-                                 'extra_target_positions':[]}
+                    selection = selection_for(row, [target])
                     # Use the native ordered-prefix contract, including repeated rays.
                     for _ in range(12):
                         result = await preview(connection, {'actor_uuid':actor,'state_revision':revision,
@@ -136,7 +136,7 @@ async def play():
                             'correlation_id':str(uuid4()),'selection':selection})
                         if result['preview']['can_confirm']:
                             break
-                        options = result['preview']['next_targets']
+                        options = next_options(result['preview'])
                         if not options:
                             raise AssertionError(result)
                         selection['target_indices'].append(options[0]['index'])

@@ -46,25 +46,32 @@ async def play_steps(game_ref, max_actions=12):
         discovery = await game_choices(game_ref)
         choices = discovery['choices']
         controlled = observation['audience']['controlled']
-        attacks = [(row, target) for row in choices['entity_actions']
-            if row['performs_attack'] and row['can_afford']
-            for target in row['valid_targets'] if target['target_uuid'] not in controlled]
+        attacks = []
+        for row in choices['entity_actions']:
+            if not row['performs_attack'] or not row['can_afford']:
+                continue
+            for target in choices['target_sets'][row['target_set']]:
+                if target['kind'] != 'subject':
+                    continue
+                subject = choices['subjects'][target['subject']]
+                if subject['uuid'] not in controlled:
+                    attacks.append((row, target, subject))
         intent = {'kind': 'end_turn'}
         label = 'End turn'
         if attacks:
-            row, target = sorted(attacks, key=lambda pair: (
-                pair[1]['target_uuid'] != focus_uuid,
-                pair[0]['weapon_slot'] != 'MELEE_MAIN', pair[1]['distance'] or 0))[0]
+            row, target, subject = sorted(attacks, key=lambda pair: (
+                pair[2]['uuid'] != focus_uuid,
+                pair[0]['weapon_slot'] != 'MELEE_MAIN', pair[1].get('distance') or 0))[0]
             selection = {'action_index': row['discovery_index'],
                 'target_indices': [target['index']], 'extra_target_positions': []}
             checked = await game_preview(game_ref, choices['entity_uuid'], discovery['state_revision'],
                 choices['discovery_generation'], selection)
             if not checked['preview']['can_confirm']:
                 break
-            focus_uuid = target['target_uuid']
+            focus_uuid = subject['uuid']
             intent = {'kind': 'execute_selection',
                 'discovery_generation': choices['discovery_generation'], 'selection': selection}
-            label = row['display_name'] + ' -> ' + target['target_name']
+            label = row['display_name'] + ' -> ' + (subject.get('name') or subject['uuid'])
         print(label)
         outcome = await game_act(game_ref, choices['entity_uuid'], discovery['state_revision'], intent)
         steps.append({'actor': choices['entity_uuid'], 'action': label,

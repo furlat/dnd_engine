@@ -92,7 +92,7 @@ def test_preview_echo_preserves_route_preference(requested, echoed):
             assert json.loads(request.content) == body
             return httpx.Response(200, json={**SCOPE, 'kind': 'preview', 'state_revision': 'r',
                 'request': {**body, 'selection': {**selection, 'prefer_safe': echoed}},
-                'preview': {'can_confirm': True}})
+                'preview': {'can_confirm': True, 'target_sets': [[]], 'next_target_set': 0}})
 
         async with httpx.AsyncClient(base_url='https://peer.invalid', transport=httpx.MockTransport(handle)) as http:
             connection = sdk.Connection(http, {'kind': 'bootstrap', 'protocol': sdk.IDENTITY,
@@ -372,7 +372,7 @@ def test_choices_for_different_actor_are_rejected():
     async def check():
         body = {'actor_uuid': UUID, 'state_revision': 'r', 'force_attack': False, 'correlation_id': UUID}
         reply = {**SCOPE, 'kind': 'choices', 'state_revision': 'r', 'force_attack': False, 'correlation_id': UUID,
-            'choices': {'entity_uuid': '00000000-0000-4000-8000-000000000002'}}
+            'choices': {'entity_uuid': '00000000-0000-4000-8000-000000000002', 'discovery_generation': 1}}
         peer = Peer([])
         connection = peer.connection()
         await connection.http.aclose()
@@ -461,3 +461,25 @@ def test_cursor_wait_deadline_releases_its_registration():
                 await sdk.wait_for_cursor(follower, cursor(1), timeout=0)
             assert follower.waiters == 0
     run(check())
+
+
+@pytest.mark.parametrize('changes', [
+    {'resolved_light': 2},
+    {'slope_axis': None, 'condition_names': [], 'residues': [],
+     'blocks_optics': False, 'walking_cost': 0, 'resolved_light': 0},
+])
+def test_tile_field_updates_preserve_omission_and_explicit_clears(changes):
+    value = {'position': [-47, 20], 'changes': changes}
+    assert sdk.decode('TileFieldUpdate', json.dumps(value).encode()) == value
+    assert sdk.validate('TileFieldUpdate', value) is value
+    assert 'name' not in value['changes']
+
+
+@pytest.mark.parametrize('changes', [
+    {'resolved_light': None}, {'condition_names': None}, {'walking_cost': -1},
+    {'walking_cost': True}, {'walking_cost': 1.5}, {'tile_uuid': UUID},
+    {'position': [1, 0]}, {'unknown': 1},
+])
+def test_tile_field_updates_reject_invalid_values_and_identity_fields(changes):
+    with pytest.raises(sdk.ProtocolError):
+        sdk.decode('TileFieldUpdate', json.dumps({'position': [1, 0], 'changes': changes}).encode())

@@ -229,6 +229,7 @@ def test_shared_light_tile_after_values_precede_parent_completion_and_survive_co
             lineages.append(native)
             for update in packet.world_updates:
                 assert {tile.position for tile in update.tiles} <= {position}
+                assert {row.position for row in update.tile_changes} <= {position}
                 assert not update.objects and not update.objects_removed
                 indexes = {row.event_uuid: row.source_index for row in native.objective_rows}
                 light_completion = next(event for event in native.events

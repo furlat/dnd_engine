@@ -1964,8 +1964,8 @@ class GridMap:
             return side_cache[key]
         exit_direction = self._transition_direction(from_pos, to_pos)
         entry_direction = self._opposite_direction(exit_direction)
-        if (not self.get_boundary_objects_at(from_pos, exit_direction)
-                and not self.get_boundary_objects_at(to_pos, entry_direction)):
+        if (not self.has_boundary_objects_at(from_pos, exit_direction)
+                and not self.has_boundary_objects_at(to_pos, entry_direction)):
             result = self.spatial_crossing_allows(from_pos, to_pos, channel,
                 requester_uuid, movement_mode, subjective=subjective)
         else:
@@ -2775,8 +2775,8 @@ class GridMap:
                 return False
             exit_direction = self._transition_direction(first, second)
             entry_direction = self._opposite_direction(exit_direction)
-            if (not self.get_boundary_objects_at(first, exit_direction)
-                    and not self.get_boundary_objects_at(second, entry_direction)):
+            if (not self.has_boundary_objects_at(first, exit_direction)
+                    and not self.has_boundary_objects_at(second, entry_direction)):
                 return True
             edge = self.get_world_edge(first, second)
             for contribution in (*edge.exit_contributions, *edge.entry_contributions):
@@ -3940,6 +3940,14 @@ class GridMap:
         if tile is None:
             return set()
         return tile.get_boundary_object_uuids(direction, height)
+
+    def has_boundary_objects_at(
+        self, position: Tuple[int, int], direction: CardinalDirection,
+        height: Optional[int] = None,
+    ) -> bool:
+        """Read the current Tile side without copying its provider identities."""
+        tile = self._tiles.get(position)
+        return tile is not None and tile.has_boundary_objects(direction, height)
 
     def get_object_placement(
         self,

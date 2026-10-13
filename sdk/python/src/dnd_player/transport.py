@@ -15,15 +15,12 @@ import httpx
 from jsonschema_rs import Draft202012Validator, ValidationError
 
 from . import contracts as c
+from .choices import ProtocolError, check_choices, check_preview
 
 MAX_BYTES = 64 * 1024 * 1024
 _SCHEMA = json.loads(files('dnd_player').joinpath('player-api-v1.schema.json').read_bytes())
 IDENTITY = json.loads(files('dnd_player').joinpath('protocol-identity.json').read_bytes())
 _VALIDATORS: dict[str, Draft202012Validator] = {}
-
-
-class ProtocolError(Exception):
-    pass
 
 
 class ApiError(Exception):
@@ -55,6 +52,14 @@ def _validate(root: str, value: Any) -> Any:
         raise ProtocolError(f'{root}: {error.instance_path}: {error.message}') from error
     except (ValueError, TypeError, OverflowError) as error:
         raise ProtocolError('Invalid JSON value') from error
+    if root == 'ChoicesResponse':
+        check_choices(value['choices'])
+    elif root == 'PreviewResponse':
+        check_preview(value['preview'])
+    elif root == 'PlayerChoices':
+        check_choices(value)
+    elif root == 'PlayerSelectionPreview':
+        check_preview(value)
     if root == 'InitializationResponse' and value['cursor']['sequence'] != 0:
         raise ProtocolError('Initialization sequence must be zero')
     if root == 'PlayerOperation' and value['cursor']['sequence'] < 1:

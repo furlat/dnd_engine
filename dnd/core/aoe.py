@@ -16,6 +16,7 @@ from dnd.core.geometry import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.presentation_geometry import (
+    AoEAimingGeometry,
     AoEPresentationGeometry,
     ConePresentationGeometry,
     CubePresentationGeometry,
@@ -506,3 +507,21 @@ def snapshot_aoe_presentation_geometry(
     raise TypeError(
         f"AoE shape {type(shape).__name__} has no presentation geometry contract"
     )
+
+
+def snapshot_aoe_aiming_geometry(
+    shape: AoEShape, caster_position: Tuple[int, int],
+) -> Optional[AoEAimingGeometry]:
+    """Describe native aiming without computing propagation or recipients."""
+    try:
+        geometry = snapshot_aoe_presentation_geometry(shape, caster_position)
+    except (TypeError, ValueError):
+        return None
+    origin_mode = "fixed"
+    if shape.origin_override is None:
+        if geometry.shape in ("sphere", "cylinder"):
+            origin_mode = "aim"
+        elif geometry.shape == "cube" and geometry.centered:
+            origin_mode = "aim"
+    return AoEAimingGeometry(geometry=geometry, reference_target=shape.target,
+        origin_mode=origin_mode, propagation=shape.propagation)

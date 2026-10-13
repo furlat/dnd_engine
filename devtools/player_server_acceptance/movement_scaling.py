@@ -24,7 +24,7 @@ from types import CodeType, FrameType, FunctionType, ModuleType, TracebackType
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
-from dnd_player import (Follower, acknowledge, attach, choices, connect, follow,
+from dnd_player import (Follower, acknowledge, action_options, attach, binding_position, binding_value, choices, connect, follow,
     preview, receipt, status, submit_command, wait_for_cursor)
 from devtools.player_server_acceptance import test_host
 from devtools.player_server_acceptance.gallery import move_toward, rows
@@ -507,12 +507,12 @@ async def record(args, settings, url):
                 available = rows(discovered)
                 if dash:
                     row = next(row for row in available if row['behavior_id'] == 'action.dash')
-                    selected = row, row['valid_targets'][0]
+                    selected = row, action_options(discovered, row)[0]
                 else:
-                    selected = move_toward(available, position, (destination,))
+                    selected = move_toward(discovered, available, position, (destination,))
                 if selected is not None:
                     row, target = selected
-                    if sample is not None and (tuple(target['position']) != destination or target['path_cost'] != 30):
+                    if sample is not None and (tuple(binding_position(discovered, target)) != destination or binding_value(target, 'path_cost') != 30):
                         raise AssertionError('Measured selection is not the required ordinary six-cell move')
                     selection = {'action_index': row['discovery_index'], 'target_indices': [target['index']],
                         'extra_target_positions': []}

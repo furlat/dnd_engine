@@ -9,6 +9,7 @@ from typing import Annotated, Literal, TypeAlias, Union
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 from dnd.core.effect_types import ObjectSectionVolume
+from dnd.types.spatial_effects import AreaPropagation
 
 
 Position: TypeAlias = tuple[int, int]
@@ -165,7 +166,17 @@ AoEPresentationGeometry: TypeAlias = Annotated[
 ]
 
 
+class AoEAimingGeometry(PresentationGeometryModel):
+    """One native shape at a reference aim, reusable for client prediction."""
+
+    geometry: AoEPresentationGeometry
+    reference_target: Position
+    origin_mode: Literal["aim", "fixed"]
+    propagation: AreaPropagation
+
+
 __all__ = [
+    "AoEAimingGeometry",
     "AoEPresentationGeometry",
     "ConePresentationGeometry",
     "CubePresentationGeometry",

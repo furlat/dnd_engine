@@ -132,6 +132,19 @@ uv sync --project monty_sandbox --locked --compile-bytecode
 .venv/bin/python -m monty_sandbox.prepare_trial
 ```
 
+After updating the engine/player protocol, refresh the sandbox's installed SDK
+explicitly; it is a local package installation, not an editable source import:
+
+```sh
+uv sync --project monty_sandbox --locked --reinstall-package dnd-player-sdk
+```
+
+Restart the game and MCP processes together after updating. Current code uses
+player schema 8; an older SDK is rejected by the protocol handshake. Load the
+updated `examples/scouts.py` into a fresh workspace. Previously exported source
+that reads `valid_targets` or `next_targets` must be migrated before reuse; loading
+old source does not rewrite it. Historical evidence folders remain old recordings.
+
 Start the game in one terminal and MCP in another:
 
 ```sh
@@ -193,14 +206,15 @@ games and unsaved state. An exported bundle remains usable independently.
 | `await game_list()` | `{games: [{game_ref, seat, identity, mode, record_count}, ...]}` |
 | `await game_read(game_ref)` | Native status, consumed cursor, audience, record count/bytes, recent commands and any unresolved command; plus workspace metadata |
 | `await game_events(game_ref, after=-1, limit=16)` | Native records, `game_ref`, `next_after`, `has_more`; maximum 64 records per call |
-| `await game_choices(game_ref, force_attack=False)` | Native choices response for that game's current controlled actor |
-| `await game_preview(game_ref, actor_uuid, state_revision, discovery_generation, selection)` | Native preview response |
+| `await game_choices(game_ref, force_attack=False)` | Schema-8 choices response for that game's current controlled actor |
+| `await game_preview(game_ref, actor_uuid, state_revision, discovery_generation, selection)` | Schema-8 preview response with its own lookup domains |
 | `await game_act(game_ref, actor_uuid, state_revision, intent)` | Settled command receipt and observation |
 | `await game_receipt(game_ref)` | Resolves that game's saved unresolved command using its original number and payload |
 | `await game_wait(game_ref, timeout_seconds=20)` | Observation at this seat's input/terminal boundary, plus `wait_timed_out` |
 
-Use native discovery indexes and target indexes unchanged. Preview selections
-before executing them. Rediscover after state changes. A snippet can fail after
+Use native discovery indexes and target indexes unchanged. Use Preview for
+compound selection or exact effects; direct commands do not require a prior
+Preview. Rediscover after state changes. A snippet can fail after
 committing an action: inspect receipts before deciding what to do next. Ambiguous
 commands remain saved outside Monty and block new actions until resolved.
 
@@ -208,6 +222,40 @@ Large stream values stay in the host/REPL until the snippet explicitly returns o
 prints them. This prototype offers raw records and native choices, with no state
 reducer. The sample filters combat logs and chooses actions inside Monty. It does
 not invoke nested language models.
+
+Choices share lookup tables; Monty can index the admitted dictionaries directly:
+
+```python
+options = choices['target_sets'][action['target_set']]
+target = options[0]
+if target['kind'] == 'subject':
+    subject = choices['subjects'][target['subject']]  # uuid, kind, optional name
+if target.get('position') is not None:
+    position = choices['positions'][target['position']]
+selection = {'action_index': action['discovery_index'],
+    'target_indices': [target['index']], 'extra_target_positions': []}
+```
+
+Binding kinds are `subject`, `position` and `self`. Table offsets are not native
+selection indexes. Pair fields such as distance may be omitted; use
+`target.get('distance')`. Keep shared values read-only and retain local UI/policy
+state separately. A primary binding's `secondary_set` overrides its secondary
+pool; absence inherits the action's set, while an explicit empty set has no
+secondary options. Individual membership does not prove that a compound prefix
+is legal.
+
+Every Preview has its own `subjects`, `positions` and `target_sets`. Resolve
+`next_target_set`, `next_positions` and `affected_positions` against that Preview,
+including newly offered landing/path coordinates. Retain target order and
+repeats when submitting a selection. Optional AoE effects are `deferred` in
+Choices; a selected Preview returns `computed` subjective effects, which may be
+empty. See the [complete protocol handoff](../sdk/protocol/README.md) for geometry
+prediction, recipient limits, movement and stale-response rules.
+
+Raw event records also include ordered `world_updates[].tile_changes`: update
+only the supplied fields on each already-known tile. Omitted fields retain
+their values; explicit null clears one. Apply these alongside full `tiles` in
+event order. The sandbox forwards those records unchanged and adds no reducer.
 
 ## Bounds and current limitations
 
@@ -235,6 +283,13 @@ and indexing instead. Return JSON-compatible values; retain other values in glob
 and return a smaller projection. No file access or arbitrary imports are exposed.
 
 ## Validation
+
+Schema-8 refresh (2026-10-13): all nine sandbox tests pass. The existing real
+two-game workspace trial also passes using the installed SDK and updated scout
+source: 16 committed commands, 48 records, both matches terminal, offline archive
+reads and history-free helper export/import preserved. Its local evidence is in
+`.runtime/monty-schema8-workspace/proof.json`; the checked-in older demonstration
+captures below remain historical.
 
 ```sh
 uv run --project monty_sandbox --no-sync python -m pytest monty_sandbox/tests -q

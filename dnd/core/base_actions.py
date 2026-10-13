@@ -2643,12 +2643,9 @@ def prefers_safe_movement_path(target: AvailableTarget, movement_remaining: int,
             and target.safe_path_cost <= movement_remaining)
 
 
-class AvailableActionInfo(BaseModel):
-    """Information about an available action and its valid targets.
+class AvailableActionMetadata(BaseModel):
+    """Passive metadata shared by native choices and compact player choices."""
 
-    This is returned by Entity.get_available_actions() and contains everything
-    needed to display the action in UI and execute it.
-    """
     discovery_generation: int = 0
     discovery_index: int = 0
     discovery_runtime: UUID | None = None
@@ -2688,13 +2685,6 @@ class AvailableActionInfo(BaseModel):
         description=(
             "Closed reason this authored row is executable or unavailable; "
             "clients never infer the reason from an empty target list."
-        ),
-    )
-    valid_targets: List[AvailableTarget] = Field(
-        default_factory=list,
-        description=(
-            "Currently executable targets with stable indices. Target-bound "
-            "costs are evaluated before a target enters this list."
         ),
     )
     can_afford: bool = Field(
@@ -2782,7 +2772,27 @@ class AvailableActionInfo(BaseModel):
     variant_facets: tuple[ActionVariantFacet, ...] = ()
     interaction_affordance: ActionAffordance = Field(default_factory=ActionAffordance)
     connector_traversal: Optional[ConnectorTraversalDiscovery] = None
+    @field_validator("behavior_id", "provided_by_id", "origin_root_id")
+    @classmethod
+    def _validate_behavior_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_namespaced_id(value, "discovered behavior identity")
+
+
+
+class AvailableActionInfo(AvailableActionMetadata):
+    """Native admitted targets and their private execution template."""
+
+    valid_targets: List[AvailableTarget] = Field(
+        default_factory=list,
+        description=(
+            "Currently executable targets with stable indices. Target-bound "
+            "costs are evaluated before a target enters this list."
+        ),
+    )
     _execution_template: Optional[BaseAction] = PrivateAttr(default=None)
+    _aoe_include_dead: bool = PrivateAttr(default=False)
 
     @model_validator(mode="after")
     def _validate_availability_status(self) -> "AvailableActionInfo":
@@ -2805,13 +2815,6 @@ class AvailableActionInfo(BaseModel):
                 "every unavailable status requires an empty target list"
             )
         return self
-
-    @field_validator("behavior_id", "provided_by_id", "origin_root_id")
-    @classmethod
-    def _validate_behavior_id(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return validate_namespaced_id(value, "discovered behavior identity")
 
     @property
     def execution_template(self) -> Optional[BaseAction]:
@@ -2846,6 +2849,9 @@ class AvailableSelectionPreview(BaseModel):
     next_positions: tuple[tuple[int, int], ...] = ()
     geometry: AoEPresentationGeometry | None = None
     affected_positions: tuple[tuple[int, int], ...] = ()
+    area_preview: Literal["not_applicable", "deferred", "computed"] = "not_applicable"
+    affected_entity_uuids: tuple[UUID, ...] = ()
+    affected_entity_names: tuple[str, ...] = ()
     selected_route: SelectedRoute | None = None
 
 

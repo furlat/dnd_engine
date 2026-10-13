@@ -4,18 +4,23 @@ import {fullFormats} from 'ajv-formats/dist/formats.js';
 import schema from './player-api-v1.schema.json' with {type: 'json'};
 import identity from './protocol-identity.json' with {type: 'json'};
 import type * as C from './contracts.generated.js';
+import {ProtocolError, checkChoices, checkPreview} from './choices.js';
+export * from './choices.js';
 export type * from './contracts.generated.js';
 const MAX_BYTES = 64 * 1024 * 1024;
 const ajv = new Ajv2020({strict: false, strictNumbers: true, coerceTypes: false, useDefaults: false, removeAdditional: false, inlineRefs: false, formats: fullFormats});
 ajv.addSchema(schema);
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', {fatal: true});
-export class ProtocolError extends Error {}
 export class PlayerApiError extends Error { constructor(readonly value: C.ApiError, readonly retryAfter = 0) { super(value.code); } }
 export function validate<T>(root: string, value: unknown): T {
   const validator = ajv.getSchema(schema.$id + '#/$defs/' + root);
   if (!validator) throw new ProtocolError('Unknown contract: ' + root);
   if (!validator(value)) throw new ProtocolError(root + ': ' + ajv.errorsText(validator.errors));
+  if (root === 'ChoicesResponse') checkChoices((value as C.ChoicesResponse).choices);
+  else if (root === 'PreviewResponse') checkPreview((value as C.PreviewResponse).preview);
+  else if (root === 'PlayerChoices') checkChoices(value as C.PlayerChoices);
+  else if (root === 'PlayerSelectionPreview') checkPreview(value as C.PlayerSelectionPreview);
   if (root === 'InitializationResponse' && (value as C.InitializationResponse).cursor.sequence !== 0) throw new ProtocolError('Initialization sequence must be zero');
   if (root === 'PlayerOperation' && (value as C.PlayerOperation).cursor.sequence < 1) throw new ProtocolError('Operation sequence must be positive');
   return value as T;

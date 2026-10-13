@@ -4049,7 +4049,8 @@ class Entity(BaseBlock):
                 continue
             other_entity = Entity.get(entity_uuid)
             if other_entity and self.is_enemy(other_entity):
-                if my_position in other_entity.senses.get_threathened_positions(close_pressure=True):
+                if my_position in other_entity.senses.get_threathened_positions(
+                        close_pressure=True, candidate_positions=(my_position,)):
                     return True
         return False
 
@@ -6000,6 +6001,7 @@ class Entity(BaseBlock):
         valid_positions: List[Tuple[int, int]],
         include_dead: bool,
         shape_definition_key: Tuple[Any, ...],
+        include_aoe_preview: bool = True,
     ) -> Tuple[Any, ...]:
         """Build a per-query cache key for AoE preview discovery.
 
@@ -6022,7 +6024,35 @@ class Entity(BaseBlock):
             template.include_dead,
             include_dead,
             template.aoe_require_targets,
+            include_aoe_preview or template.aoe_require_targets,
         )
+
+    def preview_aoe_target(
+        self, template: BaseAction, target: AvailableTarget, *,
+        include_dead: bool = False,
+    ) -> AvailableTarget:
+        """Compute one selected aim using current subjective discovery rules."""
+        shape = template.aoe_shape
+        if shape is None or target.position is None:
+            raise ValueError("Area preview requires a shape and selected aim")
+        grid = get_map()
+        if self._aoe_origin_fov_cache_revision != grid.propagation_revision:
+            self._aoe_origin_fov_cache_revision = grid.propagation_revision
+            self._aoe_origin_fov_cache.clear()
+        visible_positions = self._prepare_aoe_caches()
+        result = self._compute_aoe_at_position(
+            shape.model_copy(), self._aoe_shape_definition_key(shape),
+            target.position, template, include_dead, visible_positions,
+            self._aoe_origin_fov_cache, grid.get_barrier_positions(), target.index,
+        )
+        if result is None:
+            raise ValueError("The selected aim has no admitted recipients")
+        return target.model_copy(deep=True, update={
+            "affected_entity_uuids": result.affected_entity_uuids,
+            "affected_entity_names": result.affected_entity_names,
+            "affected_count": result.affected_count,
+            "affected_positions": result.affected_positions,
+        })
 
     @staticmethod
     def _aoe_shape_definition_key(shape: Any) -> Tuple[Any, ...]:
@@ -7202,10 +7232,11 @@ class Entity(BaseBlock):
         self,
         include_dead: bool,
         fov_cache: dict,
-        barrier_positions: Set[Tuple[int, int]],
+        barrier_positions: Optional[Set[Tuple[int, int]]],
         discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
+        include_aoe_preview: bool = True,
     ) -> List[AvailableActionInfo]:
         """Collect position-AoE actions with preview metadata.
 
@@ -7311,11 +7342,20 @@ class Entity(BaseBlock):
                     valid_pos_list,
                     include_dead,
                     shape_definition_key,
+                    include_aoe_preview,
                 )
                 if cache_key in self._aoe_preview_cache:
                     valid_positions = list(self._aoe_preview_cache[cache_key])
+                elif not include_aoe_preview and not template.aoe_require_targets:
+                    valid_positions = [AvailableTarget(
+                        index=index, position=position,
+                        distance=template.get_target_distance(position),
+                    ) for index, position in enumerate(valid_pos_list)]
+                    self._aoe_preview_cache[cache_key] = tuple(valid_positions)
                 else:
                     valid_positions = []
+                    if barrier_positions is None:
+                        barrier_positions = grid.get_barrier_positions()
                     preview_shape = shape_template.model_copy()
                     for pos in valid_pos_list:
                         target = self._compute_aoe_at_position(
@@ -7383,6 +7423,7 @@ class Entity(BaseBlock):
                     distance = self.senses.get_feet_distance(obj_pos)
                     valid_targets.append(AvailableTarget(
                         index=idx,
+                        target_kind="object",
                         target_uuid=obj_uuid,
                         position=obj_pos,
                         target_name=obj_name,
@@ -7458,9 +7499,10 @@ class Entity(BaseBlock):
         potential_targets: Dict[UUID, Tuple[int, int]],
         include_dead: bool,
         fov_cache: dict,
-        barrier_positions: Set[Tuple[int, int]],
+        barrier_positions: Optional[Set[Tuple[int, int]]],
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
+        include_aoe_preview: bool = True,
     ) -> None:
         """Collect use actions from inventory and nearby environment objects.
 
@@ -7687,6 +7729,7 @@ class Entity(BaseBlock):
                     valid_pos_list,
                     include_dead,
                     use_shape_definition_key,
+                    include_aoe_preview,
                 )
                 if cache_key in self._aoe_preview_cache:
                     cached_targets = self._aoe_preview_cache[cache_key]
@@ -7722,20 +7765,28 @@ class Entity(BaseBlock):
 
                 use_valid_positions: List[AvailableTarget] = []
                 use_idx = 0
-                use_preview_shape = use_shape_template.model_copy()
-                for pos in valid_pos_list:
-                    target = self._compute_aoe_at_position(
-                        use_preview_shape,
-                        use_shape_definition_key,
-                        pos,
-                        use_template,
-                        include_dead,
-                        visible_position_set,
-                        fov_cache, barrier_positions, use_idx
-                    )
-                    if target is not None:
-                        use_valid_positions.append(target)
-                        use_idx += 1
+                if not include_aoe_preview and not use_template.aoe_require_targets:
+                    use_valid_positions = [AvailableTarget(
+                        index=index, position=position,
+                        distance=use_template.get_target_distance(position),
+                    ) for index, position in enumerate(valid_pos_list)]
+                else:
+                    if barrier_positions is None:
+                        barrier_positions = grid.get_barrier_positions()
+                    use_preview_shape = use_shape_template.model_copy()
+                    for pos in valid_pos_list:
+                        target = self._compute_aoe_at_position(
+                            use_preview_shape,
+                            use_shape_definition_key,
+                            pos,
+                            use_template,
+                            include_dead,
+                            visible_position_set,
+                            fov_cache, barrier_positions, use_idx
+                        )
+                        if target is not None:
+                            use_valid_positions.append(target)
+                            use_idx += 1
                 self._aoe_preview_cache[cache_key] = tuple(use_valid_positions)
                 if use_valid_positions:
                     result.position_actions.append(self._make_action_info(
@@ -7869,6 +7920,7 @@ class Entity(BaseBlock):
         target_filter: str = "enemies",
         include_dead: bool = False,
         legal_only: bool = False,
+        include_aoe_preview: bool = True,
     ) -> AvailableActionsResult:
         """Get all available actions for this entity.
 
@@ -7887,6 +7939,8 @@ class Entity(BaseBlock):
             legal_only: When true, omit unaffordable action rows and skip their
                 expensive target discovery. Public/debug callers should keep the
                 default to preserve explanatory unaffordable rows.
+            include_aoe_preview: Include optional area effects for every aim.
+                Required-recipient admission is always computed.
 
         Returns:
             Grouped discovery result for the acting entity.
@@ -7978,7 +8032,7 @@ class Entity(BaseBlock):
             self._aoe_origin_fov_cache_revision = grid.propagation_revision
             self._aoe_origin_fov_cache.clear()
         fov_cache: dict = self._aoe_origin_fov_cache
-        barrier_positions = grid.get_barrier_positions()
+        barrier_positions = grid.get_barrier_positions() if include_aoe_preview else None
         caster_visible_positions = frozenset(
             position
             for position, visible in self.senses.visible.items()
@@ -8017,6 +8071,7 @@ class Entity(BaseBlock):
                 discovery_variants,
                 caster_visible_positions,
                 legal_only,
+                include_aoe_preview,
             )
         )
         if timing:
@@ -8036,6 +8091,7 @@ class Entity(BaseBlock):
             barrier_positions,
             caster_visible_positions,
             legal_only,
+            include_aoe_preview,
         )
         if timing:
             record_action_timing("available_actions.collect_use_actions_ms", started)
@@ -8047,6 +8103,9 @@ class Entity(BaseBlock):
         if timing:
             record_action_timing("available_actions.handler_details_ms", started)
 
+        for action in result.position_actions:
+            if action.target_type is TargetType.POSITION_AOE:
+                action._aoe_include_dead = include_dead
         return result
 
     def get_equippable_items(self) -> Dict[str, list]:
