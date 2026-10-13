@@ -1,6 +1,6 @@
 """Permeable wall fields composed from geometry, area triggers and damage facts."""
 
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -141,6 +141,8 @@ class WallOfThornsZone(WallFieldZone):
 
 
 class WindWallZone(WallFieldZone):
+
+    crossing_channels: ClassVar[frozenset[str] | None] = frozenset({"movement"})
     name: str = "Wind Wall"
     description: str = "Transparent wind keeps gas and small flying bodies back and deflects ordinary missiles."
     content_ref: ContentRef = wall_condition_ref("spatial_effect.spell.wind_wall")

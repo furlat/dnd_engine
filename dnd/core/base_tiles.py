@@ -1,6 +1,6 @@
 """Tile primitives for terrain, lighting, elevation, and object bands."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, StrictInt, model_validator
@@ -50,6 +50,16 @@ def _empty_boundary_object_bands() -> Dict[
 ]:
     """Create all four private boundary-band buckets for one Tile."""
     return {direction: {} for direction in CardinalDirection}
+
+
+@dataclass(slots=True)
+class TileLight:
+    """Current objective light inputs and their resolved value."""
+
+    illuminations: Dict[UUID, LightLevel] = field(default_factory=dict)
+    caps: Dict[UUID, LightLevel] = field(default_factory=dict)
+    default: Optional[LightLevel] = None
+    resolved: LightLevel = LightLevel.BRIGHT_LIGHT
 
 
 class Tile(BaseBlock):
@@ -113,8 +123,7 @@ class Tile(BaseBlock):
         default=LightLevel.BRIGHT_LIGHT,
         description="Base objective light level before illumination or obscurement modifiers.",
     )
-    _illuminations: Dict[UUID, LightLevel] = PrivateAttr(default={})
-    _illumination_caps: Dict[UUID, LightLevel] = PrivateAttr(default={})
+    _light: TileLight = PrivateAttr(default_factory=TileLight)
     _center_object_bands: Dict[int, TileObjectBand] = PrivateAttr(default={})
     _boundary_object_bands: Dict[
         CardinalDirection,
@@ -159,6 +168,12 @@ class Tile(BaseBlock):
             for band in self._center_object_bands.values()
             for object_uuid in band.object_uuids
         }
+
+    def snapshot_boundary_object_uuids(self) -> Dict[CardinalDirection, Tuple[UUID, ...]]:
+        """Capture every owner side once for a batch of spatial queries."""
+        return {direction: tuple(sorted({identity for band in bands.values()
+                                        for identity in band.object_uuids}, key=str))
+                for direction, bands in self._boundary_object_bands.items()}
 
     def get_boundary_object_uuids(
         self,
@@ -361,26 +376,39 @@ class Tile(BaseBlock):
     def _add_illumination(self, source_uuid: UUID, level: LightLevel) -> bool:
         """Install one GridMap-owned objective illumination contribution."""
         old = self.resolved_light_level
-        self._illuminations[source_uuid] = level
-        return self.resolved_light_level != old
+        light = self._light
+        light.illuminations[source_uuid] = level
+        light.resolved = _resolve_light_contributions(light, self.default_light)
+        light.default = self.default_light
+        return light.resolved != old
 
     def _add_illumination_cap(self, source_uuid: UUID, level: LightLevel) -> bool:
         """Install one GridMap-owned source cap on objective illumination."""
         old = self.resolved_light_level
-        self._illumination_caps[source_uuid] = level
-        return self.resolved_light_level != old
+        light = self._light
+        light.caps[source_uuid] = level
+        light.resolved = _resolve_light_contributions(light, self.default_light)
+        light.default = self.default_light
+        return light.resolved != old
 
     def _remove_light_modifier(self, source_uuid: UUID) -> bool:
         """Remove one GridMap-owned illumination contribution or cap."""
         old = self.resolved_light_level
-        self._illuminations.pop(source_uuid, None)
-        self._illumination_caps.pop(source_uuid, None)
-        return self.resolved_light_level != old
+        light = self._light
+        light.illuminations.pop(source_uuid, None)
+        light.caps.pop(source_uuid, None)
+        light.resolved = _resolve_light_contributions(light, self.default_light)
+        light.default = self.default_light
+        return light.resolved != old
 
     @property
     def resolved_light_level(self) -> LightLevel:
         """Objective light level (no observer). Lights brighten, darkness overrides."""
-        return resolve_tile_light_level(self, self.default_light)
+        light = self._light
+        if light.default is not self.default_light:
+            light.resolved = _resolve_light_contributions(light, self.default_light)
+            light.default = self.default_light
+        return light.resolved
 
     def directions_toward(self, other_position: Tuple[int, int]) -> Tuple[str, ...]:
         """Return tile-relative cardinal directions touched by a transition."""
@@ -562,15 +590,19 @@ def resolve_tile_light_level(
     default_light: LightLevel,
 ) -> LightLevel:
     """Preview objective light with another authored default, without mutation."""
+    return _resolve_light_contributions(tile._light, default_light)
+
+
+def _resolve_light_contributions(light: TileLight, default_light: LightLevel) -> LightLevel:
     if type(default_light) is not LightLevel:
         raise TypeError("default_light must be a LightLevel")
     brightest = default_light
-    for level in tile._illuminations.values():
+    for level in light.illuminations.values():
         if level.value > brightest.value:
             brightest = level
-    if not tile._illumination_caps:
+    if not light.caps:
         return brightest
-    darkest = min(tile._illumination_caps.values(), key=lambda level: level.value)
+    darkest = min(light.caps.values(), key=lambda level: level.value)
     return LightLevel(min(brightest.value, darkest.value))
 
 
@@ -578,7 +610,8 @@ def tile_light_contributions(
     tile: Tile,
 ) -> Tuple[Dict[UUID, LightLevel], Dict[UUID, LightLevel]]:
     """Return detached GridMap-owned illumination and cap contributions."""
-    return dict(tile._illuminations), dict(tile._illumination_caps)
+    light = tile._light
+    return dict(light.illuminations), dict(light.caps)
 
 
 def validate_tile_owned_movement_graph(tile: Tile) -> None:

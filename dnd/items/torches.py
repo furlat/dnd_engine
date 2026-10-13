@@ -286,6 +286,7 @@ class Torch(UsableItem):
                     IgniteTorchAction(
                         source_entity_uuid=user_entity_uuid,
                         source_item_uuid=self.uuid,
+                        use_register=False,
                     ),
                 )
             ]
@@ -294,6 +295,7 @@ class Torch(UsableItem):
                 ExtinguishTorchAction(
                     source_entity_uuid=user_entity_uuid,
                     source_item_uuid=self.uuid,
+                    use_register=False,
                 ),
             )
         ]
@@ -582,6 +584,7 @@ class WallTorch(UsableItem):
                     IgniteWallTorchAction(
                         source_entity_uuid=user_entity_uuid,
                         source_item_uuid=self.uuid,
+                        use_register=False,
                     ),
                 )
             ]
@@ -590,6 +593,7 @@ class WallTorch(UsableItem):
                 ExtinguishWallTorchAction(
                     source_entity_uuid=user_entity_uuid,
                     source_item_uuid=self.uuid,
+                    use_register=False,
                 ),
             )
         ]

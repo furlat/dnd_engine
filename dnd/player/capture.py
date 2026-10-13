@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections import ChainMap
+from collections.abc import Collection
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Mapping
@@ -55,7 +58,7 @@ from dnd.core.events import (
 from dnd.core.item_types import ItemLocation
 from dnd.subjective_combat_log import project_combat_log
 from dnd.types.senses import PerceivedContact
-from dnd.world_facts import WorldFacts, apply_world_fact as apply_recorded_world_fact
+from dnd.world_facts import copy_world_facts, apply_world_fact as apply_recorded_world_fact
 from dnd.player.audience import PlayerAudience, resolve_audience
 
 from dnd.player.event_record import RecordedEvent
@@ -376,7 +379,6 @@ def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
 
 def apply_world_fact(target: PresentationTarget, event: Event, condition: ConditionFact | None = None) -> bool:
     """Fold recorded world after-values, reporting whether any were applied."""
-    world = WorldFacts(world=target.world, tiles=target.tiles, objects=target.objects)
     holdings_changed = bool(remove_previous_item_holdings(target.actors, event)) if isinstance(event, ItemLocationStateEvent) else False
     owned_item = condition.resulting_item if condition is not None else None
     owned_changed = False
@@ -386,11 +388,8 @@ def apply_world_fact(target: PresentationTarget, event: Event, condition: Condit
                 target.actors[identity] = replace(actor, items=tuple(
                     owned_item if item.item_uuid == owned_item.item_uuid else item for item in actor.items))
                 owned_changed = True
-    if not apply_recorded_world_fact(world, event, condition):
+    if not apply_recorded_world_fact(target.recorded_world, event, condition):
         return owned_changed or holdings_changed
-    target.world = world.world
-    target.tiles = world.tiles
-    target.objects = world.objects
     if target.door_uuid is not None and (door := target.objects.get(target.door_uuid)) is not None:
         target.door_placement = door.placement
         target.door_is_open = door.item.is_open
@@ -510,8 +509,7 @@ def copy_target(target: PresentationTarget) -> PresentationTarget:
     """Own the mutable indexes at one reduction position, sharing cold facts."""
     return replace(
         target,
-        tiles=dict(target.tiles),
-        objects=dict(target.objects),
+        recorded_world=copy_world_facts(target.recorded_world),
         actors=dict(target.actors),
         senses=_copy_snapshot(target.senses),
     )
@@ -612,11 +610,60 @@ def _event_header(event: Event) -> Event:
     return header
 
 
+def _detach_retained_event(event: Event) -> Event:
+    """Detach mutable containers without rebuilding their immutable contents.
+
+    The remaining payload still uses the native deep-copy contract, including
+    mutable sense modes, spatial effects, costs, logs and subclass fields.
+    """
+    memo = {
+        id(event.lineage_children_events): list(event.lineage_children_events),
+        id(event.children_events): list(event.children_events),
+        id(event.children_lineages): list(event.children_lineages),
+    }
+    # Native identity/provenance metadata is immutable. Keep the generic deep
+    # traversal for payloads and extensions without reconstructing these leaves.
+    for value in (event.uuid, event.source_entity_uuid, event.target_entity_uuid,
+                  event.lineage_uuid, event.parent_event, event.parent_lineage,
+                  event.turn_execution_id, event.outcome_source_entity_uuid,
+                  event.timestamp, event.effective_handler_presentations,
+                  event._recorded_omissions):
+        if value is not None:
+            memo[id(value)] = value
+    for grants in (event.identified_entity_observer_uuids,
+                   event.located_entity_observer_uuids, event.located_position_observer_uuids):
+        memo[id(grants)] = {key: memo.setdefault(id(value), set(value))
+                           for key, value in grants.items()}
+    match event:
+        case SensoryUpdateEvent():
+            # The native contact schema contains only immutable values. An
+            # extension may add mutable fields and keeps ordinary detachment.
+            for contacts in (event.entity_contacts_changed, event.object_contacts_changed):
+                for contact in contacts.values():
+                    if type(contact) is PerceivedContact:
+                        memo[id(contact)] = contact
+            memo.update({
+                id(event.visible_cells_added): list(event.visible_cells_added),
+                id(event.visible_cells_removed): list(event.visible_cells_removed),
+                id(event.seen_cells_added): list(event.seen_cells_added),
+                id(event.entity_contacts_removed): set(event.entity_contacts_removed),
+                id(event.object_contacts_removed): set(event.object_contacts_removed),
+                id(event.spatial_effects_removed): set(event.spatial_effects_removed),
+                id(event.effective_light_levels_changed): dict(event.effective_light_levels_changed),
+                id(event.hazardous_cells_changed): dict(event.hazardous_cells_changed),
+            })
+        case SpatialChangeEvent():
+            if event.light_level_map is not None:
+                memo[id(event.light_level_map)] = dict(event.light_level_map)
+    return deepcopy(event, memo)
+
+
 def _retained_event(event: Event, audience: PlayerAudience,
                     known_entity_names: Mapping[str, str] | None = None,
                     known_connector_uuids: frozenset[str] = frozenset(),
                     known_content_ids: frozenset[str] = frozenset(),
-                    retained_entries: dict[int, CombatLogEntry | None] | None = None) -> Event:
+                    retained_entries: dict[int, CombatLogEntry | None] | None = None,
+                    *, omit_sensory_payload: bool = False) -> Event:
     """Copy the selected event families without constructing registered models."""
     projected_log = project_combat_log(
         event.combat_log, known_entity_names=known_entity_names, retained_entries=retained_entries,
@@ -626,6 +673,8 @@ def _retained_event(event: Event, audience: PlayerAudience,
     )
     common = {"use_register": False, "context": None, "combat_log": projected_log}
     match event:
+        case SensoryUpdateEvent() if omit_sensory_payload:
+            copied = _event_header(event).model_copy(update=common)
         case AttackEvent():
             copied = event.model_copy(update={
                 **common, "attack_bonus": None, "ac": None, "damages": None, "additional_damages": [],
@@ -678,7 +727,7 @@ def _retained_event(event: Event, audience: PlayerAudience,
         copied = copied.model_copy(update={"costs": [
             BaseCost.model_validate_json(cost.model_dump_json()) for cost in copied.costs
         ]})
-    return copied.model_copy(deep=True)
+    return _detach_retained_event(copied)
 
 
 def _actor_participants(event: Event) -> tuple[UUID, ...]:
@@ -727,8 +776,9 @@ def _condition_fact(event: Event) -> ConditionFact | None:
 
 def _capture_actor_admissions(
     indexed: tuple[tuple[int, Event], ...],
-    audience: PlayerAudience, known_actor_uuids: frozenset[UUID],
+    audience: PlayerAudience, known_actor_uuids: Collection[UUID],
     generation: UUID, checkpoint: CaptureCheckpoint | None = None,
+    newly_known_actor_uuids: Collection[UUID] = (),
 ) -> tuple[ActorAdmission, ...]:
     """Fold original evidence through each admission, resuming only forward reads."""
     if checkpoint is None:
@@ -745,7 +795,7 @@ def _capture_actor_admissions(
     for identity in audience.observers:
         contacts.setdefault(identity, {})
     selected = {event.uuid for _, event in indexed}
-    admitted = set(known_actor_uuids)
+    admitted: set[UUID] = set()
     result: list[ActorAdmission] = []
     for index, event in EventQueue.iter_events_since(checkpoint.cursor):
         if index > indexed[-1][0]:
@@ -776,7 +826,9 @@ def _capture_actor_admissions(
             owner = actor_fact_owner(event)
             if owner is not None:
                 candidates.add(owner)
-            for identity in sorted((candidates - admitted) | acquired, key=str):
+            for identity in sorted({identity for identity in candidates
+                    if identity not in known_actor_uuids and identity not in newly_known_actor_uuids
+                    and identity not in admitted} | acquired, key=str):
                 if identity not in actors:
                     continue
                 witnesses = [member for member in audience.observers
@@ -815,7 +867,7 @@ def _capture_actor_admissions(
 
 
 def capture_lineage(
-    root: Event, *, observer_uuid: UUID, known_actor_uuids: frozenset[UUID] = frozenset(),
+    root: Event, *, observer_uuid: UUID, known_actor_uuids: Collection[UUID] = frozenset(),
     audience: PlayerAudience | None = None,
 ) -> CompletedLineage:
     """Retain a closed native lineage privately after its public operation.
@@ -848,22 +900,24 @@ def _lineage_versions(context: CaptureContext, identity: UUID) -> tuple[tuple[in
 
 def capture_lineages(
     roots: tuple[Event, ...], *, observer_uuid: UUID,
-    known_actor_uuids: frozenset[UUID] = frozenset(), audience: PlayerAudience | None = None,
+    known_actor_uuids: Collection[UUID] = frozenset(), audience: PlayerAudience | None = None,
     context: CaptureContext | None = None, known_entity_names: Mapping[str, str] | None = None,
     known_connector_uuids: frozenset[str] = frozenset(), known_content_ids: frozenset[str] = frozenset(),
     checkpoint: CaptureCheckpoint | None = None,
+    omit_foreign_sensory_payloads: bool = False,
 ) -> tuple[CompletedLineage, ...]:
     """Project each audience from the same original operation evidence."""
     audience = resolve_audience(observer_uuid, audience)
     context = context or capture_context()
-    known = set(known_actor_uuids)
-    names = dict(known_entity_names or {})
+    known: set[UUID] = set()
+    names = ChainMap({}, known_entity_names or {})
     retained: list[CompletedLineage] = []
     for root in roots:
         lineage = _capture_lineage(root, observer_uuid=observer_uuid, audience=audience,
-            known_actor_uuids=frozenset(known), context=context, known_entity_names=names,
+            known_actor_uuids=known_actor_uuids, newly_known_actor_uuids=known,
+            context=context, known_entity_names=names,
             known_connector_uuids=known_connector_uuids, known_content_ids=known_content_ids,
-            checkpoint=checkpoint)
+            checkpoint=checkpoint, omit_foreign_sensory_payloads=omit_foreign_sensory_payloads)
         retained.append(lineage)
         known.update(admission.actor.uuid for admission in lineage.admissions)
         names.update((str(admission.actor.uuid), admission.actor.name) for admission in lineage.admissions)
@@ -871,10 +925,12 @@ def capture_lineages(
 
 
 def _capture_lineage(
-    root: Event, *, observer_uuid: UUID, audience: PlayerAudience, known_actor_uuids: frozenset[UUID],
+    root: Event, *, observer_uuid: UUID, audience: PlayerAudience, known_actor_uuids: Collection[UUID],
     context: CaptureContext, known_entity_names: Mapping[str, str],
     known_connector_uuids: frozenset[str], known_content_ids: frozenset[str],
     checkpoint: CaptureCheckpoint | None,
+    newly_known_actor_uuids: Collection[UUID] = (),
+    omit_foreign_sensory_payloads: bool = False,
 ) -> CompletedLineage:
     generation = context.generation
     if generation != EventQueue.generation_id():
@@ -919,19 +975,32 @@ def _capture_lineage(
                            key=lambda row: row[0]))
     if not indexed or root.uuid not in {event.uuid for _, event in indexed}:
         raise ValueError("lineage root is absent from the current EventQueue")
-    admissions = _capture_actor_admissions(indexed, audience, known_actor_uuids, generation, checkpoint)
-    names = dict(known_entity_names)
+    admissions = _capture_actor_admissions(indexed, audience, known_actor_uuids, generation, checkpoint,
+        newly_known_actor_uuids)
+    names = ChainMap({}, known_entity_names)
     retained_logs: dict[int, CombatLogEntry | None] = {}
     admissions_at: dict[UUID, list[ActorAdmission]] = {}
     for admission in admissions:
         admissions_at.setdefault(admission.event_uuid, []).append(admission)
+    # Source versions are selected from original evidence before admission.
+    # Even a foreign observer's reference retains its exact source payload.
+    observed_source_ids = {
+        reference.source_event_uuid for event in nodes.values()
+        if isinstance(event, SensoryUpdateEvent) for reference in event.observed_changes
+    }
+    omitted_sensory = {
+        event.uuid for event in nodes.values()
+        if omit_foreign_sensory_payloads and isinstance(event, SensoryUpdateEvent)
+        and not audience.observes(event.observer_uuid) and _safe_to_detach(event)
+        and event.uuid not in observed_source_ids
+    }
     retained_values = []
     for _, event in indexed:
         for admission in admissions_at.get(event.uuid, ()):
             names[str(admission.actor.uuid)] = admission.actor.name
         if event.uuid == nodes[event.lineage_uuid].uuid:
             retained_values.append(_retained_event(nodes[event.lineage_uuid], audience, names, known_connector_uuids, known_content_ids,
-                retained_logs))
+                retained_logs, omit_sensory_payload=event.uuid in omitted_sensory))
     retained = tuple(retained_values)
     retained_root = next(event for event in retained if event.uuid == root.uuid)
     conditions = tuple(fact for _, event in indexed
@@ -939,9 +1008,11 @@ def _capture_lineage(
                        and (fact := _condition_fact(event)) is not None)
     condition_ids = {fact.event_uuid for fact in conditions}
     dispositions = tuple(
-        (event.uuid, Disposition.UNSUPPORTED) for event in retained
+        (event.uuid, Disposition.NOT_DISCLOSED if event.uuid in omitted_sensory else Disposition.UNSUPPORTED)
+        for event in retained
         if type(event) is Event and event.uuid not in condition_ids
     )
+    retained_ids = {event.uuid for event in retained}
     if generation != EventQueue.generation_id():
         raise RuntimeError("EventQueue generation changed during lineage capture")
     return CompletedLineage(
@@ -957,10 +1028,8 @@ def _capture_lineage(
         dispositions=dispositions,
         admissions=admissions,
         observed_sources=tuple(_retained_event(event, audience)
-            for _, event in indexed if event.uuid in {
-                reference.source_event_uuid for node in retained
-                if isinstance(node, SensoryUpdateEvent) for reference in node.observed_changes
-            } and event.uuid not in {node.uuid for node in retained}),
+            for _, event in indexed
+            if event.uuid in observed_source_ids and event.uuid not in retained_ids),
     )
 
 
@@ -1025,6 +1094,8 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
     condition_facts = {fact.event_uuid: fact for fact in lineage.conditions}
     unsupported = {identity for identity, disposition in lineage.dispositions
                    if disposition is Disposition.UNSUPPORTED}
+    not_disclosed = {identity for identity, disposition in lineage.dispositions
+                     if disposition is Disposition.NOT_DISCLOSED}
     source_indexes = {row.event_uuid: row.source_index for row in lineage.objective_rows}
     admissions = iter(sorted(lineage.admissions, key=lambda row: source_indexes[row.event_uuid]))
     admission = next(admissions, None)
@@ -1052,6 +1123,10 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
         match event:
             case SensoryUpdateEvent():
                 _reduce_sensory_fact(result, event)
+            case Event(event_type=EventType.SENSORY_UPDATE) if event.uuid in not_disclosed:
+                # Audience capture retains only the causal header for an
+                # unrelated observer whose sensory payload has no consumer.
+                pass
             case ActionEvent() | TakeDamageEvent() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent() | D20Event():
                 # These facts explain causality. Only the committed applied
                 # packet changes HP, so aggregate totals cannot apply it twice.

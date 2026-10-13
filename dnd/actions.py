@@ -815,7 +815,8 @@ class Move(BaseAction):
             end_position=end_position,
             requested_end_position=end_position,
             path=path,
-            costs=[BaseCost.model_validate(cost) for cost in costs],
+            costs=[BaseCost(name=cost.name, cost_type=cost.cost_type, cost=cost.cost,
+                resource_name=cost.resource_name, resource_cost=cost.resource_cost) for cost in costs],
             use_register=use_register,
             source_entity_name=source_entity.name,
         )
@@ -853,7 +854,10 @@ class Move(BaseAction):
             )
 
         started = time.perf_counter()
-        costs = [BaseCost.model_validate(cost) for cost in self.costs]
+        # Stored movement facts own finite values, never a callback back to this
+        # executable action. Validation of a Cost instance would retain it.
+        costs = [BaseCost(name=cost.name, cost_type=cost.cost_type, cost=cost.cost,
+            resource_name=cost.resource_name, resource_cost=cost.resource_cost) for cost in self.costs]
         record_action_timing("movement.validate_cost_models_ms", started)
         started = time.perf_counter()
         effect_event = execution_event.phase_to(
@@ -1072,14 +1076,7 @@ class Move(BaseAction):
             record_action_elapsed("movement.step_completion_ms", step_completion_seconds)
             record_action_elapsed("movement.consume_movement_ms", consume_movement_seconds)
             started = time.perf_counter()
-            remaining_path_distance = max(
-                0,
-                (source_entity.action_economy.movement_remaining(self.movement_mode) + 4) // 5,
-            )
-            source_entity.materialize_navigation(
-                max_distance=20,
-                path_max_distance=remaining_path_distance,
-            )
+            source_entity.materialize_navigation_after_movement(self.movement_mode)
             record_action_timing("movement.final_update_senses_ms", started)
 
         completion_costs = [

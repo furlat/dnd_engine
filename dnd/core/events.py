@@ -1225,7 +1225,6 @@ class EventQueue:
     _events_by_uuid: Dict[UUID, Event] = {}
     _event_indexes_by_uuid: Dict[UUID, int] = {}
     _events_by_type: Dict[EventType, List[Event]] = defaultdict(list)
-    _events_by_timestamp: Dict[datetime, List[Event]] = defaultdict(list)
     _events_by_phase: Dict[EventPhase, List[Event]] = defaultdict(list)
     _events_by_source: Dict[UUID, List[Event]] = defaultdict(list)
     _events_by_target: Dict[UUID, List[Event]] = defaultdict(list)
@@ -1240,6 +1239,8 @@ class EventQueue:
     }
 
     _event_handlers: Dict[UUID, 'EventHandler'] = {}
+    _event_handler_order: Dict[UUID, int] = {}
+    _next_event_handler_order: int = 0
     _event_handlers_by_trigger: Dict[Trigger, List['EventHandler']] = defaultdict(list)
     _event_handlers_by_simple_trigger: Dict[Trigger, List['EventHandler']] = defaultdict(list)
     _event_handlers_by_source_entity_uuid: Dict[UUID, List['EventHandler']] = defaultdict(list)
@@ -1456,6 +1457,13 @@ class EventQueue:
             outcome = HandlerDispatchOutcome.EMITTED_EVENTS
         else:
             outcome = HandlerDispatchOutcome.NO_EFFECT
+        if (outcome is HandlerDispatchOutcome.NO_EFFECT
+                and not cls._on_handler_dispatch_callbacks and handler.name):
+            # No presentation consumes a no-effect dispatch. Check listeners
+            # after the handler so observers installed by children still see it.
+            # Empty names retain the existing diagnostic validation failure.
+            cls._handler_dispatch_cursor += 1
+            return result
         binding = handler.behavior_binding
         evidence = HandlerDispatchEvidence(
             dispatch_index=cls._handler_dispatch_cursor,
@@ -2158,7 +2166,6 @@ class EventQueue:
         started = time.perf_counter() if timing else 0.0
         cls._events_by_lineage[event.lineage_uuid].append(event)
         cls._events_by_uuid[event.uuid] = event
-        cls._events_by_timestamp[event.timestamp].append(event)
 
         if event.parent_event:
             if parent_event and event.uuid not in parent_event.children_events:
@@ -2280,7 +2287,7 @@ class EventQueue:
                 handlers.append(h)
                 seen.add(h.uuid)
 
-        for handler in cls._event_handlers.values():
+        for handler in cls._event_trigger_candidates(event, include_simple=False):
             if handler.uuid in seen:
                 continue
             if handler.uuid in cls._handler_positions:
@@ -2302,7 +2309,7 @@ class EventQueue:
         handler_set: Set[UUID] = {h.uuid for h in simple_handlers}
         matching_handlers: List['BaseHandler'] = list(simple_handlers)
 
-        for handler in cls._event_handlers.values():
+        for handler in cls._event_trigger_candidates(event):
             if handler.uuid in handler_set:
                 continue
             for trigger in handler.trigger_conditions:
@@ -2312,6 +2319,23 @@ class EventQueue:
                     break
 
         return matching_handlers
+
+    @classmethod
+    def _event_trigger_candidates(cls, event: Event, *, include_simple: bool = True) -> List['EventHandler']:
+        """Read only trigger buckets compatible with this event's native fields."""
+        candidates: Dict[UUID, EventHandler] = {}
+        for source in dict.fromkeys((None, event.source_entity_uuid)):
+            for target in dict.fromkeys((None, event.target_entity_uuid)):
+                # Positioned dispatch already read its local and simple-global
+                # indexes. The unfiltered bucket only repeats those handlers or
+                # contains distant positional registrations that it must skip.
+                if not include_simple and source is None and target is None:
+                    continue
+                trigger = Trigger(event_type=event.event_type, event_phase=event.phase,
+                    event_source_entity_uuid=source, event_target_entity_uuid=target)
+                for handler in cls._event_handlers_by_trigger.get(trigger, ()):
+                    candidates[handler.uuid] = handler
+        return sorted(candidates.values(), key=lambda handler: cls._event_handler_order[handler.uuid])
 
     @classmethod
     def add_event_handler(cls, event_handler: EventHandler) -> None:
@@ -2330,6 +2354,9 @@ class EventQueue:
                 cls._event_handlers_by_simple_trigger[trigger.get_simple_trigger()].append(event_handler)
             cls._event_handlers_by_trigger[trigger].append(event_handler)
         cls._event_handlers[event_handler.uuid] = event_handler
+        if event_handler.uuid not in cls._event_handler_order:
+            cls._event_handler_order[event_handler.uuid] = cls._next_event_handler_order
+            cls._next_event_handler_order += 1
         cls._event_handlers_by_source_entity_uuid[event_handler.source_entity_uuid].append(event_handler)
 
     @classmethod
@@ -2345,6 +2372,8 @@ class EventQueue:
         if set(ordered_uuids) != set(cls._event_handlers):
             raise ValueError("event handler order must name every registered handler")
         order = {handler_uuid: index for index, handler_uuid in enumerate(ordered_uuids)}
+        cls._event_handler_order = order
+        cls._next_event_handler_order = len(order)
         handlers = dict(cls._event_handlers)
         cls._event_handlers.clear()
         cls._event_handlers.update(
@@ -2371,6 +2400,7 @@ class EventQueue:
                 cls._event_handlers_by_trigger[trigger].remove(event_handler)
 
         cls._event_handlers.pop(event_handler.uuid, None)
+        cls._event_handler_order.pop(event_handler.uuid, None)
 
         source_handlers = cls._event_handlers_by_source_entity_uuid.get(event_handler.source_entity_uuid, [])
         if event_handler in source_handlers:
@@ -2461,6 +2491,12 @@ class EventQueue:
             cls._handler_positions[handler.uuid] = (event_key, positions.copy())
 
             cls._event_handlers[handler.uuid] = handler
+            if handler.uuid not in cls._event_handler_order:
+                cls._event_handler_order[handler.uuid] = cls._next_event_handler_order
+                cls._next_event_handler_order += 1
+            for trigger in handler.trigger_conditions:
+                if handler not in cls._event_handlers_by_trigger[trigger]:
+                    cls._event_handlers_by_trigger[trigger].append(handler)
             cls._event_handlers_by_source_entity_uuid[handler.source_entity_uuid].append(handler)
 
     @classmethod
@@ -2566,10 +2602,8 @@ class EventQueue:
             if handler in source_handlers:
                 source_handlers.remove(handler)
         else:
-            cls._event_handlers.pop(handler_uuid, None)
-            source_handlers = cls._event_handlers_by_source_entity_uuid.get(handler.source_entity_uuid, [])
-            if handler in source_handlers:
-                source_handlers.remove(handler)
+            legacy = cls._event_handlers[handler_uuid]
+            cls.remove_event_handler(legacy)
 
         return True
 
@@ -2626,8 +2660,9 @@ class EventQueue:
         cls._events_by_source.clear()
         cls._events_by_target.clear()
         cls._events_by_lineage.clear()
-        cls._events_by_timestamp.clear()
         cls._event_handlers.clear()
+        cls._event_handler_order.clear()
+        cls._next_event_handler_order = 0
         cls._event_handlers_by_trigger.clear()
         cls._event_handlers_by_simple_trigger.clear()
         cls._event_handlers_by_source_entity_uuid.clear()

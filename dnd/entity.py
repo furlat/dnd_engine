@@ -9,7 +9,7 @@ from contextlib import contextmanager
 import time
 
 from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
-from dnd.core.values import BaseValue, ModifiableValue, AdvantageStatus
+from dnd.core.values import BaseValue, ModifiableValue, AdvantageStatus, composed_passive_score
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.elevation import support_distance_feet
@@ -53,7 +53,7 @@ from dnd.core.events import RangeType
 from dnd.types.actor import EntityStatsState, PendingSpatialReturn, SpatialDisposition
 from dnd.types.summoning import SummonOrigin, TerminalOwnerRelease
 from dnd.types.spatial_effects import SpatialDamageSource
-from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
+from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores, ability_score_normalizer
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
 from dnd.blocks.health import (
     DamageApplicationPreview,
@@ -828,6 +828,8 @@ class Entity(BaseBlock):
         self.is_deployed = False
         self.is_spatially_suspended = True
         self.spatial_disposition = SpatialDisposition.ABSENT
+        # Rare unknown coverage: attached conditions can extend beyond this anchor.
+        grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
         spatial_senses_system.unregister_observer(self.uuid)
         try:
             grid._publish_entity_membership(
@@ -860,6 +862,7 @@ class Entity(BaseBlock):
             self.is_deployed = True
             self.is_spatially_suspended = False
             self.spatial_disposition = SpatialDisposition.PRESENT
+            grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
             self._register_spatial_observer()
         except BaseException as exc:
             spatial_senses_system.unregister_observer(self.uuid)
@@ -869,6 +872,7 @@ class Entity(BaseBlock):
             self.is_deployed = False
             self.is_spatially_suspended = True
             self.spatial_disposition = old_disposition
+            grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
             if isinstance(exc, PositionCommitError):
                 raise
             raise PositionCommitError(exc) from exc
@@ -926,7 +930,7 @@ class Entity(BaseBlock):
                 raise
             raise PositionCommitError(exc) from exc
         if old_layer is not new_layer:
-            grid.invalidate_occupancy_paths()
+            grid.invalidate_occupancy_paths({old_position, new_position})
         if not publish:
             return
         try:
@@ -1747,7 +1751,7 @@ class Entity(BaseBlock):
             return None
         previous = self.faction
         self.faction = faction
-        get_map().invalidate_occupancy_paths()
+        get_map().invalidate_occupancy_paths({self.position})
         return EventQueue.publish_completed_fact(EntityFactionChangedEvent(
             source_entity_uuid=self.uuid, target_entity_uuid=self.uuid,
             entity_uuid=self.uuid, previous_faction=previous, faction_after=faction,
@@ -1914,7 +1918,7 @@ class Entity(BaseBlock):
             source_id,
         )
         if capability is OriginCapability.HALFLING_NIMBLENESS:
-            get_map().invalidate_occupancy_paths()
+            get_map().invalidate_occupancy_paths({self.position})
             self.senses._paths_dirty = True
 
     def remove_origin_capability_source(
@@ -1930,7 +1934,7 @@ class Entity(BaseBlock):
         if not sources:
             del self.origin_capability_sources[capability]
         if capability is OriginCapability.HALFLING_NIMBLENESS:
-            get_map().invalidate_occupancy_paths()
+            get_map().invalidate_occupancy_paths({self.position})
             self.senses._paths_dirty = True
         return True
 
@@ -2469,12 +2473,12 @@ class Entity(BaseBlock):
         self._replace_life_state_capabilities(state)
         if state is LifeState.DEAD:
             grid = get_map()
+            grid.invalidate_occupancy_paths({self.position})
             grid.set_block_light_suppressed(
                 self.uuid,
                 self._LIFE_STATE_LIGHT_SUPPRESSION_TOKEN,
                 True,
             )
-            grid.invalidate_occupancy_paths()
 
     def _replace_life_state_capabilities(self, state: LifeState) -> None:
         """Replace only modifiers owned by the previous life-state transform."""
@@ -2503,13 +2507,13 @@ class Entity(BaseBlock):
             return
 
         grid = get_map()
+        grid.invalidate_occupancy_paths({self.position})
         grid.set_block_light_suppressed(
             self.uuid,
             self._LIFE_STATE_LIGHT_SUPPRESSION_TOKEN,
             requested_state is LifeState.DEAD,
             parent_event=parent_event_uuid,
         )
-        grid.invalidate_occupancy_paths()
         self._notify_perceivability_changed(parent_event=parent_event_uuid)
 
     def _transition_life_state(
@@ -3245,6 +3249,20 @@ class Entity(BaseBlock):
         """
         timing = action_timing_enabled()
         started = time.perf_counter() if timing else 0.0
+        skill = self.skill_set.get_skill(skill_name)
+        ability = self.ability_scores.get_ability(skill.ability)
+
+        def proficiency_normalizer(bonus: int) -> int:
+            return max(skill.proficiency_sources.apply(bonus), ability.check_proficiency_sources.apply(bonus))
+
+        scalar = composed_passive_score(self.proficiency_bonus, skill.skill_bonus,
+            ability.ability_score, ability.modifier_bonus, ability.source_entity_uuid,
+            proficiency_normalizer, ability_score_normalizer)
+        if scalar is not None:
+            if timing:
+                record_action_timing(f"passive_skill.{skill_name}.scalar_ms", started)
+            return scalar
+
         skill_bonuses = self._get_bonuses_for_skill(skill_name, use_register=False)
         skill_bonus = skill_bonuses[0].combine_values(list(skill_bonuses[1:]), use_register=False)
         if timing:
@@ -5210,8 +5228,134 @@ class Entity(BaseBlock):
         path_max_distance: Optional[int] = None,
     ) -> None:
         """Materialize derived navigation without changing perception."""
-        grid = get_map()
         effective_path_distance = path_max_distance or max_distance
+        self._materialize_navigation_distance(effective_path_distance)
+
+    def _requires_exhausted_movement_paths(
+        self,
+        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
+    ) -> bool:
+        """Return whether discovery still consumes paths with no movement left."""
+        for registered in self.position_actions:
+            variants = (discovery_variants.get(registered.uuid)
+                        if discovery_variants is not None else None)
+            if variants is None:
+                variants = registered.get_discovery_variants(self)
+            for template in variants:
+                target_type = template.effective_target_type
+                if target_type in (TargetType.POSITION, TargetType.POSITION_LOS):
+                    contract = template.position_discovery
+                    if ((contract is None and target_type is TargetType.POSITION)
+                            or (contract is not None and contract.candidate_source == "reachable")):
+                        return True
+                elif (target_type is TargetType.POSITION_PATH
+                      and not template.is_movement
+                      and template.get_movement_mode() is MovementMode.WALKING):
+                    return True
+        return False
+
+    def materialize_navigation_after_movement(self, movement_mode: MovementMode) -> None:
+        """Refresh navigation, omitting unused routes after ordinary exhaustion."""
+        remaining_distance = max(
+            0, (self.action_economy.movement_remaining(movement_mode) + 4) // 5,
+        )
+        if (remaining_distance == 0
+                and self.action_economy.movement_remaining(MovementMode.WALKING) <= 0
+                and not self._requires_exhausted_movement_paths()):
+            self._materialize_navigation_distance(0)
+        else:
+            self.materialize_navigation(max_distance=20, path_max_distance=remaining_distance)
+
+    def _prefer_direct_navigation_paths(
+        self,
+        paths: Dict[Tuple[int, int], List[Tuple[int, int]]],
+        path_costs: Dict[Tuple[int, int], int],
+        threat_domains: List[Tuple['Entity', Set[Tuple[int, int]]]],
+        *,
+        walk_in_danger: bool,
+        has_reachable_hazard: bool,
+    ) -> None:
+        """Prefer equal-cost monotone routes that add no disclosed risk."""
+        grid = get_map()
+
+        def turns(path):
+            return sum(
+                (b[0] - a[0], b[1] - a[1]) != (c[0] - b[0], c[1] - b[1])
+                for a, b, c in zip(path, path[1:], path[2:])
+            )
+
+        def integer_cost(path):
+            total = 0
+            for source, target in zip(path, path[1:]):
+                cost = grid.movement_edge_cost_units(source, target, MovementMode.WALKING,
+                    ignore_difficult_terrain=self.ignore_difficult_terrain)
+                # Declaration and individual paid steps round fractional costs
+                # differently. Leave that existing boundary untouched.
+                if cost <= 0 or cost != int(cost):
+                    return None
+                total += int(cost) * 5
+            return total
+
+        def risk(path):
+            hazards = {step for step in path[1:]
+                if grid.is_position_hazardous_for(*step, self.uuid)}
+            reactors = {reactor.uuid for reactor, domain in threat_domains
+                if any(source in domain and target not in domain
+                       for source, target in zip(path, path[1:]))}
+            return hazards, reactors
+
+        for position, original in paths.items():
+            dx, dy = position[0] - self.position[0], position[1] - self.position[1]
+            if not dx and not dy:
+                continue
+            diagonal_steps = min(abs(dx), abs(dy))
+            cardinal_steps = abs(abs(dx) - abs(dy))
+            minimum_turns = int(bool(diagonal_steps and cardinal_steps))
+            best_turns = turns(original)
+            if best_turns == minimum_turns and not has_reachable_hazard and not threat_domains:
+                continue
+            best_hazards, best_reactors = risk(original)
+            if best_turns == minimum_turns and not best_hazards and not best_reactors:
+                continue
+            original_cost = integer_cost(original)
+            if original_cost is None or original_cost != path_costs[position]:
+                continue
+            sx, sy = (dx > 0) - (dx < 0), (dy > 0) - (dy < 0)
+            diagonal = [(sx, sy)] * diagonal_steps
+            cardinal = [(sx, 0) if abs(dx) > abs(dy) else (0, sy)] * cardinal_steps
+            previous = None
+            for directions in (diagonal + cardinal, cardinal + diagonal):
+                candidate = [self.position]
+                for step_x, step_y in directions:
+                    x, y = candidate[-1]
+                    candidate.append((x + step_x, y + step_y))
+                if candidate == original or candidate == previous:
+                    continue
+                previous = candidate
+                if any(step not in self.senses.seen and step not in self.senses.visible
+                       for step in candidate[1:]):
+                    continue
+                if not all(grid.can_transition(source, target, self.uuid,
+                    MovementMode.WALKING, walk_in_danger, True,
+                    self.senses.collision_blocked,
+                    directional_collision_blocked=self.senses.directional_collision_blocked)
+                    for source, target in zip(candidate, candidate[1:])):
+                    continue
+                if integer_cost(candidate) != original_cost:
+                    continue
+                hazards, reactors = risk(candidate)
+                if not hazards <= best_hazards or not reactors <= best_reactors:
+                    continue
+                if (hazards == best_hazards and reactors == best_reactors
+                        and minimum_turns >= best_turns):
+                    continue
+                paths[position] = candidate
+                best_hazards, best_reactors = hazards, reactors
+                best_turns = minimum_turns
+
+    def _materialize_navigation_distance(self, effective_path_distance: int) -> None:
+        """Materialize the requested path domain, including an origin-only domain."""
+        grid = get_map()
         distances, paths = grid.compute_paths(
             self.position,
             effective_path_distance,
@@ -5270,6 +5414,12 @@ class Entity(BaseBlock):
                     safe_path_costs[position] = int(
                         safe_distances[position] * 5
                     )
+        if len(filtered_paths) > 1:
+            threat_domains = self._visible_hostile_threat_domains()
+            self._prefer_direct_navigation_paths(filtered_paths, path_costs, threat_domains,
+                walk_in_danger=True, has_reachable_hazard=has_reachable_hazard)
+            self._prefer_direct_navigation_paths(safe_paths, safe_path_costs, threat_domains,
+                walk_in_danger=False, has_reachable_hazard=has_reachable_hazard)
         walkable = {
             position: grid.is_walkable(position[0], position[1])
             for position in self.senses.visible
@@ -6623,7 +6773,6 @@ class Entity(BaseBlock):
                             else int(rules_route_exists)
                         )
                     else:
-                        map_has_hazards = grid.has_any_hazards()
                         threat_domains = self._visible_hostile_threat_domains()
                         for position, normal_path in paths_by_position.items():
                             if position == self.senses.position:
@@ -6642,16 +6791,11 @@ class Entity(BaseBlock):
                                 for cost in targeted_template.effective_costs
                                 if cost.cost_type == "movement"
                             )
-                            is_hazardous = (
-                                map_has_hazards
-                                and any(
-                                    grid.is_position_hazardous_for(
-                                        step[0],
-                                        step[1],
-                                        self.uuid,
-                                    )
-                                    for step in normal_path[1:]
+                            is_hazardous = any(
+                                grid.is_position_hazardous_for(
+                                    step[0], step[1], self.uuid,
                                 )
+                                for step in normal_path[1:]
                             )
                             safe_path_list: Optional[List[Tuple[int, int]]] = None
                             safe_cost: Optional[int] = None
@@ -6805,7 +6949,6 @@ class Entity(BaseBlock):
 
         valid_positions: List[AvailableTarget] = []
         idx = 0
-        map_has_hazards = grid.has_any_hazards()
         step_cost_cache: Dict[Tuple[int, int], float] = {}
 
         def cached_path_cost_feet(path: List[Tuple[int, int]]) -> int:
@@ -6851,12 +6994,9 @@ class Entity(BaseBlock):
                 continue
 
             phase_started = time.perf_counter() if timing else 0.0
-            is_hazardous = (
-                map_has_hazards
-                and any(
-                    grid.is_position_hazardous_for(step[0], step[1], self.uuid)
-                    for step in normal_path[1:]
-                )
+            is_hazardous = any(
+                grid.is_position_hazardous_for(step[0], step[1], self.uuid)
+                for step in normal_path[1:]
             )
             if timing:
                 hazard_seconds += time.perf_counter() - phase_started
@@ -7812,6 +7952,11 @@ class Entity(BaseBlock):
             record_action_timing("available_actions.collect_entity_actions_ms", started)
 
         required_path_distance = max(1, (remaining_movement + 4) // 5) if remaining_movement > 0 else 0
+        if (self.senses.path_max_distance == 0
+                and self._requires_exhausted_movement_paths(discovery_variants)):
+            # A newly registered consumer needs the domain omitted at the last
+            # exhausted movement boundary before it can read current paths.
+            required_path_distance = max(required_path_distance, 20)
         paths_need_refresh = (
             required_path_distance > 0
             and not self.senses.has_clean_paths_for_distance(required_path_distance)

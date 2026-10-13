@@ -5,6 +5,7 @@ authority, remembers last-observed world values, and copies committed facts;
 it never asks the live engine what an observer can see.
 """
 
+from collections.abc import Collection
 from dataclasses import dataclass, field, replace
 from math import floor
 from uuid import UUID, uuid5
@@ -13,7 +14,7 @@ from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, Spell
 from dnd.spells.abjuration import CounterspellReactionEvent
 from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
-from dnd.types.senses import SensesSnapshot, PerceivedSpatialEffect
+from dnd.types.senses import SensesSnapshot, PerceivedContact, PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.base_actions import ActionEvent
@@ -34,7 +35,7 @@ from dnd.types.world import CardinalDirection
 from dnd.types.class_features import FontConversion
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult, ObjectResidueState
 from dnd.types.summoning import SummonDepartureCause
-from dnd.player.audience import PlayerAudience, resolve_audience
+from dnd.player.audience import AudienceComposition, PlayerAudience, resolve_audience
 
 from dnd.player.actor_facts import ActorState, ConditionFact, PresentationTarget
 from dnd.player.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
@@ -51,6 +52,7 @@ from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelop
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
 from dnd.player.reduction import apply_world_update, apply_player_fact, apply_committed_player_fact
 from dnd.player.compatibility import legacy_damage_reference
+from dnd.world_facts import world_event_objects, world_event_footprints, world_objects_at
 
 
 def _identified(event: Event, identity: UUID | None, observer: PlayerAudience) -> bool:
@@ -153,22 +155,49 @@ def _sensory_fact(event: SensoryUpdateEvent) -> SensoryFact:
 
 
 def _held_item_disclosed(item_uuid: UUID | None, event: Event, observer: PlayerAudience,
-                         actors: dict[UUID, ActorState], known: set[UUID],
+                         actors: dict[UUID, ActorState], known: Collection[UUID],
                          senses: SensesSnapshot | None) -> bool:
     if any(identity in actors and any(item.item_uuid == item_uuid for item in actors[identity].items)
            for identity in observer.controlled):
         return True
-    return any(identity in known and _identified(event, identity, observer)
-        and senses is not None and identity in senses.entities and senses.entities[identity].visual
-        and any(equipped == item_uuid for _, equipped in actor.equipment)
-        for identity, actor in actors.items())
+    return senses is not None and any(identity in known and identity in actors
+        and contact.visual and _identified(event, identity, observer)
+        and any(equipped == item_uuid for _, equipped in actors[identity].equipment)
+        for identity, contact in senses.entities.items())
+
+
+def _held_content_at_event(event: Event, observer: PlayerAudience, actors: dict[UUID, ActorState],
+                           known: Collection[UUID], senses: SensesSnapshot | None) -> frozenset[str]:
+    holders = set(observer.controlled)
+    if senses is not None:
+        holders.update(identity for identity, contact in senses.entities.items()
+            if contact.visual and identity in known and _identified(event, identity, observer))
+    result = set()
+    for identity in holders:
+        actor = actors.get(identity)
+        if actor is None:
+            continue
+        equipped = {item for _, item in actor.equipment}
+        result.update(item.item_id for item in actor.items
+            if observer.controls(identity) or item.item_uuid in equipped)
+    return frozenset(result)
+
+
+@dataclass(frozen=True, slots=True)
+class DeclarationSenses:
+    """Detached event-entry grants; explored history is not a delivery grant."""
+
+    visible: frozenset[tuple[int, int]]
+    entities: dict[UUID, PerceivedContact]
+    objects: dict[UUID, PerceivedContact]
+    spatial_effects: dict[UUID, PerceivedSpatialEffect]
 
 
 def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, ActorState],
                   condition: ConditionFact | None, events: tuple[Event, ...],
-                  admissions: tuple[ActorAdmission, ...], known: set[UUID],
+                  admissions: tuple[ActorAdmission, ...], known: Collection[UUID],
                   observed_objects: set[UUID], senses: SensesSnapshot | None,
-                  declaration_senses: SensesSnapshot | None = None) -> PlayerFact | None:
+                  declaration_senses: DeclarationSenses | None = None) -> PlayerFact | None:
     source = event.source_entity_uuid if event.source_entity_uuid in known and _identified(event, event.source_entity_uuid, observer) else None
     target = event.target_entity_uuid if event.target_entity_uuid in known and _identified(event, event.target_entity_uuid, observer) else None
     match event:
@@ -690,12 +719,14 @@ def _content_attributions(event: Event, fact: PlayerFact | None, observer: Playe
     return tuple(result)
 
 
-def _observed_remnant(state: ItemRemnantState | None, known_objects: set[UUID]) -> ItemRemnantState | None:
+def _observed_remnant(state: ItemRemnantState | None, known_objects: Collection[UUID],
+                      observed_objects: Collection[UUID] = ()) -> ItemRemnantState | None:
     """A composite never supplies identities or pixels of undisclosed attachments."""
     if state is None:
         return None
     return state.model_copy(update={"intact_supported_items": tuple(
-        identity for identity in state.intact_supported_items if identity in known_objects)})
+        identity for identity in state.intact_supported_items
+        if identity in known_objects or identity in observed_objects)})
 
 
 def _floor_item(item: ItemPresentationState, residues: tuple[ObjectResidueState, ...]) -> FloorItem:
@@ -748,7 +779,8 @@ def _object_observed(world: PresentationTarget, identity: UUID) -> bool:
     return (x, y) in senses.visible or (x + dx, y + dy) in senses.visible
 
 
-def _observed_object(world: PresentationTarget, remembered: PlayerState, identity: UUID) -> PlayerObject:
+def _observed_object(world: PresentationTarget, remembered: PlayerState, identity: UUID,
+                     observed_objects: Collection[UUID]) -> PlayerObject:
     """Refresh seen wall faces while preserving the last observation of others."""
     obj = world.objects[identity]
     direction = obj.placement.boundary_direction
@@ -777,7 +809,6 @@ def _observed_object(world: PresentationTarget, remembered: PlayerState, identit
         retained[residue.condition_uuid] = residue.model_copy(update={
             "faces": tuple(sorted(faces, key=lambda face: face.value)),
         })
-    known_objects = set(remembered.objects) | {key for key in world.objects if _object_observed(world, key)}
     senses = world.senses
     previous = remembered.objects.get(identity)
     retained_suppressions = ({row.provider_uuid: row for row in previous.item.construction_suppressions}
@@ -792,7 +823,8 @@ def _observed_object(world: PresentationTarget, remembered: PlayerState, identit
         if retained_suppression is not None:
             admitted = set(outcome.positions) & (senses.visible if senses is not None else set())
             suppressions.append(retained_suppression.model_copy(update={"positions": tuple(sorted(admitted))}))
-    item = obj.item.model_copy(update={"remnant_state": _observed_remnant(obj.item.remnant_state, known_objects),
+    item = obj.item.model_copy(update={"remnant_state": _observed_remnant(
+        obj.item.remnant_state, remembered.objects, observed_objects),
         "construction_suppressions": tuple(suppressions)})
     contact = senses.objects.get(identity) if senses is not None else None
     contained_items = None
@@ -804,23 +836,72 @@ def _observed_object(world: PresentationTarget, remembered: PlayerState, identit
         contained_items=contained_items)
 
 
-def _world_update(world: PresentationTarget, remembered: PlayerState, event_uuid: UUID) -> WorldUpdate | None:
+@dataclass(slots=True)
+class WorldProjectionIndex:
+    """Audience memberships over current contacts and last-observed placements."""
+
+    observed: set[UUID] = field(default_factory=set)
+    remembered_positions: dict[tuple[int, int], set[UUID]] = field(default_factory=dict)
+    remembered_order: dict[UUID, int] = field(default_factory=dict)
+    next_order: int = 0
+    knowledge_removed: set[UUID] = field(default_factory=set)
+
+
+def _remember_object(index: WorldProjectionIndex, before: PlayerObject | None,
+                     after: PlayerObject | None) -> None:
+    if before is not None:
+        identity = before.item.item_uuid
+        for position in before.placement.positions:
+            members = index.remembered_positions[position]
+            members.remove(identity)
+            if not members:
+                del index.remembered_positions[position]
+        if after is None:
+            del index.remembered_order[identity]
+    if after is not None:
+        identity = after.item.item_uuid
+        if identity not in index.remembered_order:
+            index.remembered_order[identity] = index.next_order
+            index.next_order += 1
+        for position in after.placement.positions:
+            index.remembered_positions.setdefault(position, set()).add(identity)
+
+
+def _world_update(world: PresentationTarget, remembered: PlayerState, event_uuid: UUID,
+                  positions: set[tuple[int, int]], object_positions: set[tuple[int, int]], identities: set[UUID],
+                  index: WorldProjectionIndex) -> WorldUpdate | None:
     senses = world.senses
     if senses is None or world.world is None:
         return None
-    tiles = tuple(world.tiles[position] for position in sorted(senses.visible) if position in world.tiles
+    tiles = tuple(world.tiles[position] for position in sorted(positions) if position in senses.visible and position in world.tiles
                   and remembered.tiles.get(position) != world.tiles[position])
-    observed = {identity: _observed_object(world, remembered, identity)
-                for identity in world.objects if _object_observed(world, identity)}
-    removed = tuple(identity for identity, obj in remembered.objects.items()
-                    if identity not in observed
-                    and any(position in senses.visible for position in obj.placement.positions))
+    identities.update(world_objects_at(world.recorded_world, object_positions))
+    for position in object_positions:
+        identities.update(index.remembered_positions.get(position, ()))
+        identities.update(world.recorded_world.constructions_by_position.get(position, ()))
+    # A removal keeps the entry knowledge grant for this event. Its dependents
+    # observe the loss at the next world projection, matching the recorded fold.
+    for identity in identities | index.knowledge_removed:
+        identities.update(world.recorded_world.remnants_by_item.get(identity, ()))
+    index.knowledge_removed.clear()
+    observed_ids = {identity for identity in identities
+        if identity in world.objects and _object_observed(world, identity)}
+    index.observed.difference_update(identities)
+    index.observed.update(observed_ids)
+    observed = {identity: _observed_object(world, remembered, identity, index.observed)
+                for identity in observed_ids}
+    removed = tuple(sorted((identity for identity in identities
+        if identity in remembered.objects and identity not in observed
+        and any(position in senses.visible for position in remembered.objects[identity].placement.positions)),
+        key=index.remembered_order.__getitem__))
     changed = {identity: value for identity, value in observed.items()
                if remembered.objects.get(identity) != value}
     # Remembered silhouettes may remain out of sight. Contents are current
     # observations, so losing the grant clears them without exposing new state.
-    for identity, previous in remembered.objects.items():
-        if identity not in observed and identity not in removed and previous.contained_items is not None:
+    for identity in identities:
+        previous = remembered.objects.get(identity)
+        if (previous is not None and identity not in observed and identity not in removed
+                and previous.contained_items is not None):
             changed[identity] = replace(previous, contained_items=None)
     objects = tuple(changed[identity] for identity in sorted(changed, key=str))
     connectors = tuple(row for row in world.world.connectors
@@ -829,6 +910,11 @@ def _world_update(world: PresentationTarget, remembered: PlayerState, event_uuid
         return None
     update = WorldUpdate(event_uuid=event_uuid, tiles=tiles, objects=objects,
                          objects_removed=removed, connectors=connectors)
+    for identity in removed:
+        _remember_object(index, remembered.objects[identity], None)
+    for obj in objects:
+        _remember_object(index, remembered.objects.get(obj.item.item_uuid), obj)
+    index.knowledge_removed.update(removed)
     apply_world_update(remembered, update)
     return update
 
@@ -866,7 +952,9 @@ def _disclosed_actor(actor: PlayerActor, disclosed: set[UUID]) -> PlayerActor:
 def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                    admissions: tuple[ActorAdmission, ...], conditions: tuple[ConditionFact, ...],
                    private_world: PresentationTarget, private_actors: dict[UUID, ActorState],
-                   remembered: PlayerState, disclosed: set[UUID], observed_sources: tuple[Event, ...] = ()
+                   remembered: PlayerState, disclosed: set[UUID], world_index: WorldProjectionIndex,
+                   audience_composition: AudienceComposition,
+                   observed_sources: tuple[Event, ...] = ()
                    ) -> tuple[tuple[PlayerNode, ...], tuple[PlayerObservation, ...], tuple[WorldUpdate, ...]]:
     events = upgrade_recorded_spatial_commits(events, tuple(
         (row.lineage_uuid, row.event_uuid) for row in sorted(versions, key=lambda row: row.source_index)))
@@ -877,6 +965,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
     observations: list[PlayerObservation] = []
     updates: list[WorldUpdate] = []
     nodes: list[PlayerNode] = []
+    touched_actors: set[UUID] = set()
     content_at_event: dict[UUID, frozenset[str]] = {}
     pending = iter(sorted(admissions, key=lambda row: indexes[row.event_uuid]))
     admission = next(pending, None)
@@ -899,7 +988,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
             delivery_starts.setdefault(version.lineage_uuid, version.source_index)
     pending_deliveries = iter(sorted(delivery_starts.items(), key=lambda row: row[1]))
     next_delivery = next(pending_deliveries, None)
-    delivery_declarations: dict[UUID, SensesSnapshot | None] = {}
+    delivery_declarations: dict[UUID, DeclarationSenses | None] = {}
     # A break's sensory children can run before its completion. Capture the
     # contact at the integrity transition's entry; old recordings instead
     # witness the removal which preceded their replacement-object fact.
@@ -920,21 +1009,25 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
     destroyed_contacts: dict[UUID, PlayerObject] = {}
     # An interaction may itself hide the object. Retain its already granted
     # identity at entry; a remote control's undisclosed target gains no identity.
-    observed_objects = {identity for identity in private_world.objects if _object_observed(private_world, identity)}
+    observed_objects = set(world_index.observed)
     for event in events:
         while next_removal is not None and next_removal[1] <= indexes[event.uuid]:
             identity = next_removal[0]
             if identity in private_world.objects and _object_observed(private_world, identity):
-                destroyed_contacts[identity] = _observed_object(private_world, remembered, identity)
+                destroyed_contacts[identity] = _observed_object(
+                    private_world, remembered, identity, world_index.observed)
             next_removal = next(pending_removals, None)
         while next_delivery is not None and next_delivery[1] <= indexes[event.uuid]:
-            delivery_declarations[next_delivery[0]] = private_world.senses
+            senses = private_world.senses
+            delivery_declarations[next_delivery[0]] = (None if senses is None else DeclarationSenses(
+                frozenset(senses.visible), dict(senses.entities), dict(senses.objects), dict(senses.spatial_effects)))
             next_delivery = next(pending_deliveries, None)
         while admission is not None and indexes[admission.event_uuid] <= indexes[event.uuid]:
             private_actors[admission.actor.uuid] = admission.actor
             observed = _public_actor(admission.actor, observer)
             observations.append(PlayerObservation(event_uuid=admission.event_uuid, actor=observed, contact=admission.contact))
             remembered.actors[observed.uuid] = observed
+            touched_actors.add(observed.uuid)
             admission = next(pending, None)
         if not event.canceled:
             if isinstance(event, EntityCreatedEvent):
@@ -967,6 +1060,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                                     temporary_hp=committed.resulting_temporary_hp)
                         observations.append(PlayerObservation(event_uuid=event.uuid, actor=observed, contact=None))
                         remembered.actors[identity] = observed
+                        touched_actors.add(identity)
             if owner is not None and owner in private_actors:
                 private_actors[owner] = apply_actor_fact(private_actors[owner], event, facts.get(event.uuid))
             condition = facts.get(event.uuid)
@@ -984,20 +1078,41 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                                            controlled_items=actor.items if observer.controls(identity) else None)
                         observations.append(PlayerObservation(event_uuid=event.uuid, actor=observed, contact=None))
                         remembered.actors[identity] = observed
-            world_changed = apply_world_fact(private_world, event, facts.get(event.uuid))
+                        touched_actors.add(identity)
+            positions, object_positions = world_event_footprints(private_world.recorded_world, event, condition)
+            changed_objects = world_event_objects(private_world.recorded_world, event, condition)
+            changed_objects.update(world_objects_at(private_world.recorded_world, object_positions))
+            world_changed = apply_world_fact(private_world, event, condition)
             if isinstance(event, SensoryUpdateEvent) and observer.observes(event.observer_uuid):
                 for source_uuid in dict.fromkeys(row.source_event_uuid for row in event.observed_changes):
                     source = by_version.get(source_uuid)
                     if source is not None and not source.canceled:
+                        source_positions, source_object_positions = world_event_footprints(private_world.recorded_world, source)
+                        positions.update(source_positions)
+                        object_positions.update(source_object_positions)
+                        changed_objects.update(world_event_objects(private_world.recorded_world, source))
+                        changed_objects.update(world_objects_at(private_world.recorded_world, source_object_positions))
                         apply_world_fact(private_world, source)
+                positions.update(event.visible_cells_added)
+                object_positions.update(event.visible_cells_added)
+                object_positions.update(event.visible_cells_removed)
+                changed_objects.update(event.object_contacts_changed)
+                changed_objects.update(event.object_contacts_removed)
+                for identity in set(event.spatial_effects_changed) | event.spatial_effects_removed:
+                    changed_objects.update(private_world.recorded_world.constructions_by_provider.get(identity, ()))
                 # Keep the projector's remembered body positions in the same
                 # fold as replay. A later gear-only observation must not replace
                 # a teammate's pose with their pre-deployment admission value.
-                apply_player_fact(remembered, _sensory_fact(event), source_cursor=indexes[event.uuid])
+                apply_player_fact(remembered, _sensory_fact(event), source_cursor=indexes[event.uuid],
+                    audience_composition=audience_composition)
                 private_world.senses = remembered.senses
+                touched_actors.update(event.entity_contacts_changed)
+                if event.observer_position_changed:
+                    touched_actors.add(event.observer_uuid)
                 world_changed = True
             if world_changed:
-                update = _world_update(private_world, remembered, event.uuid)
+                update = _world_update(private_world, remembered, event.uuid, positions, object_positions,
+                    changed_objects, world_index)
                 if update is not None:
                     updates.append(update)
         if (isinstance(event, ActionEvent) and event.source_item_uuid is not None
@@ -1022,7 +1137,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
             if isinstance(cause, DeathEvent) and not cause.canceled and cause.entity_uuid == event.entity_uuid:
                 declaration_senses = delivery_declarations.get(cause.lineage_uuid)
         fact = _project_fact(event, observer, private_actors, facts.get(event.uuid), events, admissions,
-                            set(remembered.actors), observed_objects, private_world.senses,
+                            remembered.actors, observed_objects, private_world.senses,
                             declaration_senses)
         condition_target = event.target_entity_uuid
         if (fact is None and event.event_type is EventType.CONDITION_REMOVAL
@@ -1039,7 +1154,9 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                         event_uuid=event.uuid, resulting_stats=None, resulting_max_hp=None,
                         resulting_ac=None, resulting_tile=None, resulting_item=None))
         if isinstance(fact, (ConditionChangeFact, SpatialFact)) and not event.canceled:
-            apply_committed_player_fact(remembered, fact, source_cursor=indexes[event.uuid], version_cursors=indexes)
+            apply_committed_player_fact(remembered, fact, source_cursor=indexes[event.uuid], version_cursors=indexes,
+                audience_composition=audience_composition)
+            touched_actors.add(fact.target_entity_uuid if isinstance(fact, ConditionChangeFact) else fact.entity_uuid)
         if isinstance(fact, FactionFact):
             parent = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
             removed = (facts.get(parent.uuid) if parent is not None
@@ -1076,7 +1193,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                 fact = ObjectDestroyedFact(object_uuid=destroyed.item.item_uuid,
                     placement=destroyed.placement, item_id=destroyed.item.item_id,
                     remnant_state=_observed_remnant(event.resulting_state.remnant_state,
-                        observed_objects | set(remembered.objects)) if event.resulting_state is not None else None,
+                        remembered.objects, observed_objects) if event.resulting_state is not None else None,
                     destruction_outcome=event.resulting_state.destruction_outcome if event.resulting_state is not None else None,
                     remains_disposition=event.remains_disposition, previous_item=destroyed.item,
                     affected_volume=event.affected_volume,
@@ -1092,9 +1209,16 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                 fact = ObjectDestroyedFact(object_uuid=destroyed.item.item_uuid,
                     replacement_uuid=replacement, placement=destroyed.placement, item_id=destroyed.item.item_id,
                     remnant_state=event.item_state.remnant_state)
-        content_at_event[event.uuid] = frozenset(item.item_id for identity, actor in private_actors.items()
-            for item in actor.items if observer.controls(identity) or _held_item_disclosed(
-                item.item_uuid, event, observer, private_actors, set(remembered.actors), private_world.senses))
+        # Only foreign action/handler attribution can consult held-content
+        # knowledge. Capture it at this event boundary when there is a consumer.
+        needs_held_content = (
+            fact is not None and isinstance(event, ActionEvent)
+            and not observer.controls(event.source_entity_uuid)
+        ) or any(not observer.controls(row.source_entity_uuid)
+                 for row in event.effective_handler_presentations)
+        content_at_event[event.uuid] = (_held_content_at_event(event, observer,
+            private_actors, remembered.actors, private_world.senses)
+            if needs_held_content else frozenset())
         nodes.append(PlayerNode(uuid=event.uuid, lineage_uuid=event.lineage_uuid,
             parent_event=event.parent_event, parent_lineage=event.parent_lineage,
             children_lineages=tuple(event.children_lineages), phase=event.phase,
@@ -1132,8 +1256,12 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
     observations = [replace(row, actor=_disclosed_actor(row.actor, disclosed)) for row in observations]
     updates = [replace(row, objects=tuple(_disclosed_object(obj, disclosed) for obj in row.objects))
         for row in updates]
-    remembered.actors = {key: _disclosed_actor(actor, disclosed) for key, actor in remembered.actors.items()}
-    remembered.objects = {key: _disclosed_object(obj, disclosed) for key, obj in remembered.objects.items()}
+    for identity in touched_actors:
+        if identity in remembered.actors:
+            remembered.actors[identity] = _disclosed_actor(remembered.actors[identity], disclosed)
+    for identity in {obj.item.item_uuid for update in updates for obj in update.objects}:
+        if identity in remembered.objects:
+            remembered.objects[identity] = _disclosed_object(remembered.objects[identity], disclosed)
     return tuple(nodes), tuple(observations), tuple(updates)
 
 
@@ -1204,8 +1332,12 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
         identity: effect.model_copy(update={"duration": effect.duration if identity in state.owned_spatial_effects else None})
         for identity, effect in node.fact.spatial_effects_changed.items()}))
         if isinstance(node.fact, SensoryFact) else node for node in nodes)
-    previous_spatial = dict(state.spatial_values)
-    previous_revisions = dict(state.spatial_revisions)
+    touched_spatial = {(node.fact.observer_uuid, identity) for node in nodes
+        if isinstance(node.fact, SensoryFact)
+        for identity in node.fact.spatial_effects_changed.keys() | node.fact.spatial_effects_removed}
+    previous_spatial = {key: state.spatial_values[key] for key in touched_spatial if key in state.spatial_values}
+    previous_revisions = {identity: state.spatial_revisions[identity] for _, identity in touched_spatial
+        if identity in state.spatial_revisions}
     _observe_spatial_revisions(state, nodes)
     filtered = []
     for node in nodes:
@@ -1328,6 +1460,8 @@ class ProjectionState:
     spatial_revisions: dict[UUID, int] = field(default_factory=dict)
     next_occurrence: int = 0
     next_log_append: int = 0
+    world_index: WorldProjectionIndex = field(default_factory=WorldProjectionIndex)
+    audience_composition: AudienceComposition = field(default_factory=AudienceComposition)
 
 
 def project_after_values(state: ProjectionState, hud: PlayerHUDSnapshot | None,
@@ -1364,9 +1498,13 @@ def begin_projection(initialization: IntervalEnvelope) -> tuple[ProjectionState,
     actors: dict[UUID, ActorState] = {}
     versions = _versions(initialization.objective_rows)
     disclosed: set[UUID] = set()
+    world_index = WorldProjectionIndex()
+    audience_composition = AudienceComposition()
     nodes, observations, updates = _project_nodes(tuple(event for _, event in initialization.admitted),
-        versions, initialization.admissions, initialization.conditions, private_world, actors, remembered, disclosed)
-    state = ProjectionState(private_world, actors, remembered, disclosed)
+        versions, initialization.admissions, initialization.conditions, private_world, actors, remembered, disclosed, world_index,
+        audience_composition)
+    state = ProjectionState(private_world, actors, remembered, disclosed, world_index=world_index,
+        audience_composition=audience_composition)
     state.owned_spatial_effects.update(event.spatial_effect_uuid for _, event in initialization.admitted
         if isinstance(event, SpatialEffectChangeEvent) and remembered.viewing_audience.controls(event.source_entity_uuid))
     nodes, versions, observations, updates = _public_occurrences(state, nodes, versions, observations, updates)
@@ -1386,7 +1524,8 @@ def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> Player
         if isinstance(event, SpatialEffectChangeEvent) and state.remembered.viewing_audience.controls(event.source_entity_uuid))
     versions = _versions(lineage.objective_rows)
     nodes, observations, updates = _project_nodes(upgrade_recorded_resolutions(lineage.events), versions, lineage.admissions,
-        lineage.conditions, state.world, state.actors, state.remembered, state.disclosed_lineages, lineage.observed_sources)
+        lineage.conditions, state.world, state.actors, state.remembered, state.disclosed_lineages,
+        state.world_index, state.audience_composition, lineage.observed_sources)
     # Settled initialization needs resulting state only. Presenting a damage
     # operation additionally requires recorded causal ownership, or an explicit
     # current-format unknown owner; old missing fields cannot establish either.

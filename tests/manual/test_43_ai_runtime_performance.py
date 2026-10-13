@@ -1519,24 +1519,19 @@ def test_zero_movement_dirty_paths_are_deferred_until_movement_exists() -> None:
     assert "available_actions.skip_dirty_senses_no_movement_ms" in phases
 
 
-def test_no_hazard_map_skips_per_path_hazard_checks(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """No-hazard maps should not scan every movement path for hazards."""
+def test_hazard_free_movement_choices_have_no_hazard_or_safe_alternative() -> None:
+    """Local movement discovery reports actual route safety on an empty map."""
     arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     grid = get_map()
     assert grid.has_any_hazards() is False
 
-    def reject_hazard_scan(*_args: Any, **_kwargs: Any) -> bool:
-        raise AssertionError("per-position hazard check should be skipped")
-
-    monkeypatch.setattr(grid, "is_position_hazardous_for", reject_hazard_scan)
-
     actions = actor.get_available_actions()
-
-    assert actions.position_actions
+    move = next(row for row in actions.position_actions if row.template_name == "Move")
+    assert move.valid_targets
+    assert all(not target.is_path_hazardous and target.safe_path is None
+               for target in move.valid_targets)
 
 
 def test_bright_visibility_skips_per_tile_effective_light(

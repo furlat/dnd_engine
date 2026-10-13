@@ -3221,17 +3221,22 @@ def _refresh_antimagic_created_object(event: Event, _source_uuid: UUID, *, item_
     if item.suppression_provider_uuids:
         if saved is None and (placement := grid.get_object_placement(item.uuid)) is not None:
             item.antimagic_suspended_placement = placement
+            # Attached condition footprints need not fit the anchor's cells.
+            grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
             if not grid.remove_object(item.uuid, parent_event=event.uuid):
                 item.antimagic_suspended_placement = None
+                grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
     elif saved is not None:
         if any(grid.get_entities_at(position) for position in saved.positions):
             return None
         item.antimagic_suspended_placement = None
+        grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
         try:
             item.place_on_grid(saved.position, boundary_direction=saved.boundary_direction,
                 base_height_steps=saved.base_height_steps, orientation=saved.orientation, parent_event=event.uuid)
         except ValueError:
             item.antimagic_suspended_placement = saved
+            grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
     return None
 
 
@@ -3286,6 +3291,9 @@ class AntimagicFieldZone(AreaCondition):
             magic_suppressed = suppressed and not item.antimagic_exempt()
             before = item.to_item_presentation_state()
             previous_tokens = set(item.suppression_provider_uuids)
+            if magic_suppressed != (self.uuid in previous_tokens):
+                # Rare unknown coverage: retained parent contributions may be remote.
+                grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
             if magic_suppressed:
                 item.suppression_provider_uuids.add(self.uuid)
                 self.suppressed_conditions.setdefault(item.uuid, set())
@@ -3294,6 +3302,8 @@ class AntimagicFieldZone(AreaCondition):
             for condition in tuple(item.active_conditions_by_uuid.values()):
                 if not condition.applied or not condition.magical_origin or condition.antimagic_exempt():
                     continue
+                if suppressed != (self.uuid in condition.suppression_provider_uuids):
+                    grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
                 condition.set_suppression(self.uuid, suppressed)
                 if suppressed:
                     self.suppressed_conditions.setdefault(item.uuid, set()).add(condition.uuid)
@@ -3353,6 +3363,9 @@ class AntimagicFieldZone(AreaCondition):
         before_hp = entity.get_normal_hp()
         before_states = {identity: effect.snapshot_state()
             for identity, effect in entity.active_conditions_by_uuid.items()}
+        if suppressed != (self.uuid in condition.suppression_provider_uuids):
+            # Parent conditions can gate spatial descendants outside the entity's cell.
+            get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
         if not condition.set_suppression(self.uuid, suppressed):
             return
         entity.health.preserve_normal_hit_points(before_hp, maximum_hp=entity.get_max_hp())
@@ -3419,6 +3432,7 @@ class AntimagicFieldZone(AreaCondition):
         for identity in tuple(self.suppressed_conditions):
             item = BaseBlock.get(identity)
             if isinstance(item, BaseItem):
+                get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
                 item.suppression_provider_uuids.discard(self.uuid)
                 for owned in self.suppressed_conditions.pop(identity):
                     condition = item.active_conditions_by_uuid.get(owned)

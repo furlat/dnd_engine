@@ -1,6 +1,6 @@
 """Fold recorded world after-values without consulting native world owners."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from uuid import UUID
 
 from dnd.blocks.base_item import ItemResourceChangeEvent, ItemLocationStateEvent, ItemHoldingsReleasedEvent
@@ -37,36 +37,109 @@ class WorldFacts:
     objects: dict[UUID, WorldObjectState] = field(default_factory=dict)
     connectors: dict[UUID, WorldConnectorState] = field(default_factory=dict)
     boundaries: dict[tuple[tuple[int, int], CardinalDirection], set[UUID]] = field(default_factory=dict)
+    # Query membership includes the opposite incident support of each boundary.
+    objects_by_position: dict[tuple[int, int], set[UUID]] = field(default_factory=dict)
+    containers_by_item: dict[UUID, set[UUID]] = field(default_factory=dict)
+    remnants_by_item: dict[UUID, set[UUID]] = field(default_factory=dict)
+    constructions_by_provider: dict[UUID, set[UUID]] = field(default_factory=dict)
+    constructions_by_position: dict[tuple[int, int], set[UUID]] = field(default_factory=dict)
+
+
+def copy_world_facts(world: WorldFacts) -> WorldFacts:
+    """Detach mutable recorded indexes while sharing their immutable after-values."""
+    return replace(world, tiles=dict(world.tiles), objects=dict(world.objects),
+        connectors=dict(world.connectors),
+        boundaries={key: set(value) for key, value in world.boundaries.items()},
+        objects_by_position={key: set(value) for key, value in world.objects_by_position.items()},
+        containers_by_item={key: set(value) for key, value in world.containers_by_item.items()},
+        remnants_by_item={key: set(value) for key, value in world.remnants_by_item.items()},
+        constructions_by_provider={key: set(value) for key, value in world.constructions_by_provider.items()},
+        constructions_by_position={key: set(value) for key, value in world.constructions_by_position.items()})
+
+
+def world_objects_at(world: WorldFacts, positions: set[tuple[int, int]]) -> set[UUID]:
+    """Objects on touched supports, including either incident side of a boundary."""
+    identities: set[UUID] = set()
+    for position in positions:
+        identities.update(world.objects_by_position.get(position, ()))
+    return identities
+
+
+def _index_object(world: WorldFacts, identity: UUID, value: WorldObjectState, *, remove: bool) -> None:
+    positions = set(value.placement.positions)
+    memberships = []
+    if value.placement.kind is WorldPlacementKind.BOUNDARY:
+        assert value.placement.boundary_direction is not None
+        dx, dy = CARDINAL_DELTAS[value.placement.boundary_direction]
+        x, y = value.placement.position
+        positions.add((x + dx, y + dy))
+        memberships.append((world.boundaries, ((value.placement.position, value.placement.boundary_direction),)))
+    memberships.append((world.objects_by_position, positions))
+    memberships.append((world.containers_by_item, tuple(item.item_uuid for item in value.contained_items or ())))
+    memberships.append((world.remnants_by_item, value.item.remnant_state.intact_supported_items
+        if value.item.remnant_state is not None else ()))
+    memberships.append((world.constructions_by_provider, tuple(
+        row.provider_uuid for row in value.item.construction_suppressions)))
+    memberships.append((world.constructions_by_position, tuple(
+        position for row in value.item.construction_suppressions for position in row.positions)))
+    for index, keys in memberships:
+        for key in set(keys):
+            if remove:
+                members = index[key]
+                members.remove(identity)
+                if not members:
+                    del index[key]
+            else:
+                index.setdefault(key, set()).add(identity)
 
 
 def _put_object(world: WorldFacts, identity: UUID, value: WorldObjectState | None) -> None:
     previous = world.objects.pop(identity, None)
-    if previous is not None and previous.placement.boundary_direction is not None:
-        key = (previous.placement.position, previous.placement.boundary_direction)
-        members = world.boundaries.get(key)
-        if members is not None:
-            members.discard(identity)
-            if not members:
-                world.boundaries.pop(key)
+    if previous is not None:
+        _index_object(world, identity, previous, remove=True)
     if value is not None:
         world.objects[identity] = value
-        if value.placement.kind is WorldPlacementKind.BOUNDARY:
-            direction = value.placement.boundary_direction
-            assert direction is not None
-            world.boundaries.setdefault((value.placement.position, direction), set()).add(identity)
+        _index_object(world, identity, value, remove=False)
 
 
 def _remove_contained_item(world: WorldFacts, identity: UUID) -> bool:
     """Recorded membership identifies the source, including older owner stamps."""
     changed = False
-    for owner, obj in tuple(world.objects.items()):
-        if obj.contained_items is None:
-            continue
+    for owner in tuple(world.containers_by_item.get(identity, ())):
+        obj = world.objects[owner]
+        assert obj.contained_items is not None
         retained = tuple(item for item in obj.contained_items if item.item_uuid != identity)
         if retained != obj.contained_items:
             _put_object(world, owner, obj.model_copy(update={"contained_items": retained}))
             changed = True
     return changed
+
+
+def world_event_objects(
+    world: WorldFacts, event: Event, condition: ConditionFact | None = None,
+) -> set[UUID]:
+    """Explicit subjects and containing owners, including objects with no surviving bands."""
+    identities: set[UUID] = set()
+    if condition is not None and condition.resulting_item is not None:
+        identities.add(condition.resulting_item.item_uuid)
+    match event:
+        case WorldInitializedEvent():
+            return set(world.objects) | {obj.item.item_uuid for obj in event.objects}
+        case WorldModifiedEvent() | SpatialChangeEvent():
+            if event.object_uuid is not None:
+                identities.add(event.object_uuid)
+        case ItemLocationStateEvent():
+            identities.add(event.item_state.item_uuid)
+            if event.owner_uuid is not None:
+                identities.add(event.owner_uuid)
+        case ItemHoldingsReleasedEvent() | ItemResourceChangeEvent():
+            identities.add(event.item_uuid)
+        case ConditionApplicationEvent() | ConditionRemovalEvent():
+            if event.resulting_item is not None:
+                identities.add(event.resulting_item.item_uuid)
+    for identity in tuple(identities):
+        identities.update(world.containers_by_item.get(identity, ()))
+    return identities
 
 
 def world_event_positions(
@@ -92,6 +165,8 @@ def world_event_positions(
             identity = event.item_state.item_uuid
             if event.world_placement is not None:
                 positions.update(event.world_placement.positions)
+            if event.owner_uuid is not None and (owner := world.objects.get(event.owner_uuid)) is not None:
+                positions.update(owner.placement.positions)
         case ItemHoldingsReleasedEvent():
             identity = event.item_uuid
         case ItemResourceChangeEvent():
@@ -119,12 +194,27 @@ def world_event_positions(
     if identity is not None:
         if (obj := world.objects.get(identity)) is not None:
             positions.update(obj.placement.positions)
-        for obj in world.objects.values():
-            if any(item.item_uuid == identity for item in obj.contained_items or ()):
-                positions.update(obj.placement.positions)
+        for owner in world.containers_by_item.get(identity, ()):
+            positions.update(world.objects[owner].placement.positions)
     return positions | {
         (x + dx, y + dy) for x, y in positions for dx, dy in CARDINAL_DELTAS.values()
     }
+
+
+def world_event_footprints(
+    world: WorldFacts, event: Event, condition: ConditionFact | None = None,
+) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
+    """Separate Tile after-values from object/incident-support observation inputs."""
+    if (isinstance(event, SpatialChangeEvent)
+            and event.change_type is SpatialChangeType.LIGHT_CHANGED
+            and (condition is None or condition.resulting_tile is None and condition.resulting_item is None)):
+        positions = {tuple(map(int, key.split(",", maxsplit=1))) for key in event.light_level_map or {}}
+        if event.new_light_level is not None:
+            positions.add(event.position)
+        # This fact changes no placement, object value or observation grant.
+        return positions, set()
+    positions = world_event_positions(world, event, condition)
+    return positions, set(positions)
 
 
 def apply_world_fact(
@@ -149,6 +239,11 @@ def apply_world_fact(
             world.tiles = {row.position: row for row in event.tiles}
             world.objects.clear()
             world.boundaries.clear()
+            world.objects_by_position.clear()
+            world.containers_by_item.clear()
+            world.remnants_by_item.clear()
+            world.constructions_by_provider.clear()
+            world.constructions_by_position.clear()
             for obj in event.objects:
                 _put_object(world, obj.item.item_uuid, obj)
             world.connectors = {row.connector_uuid: row for row in event.connectors}
@@ -245,7 +340,9 @@ def apply_world_fact(
                     x, y = key.split(",", maxsplit=1)
                     position = (int(x), int(y))
                     if (previous := world.tiles.get(position)) is not None:
-                        world.tiles[position] = previous.model_copy(update={"resolved_light": LightLevel(level)})
+                        resolved = LightLevel(level)
+                        if previous.resolved_light is not resolved:
+                            world.tiles[position] = previous.model_copy(update={"resolved_light": resolved})
             elif event.change_type is SpatialChangeType.OBJECT_REMOVED and event.object_uuid is not None:
                 _put_object(world, event.object_uuid, None)
             elif event.change_type in (SpatialChangeType.OBJECT_PLACED, SpatialChangeType.OBJECT_CHANGED):

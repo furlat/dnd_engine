@@ -8,11 +8,32 @@ from typing import Callable, Optional
 
 
 ActionTimingRecorder = Callable[[str, float], None]
+ActionCountRecorder = Callable[[str, int], None]
 
 _action_timing_recorder: ContextVar[Optional[ActionTimingRecorder]] = ContextVar(
     "action_timing_recorder",
     default=None,
 )
+
+
+# Temporary movement-rework diagnostics; removed at the cleanup checkpoint.
+_action_count_recorder: ContextVar[Optional[ActionCountRecorder]] = ContextVar(
+    "action_count_recorder", default=None,
+)
+
+
+def set_action_count_recorder(recorder: Optional[ActionCountRecorder]) -> Token[Optional[ActionCountRecorder]]:
+    return _action_count_recorder.set(recorder)
+
+
+def reset_action_count_recorder(token: Token[Optional[ActionCountRecorder]]) -> None:
+    _action_count_recorder.reset(token)
+
+
+def record_action_count(name: str, value: int) -> None:
+    recorder = _action_count_recorder.get()
+    if recorder is not None:
+        recorder(name, value)
 
 
 def set_action_timing_recorder(recorder: Optional[ActionTimingRecorder]) -> Token[Optional[ActionTimingRecorder]]:

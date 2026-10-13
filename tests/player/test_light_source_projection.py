@@ -7,14 +7,20 @@ import pytest
 
 from dnd.actions_functional import execute_use_action
 from dnd.content.items.environment_item_builders import build_wall_torch
-from dnd.core.events import EventQueue
+from dnd.core.base_actions import ActionEvent
+from dnd.core.events import EventPhase, EventQueue, EventType, SensoryUpdateEvent
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.items.torches import build_torch
-from dnd.player.capture import capture_interval, capture_lineages
+from dnd.player.capture import CompletedLineage, ObjectiveRow, capture_interval, capture_lineages
+from dnd.player.audience import PlayerAudience
 from dnd.player.projection import begin_projection, project_lineage
-from dnd.player.event_record import RecordedEvent
+from dnd.player.event_record import RecordedEvent, encode_event
 from dnd.player.reduction import reduce_initialization, reduce_lineage
+from dnd.player.recorded import RecordedSequence, project_sequence
+from dnd.core.base_object import PASSIVE_EVENT_REPLAY
+from dnd.types.world import LightLevel
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from pydantic import TypeAdapter
@@ -133,3 +139,114 @@ def test_disclosed_equipment_source_after_values_preserve_activation(world, lit)
     assert actor.controlled_items is None
     assert (source.is_lit, source.very_bright_radius_feet,
         source.bright_radius_feet, source.dim_radius_feet) == (lit, 6, 19, 31)
+
+
+@pytest.mark.parametrize('equipped', (False, True))
+@pytest.mark.parametrize('foreign_handler', (False, True))
+def test_recorded_content_attribution_uses_foreign_equipment_grants(world, equipped, foreign_handler):
+    # Recorded-value boundary: as above, this supplies equipment facts rather
+    # than claiming a portable torch supports a native equip command.
+    built, (owner, witness) = world
+    torch = build_torch(owner.uuid)
+    assert owner.loot_item(torch)
+    witness.update_entity_senses(max_distance=8)
+    initial = capture(built, witness)
+    item = torch.to_item_presentation_state()
+    initial = replace(initial, admissions=tuple(replace(row, actor=replace(row.actor,
+        items=(item,), equipment=(("weapon_melee_off", torch.uuid),) if equipped else ()))
+        if row.actor.uuid == owner.uuid else row for row in initial.admissions))
+    source = witness.uuid if foreign_handler else owner.uuid
+    event = ActionEvent.model_validate(dict(name='Use recorded equipment', use_register=False,
+        source_entity_uuid=source, phase=EventPhase.COMPLETION,
+        behavior_id='action.recorded_use', provided_by_id=item.item_id, origin_root_id=item.item_id,
+        source_item_uuid=None if foreign_handler else item.item_uuid,
+        source_item_presentation=None if foreign_handler else item,
+        identified_entity_observer_uuids={str(owner.uuid): {str(witness.uuid)},
+            str(witness.uuid): {str(witness.uuid)}}),
+        context=PASSIVE_EVENT_REPLAY)
+    payload = encode_event(event)
+    if foreign_handler:
+        payload['effective_handler_presentations'] = [dict(dispatch_index=0,
+            handler_name='Recorded equipment reaction', behavior_id='reaction.recorded_equipment',
+            provided_by_id=item.item_id, origin_root_id=item.item_id,
+            source_entity_uuid=str(owner.uuid), triggering_event_uuid=str(event.uuid),
+            triggering_lineage_uuid=str(event.lineage_uuid), emitted_lineage_uuids=[],
+            outcome='modified_event')]
+    event = TypeAdapter(RecordedEvent).validate_python(payload, context=PASSIVE_EVENT_REPLAY)
+    index = initial.end_cursor
+    row = ObjectiveRow(source_index=index, event_uuid=event.uuid, lineage_uuid=event.lineage_uuid,
+        parent_event=None, parent_lineage=None, event_type=event.event_type.value,
+        event_class='ActionEvent', phase=event.phase.value, source_uuid=source, source_name=None,
+        target_uuid=None, target_name=None, turn_execution_id=None, status=None, outcome=None,
+        canceled=False, modified=False)
+    lineage = CompletedLineage(generation=initial.generation, observer_uuid=witness.uuid,
+        root=event, events=(event,), objective_rows=(row,), start_cursor=index, end_cursor=index+1)
+    projection, _ = begin_projection(initial)
+    packet = project_lineage(projection, lineage)
+    assert packet is not None
+    node, = (node for node in packet.events if node.uuid == event.uuid)
+    role = 'effective_handler' if foreign_handler else 'behavior'
+    attribution, = (value for value in node.content_attributions if value.role == role)
+    expected_provider = item.item_id if equipped else None
+    assert (attribution.provided_by_id, attribution.origin_root_id) == (expected_provider, expected_provider)
+    if not foreign_handler:
+        assert [value.behavior_id for value in node.content_attributions if value.role == 'source_item'] == (
+            [item.item_id] if equipped else [])
+    saved = RecordedSequence(initialization=initial, lineages=(lineage,)).model_dump_json()
+    restored = RecordedSequence.model_validate_json(saved, context=PASSIVE_EVENT_REPLAY)
+    assert project_sequence(restored).lineages == (packet,)
+
+
+def test_shared_light_tile_after_values_precede_parent_completion_and_survive_cold_replay(world):
+    built, (first, second) = world
+    audience = PlayerAudience((first.uuid, second.uuid), (first.uuid, second.uuid))
+    for actor in (first, second):
+        actor.update_entity_senses(max_distance=8)
+    initial = capture_interval(name="shared light", start_cursor=0,
+        end_cursor=EventQueue.event_cursor(), observer_uuid=first.uuid, audience=audience,
+        battlefield_id=built.definition.battlefield_id)
+    projection, public = begin_projection(initial)
+    state = reduce_initialization(public)
+    position, neighbor = (5, 6), (5, 7)
+    unchanged = state.tiles[neighbor]
+    lineages, packets = [], []
+
+    for light in (LightLevel.DIM_LIGHT, LightLevel.DARKNESS, LightLevel.BRIGHT_LIGHT):
+        cursor = EventQueue.event_cursor()
+        assert get_map().set_tile_base_light(position, light)
+        roots = tuple(event for _, event in EventQueue.iter_events_since(cursor)
+            if event.parent_lineage is None and event.phase is EventPhase.COMPLETION)
+        captured = capture_lineages(roots, observer_uuid=first.uuid, audience=audience,
+            known_actor_uuids=frozenset(state.actors))
+        children = [event for row in captured for event in row.events
+            if isinstance(event, SensoryUpdateEvent)]
+        assert {event.observer_uuid for event in children} == {first.uuid, second.uuid}
+        for native in captured:
+            assert not native.dispositions
+            packet = project_lineage(projection, native)
+            assert packet is not None
+            packets.append(packet)
+            lineages.append(native)
+            for update in packet.world_updates:
+                assert {tile.position for tile in update.tiles} <= {position}
+                assert not update.objects and not update.objects_removed
+                indexes = {row.event_uuid: row.source_index for row in native.objective_rows}
+                light_completion = next(event for event in native.events
+                    if event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+                    and event.phase is EventPhase.COMPLETION)
+                assert indexes[update.event_uuid] < indexes[light_completion.uuid]
+            state = reduce_lineage(state, packet)
+        # The first observer's source after-value is projected while the other
+        # observer still grants this cell. Darkness is remembered at that prefix
+        # before the second child's visibility removal closes the shared grant.
+        assert state.tiles[position].resolved_light is light
+        assert (position in state.senses.visible) is (light is not LightLevel.DARKNESS)
+        assert state.tiles[neighbor] == unchanged
+
+    saved = RecordedSequence(initialization=initial, lineages=tuple(lineages)).model_dump_json()
+    cold = project_sequence(RecordedSequence.model_validate_json(saved, context=PASSIVE_EVENT_REPLAY))
+    assert cold.lineages == tuple(packets)
+    replayed = reduce_initialization(cold.initialization)
+    for packet in cold.lineages:
+        replayed = reduce_lineage(replayed, packet)
+    assert replayed == state

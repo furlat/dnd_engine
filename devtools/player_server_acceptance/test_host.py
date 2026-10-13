@@ -19,6 +19,15 @@ from server.config import ServerConfig
 
 
 async def run(args):
+    root = Path(__file__).resolve().parents[2]
+    source_paths = sorted({path for directory in (
+        'dnd', 'server', 'sdk/python/src', 'devtools/player_server_acceptance',
+    ) for path in (root / directory).rglob('*.py')} | {
+        root / 'pyproject.toml', root / 'sdk/python/pyproject.toml', root / 'uv.lock',
+    })
+    source_snapshot = {str(path.relative_to(root)): sha256(path.read_bytes()).hexdigest()
+        for path in source_paths}
+    source_snapshot_unix_ns = time_ns()
     app = create_app(ServerConfig.model_validate_json(args.config.read_bytes()))
     host = app.state.player_host
     worker_process = None
@@ -64,23 +73,15 @@ async def run(args):
         watcher.cancel()
         publication_watcher.cancel()
         await asyncio.gather(watcher, publication_watcher, return_exceptions=True)
-        root = Path(__file__).resolve().parents[2]
         args.result.write_text(json.dumps({'pid': os.getpid(), 'worker_pid': None if worker_process is None else worker_process.pid,
             'worker_returncode': None if worker_process is None else worker_process.returncode,
             'timings': host.timings, 'delivery_bytes': host.delivery_bytes, 'query_bytes': host.query_bytes,
             'receipt_bytes': {key: seat.receipt_bytes for key, seat in host.seats.items()},
             'receipt_counts': {key: len(seat.receipts) for key, seat in host.seats.items()},
             'spool_bytes': {key: spool.committed_bytes for key, spool in host.recording.audiences.items()},
-            'source_sha256': {path: sha256((root / path).read_bytes()).hexdigest() for path in (
-                'dnd/core/events.py', 'dnd/core/aoe.py', 'dnd/player/capture.py', 'dnd/player/application.py',
-                'dnd/player/session.py',
-                'dnd/player/content_composition.py', 'dnd/player/reduction.py', 'dnd/entity.py',
-                'dnd/core/values.py', 'dnd/blocks/health.py', 'dnd/blocks/abilities.py',
-                'dnd/blocks/equipment.py', 'dnd/player/projection.py', 'server/worker.py',
-                'dnd/controller.py', 'dnd/encounter.py', 'dnd/core/base_object.py',
-                'dnd/core/gridmap.py', 'dnd/blocks/sensory.py', 'server/protocol.py',
-                'server/host.py', 'server/app.py', 'sdk/python/src/dnd_player/transport.py',
-                'sdk/python/pyproject.toml', 'uv.lock')}}, indent=2))
+            'source_snapshot_unix_ns': source_snapshot_unix_ns,
+            'source_snapshot_scope': 'Captured once before app creation and worker startup; source remains frozen during the lane.',
+            'source_sha256': source_snapshot}, indent=2))
 
 
 def main():

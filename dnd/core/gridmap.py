@@ -2,9 +2,11 @@
 
 import math
 import time
+from bisect import bisect_left, bisect_right
+from heapq import heappop, heappush
 from dnd.core.condition_types import ConditionDurationSummary
 
-from typing import AbstractSet, Any, Dict, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
+from typing import AbstractSet, Collection, Any, Dict, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
@@ -12,7 +14,8 @@ from dataclasses import dataclass
 from pydantic import BaseModel, Field
 
 from dnd.types.event_facts import LandingKind
-from dnd.core.geometry import circle_positions, supercover_line, supercover_line_offsets
+from dnd.core.geometry import (circle_positions, supercover_line, supercover_line_offsets,
+    supercover_slope_order, supercover_incoming_ranges, supercover_incoming_rank_ranges)
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.shadowcast import compute_fov
@@ -67,7 +70,12 @@ from dnd.types.world_placement import (
     WorldObjectSupport,
     WorldPlacementKind,
 )
-from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
+from dnd.action_timing import action_timing_enabled, record_action_count, record_action_elapsed, record_action_timing
+
+OpticalSnapshot = Dict[Tuple[int, int], Dict[UUID, frozenset[OpticalObscurement]]]
+
+SPATIAL_CHUNK_SIZE = 16
+FOV_CACHE_ORIGINS = 64
 
 DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
 DIRECTIONAL_CHANNELS: Tuple[str, ...] = (
@@ -77,6 +85,25 @@ DIRECTIONAL_CHANNELS: Tuple[str, ...] = (
 )
 ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "entity.world_presence.absent"
 OBJECT_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "object.world_presence.absent"
+
+
+@dataclass(frozen=True, slots=True)
+class BoundarySnapshot:
+    """Detached native side layers and provider values for one query batch."""
+
+    layers: Dict[Tuple[int, int], Dict[CardinalDirection, Tuple[UUID, ...]]]
+    structures: Dict[UUID, Optional[BoundaryStructure]]
+    placements: Dict[UUID, Optional[WorldObjectPlacement]]
+    coverage_base: frozenset[Tuple[int, int]]
+    routes: Dict[Tuple[int, int], Tuple[CardinalDirection, ...]]
+
+
+def boundary_snapshot_covers(snapshot: BoundarySnapshot, position: Tuple[int, int]) -> bool:
+    """Exact batch coverage: input cells plus their four incident neighbors."""
+    cells = snapshot.coverage_base
+    x, y = position
+    return (position in cells or (x - 1, y) in cells or (x + 1, y) in cells
+            or (x, y - 1) in cells or (x, y + 1) in cells)
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,6 +204,7 @@ class GridMap:
     def __init__(self):
         self._tiles: Dict[Tuple[int, int], Tile] = {}
         self._tiles_by_uuid: Dict[UUID, Tuple[int, int]] = {}
+        self._support_columns: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
 
         self._min_x: int = 0
         self._max_x: int = 0
@@ -185,7 +213,14 @@ class GridMap:
         self._bounds_dirty: bool = True
 
         self._object_placements: Dict[UUID, WorldObjectPlacement] = {}
+        self._boundary_placements_by_position: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
+        self._objects_by_declared_source: DefaultDict[UUID, Set[UUID]] = defaultdict(set)
+        self._declared_source_by_object: Dict[UUID, Tuple[UUID, int]] = {}
+        self._next_object_placement_order = 0
         self._spatial_conditions: Dict[UUID, SpatialConditionOwner] = {}
+        self._global_crossing_owners: Set[UUID] = set()
+        self._local_crossing_owners: DefaultDict[str, Set[UUID]] = defaultdict(set)
+        self._missing_support_frontier: DefaultDict[Tuple[int, int], Set[Tuple[int, int]]] = defaultdict(set)
         self._spatial_condition_positions: Dict[
             UUID,
             Set[Tuple[int, int]],
@@ -203,6 +238,18 @@ class GridMap:
 
         self._cell_subscribers: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
         self._entity_subscriptions: DefaultDict[UUID, Set[Tuple[int, int]]] = defaultdict(set)
+        self._observer_revisions: Dict[UUID, Tuple[int, int, int, int]] = {}
+        self._observer_dependency_chunks: Dict[UUID, Set[Tuple[int, int]]] = {}
+        self._observer_dependency_cells: Dict[UUID, frozenset[Tuple[int, int]]] = {}
+        self._observer_dependency_bounds: Dict[UUID, Optional[Tuple[int, int, int, int]]] = {}
+        self._chunk_dependents: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
+        self._optical_candidate_cells: DefaultDict[Tuple[int, int], Set[Tuple[int, int]]] = defaultdict(set)
+        self._boundary_candidate_cells: DefaultDict[
+            Tuple[int, int], Dict[Tuple[int, int], Dict[CardinalDirection, Tuple[UUID, ...]]]
+        ] = defaultdict(dict)
+        self._contact_candidate_cells: DefaultDict[
+            Tuple[int, int], Dict[Tuple[int, int], Tuple[Tuple[UUID, ...], Tuple[UUID, ...]]]
+        ] = defaultdict(dict)
 
         self._light_sources: Dict[UUID, LightSourceData] = {}
         self._block_light_suppressions: DefaultDict[UUID, Set[str]] = defaultdict(set)
@@ -224,16 +271,17 @@ class GridMap:
         self._occupancy_revision: int = 0
         self._light_revision: int = 0
         self._propagation_revision: int = 0
-        self._fov_cache: Dict[
-            Tuple[Tuple[int, int], Optional[float], int],
-            List[Tuple[int, int]],
-        ] = {}
-        self._propagation_fov_cache: Dict[
+        self._fov_cache: OrderedDict[
+            Tuple[Tuple[int, int], int],
+            Tuple[Optional[float], Tuple[Tuple[int, int], ...]],
+        ] = OrderedDict()
+        self._propagation_fov_cache: OrderedDict[
             Tuple[Tuple[int, int], Optional[float]],
             Tuple[Tuple[int, int], ...],
-        ] = {}
+        ] = OrderedDict()
         self._barrier_positions_cache: Optional[frozenset[Tuple[int, int]]] = None
         self._directional_blockers_cache: Dict[str, bool] = {}
+        self._directional_blocking_owners: Dict[str, Set[UUID]] = {}
         self._directional_transition_cache: Dict[
             Tuple[str, int],
             Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool],
@@ -378,38 +426,114 @@ class GridMap:
         """Get all entity UUIDs subscribed to a cell."""
         return self._cell_subscribers.get(position, set()).copy()
 
-    def get_subscribers_for_cells(self, cells: Set[Tuple[int, int]]) -> Set[UUID]:
+    def get_subscribers_for_cells(self, cells: Collection[Tuple[int, int]]) -> Set[UUID]:
         """Return the union of subscribers for a batch of cells."""
         subscribers: Set[UUID] = set()
         for cell in cells:
             subscribers.update(self._cell_subscribers.get(cell, set()))
         return subscribers
 
-    def subscribe_to_cells(self, entity_uuid: UUID, cells: Set[Tuple[int, int]]) -> None:
+    @staticmethod
+    def _spatial_chunk(position: Tuple[int, int]) -> Tuple[int, int]:
+        return position[0] // SPATIAL_CHUNK_SIZE, position[1] // SPATIAL_CHUNK_SIZE
+
+    def get_dependent_observers_at(self, position: Tuple[int, int]) -> Set[UUID]:
+        """Return conservative sensory dependencies, never observation grants."""
+        return {identity for identity in self._chunk_dependents.get(self._spatial_chunk(position), ())
+                if self._observer_depends_on(identity, position)}
+
+    def _observer_depends_on(self, observer_uuid: UUID, position: Tuple[int, int]) -> bool:
+        bounds = self._observer_dependency_bounds[observer_uuid]
+        return (position in self._observer_dependency_cells[observer_uuid]
+                or bounds is not None and bounds[0] <= position[0] <= bounds[2]
+                and bounds[1] <= position[1] <= bounds[3])
+
+    def get_dependent_observers_for_cells(self, cells: Collection[Tuple[int, int]]) -> Set[UUID]:
+        observers: Set[UUID] = set()
+        for position in cells:
+            observers.update(self.get_dependent_observers_at(position))
+        return observers
+
+    def subscribe_to_cells(
+        self, entity_uuid: UUID, cells: Set[Tuple[int, int]], *,
+        dependency_cells: Optional[Collection[Tuple[int, int]]] = None,
+        dependency_bounds: Optional[Tuple[int, int, int, int]] = None,
+    ) -> None:
         """Subscribe an entity to a set of cells.
 
         Replaces any existing subscriptions for this entity.
-        Typically called after updating entity senses with the visible cells.
+        ``cells`` retains the established encounter/action observation grants.
+        Sensory dependencies may include an inclusive (min_x, min_y, max_x, max_y)
+        rectangle and extra cells. Their coarse memberships never grant knowledge.
         """
         old_cells = self._entity_subscriptions.get(entity_uuid, set())
 
         for cell in old_cells - cells:
             self._cell_subscribers[cell].discard(entity_uuid)
+            if not self._cell_subscribers[cell]:
+                del self._cell_subscribers[cell]
 
         for cell in cells - old_cells:
             self._cell_subscribers[cell].add(entity_uuid)
 
         self._entity_subscriptions[entity_uuid] = cells.copy()
+        self._observer_revisions.setdefault(entity_uuid, (0, 0, 0, 0))
+        extra_cells = frozenset(cells if dependency_cells is None else dependency_cells)
+        self._observer_dependency_cells[entity_uuid] = extra_cells
+        self._observer_dependency_bounds[entity_uuid] = dependency_bounds
+        dependency_chunks = {self._spatial_chunk(position) for position in extra_cells}
+        if dependency_bounds is not None:
+            min_x, min_y, max_x, max_y = dependency_bounds
+            dependency_chunks.update((x, y)
+                for x in range(min_x // SPATIAL_CHUNK_SIZE, max_x // SPATIAL_CHUNK_SIZE + 1)
+                for y in range(min_y // SPATIAL_CHUNK_SIZE, max_y // SPATIAL_CHUNK_SIZE + 1))
+        old_chunks = self._observer_dependency_chunks.get(entity_uuid, set())
+        for chunk in old_chunks - dependency_chunks:
+            self._chunk_dependents[chunk].discard(entity_uuid)
+            if not self._chunk_dependents[chunk]:
+                del self._chunk_dependents[chunk]
+        for chunk in dependency_chunks - old_chunks:
+            self._chunk_dependents[chunk].add(entity_uuid)
+        self._observer_dependency_chunks[entity_uuid] = dependency_chunks
 
     def unsubscribe_entity(self, entity_uuid: UUID) -> None:
         """Remove all subscriptions for an entity."""
         cells = self._entity_subscriptions.pop(entity_uuid, set())
+        self._observer_revisions.pop(entity_uuid, None)
+        self._observer_dependency_cells.pop(entity_uuid, None)
+        self._observer_dependency_bounds.pop(entity_uuid, None)
+        for chunk in self._observer_dependency_chunks.pop(entity_uuid, set()):
+            self._chunk_dependents[chunk].discard(entity_uuid)
+            if not self._chunk_dependents[chunk]:
+                del self._chunk_dependents[chunk]
         for cell in cells:
             self._cell_subscribers[cell].discard(entity_uuid)
+            if not self._cell_subscribers[cell]:
+                del self._cell_subscribers[cell]
 
     def get_entity_subscriptions(self, entity_uuid: UUID) -> Set[Tuple[int, int]]:
         """Get all cells an entity is subscribed to."""
         return self._entity_subscriptions.get(entity_uuid, set()).copy()
+
+    def observer_spatial_revisions(self, observer_uuid: UUID) -> Tuple[int, int, int, int]:
+        """Return this subscriber's optical, illumination, propagation and occupancy revisions."""
+        return self._observer_revisions.get(observer_uuid, (0, 0, 0, 0))
+
+    def _bump_observer_revisions(
+        self, channels: Set[str], positions: Optional[Collection[Tuple[int, int]]],
+    ) -> None:
+        increments = tuple(int(channel in channels) for channel in
+                           ("optical", "illumination", "propagation", "occupancy"))
+        if not any(increments):
+            return
+        observers = (self._observer_revisions if positions is None
+                     else self.get_dependent_observers_for_cells(positions))
+        for observer_uuid in observers:
+            optical, illumination, propagation, occupancy = self._observer_revisions[observer_uuid]
+            self._observer_revisions[observer_uuid] = (
+                optical + increments[0], illumination + increments[1],
+                propagation + increments[2], occupancy + increments[3],
+            )
 
     @property
     def optical_revision(self) -> int:
@@ -441,19 +565,25 @@ class GridMap:
         """Return the current physical-propagation topology revision."""
         return self._propagation_revision
 
-    def invalidate_spatial_caches(self, channels: Set[str]) -> None:
+    def invalidate_spatial_caches(
+        self, channels: Set[str], positions: Optional[Collection[Tuple[int, int]]] = None,
+    ) -> None:
         """Invalidate spatial query caches after authoritative topology changes.
 
         Args:
             channels: Changed spatial channels: movement, optical,
                 illumination, or propagation.
+            positions: Authoritative changed cells; unknown coverage invalidates all subscribers.
         """
-        self._bump_spatial_revisions(channels)
+        self._bump_spatial_revisions(channels, positions)
 
-    def invalidate_occupancy_paths(self) -> None:
+    def invalidate_occupancy_paths(
+        self, positions: Optional[Collection[Tuple[int, int]]] = None,
+    ) -> None:
         """Invalidate cached paths after entity blocking state changes."""
         self._occupancy_revision += 1
         self._path_cache.clear()
+        self._bump_observer_revisions({"occupancy"}, positions)
 
     def _on_perceivability_changed(self, event: Event) -> None:
         """Invalidate subjective occupancy paths when a blocker can appear or vanish.
@@ -468,12 +598,15 @@ class GridMap:
             event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED
             and event.phase == EventPhase.DECLARATION
         ):
-            self.invalidate_occupancy_paths()
+            self.invalidate_occupancy_paths(event.get_affected_positions() or None)
 
-    def _bump_spatial_revisions(self, channels: Set[str]) -> None:
+    def _bump_spatial_revisions(
+        self, channels: Set[str], positions: Optional[Collection[Tuple[int, int]]] = None,
+    ) -> None:
         """Advance channel revisions and clear dependent query caches."""
         if not channels:
             return
+        self._bump_observer_revisions(channels, positions)
         self._spatial_revision += 1
         if "optical" in channels:
             self._optical_revision += 1
@@ -493,13 +626,22 @@ class GridMap:
         if "optical" in channels:
             self._directional_transition_cache.clear()
             self._directional_blocking_cache.clear()
-        for channel in channels & set(DIRECTIONAL_CHANNELS):
+        directional_channels = channels & set(DIRECTIONAL_CHANNELS)
+        for channel in directional_channels:
             self._directional_blockers_cache.pop(channel, None)
+            if positions is None:
+                self._directional_blocking_owners.pop(channel, None)
+        if directional_channels and positions is not None:
+            owners = {identity for position in positions
+                      for identity in self._boundary_placements_by_position.get(position, ())}
+            self._refresh_directional_blocker_owners(channels, owners)
 
-    def _bump_all_spatial_revisions(self) -> None:
+    def _bump_all_spatial_revisions(
+        self, positions: Optional[Collection[Tuple[int, int]]] = None,
+    ) -> None:
         """Advance every spatial channel revision and clear query caches."""
         self._bump_spatial_revisions(
-            {"movement", "optical", "illumination", "propagation"}
+            {"movement", "optical", "illumination", "propagation"}, positions,
         )
 
     def _path_requester_perception_signature(
@@ -707,6 +849,12 @@ class GridMap:
             )
         self._tiles[position] = tile
         self._tiles_by_uuid[tile.uuid] = position
+        self._index_support_position(position)
+        if old_tile is None:
+            self._refresh_missing_support_frontier(position)
+        self._refresh_optical_candidate_cells({position})
+        self._refresh_boundary_candidate_cell(position)
+        self._refresh_contact_candidate_cell(position)
         self._bounds_dirty = True
 
         revision_channels: Set[str] = set()
@@ -718,7 +866,9 @@ class GridMap:
             revision_channels.add("propagation")
         if illumination_changed:
             revision_channels.add("illumination")
-        self._bump_spatial_revisions(revision_channels)
+        self._bump_spatial_revisions(revision_channels, {position})
+        if support_changed and "optical" not in revision_channels:
+            self._bump_observer_revisions({"optical"}, {position})
 
         if effect is not None:
             self._complete_event_effect(effect)
@@ -847,8 +997,17 @@ class GridMap:
 
         self._tiles_by_uuid.pop(tile.uuid, None)
         del self._tiles[position]
+        support_key = (x, y // SPATIAL_CHUNK_SIZE)
+        support = self._support_columns[support_key]
+        support.remove(position)
+        if not support:
+            del self._support_columns[support_key]
+        self._refresh_missing_support_frontier(position)
+        self._refresh_optical_candidate_cells({position})
+        self._refresh_boundary_candidate_cell(position)
+        self._refresh_contact_candidate_cell(position)
         self._bounds_dirty = True
-        self._bump_all_spatial_revisions()
+        self._bump_all_spatial_revisions({position})
         if effect is not None:
             self._complete_event_effect(effect)
         release_tile_owned_movement_graph(tile)
@@ -857,6 +1016,16 @@ class GridMap:
     def get_tile(self, x: int, y: int) -> Optional[Tile]:
         """Get tile at position, or None if no tile exists."""
         return self._tiles.get((x, y))
+
+    def _index_support_position(self, position: Tuple[int, int]) -> None:
+        """Index committed support in bounded, ordered column segments."""
+        key = (position[0], position[1] // SPATIAL_CHUNK_SIZE)
+        support = self._support_columns.setdefault(key, [])
+        index = bisect_left(support, position)
+        # A native acceptance callback can change support before the caller
+        # commits. Membership follows this assignment, not its preflight state.
+        if index == len(support) or support[index] != position:
+            support.insert(index, position)
 
     def get_tile_by_uuid(self, tile_uuid: UUID) -> Optional[Tile]:
         """Get tile by UUID, or None if not found."""
@@ -1313,7 +1482,8 @@ class GridMap:
         tile.height = height
         tile.elevation_surface_kind = surface_kind
         tile.slope_axis = slope_axis
-        self._bump_spatial_revisions({"movement"})
+        self._bump_spatial_revisions({"movement"}, {position})
+        self._bump_observer_revisions({"optical"}, {position})
         if effect is not None:
             self._complete_event_effect(effect)
         return True
@@ -1372,6 +1542,7 @@ class GridMap:
         layer: SpatialEffectLayer,
         occupancy_policy: SpatialEffectOccupancyPolicy,
         positions: Set[Tuple[int, int]],
+        crossing_channels: Optional[frozenset[str]] = None,
     ) -> None:
         """Commit one independent condition's complete Tile footprint."""
         normalized = set(positions)
@@ -1399,6 +1570,14 @@ class GridMap:
                         previous_layer,
                     )
         self._spatial_conditions[condition.uuid] = condition
+        self._global_crossing_owners.discard(condition.uuid)
+        for owners in self._local_crossing_owners.values():
+            owners.discard(condition.uuid)
+        if crossing_channels is None:
+            self._global_crossing_owners.add(condition.uuid)
+        else:
+            for channel in crossing_channels:
+                self._local_crossing_owners[channel].add(condition.uuid)
         self._spatial_condition_layers[condition.uuid] = layer
         self._spatial_condition_positions[condition.uuid] = normalized
         for position in normalized:
@@ -1406,6 +1585,7 @@ class GridMap:
                 condition.uuid,
                 layer,
             )
+        self._refresh_optical_candidate_cells(previous_positions | normalized)
 
     def publish_tile_state_changed(
         self, position: Tuple[int, int], *, source_entity_uuid: UUID,
@@ -1492,6 +1672,10 @@ class GridMap:
                         layer,
                     )
         self._spatial_conditions.pop(condition_uuid, None)
+        self._global_crossing_owners.discard(condition_uuid)
+        for owners in self._local_crossing_owners.values():
+            owners.discard(condition_uuid)
+        self._refresh_optical_candidate_cells(positions)
 
     def get_spatial_condition_positions(
         self,
@@ -1518,6 +1702,10 @@ class GridMap:
         layer: Optional[SpatialEffectLayer] = None,
     ) -> Set[UUID]:
         """Return active independent-condition UUIDs at one Tile."""
+        # The committed candidate union includes every spatial condition, not
+        # just optical contributors. Empty cells need no Tile set reconstruction.
+        if position not in self._optical_candidate_cells.get(self._spatial_chunk(position), ()):
+            return set()
         tile = self._tiles.get(position)
         if tile is None:
             return set()
@@ -1862,7 +2050,19 @@ class GridMap:
                                 subjective: bool = False, terminal_provider_uuid: Optional[UUID] = None) -> bool:
         requester = BaseBlock.get(requester_uuid) if requester_uuid is not None else None
         senses = requester.get_senses() if requester is not None else None
-        for owner in self.get_spatial_conditions():
+        candidates = set(self._global_crossing_owners)
+        local_owners = self._local_crossing_owners.get(channel)
+        if local_owners:
+            # Include corner-touching cells as well as the native ray cells.
+            # Crossing predicates remain authoritative for admitted owners.
+            cells = {nearby for x, y in supercover_line(start, end)
+                for nearby in ((x, y), (x-1, y), (x+1, y), (x, y-1), (x, y+1))}
+            for position in cells:
+                tile = self._tiles.get(position)
+                if tile is not None:
+                    candidates.update(tile.get_spatial_condition_uuids() & local_owners)
+        for identity in sorted(candidates, key=str):
+            owner = self._spatial_conditions[identity]
             if subjective and senses is not None and owner.uuid not in senses.spatial_effects:
                 continue
             if owner.blocks_crossing_between(start, end, channel, requester_uuid, mode, terminal_provider_uuid):
@@ -2237,9 +2437,12 @@ class GridMap:
                     )
                     self._tiles[(tx, ty)] = tile
                     self._tiles_by_uuid[tile.uuid] = (tx, ty)
+                    self._index_support_position((tx, ty))
+                    if old_tile is None:
+                        self._refresh_missing_support_frontier((tx, ty))
             self._bounds_dirty = True
         finally:
-            self._bump_all_spatial_revisions()
+            self._bump_all_spatial_revisions(positions)
             if events_were_enabled:
                 self.enable_events()
         if events_were_enabled:
@@ -2348,12 +2551,19 @@ class GridMap:
                 old_tile._replace_entity_uuids(old_members - {entity_uuid})
             if new_tile is not None and new_members is not None:
                 new_tile._replace_entity_uuids(new_members | {entity_uuid})
-            self.invalidate_occupancy_paths()
+            for position in (expected_old_position, new_position):
+                if position is not None:
+                    self._refresh_contact_candidate_cell(position)
+            self.invalidate_occupancy_paths(
+                {position for position in (expected_old_position, new_position) if position is not None})
         except BaseException as exc:
             if old_tile is not None and old_members is not None:
                 old_tile._replace_entity_uuids(old_members)
             if new_tile is not None and new_members is not None:
                 new_tile._replace_entity_uuids(new_members)
+            for position in (expected_old_position, new_position):
+                if position is not None:
+                    self._refresh_contact_candidate_cell(position)
             raise PositionCommitError(exc) from exc
 
     def _publish_entity_membership(
@@ -2426,6 +2636,26 @@ class GridMap:
             return None
         return position
 
+    def _refresh_contact_candidate_cell(self, position: Tuple[int, int]) -> None:
+        """Replace ordered contact membership after the native cell commit."""
+        tile = self._tiles.get(position)
+        chunk = self._spatial_chunk(position)
+        entities = tile.get_entity_uuids() if tile is not None else ()
+        objects = tile.get_center_object_uuids() if tile is not None else ()
+        if entities or objects:
+            self._contact_candidate_cells[chunk][position] = (
+                tuple(sorted(entities, key=str)), tuple(sorted(objects, key=str)))
+        elif chunk in self._contact_candidate_cells:
+            self._contact_candidate_cells[chunk].pop(position, None)
+            if not self._contact_candidate_cells[chunk]:
+                del self._contact_candidate_cells[chunk]
+
+    def get_contact_candidate_cells(self, positions: Collection[Tuple[int, int]]) -> Set[Tuple[int, int]]:
+        """Return current entity/center-object cells inside a queried field."""
+        chunks = {self._spatial_chunk(position) for position in positions}
+        return {position for chunk in chunks
+                for position in self._contact_candidate_cells.get(chunk, ()) if position in positions}
+
     def get_entities_at(self, position: Tuple[int, int]) -> Set[UUID]:
         """Return a defensive UUID snapshot from one authoritative Tile."""
         self._validate_entity_position(position, allow_none=False)
@@ -2433,13 +2663,58 @@ class GridMap:
         if tile is None:
             return set()
         entity_uuids = tile.get_entity_uuids()
+        self._validate_entity_membership(position, entity_uuids)
+        return entity_uuids
+
+    @staticmethod
+    def _validate_entity_membership(position: Tuple[int, int], entity_uuids: Collection[UUID]) -> None:
         for entity_uuid in entity_uuids:
             block = BaseBlock.get(entity_uuid)
             if block is None or block.get_position() != position:
                 raise RuntimeError(
                     f"Tile membership {entity_uuid} does not match {position}"
                 )
-        return entity_uuids
+
+    def get_ordered_entities_at(self, position: Tuple[int, int]) -> Tuple[UUID, ...]:
+        """Read settled entity membership, authenticating it before any consumer."""
+        self._validate_entity_position(position, allow_none=False)
+        rows = self._contact_candidate_cells.get(self._spatial_chunk(position))
+        row = rows.get(position) if rows is not None else None
+        entities = row[0] if row is not None else ()
+        self._validate_entity_membership(position, entities)
+        return entities
+
+    def get_ordered_center_objects_at(self, position: Tuple[int, int]) -> Tuple[UUID, ...]:
+        """Read the current immutable union of a cell's center bands."""
+        rows = self._contact_candidate_cells.get(self._spatial_chunk(position))
+        row = rows.get(position) if rows is not None else None
+        return row[1] if row is not None else ()
+
+    def refresh_object_known_source(self, obj: BaseBlock) -> None:
+        """Keep placed creator candidates aligned with the object's declared source."""
+        order = self._remove_object_known_source(obj.uuid)
+        if obj.uuid in self._object_placements:
+            if order is None:
+                order = self._next_object_placement_order
+                self._next_object_placement_order += 1
+            self._declared_source_by_object[obj.uuid] = (obj.source_entity_uuid, order)
+            self._objects_by_declared_source[obj.source_entity_uuid].add(obj.uuid)
+
+    def _remove_object_known_source(self, object_uuid: UUID) -> Optional[int]:
+        previous = self._declared_source_by_object.pop(object_uuid, None)
+        if previous is None:
+            return None
+        source_uuid, order = previous
+        candidates = self._objects_by_declared_source[source_uuid]
+        candidates.discard(object_uuid)
+        if not candidates:
+            del self._objects_by_declared_source[source_uuid]
+        return order
+
+    def get_known_object_candidates(self, observer_uuid: UUID) -> Tuple[UUID, ...]:
+        """Return source candidates in placement order; native knowledge policy still applies."""
+        return tuple(sorted(self._objects_by_declared_source.get(observer_uuid, ()),
+            key=lambda identity: self._declared_source_by_object[identity][1]))
 
     def get_all_object_positions(self) -> Dict[UUID, Tuple[int, int]]:
         """Return a derived UUID-to-position snapshot."""
@@ -2801,6 +3076,14 @@ class GridMap:
         """Replace every immutable local band touched by one placement."""
         for support in placement.covered_supports:
             tile = self._tiles[support.position]
+            if placement.kind is WorldPlacementKind.BOUNDARY:
+                if add:
+                    self._boundary_placements_by_position[support.position].add(placement.object_uuid)
+                elif support.position in self._boundary_placements_by_position:
+                    members = self._boundary_placements_by_position[support.position]
+                    members.discard(placement.object_uuid)
+                    if not members:
+                        del self._boundary_placements_by_position[support.position]
             for height in placement.band_heights(support.position):
                 old = self._placement_band(tile, placement, height)
                 object_uuids = set(old.object_uuids if old is not None else ())
@@ -2830,6 +3113,10 @@ class GridMap:
                         height,
                         band,
                     )
+            if placement.kind is WorldPlacementKind.BOUNDARY:
+                self._refresh_boundary_candidate_cell(support.position)
+            else:
+                self._refresh_contact_candidate_cell(support.position)
 
     def _accept_event_effect(
         self,
@@ -2908,6 +3195,14 @@ class GridMap:
         if WorldEdgeChannel.PROPAGATION in channels:
             revisions.add("propagation")
         return revisions
+
+    def _bump_object_revisions(self, object_uuid: UUID, channels: Set[str], positions: Collection[Tuple[int, int]]) -> None:
+        """Invalidate physical contacts locally as well as existing blocker caches."""
+        self._bump_spatial_revisions(channels, positions)
+        # A retained boundary can have no occupied bands. Its placement identity
+        # still participates in the native global directional-solver decision.
+        self._refresh_directional_blocker_owners(channels, (object_uuid,))
+        self._bump_observer_revisions({"optical"} - channels, positions)
 
     def _object_revision_channels(self, obj: BaseBlock) -> Set[str]:
         channels: Set[str] = set()
@@ -3038,8 +3333,9 @@ class GridMap:
             raise RuntimeError("admitted object placement changed before commit")
         self._replace_placement_bands(candidate, add=True)
         self._object_placements[obj.uuid] = candidate
+        self.refresh_object_known_source(obj)
         obj.on_grid_object_placed(candidate)
-        self._bump_spatial_revisions(self._object_revision_channels(obj))
+        self._bump_object_revisions(obj.uuid, self._object_revision_channels(obj), candidate.positions)
         if effect is not None:
             self._complete_event_effect(effect)
         return candidate
@@ -3133,7 +3429,8 @@ class GridMap:
             candidate = pending[obj.uuid]
             self._replace_placement_bands(candidate, add=True)
             self._object_placements[obj.uuid] = candidate
-            self._bump_spatial_revisions(self._object_revision_channels(obj))
+            self.refresh_object_known_source(obj)
+            self._bump_object_revisions(obj.uuid, self._object_revision_channels(obj), candidate.positions)
         if connector is not None:
             self._index_connector(connector)
             self._connector_revision += 1
@@ -3174,7 +3471,8 @@ class GridMap:
             assert obj is not None
             self._replace_placement_bands(candidate, add=True)
             self._object_placements[candidate.object_uuid] = candidate
-            self._bump_spatial_revisions(self._object_revision_channels(obj))
+            self.refresh_object_known_source(obj)
+            self._bump_object_revisions(obj.uuid, self._object_revision_channels(obj), candidate.positions)
         for effect in effects:
             self._complete_event_effect(effect)
         return tuple(candidates)
@@ -3267,7 +3565,8 @@ class GridMap:
         self._replace_placement_bands(previous, add=False)
         self._replace_placement_bands(candidate, add=True)
         self._object_placements[object_uuid] = candidate
-        self._bump_spatial_revisions(self._object_revision_channels(obj))
+        self.refresh_object_known_source(obj)
+        self._bump_object_revisions(obj.uuid, self._object_revision_channels(obj), set(previous.positions) | set(candidate.positions))
         if departure_effect is not None:
             self._complete_event_effect(departure_effect)
         if arrival_effect is not None:
@@ -3322,7 +3621,8 @@ class GridMap:
         self._replace_placement_bands(previous, add=False)
         self._replace_placement_bands(candidate, add=True)
         self._object_placements[object_uuid] = candidate
-        self._bump_spatial_revisions(changed_channels)
+        self.refresh_object_known_source(obj)
+        self._bump_object_revisions(object_uuid, changed_channels, set(previous.positions) | set(candidate.positions))
         if effect is not None:
             self._complete_event_effect(effect)
         return candidate
@@ -3403,7 +3703,8 @@ class GridMap:
         for obj, previous, _ in prepared:
             self._replace_placement_bands(previous, add=False)
             del self._object_placements[obj.uuid]
-            self._bump_spatial_revisions(self._object_revision_channels(obj))
+            self._remove_object_known_source(obj.uuid)
+            self._bump_object_revisions(obj.uuid, self._object_revision_channels(obj), previous.positions)
         effects: list[Event] = []
         light_changes: list[SpatialChangeEvent] = []
         for obj, previous, effect in reversed(prepared):
@@ -3491,7 +3792,7 @@ class GridMap:
         changed_channels = self._boundary_revision_channels(
             changed_world_channels
         )
-        self._bump_spatial_revisions(changed_channels)
+        self._bump_object_revisions(object_uuid, changed_channels, placement.positions)
         if not self._events_enabled:
             return
         assert placement.boundary_direction is not None
@@ -3553,9 +3854,10 @@ class GridMap:
         self._replace_placement_bands(previous, add=False)
         self._replace_placement_bands(candidate, add=True)
         self._object_placements[object_uuid] = candidate
+        self.refresh_object_known_source(provider)
         provider.on_grid_object_placed(candidate)
+        self._bump_object_revisions(object_uuid, channels, set(previous.positions) | set(candidate.positions))
         provider.on_object_section_removed(volume, effect or parent_event)
-        self._bump_spatial_revisions(channels)
         if effect is not None:
             self._complete_event_effect(effect)
         return True
@@ -3577,6 +3879,7 @@ class GridMap:
         self._replace_placement_bands(old, add=False)
         self._replace_placement_bands(placement, add=True)
         self._object_placements[identity] = placement
+        self.refresh_object_known_source(provider)
         channels: Set[str] = set()
         for state in (previous, current):
             if state.blocks_movement:
@@ -3587,7 +3890,7 @@ class GridMap:
                 channels.add("propagation")
             if state.boundary_structure is not None:
                 channels.update(self._boundary_revision_channels(state.boundary_structure.blocked_channels))
-        self._bump_spatial_revisions(channels)
+        self._bump_object_revisions(identity, channels, set(old.positions) | set(placement.positions))
         boundary = old.boundary_direction or placement.boundary_direction
         event = SpatialChangeEvent.object_changed(placement.position, identity,
             placement=placement, previous_placement=old, parent_event=parent_event,
@@ -3610,8 +3913,9 @@ class GridMap:
         if tile is None:
             return set()
         object_uuids = tile.get_center_object_uuids()
-        for direction in CardinalDirection:
-            object_uuids.update(tile.get_boundary_object_uuids(direction))
+        sides = self._boundary_candidate_cells.get(self._spatial_chunk(position), {}).get(position, {})
+        for identities in sides.values():
+            object_uuids.update(identities)
         return object_uuids
 
     def get_center_objects_at(
@@ -3767,11 +4071,206 @@ class GridMap:
             ),
         )
 
+    def _refresh_missing_support_frontier(self, position: Tuple[int, int]) -> None:
+        """Maintain absent cells touching support after a support commit."""
+        px, py = position
+        for x in range(px - 1, px + 2):
+            for y in range(py - 1, py + 2):
+                cell = (x, y)
+                chunk = self._spatial_chunk(cell)
+                if cell not in self._tiles and any(
+                    (x + dx, y + dy) in self._tiles
+                    for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                    if dx or dy
+                ):
+                    self._missing_support_frontier[chunk].add(cell)
+                elif chunk in self._missing_support_frontier:
+                    self._missing_support_frontier[chunk].discard(cell)
+                    if not self._missing_support_frontier[chunk]:
+                        del self._missing_support_frontier[chunk]
+
+    def _refresh_boundary_candidate_cell(self, position: Tuple[int, int]) -> None:
+        """Index native side membership after its owning Tile bands settle."""
+        tile = self._tiles.get(position)
+        chunk = self._spatial_chunk(position)
+        sides = tile.snapshot_boundary_object_uuids() if tile is not None else {}
+        if any(sides.values()):
+            self._boundary_candidate_cells[chunk][position] = sides
+        elif chunk in self._boundary_candidate_cells:
+            self._boundary_candidate_cells[chunk].pop(position, None)
+            if not self._boundary_candidate_cells[chunk]:
+                del self._boundary_candidate_cells[chunk]
+
+    def capture_boundary_snapshot(self, positions: Collection[Tuple[int, int]], *,
+                                  previous: Optional[BoundarySnapshot] = None) -> BoundarySnapshot:
+        """Capture occupied sides, retaining overlap from unchanged native geometry.
+
+        A caller supplying ``previous`` must have verified that its covered
+        geometry has not changed. New coverage always reads the current owner.
+        Returned mappings stay detached and contain only this query's halo.
+        """
+        # Temporary phase evidence for the movement rework.
+        diagnostic = action_timing_enabled()
+        phase_started = time.perf_counter() if diagnostic else 0.0
+        cells = frozenset(positions)
+        layers = {}
+        structures: Dict[UUID, Optional[BoundaryStructure]] = {}
+        placements: Dict[UUID, Optional[WorldObjectPlacement]] = {}
+        resolved_providers = 0
+        incident: DefaultDict[Tuple[int, int], Set[CardinalDirection]] = defaultdict(set)
+        deltas = {CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
+                  CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0)}
+        snapshot = BoundarySnapshot(layers, structures, placements, cells, {})
+        if previous is not None:
+            layers.update((position, dict(sides)) for position, sides in previous.layers.items()
+                          if boundary_snapshot_covers(snapshot, position))
+        added_cells = cells if previous is None else cells - previous.coverage_base
+        base_chunks = {self._spatial_chunk(position) for position in added_cells}
+        chunks = base_chunks | {(x + dx, y + dy) for x, y in base_chunks
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))}
+        if diagnostic:
+            record_action_timing("grid.boundary_snapshot.coverage_ms", phase_started)
+            phase_started = time.perf_counter()
+        for chunk in chunks:
+            for position, sides in self._boundary_candidate_cells.get(chunk, {}).items():
+                if not boundary_snapshot_covers(snapshot, position):
+                    continue
+                if previous is not None and boundary_snapshot_covers(previous, position):
+                    continue
+                # Current side tuples belong to committed Tile bands. Detach
+                # the mapping; later commits replace the indexed value.
+                layers[position] = dict(sides)
+        same_layers = previous is not None and layers == previous.layers
+        if same_layers:
+            # Coverage can move without changing any incident boundary input.
+            # Reuse that derived evidence while keeping every mapping detached.
+            structures = dict(previous.structures)
+            placements = dict(previous.placements)
+        else:
+            for position, sides in layers.items():
+                for direction, identities in sides.items():
+                    if not identities:
+                        continue
+                    incident[position].add(direction)
+                    dx, dy = deltas[direction]
+                    incident[(position[0] + dx, position[1] + dy)].add(self._opposite_direction(direction))
+                    for identity in identities:
+                        if identity not in structures:
+                            if previous is not None and identity in previous.structures:
+                                structures[identity] = previous.structures[identity]
+                                placements[identity] = previous.placements[identity]
+                            else:
+                                provider = BaseBlock.get(identity)
+                                structures[identity] = provider.get_boundary_structure() if provider is not None else None
+                                placements[identity] = self._object_placements.get(identity)
+                                resolved_providers += 1
+        if diagnostic:
+            record_action_timing("grid.boundary_snapshot.native_sides_and_providers_ms", phase_started)
+            phase_started = time.perf_counter()
+        if same_layers:
+            routes = dict(previous.routes)
+        else:
+            routes = {position: tuple(direction for direction in CardinalDirection if direction in directions)
+                      for position, directions in incident.items()}
+        snapshot = BoundarySnapshot(layers, structures, placements, cells, routes)
+        if diagnostic:
+            record_action_timing("grid.boundary_snapshot.incident_routes_ms", phase_started)
+            record_action_count("grid.boundary_snapshot.coverage_base_cells", len(cells))
+            record_action_count("grid.boundary_snapshot.occupied_cells", len(layers))
+            record_action_count("grid.boundary_snapshot.providers", len(structures))
+            record_action_count("grid.boundary_snapshot.resolved_providers", resolved_providers)
+            record_action_count("grid.boundary_snapshot.reused_providers", len(structures) - resolved_providers)
+        return snapshot
+
+    def _shift_observer_boundaries(self, positions: Collection[Tuple[int, int]],
+                                   previous: BoundarySnapshot) -> BoundarySnapshot:
+        """Reconcile a private observer field after unchanged native geometry.
+
+        The caller uses the same local-revision gate as snapshot overlap reuse.
+        Both fields only read their shared inner side dictionaries. Public
+        snapshots continue to detach every mapping through capture_boundary_snapshot.
+        """
+        cells = frozenset(positions)
+        if not cells or previous.coverage_base.isdisjoint(cells):
+            return self.capture_boundary_snapshot(cells, previous=previous)
+        diagnostic = action_timing_enabled()
+        phase_started = time.perf_counter() if diagnostic else 0.0
+        layers = dict(previous.layers)
+        structures = dict(previous.structures)
+        placements = dict(previous.placements)
+        routes = dict(previous.routes)
+        snapshot = BoundarySnapshot(layers, structures, placements, cells, routes)
+        deltas = {CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
+                  CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0)}
+        changed_cells = cells ^ previous.coverage_base
+        candidates = set(changed_cells)
+        for x, y in changed_cells:
+            candidates.update(((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)))
+        if diagnostic:
+            record_action_timing("grid.boundary_snapshot.coverage_ms", phase_started)
+            phase_started = time.perf_counter()
+        changed_layers = set()
+        resolved_providers = 0
+        for position in candidates:
+            sides = self._boundary_candidate_cells.get(self._spatial_chunk(position), {}).get(position)
+            if position not in previous.layers and sides is None:
+                continue
+            covered = boundary_snapshot_covers(snapshot, position)
+            if covered == boundary_snapshot_covers(previous, position):
+                continue
+            if covered:
+                if sides is None:
+                    continue
+                layers[position] = dict(sides)
+                for identities in sides.values():
+                    for identity in identities:
+                        provider = BaseBlock.get(identity)
+                        structures[identity] = provider.get_boundary_structure() if provider is not None else None
+                        placements[identity] = self._object_placements.get(identity)
+                        resolved_providers += 1
+            else:
+                departed = layers.pop(position, None)
+                if departed is None:
+                    continue
+                # A native boundary placement owns exactly one Tile and side.
+                # Remove only this field's provider values, never world placement.
+                for identities in departed.values():
+                    for identity in identities:
+                        structures.pop(identity, None)
+                        placements.pop(identity, None)
+            changed_layers.add(position)
+        if diagnostic:
+            record_action_timing("grid.boundary_snapshot.native_sides_and_providers_ms", phase_started)
+            phase_started = time.perf_counter()
+        touched_routes = set(changed_layers)
+        for x, y in changed_layers:
+            touched_routes.update(((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)))
+        for position in touched_routes:
+            x, y = position
+            directions = tuple(direction for direction, (dx, dy) in deltas.items()
+                if layers.get(position, {}).get(direction)
+                or layers.get((x + dx, y + dy), {}).get(self._opposite_direction(direction)))
+            if directions:
+                routes[position] = directions
+            else:
+                routes.pop(position, None)
+        if diagnostic:
+            record_action_timing("grid.boundary_snapshot.incident_routes_ms", phase_started)
+            record_action_count("grid.boundary_snapshot.coverage_base_cells", len(cells))
+            record_action_count("grid.boundary_snapshot.occupied_cells", len(layers))
+            record_action_count("grid.boundary_snapshot.providers", len(structures))
+            record_action_count("grid.boundary_snapshot.resolved_providers", resolved_providers)
+            record_action_count("grid.boundary_snapshot.reused_providers", len(structures) - resolved_providers)
+            record_action_count("grid.boundary_snapshot.changed_layers", len(changed_layers))
+            record_action_count("grid.boundary_snapshot.rebuilt_routes", len(touched_routes))
+        return snapshot
+
     def get_boundary_route_layers(
         self,
         source: Tuple[int, int],
         direction: CardinalDirection,
         channel: WorldEdgeChannel,
+        *, snapshot: Optional[BoundarySnapshot] = None,
     ) -> Tuple[Tuple[UUID, ...], Tuple[UUID, ...]]:
         """Return boundary objects reached from one perceivable endpoint."""
         if source not in self._tiles:
@@ -3783,10 +4282,9 @@ class GridMap:
             WorldEdgeChannel.PROPAGATION,
         }:
             raise ValueError("boundary route channel must be optical or propagation")
-        exit_layer = tuple(sorted(
-            self.get_boundary_objects_at(source, direction),
-            key=str,
-        ))
+        exit_layer = (snapshot.layers.get(source, {}).get(direction, ())
+            if snapshot is not None and boundary_snapshot_covers(snapshot, source) else
+            tuple(sorted(self.get_boundary_objects_at(source, direction), key=str)))
         delta = {
             CardinalDirection.NORTH: (0, 1),
             CardinalDirection.SOUTH: (0, -1),
@@ -3796,19 +4294,19 @@ class GridMap:
         destination = (source[0] + delta[0], source[1] + delta[1])
         if destination not in self._tiles:
             return exit_layer, ()
-        entry_layer = tuple(sorted(
-            self.get_boundary_objects_at(
-                destination,
-                self._opposite_direction(direction),
-            ),
-            key=str,
-        ))
+        entry_direction = self._opposite_direction(direction)
+        entry_layer = (snapshot.layers.get(destination, {}).get(entry_direction, ())
+            if snapshot is not None and boundary_snapshot_covers(snapshot, destination) else
+            tuple(sorted(self.get_boundary_objects_at(destination, entry_direction), key=str)))
         if not entry_layer:
             return exit_layer, ()
         # Optical and propagation channels use the existing XY blocking policy.
         for object_uuid in exit_layer:
-            provider = BaseBlock.get(object_uuid)
-            structure = provider.get_boundary_structure() if provider is not None else None
+            if snapshot is not None and object_uuid in snapshot.structures:
+                structure = snapshot.structures[object_uuid]
+            else:
+                provider = BaseBlock.get(object_uuid)
+                structure = provider.get_boundary_structure() if provider is not None else None
             if structure is not None and channel in structure.blocked_channels:
                 return exit_layer, ()
         return exit_layer, entry_layer
@@ -3830,24 +4328,30 @@ class GridMap:
         cached = self._directional_blockers_cache.get(channel)
         if cached is not None:
             return cached
-        world_channel = WorldEdgeChannel(channel)
-        for object_uuid, placement in self._object_placements.items():
-            if placement.kind is not WorldPlacementKind.BOUNDARY:
-                continue
-            provider = BaseBlock.get(object_uuid)
-            structure = (
-                provider.get_boundary_structure()
-                if provider is not None
-                else None
-            )
-            if (
-                structure is not None
-                and world_channel in structure.blocked_channels
-            ):
-                self._directional_blockers_cache[channel] = True
-                return True
-        self._directional_blockers_cache[channel] = False
-        return False
+        self._directional_blocking_owners[channel] = set()
+        identities = {identity for members in self._boundary_placements_by_position.values()
+                      for identity in members}
+        self._refresh_directional_blocker_owners({channel}, identities)
+        return self._directional_blockers_cache[channel]
+
+    def _refresh_directional_blocker_owners(self, channels: Collection[str], identities: Collection[UUID]) -> None:
+        """Reconcile settled providers in already-materialized presence sets."""
+        active = [(channel, WorldEdgeChannel(channel), self._directional_blocking_owners[channel])
+                  for channel in channels if channel in self._directional_blocking_owners]
+        if not active:
+            return
+        for identity in identities:
+            placement = self._object_placements.get(identity)
+            provider = (BaseBlock.get(identity) if placement is not None
+                        and placement.kind is WorldPlacementKind.BOUNDARY else None)
+            structure = provider.get_boundary_structure() if provider is not None else None
+            for _, world_channel, owners in active:
+                if structure is not None and world_channel in structure.blocked_channels:
+                    owners.add(identity)
+                else:
+                    owners.discard(identity)
+        for channel, _, owners in active:
+            self._directional_blockers_cache[channel] = bool(owners)
 
     def _transition_clear(
         self,
@@ -3885,6 +4389,201 @@ class GridMap:
         """Public transition-aware line check for physical topology."""
         return self._transition_clear(start, end, channel)
 
+    def _sparse_directional_visibility(
+        self, origin: Tuple[int, int], channel: str,
+        targets: List[Tuple[int, int]],
+        opaque: Set[Tuple[int, int]],
+        bounds: Tuple[int, int, int, int], radius_squared: Optional[float],
+        transition_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool],
+        blocking_cache: Dict[Tuple[int, int], bool],
+    ) -> List[Tuple[int, int]]:
+        """Resolve exact rays from sparse native obstruction inputs."""
+        timing = action_timing_enabled()
+        started = time.perf_counter() if timing else 0.0
+        origin_x, origin_y = origin
+        min_x, min_y, max_x, max_y = bounds
+        supported = set(targets)
+        chunks = [(x, y)
+            for x in range(min_x // SPATIAL_CHUNK_SIZE, max_x // SPATIAL_CHUNK_SIZE + 1)
+            for y in range(min_y // SPATIAL_CHUNK_SIZE, max_y // SPATIAL_CHUNK_SIZE + 1)]
+        candidates: Set[Tuple[int, int]] = set()
+        missing: Set[Tuple[int, int]] = set()
+        cardinal_edges: Set[Tuple[Tuple[int, int], Tuple[int, int]]] = set()
+        local_crossings = self._local_crossing_owners.get(channel, set())
+        deltas = {CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
+                  CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0)}
+        for chunk in chunks:
+            candidates.update(self._contact_candidate_cells.get(chunk, ()))
+            if channel == "optical":
+                candidates.update(self._optical_candidate_cells.get(chunk, ()))
+            for position in self._missing_support_frontier.get(chunk, ()):
+                x, y = position
+                if (min_x <= x <= max_x and min_y <= y <= max_y
+                        and (radius_squared is None or (x-origin_x)**2 + (y-origin_y)**2 <= radius_squared)):
+                    missing.add(position)
+            for position, sides in self._boundary_candidate_cells.get(chunk, {}).items():
+                for direction, identities in sides.items():
+                    if identities:
+                        dx, dy = deltas[direction]
+                        neighbor = position[0] + dx, position[1] + dy
+                        cardinal_edges.add((position, neighbor))
+                        cardinal_edges.add((neighbor, position))
+            if local_crossings:
+                for position in self._optical_candidate_cells.get(chunk, ()):
+                    tile = self._tiles.get(position)
+                    if tile is not None and tile.get_spatial_condition_uuids() & local_crossings:
+                        for dx, dy in deltas.values():
+                            neighbor = position[0] + dx, position[1] + dy
+                            cardinal_edges.add((position, neighbor))
+                            cardinal_edges.add((neighbor, position))
+        for position in (candidates & supported) - opaque:
+            blocked = blocking_cache.get(position)
+            if blocked is None:
+                blocked = (self.is_blocking_optics(*position) if channel == "optical"
+                    else self.is_blocking_propagation(*position))
+                blocking_cache[position] = blocked
+            if blocked:
+                opaque.add(position)
+        opaque.discard(origin)
+        centers = opaque | missing
+        blocked_edges = []
+        diagonals: Set[Tuple[Tuple[int, int], Tuple[int, int]]] = set()
+        for first, second in cardinal_edges:
+            if first not in supported or second not in supported:
+                continue
+            if (abs(second[0]-origin_x) + abs(second[1]-origin_y)
+                    != abs(first[0]-origin_x) + abs(first[1]-origin_y) + 1):
+                continue
+            edge = first, second
+            allowed = transition_cache.get(edge)
+            if allowed is None:
+                allowed = (self.can_optical_transition(*edge) if channel == "optical"
+                    else self.can_propagate_transition(*edge))
+                transition_cache[edge] = allowed
+            if allowed:
+                continue
+            blocked_edges.append(edge)
+            dx, dy = second[0]-first[0], second[1]-first[1]
+            for vx, vy in ((-dy, dx), (dy, -dx)):
+                diagonals.add((first, (second[0]+vx, second[1]+vy)))
+                diagonals.add(((first[0]-vx, first[1]-vy), second))
+        # Any failed diagonal bridge route contains a failed cardinal leg or
+        # an opaque/missing bridge. Probe precisely those candidate diagonals.
+        for x, y in centers:
+            signs_x = (-1, 1) if x == origin_x else (1,) if x > origin_x else (-1,)
+            signs_y = (-1, 1) if y == origin_y else (1,) if y > origin_y else (-1,)
+            for sx in signs_x:
+                for sy in signs_y:
+                    # Rays advance away from the origin on both axes. Select
+                    # those two bridge diagonals before allocating candidates.
+                    if x != origin_x:
+                        diagonals.add(((x-sx, y), (x, y+sy)))
+                    if y != origin_y:
+                        diagonals.add(((x, y-sy), (x+sx, y)))
+        failed_cardinals = set(blocked_edges)
+        for first, second in diagonals:
+            if first not in supported or second not in supported:
+                continue
+            if (abs(second[0]-origin_x) + abs(second[1]-origin_y)
+                    != abs(first[0]-origin_x) + abs(first[1]-origin_y) + 2):
+                continue
+            # Native optical/propagation diagonals allow either two-leg bridge.
+            # Every outward leg and bridge is inside this acquired domain, so
+            # reuse its native center/side result instead of resolving it again.
+            for bridge in ((second[0], first[1]), (first[0], second[1])):
+                if (bridge in supported and bridge not in opaque
+                        and (first, bridge) not in failed_cardinals
+                        and (bridge, second) not in failed_cardinals):
+                    break
+            else:
+                blocked_edges.append((first, second))
+        if timing:
+            record_action_timing("grid.directional_fov.sparse_inputs_ms", started)
+            record_action_count("grid.directional_fov.sparse_center_candidates", len(candidates & supported))
+            record_action_count("grid.directional_fov.sparse_blocked_centers", len(centers))
+            record_action_count("grid.directional_fov.sparse_cardinal_candidates", len(cardinal_edges))
+            record_action_count("grid.directional_fov.sparse_diagonal_candidates", len(diagonals))
+            record_action_count("grid.directional_fov.sparse_blocked_edges", len(blocked_edges))
+        if not centers and not blocked_edges:
+            return targets
+        envelopes = {}
+        preparation_seconds = cutoff_seconds = output_seconds = 0.0
+        for sign_x, sign_y in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+            started = time.perf_counter() if timing else 0.0
+            extent_x = max_x-origin_x if sign_x > 0 else origin_x-min_x
+            extent_y = max_y-origin_y if sign_y > 0 else origin_y-min_y
+            extent = max(extent_x, extent_y)
+            scale = extent * (2 * extent + 1) + 1
+            vertical = scale * (2 * extent + 2)
+            final_shell = extent_x + extent_y
+            events = []
+            for position in centers:
+                x = (position[0]-origin_x)*sign_x
+                y = (position[1]-origin_y)*sign_y
+                if not (0 <= x <= extent_x and 0 <= y <= extent_y and 0 < x+y <= final_shell):
+                    continue
+                lower, _, _, upper = supercover_incoming_rank_ranges(scale, vertical, x, y)
+                if lower < upper:
+                    events.append((lower, upper, x+y))
+            for first, second in blocked_edges:
+                px, py = (first[0]-origin_x)*sign_x, (first[1]-origin_y)*sign_y
+                x, y = (second[0]-origin_x)*sign_x, (second[1]-origin_y)*sign_y
+                if not (0 <= px <= x <= extent_x and 0 <= py <= y <= extent_y and x+y <= final_shell):
+                    continue
+                lower, ds, de, upper = supercover_incoming_rank_ranges(scale, vertical, x, y)
+                if x == px:
+                    start, end = lower, ds
+                elif y == py:
+                    start, end = de, upper
+                else:
+                    start, end = ds, de
+                if start < end:
+                    events.append((start, end, x+y-1))
+            events.sort()
+            if timing:
+                preparation_seconds += time.perf_counter()-started
+                started = time.perf_counter()
+            # Each obstruction contributes one interval of allowed ray depth.
+            # Build their minimum envelope, independently of the target cells.
+            # Expired nonminimum heap entries can wait until they reach the top.
+            endpoints = sorted({endpoint for lower, upper, _ in events for endpoint in (lower, upper)})
+            active: List[Tuple[int, int]] = []
+            boundaries = [0]
+            cutoffs = [final_shell]
+            event_index = 0
+            for rank in endpoints:
+                while event_index < len(events) and events[event_index][0] <= rank:
+                    _, upper, depth = events[event_index]
+                    heappush(active, (depth, upper))
+                    event_index += 1
+                while active and active[0][1] <= rank:
+                    heappop(active)
+                depth = active[0][0] if active else final_shell
+                if depth != cutoffs[-1]:
+                    boundaries.append(rank)
+                    cutoffs.append(depth)
+            if timing:
+                cutoff_seconds += time.perf_counter()-started
+            envelopes[sign_x, sign_y] = scale, vertical, boundaries, cutoffs
+        started = time.perf_counter() if timing else 0.0
+        result = []
+        for position in targets:
+            dx, dy = position[0]-origin_x, position[1]-origin_y
+            if dx == 0 and dy == 0:
+                result.append(position)
+                continue
+            scale, vertical, boundaries, cutoffs = envelopes[1 if dx >= 0 else -1, 1 if dy >= 0 else -1]
+            x, y = abs(dx), abs(dy)
+            rank = scale*y//x if x else vertical
+            if x+y <= cutoffs[bisect_right(boundaries, rank)-1]:
+                result.append(position)
+        if timing:
+            output_seconds = time.perf_counter()-started
+            record_action_elapsed("grid.directional_fov.sparse_events_ms", preparation_seconds)
+            record_action_elapsed("grid.directional_fov.sparse_cutoffs_ms", cutoff_seconds)
+            record_action_elapsed("grid.directional_fov.sparse_output_ms", output_seconds)
+        return result
+
     def _compute_directional_fov(
         self,
         origin: Tuple[int, int],
@@ -3897,117 +4596,196 @@ class GridMap:
             return []
         if self._bounds_dirty:
             self._update_bounds()
-
         radius = max_distance if max_distance is not None else max(self.width, self.height)
         radius_squared = radius * radius if max_distance is not None else None
-        visible_positions: List[Tuple[int, int]] = []
         min_x = max(self._min_x, math.floor(origin[0] - radius))
         max_x = min(self._max_x, math.ceil(origin[0] + radius))
         min_y = max(self._min_y, math.floor(origin[1] - radius))
         max_y = min(self._max_y, math.ceil(origin[1] + radius))
-
-        line_cache: Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]] = {}
         if channel == "propagation":
             transition_cache = self._propagation_transition_cache
             blocking_cache = self._propagation_blocking_cache
         elif channel == "optical":
             cache_key = (channel, self._optical_revision)
-            transition_cache = self._directional_transition_cache.setdefault(
-                cache_key,
-                {},
-            )
-            blocking_cache = self._directional_blocking_cache.setdefault(
-                cache_key,
-                {},
-            )
+            transition_cache = self._directional_transition_cache.setdefault(cache_key, {})
+            blocking_cache = self._directional_blocking_cache.setdefault(cache_key, {})
         else:
-            transition_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool] = {}
-            blocking_cache: Dict[Tuple[int, int], bool] = {}
-        line_seconds = 0.0
-        transition_seconds = 0.0
-        blocking_seconds = 0.0
+            transition_cache = {}
+            blocking_cache = {}
 
-        def get_line_offsets(end: Tuple[int, int]) -> Tuple[Tuple[int, int], ...]:
-            nonlocal line_seconds
-            key = (end[0] - origin[0], end[1] - origin[1])
-            cached = line_cache.get(key)
-            if cached is not None:
-                return cached
-            started = time.perf_counter() if timing else 0.0
-            path = supercover_line_offsets(key)
-            if timing:
-                line_seconds += time.perf_counter() - started
-            line_cache[key] = path
-            return path
-
-        def transition_allows(prev: Tuple[int, int], current: Tuple[int, int]) -> bool:
-            nonlocal transition_seconds
-            key = (prev, current)
-            cached = transition_cache.get(key)
-            if cached is not None:
-                return cached
-            started = time.perf_counter() if timing else 0.0
-            if channel == "optical":
-                allowed = self.can_optical_transition(prev, current)
-            else:
-                allowed = self.can_propagate_transition(prev, current)
-            if timing:
-                transition_seconds += time.perf_counter() - started
-            transition_cache[key] = allowed
-            return allowed
-
-        def blocks_cell(position: Tuple[int, int]) -> bool:
-            nonlocal blocking_seconds
-            cached = blocking_cache.get(position)
-            if cached is not None:
-                return cached
-            started = time.perf_counter() if timing else 0.0
-            if channel == "optical":
-                blocked = self.is_blocking_optics(position[0], position[1])
-            else:
-                blocked = self.is_blocking_propagation(position[0], position[1])
-            if timing:
-                blocking_seconds += time.perf_counter() - started
-            blocking_cache[position] = blocked
-            return blocked
-
-        def transition_clear(start: Tuple[int, int], end: Tuple[int, int]) -> bool:
-            path = get_line_offsets(end)
-            if not path:
-                return False
-            origin_x, origin_y = start
-            prev = start
-            for index in range(1, len(path)):
-                offset_x, offset_y = path[index]
-                current = (origin_x + offset_x, origin_y + offset_y)
-                if not transition_allows(prev, current):
-                    return False
-                if index < len(path) - 1 and blocks_cell(current):
-                    return False
-                prev = current
-            return True
-
+        enumeration_started = time.perf_counter() if timing else 0.0
+        targets = []
+        sparse = not self._global_crossing_owners
+        opaque: Set[Tuple[int, int]] = set()
+        quadrants: Dict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
+        origin_x, origin_y = origin
+        # Integer cell distances admit an exact column interval. Keep fresh
+        # native Tile reads and x/y order, without visiting the circle's corners.
+        distance_limit = (math.floor(radius_squared)
+            if radius_squared is not None and radius_squared != math.inf else None)
+        enumerated_positions = 0
         for x in range(min_x, max_x + 1):
-            for y in range(min_y, max_y + 1):
-                pos = (x, y)
-                if pos not in self._tiles:
+            column_min_y, column_max_y = min_y, max_y
+            if distance_limit is not None:
+                remaining = distance_limit - (x - origin_x) ** 2
+                if remaining < 0:
                     continue
-                if max_distance is not None:
-                    dx = x - origin[0]
-                    dy = y - origin[1]
-                    if radius_squared is not None and dx * dx + dy * dy > radius_squared:
-                        continue
-                if pos == origin or transition_clear(origin, pos):
-                    visible_positions.append(pos)
+                height = math.isqrt(remaining)
+                column_min_y = max(min_y, origin_y - height)
+                column_max_y = min(max_y, origin_y + height)
+            for chunk_y in range(column_min_y // SPATIAL_CHUNK_SIZE,
+                                 column_max_y // SPATIAL_CHUNK_SIZE + 1):
+                support = self._support_columns.get((x, chunk_y), ())
+                if not support:
+                    continue
+                selected = support[bisect_left(support, (x, column_min_y)):
+                    bisect_right(support, (x, column_max_y))]
+                if timing:
+                    enumerated_positions += len(selected)
+                for position in selected:
+                    tile = self._tiles[position]
+                    targets.append(position)
+                    if sparse and (tile.blocks_optics_at_center() if channel == "optical" else tile.blocks_propagation()):
+                        opaque.add(position)
+                    if not sparse:
+                        dx, dy = x - origin_x, position[1] - origin_y
+                        if dx or dy:
+                            quadrants[(1 if dx >= 0 else -1, 1 if dy >= 0 else -1)].append((abs(dx), abs(dy)))
         if timing:
-            record_action_elapsed("grid.directional_fov.supercover_line_ms", line_seconds)
+            record_action_timing("grid.directional_fov.enumeration_ms", enumeration_started)
+            record_action_count("grid.directional_fov.enumerated_positions", enumerated_positions)
+            record_action_count("grid.directional_fov.admitted_targets", len(targets))
+        if sparse:
+            result = self._sparse_directional_visibility(origin, channel, targets, opaque,
+                (min_x, min_y, max_x, max_y), radius_squared, transition_cache, blocking_cache)
+            if timing:
+                record_action_count("grid.directional_fov.visible_targets", len(result))
+                record_action_timing("grid.directional_fov.total_ms", total_started)
+            return result
+        if timing:
+            record_action_count("grid.directional_fov.unknown_crossing_fallbacks", 1)
+        prepare_started = time.perf_counter() if timing else 0.0
+        lanes = []
+        for (sign_x, sign_y), offsets in quadrants.items():
+            slopes, slope_ranks, rank_scale = supercover_slope_order(offsets)
+            terminals = {position: index for index, position in enumerate(slopes)}
+            lanes.append((sign_x, sign_y, slope_ranks, rank_scale, terminals,
+                max(x for x, _ in slopes), max(y for _, y in slopes),
+                max(x + y for x, y in slopes)))
+        if timing:
+            record_action_timing("grid.directional_fov.target_sort_ms", prepare_started)
+
+        visible = {origin}
+        counts = defaultdict(int) if timing else None
+        transition_seconds = blocking_seconds = 0.0
+        transition_total = blocking_total = interval_total = output_total = 0.0
+        sweep_started = time.perf_counter() if timing else 0.0
+        for sign_x, sign_y, slope_ranks, rank_scale, terminals, extent_x, extent_y, final_shell in lanes:
+            # Each bit belongs to one endpoint, including collinear near/far ones.
+            # Finishing a ray removes it before more distant blockers are visited.
+            active = (1 << len(slope_ranks)) - 1
+            for shell in range(1, final_shell + 1):
+                if not active:
+                    break
+                for x in range(max(0, shell - extent_y), min(extent_x, shell) + 1):
+                    y = shell - x
+                    interval_started = time.perf_counter() if timing else 0.0
+                    lower, diagonal_start, diagonal_end, upper = supercover_incoming_ranges(slope_ranks, rank_scale, x, y)
+                    cell_mask = ((1 << (upper - lower)) - 1) << lower
+                    if timing:
+                        interval_total += time.perf_counter() - interval_started
+                        counts["sweep_cells"] += 1
+                    if not active & cell_mask:
+                        continue
+                    position = (origin_x + sign_x * x, origin_y + sign_y * y)
+                    if timing:
+                        counts["active_cells"] += 1
+                    # These open intervals and the exact corner tie partition all
+                    # native ways into this cell. Missing cells remain in the sweep.
+                    for start, end, previous in (
+                        (lower, diagonal_start, (position[0], position[1] - sign_y)),
+                        (diagonal_start, diagonal_end, (position[0] - sign_x, position[1] - sign_y)),
+                        (diagonal_end, upper, (position[0] - sign_x, position[1])),
+                    ):
+                        if start == end:
+                            continue
+                        interval_started = time.perf_counter() if timing else 0.0
+                        incoming = ((1 << (end - start)) - 1) << start
+                        admitted = active & incoming
+                        if timing:
+                            interval_total += time.perf_counter() - interval_started
+                            counts["incoming_masks"] += 1
+                        if not admitted:
+                            continue
+                        lookup_started = time.perf_counter() if timing else 0.0
+                        edge = (previous, position)
+                        allowed = transition_cache.get(edge)
+                        if allowed is None:
+                            native_started = time.perf_counter() if timing else 0.0
+                            allowed = (self.can_optical_transition(*edge) if channel == "optical"
+                                else self.can_propagate_transition(*edge))
+                            transition_cache[edge] = allowed
+                            if timing:
+                                transition_seconds += time.perf_counter() - native_started
+                                counts["transition_cache_misses"] += 1
+                        elif timing:
+                            counts["transition_cache_hits"] += 1
+                        if not allowed:
+                            active &= ~incoming
+                        if timing:
+                            transition_total += time.perf_counter() - lookup_started
+                            counts["native_edge_inputs"] += 1
+                    output_started = time.perf_counter() if timing else 0.0
+                    terminal_index = terminals.get((x, y))
+                    terminal = 0 if terminal_index is None else 1 << terminal_index
+                    if active & terminal:
+                        visible.add(position)
+                    active &= ~terminal
+                    if timing:
+                        output_total += time.perf_counter() - output_started
+                    # The reached terminal is visible even when its center is
+                    # opaque. Only unfinished rays can be stopped by that center.
+                    if active & cell_mask:
+                        lookup_started = time.perf_counter() if timing else 0.0
+                        blocked = blocking_cache.get(position)
+                        if blocked is None:
+                            native_started = time.perf_counter() if timing else 0.0
+                            blocked = (self.is_blocking_optics(*position) if channel == "optical"
+                                else self.is_blocking_propagation(*position))
+                            blocking_cache[position] = blocked
+                            if timing:
+                                blocking_seconds += time.perf_counter() - native_started
+                                counts["blocking_cache_misses"] += 1
+                        elif timing:
+                            counts["blocking_cache_hits"] += 1
+                        if blocked:
+                            active &= ~cell_mask
+                        if timing:
+                            blocking_total += time.perf_counter() - lookup_started
+        if timing:
+            sweep_seconds = time.perf_counter() - sweep_started
+            record_action_elapsed("grid.directional_fov.sweep_total_ms", sweep_seconds)
+            record_action_elapsed("grid.directional_fov.interval_masks_ms", interval_total)
+            record_action_elapsed("grid.directional_fov.transition_total_ms", transition_total)
+            record_action_elapsed("grid.directional_fov.blocking_total_ms", blocking_total)
+            record_action_elapsed("grid.directional_fov.terminal_output_ms", output_total)
             record_action_elapsed("grid.directional_fov.transition_checks_ms", transition_seconds)
             record_action_elapsed("grid.directional_fov.blocking_checks_ms", blocking_seconds)
+            record_action_elapsed("grid.directional_fov.sweep_remainder_ms",
+                sweep_seconds - interval_total - transition_total - blocking_total - output_total)
+        output_started = time.perf_counter() if timing else 0.0
+        result = [position for position in targets if position in visible]
+        if timing:
+            counts["visible_targets"] = len(result)
+            for name, value in counts.items():
+                record_action_count("grid.directional_fov." + name, value)
+            record_action_timing("grid.directional_fov.output_ms", output_started)
             record_action_timing("grid.directional_fov.total_ms", total_started)
-        return visible_positions
+        return result
 
     def upper_volume_sight_planes(
         self, origin: Tuple[int, int], destination: Tuple[int, int],
+        *, snapshot: Optional[BoundarySnapshot] = None,
     ) -> Tuple[Tuple[float, float, float], ...]:
         """Clearance over finite optical boundaries, from existing support height.
 
@@ -4023,13 +4801,21 @@ class GridMap:
         for cell in route:
             for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
                 nearby = cell[0] + dx, cell[1] + dy
-                for direction in CardinalDirection:
-                    providers.update(self.get_boundary_objects_at(nearby, direction))
+                if snapshot is not None and boundary_snapshot_covers(snapshot, nearby):
+                    for identities in snapshot.layers.get(nearby, {}).values():
+                        providers.update(identities)
+                else:
+                    for direction in CardinalDirection:
+                        providers.update(self.get_boundary_objects_at(nearby, direction))
         planes: Set[Tuple[float, float, float]] = set()
         for identity in providers:
-            provider = BaseBlock.get(identity)
-            placement = self.get_object_placement(identity)
-            structure = provider.get_boundary_structure() if provider is not None else None
+            if snapshot is not None and identity in snapshot.structures:
+                placement = snapshot.placements[identity]
+                structure = snapshot.structures[identity]
+            else:
+                provider = BaseBlock.get(identity)
+                placement = self.get_object_placement(identity)
+                structure = provider.get_boundary_structure() if provider is not None else None
             if (placement is None or structure is None
                     or WorldEdgeChannel.OPTICAL not in structure.blocked_channels):
                 continue
@@ -4072,46 +4858,22 @@ class GridMap:
         """
         timing = action_timing_enabled()
         cache_started = time.perf_counter() if timing else 0.0
-        cache_key = (
-            origin,
-            max_distance,
-            self._optical_revision,
-        )
+        cache_key = (origin, self._optical_revision)
         cached = self._fov_cache.get(cache_key)
         if cached is not None:
-            if timing:
-                record_action_timing("grid.compute_fov.cache_hit_ms", cache_started)
-            return list(cached)
-        if max_distance is not None:
-            supersets = [
-                (cached_distance, positions)
-                for (
-                    cached_origin,
-                    cached_distance,
-                    cached_revision,
-                ), positions in tuple(self._fov_cache.items())
-                if cached_origin == origin
-                and cached_revision == self._optical_revision
-                and (cached_distance is None or cached_distance >= max_distance)
-            ]
-            if supersets:
-                _, superset = min(
-                    supersets,
-                    key=lambda item: math.inf if item[0] is None else item[0],
-                )
-                radius_squared = max_distance * max_distance
-                cached = [
-                    position
-                    for position in superset
-                    if (
-                        (position[0] - origin[0]) ** 2
-                        + (position[1] - origin[1]) ** 2
-                    ) <= radius_squared
-                ]
-                self._fov_cache[cache_key] = list(cached)
+            cached_distance, positions = cached
+            if cached_distance is None or (max_distance is not None and cached_distance >= max_distance):
+                self._fov_cache.move_to_end(cache_key)
+                if max_distance == cached_distance:
+                    visible = list(positions)
+                else:
+                    assert max_distance is not None
+                    radius_squared = max_distance * max_distance
+                    visible = [position for position in positions
+                        if ((position[0] - origin[0]) ** 2 + (position[1] - origin[1]) ** 2) <= radius_squared]
                 if timing:
                     record_action_timing("grid.compute_fov.cache_hit_ms", cache_started)
-                return list(cached)
+                return visible
         if timing:
             record_action_timing("grid.compute_fov.cache_miss_ms", cache_started)
 
@@ -4136,11 +4898,12 @@ class GridMap:
                 max_distance,
                 "optical",
             )
-            self._fov_cache[cache_key] = list(visible_positions)
-            return list(visible_positions)
-
-        compute_fov(origin, is_blocking_for, mark_visible, max_distance)
-        self._fov_cache[cache_key] = list(visible_positions)
+        else:
+            compute_fov(origin, is_blocking_for, mark_visible, max_distance)
+        self._fov_cache[cache_key] = (max_distance, tuple(visible_positions))
+        self._fov_cache.move_to_end(cache_key)
+        if len(self._fov_cache) > FOV_CACHE_ORIGINS:
+            self._fov_cache.popitem(last=False)
         return list(visible_positions)
 
     def compute_light_fov(self, origin: Tuple[int, int], max_distance: Optional[float] = None) -> List[Tuple[int, int]]:
@@ -4232,8 +4995,26 @@ class GridMap:
                 ignore_difficult_terrain=ignore_difficult_terrain)
 
         def unit_movement_costs() -> bool:
-            for tile in self._tiles.values():
-                cost = self.movement_cell_cost_units(tile.position, movement_mode,
+            if max_distance is None:
+                positions = self._tiles.keys()
+            else:
+                # Every admitted native step costs at least one unit. No path
+                # within this budget can leave the surrounding Chebyshev box.
+                radius = math.floor(max_distance)
+                min_x = max(self._min_x, start[0] - radius)
+                max_x = min(self._max_x, start[0] + radius)
+                min_y = max(self._min_y, start[1] - radius)
+                max_y = min(self._max_y, start[1] + radius)
+                positions = (
+                    position
+                    for x in range(min_x, max_x + 1)
+                    for chunk_y in range(min_y // SPATIAL_CHUNK_SIZE,
+                                         max_y // SPATIAL_CHUNK_SIZE + 1)
+                    for position in self._support_columns.get((x, chunk_y), ())
+                    if min_y <= position[1] <= max_y
+                )
+            for position in positions:
+                cost = self.movement_cell_cost_units(position, movement_mode,
                     ignore_difficult_terrain=ignore_difficult_terrain)
                 if cost != 1:
                     return False
@@ -4316,6 +5097,7 @@ class GridMap:
         if (
             start_tile is None
             or start_tile.get_movement_cost(movement_mode) <= 0
+            or max_distance == 0
         ):
             sentinel_result = ({start: 0}, {start: [start]})
             self._path_cache[cache_key] = (
@@ -4424,7 +5206,7 @@ class GridMap:
                 return False
         tile.default_light = level
         if preview is not old:
-            self._bump_spatial_revisions({"illumination"})
+            self._bump_spatial_revisions({"illumination"}, {position})
         if execution is not None:
             effect = cast(
                 SpatialChangeEvent,
@@ -4481,7 +5263,7 @@ class GridMap:
         if publish:
             self._fire_light_batch_events(list(changed), parent_event=parent_event)
         elif changed:
-            self._bump_spatial_revisions({"illumination"})
+            self._bump_spatial_revisions({"illumination"}, changed)
         return changed
 
     def apply_optical_obscurement(
@@ -4511,6 +5293,7 @@ class GridMap:
         owned = previous | normalized
         if owned:
             self._optical_obscurement_positions_by_source[source_uuid] = owned
+        self._refresh_optical_candidate_cells(normalized)
         if changed:
             self._publish_optical_obscurement_change(
                 source_uuid,
@@ -4540,6 +5323,7 @@ class GridMap:
             self._optical_obscurement_positions_by_source[source_uuid] = retained
         else:
             self._optical_obscurement_positions_by_source.pop(source_uuid, None)
+        self._refresh_optical_candidate_cells(removed)
         if removed:
             self._publish_optical_obscurement_change(
                 source_uuid,
@@ -4548,12 +5332,58 @@ class GridMap:
             )
         return removed
 
+    def _refresh_optical_candidate_cells(self, positions: Collection[Tuple[int, int]]) -> None:
+        """Index candidate membership only; contribution activity remains owner-native."""
+        for position in positions:
+            tile = self._tiles.get(position)
+            chunk = self._spatial_chunk(position)
+            if (self._optical_obscurements_by_position.get(position)
+                    or tile is not None and tile.get_spatial_condition_uuids()):
+                self._optical_candidate_cells[chunk].add(position)
+            elif chunk in self._optical_candidate_cells:
+                self._optical_candidate_cells[chunk].discard(position)
+                if not self._optical_candidate_cells[chunk]:
+                    del self._optical_candidate_cells[chunk]
+
+    def capture_optical_obscurements(
+        self, origin: Tuple[int, int], radius: float,
+    ) -> OpticalSnapshot:
+        """Capture native conditional optics once over a bounded ray domain.
+
+        The square includes diagonal and supercover cells. Each source keeps all
+        its values so excluding a volume owner removes only that owner's facts.
+        This detached input belongs to one solve and is never retained by the map.
+        """
+        snapshot: OpticalSnapshot = {}
+        extent = math.ceil(radius)
+        min_x, max_x = origin[0] - extent, origin[0] + extent
+        min_y, max_y = origin[1] - extent, origin[1] + extent
+        for chunk_x in range(min_x // SPATIAL_CHUNK_SIZE, max_x // SPATIAL_CHUNK_SIZE + 1):
+            for chunk_y in range(min_y // SPATIAL_CHUNK_SIZE, max_y // SPATIAL_CHUNK_SIZE + 1):
+                for position in self._optical_candidate_cells.get((chunk_x, chunk_y), ()):
+                    if not (min_x <= position[0] <= max_x and min_y <= position[1] <= max_y):
+                        continue
+                    values = {owner: {value} for owner, value in
+                              self._optical_obscurements_by_position.get(position, {}).items()}
+                    for condition in self.get_spatial_conditions_at(position):
+                        value = condition.get_optical_obscurement_at(position)
+                        if value is not None:
+                            values.setdefault(condition.uuid, set()).add(value)
+                    if values:
+                        snapshot[position] = {owner: frozenset(contributions)
+                                              for owner, contributions in values.items()}
+        return snapshot
+
     def get_optical_obscurements_at(
         self,
         position: Tuple[int, int],
         *, excluded_owner_uuid: Optional[UUID] = None,
+        snapshot: Optional[OpticalSnapshot] = None,
     ) -> Set[OpticalObscurement]:
         """Return conditional optical facts currently covering one Tile."""
+        if snapshot is not None:
+            return {value for owner, values in snapshot.get(position, {}).items()
+                    if owner != excluded_owner_uuid for value in values}
         result = {value for owner, value in self._optical_obscurements_by_position.get(position, {}).items()
                   if owner != excluded_owner_uuid}
         result.update(
@@ -4570,13 +5400,18 @@ class GridMap:
         start: Tuple[int, int],
         end: Tuple[int, int],
         *, excluded_owner_uuid: Optional[UUID] = None,
+        snapshot: Optional[OpticalSnapshot] = None,
     ) -> Set[OpticalObscurement]:
         """Return conditional optical facts intersecting one optical ray."""
-        if not self._optical_obscurements_by_position and not self._spatial_conditions:
+        if snapshot is not None:
+            if not snapshot:
+                return set()
+        elif not self._optical_obscurements_by_position and not self._spatial_conditions:
             return set()
         result: Set[OpticalObscurement] = set()
         for position in supercover_line(start, end):
-            result.update(self.get_optical_obscurements_at(position, excluded_owner_uuid=excluded_owner_uuid))
+            result.update(self.get_optical_obscurements_at(
+                position, excluded_owner_uuid=excluded_owner_uuid, snapshot=snapshot))
         return result
 
     def _publish_optical_obscurement_change(
@@ -4588,8 +5423,9 @@ class GridMap:
         """Publish one committed batch fact for a conditional optical change."""
         live = {position for position in positions if position in self._tiles}
         if not live:
+            self._bump_observer_revisions({"optical"}, positions)
             return
-        self._bump_spatial_revisions({"optical"})
+        self._bump_spatial_revisions({"optical"}, positions)
         representative = min(live)
         event = SpatialChangeEvent.tile_changed(
             representative,
@@ -4873,7 +5709,7 @@ class GridMap:
         if publish_event:
             self._fire_light_batch_events(changed_positions, parent_event=parent_event)
         elif changed_positions:
-            self._bump_spatial_revisions({"illumination"})
+            self._bump_spatial_revisions({"illumination"}, set(changed_positions))
 
     def _remove_light_source_tiles(self, source: LightSourceData,
                                    parent_event: Optional[UUID] = None,
@@ -4890,7 +5726,7 @@ class GridMap:
         if publish_event:
             self._fire_light_batch_events(changed_positions, parent_event=parent_event)
         elif changed_positions:
-            self._bump_spatial_revisions({"illumination"})
+            self._bump_spatial_revisions({"illumination"}, set(changed_positions))
 
         return changed_positions
 
@@ -4910,7 +5746,7 @@ class GridMap:
         """
         if not changed_positions:
             return
-        self._bump_spatial_revisions({"illumination"})
+        self._bump_spatial_revisions({"illumination"}, set(changed_positions))
         event = self.snapshot_light_change(changed_positions, parent_event=parent_event)
         if event is not None:
             self._fire_committed_spatial_event(event)
@@ -5076,7 +5912,7 @@ class GridMap:
             if publish:
                 self._fire_light_batch_events(changed_positions, parent_event=parent_event)
             elif changed_positions:
-                self._bump_spatial_revisions({"illumination"})
+                self._bump_spatial_revisions({"illumination"}, set(changed_positions))
         return all_changed
 
     def get_positions_near_entities(
@@ -5122,6 +5958,7 @@ class GridMap:
         cache_key = (origin, max_distance)
         cached = self._propagation_fov_cache.get(cache_key)
         if cached is not None:
+            self._propagation_fov_cache.move_to_end(cache_key)
             record_action_timing("grid.compute_propagation_fov.cache_hit_ms", cache_started)
             return list(cached)
         record_action_timing("grid.compute_propagation_fov.cache_miss_ms", cache_started)
@@ -5144,6 +5981,9 @@ class GridMap:
         ]
 
         self._propagation_fov_cache[cache_key] = tuple(visible_positions)
+        self._propagation_fov_cache.move_to_end(cache_key)
+        if len(self._propagation_fov_cache) > FOV_CACHE_ORIGINS:
+            self._propagation_fov_cache.popitem(last=False)
         return list(visible_positions)
 
     def connected_propagation_positions(
@@ -5363,8 +6203,16 @@ class GridMap:
             BaseBlock.unregister(tile.uuid)
         self._tiles.clear()
         self._tiles_by_uuid.clear()
+        self._support_columns.clear()
         self._object_placements.clear()
+        self._boundary_placements_by_position.clear()
+        self._objects_by_declared_source.clear()
+        self._declared_source_by_object.clear()
+        self._next_object_placement_order = 0
         self._spatial_conditions.clear()
+        self._global_crossing_owners.clear()
+        self._local_crossing_owners.clear()
+        self._missing_support_frontier.clear()
         self._spatial_condition_positions.clear()
         self._spatial_condition_layers.clear()
         self._connectors_by_uuid.clear()
@@ -5372,6 +6220,14 @@ class GridMap:
         self._connector_uuids_by_endpoint.clear()
         self._cell_subscribers.clear()
         self._entity_subscriptions.clear()
+        self._observer_revisions.clear()
+        self._observer_dependency_chunks.clear()
+        self._observer_dependency_cells.clear()
+        self._observer_dependency_bounds.clear()
+        self._chunk_dependents.clear()
+        self._optical_candidate_cells.clear()
+        self._boundary_candidate_cells.clear()
+        self._contact_candidate_cells.clear()
         self._light_sources.clear()
         self._block_light_suppressions.clear()
         self._optical_obscurements_by_position.clear()
@@ -5390,6 +6246,7 @@ class GridMap:
         self._propagation_filter_cache.clear()
         self._barrier_positions_cache = None
         self._directional_blockers_cache.clear()
+        self._directional_blocking_owners.clear()
         self._directional_transition_cache.clear()
         self._directional_blocking_cache.clear()
         self._propagation_transition_cache.clear()

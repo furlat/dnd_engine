@@ -1,6 +1,7 @@
 """Pure grid-geometry helpers for shape and ray calculations."""
 import math
 from functools import lru_cache
+from bisect import bisect_left, bisect_right
 from typing import Set, Tuple, List, Optional
 
 
@@ -155,7 +156,7 @@ def _supercover_line_cached(
     )
 
 
-@lru_cache(maxsize=1024)
+@lru_cache(maxsize=8192)
 def _supercover_line_relative_cached(
     dx: int,
     dy: int,
@@ -191,6 +192,71 @@ def _supercover_line_relative_cached(
         positions.append((x, y))
 
     return tuple(positions)
+
+
+def supercover_slope_order(
+    targets: List[Tuple[int, int]],
+) -> Tuple[List[Tuple[int, int]], List[int], int]:
+    """Rank bounded endpoint slopes exactly, including vertical rays.
+
+    Target denominators are at most M; half-cell boundary denominators are at
+    most 2M+1. Unequal rational slopes therefore differ by at least
+    1/(M*(2M+1)). Scaling by a larger integer makes their integer ranks distinct.
+    Equal slopes retain the same rank, so native strict/equal corner rules use
+    ordinary integer bisect without ray construction or approximate angles.
+    """
+    extent = max(max(x, y) for x, y in targets)
+    scale = extent * (2 * extent + 1) + 1
+    vertical = scale * (2 * extent + 2)
+    ranked = [(scale * y // x if x else vertical, (x, y)) for x, y in targets]
+    ranked.sort(key=lambda row: row[0])
+    return [position for _, position in ranked], [rank for rank, _ in ranked], scale
+
+
+def supercover_incoming_ranges(
+    ranks: List[int], scale: int, x: int, y: int,
+) -> Tuple[int, int, int, int]:
+    """Indices of native bottom, diagonal and left entry directions for a cell.
+
+    The sorted endpoint slopes are nonnegative and (x, y) is not the origin.
+    Open half-cell corner bounds reproduce the native supercover tie policy:
+    [lower, diagonal_start) enters vertically; equal middle slopes enter
+    diagonally; [diagonal_end, upper) enters horizontally. Axis cells still
+    admit non-axis rays passing through their interiors.
+    """
+    if x == 0:
+        lower = bisect_right(ranks, scale * (2 * y - 1))
+        upper = len(ranks)
+        return lower, upper, upper, upper
+    if y == 0:
+        upper = bisect_left(ranks, scale // (2 * x - 1))
+        return 0, 0, 0, upper
+    lower = bisect_right(ranks, scale * (2 * y - 1) // (2 * x + 1))
+    corner = scale * (2 * y - 1) // (2 * x - 1)
+    diagonal_start = bisect_left(ranks, corner)
+    diagonal_end = bisect_right(ranks, corner)
+    upper = bisect_left(ranks, scale * (2 * y + 1) // (2 * x - 1))
+    return lower, diagonal_start, diagonal_end, upper
+
+
+def supercover_incoming_rank_ranges(
+    scale: int, vertical: int, x: int, y: int,
+) -> Tuple[int, int, int, int]:
+    """Half-open integer-rank intervals for native incoming ray directions.
+
+    The same separating scale as ``supercover_slope_order`` makes different
+    endpoint/corner rationals occupy different integer ranks. Strict corner
+    bounds therefore need no list of target slopes or per-boundary bisection.
+    """
+    if x == 0:
+        lower, upper = scale * (2 * y - 1) + 1, vertical + 1
+        return lower, upper, upper, upper
+    if y == 0:
+        return 0, 0, 0, scale // (2 * x - 1)
+    lower = scale * (2 * y - 1) // (2 * x + 1) + 1
+    corner = scale * (2 * y - 1) // (2 * x - 1)
+    upper = scale * (2 * y + 1) // (2 * x - 1)
+    return lower, corner, corner + 1, upper
 
 
 def line_positions(

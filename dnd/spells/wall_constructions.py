@@ -1,7 +1,7 @@
 """Solid wall spells: ordinary attackable sections and one native spatial owner."""
 
 from math import ceil, hypot, isclose
-from typing import Literal
+from typing import ClassVar, Literal
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
@@ -166,6 +166,8 @@ class WallSection(WorldItem):
         owner = BaseCondition.get(self.wall_owner_uuid)
         if isinstance(owner, SolidWallZone) and owner.applied:
             owner.sections[self.uuid] = self.geometry
+            get_map().invalidate_spatial_caches(
+                {"movement", "optical", "propagation"}, owner.affected_positions)
             change = owner._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
                 previous_positions=set(owner.affected_positions), affected_positions=set(owner.affected_positions),
                 parent_event=parent_event)
@@ -173,7 +175,6 @@ class WallSection(WorldItem):
                 positions = {position for position in wall_shell_cells(previous)
                     if volume.contains_band(position, previous.base_height_steps)} & owner.affected_positions
                 owner.leave_frigid_air(previous, positions, change)
-            get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
             owner._complete_change(change)
 
     def disintegration_error(self) -> str | None:
@@ -182,6 +183,8 @@ class WallSection(WorldItem):
 
 class SolidWallZone(AreaCondition):
     """Ownership links and exact shell crossings, without a filled-volume blocker."""
+
+    crossing_channels: ClassVar[frozenset[str] | None] = frozenset({"movement", "optical", "propagation"})
 
     geometry: WallAssemblyPresentationGeometry
     material: Literal["ice", "stone", "force"]
@@ -260,17 +263,17 @@ class SolidWallZone(AreaCondition):
         geometry = self.sections.pop(identity, None)
         if geometry is None:
             return
+        get_map().invalidate_spatial_caches(
+            {"movement", "optical", "propagation"}, self.affected_positions)
         change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
             previous_positions=set(self.affected_positions), affected_positions=set(self.affected_positions),
             parent_event=parent_event)
         if self.material == "ice":
             positions = wall_shell_cells(geometry) & self.affected_positions
             if not positions:
-                get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
                 self._complete_change(change)
                 return
             self.leave_frigid_air(geometry, positions, change)
-        get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
         self._complete_change(change)
 
     def leave_frigid_air(self, geometry: WallAssemblyPresentationGeometry,

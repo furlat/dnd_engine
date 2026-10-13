@@ -62,7 +62,7 @@ def _project(log: CombatLogEntry, controlled: frozenset[str], observers: frozens
     # A previously known name can label an admitted death/turn closure, but is
     # not evidence about the source or equipment of a newly hidden attack.
     if log.data.kind in {"turn", "death"}:
-        identified.update(known)
+        identified.update(identity for identity in _identity_candidates(log) if identity in known)
     hidden_ids, hidden_names = _hidden_identities(log, identified, controlled, observers, known)
     source_known = not log.source_uuid or log.source_uuid in identified
     target_known = not log.target_uuid or log.target_uuid in identified
@@ -128,16 +128,20 @@ def _project(log: CombatLogEntry, controlled: frozenset[str], observers: frozens
     return result
 
 
+def _identity_candidates(log: CombatLogEntry) -> tuple[str | None, ...]:
+    return (log.source_uuid, log.target_uuid, *log.perceiver_uuids, *log.revealed_entity_uuids,
+        *log.identified_entity_observer_uuids, *log.located_entity_observer_uuids)
+
+
 def _hidden_identities(log: CombatLogEntry, identified: set[str], controlled: frozenset[str],
                        observers: frozenset[str], known: Mapping[str, str]) -> tuple[set[str], set[str]]:
-    hidden_ids = {identity for identity in (
-        log.source_uuid, log.target_uuid, *log.perceiver_uuids, *log.revealed_entity_uuids,
-        *log.identified_entity_observer_uuids, *log.located_entity_observer_uuids)
+    hidden_ids = {identity for identity in _identity_candidates(log)
         if identity and identity not in identified}
     hidden_names = {name for identity, name in ((log.source_uuid, log.source_name),
         (log.target_uuid, log.target_name)) if identity in hidden_ids and name}
     for child in log.sub_entries:
-        child_known = set(controlled) | set(known) | {identity for identity, grants
+        child_known = set(controlled) | {identity for identity in _identity_candidates(child)
+            if identity in known} | {identity for identity, grants
             in child.identified_entity_observer_uuids.items() if grants & observers}
         child_ids, child_names = _hidden_identities(child, child_known, controlled, observers, known)
         hidden_ids.update(child_ids)

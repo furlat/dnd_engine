@@ -43,7 +43,8 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
     if "Disengaging" in event_source_entity.active_conditions:
         return event
 
-    threatened_positions = reaction_source_entity.senses.get_threathened_positions()
+    threatened_positions = reaction_source_entity.senses.get_threathened_positions(
+        candidate_positions=(event.from_position, event.to_position))
 
     if event.from_position in threatened_positions and event.to_position not in threatened_positions:
         reaction_attack = Attack(

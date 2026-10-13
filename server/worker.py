@@ -76,7 +76,7 @@ def start(request: Start) -> tuple[Runtime, Reply, tuple[BaseModel, ...]]:
         public_content = tuple(descriptor for _, descriptor in catalog.content
             if descriptor.visibility is ContentVisibility.PUBLIC)
         content_revision = sha256(ContentResponse(revision='public', descriptors=public_content).model_dump_json().encode()).hexdigest()
-        audiences, initializations = initialize_audiences(session, catalog)
+        audiences, initializations = initialize_audiences(session, catalog, exclusive_current=True)
         publications = {}
         records = []
         for seat, initial in initializations.items():

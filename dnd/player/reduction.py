@@ -5,13 +5,15 @@ import json
 from types import MappingProxyType
 from typing import Mapping
 from dnd.types.actor import SpatialDisposition
+from dnd.types.senses import PreparedSensoryDelta, prepare_sensory_delta, apply_current_senses, copy_senses_snapshot
 from dnd.core.effect_types import ResolutionRef
 from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.descriptors import ContentDescriptor
 from dnd.types.event_facts import EventType, SpatialChangeType
-from dnd.player.audience import audience_view, observe_audience, resolve_audience
+from dnd.player.audience import (AudienceComposition, apply_current_audience, audience_view,
+    begin_audience_composition, observe_audience, resolve_audience)
 from dnd.player.facts import (
     AttackFact, ConditionChangeFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, LifeFact,
     PlayerFact, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
@@ -76,10 +78,12 @@ def copy_target(target: PlayerState) -> PlayerState:
     senses = target.senses
     return replace(target, tiles=dict(target.tiles), objects=dict(target.objects), actors=dict(target.actors),
         spatial_commit_cursors=dict(target.spatial_commit_cursors),
-        senses=None if senses is None else replace(senses, visible=set(senses.visible), seen=set(senses.seen),
-            entities=dict(senses.entities), objects=dict(senses.objects),
-            effective_light_levels=dict(senses.effective_light_levels), hazardous_cells=dict(senses.hazardous_cells),
-            spatial_effects=dict(senses.spatial_effects)))
+        senses=None if senses is None else copy_senses_snapshot(senses),
+        perception=replace(target.perception,
+            members={identity: copy_senses_snapshot(value) for identity, value in target.perception.members.items()},
+            contact_cursors=dict(target.perception.contact_cursors),
+            effect_cursors=dict(target.perception.effect_cursors),
+            effect_absences=dict(target.perception.effect_absences)))
 
 
 def apply_world_update(target: PlayerState, update: WorldUpdate) -> None:
@@ -90,13 +94,16 @@ def apply_world_update(target: PlayerState, update: WorldUpdate) -> None:
     target.connectors = update.connectors
 
 
-def _observe(target: PlayerState, observation: PlayerObservation) -> None:
+def _observe(target: PlayerState, observation: PlayerObservation, *,
+             audience_composition: AudienceComposition | None = None) -> None:
     previous = target.actors.get(observation.actor.uuid)
     if previous is not None and not previous.present:
         return  # A later retained observation cannot resurrect a terminal lifetime.
     target.actors[observation.actor.uuid] = observation.actor
     if observation.contact is not None and target.senses is not None:
         target.senses.entities[observation.actor.uuid] = observation.contact
+        if audience_composition is not None:
+            audience_composition.contact_overrides.add(observation.actor.uuid)
 
 
 def stage_actors(target: PlayerState, observations: tuple[PlayerObservation, ...]) -> PlayerState:
@@ -134,7 +141,9 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
     return result
 
 
-def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int | None = None) -> None:
+def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int | None = None,
+                      audience_composition: AudienceComposition | None = None,
+                      prepared_sensory: PreparedSensoryDelta | None = None) -> None:
     """Fold an already-disclosed committed fact into player memory."""
     match fact:
         case FactionFact():
@@ -147,6 +156,8 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: i
                 target.actors[actor.uuid] = replace(actor, present=False, last_visual_position=None, occupancy_layer=None)
                 if target.senses is not None:
                     target.senses.entities.pop(actor.uuid, None)
+                    if audience_composition is not None:
+                        audience_composition.contact_overrides.add(actor.uuid)
                 return
             actor = target.actors.get(fact.entity_uuid) if fact.entity_uuid is not None else None
             if actor is not None and fact.change_type is SpatialChangeType.ENTITY_ENTERED:
@@ -175,9 +186,14 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: i
             target.actors[actor.uuid] = replace(actor, controlled_items=items,
                 visual_loadout=replace(actor.visual_loadout, layers=layers))
         case SensoryFact():
-            target.perception = observe_audience(target.perception, target.viewing_audience, fact,
-                target.reducer_cursor if source_cursor is None else source_cursor)
-            target.senses = audience_view(target.perception, target.observer_uuid)
+            cursor = target.reducer_cursor if source_cursor is None else source_cursor
+            if audience_composition is None:
+                target.perception = observe_audience(target.perception, target.viewing_audience, fact, cursor)
+                target.senses = audience_view(target.perception, target.observer_uuid)
+            else:
+                apply_current_audience(audience_composition, target.viewing_audience,
+                    target.observer_uuid, fact, cursor, prepared=prepared_sensory)
+                target.perception, target.senses = audience_composition.perception, audience_composition.view
             if fact.observer_position_changed and fact.observer_uuid in target.actors:
                 target.actors[fact.observer_uuid] = replace(target.actors[fact.observer_uuid], last_visual_position=fact.observer_position)
             for identity, contact in fact.entity_contacts_changed.items():
@@ -240,7 +256,9 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: i
 
 
 def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
-                               version_cursors: Mapping[UUID, int]) -> None:
+                               version_cursors: Mapping[UUID, int],
+                               audience_composition: AudienceComposition | None = None,
+                               prepared_sensory: PreparedSensoryDelta | None = None) -> None:
     """Fold a committed fact without letting an outer move undo nested arrival."""
     if (isinstance(fact, SpatialFact) and fact.entity_uuid is not None
             and fact.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT)):
@@ -252,30 +270,40 @@ def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source
         if committed_at < target.spatial_commit_cursors.get(fact.entity_uuid, -1) < source_cursor:
             return
         target.spatial_commit_cursors[fact.entity_uuid] = committed_at
-    apply_player_fact(target, fact, source_cursor=source_cursor)
+    apply_player_fact(target, fact, source_cursor=source_cursor,
+        audience_composition=audience_composition, prepared_sensory=prepared_sensory)
 
 
 def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
             observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...]) -> PlayerState:
     """Fold received values in source order, including a timed partial group."""
     result = copy_target(target)
+    _apply_nodes(result, nodes, versions, observations, updates)
+    return result
+
+
+def _apply_nodes(result: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
+                 observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...], *,
+                 audience_composition: AudienceComposition | None = None,
+                 prepared_sensory: Mapping[UUID, PreparedSensoryDelta] | None = None) -> None:
     indexes = {row.event_uuid: row.source_index for row in versions}
     pending = iter(sorted(observations, key=lambda row: indexes[row.event_uuid]))
     observation = next(pending, None)
     world_updates = {row.event_uuid: row for row in updates}
     for node in nodes:
         while observation is not None and indexes[observation.event_uuid] <= indexes[node.uuid]:
-            _observe(result, observation)
+            _observe(result, observation, audience_composition=audience_composition)
             observation = next(pending, None)
         if node.uuid in world_updates:
             apply_world_update(result, world_updates[node.uuid])
         if not node.canceled and node.fact is not None:
-            apply_committed_player_fact(result, node.fact, source_cursor=indexes[node.uuid], version_cursors=indexes)
+            apply_committed_player_fact(result, node.fact, source_cursor=indexes[node.uuid], version_cursors=indexes,
+                audience_composition=audience_composition,
+                prepared_sensory=prepared_sensory.get(node.uuid) if prepared_sensory is not None else None)
     if observation is not None:
-        _observe(result, observation)
+        _observe(result, observation, audience_composition=audience_composition)
     for remaining in pending:
-        _observe(result, remaining)
-    return result
+        _observe(result, remaining, audience_composition=audience_composition)
 
 
 def state_before_event(before: PlayerState, lineage: PlayerLineage, event: PlayerNode) -> PlayerState:
@@ -309,12 +337,21 @@ def reduce_initialization(initialization: PlayerInitialization, *,
 
 
 def reduce_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
+    result = copy_target(target)
+    _apply_lineage(result, lineage)
+    return result
+
+
+def _apply_lineage(target: PlayerState, lineage: PlayerLineage, *,
+                   audience_composition: AudienceComposition | None = None) -> None:
     if (target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid
             or target.viewing_audience != resolve_audience(lineage.observer_uuid, lineage.audience)):
         raise ValueError("player lineage belongs to a different observer or generation")
     if lineage.end_cursor <= target.reducer_cursor:
         raise ValueError("player lineage precedes this reduction position")
-    result = reduce_nodes(target, lineage.events, lineage.version_rows, lineage.observations, lineage.world_updates)
+    result = target
+    _apply_nodes(result, lineage.events, lineage.version_rows, lineage.observations, lineage.world_updates,
+        audience_composition=audience_composition)
     result.reducer_cursor = lineage.end_cursor
     if lineage.hud_snapshot is not None:
         snapshot = lineage.hud_snapshot
@@ -323,7 +360,6 @@ def reduce_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
                 or (result.hud_snapshot is not None and snapshot.revision < result.hud_snapshot.revision)):
             raise ValueError("HUD facts belong to a different observer or generation")
         result.hud_snapshot = snapshot
-    return result
 
 
 def lineage_branch(lineage: PlayerLineage, root: PlayerNode) -> PlayerLineage:
@@ -383,10 +419,14 @@ def reduce_operation(target: PlayerState, update: PlayerUpdate) -> PlayerState:
                 raise ValueError("An admitted content identity changed its definition")
             content[descriptor.ref.identity_key] = descriptor
         result.content = tuple(content[key] for key in sorted(content))
+    composition = None
     for lineage in update.lineages:
         if lineage.start_cursor != result.reducer_cursor:
             raise ValueError("Operation occurrence sequence has a gap")
-        result = reduce_lineage(result, lineage)
+        if composition is None and any(not node.canceled and isinstance(node.fact, SensoryFact)
+                                       for node in lineage.events):
+            composition = begin_audience_composition(result.perception, result.observer_uuid)
+        _apply_lineage(result, lineage, audience_composition=composition)
     if update.hud is not None:
         hud = update.hud
         if (hud.generation != result.generation or hud.observer_uuid != result.observer_uuid
@@ -400,3 +440,130 @@ def reduce_operation(target: PlayerState, update: PlayerUpdate) -> PlayerState:
             raise ValueError("Standalone log append is out of order or belongs to another audience")
     result.combat_log_appends += update.combat_log_appends
     return result
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedPlayerOperation:
+    """Validated values for one exclusively owned current-state application."""
+    content: tuple[ContentDescriptor, ...]
+    sensory: dict[UUID, PreparedSensoryDelta]
+    log_count: int
+
+
+def _fact_actor_identity(fact: PlayerFact) -> UUID | None:
+    match fact:
+        case FactionFact() | SpatialFact() | TemporaryHitPointsFact() | LifeFact() | TurnFact():
+            return fact.entity_uuid
+        case ItemChargeFact() | AttackFact() | EquipmentFact():
+            return fact.source_entity_uuid
+        case DamageResultFact() | HealFact() | ConditionChangeFact():
+            return fact.target_entity_uuid
+    return None
+
+
+def prepare_current_operation(target: PlayerState, update: PlayerUpdate, *,
+                              log_count: int) -> PreparedPlayerOperation:
+    """Check this operation without touching any retained current-state container.
+
+    Only actors and commit cursors used by the operation need staged values.
+    Sensory parsing is done here; its after-values are already typed immutable
+    facts. Earlier observations/equipment/terminal facts determine later checks.
+    """
+    if update.audience != target.viewing_audience:
+        raise ValueError("An operation cannot change its authorized audience")
+    content = target.content
+    if update.content_additions:
+        descriptors = {row.ref.identity_key: row for row in content}
+        for row in update.content_additions:
+            previous = descriptors.get(row.ref.identity_key)
+            if previous is not None and previous != row:
+                raise ValueError("An admitted content identity changed its definition")
+            descriptors[row.ref.identity_key] = row
+        content = tuple(descriptors[key] for key in sorted(descriptors))
+    staged = PlayerState(generation=target.generation, observer_uuid=target.observer_uuid,
+        world=target.world, audience=target.audience, reducer_cursor=target.reducer_cursor,
+        hud_snapshot=target.hud_snapshot)
+    loaded: set[UUID] = set()
+    members = dict(target.perception.members)
+    sensory: dict[UUID, PreparedSensoryDelta] = {}
+
+    def load_actor(identity: UUID | None) -> None:
+        if identity is None or identity in loaded:
+            return
+        loaded.add(identity)
+        if identity in target.actors:
+            staged.actors[identity] = target.actors[identity]
+        if identity in target.spatial_commit_cursors:
+            staged.spatial_commit_cursors[identity] = target.spatial_commit_cursors[identity]
+
+    def observe(row: PlayerObservation) -> None:
+        load_actor(row.actor.uuid)
+        _observe(staged, row)
+
+    for lineage in update.lineages:
+        if lineage.start_cursor != staged.reducer_cursor:
+            raise ValueError("Operation occurrence sequence has a gap")
+        if (staged.generation != lineage.generation or staged.observer_uuid != lineage.observer_uuid
+                or staged.viewing_audience != resolve_audience(lineage.observer_uuid, lineage.audience)):
+            raise ValueError("player lineage belongs to a different observer or generation")
+        if lineage.end_cursor <= staged.reducer_cursor:
+            raise ValueError("player lineage precedes this reduction position")
+        indexes = {row.event_uuid: row.source_index for row in lineage.version_rows}
+        pending = iter(sorted(lineage.observations, key=lambda row: indexes[row.event_uuid]))
+        observation = next(pending, None)
+        for node in lineage.events:
+            while observation is not None and indexes[observation.event_uuid] <= indexes[node.uuid]:
+                observe(observation)
+                observation = next(pending, None)
+            if node.canceled or node.fact is None:
+                continue
+            source_cursor = indexes[node.uuid]
+            fact = node.fact
+            if isinstance(fact, SensoryFact):
+                if not staged.viewing_audience.observes(fact.observer_uuid):
+                    raise ValueError("Sensory observation does not belong to this audience")
+                previous = members.get(fact.observer_uuid)
+                prepared = prepare_sensory_delta(fact.observer_uuid, previous, fact)
+                sensory[node.uuid] = prepared
+                if fact.initial:
+                    members[fact.observer_uuid] = apply_current_senses(previous, fact, prepared)
+            else:
+                load_actor(_fact_actor_identity(fact))
+                apply_committed_player_fact(staged, fact, source_cursor=source_cursor, version_cursors=indexes)
+        if observation is not None:
+            observe(observation)
+        for observation in pending:
+            observe(observation)
+        staged.reducer_cursor = lineage.end_cursor
+        if lineage.hud_snapshot is not None:
+            hud = lineage.hud_snapshot
+            if (hud.generation != staged.generation or hud.observer_uuid != staged.observer_uuid
+                    or hud.revision > lineage.end_cursor
+                    or staged.hud_snapshot is not None and hud.revision < staged.hud_snapshot.revision):
+                raise ValueError("HUD facts belong to a different observer or generation")
+            staged.hud_snapshot = hud
+    if update.hud is not None:
+        hud = update.hud
+        if (hud.generation != staged.generation or hud.observer_uuid != staged.observer_uuid
+                or hud.revision > staged.reducer_cursor
+                or staged.hud_snapshot is not None and hud.revision < staged.hud_snapshot.revision):
+            raise ValueError("HUD belongs to a different or future operation")
+    for index, row in enumerate(update.combat_log_appends, log_count):
+        if (row.generation != staged.generation or row.observer_uuid != staged.observer_uuid
+                or row.operation_end_cursor > staged.reducer_cursor or row.encounter_log_index != index):
+            raise ValueError("Standalone log append is out of order or belongs to another audience")
+    return PreparedPlayerOperation(content, sensory, log_count + len(update.combat_log_appends))
+
+
+def apply_current_operation(target: PlayerState, update: PlayerUpdate, prepared: PreparedPlayerOperation,
+                            composition: AudienceComposition) -> None:
+    """Commit preflighted values to exclusive server state; journal owns log history."""
+    target.content = prepared.content
+    for lineage in update.lineages:
+        _apply_nodes(target, lineage.events, lineage.version_rows, lineage.observations, lineage.world_updates,
+            audience_composition=composition, prepared_sensory=prepared.sensory)
+        target.reducer_cursor = lineage.end_cursor
+        if lineage.hud_snapshot is not None:
+            target.hud_snapshot = lineage.hud_snapshot
+    if update.hud is not None:
+        target.hud_snapshot = update.hud

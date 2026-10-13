@@ -1,5 +1,7 @@
 """Native content descriptors for the client, without SDL/media loading."""
 
+from dataclasses import dataclass
+
 from dnd.content.characters.class_definitions import FIGHTER_DEFINITION, BARBARIAN_DEFINITION, SORCERER_DEFINITION
 from dnd.content.items.authored_item_builders import DIRECT_ITEM_BUILDERS
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
@@ -35,19 +37,9 @@ def ui_content_manifest() -> UIContentManifest:
 
 
 
-def admitted_content(catalog: UIContentManifest, state: PlayerState,
-                     lineages: tuple[PlayerLineage, ...] = ()) -> tuple[ContentDescriptor, ...]:
-    """Public catalog plus independently observed identities; no encounter-wide scan."""
-    known = {row.ref.content_id for row in state.content}
-    for actor in state.actors.values():
-        known.update(_actor_content(actor))
-    known.update(row.item.item_id for row in state.objects.values())
-    known.update(effect.behavior_id for row in state.objects.values() for effect in row.item.item_effects)
-    known.update(item.item_id for row in state.objects.values() for item in row.contained_items or ())
-    known.update(effect.behavior_id for row in state.objects.values() for item in row.contained_items or ()
-        for effect in item.item_effects)
-    if state.senses is not None:
-        known.update(row.content_ref.content_id for row in state.senses.spatial_effects.values())
+def _lineage_content(lineages: tuple[PlayerLineage, ...]) -> set[str]:
+    """All content witnessed during these roots, including transient grants."""
+    known: set[str] = set()
     for lineage in lineages:
         for observation in lineage.observations:
             known.update(_actor_content(observation.actor))
@@ -85,6 +77,23 @@ def admitted_content(catalog: UIContentManifest, state: PlayerState,
             for row in node.content_attributions:
                 known.update(identity for identity in (row.behavior_id, row.provided_by_id, row.origin_root_id)
                              if identity is not None)
+    return known
+
+
+def admitted_content(catalog: UIContentManifest, state: PlayerState,
+                     lineages: tuple[PlayerLineage, ...] = ()) -> tuple[ContentDescriptor, ...]:
+    """Public catalog plus independently observed identities; no encounter-wide scan."""
+    known = {row.ref.content_id for row in state.content}
+    for actor in state.actors.values():
+        known.update(_actor_content(actor))
+    known.update(row.item.item_id for row in state.objects.values())
+    known.update(effect.behavior_id for row in state.objects.values() for effect in row.item.item_effects)
+    known.update(item.item_id for row in state.objects.values() for item in row.contained_items or ())
+    known.update(effect.behavior_id for row in state.objects.values() for item in row.contained_items or ()
+        for effect in item.item_effects)
+    if state.senses is not None:
+        known.update(row.content_ref.content_id for row in state.senses.spatial_effects.values())
+    known.update(_lineage_content(lineages))
     # Creature facts retain the exact existing ContentRef identity string.
     known.update(ref.content_id for ref, _ in catalog.content if ref.identity_key in known)
     # Admitted descriptors are immutable, already stripped of private links, and
@@ -103,3 +112,36 @@ def admitted_content(catalog: UIContentManifest, state: PlayerState,
         ref for ref in descriptor.related_content_refs if ref.content_id in public_ids)})
         for descriptor in additions)
     return tuple(sorted((*state.content, *additions), key=lambda row: row.ref.identity_key))
+
+
+@dataclass(frozen=True, slots=True)
+class ContentCatalog:
+    """Read-only lookup over the supplied manifest, shared by its audiences."""
+
+    source: UIContentManifest
+    observed: dict[str, tuple[ContentDescriptor, ...]]
+    identity_content_ids: dict[str, str]
+
+
+def index_content_catalog(catalog: UIContentManifest) -> ContentCatalog:
+    public_ids = {ref.content_id for ref, descriptor in catalog.content
+        if descriptor.visibility is ContentVisibility.PUBLIC}
+    observed: dict[str, list[ContentDescriptor]] = {}
+    for ref, descriptor in catalog.content:
+        if descriptor.visibility is ContentVisibility.OBSERVED:
+            observed.setdefault(ref.content_id, []).append(descriptor.model_copy(update={
+                "related_content_refs": tuple(related for related in descriptor.related_content_refs
+                    if related.content_id in public_ids)}))
+    return ContentCatalog(catalog, {key: tuple(rows) for key, rows in observed.items()},
+        {ref.identity_key: ref.content_id for ref, _ in catalog.content})
+
+
+def observed_content_additions(catalog: ContentCatalog, retained: set[str],
+                               lineages: tuple[PlayerLineage, ...]) -> tuple[ContentDescriptor, ...]:
+    """Resolve only newly witnessed identities; startup admits public content."""
+    known = _lineage_content(lineages)
+    known.update(catalog.identity_content_ids[value] for value in tuple(known)
+        if value in catalog.identity_content_ids)
+    additions = {row.ref.identity_key: row for identity in known
+        for row in catalog.observed.get(identity, ()) if row.ref.identity_key not in retained}
+    return tuple(additions[key] for key in sorted(additions))

@@ -8,6 +8,7 @@ from dnd.core.item_types import ItemPresentationState
 from dnd.types.senses import SensesSnapshot
 from dnd.types.actor_facts import ActorState as ActorState, ConditionFact as ConditionFact
 from dnd.types.world_placement import WorldObjectPlacement
+from dnd.world_facts import WorldFacts
 
 
 @dataclass(slots=True)
@@ -16,9 +17,7 @@ class PresentationTarget:
 
     generation: UUID
     observer_uuid: UUID
-    world: WorldInitializedEvent | None = None
-    tiles: dict[tuple[int, int], WorldTileState] = field(default_factory=dict)
-    objects: dict[UUID, WorldObjectState] = field(default_factory=dict)
+    recorded_world: WorldFacts = field(default_factory=WorldFacts)
     door_uuid: UUID | None = None
     door_placement: WorldObjectPlacement | None = None
     door_is_open: bool | None = None
@@ -29,3 +28,15 @@ class PresentationTarget:
     actors: dict[UUID, ActorState] = field(default_factory=dict)
     current_actor_uuid: UUID | None = None
     round_number: int = 0
+
+    @property
+    def world(self) -> WorldInitializedEvent | None:
+        return self.recorded_world.world
+
+    @property
+    def tiles(self) -> dict[tuple[int, int], WorldTileState]:
+        return self.recorded_world.tiles
+
+    @property
+    def objects(self) -> dict[UUID, WorldObjectState]:
+        return self.recorded_world.objects

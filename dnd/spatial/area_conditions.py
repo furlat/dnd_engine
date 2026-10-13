@@ -1,6 +1,6 @@
 """Independent spatial conditions and reusable area mechanics."""
 
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, ClassVar, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 from dataclasses import dataclass, field
 
@@ -56,6 +56,10 @@ class SpatialRemovalPublication:
 
 class SpatialCondition(BaseCondition):
     """One condition that directly owns its world footprint and mechanics."""
+
+    # None keeps arbitrary crossing predicates global. A declared channel set
+    # promises that only segments touching the committed footprint can block.
+    crossing_channels: ClassVar[frozenset[str] | None] = None
 
     name: str = Field(default="Spatial Condition")
     content_ref: ContentRef = Field(
@@ -181,6 +185,12 @@ class SpatialCondition(BaseCondition):
         return not ((isinstance(anchor, Entity) and anchor.is_spatially_suspended)
             or (isinstance(anchor, BaseItem) and anchor.antimagic_suspended_placement is not None))
 
+    def on_suppression_changed(self) -> None:
+        """Invalidate settled source contributions before dependent child work."""
+        if self.is_active_spatial_condition():
+            get_map().invalidate_spatial_caches(
+                {"movement", "optical", "propagation"}, self.affected_positions)
+
     def is_active_spatial_condition(self) -> bool:
         """Verify activity against the authoritative map collection."""
         return get_map().get_spatial_condition(self.uuid) is self
@@ -277,7 +287,8 @@ class SpatialCondition(BaseCondition):
             parent_event=application_effect,
         )
         self._commit_activation_footprint(change_effect)
-        get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
+        get_map().invalidate_spatial_caches(
+            {"movement", "optical", "propagation"}, self.affected_positions)
         event_handler_uuids: list[UUID] = []
         anchor_handler = self._create_anchor_handler()
         if anchor_handler is not None:
@@ -383,6 +394,7 @@ class SpatialCondition(BaseCondition):
             if remaining:
                 grid.set_spatial_condition_positions(
                     condition=incumbent,
+                    crossing_channels=incumbent.crossing_channels,
                     layer=incumbent.layer,
                     occupancy_policy=incumbent.occupancy_policy,
                     positions=set(remaining),
@@ -392,6 +404,7 @@ class SpatialCondition(BaseCondition):
 
         grid.set_spatial_condition_positions(
             condition=self,
+            crossing_channels=self.crossing_channels,
             layer=self.layer,
             occupancy_policy=self.occupancy_policy,
             positions=set(self._activation_positions),
@@ -456,10 +469,13 @@ class SpatialCondition(BaseCondition):
             incumbent.observation_revision += 1
             grid.set_spatial_condition_positions(
                 condition=incumbent,
+                crossing_channels=incumbent.crossing_channels,
                 layer=incumbent.layer,
                 occupancy_policy=incumbent.occupancy_policy,
                 positions=set(original),
             )
+            grid.invalidate_spatial_caches(
+                {"movement", "optical", "propagation"}, set(original))
         self._displaced_footprints.clear()
 
     def _create_anchor_handler(self) -> Optional[EventHandler]:
@@ -638,6 +654,7 @@ class SpatialCondition(BaseCondition):
         )
         get_map().set_spatial_condition_positions(
             condition=self,
+            crossing_channels=self.crossing_channels,
             layer=self.layer,
             occupancy_policy=self.occupancy_policy,
             positions=normalized,
@@ -652,7 +669,8 @@ class SpatialCondition(BaseCondition):
                 handler_uuid,
                 normalized,
             )
-        get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
+        get_map().invalidate_spatial_caches(
+            {"movement", "optical", "propagation"}, previous | normalized)
         return change_effect
 
     def change_footprint(
@@ -732,7 +750,7 @@ class SpatialCondition(BaseCondition):
         if get_map().has_spatial_condition(self.uuid):
             get_map().remove_spatial_condition(self.uuid)
             get_map().invalidate_spatial_caches(
-                {"movement", "optical", "propagation"},
+                {"movement", "optical", "propagation"}, self.affected_positions,
             )
 
     def discard_from_runtime_owner(self) -> bool:
@@ -1163,13 +1181,14 @@ class AreaCondition(SpatialCondition):
         before = {position for row in previous if row.antimagic for position in row.positions}
         after = {position for row in current if row.antimagic for position in row.positions}
         self.spatial_suppressions = current
+        grid = get_map()
+        grid.invalidate_spatial_caches(
+            {"movement", "optical", "propagation"}, self.affected_positions)
         change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
             previous_positions=set(self.affected_positions), affected_positions=set(self.affected_positions),
             parent_event=parent_event)
         self._remove_light_positions(after, parent_event=change)
         self._apply_light_positions(before - after, parent_event=change)
-        grid = get_map()
-        grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
         for position in before ^ after:
             grid.publish_tile_mechanics_changed(position, source_entity_uuid=self.source_entity_uuid,
                 parent_event=change.uuid)
@@ -1369,7 +1388,7 @@ class AreaCondition(SpatialCondition):
             self._terrain_modifiers[position] = row
             owned.append(row)
             if tile.get_movement_cost(MovementMode.WALKING) != before:
-                grid.invalidate_spatial_caches({"movement"})
+                grid.invalidate_spatial_caches({"movement"}, {position})
                 grid.publish_tile_mechanics_changed(
                     position,
                     source_entity_uuid=self.source_entity_uuid,
@@ -1412,7 +1431,7 @@ class AreaCondition(SpatialCondition):
                 tile is not None
                 and before != tile.get_movement_cost(MovementMode.WALKING)
             ):
-                grid.invalidate_spatial_caches({"movement"})
+                grid.invalidate_spatial_caches({"movement"}, {position})
                 change = grid.snapshot_tile_mechanics_change(
                     position,
                     source_entity_uuid=self.source_entity_uuid,
@@ -1560,6 +1579,7 @@ class AreaCondition(SpatialCondition):
         self._remove_light_positions(removed, parent_event=change_effect)
         grid.set_spatial_condition_positions(
             condition=self,
+            crossing_channels=self.crossing_channels,
             layer=self.layer,
             occupancy_policy=self.occupancy_policy,
             positions=normalized,
@@ -1571,6 +1591,8 @@ class AreaCondition(SpatialCondition):
                 *SpellProtectionRegistry.get_antimagic_suppressions(normalized))
         for handler_uuid in self.spatial_handler_uuids:
             EventQueue.update_spatial_handler_positions(handler_uuid, normalized)
+        grid.invalidate_spatial_caches(
+            {"movement", "optical", "propagation"}, previous | normalized)
         new_modifiers = self._apply_terrain_positions(
             added,
             parent_event=change_effect,
@@ -1589,7 +1611,6 @@ class AreaCondition(SpatialCondition):
                         entity,
                         parent_event=change_effect,
                     )
-        grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
         return change_effect
 
     def _release_positions(

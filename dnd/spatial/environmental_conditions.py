@@ -1,6 +1,6 @@
 """Authored environmental conditions with independent world ownership."""
 
-from typing import NotRequired, Optional, Set, Tuple, TypedDict
+from typing import ClassVar, NotRequired, Optional, Set, Tuple, TypedDict
 from uuid import UUID, uuid4
 
 from pydantic import Field
@@ -976,6 +976,8 @@ def build_environmental_replacement(
 
 class SpikeTrap(SpatialCondition):
     """One persistent spike mechanism, its footprint and authored payload."""
+
+    crossing_channels: ClassVar[frozenset[str] | None] = frozenset()
 
     name: str = Field(default="Spike Trap")
     description: str = Field(

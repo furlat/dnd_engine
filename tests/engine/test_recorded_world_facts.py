@@ -26,6 +26,7 @@ from dnd.world_authoring import set_world_tile
 from dnd.world_facts import WorldFacts, apply_world_fact
 from dnd.player.event_record import RecordedEvent
 from dnd.player.capture import _retained_event
+from dnd.player.audience import resolve_audience
 from tests.engine.support import create_test_entity
 
 
@@ -33,8 +34,9 @@ ROWS = TypeAdapter(list[tuple[RecordedEvent, ConditionFact | None]])
 
 
 def recorded(observer_uuid: UUID) -> bytes:
+    audience = resolve_audience(observer_uuid, None)
     return ROWS.dump_json([
-        (_retained_event(event, observer_uuid), condition_fact(event, source_index=index))
+        (_retained_event(event, audience), condition_fact(event, source_index=index))
         for index, event in EventQueue.iter_events_since(0)
     ])
 

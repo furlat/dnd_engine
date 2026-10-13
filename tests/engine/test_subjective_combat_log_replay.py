@@ -14,7 +14,7 @@ from dnd.core.action_execution import (
     MovementTerminationReason,
 )
 from dnd.core.combat_log import (
-    CombatLogData, DamageTakenLogData, EmptyLogData, StepMovementLogData,
+    CombatLogData, DamageTakenLogData, DeathLogData, EmptyLogData, StepMovementLogData, TurnLogData,
     CombatLogEntry,
     CombatLogEntryType,
     DamageRollDisplay,
@@ -793,3 +793,26 @@ def test_cold_world_creation_logs_and_two_senses_replay_match_live_values() -> N
     assert set(replay_senses[0].visible) | set(replay_senses[1].visible) == (
         set(actors[0].senses.visible) | set(actors[1].senses.visible)
     )
+
+
+@pytest.mark.parametrize("entry_type,data", [
+    (CombatLogEntryType.TURN_START, TurnLogData(entity_name="Remembered witness",
+        entity_uuid=HIDDEN_SOURCE_UUID, round_number=2, turn_index=None)),
+    (CombatLogEntryType.DEATH, DeathLogData(entity_name="Remembered witness", final_hp=0)),
+])
+def test_retained_names_label_admitted_nested_closures_without_new_visibility(entry_type, data):
+    child = _log(entry_type, source_name="Remembered witness", source_uuid=HIDDEN_SOURCE_UUID,
+        data=data, perceiver_uuids={CONTROLLED_UUID})
+    parent = _log(CombatLogEntryType.ACTION, source_name="Controlled Hero", source_uuid=CONTROLLED_UUID,
+        sub_entries=[child])
+    names = {HIDDEN_SOURCE_UUID: "Remembered witness"}
+    arguments = dict(controlled_entity_uuids=frozenset({CONTROLLED_UUID}),
+        observer_entity_uuids=frozenset({CONTROLLED_UUID}))
+    small = project_combat_log(parent, known_entity_names=names, **arguments)
+    large = project_combat_log(parent, known_entity_names={**names,
+        **{str(UUID(int=100+index)): f"Distant actor {index}" for index in range(200)}}, **arguments)
+    assert large == small
+    assert small.sub_entries[0].source_uuid == HIDDEN_SOURCE_UUID
+    assert small.sub_entries[0].source_name == "Remembered witness"
+    hidden = child.model_copy(update={'perceiver_uuids': set(), 'target_uuid': HIDDEN_TARGET_UUID})
+    assert project_combat_log(hidden, known_entity_names=names, **arguments) is None

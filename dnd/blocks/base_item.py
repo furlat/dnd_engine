@@ -198,11 +198,19 @@ class BaseItem(BaseBlock):
             if self.antimagic_suspended_placement is not None else self.get_position())
         providers = ({row.provider_uuid for row in SpellProtectionRegistry.get_antimagic_suppressions({position})}
             if position is not None else set())
-        self.suppression_provider_uuids = set() if self.antimagic_exempt() else providers
+        current = set() if self.antimagic_exempt() else providers
+        if current != self.suppression_provider_uuids:
+            # Dependent condition footprints can extend beyond this item's placement.
+            get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
+        self.suppression_provider_uuids = current
         for condition in self.active_conditions_by_uuid.values():
             if condition.magical_origin and not condition.antimagic_exempt():
                 for identity in providers | condition.suppression_provider_uuids:
-                    condition.set_suppression(identity, identity in providers)
+                    suppressed = identity in providers
+                    if suppressed != (identity in condition.suppression_provider_uuids):
+                        # Parent contribution coverage is not indexed by the item.
+                        get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
+                    condition.set_suppression(identity, suppressed)
 
     def on_world_placement_committed(self, event: Event) -> None:
         self.refresh_antimagic_contributions()
@@ -591,9 +599,10 @@ class BaseItem(BaseBlock):
         change event.
         """
         grid = get_map()
-        position = grid.get_object_position(self.uuid)
-        if position is None:
+        placement = grid.get_object_placement(self.uuid)
+        if placement is None:
             return
+        position = placement.position
         optics_changed = self.blocks_optics_field != old_blocks_optics
         propagation_changed = (
             self.blocks_propagation_field != old_blocks_propagation
@@ -606,7 +615,7 @@ class BaseItem(BaseBlock):
             revision_channels.add("propagation")
         if walking_changed:
             revision_channels.add("movement")
-        grid.invalidate_spatial_caches(revision_channels)
+        grid.invalidate_spatial_caches(revision_channels, placement.positions)
         if optics_changed or propagation_changed or walking_changed:
             event = SpatialChangeEvent.object_changed(
                 position, self.uuid,

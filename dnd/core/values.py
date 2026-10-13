@@ -1,3 +1,4 @@
+from copy import deepcopy
 from fractions import Fraction
 from math import prod
 
@@ -747,6 +748,39 @@ class StaticValue(BaseValue):
             self._set_normalizer_recursive(self.score_normalizer)
         return self
 
+def _contextual_additive_score(
+    modifiers: Dict[UUID, ContextualNumericalModifier], source: UUID,
+    target: Optional[UUID], context: Optional[Dict[str, Any]], lineage: Optional[UUID],
+    normalized: bool, excluded: frozenset[UUID] = frozenset(),
+) -> int:
+    total = 0
+    for key, modifier in modifiers.items():
+        if key in excluded:
+            continue
+        result = modifier.evaluate(source, target, context, event_lineage_uuid=lineage)
+        if isinstance(result, NumericalModifier):
+            total += result.normalized_value if normalized else result.value
+    return total
+
+
+def _contextual_constraint_values(
+    modifiers: Dict[UUID, ContextualNumericalModifier], source: UUID,
+    target: Optional[UUID], context: Optional[Dict[str, Any]], lineage: Optional[UUID],
+) -> List[int]:
+    results = [modifier.evaluate(source, target, context, event_lineage_uuid=lineage)
+               for modifier in modifiers.values()]
+    return [result.value for result in results if isinstance(result, NumericalModifier)]
+
+
+def _contextual_advantage_sum(
+    modifiers: Dict[UUID, ContextualAdvantageModifier], source: UUID,
+    target: Optional[UUID], context: Optional[Dict[str, Any]], lineage: Optional[UUID],
+) -> int:
+    results = [modifier.evaluate(source, target, context, event_lineage_uuid=lineage)
+               for modifier in modifiers.values()]
+    return sum(result.numerical_value for result in results if isinstance(result, AdvantageModifier))
+
+
 class ContextualValue(BaseValue):
     """Context-sensitive modifier bucket for one value channel.
 
@@ -837,10 +871,8 @@ class ContextualValue(BaseValue):
         """
         if not self.min_constraints:
             return None
-        constraints = [constraint.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
-                        event_lineage_uuid=self.event_lineage_uuid) for constraint in self.min_constraints.values()]
-        values = [constraint.value for constraint in constraints if isinstance(constraint, NumericalModifier)]
-        return min(values) if len(values) > 0 else None
+        return min(_contextual_constraint_values(self.min_constraints, self.source_entity_uuid,
+            self.target_entity_uuid, self.context, self.event_lineage_uuid), default=None)
 
     @computed_field
     @property
@@ -852,10 +884,8 @@ class ContextualValue(BaseValue):
         """
         if not self.max_constraints:
             return None
-        constraints = [constraint.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
-                        event_lineage_uuid=self.event_lineage_uuid) for constraint in self.max_constraints.values()]
-        values = [constraint.value for constraint in constraints if isinstance(constraint, NumericalModifier)]
-        return max(values) if len(values) > 0 else None
+        return max(_contextual_constraint_values(self.max_constraints, self.source_entity_uuid,
+            self.target_entity_uuid, self.context, self.event_lineage_uuid), default=None)
 
     def score_bounds(self, excluded: frozenset[UUID] = frozenset()) -> tuple[int | None, int | None]:
         # Exclusion names static contributions; contextual constraints retain their contract.
@@ -865,19 +895,8 @@ class ContextualValue(BaseValue):
         return Fraction(1)
 
     def additive_score(self, normalized: bool = False, excluded: frozenset[UUID] = frozenset()) -> int:
-        modifier_sum = 0
-        for key, context_aware_modifier in self.value_modifiers.items():
-            if key in excluded:
-                continue
-            result = context_aware_modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
-                                                      event_lineage_uuid=self.event_lineage_uuid)
-            if result is None:
-                continue
-            if not isinstance(result, NumericalModifier):
-                continue
-            modifier_sum += result.value if not normalized else result.normalized_value
-
-        return modifier_sum
+        return _contextual_additive_score(self.value_modifiers, self.source_entity_uuid,
+            self.target_entity_uuid, self.context, self.event_lineage_uuid, normalized, excluded)
 
     def _score(self, normalized: bool = False) -> int:
         """Calculate the contextual score after modifiers and constraints.
@@ -927,10 +946,8 @@ class ContextualValue(BaseValue):
         Returns:
             Positive values mean advantage, negative values mean disadvantage.
         """
-        modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
-                      event_lineage_uuid=self.event_lineage_uuid) for modifier in self.advantage_modifiers.values()]
-        values = [modifier.numerical_value for modifier in modifiers if isinstance(modifier, AdvantageModifier)]
-        return sum(values) if len(values) > 0 else 0
+        return _contextual_advantage_sum(self.advantage_modifiers, self.source_entity_uuid,
+            self.target_entity_uuid, self.context, self.event_lineage_uuid)
 
     @computed_field
     @property
@@ -2392,3 +2409,190 @@ class ModifiableValue(BaseValue):
             return AutoHitStatus.AUTOHIT
         else:
             return AutoHitStatus.NONE
+
+
+def composed_passive_score(
+    proficiency: ModifiableValue,
+    skill: ModifiableValue,
+    ability_score: ModifiableValue,
+    ability_bonus: ModifiableValue,
+    ability_source_uuid: UUID,
+    proficiency_normalizer: Callable[[int], int],
+    ability_normalizer: Callable[[int], int],
+) -> Optional[int]:
+    """Read a passive score without constructing temporary value models.
+
+    The proficiency copy has observable callable/cache behavior in its contextual
+    channels. Those uncommon inputs retain the existing composition path. All
+    other rows are merged in the native order, independently in each channel.
+    """
+    for channel in (proficiency.self_contextual, proficiency.to_target_contextual,
+                    proficiency.from_target_contextual):
+        if channel is not None and channel.value_modifiers:
+            return None
+    for channel in (proficiency.self_contextual, proficiency.from_target_contextual):
+        if channel is not None and (channel.min_constraints or channel.max_constraints
+                                    or channel.advantage_modifiers):
+            return None
+    # Rebuilding outgoing channels also validates their targets, even though
+    # they do not contribute to this score. Preserve that validation for rows
+    # installed through mutable modifier owners after channel construction.
+    for value in (proficiency, skill, ability_bonus):
+        channel = value.to_target_static
+        if any(modifier.target_entity_uuid == channel.source_entity_uuid
+               for modifiers in (channel.value_modifiers, channel.factor_modifiers,
+                                 channel.min_constraints, channel.max_constraints)
+               for modifier in modifiers.values()):
+            return None
+
+    ability_base = ability_normalizer(ability_score.score)
+    ability_bonus.validate_source_id(ability_source_uuid)
+    proficiency.validate_source_id(skill.source_entity_uuid)
+    proficiency.validate_source_id(ability_source_uuid)
+    values = (proficiency, skill, ability_bonus)
+    # The synthetic ability value has the ability owner's source in all primary
+    # channels; the two native combinations enforce those same source identities.
+    for channels in (
+        tuple(value.self_static for value in values),
+        tuple(value.to_target_static for value in values),
+        tuple(value.self_contextual for value in values),
+        tuple(value.to_target_contextual for value in values),
+    ):
+        channels[-1].validate_source_id(ability_source_uuid)
+        for channel in channels[1:]:
+            channels[0].validate_source_id(channel.source_entity_uuid)
+
+    def static_inputs(channels):
+        numbers, factors, minima, maxima, advantages = {}, {}, {}, {}, {}
+        first = None
+        for channel, normalizer in channels:
+            if channel is None:
+                continue
+            if first is None:
+                first = channel
+            else:
+                first.validate_source_id(channel.source_entity_uuid)
+            numbers.update((key, (modifier, normalizer)) for key, modifier in channel.value_modifiers.items())
+            factors.update(channel.factor_modifiers)
+            minima.update(channel.min_constraints)
+            maxima.update(channel.max_constraints)
+            advantages.update(channel.advantage_modifiers)
+        return numbers, factors, minima, maxima, advantages
+
+    def contextual_inputs(channels, *, imported):
+        numbers, minima, maxima, advantages = {}, {}, {}, {}
+        first = None
+        for channel in channels:
+            if channel is None:
+                continue
+            if first is None:
+                first = channel
+            else:
+                first.validate_source_id(channel.source_entity_uuid)
+            numbers.update(channel.value_modifiers)
+            minima.update(channel.min_constraints)
+            maxima.update(channel.max_constraints)
+            advantages.update(channel.advantage_modifiers)
+        if first is None:
+            return None
+        proficiency_owned = first is proficiency.self_contextual or first is proficiency.from_target_contextual
+        context = (deepcopy(first.context) if proficiency_owned else dict(first.context)) if first.context is not None else None
+        target = (proficiency.source_entity_uuid if imported else
+            proficiency.target_entity_uuid if proficiency.target_entity_uuid is not None else first.target_entity_uuid)
+        return numbers, minima, maxima, advantages, first.source_entity_uuid, target, context
+
+    own_static = static_inputs([(value.self_static,
+        proficiency_normalizer if index == 0 else None) for index, value in enumerate(values)])
+    imported_static = static_inputs([(value.from_target_static,
+        proficiency_normalizer if index == 0 else None) for index, value in enumerate(values)])
+    own_context = contextual_inputs([value.self_contextual for value in values], imported=False)
+    imported_context = contextual_inputs([value.from_target_contextual for value in values], imported=True)
+
+    def static_additive(inputs, base=0):
+        numbers, _, _, _, _ = inputs
+        return base + sum((normalizer(modifier.value) if normalizer is not None else modifier.normalized_value)
+            for modifier, normalizer in numbers.values() if modifier.contributions_active())
+
+    def static_bounds(inputs):
+        _, _, minima, maxima, _ = inputs
+        return (min((modifier.value for modifier in minima.values() if modifier.contributions_active()), default=None),
+                max((modifier.value for modifier in maxima.values() if modifier.contributions_active()), default=None))
+
+    def static_factor(inputs):
+        _, factors, _, _, _ = inputs
+        return prod((Fraction(modifier.numerator, modifier.denominator)
+            for modifier in factors.values() if modifier.contributions_active()), start=Fraction(1))
+
+    def context_additive(inputs):
+        if inputs is None:
+            return 0
+        numbers, _, _, _, source, target, context = inputs
+        return _contextual_additive_score(numbers, source, target, context, None, True)
+
+    def context_min(inputs):
+        if inputs is None:
+            return None
+        _, minima, _, _, source, target, context = inputs
+        return min(_contextual_constraint_values(minima, source, target, context, None), default=None)
+
+    def context_max(inputs):
+        if inputs is None:
+            return None
+        _, _, maxima, _, source, target, context = inputs
+        return max(_contextual_constraint_values(maxima, source, target, context, None), default=None)
+
+    def context_score(inputs):
+        total = context_additive(inputs)
+        # Keep native repeated evaluation for arbitrary contextual callables.
+        if context_max(inputs) is not None and context_min(inputs) is not None:
+            return max(context_min(inputs), min(total, context_max(inputs)))
+        elif context_max(inputs) is not None:
+            return min(total, context_max(inputs))
+        elif context_min(inputs) is not None:
+            return max(context_min(inputs), total)
+        return total
+
+    def static_score(inputs, base=0):
+        total = static_additive(inputs, base)
+        minimum, maximum = static_bounds(inputs)
+        if maximum is not None:
+            total = min(total, maximum)
+        if minimum is not None:
+            total = max(total, minimum)
+        return int(total)
+
+    # Factor presence selects the aggregate-first rule even when a retained
+    # factor is currently suppressed. Evaluate factors before additive callbacks.
+    if own_static[1] or imported_static[1]:
+        factor = static_factor(own_static) * static_factor(imported_static)
+        total = sum((static_additive(own_static, ability_base), context_additive(own_context),
+                     context_additive(imported_context), static_additive(imported_static))) * factor
+    else:
+        total = Fraction(sum((static_score(own_static, ability_base), context_score(own_context),
+                              context_score(imported_context), static_score(imported_static))))
+    bounds = (static_bounds(own_static), (context_min(own_context), context_max(own_context)),
+              (context_min(imported_context), context_max(imported_context)), static_bounds(imported_static))
+    minimum = min((lower for lower, _ in bounds if lower is not None), default=None)
+    maximum = max((upper for _, upper in bounds if upper is not None), default=None)
+    if maximum is not None:
+        total = min(total, maximum)
+    if minimum is not None:
+        total = max(total, minimum)
+    score = 10 + int(total)
+
+    def advantage_sum():
+        result = 0
+        for _, _, _, _, advantages in (own_static, imported_static):
+            result += sum(modifier.numerical_value for modifier in advantages.values()
+                          if modifier.contributions_active())
+        for inputs in (own_context, imported_context):
+            if inputs is not None:
+                _, _, _, advantages, source, target, context = inputs
+                result += _contextual_advantage_sum(advantages, source, target, context, None)
+        return result
+
+    if advantage_sum() > 0:
+        return score + 5
+    if advantage_sum() < 0:
+        return score - 5
+    return score

@@ -4,7 +4,7 @@ Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web, Cloudkill,
           SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud
 """
 from dnd.types.physical_access import PhysicalAccess
-from typing import Any, Literal, Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, ClassVar, Literal, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID, uuid4
 
 from pydantic import Field, PrivateAttr
@@ -648,6 +648,8 @@ class GreaseZone(AreaCondition):
 
     Applied to the caster, manages the zone via position-indexed handlers.
     """
+    # Terrain/obscurement contributions do not reject crossing segments.
+    crossing_channels: ClassVar[frozenset[str] | None] = frozenset()
     name: str = Field(default="Grease Zone", description="Display name for the grease zone zone condition.")
     has_visible_presence: bool = True
     description: str = Field(default="Slippery grease - DEX save or fall prone", description="Rules-facing summary for the grease zone zone condition.")
@@ -2592,6 +2594,8 @@ class FogCloudZone(AreaCondition):
     Creates a 20ft radius sphere of heavily obscured area (DARKNESS).
     Uses obscurement so darkvision cannot see through it.
     """
+    # Terrain/obscurement contributions do not reject crossing segments.
+    crossing_channels: ClassVar[frozenset[str] | None] = frozenset()
     name: str = Field(default="Fog Cloud Zone", description="Display name for the fog cloud zone zone condition.")
     description: str = Field(default="Heavily obscured fog — blocks vision including darkvision", description="Rules-facing summary for the fog cloud zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the fog cloud zone for cleanup and filtering.")

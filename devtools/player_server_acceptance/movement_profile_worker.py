@@ -1,0 +1,427 @@
+"""Temporary, opt-in movement diagnostics around the unchanged native worker.
+
+Run only through gallery --diagnostic-commands. No payloads are logged. Profiles
+include dispatch AND outgoing serialization/framing; ordinary gallery runs never
+load this module. Remove this temporary module at the plan's cleanup checkpoint.
+"""
+import argparse
+from collections import Counter
+from contextlib import ExitStack, contextmanager
+import cProfile
+import gc
+import json
+from pathlib import Path
+import pstats
+from time import perf_counter, perf_counter_ns, process_time_ns
+from unittest.mock import patch
+
+from pydantic import BaseModel, TypeAdapter
+
+from dnd.action_timing import (reset_action_count_recorder, reset_action_timing_recorder,
+    set_action_count_recorder, set_action_timing_recorder)
+from dnd.blocks import sensory
+from dnd.core.events import BaseHandler, EventHandler, EventQueue, SpatialHandler, Trigger
+from dnd.core.gridmap import GridMap
+from dnd.entity import Entity
+from dnd.player import application, audience, capture, projection, reduction
+from server import worker
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--diagnostic-commands', required=True)
+    parser.add_argument('--coarse-timing', action='store_true')
+    args = parser.parse_args()
+    selected = {int(value) for value in args.diagnostic_commands.split(',') if value}
+    current = None
+    profile = None
+    action_token = None
+    count_token = None
+    stack = []
+    coverage = []
+    span_limit = 120_000
+
+    def increment(key, amount=1):
+        if current is not None:
+            current['counters'][key] += amount
+
+    @contextmanager
+    def span(label, identity=None):
+        if current is None:
+            yield
+            return
+        started = perf_counter_ns()
+        row = {'name': label, 'start_ns': started, 'children_ns': 0,
+            'parent': stack[-1]['name'] if stack else None}
+        if identity is not None:
+            row.update(identity)
+        stack.append(row)
+        try:
+            yield
+        finally:
+            ended = perf_counter_ns()
+            stack.pop()
+            duration = ended-started
+            if stack:
+                stack[-1]['children_ns'] += duration
+            key = (row['parent'], label)
+            total = current['spans'].setdefault(key, {'calls': 0, 'inclusive_ns': 0,
+                'exclusive_wrapped_ns': 0, 'max_ns': 0})
+            total['calls'] += 1
+            total['inclusive_ns'] += duration
+            total['exclusive_wrapped_ns'] += duration-row['children_ns']
+            total['max_ns'] = max(total['max_ns'], duration)
+            if len(current['trace']) < span_limit:
+                row['end_ns'] = ended
+                current['trace'].append(row)
+            else:
+                current['trace_dropped'] += 1
+
+    def measured(label, original, count=None):
+        coverage.append(label)
+        def call(*arguments, **keywords):
+            if current is None:
+                return original(*arguments, **keywords)
+            if count is not None:
+                count(*arguments, **keywords)
+            with span(label):
+                return original(*arguments, **keywords)
+        return call
+
+    def action_phase(label, started):
+        if current is None:
+            return
+        ended = perf_counter()
+        row = current['action_phases'].setdefault(label, {'calls': 0, 'inclusive_ms': 0.0})
+        row['calls'] += 1
+        row['inclusive_ms'] += (ended-started)*1000
+        row['max_ms'] = max(row.get('max_ms', 0.0), (ended-started)*1000)
+        if len(current['trace']) < span_limit:
+            current['trace'].append({'name': label, 'start_ns': int(started*1e9),
+                'end_ns': int(ended*1e9), 'kind': 'existing_action_hook',
+                'parent': stack[-1]['name'] if stack else None})
+        else:
+            current['trace_dropped'] += 1
+
+    gc_start = 0
+    def gc_callback(phase, info):
+        nonlocal gc_start
+        if current is None:
+            return
+        if phase == 'start':
+            gc_start = perf_counter_ns()
+        elif gc_start:
+            increment('gc.pause_ns', perf_counter_ns()-gc_start)
+            increment('gc.collections')
+            increment('gc.collected', info['collected'])
+            increment('gc.generation_'+str(info['generation'])+'.collections')
+            increment('gc.generation_'+str(info['generation'])+'.pause_ns', perf_counter_ns()-gc_start)
+            if len(current['trace']) < span_limit:
+                current['trace'].append({'name': 'gc.generation_'+str(info['generation']),
+                    'start_ns': gc_start, 'end_ns': perf_counter_ns(), 'kind': 'gc',
+                    'parent': stack[-1]['name'] if stack else None})
+            else:
+                current['trace_dropped'] += 1
+            gc_start = 0
+
+    def snapshot_count(snapshot):
+        if snapshot is not None:
+            for label, value in (('seen', snapshot.seen), ('visible', snapshot.visible),
+                    ('entities', snapshot.entities), ('objects', snapshot.objects),
+                    ('light', snapshot.effective_light_levels), ('hazards', snapshot.hazardous_cells),
+                    ('effects', snapshot.spatial_effects)):
+                increment('snapshot.input_entries.'+label, len(value))
+
+    def target_count(target):
+        increment('target_copy.tiles', len(target.tiles))
+        increment('target_copy.objects', len(target.objects))
+        increment('target_copy.actors', len(target.actors))
+        snapshot_count(target.senses)
+
+    original_read = worker.read_packet
+    original_validate = TypeAdapter.validate_json
+    original_dispatch = worker.dispatch
+    original_write = worker.write_packet
+
+    def finish():
+        nonlocal current, profile, action_token, count_token
+        if current is None:
+            return
+        ended = perf_counter_ns()
+        cpu_ended = process_time_ns()
+        if profile is not None:
+            profile.disable()
+            reset_action_timing_recorder(action_token)
+            reset_action_count_recorder(count_token)
+        data = current
+        current = None
+        data['end_ns'] = ended
+        data['elapsed_ms'] = (ended-data['start_ns'])/1e6
+        data['cpu_ms'] = (cpu_ended-data.pop('cpu_start_ns'))/1e6
+        data['event_cursor_after'] = EventQueue.event_cursor()
+        data['diagnostic'] = True
+        data['mode'] = 'coarse' if args.coarse_timing else 'full'
+        data['cprofile'] = profile is not None
+        data['scope'] = ('Dispatch entry through response/public-record encoding and writes; excludes request decode. '
+            'Only outer owner wall spans and GC; no cProfile, action/count recorders, per-cell hooks, model or handler wrappers. '
+            if args.coarse_timing else 'Decoded request through completed dispatch, response/public-record encoding and writes; includes cProfile and fine wrappers. ')
+        data['scope'] += 'Ends before next input read. Still instrumented; never a clean speed sample.'
+        if not args.coarse_timing:
+            data['directional_fov_note'] = 'Temporary timers and scalar counters add diagnostic overhead. sweep_remainder_ms = sweep_total_ms - interval_masks_ms - transition_total_ms - blocking_total_ms - terminal_output_ms. This is a derived loop/instrumentation remainder, not measured exclusive CPU time. Enumeration, target sorting and final output are separate disjoint phases. There is no retained ray graph or geometry warmup cache.'
+        data['exclusive_note'] = ('exclusive_wrapped_ns removes explicit child wrapper spans only; it is not function self time.'
+            if args.coarse_timing else 'exclusive_wrapped_ns removes explicit child wrapper spans only; cProfile supplies function self time. Existing action hooks overlap these spans and each other.')
+        data['coverage'] = coverage
+        if args.coarse_timing:
+            data['navigation_timing_owner'] = {
+                'label': 'entity.materialize_navigation',
+                'method': 'Entity._materialize_navigation_distance',
+                'note': 'The existing navigation label measures the shared worker, including exhausted movement. Public and movement wrappers are not separately timed, so their nested calls are counted once.',
+            }
+        data['spans'] = [dict(parent=key[0], name=key[1], **value)
+            for key, value in data['spans'].items()]
+        if profile is not None:
+            path = args.output / f"command-{data['command_number']}.pstats"
+            profile.dump_stats(str(path))
+            functions = [{'file': key[0], 'line': key[1], 'function': key[2],
+                'calls': value[1], 'self_ms': value[2]*1000, 'inclusive_ms': value[3]*1000}
+                for key, value in pstats.Stats(profile).stats.items()]
+            data['top_self'] = sorted(functions, key=lambda row: row['self_ms'], reverse=True)[:45]
+            data['top_inclusive'] = sorted(functions, key=lambda row: row['inclusive_ms'], reverse=True)[:45]
+        trace = data.pop('trace')
+        base = args.output / f"command-{data['command_number']}"
+        base.with_suffix('.json').write_text(json.dumps(data, indent=2))
+        base.with_suffix('.spans.jsonl').write_text(''.join(json.dumps(row)+'\n' for row in trace))
+        profile = action_token = count_token = None
+
+    def read(stream):
+        finish()
+        return original_read(stream)
+
+    def validate(adapter, data, *arguments, **keywords):
+        nonlocal current, profile, action_token, count_token
+        started = perf_counter_ns()
+        result = original_validate(adapter, data, *arguments, **keywords)
+        elapsed = perf_counter_ns()-started
+        if adapter is worker.REQUEST_CODEC and result.kind == 'command' and result.request.command_number in selected:
+            current = {'command_number': result.request.command_number, 'start_ns': perf_counter_ns(),
+                'cpu_start_ns': process_time_ns(), 'request_decode_ms': elapsed/1e6,
+                'request_bytes': len(data), 'event_cursor_before': EventQueue.event_cursor(),
+                'counters': Counter(), 'spans': {}, 'trace': [], 'trace_dropped': 0,
+                'action_phases': {}}
+            profile = cProfile.Profile()
+            action_token = set_action_timing_recorder(action_phase)
+            count_token = set_action_count_recorder(increment)
+            profile.enable()
+        elif current is not None:
+            increment('type_adapter.validate_json.calls')
+            increment('type_adapter.validate_json.bytes', len(data))
+            increment('type_adapter.validate_json.ns', elapsed)
+        return result
+
+    def dispatch(runtime, request):
+        nonlocal current
+        if args.coarse_timing and request.kind == 'command' and request.request.command_number in selected:
+            current = {'command_number': request.request.command_number, 'start_ns': perf_counter_ns(),
+                'cpu_start_ns': process_time_ns(), 'request_decode_ms': None, 'request_bytes': None,
+                'event_cursor_before': EventQueue.event_cursor(), 'counters': Counter(), 'spans': {},
+                'trace': [], 'trace_dropped': 0, 'action_phases': {}}
+        with span('worker.dispatch'):
+            result = original_dispatch(runtime, request)
+        if current is not None:
+            current['result_cursors'] = [publication.cursor.model_dump(mode='json')
+                for publication in result[0].publications]
+            increment('worker.publication_count', len(result[1]))
+        return result
+
+    def write(stream, payload):
+        increment('worker.frames')
+        increment('worker.frame_bytes', len(payload))
+        with span('worker.write_packet'):
+            return original_write(stream, payload)
+
+    original_handler = EventQueue._invoke_handler
+    def invoke(cls, handler, event):
+        if current is None:
+            return original_handler(handler, event)
+        with span('handler.'+handler.get_semantic_key()+'.'+handler.name,
+                {'event_uuid': str(event.uuid), 'lineage_uuid': str(event.lineage_uuid),
+                 'event_type': event.event_type.value, 'event_phase': event.phase.value,
+                 'handler_uuid': str(handler.uuid)}):
+            before = EventQueue.event_cursor()
+            result = original_handler(handler, event)
+            increment('handler.emitted_event_versions', EventQueue.event_cursor()-before)
+            increment('handler.invocations')
+            return result
+
+    original_spatial = EventQueue._get_handlers_for_spatial_event
+    def spatial(cls, event, position):
+        if current is None:
+            return original_spatial(event, position)
+        increment('discovery.spatial_lookups')
+        increment('discovery.position_index_entries', len(
+            cls._spatial_handlers_by_position[(event.event_type, event.phase)].get(position, ())))
+        with span('events.spatial_lookup'):
+            result = original_spatial(event, position)
+        increment('discovery.spatial_admitted_before_cross_position_dedup', len(result))
+        return result
+
+    original_nonspatial = EventQueue._get_handlers_for_non_spatial_event
+    def nonspatial(cls, event):
+        increment('discovery.nonspatial_lookups')
+        with span('events.nonspatial_lookup'):
+            result = original_nonspatial(event)
+        increment('discovery.nonspatial_admitted', len(result))
+        return result
+
+    original_candidates = EventQueue._event_trigger_candidates
+    def candidates(cls, event, *, include_simple=True):
+        result = original_candidates(event, include_simple=include_simple)
+        increment('discovery.indexed_candidates_visited', len(result))
+        return result
+
+    original_lookup = EventQueue._get_handlers_for_event
+    def lookup(cls, event):
+        with span('events.lookup', {'event_uuid': str(event.uuid),
+                'lineage_uuid': str(event.lineage_uuid), 'event_type': event.event_type.value,
+                'event_phase': event.phase.value} if current is not None else None):
+            result = original_lookup(event)
+        increment('discovery.final_admitted', len(result))
+        return result
+
+    original_trigger = Trigger.__call__
+    def trigger(owner, event):
+        result = original_trigger(owner, event)
+        increment('discovery.base_trigger_tests')
+        increment('discovery.base_trigger_matches', int(result))
+        return result
+
+    original_dump_json = BaseModel.model_dump_json
+    def dump_json(model, *arguments, **keywords):
+        with span('model.dump_json'):
+            result = original_dump_json(model, *arguments, **keywords)
+        increment('model.dump_json.characters', len(result))
+        return result
+
+    original_copy = BaseModel.model_copy
+    def model_copy(model, *arguments, **keywords):
+        increment('model.copy.fields', len(model.__dict__))
+        increment('model.copy.deep_calls', int(keywords.get('deep', False)))
+        with span('model.copy'):
+            return original_copy(model, *arguments, **keywords)
+
+    def world_count(world, remembered, event_uuid, positions, object_positions, identities, index):
+        increment('world_update.world_objects_available', len(world.objects))
+        increment('world_update.remembered_objects_available', len(remembered.objects))
+        increment('world_update.visible_tiles_available', len(world.senses.visible) if world.senses else 0)
+        increment('world_update.input_positions', len(positions))
+        increment('world_update.input_object_positions', len(object_positions))
+        increment('world_update.input_object_ids', len(identities))
+
+    def audience_count(composition, audience, observer_uuid, event, cursor, *, prepared=None):
+        increment('audience.current.visible_added', len(event.visible_cells_added))
+        increment('audience.current.visible_removed', len(event.visible_cells_removed))
+        increment('audience.current.seen_added', len(event.seen_cells_added))
+        increment('audience.current.entity_changed', len(event.entity_contacts_changed))
+        increment('audience.current.object_changed', len(event.object_contacts_changed))
+        increment('audience.current.effect_changed', len(event.spatial_effects_changed))
+        increment('audience.current.visible_effect_candidates',
+            len(composition.visible_effects.get(event.observer_uuid, ())))
+        increment('audience.current.retained_seen_available', len(composition.view.seen) if composition.view else 0)
+
+    modules = (
+        (worker, 'execute_player_action', 'action.execute', worker.execute_player_action, None),
+        (worker, 'capture_application_operation', 'audience.capture_project', worker.capture_application_operation, None),
+        (sensory, 'capture_senses_snapshot', 'sensory.snapshot', sensory.capture_senses_snapshot, snapshot_count),
+        (sensory, 'emit_sensory_update_delta', 'sensory.delta', sensory.emit_sensory_update_delta, None),
+        (capture, 'copy_target', 'capture.copy_target', capture.copy_target, target_count),
+        (capture, '_copy_snapshot', 'capture.copy_snapshot', capture._copy_snapshot, snapshot_count),
+        (reduction, 'copy_target', 'reduction.copy_target', reduction.copy_target, target_count),
+        (reduction, 'reduce_nodes', 'reduction.nodes', reduction.reduce_nodes, None),
+        (application, 'reduce_operation', 'application.reduce_operation', application.reduce_operation, None),
+        (application, 'prepare_current_operation', 'application.prepare_current', application.prepare_current_operation, None),
+        (application, 'apply_current_operation', 'application.apply_current', application.apply_current_operation, None),
+        (application, 'capture_lineages', 'capture.lineages', application.capture_lineages, None),
+        (application, 'project_lineage', 'projection.lineage', application.project_lineage, None),
+        (application, 'admitted_content', 'application.content', application.admitted_content, None),
+        (projection, '_world_update', 'projection.world_update', projection._world_update, world_count),
+        (projection, '_observed_object', 'projection.observed_object', projection._observed_object, None),
+        (projection, '_public_occurrences', 'projection.occurrences', projection._public_occurrences, None),
+        (projection, '_disclosed_actor', 'projection.disclosed_actor', projection._disclosed_actor, None),
+        (projection, '_disclosed_object', 'projection.disclosed_object', projection._disclosed_object, None),
+        (reduction, 'apply_current_audience', 'audience.current', reduction.apply_current_audience, audience_count),
+        (audience, 'apply_current_senses', 'audience.current_member_senses', audience.apply_current_senses, None),
+        (audience, '_current_effect', 'audience.current_effect', audience._current_effect, None),
+        (audience, '_join_effect', 'audience.join_effect', audience._join_effect, None),
+        (reduction, 'audience_view', 'audience.view', reduction.audience_view, None),
+        (reduction, 'observe_audience', 'audience.observe', reduction.observe_audience, None),
+        (audience, 'reduce_senses_snapshot', 'audience.reduce_member_senses', audience.reduce_senses_snapshot,
+            lambda observer, before, event: snapshot_count(before)),
+    )
+    methods = (
+        (sensory.SpatialSensesSystem, '__call__', 'sensory.callback', sensory.SpatialSensesSystem.__call__),
+        (sensory.SpatialSensesSystem, 'recompute_observer', 'sensory.full_solve', sensory.SpatialSensesSystem.recompute_observer),
+        (sensory.SpatialSensesSystem, '_collect_boundary_evidence', 'sensory.boundaries', sensory.SpatialSensesSystem._collect_boundary_evidence),
+        (GridMap, 'move_light_source', 'grid.move_light', GridMap.move_light_source),
+        (GridMap, 'compute_fov', 'grid.fov', GridMap.compute_fov),
+        (GridMap, 'compute_paths', 'grid.paths', GridMap.compute_paths),
+    )
+    if args.coarse_timing:
+        modules = (
+            (worker, 'execute_player_action', 'worker.execute', worker.execute_player_action, None),
+            (worker, 'capture_application_operation', 'worker.capture_application', worker.capture_application_operation, None),
+            (sensory, 'emit_sensory_update_delta', 'sensory.delta', sensory.emit_sensory_update_delta, None),
+            (application, 'capture_lineages', 'capture.lineages', application.capture_lineages, None),
+            (application, 'project_lineage', 'projection.lineage', application.project_lineage, None),
+        )
+        methods = (
+            (sensory.SpatialSensesSystem, 'recompute_observer', 'sensory.recompute_observer', sensory.SpatialSensesSystem.recompute_observer),
+            (GridMap, '_compute_directional_fov', 'grid._compute_directional_fov', GridMap._compute_directional_fov),
+            (GridMap, 'compute_fov', 'grid.compute_fov', GridMap.compute_fov),
+            (GridMap, 'compute_paths', 'grid.compute_paths', GridMap.compute_paths),
+            (GridMap, 'move_light_source', 'grid.move_light', GridMap.move_light_source),
+            (Entity, '_materialize_navigation_distance', 'entity.materialize_navigation', Entity._materialize_navigation_distance),
+        )
+    def handler_call(original):
+        def call(owner, event, *arguments, **keywords):
+            if current is None:
+                return original(owner, event, *arguments, **keywords)
+            with span('handler.body.'+owner.get_semantic_key()+'.'+owner.name,
+                    {'handler_uuid': str(owner.uuid), 'event_uuid': str(event.uuid),
+                     'lineage_uuid': str(event.lineage_uuid), 'event_type': event.event_type.value,
+                     'event_phase': event.phase.value}):
+                increment('handler.body_calls_including_direct_and_preflight')
+                return original(owner, event, *arguments, **keywords)
+        return call
+
+    with ExitStack() as patches:
+        for owner, name, label, original, counter in modules:
+            patches.enter_context(patch.object(owner, name, measured(label, original, counter)))
+        for owner, name, label, original in methods:
+            patches.enter_context(patch.object(owner, name, measured(label, original)))
+        patches.enter_context(patch.object(worker, 'read_packet', read))
+        patches.enter_context(patch.object(worker, 'write_packet', write))
+        patches.enter_context(patch.object(worker, 'dispatch', dispatch))
+        if not args.coarse_timing:
+            patches.enter_context(patch.object(TypeAdapter, 'validate_json', validate))
+            patches.enter_context(patch.object(EventQueue, '_invoke_handler', classmethod(invoke)))
+            patches.enter_context(patch.object(EventQueue, '_get_handlers_for_event', classmethod(lookup)))
+            patches.enter_context(patch.object(EventQueue, '_event_trigger_candidates', classmethod(candidates)))
+            patches.enter_context(patch.object(EventQueue, '_get_handlers_for_spatial_event', classmethod(spatial)))
+            patches.enter_context(patch.object(EventQueue, '_get_handlers_for_non_spatial_event', classmethod(nonspatial)))
+            patches.enter_context(patch.object(Trigger, '__call__', trigger))
+            for owner, original in ((BaseHandler, BaseHandler.__call__),
+                    (EventHandler, EventHandler.__call__), (SpatialHandler, SpatialHandler.__call__)):
+                patches.enter_context(patch.object(owner, '__call__', handler_call(original)))
+            patches.enter_context(patch.object(BaseModel, 'model_copy', model_copy))
+            patches.enter_context(patch.object(BaseModel, 'model_dump_json', dump_json))
+        gc.callbacks.append(gc_callback)
+        try:
+            worker.run_process()
+        finally:
+            finish()
+            gc.callbacks.remove(gc_callback)
+
+
+if __name__ == '__main__':
+    main()
