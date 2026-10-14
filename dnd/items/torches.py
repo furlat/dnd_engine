@@ -319,6 +319,7 @@ class Torch(UsableItem):
             very_bright_radius_feet=self.very_bright_radius_feet,
             bright_radius_feet=self.bright_radius_feet,
             dim_radius_feet=self.dim_radius_feet,
+            appearance="torch",
             anchor_uuid=carrier_entity_uuid,
             parent_event=parent_event,
             publish_event=publish_event,
@@ -630,6 +631,7 @@ class WallTorch(UsableItem):
             very_bright_radius_feet=self.very_bright_radius_feet,
             bright_radius_feet=self.bright_radius_feet,
             dim_radius_feet=self.dim_radius_feet,
+            appearance="torch",
             anchor_uuid=self.uuid,
             parent_event=current.uuid,
         )

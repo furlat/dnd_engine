@@ -2,8 +2,8 @@
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
 owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
-319 shared definitions and 1,686 object-field rows. `protocol-identity.json` binds
-protocol 1 and player schema 8 to the exact canonical schema digest.
+320 shared definitions and 1,700 object-field rows. `protocol-identity.json` binds
+protocol 1 and player schema 9 to the exact canonical schema digest.
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
@@ -15,6 +15,80 @@ equipment also preserves `is_lit`. The dim radius extends beyond the bright
 radius. These fields describe already disclosed items, not a registry of hidden
 inventory or spell light sources. Portable ignition/extinguishing publish item
 after-values so activation follows the same causal player stream.
+
+## Optical observations (schema 9)
+
+`SensoryFact.light_sources_changed` and `light_sources_removed` publish active
+optical sources that contribute to an observer's currently visible cells. The
+source observation contains its independent optical `source_uuid`, monotonic
+`revision`, actual `position`, supporting `base_height_steps`, the native
+very-bright/bright/dim radii in feet, `appearance` (`torch` or `neutral`), and
+`actor_anchored`. The last field states the actual anchor class; it supplies no
+actor identity or invented rendering height. Dim radius extends beyond bright,
+as in the existing item contract. Clients may calibrate native light radius,
+colour and intensity from these descriptors; no new client light solver is
+required.
+
+An optical position is permitted even when the emitter is offscreen or hidden.
+`anchor_entity_uuid` is supplied only for the observer itself or an already
+visually perceived entity; `anchor_item_uuid` only for an already visually
+perceived world object. Private carried-item IDs are never substituted for the
+independent source ID. Current live observations publish compact emitter
+descriptors with an empty `affected_tiles` map. The optional map remains readable
+for archived schema-9 diagnostic recordings; current clients do not use it for
+rendering. Source membership still requires a real contribution to a currently
+visible cell, including when the source itself is offscreen.
+
+Source observations change when position, native revision, elevation or activation
+changes, including when another source keeps the aggregate MAX unchanged. A
+distinct optical-observation event handles this case; it does not manufacture
+a gameplay light-change callback or alter Hidden/perception rules. Source
+removals carry the source revision, retained in
+`SensesSnapshot.light_source_removals`; current sources reside in
+`SensesSnapshot.light_sources`. Missing fields default empty for archived replay.
+
+Audience composition selects the newest revision across all observer source
+rows and removal records. Equal-revision rows combine already-disclosed anchor
+identities and retain archived diagnostic maps when present. A same-revision observer removal means
+local loss of view and does not erase another observer's surviving row; a newer
+removal excludes older source rows. Do not combine an old position with a new
+footprint. The Python reference composition is `dnd/player/audience.py`.
+
+Ordinary native light/world events update the existing tile `resolved_light`
+and `default_light` fields through `WorldUpdate` tile patches. Compact emitter
+observations do not create a second per-observer illumination map. Optional
+objective/ambient sensory maps remain readable for archived schema-9 records.
+`resolved_light` is objective native MAX/cap illumination;
+`senses.light_levels` is the observer's effective level and can include
+darkvision. `default_light` is actual ambient illumination, independent of the
+listed sources. Hidden remembered cells retain their last observation. Silent
+setup light registrations are described by the current emitter record; they do
+not retroactively rewrite an earlier world snapshot. Historical null defaults
+mean unavailable data, not an authoritative darkness value. Replay consumes
+captured values and never consults the live grid.
+
+The exact preceding schema/identity is archived under
+`recordings/pre-light-observations/`. It remains an explicit offline contract;
+schema-8 peers are not silently admitted by a schema-9 session.
+
+Focused qualification is in `tests/player/test_optical_light_observations.py`
+(real torch commands, privacy, unchanged-MAX updates, optical obstruction,
+darkness caps/ambient values, audience revisions and cold replay), plus both
+SDKs' `test_light_observations`/`light-observations.test` admission tests. The
+real paired Hide recording uses extinguish/Hide/ignite/movement commands: the
+same Hidden UUID persists at levels 2 and 3 and the server removes it at level 4.
+This qualifies authoritative data and replay, not native rendered appearance.
+
+Qualification on 14 October 2026: the bounded Python SDK/player/sensory suite
+passed 181 tests, and the TypeScript SDK passed 63. Both new real schema-9
+audience journals passed 119 strict Godot reduction/shared-compiler checks each;
+the separate command-outcome qualifier passed 45 checks. The Studio inventory
+now selects `hide-light-schema9-seed3` (14 operations, both audiences); its prior
+schema-8 recording remains offline. The saved descriptor's `compiled_at_ms`
+excludes Studio inspection pauses, so consumers resolve bookmarks by original
+operation sequence. An initially failing qualifier was preserved: it had
+incorrectly treated a remembered, currently unseen tile as current darkness.
+No original packet or outcome was rewritten.
 
 `PlayerObject.contained_items` is available only for currently visually observed,
 accessible storage. `null` means unavailable or no storage; an empty array means

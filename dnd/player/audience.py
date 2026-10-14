@@ -7,7 +7,7 @@ complete recorded observations; it grants no actor additional senses or actions.
 from dataclasses import dataclass, field, replace
 from uuid import UUID
 
-from dnd.types.senses import (PerceivedContact, PerceivedSpatialEffect, PreparedSensoryDelta, SensoryDelta,
+from dnd.types.senses import (PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, PreparedSensoryDelta, SensoryDelta,
     SensesSnapshot, apply_current_senses, copy_senses_snapshot, prepare_sensory_delta, reduce_senses_snapshot)
 from dnd.types.world import LightLevel
 
@@ -170,6 +170,34 @@ def _effects(perception: AudiencePerception) -> dict[UUID, PerceivedSpatialEffec
     return result
 
 
+def light_sources(perception: AudiencePerception) -> tuple[dict[UUID, PerceivedLightSource], dict[UUID, int]]:
+    """Union only current-revision optical footprints across permitted observers.
+
+    Equal revision removal means this observer lost sight; a newer removal
+    retires stale source versions still retained by other observer snapshots.
+    """
+    revisions: dict[UUID, int] = {}
+    for senses in perception.members.values():
+        for identity, revision in senses.light_source_removals.items():
+            revisions[identity] = max(revisions.get(identity, -1), revision)
+        for identity, source in senses.light_sources.items():
+            revisions[identity] = max(revisions.get(identity, -1), source.revision)
+    result: dict[UUID, PerceivedLightSource] = {}
+    for observer in sorted(perception.members, key=lambda value: value.int):
+        for identity, source in perception.members[observer].light_sources.items():
+            if source.revision != revisions[identity]:
+                continue
+            previous = result.get(identity)
+            if previous is None:
+                result[identity] = source
+            else:
+                result[identity] = previous.model_copy(update={
+                    "affected_tiles": {**previous.affected_tiles, **source.affected_tiles},
+                    "anchor_entity_uuid": previous.anchor_entity_uuid or source.anchor_entity_uuid,
+                    "anchor_item_uuid": previous.anchor_item_uuid or source.anchor_item_uuid})
+    return result, {identity: revision for identity, revision in revisions.items() if identity not in result}
+
+
 def tile_observers(perception: AudiencePerception) -> dict[tuple[int, int], UUID]:
     """Choose one complete light observation per visible cell, with stable ties."""
     selected: dict[tuple[int, int], UUID] = {}
@@ -193,7 +221,8 @@ def audience_view(perception: AudiencePerception, observer_uuid: UUID) -> Senses
         return None
     anchor = perception.members.get(observer_uuid) or next(iter(perception.members.values()))
     owners = tile_observers(perception)
-    return replace(anchor, visible=set(owners),
+    lights, removals = light_sources(perception)
+    return replace(anchor, light_sources=lights, light_source_removals=removals, visible=set(owners),
         seen=set().union(*(senses.seen for senses in perception.members.values())),
         entities=_contacts(perception, objects=False), objects=_contacts(perception, objects=True),
         effective_light_levels={position: perception.members[owner].effective_light_levels[position]
@@ -458,7 +487,11 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
     else:
         view.seen.update(event.seen_cells_added)
     anchor = perception.members.get(observer_uuid) or next(iter(perception.members.values()))
-    current.view = replace(view, position=anchor.position, passive_perception=anchor.passive_perception,
+    lights, removals = ((light_sources(perception))
+        if event.initial or event.light_sources_changed or event.light_sources_removed
+        else (view.light_sources, view.light_source_removals))
+    current.view = replace(view, light_sources=lights, light_source_removals=removals,
+        position=anchor.position, passive_perception=anchor.passive_perception,
         sense_modes_hash=anchor.sense_modes_hash, sense_modes=anchor.sense_modes,
         visual_access=anchor.visual_access, paths_dirty=bool(current.dirty_members))
 

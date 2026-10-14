@@ -5,7 +5,7 @@ from dnd.core.condition_types import ConditionDurationSummary
 from collections.abc import Mapping, Sequence, Set
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -107,6 +107,27 @@ class PerceivedSpatialEffect(BaseModel):
     suppressions: tuple[SpellSuppression, ...] = ()
 
 
+class PerceivedLightSource(BaseModel):
+    """One optical emitter, without undisclosed actor or inventory identities.
+
+    Footprint levels are this source's actual occluded contribution before
+    tile MAX/caps; WorldTileState.resolved_light is the final objective level.
+    """
+    model_config = ConfigDict(frozen=True)
+    source_uuid: UUID
+    revision: int = Field(ge=0)
+    position: tuple[int, int]
+    base_height_steps: int
+    very_bright_radius_feet: int
+    bright_radius_feet: int
+    dim_radius_feet: int
+    appearance: Literal["torch", "neutral"] = "neutral"
+    actor_anchored: bool = False
+    anchor_entity_uuid: UUID | None = None
+    anchor_item_uuid: UUID | None = None
+    affected_tiles: dict[str, LightLevel] = Field(default_factory=dict)
+
+
 class SensesView(Protocol):
     """Minimal perception surface exposed upward by an observing block."""
 
@@ -159,6 +180,10 @@ class SensoryDelta(Protocol):
     @property
     def spatial_effects_removed(self) -> Set[UUID]: ...
     @property
+    def light_sources_changed(self) -> Mapping[UUID, PerceivedLightSource]: ...
+    @property
+    def light_sources_removed(self) -> Mapping[UUID, int]: ...
+    @property
     def sense_modes_changed(self) -> bool: ...
     @property
     def sense_modes(self) -> Sequence[SenseMode] | None: ...
@@ -191,6 +216,8 @@ class SensesSnapshot:
     visual_access: int
     hazardous_cells: dict[tuple[int, int], bool] = field(default_factory=dict)
     spatial_effects: dict[UUID, PerceivedSpatialEffect] = field(default_factory=dict)
+    light_sources: dict[UUID, PerceivedLightSource] = field(default_factory=dict)
+    light_source_removals: dict[UUID, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,6 +280,12 @@ def apply_current_senses(previous: SensesSnapshot | None, event: SensoryDelta,
     for identity in event.spatial_effects_removed:
         previous.spatial_effects.pop(identity, None)
     previous.spatial_effects.update(event.spatial_effects_changed)
+    for identity, revision in event.light_sources_removed.items():
+        previous.light_sources.pop(identity, None)
+        previous.light_source_removals[identity] = revision
+    for identity, source in event.light_sources_changed.items():
+        previous.light_sources[identity] = source
+        previous.light_source_removals.pop(identity, None)
     for position in event.visible_cells_removed:
         previous.effective_light_levels.pop(position, None)
         previous.hazardous_cells.pop(position, None)
@@ -276,6 +309,7 @@ def copy_senses_snapshot(value: SensesSnapshot) -> SensesSnapshot:
         entities=dict(value.entities), objects=dict(value.objects),
         effective_light_levels=dict(value.effective_light_levels),
         hazardous_cells=dict(value.hazardous_cells), spatial_effects=dict(value.spatial_effects),
+        light_sources=dict(value.light_sources), light_source_removals=dict(value.light_source_removals),
         sense_modes=tuple(mode.model_copy(deep=True) for mode in value.sense_modes))
 
 

@@ -24,7 +24,7 @@ from dnd.core.events import (
     SensoryUpdateReason,
 )
 from dnd.types.senses import (
-    OpticalObscurement, PerceivedContact, PerceivedSpatialEffect, SenseMode, SensesType, VolumeSurfaceSight,
+    OpticalObscurement, PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesType, VolumeSurfaceSight,
     SensesSnapshot as SensesSnapshot,
     reduce_senses_snapshot as reduce_senses_snapshot,
 )
@@ -100,6 +100,8 @@ class Senses(BaseBlock):
     spatial_effects: Dict[UUID, PerceivedSpatialEffect] = Field(
         default_factory=dict, description="Discovered fixture cells and their last observed state.",
     )
+    light_sources: Dict[UUID, PerceivedLightSource] = Field(default_factory=dict)
+    light_source_removals: Dict[UUID, int] = Field(default_factory=dict)
     walkable: Dict[Tuple[int, int], bool] = Field(default_factory=dict, description="Walkability for cells in geometric FOV.")
     paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = Field(
         default_factory=lambda: defaultdict(list),
@@ -348,6 +350,8 @@ class Senses(BaseBlock):
         self._paths_dirty = reduced.paths_dirty
         self.hazardous_cells = dict(reduced.hazardous_cells)
         self.spatial_effects = dict(reduced.spatial_effects)
+        self.light_sources = dict(reduced.light_sources)
+        self.light_source_removals = dict(reduced.light_source_removals)
         self._effects_by_position = None
         self._active_effects.clear()
 
@@ -435,6 +439,8 @@ def _capture_senses_transition(senses: Senses, seen: Set[Tuple[int, int]], *,
             pos: senses.hazardous_cells[pos] for pos in positions if pos in senses.hazardous_cells},
         spatial_effects=dict(senses.spatial_effects) if effects is None else {
             identity: senses.spatial_effects[identity] for identity in effects if identity in senses.spatial_effects},
+        light_sources=dict(senses.light_sources),
+        light_source_removals=dict(senses.light_source_removals),
         paths_dirty=senses._paths_dirty,
         passive_perception=senses._last_passive_perception,
         sense_modes_hash=senses._last_sense_modes_hash,
@@ -506,6 +512,10 @@ def emit_sensory_update_delta(
     }
     effects_removed = set() if initial else before.spatial_effects.keys() - after.spatial_effects.keys()
 
+    sources_changed = {identity: value for identity, value in after.light_sources.items()
+        if initial or before.light_sources.get(identity) != value}
+    sources_removed = {identity: revision for identity, revision in after.light_source_removals.items()
+        if not initial and before.light_source_removals.get(identity) != revision}
     passive_changed = initial or before.passive_perception != after.passive_perception
     sense_modes_changed = initial or before.sense_modes_hash != after.sense_modes_hash
     visual_access_changed = initial or before.visual_access != after.visual_access
@@ -537,6 +547,8 @@ def emit_sensory_update_delta(
         hazards_changed,
         effects_changed,
         effects_removed,
+        sources_changed,
+        sources_removed,
     ))
     if not has_delta:
         if timing:
@@ -575,6 +587,8 @@ def emit_sensory_update_delta(
         observer_position=after.position,
         observer_position_changed=position_changed,
         effective_light_levels_changed=light_changed,
+        light_sources_changed=sources_changed,
+        light_sources_removed=sources_removed,
         hazardous_cells_changed=hazards_changed,
         spatial_effects_changed=effects_changed,
         spatial_effects_removed=effects_removed,
@@ -638,6 +652,7 @@ class SpatialSensesSystem:
         EventType.SPATIAL_OBJECT_CHANGED,
         EventType.SPATIAL_PERCEIVABILITY_CHANGED,
         EventType.SPATIAL_LIGHT_CHANGED,
+        EventType.SPATIAL_LIGHT_SOURCES_CHANGED,
         EventType.SPATIAL_EFFECT_CHANGED,
     }
     EVENT_TYPES = {
@@ -1515,6 +1530,7 @@ class SpatialSensesSystem:
         senses = self.senses_by_observer.get(observer_uuid)
         if senses is None:
             return None
+        self._refresh_light_sources(observer_uuid, senses)
         event = emit_sensory_update_delta(
             observer_uuid, None, before, capture_senses_snapshot(senses),
             SensoryUpdateReason.UNKNOWN,
@@ -1618,13 +1634,34 @@ class SpatialSensesSystem:
     def __call__(self, event: Event) -> None:
         """Reduce indexed observers before the causal event completes."""
         sensory_events: List[SensoryUpdateEvent] = []
+        deferred: Set[UUID] = set()
+        if event.event_type in (EventType.SPATIAL_LIGHT_CHANGED, EventType.SPATIAL_LIGHT_SOURCES_CHANGED):
+            parent = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event is not None else None
+            if isinstance(parent, SpatialChangeEvent) and parent.senses_hint is not None and parent.senses_hint.requires_light_recompute:
+                # The geometry parent observes after every affected emitter has
+                # settled. Its observers must not see partial source recomputes.
+                deferred = self.candidate_observer_uuids(parent)
         residue_tile = (get_map().get_tile_by_uuid(event.target_entity_uuid)
             if isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent))
             and event.target_entity_uuid is not None
             and event.condition.snapshot_tile_residue() is not None else None)
         for observer_uuid in sorted(self.candidate_observer_uuids(event), key=str):
+            if observer_uuid in deferred:
+                continue
             senses = self.senses_by_observer.get(observer_uuid)
             if senses is None:
+                continue
+            if (event.event_type is EventType.SPATIAL_LIGHT_SOURCES_CHANGED
+                    and observer_uuid in self.published_observers):
+                before = _capture_senses_transition(senses, set(), positions=set(),
+                    entities=set(), objects=set(), effects=set())
+                self._refresh_light_sources(observer_uuid, senses)
+                after = _capture_senses_transition(senses, set(), positions=set(),
+                    entities=set(), objects=set(), effects=set())
+                sensory_event = emit_sensory_update_delta(observer_uuid, event, before, after,
+                    SensoryUpdateReason.LIGHT, register_event=False)
+                if sensory_event is not None:
+                    sensory_events.append(sensory_event)
                 continue
             if (isinstance(event, SpatialChangeEvent)
                     and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
@@ -1655,7 +1692,9 @@ class SpatialSensesSystem:
             newly_seen: Set[Tuple[int, int]] = set()
             hazard_positions = {residue_tile.position} if residue_tile is not None else None
             if isinstance(event, SpatialChangeEvent):
-                hazard_positions = self._candidate_positions(event)
+                hazard_positions = (event.senses_hint.light_changed_positions
+                    if event.event_type is EventType.SPATIAL_LIGHT_CHANGED and event.senses_hint is not None
+                    and event.senses_hint.light_changed_positions is not None else self._candidate_positions(event))
             elif isinstance(event, SpatialEffectChangeEvent):
                 hazard_positions = event.get_affected_positions()
             elif isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent)) and event.resulting_tile is not None:
@@ -1711,6 +1750,8 @@ class SpatialSensesSystem:
                         and event.event_type is EventType.SPATIAL_LIGHT_CHANGED else None)
             before = replace(before, spatial_effects={identity: value for identity, value in effect_before.items()
                 if value is not None})
+            if not only_refresh_hazards:
+                self._refresh_light_sources(observer_uuid, senses)
             after = _capture_senses_transition(senses, senses.seen if initial else newly_seen,
                 positions=set() if only_refresh_hazards else None,
                 entities=set() if only_refresh_hazards else None,
@@ -1767,6 +1808,20 @@ class SpatialSensesSystem:
             EventQueue.register_completion_sequence(sensory_events)
             self.published_observers.update(event.observer_uuid for event in sensory_events)
 
+    @staticmethod
+    def _refresh_light_sources(observer_uuid: UUID, senses: Senses) -> None:
+        """Retain compact emitter descriptors; cell illumination has its native events."""
+        grid = get_map()
+        visible = {position for position, value in senses.visible.items() if value}
+        sources = grid.observe_light_sources(observer_uuid, visible, senses.entities, senses.objects,
+            senses.light_sources)
+        for identity, previous in senses.light_sources.items():
+            if identity not in sources:
+                senses.light_source_removals[identity] = max(previous.revision, grid.light_source_revision(identity))
+        for identity in sources:
+            senses.light_source_removals.pop(identity, None)
+        senses.light_sources = sources
+
     def _field_is_current(self, observer_uuid: UUID, senses: Senses, *, illumination: bool = True) -> bool:
         """Whether retained cell evidence still describes this observer's world."""
         field = senses._field
@@ -1816,7 +1871,11 @@ class SpatialSensesSystem:
         field = senses._field
         owner = BaseBlock.get(observer_uuid)
         assert field is not None and owner is not None
-        positions = self._candidate_positions(event)
+        # Notification coverage includes the emitter's whole footprint. Only
+        # actual level changes invalidate existing cell/contact evidence.
+        positions = (set(event.senses_hint.light_changed_positions)
+            if event.senses_hint is not None and event.senses_hint.light_changed_positions is not None
+            else self._candidate_positions(event))
         entities: Set[UUID] = set()
         objects: Set[UUID] = set()
         parent = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event is not None else None
@@ -1890,6 +1949,7 @@ class SpatialSensesSystem:
         before = replace(before, spatial_effects={identity: value for identity, value in effect_before.items()
             if value is not None})
         self.refresh_observer(observer_uuid)
+        self._refresh_light_sources(observer_uuid, senses)
         after = _capture_senses_transition(senses, positions & senses.seen,
             positions=positions, entities=entities, objects=objects, effects=set(effect_before))
         if (before.visible != after.visible or before.seen != after.seen
@@ -1956,6 +2016,8 @@ class SpatialSensesSystem:
         field = cast(ObserverField, senses._field)
         subject = BaseBlock.get(subject_uuid)
         before = senses.entities.get(subject_uuid)
+        lights_before = dict(senses.light_sources)
+        removals_before = dict(senses.light_source_removals)
         contact = None
         if subject is not None and subject.appears_in_entity_contacts():
             position = cast(Tuple[int, int], subject.get_position())
@@ -1990,9 +2052,16 @@ class SpatialSensesSystem:
         revisions = get_map().observer_spatial_revisions(observer_uuid)
         if revisions[3] == field.revisions[3] + 1 and self._covers_occupancy(observer_uuid, event):
             senses._field = replace(field, revisions=revisions)
-        if not contact_changed and not paths_changed:
+        if contact_changed:
+            self._refresh_light_sources(observer_uuid, senses)
+        lights = {identity: value for identity, value in senses.light_sources.items()
+            if lights_before.get(identity) != value}
+        removals = {identity: revision for identity, revision in senses.light_source_removals.items()
+            if removals_before.get(identity) != revision}
+        if not contact_changed and not paths_changed and not lights and not removals:
             return None
         return SensoryUpdateEvent(
+            light_sources_changed=lights, light_sources_removed=removals,
             source_entity_uuid=observer_uuid, target_entity_uuid=observer_uuid,
             observer_uuid=observer_uuid, observer_position=senses.position,
             cause_event_uuid=event.uuid, parent_event=event.uuid,

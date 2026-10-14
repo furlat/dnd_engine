@@ -836,6 +836,7 @@ type EventType = Literal[
     'spatial_object_removed',
     'spatial_perceivability_changed',
     'spatial_light_changed',
+    'spatial_light_sources_changed',
     'spatial_object_changed',
     'traversal_connector_changed',
     'movement_collision',
@@ -1231,6 +1232,21 @@ class PendingReceipt(TypedDict):
     kind: NotRequired[Literal['pending']]
 
 
+class PerceivedLightSource(TypedDict):
+    source_uuid: str
+    revision: int
+    position: list[PositionItem]
+    base_height_steps: int
+    very_bright_radius_feet: int
+    bright_radius_feet: int
+    dim_radius_feet: int
+    appearance: NotRequired[Literal['torch', 'neutral']]
+    actor_anchored: NotRequired[bool]
+    anchor_entity_uuid: NotRequired[str | None]
+    anchor_item_uuid: NotRequired[str | None]
+    affected_tiles: NotRequired[dict[str, LightLevel]]
+
+
 type AnchorPositionItem = int
 
 
@@ -1321,7 +1337,7 @@ class PreviewRequest(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[8]]
+    player_schema_version: NotRequired[Literal[9]]
     schema_digest: str
 
 
@@ -1511,6 +1527,7 @@ type SpatialChangeType = Literal[
     'object_removed',
     'perceivability_changed',
     'light_changed',
+    'light_sources_changed',
     'object_changed',
     'movement_collision',
 ]
@@ -3143,6 +3160,8 @@ class SensoryFact(TypedDict):
     hazardous_cells_changed: NotRequired[dict[str, bool]]
     spatial_effects_changed: NotRequired[dict[str, PerceivedSpatialEffect]]
     spatial_effects_removed: NotRequired[list[str]]
+    light_sources_changed: NotRequired[dict[str, PerceivedLightSource]]
+    light_sources_removed: NotRequired[dict[str, int]]
 
 
 class SpellFact(TypedDict):

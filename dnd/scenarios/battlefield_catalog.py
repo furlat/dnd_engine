@@ -8,6 +8,7 @@ from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.world_prop_builders import build_world_prop, settle_world_prop
+from dnd.content.items.window_builders import place_window
 from dnd.content.items.environment_item_builders import (
     build_control_lever,
     build_directional_door,
@@ -264,6 +265,11 @@ def _preview_for_battlefield(battlefield_id: str) -> BattlefieldPreview:
         })
     if builder_id == "elevation_proving_ground":
         return BattlefieldPreview()
+    if builder_id == "window_proving_ground":
+        return BattlefieldPreview(objects=(
+            _preview_object((4, 6), "wall", "Cleared Window", blocked_directions=("east",)),
+            _preview_object((4, 8), "wall", "Wooden Window Insert", blocked_directions=("east",)),
+        ))
     if builder_id == "visual_vertical_seam":
         objects: list[BattlefieldPreviewObject] = []
         for x in range(24, 32):
@@ -494,7 +500,9 @@ _ELEVATION_PROVING_BATTLEFIELD = _battlefield(
 
 BATTLEFIELDS_BY_ID = {
     spec.battlefield_id: spec
-    for spec in (*BATTLEFIELDS, _ELEVATION_PROVING_BATTLEFIELD)
+    for spec in (*BATTLEFIELDS, _ELEVATION_PROVING_BATTLEFIELD,
+        _battlefield("battlefield.window_proving_ground", "Window Traversal Proving Ground",
+            ("bright", "window", "passage"), "bright", ("cleared-window", "breakable-window")))
 }
 
 
@@ -1343,6 +1351,22 @@ def _build_elevation_proving_ground(
     )
 
 
+def _build_window_proving_ground(
+    definition: BattlefieldDefinition,
+    grid: GridMap,
+) -> BuiltBattlefield:
+    """Two ordinary authored assemblies for public recipe traversal captures."""
+    create_standard_arena_floor(grid)
+    cleared = place_window("environment.window.fantasy_g7", (4, 6), CardinalDirection.EAST)
+    blocked = place_window("environment.window.fantasy_g8", (4, 8), CardinalDirection.EAST)
+    objects = {"cleared_frame": cleared.wall.uuid, "blocked_frame": blocked.wall.uuid}
+    if blocked.insert is not None:
+        objects["blocked_insert"] = blocked.insert.uuid
+    return BuiltBattlefield(definition=definition, environment=None,
+        notable_positions={"cleared_west": (4, 6), "cleared_east": (5, 6),
+            "blocked_west": (4, 8), "blocked_east": (5, 8)}, object_uuids=objects)
+
+
 BattlefieldBuilder = Callable[
     [BattlefieldDefinition, GridMap],
     BuiltBattlefield,
@@ -1370,6 +1394,7 @@ _BUILDERS: dict[str, BattlefieldBuilder] = {
     "battlefield.open_floor_dark": _build_open_floor_dark,
     "battlefield.visual_vertical_seam": _build_visual_vertical_seam,
     "battlefield.elevation_proving_ground": _build_elevation_proving_ground,
+    "battlefield.window_proving_ground": _build_window_proving_ground,
 }
 
 

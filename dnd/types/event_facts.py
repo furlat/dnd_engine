@@ -74,6 +74,7 @@ class EventType(str, Enum):
     SPATIAL_OBJECT_REMOVED = "spatial_object_removed"
     SPATIAL_PERCEIVABILITY_CHANGED = "spatial_perceivability_changed"
     SPATIAL_LIGHT_CHANGED = "spatial_light_changed"
+    SPATIAL_LIGHT_SOURCES_CHANGED = "spatial_light_sources_changed"
     SPATIAL_OBJECT_CHANGED = "spatial_object_changed"
     TRAVERSAL_CONNECTOR_CHANGED = "traversal_connector_changed"
     MOVEMENT_COLLISION = "movement_collision"
@@ -128,6 +129,7 @@ class SpatialChangeType(str, Enum):
     OBJECT_REMOVED = "object_removed"
     PERCEIVABILITY_CHANGED = "perceivability_changed"
     LIGHT_CHANGED = "light_changed"
+    LIGHT_SOURCES_CHANGED = "light_sources_changed"
     OBJECT_CHANGED = "object_changed"
     MOVEMENT_COLLISION = "movement_collision"
 

@@ -29,7 +29,7 @@ export type Kind = "health";
 export type Status = "ok";
 export type Kind1 = "bootstrap";
 export type ProtocolVersion = 1;
-export type PlayerSchemaVersion = 8;
+export type PlayerSchemaVersion = 9;
 export type SchemaDigest = string;
 export type GameId = string;
 export type GameEpoch = string;
@@ -859,6 +859,7 @@ export type EventType =
   | "spatial_object_removed"
   | "spatial_perceivability_changed"
   | "spatial_light_changed"
+  | "spatial_light_sources_changed"
   | "spatial_object_changed"
   | "traversal_connector_changed"
   | "movement_collision"
@@ -1007,6 +1008,7 @@ export type SpatialChangeType =
   | "object_removed"
   | "perceivability_changed"
   | "light_changed"
+  | "light_sources_changed"
   | "object_changed"
   | "movement_collision";
 export type EntityUuid3 = string | null;
@@ -1150,6 +1152,21 @@ export type LowerHeightPlanes = [[number, number, number], ...[number, number, n
 export type UpperVolumeSurfaces = VolumeSurfaceSight[];
 export type Suppressions1 = SpellSuppression[];
 export type SpatialEffectsRemoved = string[];
+export type SourceUuid = string;
+export type Revision1 = number;
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position7 = [number, number];
+export type BaseHeightSteps5 = number;
+export type VeryBrightRadiusFeet2 = number;
+export type BrightRadiusFeet2 = number;
+export type DimRadiusFeet2 = number;
+export type Appearance = "torch" | "neutral";
+export type ActorAnchored = boolean;
+export type AnchorEntityUuid1 = string | null;
+export type AnchorItemUuid1 = string | null;
 export type Kind30 = "item_charge";
 export type SourceEntityUuid11 = string;
 export type ItemUuid3 = string;
@@ -1188,19 +1205,19 @@ export type TileUuid1 = string;
  * @minItems 2
  * @maxItems 2
  */
-export type Position7 = [number, number];
+export type Position8 = [number, number];
 /**
  * Whether a world object is placed at a Tile center or boundary.
  */
 export type WorldPlacementKind = "center" | "boundary";
 export type OccupiesBands = boolean;
-export type BaseHeightSteps5 = number;
+export type BaseHeightSteps6 = number;
 export type TopHeightSteps = number;
 /**
  * @minItems 2
  * @maxItems 2
  */
-export type Position8 = [number, number];
+export type Position9 = [number, number];
 export type TileUuid2 = string;
 export type CoveredSupports = WorldObjectSupport[];
 export type RemovedBands = [number, number, number][];
@@ -1218,9 +1235,9 @@ export type VisualVariantId2 = string | null;
 export type MapChar1 = string;
 export type IsOpen1 = boolean | null;
 export type IsLit2 = boolean | null;
-export type VeryBrightRadiusFeet2 = number | null;
-export type BrightRadiusFeet2 = number | null;
-export type DimRadiusFeet2 = number | null;
+export type VeryBrightRadiusFeet3 = number | null;
+export type BrightRadiusFeet3 = number | null;
+export type DimRadiusFeet3 = number | null;
 export type StackCount1 = number;
 export type IsPickable1 = boolean;
 export type ItemEffects3 = ItemEffectPresentationState[];
@@ -1307,7 +1324,7 @@ export type SourceName = string;
 /**
  * UUID string of the acting entity or source.
  */
-export type SourceUuid = string;
+export type SourceUuid1 = string;
 /**
  * Display name of the target, if any.
  */
@@ -1905,7 +1922,7 @@ export type HazardName = string;
 /**
  * Admitted hazard position, or unknown.
  */
-export type Position9 = [number, number] | null;
+export type Position10 = [number, number] | null;
 /**
  * Passive Perception score that detected the hazard.
  */
@@ -2325,7 +2342,7 @@ export type Connectors = WorldConnectorState[];
  * @minItems 2
  * @maxItems 2
  */
-export type Position10 = [number, number];
+export type Position11 = [number, number];
 export type Name11 = string;
 export type BlocksOptics2 = boolean;
 export type BlocksPropagation3 = boolean;
@@ -2340,7 +2357,7 @@ export type TileChanges = TileFieldUpdate[];
 export type WorldUpdates = WorldUpdate[];
 export type Generation1 = string;
 export type ObserverUuid4 = string;
-export type Revision1 = number;
+export type Revision2 = number;
 export type Initiative = string[];
 export type ActorUuid = string;
 export type Species =
@@ -2459,7 +2476,7 @@ export type OpportunityAttackExposures = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures = ChoiceExposure[];
 export type Kind68 = "subject";
 export type Subject = number;
-export type Position11 = number | null;
+export type Position12 = number | null;
 export type Index2 = number;
 export type Distance1 = number | null;
 export type PathCost1 = number | null;
@@ -2472,7 +2489,7 @@ export type SafePath1 = number[] | null;
 export type OpportunityAttackExposures1 = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures1 = ChoiceExposure[];
 export type Kind69 = "position";
-export type Position12 = number;
+export type Position13 = number;
 export type Index3 = number;
 export type Distance2 = number | null;
 export type PathCost2 = number | null;
@@ -3178,7 +3195,7 @@ export type AudienceId9 = string;
 export type CommandNumber6 = number;
 export type Kind86 = "unknown";
 export type Kind87 = "content";
-export type Revision2 = string;
+export type Revision3 = string;
 export type Descriptors = ContentDescriptor[];
 export type Kind88 = "ready";
 export type Kind89 = "stream_status";
@@ -4269,6 +4286,8 @@ export interface SensoryFact {
   hazardous_cells_changed?: HazardousCellsChanged;
   spatial_effects_changed?: SpatialEffectsChanged;
   spatial_effects_removed?: SpatialEffectsRemoved;
+  light_sources_changed?: LightSourcesChanged;
+  light_sources_removed?: LightSourcesRemoved;
 }
 /**
  * One observed field at an actual native refresh/commit boundary.
@@ -4364,6 +4383,35 @@ export interface VolumeSurfaceSight {
   position: Position6;
   lower_height_planes: LowerHeightPlanes;
 }
+export interface LightSourcesChanged {
+  [k: string]: PerceivedLightSource;
+}
+/**
+ * One optical emitter, without undisclosed actor or inventory identities.
+ *
+ * Footprint levels are this source's actual occluded contribution before
+ * tile MAX/caps; WorldTileState.resolved_light is the final objective level.
+ */
+export interface PerceivedLightSource {
+  source_uuid: SourceUuid;
+  revision: Revision1;
+  position: Position7;
+  base_height_steps: BaseHeightSteps5;
+  very_bright_radius_feet: VeryBrightRadiusFeet2;
+  bright_radius_feet: BrightRadiusFeet2;
+  dim_radius_feet: DimRadiusFeet2;
+  appearance?: Appearance;
+  actor_anchored?: ActorAnchored;
+  anchor_entity_uuid?: AnchorEntityUuid1;
+  anchor_item_uuid?: AnchorItemUuid1;
+  affected_tiles?: AffectedTiles;
+}
+export interface AffectedTiles {
+  [k: string]: LightLevel;
+}
+export interface LightSourcesRemoved {
+  [k: string]: number;
+}
 export interface ItemChargeFact {
   kind?: Kind30;
   source_entity_uuid: SourceEntityUuid11;
@@ -4420,11 +4468,11 @@ export interface ObjectDestroyedFact {
 export interface WorldObjectPlacement {
   object_uuid: ObjectUuid3;
   tile_uuid: TileUuid1;
-  position: Position7;
+  position: Position8;
   kind: WorldPlacementKind;
   occupies_bands: OccupiesBands;
   boundary_direction?: CardinalDirection | null;
-  base_height_steps: BaseHeightSteps5;
+  base_height_steps: BaseHeightSteps6;
   top_height_steps: TopHeightSteps;
   orientation?: CardinalDirection | null;
   covered_supports?: CoveredSupports;
@@ -4434,7 +4482,7 @@ export interface WorldObjectPlacement {
  * One existing Tile supporting a committed object footprint.
  */
 export interface WorldObjectSupport {
-  position: Position8;
+  position: Position9;
   tile_uuid: TileUuid2;
 }
 export interface FloorItem {
@@ -4447,9 +4495,9 @@ export interface FloorItem {
   boundary_structure: BoundaryStructure | null;
   is_open: IsOpen1;
   is_lit: IsLit2;
-  very_bright_radius_feet?: VeryBrightRadiusFeet2;
-  bright_radius_feet?: BrightRadiusFeet2;
-  dim_radius_feet?: DimRadiusFeet2;
+  very_bright_radius_feet?: VeryBrightRadiusFeet3;
+  bright_radius_feet?: BrightRadiusFeet3;
+  dim_radius_feet?: DimRadiusFeet3;
   stack_count?: StackCount1;
   is_pickable?: IsPickable1;
   item_effects?: ItemEffects3;
@@ -4538,7 +4586,7 @@ export interface ActionCancellation {
 export interface CombatLogEntry {
   entry_type: CombatLogEntryType;
   source_name: SourceName;
-  source_uuid: SourceUuid;
+  source_uuid: SourceUuid1;
   target_name?: TargetName;
   target_uuid?: TargetUuid;
   compact: Compact;
@@ -4881,7 +4929,7 @@ export interface HazardDetectedLogData {
   observer_name: ObserverName1;
   observer_uuid: ObserverUuid3;
   hazard_name: HazardName;
-  position: Position9;
+  position: Position10;
   passive_perception: PassivePerception2;
   stealth_dc: StealthDc1;
 }
@@ -5218,7 +5266,7 @@ export interface WorldConnectorState {
   provocation_policy: ConnectorProvocationPolicy;
 }
 export interface TileFieldUpdate {
-  position: Position10;
+  position: Position11;
   changes: WorldTileChanges;
 }
 /**
@@ -5247,7 +5295,7 @@ export interface WorldTileChanges {
 export interface PlayerHUDSnapshot {
   generation: Generation1;
   observer_uuid: ObserverUuid4;
-  revision: Revision1;
+  revision: Revision2;
   initiative: Initiative;
   sheets: Sheets;
 }
@@ -5382,7 +5430,7 @@ export interface SubjectBinding {
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures;
   kind: Kind68;
   subject: Subject;
-  position?: Position11;
+  position?: Position12;
 }
 export interface ChoiceExposure {
   reactor_uuid: ReactorUuid;
@@ -5403,7 +5451,7 @@ export interface PositionBinding {
   opportunity_attack_exposures?: OpportunityAttackExposures1;
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures1;
   kind: Kind69;
-  position: Position12;
+  position: Position13;
 }
 export interface SelfBinding {
   index: Index3;
@@ -5869,7 +5917,7 @@ export interface UnknownReceipt {
 }
 export interface ContentResponse {
   kind?: Kind87;
-  revision: Revision2;
+  revision: Revision3;
   descriptors: Descriptors;
 }
 export interface StreamReady {

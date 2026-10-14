@@ -8762,6 +8762,7 @@
           "spatial_object_removed",
           "spatial_perceivability_changed",
           "spatial_light_changed",
+          "spatial_light_sources_changed",
           "spatial_object_changed",
           "traversal_connector_changed",
           "movement_collision",
@@ -12743,6 +12744,123 @@
         "type": "object",
         "additionalProperties": false
       },
+      "PerceivedLightSource": {
+        "description": "One optical emitter, without undisclosed actor or inventory identities.\n\nFootprint levels are this source's actual occluded contribution before\ntile MAX/caps; WorldTileState.resolved_light is the final objective level.",
+        "properties": {
+          "source_uuid": {
+            "format": "uuid",
+            "title": "Source Uuid",
+            "type": "string"
+          },
+          "revision": {
+            "minimum": 0,
+            "title": "Revision",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "position": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "title": "Position",
+            "type": "array"
+          },
+          "base_height_steps": {
+            "title": "Base Height Steps",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "very_bright_radius_feet": {
+            "title": "Very Bright Radius Feet",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "bright_radius_feet": {
+            "title": "Bright Radius Feet",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "dim_radius_feet": {
+            "title": "Dim Radius Feet",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "appearance": {
+            "default": "neutral",
+            "enum": [
+              "torch",
+              "neutral"
+            ],
+            "title": "Appearance",
+            "type": "string"
+          },
+          "actor_anchored": {
+            "default": false,
+            "title": "Actor Anchored",
+            "type": "boolean"
+          },
+          "anchor_entity_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Anchor Entity Uuid"
+          },
+          "anchor_item_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Anchor Item Uuid"
+          },
+          "affected_tiles": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/LightLevel"
+            },
+            "title": "Affected Tiles",
+            "type": "object"
+          }
+        },
+        "required": [
+          "source_uuid",
+          "revision",
+          "position",
+          "base_height_steps",
+          "very_bright_radius_feet",
+          "bright_radius_feet",
+          "dim_radius_feet"
+        ],
+        "title": "PerceivedLightSource",
+        "type": "object",
+        "additionalProperties": false
+      },
       "PerceivedSpatialEffect": {
         "description": "Last observed spatial effect and only its discovered footprint cells.",
         "properties": {
@@ -15677,8 +15795,8 @@
             "maximum": 9007199254740991
           },
           "player_schema_version": {
-            "const": 8,
-            "default": 8,
+            "const": 9,
+            "default": 9,
             "title": "Player Schema Version",
             "type": "integer",
             "minimum": -9007199254740991,
@@ -16717,6 +16835,28 @@
             "title": "Spatial Effects Removed",
             "type": "array",
             "uniqueItems": true
+          },
+          "light_sources_changed": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PerceivedLightSource"
+            },
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "title": "Light Sources Changed",
+            "type": "object"
+          },
+          "light_sources_removed": {
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "title": "Light Sources Removed",
+            "type": "object"
           }
         },
         "required": [
@@ -17110,6 +17250,7 @@
           "object_removed",
           "perceivability_changed",
           "light_changed",
+          "light_sources_changed",
           "object_changed",
           "movement_collision"
         ],

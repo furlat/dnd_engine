@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 from dnd.actions import Disengage, Hide, SpellAction
 from dnd.actions_functional import register_spell
 from dnd.blocks.base_item import BaseItem, EquippableItem
-from dnd.conditions import Blinded, Poisoned
+from dnd.conditions import Blinded, Poisoned, Prone
 from dnd.content.characters.builds import prepare_character
 from dnd.content.characters.premades import PREMADE_CHARACTER_BUILDS
 from dnd.content.items.authored_item_builders import build_authored_item
@@ -115,7 +115,7 @@ _DISENGAGE_ACTION_IDENTITY = get_content_declaration(
 ).ref.identity_key
 _SETUP_CONDITION_BY_REF = {
     get_content_declaration(condition_type).ref.identity_key: condition_type
-    for condition_type in (Blinded, Poisoned)
+    for condition_type in (Blinded, Poisoned, Prone)
 }
 _RESISTANCE_STATUS_BY_SETUP = {
     "resistance": ResistanceStatus.RESISTANCE,

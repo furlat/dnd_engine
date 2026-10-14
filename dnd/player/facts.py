@@ -29,7 +29,7 @@ from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy,
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState
-from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SenseMode, SensesSnapshot
+from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesSnapshot
 from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectChangeOperation, SpatialEffectInteractionOperation
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.traps import TrapState
@@ -513,6 +513,8 @@ class SensoryFact:
     hazardous_cells_changed: dict[str, bool] = field(default_factory=dict)
     spatial_effects_changed: dict[UUID, PerceivedSpatialEffect] = field(default_factory=dict)
     spatial_effects_removed: frozenset[UUID] = frozenset()
+    light_sources_changed: dict[UUID, PerceivedLightSource] = field(default_factory=dict)
+    light_sources_removed: dict[UUID, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

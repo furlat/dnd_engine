@@ -369,6 +369,7 @@ def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
         effective_light_levels=dict(snapshot.effective_light_levels),
         hazardous_cells=dict(snapshot.hazardous_cells),
         spatial_effects=dict(snapshot.spatial_effects),
+        light_sources=dict(snapshot.light_sources), light_source_removals=dict(snapshot.light_source_removals),
         paths_dirty=snapshot.paths_dirty,
         passive_perception=snapshot.passive_perception,
         sense_modes_hash=snapshot.sense_modes_hash,
@@ -650,6 +651,12 @@ def _detach_retained_event(event: Event) -> Event:
                 id(event.object_contacts_removed): set(event.object_contacts_removed),
                 id(event.spatial_effects_removed): set(event.spatial_effects_removed),
                 id(event.effective_light_levels_changed): dict(event.effective_light_levels_changed),
+                id(event.objective_light_levels_changed): dict(event.objective_light_levels_changed),
+                id(event.ambient_light_levels_changed): dict(event.ambient_light_levels_changed),
+                id(event.light_sources_changed): {identity: source.model_copy(update={
+                    'affected_tiles': dict(source.affected_tiles)})
+                    for identity, source in event.light_sources_changed.items()},
+                id(event.light_sources_removed): dict(event.light_sources_removed),
                 id(event.hazardous_cells_changed): dict(event.hazardous_cells_changed),
             })
         case SpatialChangeEvent():

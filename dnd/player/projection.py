@@ -139,6 +139,8 @@ def _sensory_fact(event: SensoryUpdateEvent) -> SensoryFact:
         observer_position=event.observer_position, observer_position_changed=event.observer_position_changed,
         effective_light_levels_changed=dict(event.effective_light_levels_changed),
         hazardous_cells_changed=dict(event.hazardous_cells_changed),
+        light_sources_changed=dict(event.light_sources_changed),
+        light_sources_removed=dict(event.light_sources_removed),
         spatial_effects_changed=dict(event.spatial_effects_changed),
         spatial_effects_removed=frozenset(event.spatial_effects_removed),
         cause_event_uuid=event.cause_event_uuid,
@@ -1129,7 +1131,11 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
             positions, object_positions = world_event_footprints(private_world.recorded_world, event, condition)
             changed_objects = world_event_objects(private_world.recorded_world, event, condition)
             changed_objects.update(world_objects_at(private_world.recorded_world, object_positions))
-            world_changed = apply_world_fact(private_world, event, condition)
+            # Sensory tile after-values belong to that observer's current grant.
+            # A full offline capture may also contain foreign sensory payloads;
+            # those must behave exactly like the audience-pruned live capture.
+            world_changed = (False if isinstance(event, SensoryUpdateEvent)
+                else apply_world_fact(private_world, event, condition))
             if isinstance(event, SensoryUpdateEvent) and observer.observes(event.observer_uuid):
                 for source_uuid in dict.fromkeys(row.source_event_uuid for row in event.observed_changes):
                     source = by_version.get(source_uuid)
@@ -1140,6 +1146,10 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                         changed_objects.update(world_event_objects(private_world.recorded_world, source))
                         changed_objects.update(world_objects_at(private_world.recorded_world, source_object_positions))
                         apply_world_fact(private_world, source)
+                # Observer after-values are later than their causal source snapshot.
+                # In particular initialization can add carried lights after the
+                # actor-free WorldInitializedEvent was recorded.
+                world_changed = apply_world_fact(private_world, event)
                 positions.update(event.visible_cells_added)
                 object_positions.update(event.visible_cells_added)
                 object_positions.update(event.visible_cells_removed)
@@ -1407,7 +1417,8 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
                     or fact.entity_contacts_changed or fact.entity_contacts_removed
                     or fact.object_contacts_changed or fact.object_contacts_removed
                     or fact.sense_modes_changed or fact.passive_perception_changed or fact.visual_access_changed
-                    or fact.hazardous_cells_changed or fact.spatial_effects_changed or fact.spatial_effects_removed):
+                    or fact.hazardous_cells_changed or fact.spatial_effects_changed or fact.spatial_effects_removed
+                    or fact.light_sources_changed or fact.light_sources_removed):
                 fact = None
             node = replace(node, fact=fact)
         filtered.append(node)

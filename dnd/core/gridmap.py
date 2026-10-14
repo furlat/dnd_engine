@@ -6,7 +6,7 @@ from bisect import bisect_left, bisect_right
 from heapq import heappop, heappush
 from dnd.core.condition_types import ConditionDurationSummary
 
-from typing import AbstractSet, Collection, Any, Dict, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
+from typing import Literal, AbstractSet, Collection, Any, Dict, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
@@ -54,7 +54,7 @@ from dnd.core.world_edges import (
     world_edge_contribution_allows,
 )
 from dnd.types.world import CardinalDirection, OccupancyLayer, WorldEdgeChannel
-from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
+from dnd.types.senses import OpticalObscurement, PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.spatial_effects import (
     SpatialEffectLayer,
@@ -182,6 +182,9 @@ class LightSourceData(BaseModel):
 
     uuid: UUID = Field(default_factory=uuid4, description="Light source identity.")
     position: Tuple[int, int] = Field(description="Current position of the light source")
+    revision: int = 0
+    base_height_steps: int = 0
+    appearance: Literal["torch", "neutral"] = "neutral"
     very_bright_radius_feet: int = Field(default=0, description="Radius of very bright light in feet (innermost zone)")
     bright_radius_feet: int = Field(description="Radius of bright light in feet (extends beyond very bright)")
     dim_radius_feet: int = Field(description="Radius of dim light in feet (extends beyond bright)")
@@ -252,6 +255,7 @@ class GridMap:
         ] = defaultdict(dict)
 
         self._light_sources: Dict[UUID, LightSourceData] = {}
+        self._light_source_revisions: Dict[UUID, int] = {}
         self._block_light_suppressions: DefaultDict[UUID, Set[str]] = defaultdict(set)
         self._optical_obscurements_by_position: DefaultDict[
             Tuple[int, int], Dict[UUID, OpticalObscurement]
@@ -5451,7 +5455,8 @@ class GridMap:
                          very_bright_radius_feet: int = 0,
                          parent_event: Optional[UUID] = None,
                          publish_event: bool = True, sunlight: bool = False,
-                         contribution_owner_uuid: Optional[UUID] = None) -> UUID:
+                         contribution_owner_uuid: Optional[UUID] = None,
+                         appearance: Literal["torch", "neutral"] = "neutral") -> UUID:
         """Add a light source at a position.
 
         Computes illuminated area via FOV from position.
@@ -5468,7 +5473,7 @@ class GridMap:
             UUID of the light source
         """
         source = LightSourceData(
-            position=position,
+            position=position, appearance=appearance,
             very_bright_radius_feet=very_bright_radius_feet,
             bright_radius_feet=bright_radius_feet,
             dim_radius_feet=dim_radius_feet,
@@ -5492,6 +5497,63 @@ class GridMap:
 
         return source.uuid
 
+    def _light_height(self, source: LightSourceData) -> int:
+        placement = self.get_object_placement(source.anchor_uuid) if source.anchor_uuid is not None else None
+        if placement is not None:
+            return placement.base_height_steps
+        tile = self._tiles.get(source.position)
+        return tile.height if tile is not None else 0
+
+    def _revise_light_source(self, source: LightSourceData) -> None:
+        source.revision += 1
+        source.base_height_steps = self._light_height(source)
+        self._light_source_revisions[source.uuid] = source.revision
+
+    def light_source_revision(self, identity: UUID) -> int:
+        """Current optical version, retained after an emitter is extinguished."""
+        return self._light_source_revisions.get(identity, 0)
+
+    def observe_light_sources(self, observer_uuid: UUID, visible: set[Tuple[int, int]],
+            entities: Dict[UUID, PerceivedContact], objects: Dict[UUID, PerceivedContact],
+            previous: Optional[Dict[UUID, PerceivedLightSource]] = None,
+            ) -> Dict[UUID, PerceivedLightSource]:
+        """Expose contributing emitter descriptors, never hidden inventory IDs.
+
+        The renderer needs an emitter, not another per-cell illumination map.
+        Existing tile contributions bound discovery when remote sources grow.
+        """
+        if len(self._light_sources) <= len(visible):
+            candidates = self._light_sources.keys()
+        else:
+            candidates = set()
+            for position in visible:
+                tile = self._tiles.get(position)
+                if tile is not None:
+                    candidates.update(tile._light.illuminations)
+        result = {}
+        for identity in candidates:
+            source = self._light_sources.get(identity)
+            if source is None or not self._is_light_effectively_active(source):
+                continue
+            if source.affected_tiles.keys().isdisjoint(visible):
+                continue
+            actor = entities.get(source.anchor_uuid)
+            item = objects.get(source.anchor_uuid)
+            values = dict(source_uuid=identity, revision=source.revision, position=source.position,
+                base_height_steps=source.base_height_steps, appearance=source.appearance,
+                very_bright_radius_feet=source.very_bright_radius_feet,
+                bright_radius_feet=source.bright_radius_feet, dim_radius_feet=source.dim_radius_feet,
+                actor_anchored=source.anchor_uuid is not None
+                    and self.get_entity_position(source.anchor_uuid) is not None,
+                anchor_entity_uuid=source.anchor_uuid if source.anchor_uuid == observer_uuid
+                    or actor is not None and actor.visual else None,
+                anchor_item_uuid=source.anchor_uuid if item is not None and item.visual else None)
+            old = previous.get(identity) if previous is not None else None
+            result[identity] = (old if old is not None and not old.affected_tiles
+                and all(old.__dict__[key] == value for key, value in values.items())
+                else PerceivedLightSource(**values))
+        return result
+
     def is_sunlit(self, position: Tuple[int, int]) -> bool:
         """Read active sunlight through the existing occluded light footprint."""
         return any(source.sunlight and self._is_light_effectively_active(source)
@@ -5513,6 +5575,7 @@ class GridMap:
         if source is None:
             return
 
+        old_positions = set(source.affected_tiles)
         changed = self._remove_light_source_tiles(
             source,
             parent_event=parent_event,
@@ -5524,7 +5587,8 @@ class GridMap:
             if anchor:
                 anchor.detach_light_source(light_uuid)
 
-        return self.snapshot_light_change(changed, parent_event=parent_event) if not publish_event else None
+        return self.snapshot_light_change(changed, parent_event=parent_event,
+            source_positions=old_positions) if not publish_event else None
 
     def cleanup_block_light_sources(
         self,
@@ -5644,11 +5708,16 @@ class GridMap:
         if timing:
             record_action_timing("grid.move_light_source.apply_delta_ms", started)
 
+        source_changed = (source.position != new_position or old_affected != new_affected
+            or source.base_height_steps != self._light_height(source))
         source.position = new_position
         source.affected_tiles = new_affected
+        if source_changed:
+            self._revise_light_source(source)
 
         started = time.perf_counter() if timing else 0.0
-        self._fire_light_batch_events(changed_positions, parent_event=parent_event)
+        self._fire_light_batch_events(changed_positions, parent_event=parent_event,
+            source_positions=all_positions if source_changed else set())
         if timing:
             record_action_timing("grid.move_light_source.publish_batch_ms", started)
 
@@ -5707,7 +5776,11 @@ class GridMap:
         Suppresses per-tile events and fires a single senses update after."""
         if not self._is_light_effectively_active(source):
             return
+        previous = source.affected_tiles
         source.affected_tiles = self._compute_light_tiles(source)
+        source_changed = previous != source.affected_tiles or source.revision == 0
+        if source_changed:
+            self._revise_light_source(source)
         changed_positions: List[Tuple[int, int]] = []
         for pos, level in source.affected_tiles.items():
             tile = self._tiles.get(pos)
@@ -5715,7 +5788,8 @@ class GridMap:
                 if tile._add_illumination(source.uuid, level):
                     changed_positions.append(pos)
         if publish_event:
-            self._fire_light_batch_events(changed_positions, parent_event=parent_event)
+            self._fire_light_batch_events(changed_positions, parent_event=parent_event,
+                source_positions=set(previous) | set(source.affected_tiles) if source_changed else set())
         elif changed_positions:
             self._bump_spatial_revisions({"illumination"}, set(changed_positions))
 
@@ -5730,9 +5804,13 @@ class GridMap:
             if tile:
                 if tile._remove_light_modifier(source.uuid):
                     changed_positions.append(pos)
-        source.affected_tiles.clear()
+        previous = set(source.affected_tiles)
+        source.affected_tiles = {}
+        if previous:
+            self._revise_light_source(source)
         if publish_event:
-            self._fire_light_batch_events(changed_positions, parent_event=parent_event)
+            self._fire_light_batch_events(changed_positions, parent_event=parent_event,
+                source_positions=previous)
         elif changed_positions:
             self._bump_spatial_revisions({"illumination"}, set(changed_positions))
 
@@ -5742,6 +5820,7 @@ class GridMap:
         self,
         changed_positions: List[Tuple[int, int]],
         parent_event: Optional[UUID] = None,
+        *, source_positions: Optional[Set[Tuple[int, int]]] = None,
     ) -> None:
         """Publish one complete event for an atomic light-field delta.
 
@@ -5752,20 +5831,36 @@ class GridMap:
             changed_positions: Tiles whose resolved light level changed.
             parent_event: Optional causal parent event UUID.
         """
-        if not changed_positions:
-            return
-        self._bump_spatial_revisions({"illumination"}, set(changed_positions))
-        event = self.snapshot_light_change(changed_positions, parent_event=parent_event)
+        if changed_positions:
+            self._bump_spatial_revisions({"illumination"}, set(changed_positions))
+        event = self.snapshot_light_change(changed_positions, parent_event=parent_event,
+            source_positions=source_positions)
         if event is not None:
             self._fire_committed_spatial_event(event)
 
     def snapshot_light_change(self, changed_positions: List[Tuple[int, int]], *,
-                              parent_event: Optional[UUID] = None) -> Optional[SpatialChangeEvent]:
-        """Retain an illumination delta after commitment without running observers."""
+                              parent_event: Optional[UUID] = None,
+                              source_positions: Optional[Set[Tuple[int, int]]] = None) -> Optional[SpatialChangeEvent]:
+        """Retain actual level changes, or an optical-only source notification.
+
+        A constant MAX field does not run LIGHT_CHANGED gameplay handlers.
+        """
         if not changed_positions:
-            return None
+            if not source_positions:
+                return None
+            position = min(source_positions)
+            tile = self._tiles.get(position)
+            if tile is None:
+                return None
+            return SpatialChangeEvent(source_entity_uuid=tile.uuid,
+                event_type=EventType.SPATIAL_LIGHT_SOURCES_CHANGED,
+                change_type=SpatialChangeType.LIGHT_SOURCES_CHANGED,
+                position=position, phase=EventPhase.DECLARATION,
+                use_register=False, parent_event=parent_event,
+                senses_hint=SensesUpdateHint(directional_positions=source_positions))
         batch_hint = SensesUpdateHint(
             light_changed_positions=set(changed_positions),
+            directional_positions=source_positions,
         )
         representative_position = min(changed_positions)
         representative_tile = self._tiles.get(representative_position)
@@ -5915,10 +6010,15 @@ class GridMap:
                     if tile._add_illumination(source.uuid, new_level):
                         changed_positions.append(pos)
 
+            source_changed = (old_affected != new_affected
+                or source.base_height_steps != self._light_height(source))
             source.affected_tiles = new_affected
+            if source_changed:
+                self._revise_light_source(source)
             all_changed.update(changed_positions)
             if publish:
-                self._fire_light_batch_events(changed_positions, parent_event=parent_event)
+                self._fire_light_batch_events(changed_positions, parent_event=parent_event,
+                    source_positions=all_positions if source_changed else set())
             elif changed_positions:
                 self._bump_spatial_revisions({"illumination"}, set(changed_positions))
         return all_changed
@@ -6237,6 +6337,7 @@ class GridMap:
         self._boundary_candidate_cells.clear()
         self._contact_candidate_cells.clear()
         self._light_sources.clear()
+        self._light_source_revisions.clear()
         self._block_light_suppressions.clear()
         self._optical_obscurements_by_position.clear()
         self._optical_obscurement_positions_by_source.clear()

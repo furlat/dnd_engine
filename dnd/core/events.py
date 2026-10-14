@@ -71,7 +71,7 @@ from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposi
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.creature_types import DamageType
 from dnd.core.saving_throw_types import SavingThrowContext
-from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SenseMode
+from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode
 from dnd.types.traps import TrapState
 from dnd.types.residues import BodyReleaseResult
 from dnd.types.spatial_effects import (
@@ -3179,6 +3179,12 @@ class SensoryUpdateEvent(Event):
             "Changed backend-resolved subjective light after-values, keyed as 'x,y'."
         ),
     )
+    ambient_light_levels_changed: Dict[str, int] = Field(default_factory=dict,
+        description="Recorded current native tile baseline illumination for visible cells.")
+    objective_light_levels_changed: Dict[str, int] = Field(default_factory=dict,
+        description="Recorded current objective levels for visible cells, before sense-mode conversion.")
+    light_sources_changed: Dict[UUID, PerceivedLightSource] = Field(default_factory=dict)
+    light_sources_removed: Dict[UUID, int] = Field(default_factory=dict)
     hazardous_cells_changed: Dict[str, bool] = Field(
         default_factory=dict,
         description="Native resolved hazard after-values for visible cells, keyed as 'x,y'.",
@@ -3278,6 +3284,10 @@ class SensoryUpdateEvent(Event):
         pending: List[Any] = [
             self.observer_position,
             self.effective_light_levels_changed,
+            self.objective_light_levels_changed,
+            self.ambient_light_levels_changed,
+            self.light_sources_changed,
+            self.light_sources_removed,
             self.hazardous_cells_changed,
             self.spatial_effects_changed,
             self.spatial_effects_removed,
