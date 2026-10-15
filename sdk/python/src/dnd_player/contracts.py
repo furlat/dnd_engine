@@ -69,7 +69,15 @@ type ActionTopologyOperation = Literal['create_blocker', 'remove_blocker']
 
 class ActionVariantFacet(TypedDict):
     key: Literal[
-        'form', 'side', 'radius', 'ability', 'damage_type', 'movement', 'width', 'rank'
+        'form',
+        'side',
+        'radius',
+        'ability',
+        'damage_type',
+        'movement',
+        'width',
+        'rank',
+        'resistance',
     ]
     value: str
     label: str

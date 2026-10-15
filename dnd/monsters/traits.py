@@ -641,6 +641,7 @@ class MultiattackAction(BaseAction):
         if actor is None or not isinstance(target, (Entity, BaseItem)):
             return execution_event.cancel(status_message="Multiattack actor or target missing")
         effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} uses {self.name}")
+        if effect_event.canceled:return effect_event
         for attack in self._selected_attacks():
             if target.get_hp() <= 0:
                 break
@@ -775,6 +776,7 @@ class BonusDamageFeature(BaseCondition):
             damage_bonus=bonus,
             source_entity_uuid=owner.uuid,
             target_entity_uuid=target.uuid,
+            attack_magical=event.damage_packets[0].damage.attack_magical,
         )
         modified_event = event.append_damage_roll(
             damage,
@@ -1614,6 +1616,8 @@ class LifeDrainReduction(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
             return [], [], [], [], event.cancel(status_message="Victim missing")
+        if target.health.prevents_maximum_reduction():
+            return [], [], [], [], event.cancel(status_message="Maximum hit point reduction is prevented")
         current_hp = max(0, target.get_normal_hp())
         value = target.health.max_hit_points_bonus
         modifier = NumericalModifier(name=self.name, value=-self.amount,
@@ -1626,7 +1630,7 @@ class LifeDrainReduction(BaseCondition):
 
     def add_reduction(self, amount: int, event: Event) -> None:
         victim=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if victim is None or amount <= 0:
+        if victim is None or amount <= 0 or victim.health.prevents_maximum_reduction():
             return
         hp=max(0,victim.get_normal_hp())
         value=victim.health.max_hit_points_bonus

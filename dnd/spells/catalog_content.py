@@ -42,6 +42,7 @@ import dnd.spells.wall_fields as wall_fields
 import dnd.spells.wall_constructions as wall_constructions
 import dnd.spells.summoning as summoning
 import dnd.items.created_items as created_items
+from dnd.monsters.high_level_spell_summons import HIGH_LEVEL_SPELL_SUMMON_RECIPES
 from dnd.spells.content_metadata import (
     SpellCatalogAoeShapeType,
     SpellCatalogAoeSpec,
@@ -178,6 +179,30 @@ def _catalog(
 
 
 SPELL_CONTENT_IDENTITY_SPECS: tuple[SpellContentIdentitySpec, ...] = (
+    SpellContentIdentitySpec("Forcecage",wall_constructions.Forcecage,SRD_SPELL_PACK_ID,"spell.forcecage","evocation",7,146,3460),
+    SpellContentIdentitySpec("Freezing Sphere",evocation.FreezingSphere,SRD_SPELL_PACK_ID,"spell.freezing_sphere","evocation",6,149,3470),
+    SpellContentIdentitySpec("Delayed Blast Fireball",evocation.DelayedBlastFireball,SRD_SPELL_PACK_ID,"spell.delayed_blast_fireball","evocation",7,133,3480),
+    SpellContentIdentitySpec("Conjure Elemental",summoning.ConjureElemental,SRD_SPELL_PACK_ID,"spell.conjure_elemental","conjuration",5,128,3490,adaptation_notes="BG3 independent allied native summon; elemental and Myrmidon forms, until long rest."),
+    SpellContentIdentitySpec("Planar Ally",summoning.PlanarAlly,SRD_SPELL_PACK_ID,"spell.planar_ally","conjuration",6,170,3500,adaptation_notes="BG3 independent allied native summon with approved restricted SRD-spell loadouts."),
+    SpellContentIdentitySpec("Summon Dragon",summoning.SummonDragon,SRD_5_2_SPELL_PACK_ID,"spell.summon_dragon","conjuration",5,167,3510),
+    SpellContentIdentitySpec("Blade Barrier", evocation.BladeBarrier, SRD_SPELL_PACK_ID, "spell.blade_barrier", "evocation", 6, 122, 3420, adaptation_notes="BG3 line/duration with retained caster DC and once-per-turn formation/entry/start contact."),
+    SpellContentIdentitySpec("Antilife Shell", abjuration.AntilifeShell, SRD_SPELL_PACK_ID, "spell.antilife_shell", "abjuration", 5, 123, 3430),
+    SpellContentIdentitySpec("Resilient Sphere", evocation.ResilientSphere, SRD_SPELL_PACK_ID, "spell.resilient_sphere", "evocation", 4, 174, 3440, adaptation_notes="BG3 three-turn creature condition and explicit boundary matrix."),
+    SpellContentIdentitySpec("Arcane Sword", evocation.ArcaneSword, SRD_SPELL_PACK_ID, "spell.arcane_sword", "evocation", 7, 124, 3450),
+
+    SpellContentIdentitySpec("Aura of Life", abjuration.AuraOfLife, SRD_5_2_SPELL_PACK_ID, "spell.aura_of_life", "abjuration", 4, 106, 3360),
+    SpellContentIdentitySpec("Holy Aura", abjuration.HolyAura, SRD_SPELL_PACK_ID, "spell.holy_aura", "abjuration", 8, 153, 3370),
+    SpellContentIdentitySpec("Feeblemind", enchantment.Feeblemind, SRD_SPELL_PACK_ID, "spell.feeblemind", "enchantment", 8, 143, 3380),
+    SpellContentIdentitySpec("Foresight", divination.Foresight, SRD_SPELL_PACK_ID, "spell.foresight", "divination", 9, 146, 3390, adaptation_notes="Tactical Action casting; native 4800-round duration and one same-caster lease."),
+    SpellContentIdentitySpec("Power Word Heal", evocation.PowerWordHeal, SRD_5_2_SPELL_PACK_ID, "spell.power_word_heal", "enchantment", 9, 157, 3400),
+    SpellContentIdentitySpec("Dispel Evil and Good", abjuration.DispelEvilAndGood, SRD_SPELL_PACK_ID, "spell.dispel_evil_and_good", "abjuration", 5, 137, 3410, adaptation_notes="BG3 six-type ward and Break Enchantment; no dismissal or possession."),
+    SpellContentIdentitySpec('Phantasmal Killer', illusion.PhantasmalKiller, SRD_SPELL_PACK_ID, "spell.phantasmal_killer", 'illusion', 4, 167, 3320, adaptation_notes="BG3 immobilizing fear; end-turn WIS recovery before psychic damage."),
+    SpellContentIdentitySpec('Weird', illusion.Weird, SRD_SPELL_PACK_ID, "spell.weird", 'illusion', 9, 192, 3330),
+    SpellContentIdentitySpec('Flesh to Stone', transmutation.FleshToStone, SRD_SPELL_PACK_ID, "spell.flesh_to_stone", 'transmutation', 6, 145, 3340, adaptation_notes="BG3 four failed saves; completed petrification persists until cured."),
+    SpellContentIdentitySpec('Vitriolic Sphere', evocation.VitriolicSphere, SRD_5_2_SPELL_PACK_ID, "spell.vitriolic_sphere", 'evocation', 4, 172, 3350),
+
+    SpellContentIdentitySpec("Charm Monster", enchantment.CharmMonster, SRD_5_2_SPELL_PACK_ID, "spell.charm_monster", "enchantment", 4, 114, 3300),
+    SpellContentIdentitySpec("Irresistible Dance", enchantment.IrresistibleDance, SRD_SPELL_PACK_ID, "spell.irresistible_dance", "enchantment", 6, 158, 3310, adaptation_notes="BG3 no initial save; Actions and movement denied, later WIS recovery."),
     SpellContentIdentitySpec("Spiritual Weapon",summoning.SpiritualWeapon,SRD_SPELL_PACK_ID,"spell.spiritual_weapon","evocation",2,182,3250,adaptation_notes="BG3 independent autonomous native allied summon, no concentration."),
     SpellContentIdentitySpec("Flaming Sphere",summoning.FlamingSphere,SRD_SPELL_PACK_ID,"spell.flaming_sphere","conjuration",2,146,3260,adaptation_notes="BG3 autonomous native sphere, Ram, moving aura and native fire trail."),
     SpellContentIdentitySpec("Flame Blade",evocation.FlameBlade,SRD_SPELL_PACK_ID,"spell.flame_blade","evocation",2,146,3210,adaptation_notes="BG3 ten-turn real scimitar, spell attacks and no concentration."),
@@ -372,6 +397,28 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     tuple[type[SpellAction], SpellCatalogMetadata],
     ...,
 ] = (
+    (illusion.PhantasmalKiller,_catalog("phantasmal_killer","WIS save or immobilizing fear with psychic damage on failed repeat saves.","entity","ranged",60,"none",damage=(DamageType.PSYCHIC,),saves=_saving_throws("wisdom"),concentration=True,classes=("wizard",))),
+    (illusion.Weird,_catalog("weird","Area fear; end-turn WIS recovery precedes failed-save psychic damage.","position_aoe","ranged",120,"aoe",area=_area("sphere",radius_ft=30),damage=(DamageType.PSYCHIC,),saves=_saving_throws("wisdom"),concentration=True,classes=("wizard",))),
+    (transmutation.FleshToStone,_catalog("flesh_to_stone","Restrained stages; four CON failures petrify until cured.","entity","ranged",60,"none",saves=_saving_throws("constitution"),concentration=True,classes=("warlock","wizard"))),
+    (evocation.VitriolicSphere,_catalog("vitriolic_sphere","DEX half acid burst; failure also takes 5d4 at next turn end.","position_aoe","ranged",150,"aoe",area=_area("sphere",radius_ft=20),damage=(DamageType.ACID,),saves=_saving_throws("dexterity"),classes=("sorcerer","wizard"))),
+    (wall_constructions.Forcecage,_catalog("forcecage","Invisible barred cage or sealed box; paid CHA escape gate.","position","ranged",100,"none",classes=("bard","warlock","wizard"))),
+    (evocation.FreezingSphere,_catalog("freezing_sphere","Cold burst or portable retained sphere.","position_aoe","ranged",60,"aoe",area=_area("sphere",radius_ft=20),damage=(DamageType.COLD,),saves=_saving_throws("constitution"),classes=("wizard",))),
+    (evocation.DelayedBlastFireball,_catalog("delayed_blast_fireball","Growing bead whose committed ending detonates.","position","ranged",150,"none",damage=(DamageType.FIRE,),concentration=True,saves=_saving_throws("dexterity"),classes=("sorcerer","wizard"))),
+    (summoning.ConjureElemental,_catalog("conjure_elemental","Allied elemental until long rest; higher slots unlock Myrmidons.","position","ranged",60,"none",classes=("druid","wizard"))),
+    (summoning.PlanarAlly,_catalog("planar_ally","Allied Deva, Djinni or Cambion until long rest.","position","ranged",60,"none",classes=("cleric",))),
+    (summoning.SummonDragon,_catalog("summon_dragon","Scaling Draconic Spirit with Rend, free Breath and shared resistance.","position","ranged",60,"none",concentration=True,classes=("wizard",))),
+    (evocation.BladeBarrier,_catalog("blade_barrier","Permeable wall of whirling blades and difficult terrain.","position","ranged",60,"aoe",area=_area("wall",length_ft=120,width_ft=5,height_ft=20),damage=(DamageType.SLASHING,),concentration=True,saves=_saving_throws("dexterity"),classes=("cleric",))),
+    (abjuration.AntilifeShell,_catalog("antilife_shell","Moving shell hedges living creatures out.","self","self",0,"self",concentration=True,classes=("druid",))),
+    (evocation.ResilientSphere,_catalog("resilient_sphere","Three-turn force boundary and invulnerability.","entity","ranged",30,"none",concentration=True,saves=_saving_throws("dexterity"),classes=("wizard",))),
+    (evocation.ArcaneSword,_catalog("arcane_sword","Retained force sword and bonus-action repeats.","entity","ranged",60,"none",damage=(DamageType.FORCE,),attack_roll=True,concentration=True,classes=("bard","wizard"))),
+    (abjuration.AuraOfLife,_catalog("aura_of_life","Moving friendly life protection.","self","self",0,"self",concentration=True,classes=("cleric","paladin"))),
+    (abjuration.HolyAura,_catalog("holy_aura","Fixed chosen recipients gain a holy ward.","multi_entity","ranged",30,"none",concentration=True,multi_target=_multi_target(1,64,False),classes=("cleric",))),
+    (enchantment.Feeblemind,_catalog("feeblemind","Psychic damage and persistent INT/CHA reduction.","entity","ranged",150,"none",damage=(DamageType.PSYCHIC,),saves=_saving_throws("intelligence"),classes=("bard","druid","warlock","wizard"))),
+    (divination.Foresight,_catalog("foresight","Eight hours of advantage and surprise prevention.","entity","touch",5,"touch",classes=("bard","druid","warlock","wizard"))),
+    (evocation.PowerWordHeal,_catalog("power_word_heal","Full healing and named cures, optional native reaction stand.","entity","ranged",60,"none",healing=True,verbal=True,somatic=False,material=False,classes=("bard","cleric"))),
+    (abjuration.DispelEvilAndGood,_catalog("dispel_evil_and_good","Six-type ward and touch Break Enchantment.","self","self",0,"self",concentration=True,classes=("cleric","paladin"))),
+    (enchantment.CharmMonster,_catalog("charm_monster","Charm visible creatures; allied damage ends the charm.","multi_entity","ranged",30,"none",saves=_saving_throws("wisdom"),multi_target=_multi_target(1,1,False),classes=("bard","druid","sorcerer","warlock","wizard"))),
+    (enchantment.IrresistibleDance,_catalog("irresistible_dance","No initial save; deny Actions/movement, later WIS ends.","entity","ranged",30,"none",saves=_saving_throws("wisdom"),concentration=True,classes=("bard","wizard"))),
     (summoning.SpiritualWeapon,_catalog('spiritual_weapon','Summon an autonomous spectral weapon for ten turns.','position','ranged',60,'none',classes=('cleric',))),
     (summoning.FlamingSphere,_catalog('flaming_sphere','Summon an autonomous fire sphere with Ram, aura and fire trail.','position','ranged',60,'none',concentration=True,classes=('druid','wizard'))),
     (evocation.FlameBlade,_catalog('flame_blade','Create a ten-turn real fire scimitar using retained spell accuracy.','self','self',0,'self',damage=(DamageType.FIRE,),classes=('druid',))),
@@ -975,7 +1022,15 @@ def _spell_runtime_dependencies(
             (),
         )
     )
-    return action_dependencies
+    summon_creatures={
+        summoning.ConjureElemental:("air_elemental","earth_elemental","fire_elemental","water_elemental",
+            "air_myrmidon","earth_myrmidon","fire_myrmidon","water_myrmidon"),
+        summoning.PlanarAlly:("deva","djinni","cambion"),summoning.SummonDragon:("draconic_spirit",),
+    }
+    creature_dependencies=tuple(ContentDependency(relation=ContentDependencyRelation.SUMMONS_CREATURE,
+        target_ref=HIGH_LEVEL_SPELL_SUMMON_RECIPES[identity].ref)
+        for identity in summon_creatures.get(spell_type,()))
+    return (*action_dependencies,*creature_dependencies)
 
 
 def _get_optional_declaration(

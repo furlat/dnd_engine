@@ -754,7 +754,7 @@ def test_eb_15_039_greater_restoration_removes_standard_petrified_condition() ->
     assert ally.action_economy.action_permission.normalized_score == 0
     assert ally.check_condition_immunity("Poisoned")
     for damage_type in DamageType:
-        assert ally.health.get_resistance(damage_type) == ResistanceStatus.RESISTANCE
+        assert ally.health.get_resistance(damage_type) == (ResistanceStatus.IMMUNITY if damage_type is DamageType.POISON else ResistanceStatus.RESISTANCE)
 
     restoration_event = GreaterRestoration(
         source_entity_uuid=caster.uuid,

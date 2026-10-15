@@ -2432,6 +2432,8 @@ class Attack(BaseAction):
                     return attack_event
             started = time.perf_counter()
             damages = source_entity.get_damages(weapon_slot, target_entity_uuid, override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
+            magical_attack = execution_event.attack_is_magical
+            for damage in damages: damage.attack_magical = magical_attack
             if item_suppressions and weapon is not None:
                 if damages:
                     damages[0].damage_dice = weapon.damage_dice
@@ -3238,9 +3240,15 @@ class StandUp(BaseAction):
     description: str = Field(default="Stand up from prone", description="Player-facing stand-up action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Stand Up targets self")
 
+    reaction_stand: bool = False
+
     def model_post_init(self, __context: Any) -> None:
-        """Set movement cost to half of the acting entity's base movement."""
+        """Set movement or explicitly granted reaction standing cost."""
         super().model_post_init(__context)
+        if self.reaction_stand:
+            self.costs = [Cost(name="Stand reaction", cost_type="reactions", cost=1,
+                evaluator=entity_action_economy_cost_evaluator)]
+            return
         entity = Entity.get(self.source_entity_uuid)
         if entity:
             base_movement = entity.action_economy.get_base_value("movement")
@@ -4146,6 +4154,8 @@ class Shove(BaseAction):
         if not source or not target:
             return declaration_event.cancel(status_message="Entity not found")
 
+        if source.cannot_manipulate_bodies or target.cannot_manipulate_bodies:
+            return declaration_event.cancel(status_message="This body cannot shove or be shoved")
         distance = source.senses.get_feet_distance(target.position)
         if distance > 5:
             return declaration_event.cancel(status_message=f"Target not adjacent ({distance}ft)")
@@ -4735,6 +4745,57 @@ class PreparedSpellConcentration:
     parent_event: Event
 
 
+def resolve_spell_attack_values(caster:Entity,target:Entity|BaseItem,parent_event_uuid:UUID,*,
+    ranged:bool,spellcasting_source_id:UUID|None=None,casting_ability:AbilityName|None=None,
+    extra_advantage_modifiers:Tuple[AdvantageModifier,...]=(),attack_origin_position:tuple[int,int]|None=None)->SpellAttackResolution:
+    """Native spell-roll mechanics shared by spells and intrinsic spell attacks."""
+    attack_bonus = caster.spell_attack_bonus(
+        target.uuid,
+        spellcasting_source_id=spellcasting_source_id,
+        casting_ability=casting_ability,
+    )
+    target_ac = (target.ac_bonus(caster.uuid) if isinstance(target, Entity)
+        else ModifiableValue.create(source_entity_uuid=target.uuid,
+            target_entity_uuid=caster.uuid, base_value=target.armor_class, value_name="Object AC"))
+    if attack_origin_position is not None:
+        attack_bonus.set_context({"attack_origin_position":attack_origin_position})
+        target_ac.set_context({"attack_origin_position":attack_origin_position})
+    for modifier in extra_advantage_modifiers:
+        attack_bonus.self_static.add_advantage_modifier(modifier)
+
+    is_threatened = ranged and caster.is_threatened()
+    if is_threatened:
+        attack_bonus.self_static.add_advantage_modifier(
+            AdvantageModifier(
+                name="Threatened (Ranged)",
+                value=AdvantageStatus.DISADVANTAGE,
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,
+            )
+        )
+
+    attack_bonus.set_from_target(target_ac)
+    target_ac.set_from_target(attack_bonus)
+    dice_roll = caster.roll_d20(
+        attack_bonus,
+        RollType.ATTACK,
+        parent_event=parent_event_uuid,
+    )
+    outcome = determine_attack_outcome(
+        dice_roll,
+        target_ac,
+        caster.get_spell_crit_threshold(),
+    )
+    attack_bonus.reset_from_target()
+    target_ac.reset_from_target()
+    return SpellAttackResolution(
+        attack_bonus=attack_bonus,
+        target_ac=target_ac,
+        dice_roll=dice_roll,
+        outcome=outcome,
+        is_threatened=is_threatened,
+    )
+
 class SpellAction(BaseAction):
     """Base class for all spells. Handles metadata and variant generation.
 
@@ -5027,6 +5088,7 @@ class SpellAction(BaseAction):
         parent_event_uuid: UUID,
         *,
         extra_advantage_modifiers: Tuple[AdvantageModifier, ...] = (),
+        attack_origin_position: tuple[int,int] | None = None,
     ) -> SpellAttackResolution:
         """Resolve one spell attack through the shared ranged-threat rule.
 
@@ -5039,48 +5101,9 @@ class SpellAction(BaseAction):
         Returns:
             Typed spell attack values, roll, outcome, and threat state.
         """
-        attack_bonus = caster.spell_attack_bonus(
-            target.uuid,
-            spellcasting_source_id=self.spellcasting_source_id,
-        )
-        target_ac = (target.ac_bonus(caster.uuid) if isinstance(target, Entity)
-            else ModifiableValue.create(source_entity_uuid=target.uuid,
-                target_entity_uuid=caster.uuid, base_value=target.armor_class, value_name="Object AC"))
-        for modifier in extra_advantage_modifiers:
-            attack_bonus.self_static.add_advantage_modifier(modifier)
-
-        is_threatened = self.get_range().type is RangeType.RANGE and caster.is_threatened()
-        if is_threatened:
-            attack_bonus.self_static.add_advantage_modifier(
-                AdvantageModifier(
-                    name="Threatened (Ranged)",
-                    value=AdvantageStatus.DISADVANTAGE,
-                    source_entity_uuid=caster.uuid,
-                    target_entity_uuid=target.uuid,
-                )
-            )
-
-        attack_bonus.set_from_target(target_ac)
-        target_ac.set_from_target(attack_bonus)
-        dice_roll = caster.roll_d20(
-            attack_bonus,
-            RollType.ATTACK,
-            parent_event=parent_event_uuid,
-        )
-        outcome = determine_attack_outcome(
-            dice_roll,
-            target_ac,
-            caster.get_spell_crit_threshold(),
-        )
-        attack_bonus.reset_from_target()
-        target_ac.reset_from_target()
-        return SpellAttackResolution(
-            attack_bonus=attack_bonus,
-            target_ac=target_ac,
-            dice_roll=dice_roll,
-            outcome=outcome,
-            is_threatened=is_threatened,
-        )
+        return resolve_spell_attack_values(caster,target,parent_event_uuid,
+            ranged=self.get_range().type is RangeType.RANGE,spellcasting_source_id=self.spellcasting_source_id,
+            extra_advantage_modifiers=extra_advantage_modifiers,attack_origin_position=attack_origin_position)
 
     def automatic_damage_outcome_profile(
         self,

@@ -137,12 +137,12 @@ def test_animal_friendship_beast_int_boundary_and_damage_break(game,intelligence
     assert caster.action_economy.actions.normalized_score==int(not eligible)
     assert beast.faction=="foes"
     if eligible:
-        assert "Animal Friendship" in set(beast.active_conditions)
+        assert "Animal Friendship" in {condition.get_display_name() for condition in beast.active_conditions_by_uuid.values()}
         outsider=combatant(game,"Other enemy",(6,2),"foes")
         beast.receive_damage(1,DamageType.FORCE,outsider.uuid)
-        assert "Animal Friendship" in set(beast.active_conditions)
+        assert "Animal Friendship" in {condition.get_display_name() for condition in beast.active_conditions_by_uuid.values()}
         beast.receive_damage(1,DamageType.FORCE,caster.uuid)
-        assert "Animal Friendship" not in set(beast.active_conditions)
+        assert "Animal Friendship" not in {condition.get_display_name() for condition in beast.active_conditions_by_uuid.values()}
 
 
 def test_animal_friendship_honors_native_charm_immunity(game):
@@ -151,7 +151,7 @@ def test_animal_friendship_honors_native_charm_immunity(game):
     beast.condition_immunities.append(("Charmed",None))
     force_save_result(beast,"wisdom",succeeds=False)
     with fixed_dice_faces(8): AnimalFriendship(source_entity_uuid=caster.uuid,target_entity_uuid=beast.uuid).apply()
-    assert "Animal Friendship" not in set(beast.active_conditions)
+    assert "Animal Friendship" not in {condition.get_display_name() for condition in beast.active_conditions_by_uuid.values()}
 
 
 @pytest.mark.parametrize("saved",[False,True])

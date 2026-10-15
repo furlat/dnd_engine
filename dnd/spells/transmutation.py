@@ -3,7 +3,8 @@
 Contains: SpikeGrowth, Slow, Haste, Darkvision, JumpSpell, ExpeditiousRetreat, Disintegrate,
           EnhanceAbility, EnlargeReduce, Regenerate
 """
-from dnd.spells.spell_utils import spell_condition_profile
+from dnd.spells.spell_utils import spell_condition_profile, condition_save, validate_spell_recipients
+from dnd.conditions import Restrained, Petrified
 
 from typing import cast
 from dnd.blocks.equipment import EquipmentEvent, Weapon, WeaponUnequipEvent
@@ -71,7 +72,7 @@ from dnd.core.elevation import support_distance_feet
 from dnd.core.life_types import LifeState
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.types.event_facts import LandingKind
-from dnd.core.creature_types import DamageType, Size
+from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.modifiers import (
     ArithmeticFactor,
     ContextualNumericalModifier,
@@ -1021,6 +1022,15 @@ class Disintegrate(SpellAction):
                 return effect
             return (effect.with_updates(status_message=f"{recipient.name} disintegrated")
                     if recipient.disintegrate(effect) else effect.cancel(status_message="Object retirement was refused"))
+        occupant = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        force_creation = next((condition for condition in occupant.active_conditions_by_uuid.values()
+            if condition.destroyed_by_disintegrate and condition.contributions_active()), None) if occupant is not None else None
+        if occupant is not None and force_creation is not None:
+            effect = execution_event.phase_to(EventPhase.EFFECT)
+            if effect.canceled: return effect
+            if not occupant.remove_condition_by_uuid(force_creation.uuid, parent_event=effect):
+                return effect.cancel(status_message="Force sphere destruction was refused")
+            return effect.with_updates(status_message="Force sphere disintegrated; occupant unharmed")
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -2372,6 +2382,8 @@ class PlantGrowth(SpellAction):
         if caster is None or self.end_position is None:
             return event.cancel(status_message="Plant Growth placement is absent")
         effect=event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:
+            return effect
         zone=PlantGrowthZone(source_entity_uuid=caster.uuid,position=self.end_position,
             faction=caster.faction,content_ref=get_content_declaration(PlantGrowthZone).ref,
             effect_origin=event.get_effect_origin())
@@ -2660,3 +2672,84 @@ class Goodberry(SpellAction):
                 if berry.owner_uuid is None and berry.stored_in_uuid is None and berry.tile_uuid is None and berry.is_active:
                     berry.retire()
             self._berries=[]
+
+
+class FleshToStonePetrified(Petrified):
+    name: str = "Flesh to Stone Petrified"
+    description: str = "Completed petrification persists until an eligible cure."
+    immunity_names: tuple[str, ...] = ("Petrified",)
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.PERMANENT))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.PETRIFICATION})
+
+
+class FleshToStoneEffect(Restrained):
+    name: str = "Flesh to Stone"
+    description: str = "Restrained stages; four failed CON saves complete petrification, a success clears stages."
+    immunity_names: tuple[str, ...] = ("Restrained", "Petrified")
+    spell_dc: int
+    failures: int = 1
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10, duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def model_post_init(self, context: object) -> None:
+        super().model_post_init(context)
+        self.name = f"Flesh to Stone:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Flesh to Stone"
+
+    def _apply(self, event: Event):
+        modifiers, handlers, children, spatial, effect = super()._apply(event)
+        if effect is None or effect.canceled: return modifiers, handlers, children, spatial, effect
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+        assert target is not None
+        def progress(boundary: Event, _: UUID):
+            if condition_save(self, target, boundary, "constitution", self.spell_dc, "spell.flesh_to_stone.progress"):
+                target.remove_condition_by_uuid(self.uuid, parent_event=boundary)
+                return None
+            self.failures += 1
+            if self.failures >= 4:
+                stone = FleshToStonePetrified(source_entity_uuid=self.source_entity_uuid,
+                    target_entity_uuid=target.uuid, effect_origin=self.effect_origin)
+                result = target.add_condition(stone, parent_event=boundary)
+                if result is not None and not result.canceled:
+                    target.remove_condition_by_uuid(self.uuid, parent_event=boundary)
+            return None
+        handler = EventHandler(name="Flesh to Stone progress", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target.uuid)], event_processor=progress)
+        target.add_event_handler(handler)
+        return modifiers, [*handlers, handler.uuid], children, spatial, effect
+
+
+class FleshToStone(SpellAction):
+    name: str = "Flesh to Stone"
+    description: str = "CON save or restrained stages; four failures petrify until cured."
+    spell_level: int = 6
+    spell_school: str = "transmutation"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    target_type: TargetType = TargetType.ENTITY
+    concentration: bool = True
+    harmful: bool = True
+
+    def get_target_effect_profile(self, actor: Any):
+        if not isinstance(actor, Entity): return None
+        return spell_condition_profile(self, actor, key="flesh_to_stone", condition_type=FleshToStoneEffect,
+            save_ability="constitution", fact="selected_target.condition.restrained")
+
+    def _validate(self, event: SpellEvent) -> Optional[SpellEvent]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None and (target.flesh_body is False or target.flesh_body is None and
+                target.creature_type in {CreatureType.CONSTRUCT, CreatureType.ELEMENTAL, CreatureType.PLANT, CreatureType.OOZE, CreatureType.UNDEAD}):
+            return event.cancel(status_message="Target has no flesh to petrify")
+        return validate_spell_recipients(self, event)
+
+    def _apply(self, event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None: return event.cancel(status_message="Petrification recipient absent")
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+        effect, _, saved = self.resolve_saving_throw(event, caster=caster, target=target, ability_name="constitution", dc=dc)
+        if saved or effect.canceled: return effect
+        return self.apply_owned_condition(effect, FleshToStoneEffect(source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid, spell_dc=dc))

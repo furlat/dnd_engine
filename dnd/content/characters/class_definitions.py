@@ -222,6 +222,9 @@ SORCERER_ANCESTRY_DAMAGE_TYPES: Mapping[str, str] = MappingProxyType({
     "class_feature.sorcerer.draconic_ancestry.white": "cold",
 })
 SORCERER_SPELL_RANKS: Mapping[str, int] = MappingProxyType({
+    "spell.charm_monster": 4,
+    "spell.vitriolic_sphere": 4,
+    "spell.delayed_blast_fireball": 7,
     "spell.ray_of_sickness": 1,
     "spell.sorcerous_burst": 0,
     "spell.dancing_lights": 0,

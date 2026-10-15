@@ -6,17 +6,23 @@ Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
           Resistance, ShieldOfFaith, Aid, Sanctuary, BeaconOfHope,
           AntimagicField
 """
-from dnd.spells.spell_utils import spell_condition_profile
+from dnd.spells.spell_utils import apply_concentrating_zone, validate_spell_recipients, spell_condition_profile
 
 import random
 from functools import partial
 from types import MappingProxyType
-from typing import Any, Dict, Literal, Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, ClassVar, Dict, Literal, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID, uuid4
 from dnd.core.base_block import PreparedConditionRemovals
 from dnd.core.creature_types import CreatureType
-from dnd.conditions import prepare_control_removals
+from dnd.conditions import Concentrating, prepare_control_removals, Blinded
+from dnd.spells.spell_utils import condition_save
+from dnd.core.life_types import LifeState
+from dnd.core.creature_types import CreatureType
+from dnd.core.base_actions import BaseAction, ActionEvent
 from dnd.spatial.memberships import MembershipAreaCondition, SpatialConditionMembershipSource
+from dnd.core.geometry import bresenham_line
+from dnd.types.physical_access import PhysicalAccess
 from dnd.types.spatial_effects import SpatialEffectAnchorKind, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
 
 from dnd.spells.spell_utils import target_turn_expiry_handler, spell_position_error, spell_valid_positions
@@ -76,12 +82,12 @@ from dnd.core.item_types import ItemLocation
 from dnd.blocks.action_economy import ActionEconomyChannelCost
 from dnd.core.equipment_types import UnarmoredAc
 
-from dnd.core.dice import AttackOutcome, Dice
+from dnd.core.dice import RollType, AttackOutcome, Dice
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterruptionLogData
 from dnd.entity import Entity, PreparedSpatialReturn
 from dnd.core.values import ModifiableValue
 from dnd.spatial.ignition import apply_elemental_surface_contacts
-from dnd.actions import commit_forced_movement, SpellAction, SpellEvent, AttackEvent, ShoveEvent, entity_action_economy_cost_evaluator
+from dnd.actions import commit_forced_movement, SpellAction, SpellEvent, AttackEvent, ShoveEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.creature_transforms import (
     apply_incapacitated_transform,
     apply_unconscious_transform,
@@ -195,7 +201,7 @@ class ShieldBuff(BaseCondition):
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if not target or not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
@@ -307,7 +313,7 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
         return None
 
     entity = Entity.get(source_entity_uuid)
-    if not entity or not isinstance(entity, Entity):
+    if not entity or not isinstance(entity, Entity) or entity.is_spellcasting_blocked():
         return None
 
     if "Shield" in entity.active_conditions:
@@ -647,7 +653,7 @@ class ProtectionFromEnergyEffect(BaseCondition):
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
@@ -795,7 +801,7 @@ class StoneskinEffect(BaseCondition):
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
@@ -976,7 +982,7 @@ def counterspell_reaction_processor(
         return None
 
     entity = Entity.get(source_entity_uuid)
-    if not entity or not isinstance(entity, Entity):
+    if not entity or not isinstance(entity, Entity) or entity.is_spellcasting_blocked():
         return None
 
     contact = entity.senses.entities.get(event.source_entity_uuid)
@@ -1047,9 +1053,8 @@ def counterspell_reaction_processor(
                 candidate,
             ),
         )
-    ability_mod = entity.ability_scores.get_ability(ability_name).modifier
-    d20 = random.randint(1, 20)
-    check_total = d20 + ability_mod
+    check_total = entity.roll_d20(entity.ability_check_bonus(None, ability_name),
+        RollType.CHECK, ability_name=ability_name, parent_event=event.uuid).total
     if check_total >= dc:
         _complete_counterspell_reaction(
             event,
@@ -1867,7 +1872,7 @@ class ProtectionFromPoisonEffect(BaseCondition):
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if not target or not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
@@ -2033,7 +2038,7 @@ class DeathWardEffect(BaseCondition):
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if not target or not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
@@ -2357,7 +2362,7 @@ class FreedomOfMovementEffect(BaseCondition):
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if not target or not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
@@ -2522,7 +2527,7 @@ class ResistanceEffect(BaseCondition):
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
         assert self.target_entity_uuid is not None
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
@@ -2616,7 +2621,7 @@ class ShieldOfFaithEffect(BaseCondition):
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
         assert self.target_entity_uuid is not None
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
@@ -2721,7 +2726,7 @@ class AidEffect(BaseCondition):
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
         assert self.target_entity_uuid is not None
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
@@ -2839,7 +2844,7 @@ class SanctuaryEffect(BaseCondition):
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
         assert self.target_entity_uuid is not None
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
@@ -3071,7 +3076,7 @@ class BeaconOfHopeEffect(BaseCondition):
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
         assert self.target_entity_uuid is not None
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
@@ -4008,3 +4013,349 @@ class GlyphOfWarding(SpellAction):
                 if not zone.applied:
                     break
         return admitted
+
+
+class AuraOfLifeBenefit(BaseCondition):
+    name: str = "Aura of Life"
+    description: str = "Necrotic resistance; prevents new maximum HP loss; restores an allied living creature at 0 HP to 1 HP before its death save."
+    prevents_hit_point_maximum_reduction: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None: return [], [], [], [], event.cancel(status_message="Aura recipient absent")
+        value = target.health.damage_reduction
+        ident = value.self_static.add_resistance_modifier(ResistanceModifier(name=self.name,
+            value=ResistanceStatus.RESISTANCE, damage_type=DamageType.NECROTIC,
+            source_entity_uuid=target.uuid))
+        def revive(boundary: Event, _: UUID):
+            if self.applied and self.contributions_active() and target.uuid != self.source_entity_uuid and                    target.health.life_state is not LifeState.DEAD and target.get_hp() == 0:
+                target.receive_healing(1, self.source_entity_uuid, parent_event=boundary.uuid,
+                    source_description="Aura of Life")
+            return None
+        handler = EventHandler(name="Aura of Life start-turn healing", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EXECUTION,
+                event_source_entity_uuid=target.uuid)], event_processor=revive)
+        target.add_event_handler(handler)
+        return [(value.uuid, ident)], [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
+
+
+class AuraOfLifeMembership(SpatialConditionMembershipSource):
+    name: str = "Aura of Life Membership"
+    description: str = "Exact membership in one friendly Aura of Life."
+
+    def create_manifestation(self, target: Entity) -> BaseCondition:
+        return AuraOfLifeBenefit(name=f"Aura of Life:{self.source_spatial_condition_uuid}",
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid)
+
+
+@srd_condition_identity(content_id="spatial_effect.spell.aura_of_life", display_name="Aura of Life",
+    description="Moving necrotic resistance and maximum HP protection.", srd_version="5.2")
+class AuraOfLifeZone(PassWithoutTraceZone):
+    name: str = "Aura of Life"
+    description: str = "Moving necrotic resistance and maximum HP protection."
+
+    def membership_source_class(self) -> type[SpatialConditionMembershipSource]:
+        return AuraOfLifeMembership
+
+
+class AuraOfLifeOwner(BaseCondition):
+    name: str = "Aura of Life Owner"
+    description: str = "Ten-minute concentrating owner of the moving aura."
+    duration: Duration = Field(default_factory=lambda: Duration(duration=100, duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self, event: Event):
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None: return [], [], [], [], event.cancel(status_message="Aura caster absent")
+        zone = AuraOfLifeZone(source_entity_uuid=caster.uuid, position=caster.position,
+            anchor_uuid=caster.uuid, faction=caster.faction,
+            content_ref=get_content_declaration(AuraOfLifeZone).ref, effect_origin=self.effect_origin)
+        result = zone.activate(parent_event=event)
+        if result is None or result.canceled: return [], [], [], [], event.cancel(status_message="Life aura was not admitted")
+        self.add_linked_condition(zone.uuid, zone.uuid)
+        return [], [], [], [], event.phase_to(EventPhase.EFFECT)
+
+
+class AuraOfLife(SpellAction):
+    name: str = "Aura of Life"
+    description: str = "Concentrating 30-foot friendly life protection and start-turn recovery."
+    spell_level: int = 4
+    spell_school: str = "abjuration"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    target_type: TargetType = TargetType.SELF
+    concentration: bool = True
+
+    def _apply(self, event: SpellEvent):
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT), AuraOfLifeOwner(
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.source_entity_uuid))
+
+
+class HolyAuraBlindness(Blinded):
+    name: str = "Holy Aura Blindness"
+    description: str = "Blinded by a holy ward until that spell ends."
+    immunity_names: tuple[str, ...] = ("Blinded",)
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+
+class HolyAuraEffect(BaseCondition):
+    name: str = "Holy Aura"
+    description: str = "Advantage on saves and incoming attack disadvantage; fiend/undead melee hitters risk blindness."
+    spell_dc: int
+    seen_hits: set[UUID] = Field(default_factory=set, exclude=True)
+    light_source_uuid: UUID | None = None
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.PERMANENT))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    _removed_light: SpatialChangeEvent | None = PrivateAttr(default=None)
+
+    def model_post_init(self, context: object) -> None:
+        super().model_post_init(context)
+        self.name = f"Holy Aura:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str: return "Holy Aura"
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None: return [], [], [], [], event.cancel(status_message="Holy recipient absent")
+        modifiers = []
+        for ability in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"):
+            value = target.saving_throws.get_saving_throw(ability).bonus
+            ident = value.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+                value=AdvantageStatus.ADVANTAGE, source_entity_uuid=target.uuid))
+            modifiers.append((value.uuid, ident))
+        value = target.equipment.ac_bonus
+        ident = value.to_target_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+            value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=target.uuid))
+        modifiers.append((value.uuid, ident))
+        self.light_source_uuid = get_map().add_light_source(target.position, bright_radius_feet=0,
+            dim_radius_feet=5, anchor_uuid=target.uuid, contribution_owner_uuid=self.uuid, parent_event=event.uuid)
+        def hit(boundary: Event, _: UUID):
+            if boundary.canceled or boundary.lineage_uuid in self.seen_hits: return None
+            if isinstance(boundary, AttackEvent):
+                melee = boundary.range is not None and boundary.range.type == RangeType.REACH
+                outcome = boundary.attack_outcome
+            elif isinstance(boundary, SpellEvent):
+                melee = boundary.range_type == "touch"
+                outcome = boundary.attack_outcome
+            else: return None
+            attacker = Entity.get(boundary.source_entity_uuid)
+            if not melee or outcome not in (AttackOutcome.HIT, AttackOutcome.CRIT) or attacker is None or                    attacker.creature_type not in {CreatureType.FIEND, CreatureType.UNDEAD}: return None
+            self.seen_hits.add(boundary.lineage_uuid)
+            if not condition_save(self, attacker, boundary, "constitution", self.spell_dc, "spell.holy_aura.blindness"):
+                parent=BaseCondition.get(self.parent_link[1]) if self.parent_link is not None else None
+                if not isinstance(parent,Concentrating) or not parent.applied:return None
+                child = HolyAuraBlindness(name=f"Holy Aura Blindness:{parent.uuid}", source_entity_uuid=self.source_entity_uuid,
+                    target_entity_uuid=attacker.uuid,parent_condition=parent.uuid,effect_origin=self.effect_origin)
+                result = attacker.add_condition(child, parent_event=boundary)
+                if result is not None and not result.canceled: parent.add_linked_condition(attacker.uuid, child.uuid)
+            return None
+        handler = EventHandler(name="Holy Aura melee-hit blindness", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=kind, event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=target.uuid) for kind in (EventType.ATTACK, EventType.CAST_SPELL)], event_processor=hit)
+        target.add_event_handler(handler)
+        return modifiers, [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
+
+    def _remove(self, event: Event | None = None):
+        if self.light_source_uuid is not None:
+            self._removed_light = get_map().remove_light_source(self.light_source_uuid,
+                publish_event=False, parent_event=event.uuid if event else None)
+            self.light_source_uuid = None
+        return super()._remove(event)
+
+    def on_membership_changed(self, event: Event):
+        if self._removed_light is not None:
+            get_map()._fire_committed_spatial_event(self._removed_light)
+            self._removed_light = None
+
+
+class HolyAura(SpellAction):
+    name: str = "Holy Aura"
+    description: str = "Fixed selected recipients within 30 feet gain a concentrating holy ward."
+    spell_level: int = 8
+    spell_school: str = "abjuration"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+    target_type: TargetType = TargetType.MULTI_ENTITY
+    include_self: bool = True
+    valid_target_filter: str = "self_or_allies"
+    allow_same_target: bool = False
+    concentration: bool = True
+
+    def _new_concentration(self,owner,parent_event):
+        condition=super()._new_concentration(owner,parent_event)
+        condition.duration=Duration(duration=10,duration_type=DurationType.ROUNDS)
+        return condition
+
+    def get_multi_target_count(self) -> int:
+        return len(Entity.get_all_entities())
+
+    def get_target_effect_profile(self, actor: Any):
+        return spell_condition_profile(self, actor, key="holy_aura", condition_type=HolyAuraEffect, beneficial=True)
+
+    def _validate(self, event: SpellEvent):
+        return validate_spell_recipients(self, event)
+
+    def _apply(self, event: SpellEvent):
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None or self.target_entity_uuid is None: return event.cancel(status_message="Holy recipient absent")
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT), HolyAuraEffect(
+            source_entity_uuid=caster.uuid, target_entity_uuid=self.target_entity_uuid,
+            spell_dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)))
+
+
+@srd_action_identity(content_id="action.spell.dispel_evil_and_good.break_enchantment", display_name="Break Enchantment",
+    parent_spell_name="Dispel Evil and Good", source_page=137, sort_order=3370,
+    description="Touch an eligible charmed or frightened creature, ending the ward to cure it.")
+class BreakEnchantment(BaseAction):
+    name: str = "Break Enchantment"
+    description: str = "Touch to cure charm/fear caused by aberrations, celestials, elementals, fey, fiends or undead."
+    ward_uuid: UUID
+    target_type: TargetType = TargetType.ENTITY
+    include_self: bool = True
+    costs: list[Cost] = Field(default_factory=lambda: [Cost(name="Break Enchantment", cost_type="actions", cost=1,
+        evaluator=entity_action_economy_cost_evaluator)])
+
+    def get_range(self) -> Range: return Range(type=RangeType.REACH, normal=5)
+
+    def get_physical_access(self): return PhysicalAccess.HAND
+
+    def targeting_error(self) -> str | None:
+        ward = BaseCondition.get(self.ward_uuid)
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not isinstance(ward, BaseCondition) or not ward.applied or not ward.contributions_active(): return "Ward is absent"
+        if caster is None or target is None or caster.senses.get_feet_distance(target.position) > 5: return "Recipient is beyond touch"
+        if not any((condition.name in {"Charmed", "Frightened"} or set(condition.immunity_names).intersection({"Charmed", "Frightened"}))
+                and condition.source_creature_type in PROTECTED_CREATURE_TYPES for condition in target.active_conditions_by_uuid.values()):
+            return "No eligible enchantment to break"
+        return None
+
+    def _apply_costs(self,event):
+        return entity_action_economy_cost_applier(event,self.source_entity_uuid)
+
+    def _apply(self, event: ActionEvent):
+        event = event.phase_to(EventPhase.EFFECT)
+        if event.canceled:
+            return event
+        with BaseBlock.condition_removal_scope():
+            target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+            caster = Entity.get(self.source_entity_uuid)
+            if target is None or caster is None: return event.cancel(status_message="Recipient absent")
+            removals = prepare_control_removals(target, frozenset({"Charmed", "Frightened"}), event, PROTECTED_CREATURE_TYPES)
+            if removals is None: return event.cancel(status_message="Enchantment removal rejected")
+            if not removals.entries: return event.cancel(status_message="No eligible enchantment remains")
+            ward = BaseCondition.get(self.ward_uuid)
+            if not isinstance(ward, BaseCondition):
+                BaseBlock.cancel_owned_condition_removals(removals, "Ward absent")
+                return event.cancel(status_message="Ward absent")
+            canceled = BaseBlock._prepare_condition_removal_tree(ward, condition_owner=caster, expire=False,
+                parent_event=event, prepared=removals.entries, visited={entry[1].uuid for entry in removals.entries})
+            if canceled is not None:
+                BaseBlock.cancel_owned_condition_removals(removals, "Ward ending rejected")
+                return event.cancel(status_message="Ward ending rejected")
+            BaseBlock.commit_owned_condition_removals(removals)
+            BaseBlock.publish_owned_condition_removals(removals)
+            return event
+
+
+class DispelEvilAndGoodEffect(ProtectionFromEvilAndGoodEffect):
+    granted_action_uuids: set[UUID] = Field(default_factory=set)
+    name: str = "Dispel Evil and Good"
+    description: str = "Six supernatural creature types attack with disadvantage; grants Break Enchantment."
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10, duration_type=DurationType.ROUNDS))
+
+    def _apply(self, event: Event):
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None: return [], [], [], [], event.cancel(status_message="Ward caster absent")
+        value = caster.equipment.ac_bonus
+        ident = value.to_target_contextual.add_advantage_modifier(ContextualAdvantageModifier(name=self.name,
+            source_entity_uuid=caster.uuid, callable=self._attack_penalty))
+        action = BreakEnchantment(source_entity_uuid=caster.uuid, ward_uuid=self.uuid, template=True)
+        caster.register_action(action)
+        self.granted_action_uuids = {action.uuid}
+        return [(value.uuid, ident)], [], [], [], event.phase_to(EventPhase.EFFECT)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None):
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is not None:
+            for identity in self.granted_action_uuids: caster.unregister_action_by_uuid(identity)
+        self.granted_action_uuids.clear()
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+
+class DispelEvilAndGood(SpellAction):
+    name: str = "Dispel Evil and Good"
+    description: str = "Concentrating self ward and touch Break Enchantment; no dismissal or possession simulation."
+    spell_level: int = 5
+    spell_school: str = "abjuration"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    target_type: TargetType = TargetType.SELF
+    concentration: bool = True
+
+    def _apply(self, event: SpellEvent):
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT), DispelEvilAndGoodEffect(
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.source_entity_uuid))
+
+
+@srd_condition_identity(content_id="spatial_effect.spell.antilife_shell", display_name="Antilife Shell",
+    description="Living creatures cannot cross the boundary; missiles, reach, spells and teleportation remain possible.")
+class AntilifeShellZone(AreaCondition):
+    name: str = "Antilife Shell"
+    description: str = "Living creatures cannot cross the boundary; missiles, reach, spells and teleportation remain possible."
+    layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
+    occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
+    anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.ENTITY
+    zone_shape: str = "sphere"
+    zone_radius_feet: int = 10
+    duration: Duration = Field(default_factory=lambda: Duration(duration=600, duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    crossing_channels: ClassVar[frozenset[str] | None] = frozenset({"movement"})
+
+    def blocks_crossing_between(self, start, end, channel, requester_uuid, mode, terminal_provider_uuid=None):
+        actor = Entity.get(requester_uuid) if requester_uuid else None
+        if channel != "movement" or actor is None or actor.uuid == self.anchor_uuid or                actor.creature_type in {CreatureType.CONSTRUCT, CreatureType.UNDEAD}: return False
+        live = {cell for cell in self.affected_positions if self.allows_contribution_at(cell)}
+        inside = start in live
+        return any((cell in live) != inside for cell in bresenham_line(start, end))
+
+    def relocate_anchor(self, position, *, parent_event: Event):
+        if position == self.position or not self.is_active_spatial_condition(): return False
+        transfer = EventQueue.get_event_by_uuid(parent_event.parent_event) if parent_event.parent_event else None
+        if isinstance(transfer, PortalTransferEvent):
+            return self.move_zone(position, parent_event=parent_event)
+        old = set(self.affected_positions)
+        swept=[]
+        for center in bresenham_line(self.position,position)[1:]:
+            shape=self._area_shape(center)
+            shape.compute_objective(center)
+            swept.append(set(shape.affected_positions))
+        if self.contributions_active() and any(entity.uuid != self.anchor_uuid
+                and entity.is_deployed and entity.health.life_state is not LifeState.DEAD
+                and not SpellProtectionRegistry.get_antimagic_suppressions({entity.position})
+                and entity.creature_type not in {CreatureType.CONSTRUCT, CreatureType.UNDEAD}
+                and any((entity.position in footprint) != (entity.position in old) for footprint in swept)
+                for entity in Entity.get_all_entities()):
+            link = self.parent_link
+            if link is not None:
+                owner = BaseBlock.get(link[0])
+                if owner is not None: owner.remove_condition_by_uuid(link[1], parent_event=parent_event)
+            else: self.deactivate(parent_event=parent_event)
+            return False
+        return self.move_zone(position, parent_event=parent_event)
+
+
+class AntilifeShell(SpellAction):
+    name: str = "Antilife Shell"
+    description: str = "A concentrating moving shell hedges living creatures out for one hour."
+    spell_level: int = 5
+    spell_school: str = "abjuration"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    target_type: TargetType = TargetType.SELF
+    concentration: bool = True
+
+    def _apply(self, event: SpellEvent):
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None: return event.cancel(status_message="Shell caster absent")
+        effect = event.phase_to(EventPhase.EFFECT)
+        zone = AntilifeShellZone(source_entity_uuid=caster.uuid, position=caster.position, anchor_uuid=caster.uuid,
+            content_ref=get_content_declaration(AntilifeShellZone).ref, effect_origin=event.to_effect_origin())
+        return apply_concentrating_zone(self,effect,zone)

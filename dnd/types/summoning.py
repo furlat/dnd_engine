@@ -6,11 +6,16 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.core.content.recipes import ContentRecipe
+from dnd.core.condition_types import DurationType
+from dnd.core.creature_types import DamageType
 
 
 class SummonFamily(str, Enum):
     SPIRITUAL_WEAPON = "spiritual_weapon"
     FLAMING_SPHERE = "flaming_sphere"
+    ELEMENTAL = "elemental"
+    PLANAR_ALLY = "planar_ally"
+    DRAGON = "dragon"
     ANIMALS = "animals"
     FEY = "fey"
     FIEND = "fiend"
@@ -44,12 +49,15 @@ class SummonSelection(BaseModel):
     form_id: str = Field(min_length=1)
     cast_at_level: int = Field(ge=1, le=9)
     target_position: tuple[int, int]
+    breath_type: DamageType = DamageType.FIRE
+    shared_resistance: DamageType = DamageType.FIRE
 
 
 class SummonRules(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     duration_rounds: int = Field(gt=0)
+    duration_type: DurationType = DurationType.ROUNDS
     sustain: SummonSustain
 
 

@@ -77,6 +77,8 @@ def create_divine_smite_processor(slot_level: int):
         if not entity or not isinstance(entity, Entity):
             return None
 
+        if entity.is_spellcasting_blocked() and entity.uuid not in entity.spellcasting.divine_smite_entitlements:
+            return None
         if not entity.action_economy.can_afford(spell_slot_cost_type(slot_level), 1):
             return None
 

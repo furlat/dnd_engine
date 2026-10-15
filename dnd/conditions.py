@@ -1093,7 +1093,7 @@ class Frightened(BaseCondition):
         elif isinstance(target_entity,Entity):
             self._source_parent_uuid = self.parent_condition
             existing = target_entity.active_conditions.get("Frightened")
-            if isinstance(existing, Frightened):
+            if self.name == "Frightened" and isinstance(existing, Frightened):
                 parents = set(existing.additional_parent_conditions)
                 if (existing.parent_condition is not None and (existing.source_rules_owned_by_parent
                         or existing.parent_condition != existing._source_parent_uuid)):
@@ -1587,6 +1587,11 @@ class Petrified(BaseCondition):
                 )
                 resistance_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(resistance_modifier)
                 outs.append((target_entity.health.damage_reduction.uuid, resistance_uuid))
+            poison_immunity = ResistanceModifier(name="Petrified poison immunity",
+                value=ResistanceStatus.IMMUNITY, damage_type=DamageType.POISON,
+                source_entity_uuid=source_uuid, target_entity_uuid=target_uuid)
+            poison_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(poison_immunity)
+            outs.append((target_entity.health.damage_reduction.uuid, poison_uuid))
             target_entity.add_condition_immunity_source("Poisoned", self.uuid)
             effect_event = effect_event.phase_to(
                 EventPhase.EFFECT,
@@ -3047,7 +3052,8 @@ def prepare_control_removals(target: Entity, names: frozenset[str], event: Event
                 pending.extend(parents)
                 continue
             source=Entity.get(current.source_entity_uuid)
-            if source_types is None or (source is not None and source.creature_type in source_types):
+            source_type = current.source_creature_type or (source.creature_type if source is not None else None)
+            if source_types is None or source_type in source_types:
                 roots[current.uuid]=current
     prepared=PreparedConditionRemovals([])
     visited: set[UUID] = set()

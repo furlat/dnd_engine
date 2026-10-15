@@ -32,6 +32,8 @@ import dnd.spells.divination as divination
 import dnd.spells.evocation as evocation
 import dnd.items.created_items as created_items
 import dnd.monsters.spell_summons as spell_summons
+import dnd.monsters.spell_summon_actions as summon_actions
+import dnd.items.spell_payloads as payloads
 import dnd.spells.necromancy as necromancy
 import dnd.spells.transmutation as transmutation
 import dnd.summoning.actions as summoning
@@ -136,12 +138,19 @@ def _original(
 
 
 ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
+    *tuple(_srd(kind,identity,kind.model_fields["name"].default,"Approved summon creature technique using native actions.")
+        for kind,identity in summon_actions.SUMMON_ACTION_IDENTITIES),
+    _srd(payloads.ThrowSpellPayload,"action.spell.payload.throw","Throw Spell Sphere","Throw a retained sphere, retiring the item before its explosion."),
+    _srd(payloads.TouchDelayedFireball,"action.spell.delayed_blast_fireball.touch","Touch Delayed Fireball","Touch the bead: DEX failure detonates; success permits pickup or a same-action throw."),
     _srd(spell_summons.FlamingSphereRam,"action.spell.flaming_sphere.ram","Flaming Sphere Ram","Bonus-action saved fire contact from the autonomous sphere."),
     _srd(spell_summons.SpiritualWeaponStrike,"action.spell.spiritual_weapon.strike","Spiritual Weapon Strike","Bonus-action force attack from the autonomous weapon."),
     _srd(created_items.EatGoodberry,"action.spell.goodberry.eat","Eat Goodberry","Consume one berry as a bonus action to heal 1d4."),
     _srd(transmutation.ExhaleDragonsBreath,"action.spell.dragons_breath.exhale","Exhale Dragon's Breath","Use the retained elemental cone.",srd_version="5.2"),
     _srd(necromancy.VampiricTouchStrike,"action.spell.vampiric_touch.strike","Vampiric Touch Strike","Repeat a melee necrotic attack and own-component healing."),
     _srd(evocation.MoveMoonbeam,"action.spell.moonbeam.move","Move Moonbeam","Relocate the retained beam within sixty feet."),
+    _srd(abjuration.BreakEnchantment,"action.spell.dispel_evil_and_good.break_enchantment","Break Enchantment","Touch to cure an eligible control and end the ward."),
+    _srd(evocation.ArcaneSwordStrike,"action.spell.arcane_sword.strike","Arcane Sword Strike","Move the sword anchor and make its melee spell attack."),
+    _srd(evocation.MoveArcaneSword,"action.spell.arcane_sword.move","Move Arcane Sword","Relocate the sword without attacking."),
     _srd(evocation.MoveDancingLights,"action.spell.dancing_lights.move","Move Dancing Lights","Relocate the retained light within 60 feet."),
     _srd(divination.ReapplyHuntersMark,"action.spell.hunters_mark.reapply","Reapply Hunter's Mark","Choose a new quarry after the previous quarry is defeated."),
     _srd(enchantment.ReapplyHex,"action.spell.hex.reapply","Reapply Hex","Choose a new quarry after the previous quarry is defeated."),

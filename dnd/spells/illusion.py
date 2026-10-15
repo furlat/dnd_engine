@@ -3,7 +3,8 @@
 Implemented here: Blur, Fear, Hypnotic Pattern, Color Spray, Invisibility,
 Greater Invisibility, Mirror Image, and Silence.
 """
-from dnd.spells.spell_utils import spell_condition_profile
+from dnd.spells.spell_utils import validate_spell_recipients, spell_condition_profile, condition_save, condition_damage, target_turn_expiry_handler, spell_position_error
+from dnd.spells.enchantment import DissonantFearEffect
 
 
 import random
@@ -38,7 +39,7 @@ from dnd.core.events import Damage, DamageAppliedEvent, EventPhase, RangeType, R
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.dice import AttackOutcome
-from dnd.core.aoe import AoEShape, Cone, Cube
+from dnd.core.aoe import AoEShape, Cone, Cube, Sphere
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
@@ -1483,9 +1484,16 @@ class PhantasmalForceEffect(BaseCondition):
         def respond(boundary: Event,_: UUID):
             if isinstance(boundary,DamageAppliedEvent):
                 if boundary.source_condition_uuid!=self.uuid and boundary.resolution is not None:
-                    components=[component for component in boundary.resolution.components if component.after_affinity_damage>0]
+                    remaining_reduction=boundary.resolution.flat_reduction_damage
+                    components=[]
+                    for component in boundary.resolution.components:
+                        absorbed=min(component.after_affinity_damage,remaining_reduction)
+                        remaining_reduction-=absorbed
+                        accepted=component.after_affinity_damage-absorbed
+                        if accepted>0:
+                            components.append((accepted,component.damage_type))
                     if components:
-                        self.damage_type=max(components,key=lambda component:component.after_affinity_damage).damage_type
+                        self.damage_type=max(components,key=lambda component:component[0])[1]
                 return None
             caster=Entity.get(self.source_entity_uuid)
             if caster is None:
@@ -1544,3 +1552,151 @@ class PhantasmalForce(SpellAction):
             return effect
         return self.apply_owned_condition(effect,PhantasmalForceEffect(source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,spell_dc=dc))
+
+
+class PhantasmalKillerEffect(DissonantFearEffect):
+    name: str = "Phantasmal Killer"
+    description: str = "Immobilizing fear; end-turn WIS save or retained psychic damage."
+    spell_dc: int
+    _damage_boundary: UUID | None = PrivateAttr(default=None)
+    dice_count: int = 4
+    turn_ends: int | None = None
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.PERMANENT))
+
+    def model_post_init(self, context: object) -> None:
+        super().model_post_init(context)
+        self.name = f"Phantasmal Killer:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Phantasmal Killer"
+
+    def _apply(self, event: Event):
+        modifiers, handlers, children, spatial, effect = super()._apply(event)
+        if effect is None or effect.canceled: return modifiers, handlers, children, spatial, effect
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+        assert target is not None
+        def tick(boundary: Event, _: UUID):
+            if not self.applied or not self.contributions_active(): return None
+            if condition_save(self, target, boundary, "wisdom", self.spell_dc, "spell.phantasmal_killer.recovery", (SavingThrowEffectTag.FEAR,)):
+                target.remove_condition_by_uuid(self.uuid, parent_event=boundary)
+            else:
+                contenders=[condition for condition in target.active_conditions_by_uuid.values()
+                    if isinstance(condition,PhantasmalKillerEffect) and condition.contributions_active()]
+                consumed=any(condition._damage_boundary==boundary.lineage_uuid for condition in contenders)
+                if not consumed and max(contenders,key=lambda condition:(condition.dice_count,condition.spell_dc,str(condition.uuid)),default=None) is self:
+                    for condition in contenders:condition._damage_boundary=boundary.lineage_uuid
+                    condition_damage(self, target, boundary, count=self.dice_count, die=10, damage_type=DamageType.PSYCHIC)
+            return None
+        handler = EventHandler(name="Phantasmal Killer recovery and damage", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target.uuid)], event_processor=tick)
+        expiry=target_turn_expiry_handler(self,turn_ends=10)
+        target.add_event_handler(handler);target.add_event_handler(expiry)
+        return modifiers, [*handlers, handler.uuid,expiry.uuid], children, spatial, effect
+
+
+class PhantasmalKiller(SpellAction):
+    name: str = "Phantasmal Killer"
+    description: str = "WIS save or immobilizing fear with repeated psychic damage."
+    spell_level: int = 4
+    spell_school: str = "illusion"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    target_type: TargetType = TargetType.ENTITY
+    concentration: bool = True
+    harmful: bool = True
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag, ...] = (SavingThrowEffectTag.FEAR,)
+
+    def get_target_effect_profile(self, actor: Any):
+        if not isinstance(actor, Entity): return None
+        return spell_condition_profile(self, actor, key="phantasmal_killer", condition_type=PhantasmalKillerEffect,
+            save_ability="wisdom", fact="selected_target.condition.frightened")
+
+    def _validate(self, event: SpellEvent):
+        return validate_spell_recipients(self, event)
+
+    def _apply(self, event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None: return event.cancel(status_message="Illusion recipient absent")
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+        effect, _, saved = self.resolve_saving_throw(event, caster=caster, target=target, ability_name="wisdom", dc=dc)
+        if saved or effect.canceled: return effect
+        return self.apply_owned_condition(effect, PhantasmalKillerEffect(source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid, spell_dc=dc, dice_count=4+self.get_upcast_bonus()))
+
+
+class WeirdEffect(Frightened):
+    name: str = "Weird"
+    description: str = "May move sideways or retreat; end-turn WIS save or 4d10 psychic damage."
+    immunity_names: tuple[str, ...] = ("Frightened",)
+    spell_dc: int
+    _damage_boundary: UUID | None = PrivateAttr(default=None)
+    allow_retreat: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.PERMANENT))
+
+    def model_post_init(self, context: object) -> None:
+        super().model_post_init(context)
+        self.name = f"Weird:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Weird"
+
+    def _apply(self, event: Event):
+        modifiers, handlers, children, spatial, effect = super()._apply(event)
+        if effect is None or effect.canceled: return modifiers, handlers, children, spatial, effect
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+        assert target is not None
+        def recover(boundary: Event, _: UUID):
+            if not self.applied or not self.contributions_active(): return None
+            if condition_save(self, target, boundary, "wisdom", self.spell_dc, "spell.weird.recovery", (SavingThrowEffectTag.FEAR,)):
+                target.remove_condition_by_uuid(self.uuid, parent_event=boundary)
+            else:
+                contenders=[condition for condition in target.active_conditions_by_uuid.values()
+                    if isinstance(condition,WeirdEffect) and condition.contributions_active()]
+                consumed=any(condition._damage_boundary==boundary.lineage_uuid for condition in contenders)
+                if not consumed and max(contenders,key=lambda condition:(condition.spell_dc,str(condition.uuid)),default=None) is self:
+                    for condition in contenders:condition._damage_boundary=boundary.lineage_uuid
+                    condition_damage(self, target, boundary, count=4, die=10, damage_type=DamageType.PSYCHIC)
+            return None
+        handler = EventHandler(name="Weird recovery and damage", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target.uuid)], event_processor=recover)
+        expiry=target_turn_expiry_handler(self,turn_ends=10)
+        target.add_event_handler(handler);target.add_event_handler(expiry)
+        return modifiers, [*handlers, handler.uuid,expiry.uuid], children, spatial, effect
+
+
+class Weird(SpellAction):
+    name: str = "Weird"
+    description: str = "Initial WIS save; end-turn WIS recovery precedes 4d10 psychic damage on failure."
+    spell_level: int = 9
+    spell_school: str = "illusion"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=120))
+    target_type: TargetType = TargetType.POSITION_AOE
+    concentration: bool = True
+    include_self: bool = True
+    valid_target_filter: str = "all"
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag, ...] = (SavingThrowEffectTag.FEAR,)
+
+    def model_post_init(self, context: object) -> None:
+        super().model_post_init(context)
+        self.aoe_shape = Sphere(source_entity_uuid=self.source_entity_uuid, target=self.end_position or (0,0), radius_feet=30)
+
+    def position_placement_error(self, *, subjective=False):
+        return spell_position_error(self)
+
+    def get_target_effect_profile(self, actor: Any):
+        if not isinstance(actor, Entity): return None
+        return spell_condition_profile(self, actor, key="weird", condition_type=WeirdEffect,
+            save_ability="wisdom", fact="selected_target.condition.frightened")
+
+    def _apply(self, event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None: return event.cancel(status_message="Weird recipient absent")
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+        effect, _, saved = self.resolve_saving_throw(event, caster=caster, target=target, ability_name="wisdom", dc=dc)
+        if saved or effect.canceled: return effect
+        return self.apply_owned_condition(effect, WeirdEffect(source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid, spell_dc=dc))

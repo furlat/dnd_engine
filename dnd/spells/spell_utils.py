@@ -3,6 +3,13 @@
 Contains helpers used across multiple spell school modules to avoid
 cross-spell-file imports.
 """
+from dnd.core.events import SavingThrowEvent
+from dnd.types.abilities import AbilityName
+from dnd.core.values import ModifiableValue
+from typing import Literal, cast
+from dnd.core.creature_types import DamageType
+from dnd.core.saving_throw_types import SavingThrowEffectTag
+
 from typing import Optional, Callable
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.life_types import LifeState
@@ -12,7 +19,7 @@ from uuid import UUID
 from dnd.core.dice import DiceRoll
 from dnd.core.events import EventPhase, Healing, HealRollResultEvent, Event
 from dnd.entity import Entity
-from dnd.actions import SpellEvent
+from dnd.actions import SpellEvent, PreparedSpellConcentration
 from dnd.core.base_actions import BaseAction, ActionTargetEffectProfile, ActionTargetEffectBranchProfile, OutcomeResolution, TargetEffectDisposition
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.gridmap import get_map
@@ -210,3 +217,71 @@ def spell_condition_profile(action,caster: Entity,*,key: str,condition_type: typ
         save_ability=save_ability,included_creature_types=included,excluded_creature_types=excluded,
         condition_fact_ids=(fact or f"selected_target.condition.{key}",),
         condition_semantic_keys=frozenset({get_content_declaration(condition_type).ref.content_id})),))
+
+
+def condition_save(owner: BaseCondition, target: Entity, boundary: Event,
+                   ability: AbilityName, dc: int, effect_id: str,
+                   effect_tags: tuple[SavingThrowEffectTag, ...] = ()) -> bool:
+    """Roll a retained condition save without requiring its caster to survive."""
+    request = SavingThrowEvent(source_entity_uuid=owner.source_entity_uuid or target.uuid,
+        target_entity_uuid=target.uuid, ability_name=ability, dc=dc, parent_event=boundary.uuid,
+        saving_throw_context=owner.saving_throw_context(effect_id=effect_id, effect_tags=effect_tags))
+    return target.saving_throw(request)[2]
+
+
+def condition_damage(owner: BaseCondition, target: Entity, boundary: Event, *,
+                     count: int, die: Literal[4,6,8,10,12,20], damage_type: DamageType) -> None:
+    """Deliver one source-owned periodic packet through native damage resolution."""
+    source = owner.source_entity_uuid or target.uuid
+    damage = Damage(name=owner.get_display_name(), source_entity_uuid=source,
+        target_entity_uuid=target.uuid, dice_numbers=count, damage_dice=die, damage_type=damage_type,
+        damage_bonus=ModifiableValue.create(source_entity_uuid=source, base_value=0),
+        effect_origin=owner.effect_origin)
+    roll = damage.get_dice(AttackOutcome.HIT).roll
+    target.receive_damage(roll.total, damage_type, source, damages=[damage], damage_rolls=[roll],
+        parent_event=boundary.uuid, effect_origin=owner.effect_origin,
+        independent_resolution=True, source_condition_uuid=owner.uuid)
+
+
+def validate_spell_recipients(action: BaseAction, declaration: SpellEvent) -> SpellEvent | None:
+    """Validate the selected recipients before payment, using native targeting."""
+    caster = Entity.get(action.source_entity_uuid)
+    if caster is None: return declaration.cancel(status_message="Caster absent")
+    targets = action.get_all_targets()
+    if not targets: return declaration.cancel(status_message="Recipient absent")
+    error = action._validate_target_filter(targets)
+    if error is not None: return declaration.cancel(status_message=error)
+    for identity in targets:
+        target = Entity.get(identity)
+        if target is None or target.health.life_state is LifeState.DEAD:
+            return declaration.cancel(status_message="Living recipient required")
+        if target.uuid == caster.uuid:
+            if not action.include_self: return declaration.cancel(status_message="Self targeting is not allowed")
+        else:
+            contact = caster.senses.entities.get(target.uuid)
+            if contact is None or not contact.visual: return declaration.cancel(status_message="Recipient must be visible")
+        if (error := action.target_position_error(target.position)) is not None:
+            return declaration.cancel(status_message=error)
+    return cast(SpellEvent | None, BaseAction._validate(action, declaration))
+
+
+def apply_concentrating_zone(action, event: SpellEvent, zone) -> SpellEvent:
+    """Admit concentration replacement before publishing a new spatial owner."""
+    if event.canceled:
+        zone.discard_from_runtime_owner()
+        return event
+    with BaseBlock.condition_removal_scope():
+        prepared=action.prepare_concentration(event)
+        if not isinstance(prepared,PreparedSpellConcentration):
+            zone.discard_from_runtime_owner()
+            return event.cancel(status_message="Concentration was not admitted")
+        try:
+            result=zone.activate(parent_event=event)
+            if result is None or result.canceled or not zone.applied:
+                return event.cancel(status_message="Spatial effect was not admitted")
+            action.commit_prepared_concentration(prepared,zone,zone)
+            action.publish_prepared_concentration(prepared)
+            return event
+        finally:
+            if prepared.application is not None and not prepared.application.committed:
+                prepared.owner.cancel_condition_application(prepared.application,"Spatial cast was rejected")

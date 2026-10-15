@@ -277,6 +277,8 @@ class HitDice(BaseBlock):
 class HealthConfig(BaseModel):
     """Configuration used to materialize a health block."""
 
+    nonmagical_attack_resistances: frozenset[DamageType] = frozenset()
+
     life_state: LifeState = Field(
         default=LifeState.ALIVE,
         description="Initial authoritative life state.",
@@ -319,6 +321,8 @@ class Health(BaseBlock):
         healing_blocked: Whether healing effects currently restore no HP.
     """
 
+    nonmagical_attack_resistances: frozenset[DamageType] = frozenset()
+
     name: str = Field(default="Health", description="Block name used in entity composition indexes.")
     life_state: LifeState = Field(
         default=LifeState.ALIVE,
@@ -336,8 +340,12 @@ class Health(BaseBlock):
     damage_reduction: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Damage Reduction"), description="Damage Reduction, e.g. Damage Resistance")
     healing_blocked: bool = Field(default=False, description="If True, entity cannot regain HP (e.g., Chill Touch)")
 
-    def get_resistance(self,damage_type: DamageType) -> ResistanceStatus:
-        return self.damage_reduction.resistance[damage_type]
+    def get_resistance(self,damage_type: DamageType, *, attack_magical: bool | None = None) -> ResistanceStatus:
+        status = self.damage_reduction.resistance[damage_type]
+        if attack_magical is False and damage_type in self.nonmagical_attack_resistances:
+            if status is ResistanceStatus.IMMUNITY: return status
+            return ResistanceStatus.NONE if status is ResistanceStatus.VULNERABILITY else ResistanceStatus.RESISTANCE
+        return status
 
     @computed_field
     @property
@@ -504,10 +512,11 @@ class Health(BaseBlock):
         declared_damage: int,
         normal_hit_point_damage_cap: Optional[int] = None,
         normal_hit_points_available: Optional[int] = None,
+        attack_magical: tuple[bool | None, ...] = (),
     ) -> DamageApplicationPreview:
         """Resolve typed components through affinities, defenses, and HP pools."""
         component_resolutions: list[DamageComponentResolution] = []
-        for damage, damage_type in components:
+        for index, (damage, damage_type) in enumerate(components):
             if damage < 0:
                 raise ValueError(f"Damage must be greater than 0 instead of {damage}")
             if not isinstance(damage_type, DamageType):
@@ -515,8 +524,8 @@ class Health(BaseBlock):
                     "Damage must use a DamageType instead of "
                     f"{damage_type!r}"
                 )
-            resistance_status = self.get_resistance(damage_type)
-            multiplier = self.damage_multiplier(damage_type)
+            resistance_status = self.get_resistance(damage_type, attack_magical=attack_magical[index] if attack_magical else None)
+            multiplier = {ResistanceStatus.IMMUNITY:0, ResistanceStatus.RESISTANCE:0.5, ResistanceStatus.VULNERABILITY:2, ResistanceStatus.NONE:1}[resistance_status]
             after_affinity_damage = max(0, int(damage * multiplier))
             component_resolutions.append(
                 DamageComponentResolution(
@@ -615,8 +624,13 @@ class Health(BaseBlock):
         """Resolve the existing interruptible packet through one defense owner."""
         if not event.damages:
             raise ValueError("TakeDamageEvent requires at least one typed damage component")
-        if len(event.damage_rolls) == len(event.damages) and len(event.damages) > 1:
-            amounts = [max(0, roll.total) for roll in event.damage_rolls]
+        if event.component_amounts is not None or (len(event.damage_rolls) == len(event.damages) and len(event.damages) > 1):
+            if event.component_amounts is not None:
+                if len(event.component_amounts) != len(event.damages):
+                    raise ValueError("Explicit damage amounts must match typed components")
+                amounts = [max(0, amount) for amount in event.component_amounts]
+            else:
+                amounts = [max(0, roll.total) for roll in event.damage_rolls]
             adjustment = event.get_effective_damage() - sum(amounts)
             if adjustment > 0:
                 amounts[0] += adjustment
@@ -635,6 +649,7 @@ class Health(BaseBlock):
         resolution = self.preview_damage_components(
             components, event.normal_hit_point_damage_cap,
             declared_damage=event.total_damage,
+            attack_magical=tuple(damage.attack_magical for damage in event.damages[:len(components)]),
             normal_hit_points_available=normal_hit_points_available,
         )
         return resolution.model_copy(update={"components": tuple(
@@ -648,11 +663,13 @@ class Health(BaseBlock):
         *,
         declared_damage: Optional[int] = None,
         normal_hit_points_available: Optional[int] = None,
+        attack_magical: tuple[bool | None, ...] = (),
     ) -> DamageApplicationPreview:
         """Preview mixed typed damage without mutating health state."""
         incoming_damage = sum(max(0, damage) for damage, _ in components)
         return self._preview_damage_components(
             components,
+            attack_magical=attack_magical,
             declared_damage=(incoming_damage if declared_damage is None else declared_damage),
             normal_hit_point_damage_cap=normal_hit_point_damage_cap,
             normal_hit_points_available=normal_hit_points_available,
@@ -697,6 +714,11 @@ class Health(BaseBlock):
         """
         preview = self.preview_damage(damage, damage_type, normal_hit_point_damage_cap)
         return self.apply_damage_preview(preview, source_entity_uuid)
+
+    def prevents_maximum_reduction(self) -> bool:
+        owner = BaseBlock.get(self.source_entity_uuid)
+        return owner is not None and any(condition.prevents_hit_point_maximum_reduction
+            and condition.contributions_active() for condition in owner.active_conditions_by_uuid.values())
 
     def is_healing_blocked(self) -> bool:
         """Check if healing is blocked by a condition (e.g., Chill Touch).
@@ -865,4 +887,5 @@ class Health(BaseBlock):
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
                        hit_dices=hit_dices, max_hit_points_bonus=max_hit_points_bonus, temporary_hit_points=temporary_hit_points, damage_reduction=damage_reduction,
-                       life_state=config.life_state, remains_disposition=config.remains_disposition)
+                       life_state=config.life_state, remains_disposition=config.remains_disposition,
+                       nonmagical_attack_resistances=config.nonmagical_attack_resistances)

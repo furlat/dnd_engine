@@ -1,8 +1,9 @@
 """Permeable wall fields composed from geometry, area triggers and damage facts."""
 
 from typing import ClassVar, Literal
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
 from dnd.core.action_types import ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection
@@ -36,7 +37,7 @@ def wall_condition_ref(identity: str) -> ContentRef:
 class WallDamageSpec(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     dice_count: int = Field(ge=1)
-    die: Literal[6, 8]
+    die: Literal[6, 8, 10]
     damage_type: DamageType
     save_ability: AbilityName
     effect_id: str
@@ -375,3 +376,36 @@ class WindWall(SpellAction):
             self.ensure_concentration(effect).add_linked_condition(zone.uuid, zone.uuid)
             return effect
         return effect.cancel(status_message="Wind wall creation was canceled")
+
+
+class BladeBarrierZone(WallFieldZone):
+    defer_formation: bool = False
+    _formation_contacts: list[tuple[UUID,Event]] = PrivateAttr(default_factory=list)
+    def _apply_appearance_effect(self,entity,*,parent_event):
+        if self.defer_formation: self._formation_contacts.append((entity.uuid,parent_event))
+        else: super()._apply_appearance_effect(entity,parent_event=parent_event)
+    def release_formation(self):
+        self.defer_formation=False
+        contacts,self._formation_contacts=self._formation_contacts,[]
+        for identity,event in contacts:
+            target=Entity.get(identity)
+            if target is not None and self.applied:super()._apply_appearance_effect(target,parent_event=event)
+
+    name: str = "Blade Barrier"
+    description: str = "Permeable difficult terrain; 6d10 slashing on formation, entry or turn start, once per recipient turn."
+    content_ref: ContentRef = wall_condition_ref("spatial_effect.spell.blade_barrier")
+    adds_difficult_terrain: bool = True
+    duration: Duration = Field(default_factory=lambda: Duration(duration=60, duration_type=DurationType.ROUNDS))
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.APPEAR,
+        SpatialEffectTriggerKind.ENTER, SpatialEffectTriggerKind.TURN_START})
+    first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.APPEAR,
+        SpatialEffectTriggerKind.ENTER, SpatialEffectTriggerKind.TURN_START})
+
+    def _create_zone_turn_start_handler(self) -> EventHandler:
+        def process(event: Event, _source):
+            entity = Entity.get(event.source_entity_uuid)
+            if entity is not None and self.contact_damage is not None:
+                apply_wall_damage(self, entity, self.contact_damage, self.spell_dc, event, self.geometry.base_height_steps)
+            return None
+        return EventHandler(name="Blade Barrier start-turn contact", source_entity_uuid=self.source_entity_uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EFFECT)], event_processor=process)

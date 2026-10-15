@@ -1413,6 +1413,8 @@ class ModifiableValue(BaseValue):
     channels with `set_from_target()`.
     """
 
+    fixed_scores: Dict[UUID, NumericalModifier] = Field(default_factory=dict)
+
     self_static: StaticValue = Field(
         default_factory=lambda: StaticValue(source_entity_uuid=uuid4()),
         description="Always-on static modifiers that affect this value's owner."
@@ -1444,6 +1446,9 @@ class ModifiableValue(BaseValue):
 
     def retire_owned_state(self) -> None:
         """Release this value's exact owned channels, leaving imported values alone."""
+        for identity in self.fixed_scores:
+            BaseObject.unregister(identity)
+        self.fixed_scores.clear()
         for component in (self.self_static, self.to_target_static,
                           self.self_contextual, self.to_target_contextual):
             for identity in component.get_all_modifier_uuids():
@@ -1619,8 +1624,19 @@ class ModifiableValue(BaseValue):
             return None
         return max(modifiers_max)
 
+    def add_fixed_score(self, modifier: NumericalModifier) -> UUID:
+        self.validate_modifier_target(modifier)
+        self.fixed_scores[modifier.uuid] = modifier
+        return modifier.uuid
+
     def _score(self, normalized: bool = False, excluded: frozenset[UUID] = frozenset()) -> int:
         """Sum all channels, multiply exactly once, then bound and normalize."""
+        if self.fixed_scores:
+            fixed = [modifier.value for identity, modifier in self.fixed_scores.items()
+                if identity not in excluded and modifier.contributions_active()]
+            if fixed:
+                raw = min(fixed)
+                return self.score_normalizer(raw) if normalized else raw
         channels = self.get_typed_modifiers()
         has_factors = bool(set(self.self_static.factor_modifiers) - excluded) or (
             self.from_target_static is not None
@@ -2012,6 +2028,7 @@ class ModifiableValue(BaseValue):
 
         new_value= ModifiableValue(
             use_register=use_register,
+            fixed_scores={**self.fixed_scores, **{k: v for other in others for k, v in other.fixed_scores.items()}},
             name=naming_callable([self.name] + [other.name for other in others]),
             self_static=self.self_static.combine_values([other.self_static for other in others], use_register=use_register),
             to_target_static=self.to_target_static.combine_values([other.to_target_static for other in others], use_register=use_register),
@@ -2220,6 +2237,7 @@ class ModifiableValue(BaseValue):
         Args:
             uuid: Modifier UUID to remove.
         """
+        self.fixed_scores.pop(uuid, None)
         self.self_static.remove_modifier(uuid)
         self.self_contextual.remove_modifier(uuid)
         self.to_target_static.remove_modifier(uuid)
@@ -2231,6 +2249,7 @@ class ModifiableValue(BaseValue):
 
     def remove_all_modifiers(self) -> None:
         """Clear every modifier bucket on every channel."""
+        self.fixed_scores.clear()
         self.self_static.remove_all_modifiers()
         self.self_contextual.remove_all_modifiers()
         self.to_target_static.remove_all_modifiers()
@@ -2246,7 +2265,7 @@ class ModifiableValue(BaseValue):
         Returns:
             UUIDs from self, outgoing, and imported target channels.
         """
-        uuids = []
+        uuids = list(self.fixed_scores)
         for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
             uuids.extend(component.get_all_modifier_uuids())
         if self.from_target_static:
@@ -2445,6 +2464,8 @@ def composed_passive_score(
                for modifier in modifiers.values()):
             return None
 
+    if any(value.fixed_scores for value in (proficiency, skill, ability_bonus)):
+        return None
     ability_base = ability_normalizer(ability_score.score)
     ability_bonus.validate_source_id(ability_source_uuid)
     proficiency.validate_source_id(skill.source_entity_uuid)

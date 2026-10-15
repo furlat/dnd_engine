@@ -1385,6 +1385,10 @@ class UsableItem(BaseItem):
     use_requirement: EquippedSourceRequirement | None = None
 
     def use_admission_error(self, actor_uuid: UUID) -> Optional[str]:
+        actor = BaseBlock.get(actor_uuid)
+        if self.is_magical and actor is not None and any(condition.blocks_magic_item_activation
+                and condition.contributions_active() for condition in actor.active_conditions_by_uuid.values()):
+            return "Magic item activation is prevented by an active condition"
         if self.is_magical and not self.contributions_active():
             return "The item's magical properties are suppressed"
         requirement = self.use_requirement

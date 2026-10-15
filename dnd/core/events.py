@@ -4584,6 +4584,7 @@ class Range(BaseModel):
 
 class Damage(BaseObject):
     """Damage dice specification plus damage type."""
+    attack_magical: bool | None = None
     effect_origin: EffectOrigin | None = None
 
     name: str = Field(default="Damage", description="Human-readable damage label.")
@@ -5142,6 +5143,7 @@ class TakeDamageEvent(Event):
     spatial_source: SpatialDamageSource | None = None
     source_condition_uuid: UUID | None = None
     zero_hp_disposition: RemainsDisposition = RemainsDisposition.INTACT
+    component_amounts: tuple[int, ...] | None = None
     damage_rolls: List[DiceRoll] = Field(default_factory=list, description="Individual damage rolls")
     damages: List['Damage'] = Field(default_factory=list, description="Damage specifications (types)")
     effect_id: Optional[str] = Field(
@@ -5662,3 +5664,9 @@ class InstantDeathEvent(Event):
     killer_uuid: Optional[UUID] = Field(default=None, description="Entity or effect source causing the instant-death effect.")
     killer_name: str = Field(default="", description="Display name of the instant-death source, if known.")
     source_description: str = Field(default="", description="Rules-facing source or effect description.")
+
+
+class StandOfferEvent(Event):
+    """A healed recipient may spend its configured native reaction to stand."""
+    name: str = "Stand after Power Word Heal"
+    event_type: EventType = EventType.BASE_ACTION

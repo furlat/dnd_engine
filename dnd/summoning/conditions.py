@@ -10,6 +10,8 @@ from dnd.core.condition_types import (
     ConditionCategory, ConditionTag, DurationType,
     InvoluntarySustainLoss, SustainLossPolicy,
 )
+from dnd.core.events import EventHandler, EventType, EventPhase, Trigger
+from dnd.core.base_block import BaseBlock
 from dnd.types.summoning import SummonDepartureCause, SummonOrigin, TerminalOwnerRelease
 
 
@@ -65,3 +67,24 @@ class SpiritualWeaponOwner(BaseCondition):
     child_removal_policy: Literal["none","any","last"] = "any"
     tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
     duration: Duration = Field(default_factory=lambda:Duration(duration_type=DurationType.PERMANENT))
+
+
+class IndependentSummonOwner(SpiritualWeaponOwner):
+    name:str="Independent Summon Owner"
+    family: str
+    duration:Duration=Field(default_factory=lambda:Duration(duration_type=DurationType.UNTIL_LONG_REST))
+    def model_post_init(self,context):
+        super().model_post_init(context)
+        self.name=f"Summon Owner:{self.family}"
+    def _apply(self,event):
+        owner=BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+        if owner is None:return [],[],[],[],event.cancel(status_message="Summon owner absent")
+        def ending(boundary,_):
+            owner.remove_condition_by_uuid(self.uuid,parent_event=boundary)
+            return None
+        handler=EventHandler(name="Independent summon caster death",source_entity_uuid=self.source_entity_uuid,
+            runs_while_suppressed=True,trigger_conditions=[
+                Trigger(event_type=EventType.DEATH,event_phase=EventPhase.EFFECT,event_target_entity_uuid=owner.uuid),
+                Trigger(event_type=EventType.INSTANT_DEATH,event_phase=EventPhase.EFFECT,event_target_entity_uuid=owner.uuid)],event_processor=ending)
+        owner.add_event_handler(handler)
+        return [],[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)

@@ -11,7 +11,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, SpatialChangeEvent, SpatialChangeType, StepMovementEvent
+from dnd.core.events import PortalTransferEvent, EventPhase, EventQueue, SpatialChangeEvent, SpatialChangeType, StepMovementEvent
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -81,7 +81,9 @@ def test_misty_step_records_one_parented_relocation_without_opportunity_attack(
     assert [(event.change_type, event.position) for event in relocation] == [
         (SpatialChangeType.ENTITY_LEFT, origin), (SpatialChangeType.ENTITY_ENTERED, destination),
     ]
-    assert all(event.parent_lineage == root.lineage_uuid for event in relocation)
+    transfer=next(event for event in completed if isinstance(event,PortalTransferEvent))
+    assert transfer.parent_lineage==root.lineage_uuid
+    assert all(event.parent_lineage == transfer.lineage_uuid for event in relocation)
     assert not any(isinstance(event, (StepMovementEvent, AttackEvent)) for event in completed)
     assert caster.position == caster.senses.position == destination
     assert get_map().get_entities_at(destination) == {caster.uuid}

@@ -30,7 +30,7 @@ from dnd.core.content.registration import (
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import EventHandler
 from dnd.monsters.traits import ParryReactionHandler
-from dnd.reactions import OpportunityAttackHandler
+from dnd.reactions import OpportunityAttackHandler, StandWhenHealedHandler
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +52,11 @@ REACTION_BEHAVIOR_IDENTITY_SPECS: tuple[
     ReactionBehaviorIdentitySpec,
     ...,
 ] = (
+    ReactionBehaviorIdentitySpec(handler_type=StandWhenHealedHandler, pack_id="core.rules",
+        content_id="reaction.stand_when_healed", display_name="Stand when healed",
+        description="Spend a reaction to stand after Power Word Heal when enabled.",
+        icon_key="reaction.stand_when_healed", source_anchor="SRD 5.2, Power Word Heal",
+        sort_group="reactions.standard", sort_order=20),
     ReactionBehaviorIdentitySpec(
         handler_type=OpportunityAttackHandler,
         pack_id="core.rules",

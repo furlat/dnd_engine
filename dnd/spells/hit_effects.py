@@ -178,6 +178,12 @@ class ReapplyQuarry(BaseAction):
         prepared=self._old_removals
         if not isinstance(sustain,QuarrySustain) or application is None or prepared is None:
             return event.cancel(status_message="Mark admission is absent")
+        effect=event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:
+            return effect
+        if (BaseCondition.get(self.sustain_uuid) is not sustain or not sustain.applied
+                or not sustain.contributions_active() or sustain.source_entity_uuid != self.source_entity_uuid):
+            return effect.cancel(status_message="The mark's sustaining effect ended before reapplication")
         with BaseBlock.condition_removal_scope():
             BaseBlock.commit_owned_condition_removals(prepared)
             application.owner.commit_condition_application(application)
@@ -186,7 +192,7 @@ class ReapplyQuarry(BaseAction):
             sustain.add_linked_condition(application.owner.uuid,application.condition.uuid)
             BaseBlock.publish_owned_condition_removals(prepared)
             application.owner.publish_condition_application(application)
-        return event.phase_to(EventPhase.EFFECT)
+        return effect
 
 
 class AttackBackedSpell(SpellAction):
@@ -270,6 +276,8 @@ class AttackBackedSpell(SpellAction):
 
     def _apply(self,event: SpellEvent) -> SpellEvent:
         effect=event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:
+            return effect
         caster=Entity.get(self.source_entity_uuid)
         if caster is None or (weapon:=caster.equipment.get_weapon(self.weapon_slot)) is None or weapon.uuid!=self.selected_weapon_uuid:
             return effect.cancel(status_message="Declared caster or exact weapon is absent")

@@ -950,6 +950,7 @@ class BaseAction(BaseObject):
         ),
     )
     costs: List[Cost] = Field(default_factory=list, description="Runtime costs required by this action.")
+    harmful: bool | None = False
     object_target_policy: Literal["damageable", "active"] = "damageable"
     include_owned_item_targets: bool = Field(default=False,
         description="Include the actor's inventory and equipment in object selection.")
@@ -1357,8 +1358,13 @@ class BaseAction(BaseObject):
                     return "Object is out of physical reach"
                 return None
         if self.effective_target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY, TargetType.CREATURE_OR_OBJECT):
-            positions = [target.position for identity in self.get_all_targets()
-                         if (target := BaseBlock.get(identity)) is not None]
+            targets = [target for identity in self.get_all_targets()
+                       if (target := BaseBlock.get(identity)) is not None]
+            if not self.is_spell and any(target.uuid != self.source_entity_uuid and any(
+                    condition.blocks_external_contact and condition.contributions_active()
+                    for condition in target.active_conditions_by_uuid.values()) for target in targets):
+                return "An active boundary prevents physical contact"
+            positions = [target.position for target in targets]
         elif self.effective_target_type in (TargetType.POSITION, TargetType.POSITION_LOS,
                                            TargetType.POSITION_PATH, TargetType.POSITION_AOE):
             positions = [self.end_position] if self.end_position is not None else []
@@ -2057,6 +2063,8 @@ class BaseAction(BaseObject):
         affordability. Discovery uses it to calculate target legality while
         reporting affordability independently through ``check_costs()``.
         """
+        if self.source_condition_error() is not None:
+            return False
         selection = self.get_position_selection()
         if (selection is not None and selection.kind == "entity_destination"
                 and self.end_position is None):
@@ -2087,6 +2095,18 @@ class BaseAction(BaseObject):
             return False
         return True
 
+    def source_condition_error(self) -> str | None:
+        source = BaseBlock.get(self.source_entity_uuid)
+        if source is not None and not self.is_movement and any(condition.blocks_outward_actions
+                and condition.contributions_active() for condition in source.active_conditions_by_uuid.values()):
+            targets = self.get_all_targets()
+            if self.is_attack or self.harmful or any(identity != source.uuid for identity in targets) or (
+                    self.end_position is not None and self.effective_target_type != TargetType.SELF):
+                return "An active boundary prevents outward actions"
+        if self.is_spell and source is not None and source.is_spellcasting_blocked():
+            return "Spellcasting is prevented by an active condition"
+        return None
+
     def validate_source_requirements_for_discovery(self) -> bool:
         """Validate non-cost requirements that do not depend on a target.
 
@@ -2096,7 +2116,7 @@ class BaseAction(BaseObject):
         source-owned prerequisites override this narrow hook; authoritative
         execution still repeats every requirement in ``_validate``.
         """
-        return True
+        return self.source_condition_error() is None
 
     def pre_validate(self) -> bool:
         """Validate affordability and non-cost requirements without execution."""
@@ -2355,7 +2375,7 @@ class BaseAction(BaseObject):
             update={"use_register": False},
         )
         started = start_phase()
-        targeting_error = (self.position_selection_error() or self.source_item_error() or self.targeting_error()
+        targeting_error = (self.source_condition_error() or self.position_selection_error() or self.source_item_error() or self.targeting_error()
                            or self.physical_access_error() or self.position_placement_error())
         execution_event = (
             detached_declaration.cancel(status_message=targeting_error)
@@ -2422,7 +2442,7 @@ class BaseAction(BaseObject):
 
             # Execution handlers may change the geometry after costs are committed.
             # Rejection here is an interruption, without refunding those costs.
-            access_error = (self.source_item_contact_error() or self.position_selection_error()
+            access_error = (self.source_condition_error() or self.source_item_contact_error() or self.position_selection_error()
                             or self.physical_access_error() or self.position_placement_error())
             if access_error is not None:
                 record_total()

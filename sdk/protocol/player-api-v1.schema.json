@@ -873,7 +873,8 @@
             "damage_type",
             "movement",
             "width",
-            "rank"
+            "rank",
+            "resistance"
           ],
           "title": "Key",
           "type": "string"

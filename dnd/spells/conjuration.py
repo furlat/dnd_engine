@@ -614,11 +614,16 @@ class MistyStep(SpellAction):
             status_message=f"{caster.name} teleports from {start_pos} to {target_pos}"
         )
 
+        if effect_event.canceled: return effect_event
+        transfer = EventQueue.publish_declaration(PortalTransferEvent(source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid, start_position=start_pos, end_position=target_pos,
+            effect_origin=execution_event.get_effect_origin(), parent_event=effect_event.uuid, use_register=False))
+        for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
+            if not transfer.canceled: transfer = transfer.phase_to(phase)
+        if transfer.canceled: return effect_event.with_updates(status_message="Misty Step transfer prevented")
         entry_cursor = EventQueue.event_cursor()
-        Entity.update_entity_position(
-            caster, target_pos, parent_event=effect_event.uuid,
-            occupancy_layer=OccupancyLayer.GROUND,
-        )
+        Entity.update_entity_position(caster, target_pos, parent_event=transfer.uuid, occupancy_layer=OccupancyLayer.GROUND)
+        transfer.phase_to(EventPhase.COMPLETION, committed=True)
         resolve_paid_entry_retreats(caster, since_cursor=entry_cursor, parent_event=effect_event)
 
         distance = abs(target_pos[0] - start_pos[0]) * 5 + abs(target_pos[1] - start_pos[1]) * 5

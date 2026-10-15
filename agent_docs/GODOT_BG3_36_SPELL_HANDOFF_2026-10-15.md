@@ -810,3 +810,8 @@ catalog and actual discovery rows, durable child action/condition declarations,
 public facts, spatial observations and item/summon owners. Source remains
 uncommitted. No other chat was read/contacted and no client code/art was changed.
 The human can give this document to the Godot implementer as-is.
+
+
+## Subsequent 58-spell anti-slop review
+
+The [fresh audit](SPELL_58_ANTISLOP_REVIEW_2026-10-15.md) records the later repaired bugs and current qualification: **483 combined tests passed**, 36 active architecture checks passed, and zero new Python diagnostics. Low-level repairs cover canceled smite casts, mark reapplication/owner loss, canceled field/light movement and stabilization/ground creation, independent Animal Friendship sources and Phantasmal Force's post-defense type choice. High-level repairs cover Sphere's external contact/forced-movement boundary, Antilife Shell's teleport/map-edge behavior, Air Myrmidon Tenacity's miss outcomes/current Strength formula, Break Enchantment's canceled-effect behavior and cold summon-recipe imports. Self mundane items, existing suppression/expiry/cleanup and the approved body/control model remain qualified. All repairs are in the working tree; no client code changed.

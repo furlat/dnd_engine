@@ -32,6 +32,8 @@ import dnd.spells.enchantment as enchantment
 import dnd.spells.evocation as evocation
 import dnd.items.created_items as created_items
 import dnd.monsters.spell_summons as spell_summons
+import dnd.monsters.spell_summon_actions as summon_actions
+import dnd.items.spell_payloads as payloads
 import dnd.spells.illusion as illusion
 import dnd.spells.surfaces as surfaces
 import dnd.spells.necromancy as necromancy
@@ -131,6 +133,17 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     ConditionBehaviorIdentitySpec,
     ...,
 ] = (
+    *tuple(_srd(kind,ContentDefinitionKind.CONDITION,identity) for kind,identity in summon_actions.SUMMON_CONDITION_IDENTITIES),
+    _srd(payloads.SpellPayloadLifetime,ContentDefinitionKind.CONDITION,"condition.spell.payload_lifetime"),
+    _srd(wall_constructions.ForcecageZone,ContentDefinitionKind.CONDITION,"spatial_effect.spell.forcecage"),
+    _srd(summoning_conditions.IndependentSummonOwner,ContentDefinitionKind.CONDITION,"condition.spell.independent_summon_owner"),
+    _srd(illusion.PhantasmalKillerEffect, ContentDefinitionKind.CONDITION, "condition.spell.phantasmal_killer"),
+    _srd(illusion.WeirdEffect, ContentDefinitionKind.CONDITION, "condition.spell.weird"),
+    _srd(transmutation.FleshToStoneEffect, ContentDefinitionKind.CONDITION, "condition.spell.flesh_to_stone.stages"),
+    _srd(transmutation.FleshToStonePetrified, ContentDefinitionKind.CONDITION, "condition.spell.flesh_to_stone.petrified"),
+    ConditionBehaviorIdentitySpec(evocation.VitriolicResidue, ContentDefinitionKind.CONDITION, "content.srd_5_2_cc", "condition.spell.vitriolic_sphere.residue"),
+    ConditionBehaviorIdentitySpec(enchantment.CharmMonsterEffect, ContentDefinitionKind.CONDITION, "content.srd_5_2_cc", "condition.spell.charm_monster"),
+    _srd(enchantment.IrresistibleDanceEffect, ContentDefinitionKind.CONDITION, "condition.spell.irresistible_dance"),
     _original(monster_traits.HitSaveRiderFeature, ContentDefinitionKind.TRAIT, "trait.attack_hit_save_rider"),
     _original(monster_traits.KeenPerceptionFeature, ContentDefinitionKind.TRAIT, "trait.keen_perception"),
     _srd(monster_traits.MagicResistance,ContentDefinitionKind.TRAIT,"trait.magic_resistance"),
@@ -300,6 +313,20 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(abjuration.ProtectionFromEnergyEffect, ContentDefinitionKind.CONDITION, "condition.spell.protection_from_energy"),
     _srd(abjuration.ProtectionFromPoisonEffect, ContentDefinitionKind.CONDITION, "condition.spell.protection_from_poison"),
     _srd(abjuration.ResistanceEffect, ContentDefinitionKind.CONDITION, "condition.spell.resistance"),
+    _srd(enchantment.FeeblemindEffect, ContentDefinitionKind.CONDITION, "condition.spell.feeblemind", srd_version="5.1"),
+    _srd(divination.ForesightEffect, ContentDefinitionKind.CONDITION, "condition.spell.foresight", srd_version="5.1"),
+    _srd(divination.ForesightOwner, ContentDefinitionKind.CONDITION, "condition.spell.foresight.owner", srd_version="5.1"),
+    _srd(abjuration.HolyAuraEffect, ContentDefinitionKind.CONDITION, "condition.spell.holy_aura", srd_version="5.1"),
+    _srd(abjuration.HolyAuraBlindness, ContentDefinitionKind.CONDITION, "condition.spell.holy_aura.blindness", srd_version="5.1"),
+    _srd(abjuration.AuraOfLifeOwner, ContentDefinitionKind.CONDITION, "condition.spell.aura_of_life.owner", srd_version="5.2"),
+    _srd(abjuration.AuraOfLifeBenefit, ContentDefinitionKind.CONDITION, "condition.spell.aura_of_life.benefit", srd_version="5.2"),
+    _srd(abjuration.AuraOfLifeMembership, ContentDefinitionKind.CONDITION, "condition.spell.aura_of_life.membership", srd_version="5.2"),
+    _srd(abjuration.DispelEvilAndGoodEffect, ContentDefinitionKind.CONDITION, "condition.spell.dispel_evil_and_good", srd_version="5.1"),
+    _srd(wall_fields.BladeBarrierZone, ContentDefinitionKind.CONDITION,"spatial_effect.spell.blade_barrier"),
+    _srd(abjuration.AntilifeShellZone, ContentDefinitionKind.CONDITION,"spatial_effect.spell.antilife_shell"),
+    _srd(abjuration.AuraOfLifeZone, ContentDefinitionKind.CONDITION,"spatial_effect.spell.aura_of_life", srd_version="5.2"),
+    _srd(evocation.ResilientSphereEffect, ContentDefinitionKind.CONDITION,"condition.spell.resilient_sphere"),
+    _srd(evocation.ArcaneSwordEffect, ContentDefinitionKind.CONDITION,"condition.spell.arcane_sword"),
     _srd(abjuration.SanctuaryEffect, ContentDefinitionKind.CONDITION, "condition.spell.sanctuary"),
     _srd(abjuration.ShieldBuff, ContentDefinitionKind.CONDITION, "condition.spell.shield"),
     _srd(abjuration.ShieldOfFaithEffect, ContentDefinitionKind.CONDITION, "condition.spell.shield_of_faith"),

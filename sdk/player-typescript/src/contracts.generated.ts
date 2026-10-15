@@ -3021,7 +3021,8 @@ export type ConditionalCosts = ConditionalCost[];
  */
 export type FixedHealing = number | null;
 export type AllocationCompletion = "selected_only" | "fill_primary";
-export type Key1 = "form" | "side" | "radius" | "ability" | "damage_type" | "movement" | "width" | "rank";
+export type Key1 =
+  "form" | "side" | "radius" | "ability" | "damage_type" | "movement" | "width" | "rank" | "resistance";
 export type Value2 = string;
 export type Label1 = string;
 export type VariantFacets = ActionVariantFacet[];

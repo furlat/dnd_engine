@@ -709,7 +709,7 @@ def test_eb_08_014_petrified_composes_severe_control_and_all_damage_resistance()
     target.equipment.ac_bonus.set_target_entity(attacker.uuid)
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
     for damage_type in DamageType:
-        assert target.health.get_resistance(damage_type) == ResistanceStatus.RESISTANCE
+        assert target.health.get_resistance(damage_type) == (ResistanceStatus.IMMUNITY if damage_type is DamageType.POISON else ResistanceStatus.RESISTANCE)
 
     assert target.check_condition_immunity("Poisoned")
     poison_event = target.add_condition(

@@ -14,9 +14,11 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.content.identities import ContentRef
-from dnd.core.creature_types import DamageType
+from dnd.core.creature_types import DamageType, Size
+from dnd.spells.spell_utils import condition_save
+from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.effect_types import ObjectSectionVolume
-from dnd.core.events import Event, EventPhase, EventQueue, ForcedMovementEvent, ItemDestructionEvent, Range, RangeType, SpatialChangeEvent
+from dnd.core.events import Event, EventHandler, EventType, Trigger, PortalTransferEvent, EventPhase, EventQueue, ForcedMovementEvent, ItemDestructionEvent, Range, RangeType, SpatialChangeEvent
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemLocation, ItemPresentationState
 from dnd.core.life_types import RemainsDisposition
@@ -79,6 +81,7 @@ class WallSection(WorldItem):
     wall_owner_uuid: UUID
     geometry: WallAssemblyPresentationGeometry
     magical_force: bool = False
+    force_owner_disintegration: Literal["whole", "section"] = "whole"
     is_pickable: bool = False
     is_targetable: bool = True
     blocks_movement: bool = False
@@ -121,7 +124,7 @@ class WallSection(WorldItem):
 
     def disintegrate(self, parent_event: Event) -> bool:
         owner = BaseCondition.get(self.wall_owner_uuid)
-        if self.magical_force:
+        if self.magical_force and self.force_owner_disintegration == "whole":
             if not isinstance(owner, SolidWallZone):
                 return False
             event = ItemDestructionEvent(source_entity_uuid=parent_event.source_entity_uuid,
@@ -777,3 +780,209 @@ class WallOfForce(ConstructWall):
     spell_level: int = 5
     spell_school: str = "evocation"
     construction_material: Literal["ice", "stone", "force"] = "force"
+
+
+class ForcecageZone(SolidWallZone):
+    name: str = "Forcecage"
+    description: str = "Invisible independent barred cage or sealed box with paid magical escape saves."
+    content_ref: ContentRef = wall_condition_ref("spatial_effect.spell.forcecage")
+    material: Literal["ice", "stone", "force"] = "force"
+    cage_form: Literal["cage", "box"] = "cage"
+    center: tuple[int,int]
+    side_feet: int
+    duration: Duration = Field(default_factory=lambda: Duration(duration=600, duration_type=DurationType.ROUNDS))
+    crossing_channels: ClassVar[frozenset[str] | None] = frozenset({"movement", "propagation",
+        "contact.hand", "contact.weapon", "contact.light_weapon", "contact.natural", "contact.body"})
+
+    def _commit_activation_footprint(self,parent_event):
+        admitted=[]
+        for identity,destination in self._formation_displacements.items():
+            actor=Entity.get(identity)
+            if actor is None:raise ValueError("Formation occupant disappeared")
+            start=actor.position
+            direction=(0 if destination[0]==start[0] else 1 if destination[0]>start[0] else -1,
+                0 if destination[1]==start[1] else 1 if destination[1]>start[1] else -1)
+            distance=max(abs(destination[0]-start[0]),abs(destination[1]-start[1]))*5
+            event=ForcedMovementEvent(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=actor.uuid,
+                start_position=start,end_position=destination,direction=direction,intended_distance=distance,actual_distance=distance,
+                cause="forcecage_formation",parent_event=parent_event.uuid)
+            for phase in (EventPhase.EXECUTION,EventPhase.EFFECT):
+                if not event.canceled:event=event.phase_to(phase)
+            if event.canceled:raise ValueError("Formation ejection refused")
+            admitted.append((actor,destination,event))
+        grid=get_map()
+        sections=grid.prepare_object_sections(tuple((item.uuid,anchor) for item,anchor in self._pending_sections),parent_event=parent_event.uuid)
+        placements=grid.commit_object_sections(sections,publish=False)
+        for (item,_),placement in zip(self._pending_sections,placements,strict=True):
+            item.synchronize_floor_placement(placement)
+            self.sections[item.uuid]=item.geometry
+        AreaCondition._commit_activation_footprint(self,parent_event)
+        self._pending_sections=()
+        self._formation_displacements.clear()
+        errors=[]
+        try:Entity.commit_position_transfers(tuple((actor,destination,event.uuid) for actor,destination,event in admitted))
+        except BaseException as error:errors.append(error)
+        try:grid.publish_object_sections(sections)
+        except BaseException as error:errors.append(error)
+        for _,_,event in admitted:
+            try:event.phase_to(EventPhase.COMPLETION)
+            except BaseException as error:errors.append(error)
+        if errors:raise BaseExceptionGroup("Forcecage formation publication failed",errors)
+
+    def contains(self, position: tuple[int,int]) -> bool:
+        half = self.side_feet / 10
+        return abs(position[0]-self.center[0]) < half and abs(position[1]-self.center[1]) < half
+
+    def blocks_crossing_between(self,start,end,channel,requester_uuid,mode,terminal_provider_uuid=None):
+        if channel == "propagation" and self.cage_form == "cage": return False
+        # Rays and creature crossings on the supported floor use the remaining
+        # ground band. A 10-foot breach need not erase the bars above it.
+        return any(identity != terminal_provider_uuid and wall_path_contact(
+            geometry.model_copy(update={"height_feet":5}),start,end,
+            {cell for cell in self.affected_positions if self.allows_contribution_at(cell)}) is not None
+            for identity,geometry in self.sections.items())
+
+    def _apply(self,event: Event):
+        modifiers,handlers,children,spatial,effect=super()._apply(event)
+        if effect is None or effect.canceled: return modifiers,handlers,children,spatial,effect
+        def escape(transfer: Event,_):
+            if not isinstance(transfer,PortalTransferEvent) or not self.contains(transfer.start_position) or self.contains(transfer.end_position):
+                return None
+            if not any(self.allows_contribution_at(cell) for cell in self.affected_positions): return None
+            traveler=Entity.get(transfer.target_entity_uuid) if transfer.target_entity_uuid else None
+            if traveler is not None and not condition_save(self,traveler,transfer,"charisma",self.spell_dc,"spell.forcecage.escape"):
+                return transfer.cancel(status_message="Forcecage prevents magical escape; attempted resources remain spent")
+            return None
+        def spell_boundary(incoming: Event,_):
+            if self.cage_form != "box" or not isinstance(incoming,SpellEvent) or incoming.canceled:
+                return None
+            if not any(self.allows_contribution_at(cell) for cell in self.affected_positions): return None
+            origin=incoming.effect_source_position or incoming.source_position
+            if origin is None: return None
+            inside=self.contains(origin)
+            if inside and incoming.spell_id in {"misty_step","dimension_door"}: return None
+            terminal=BaseBlock.get(incoming.target_entity_uuid) if incoming.target_entity_uuid else None
+            if incoming.spell_id=="disintegrate" and isinstance(terminal,WallSection) and terminal.wall_owner_uuid==self.uuid:return None
+            target=BaseBlock.get(incoming.target_entity_uuid) if incoming.target_entity_uuid else None
+            destination=target.position if target is not None else incoming.target_position or incoming.aoe_position or origin
+            if destination is not None and inside != self.contains(destination):
+                return incoming.cancel(status_message="Sealed Forcecage blocks the spell boundary")
+            if not inside and incoming.resolved_area_positions is not None:
+                excluded=tuple(cell for cell in incoming.resolved_area_positions if self.contains(cell))
+                if excluded:
+                    return incoming.with_updates(resolved_area_positions=tuple(cell for cell in incoming.resolved_area_positions if cell not in excluded),
+                        suppressions=(*incoming.suppressions,SpellSuppression(provider_uuid=self.uuid,positions=excluded)))
+            return None
+        for handler in (EventHandler(name="Forcecage paid magical escape",source_entity_uuid=self.source_entity_uuid,
+                trigger_conditions=[Trigger(event_type=EventType.PORTAL_TRANSFER,event_phase=EventPhase.EFFECT)],event_processor=escape),
+                EventHandler(name="Forcecage sealed spell boundary",source_entity_uuid=self.source_entity_uuid,
+                trigger_conditions=[Trigger(event_type=kind,event_phase=phase) for kind in (EventType.CAST_SPELL,EventType.BASE_ACTION)
+                    for phase in (EventPhase.EXECUTION,EventPhase.EFFECT)],event_processor=spell_boundary)):
+            EventQueue.add_event_handler(handler);handlers.append(handler.uuid)
+        return modifiers,handlers,children,spatial,effect
+
+
+def forcecage_geometry(center: tuple[int,int], side_feet: int) -> WallAssemblyPresentationGeometry | None:
+    tile=get_map().get_tile(*center)
+    if tile is None: return None
+    half=side_feet//10
+    x,y=center
+    points=((x-half,y-half),(x+half,y-half),(x+half,y+half),(x-half,y+half),(x-half,y-half))
+    return WallAssemblyPresentationGeometry(path=WallPolyline(points=points),base_height_steps=tile.height,
+        width_feet=1/48,height_feet=side_feet)
+
+
+def forcecage_displacements(caster: Entity, center: tuple[int,int],side_feet:int) -> dict[UUID,tuple[int,int]] | None:
+    half=side_feet/10
+    used=set()
+    result={}
+    for entity in sorted(Entity.get_all_entities(),key=lambda actor:str(actor.uuid)):
+        if not entity.is_deployed: continue
+        space={Size.TINY:2.5,Size.SMALL:5,Size.MEDIUM:5,Size.LARGE:10,Size.HUGE:15,Size.GARGANTUAN:20}[entity.size]/10
+        dx,dy=abs(entity.position[0]-center[0]),abs(entity.position[1]-center[1])
+        if dx-space>=half or dy-space>=half: continue
+        if dx+space<=half and dy+space<=half: continue
+        candidates=[]
+        for x in range(center[0]-6,center[0]+7):
+            for y in range(center[1]-6,center[1]+7):
+                point=(x,y)
+                if max(abs(x-center[0])-space,abs(y-center[1])-space)<half or point in used: continue
+                tile=get_map().get_tile(*point)
+                if tile is None or tile.height!=get_map().get_support_elevation_feet(center)//5 or not get_map().is_walkable_for(*point,entity.uuid): continue
+                if get_map().get_entities_at(point)-{entity.uuid}: continue
+                if not get_map().can_reach_between(entity.position,point,PhysicalAccess.BODY,entity.uuid): continue
+                candidates.append(point)
+        if not candidates:return None
+        destination=min(candidates,key=lambda p:(hypot(p[0]-entity.position[0],p[1]-entity.position[1]),p))
+        used.add(destination);result[entity.uuid]=destination
+    return result
+
+
+class Forcecage(SpellAction):
+    name: str = "Forcecage"
+    description: str = "Independent invisible 20-foot barred cage or 10-foot sealed box for one hour."
+    spell_level: int = 7
+    spell_school: str = "evocation"
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.RANGE,normal=100))
+    target_type: TargetType = TargetType.POSITION_LOS
+    cage_form: Literal["cage","box"] = "cage"
+    concentration: bool = False
+
+    def get_selection_geometry(self):
+        return forcecage_geometry(self.end_position,20 if self.cage_form=="cage" else 10) if self.end_position else None
+
+    def get_discovery_template_name(self):return super().get_discovery_template_name()+"__"+self.cage_form
+
+    def get_variant_facets(self):
+        return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.cage_form,label=self.cage_form.title()))
+
+    def get_discovery_variants(self,entity):
+        return [slot.model_copy(update={"cage_form":form}) for slot in super().get_discovery_variants(entity) for form in ("cage","box")]
+
+    def position_placement_error(self,*,subjective=False):
+        geometry=self.get_selection_geometry()
+        error=wall_support_error(self,geometry,subjective=subjective)
+        if error is not None:return error
+        caster=Entity.get(self.source_entity_uuid)
+        if caster is None or self.end_position is None or forcecage_displacements(caster,self.end_position,20 if self.cage_form=="cage" else 10) is None:
+            return "Forcecage cannot displace a partially enclosed creature"
+        return None
+
+    def _create_declaration_event(self,parent_event=None,use_register=True):
+        event=super()._create_declaration_event(parent_event,use_register)
+        return event.with_updates(area_geometry=self.get_selection_geometry()) if event is not None else None
+
+    def _apply(self,event: SpellEvent):
+        caster=Entity.get(self.source_entity_uuid)
+        geometry=self.get_selection_geometry()
+        if caster is None or geometry is None or self.end_position is None:return event.cancel(status_message="Cage placement absent")
+        side=20 if self.cage_form=="cage" else 10
+        displacements=forcecage_displacements(caster,self.end_position,side)
+        sections=construction_sections(geometry)
+        if displacements is None or sections is None:return event.cancel(status_message="Cage formation is impossible")
+        effect=event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:return effect
+        zone=ForcecageZone(source_entity_uuid=caster.uuid,position=self.end_position,geometry=geometry,
+            spell_dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),cage_form=self.cage_form,
+            center=self.end_position,side_feet=side,effect_origin=event.to_effect_origin())
+        pending=[]
+        try:
+            for section in sections:
+                cells=wall_shell_cells(section);anchor=min(cells)
+                item=WallSection(source_entity_uuid=caster.uuid,wall_owner_uuid=zone.uuid,
+                    item_id="spell_construction.forcecage.section",name="Forcecage section",geometry=section,
+                    magical_force=True,force_owner_disintegration="whole" if self.cage_form=="box" else "section",
+                    creation_condition_uuid=zone.uuid,is_invisible=True,health=None,
+                    world_placement_spec=WorldPlacementSpec(kind=WorldPlacementKind.CENTER,occupies_bands=False,
+                        vertical_extent_steps=ceil(section.height_feet/5),footprint_offsets=tuple(sorted((x-anchor[0],y-anchor[1]) for x,y in cells))))
+                pending.append((item,anchor));get_map().validate_object_placement(item.uuid,anchor)
+            zone._pending_sections=tuple(pending);zone._formation_displacements=displacements
+            result=zone.activate(parent_event=effect)
+            if result is None or result.canceled:return effect.cancel(status_message="Forcecage was not admitted")
+            return effect
+        except ValueError as error:
+            return effect.cancel(status_message=str(error))
+        finally:
+            if not zone.applied:
+                for item,_ in pending:item.retire(effect)
+                zone.discard_from_runtime_owner()

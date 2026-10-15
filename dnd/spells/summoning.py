@@ -6,6 +6,7 @@ from pydantic import Field
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
 from dnd.core.action_types import ActionVariantFacet
+from dnd.core.creature_types import DamageType
 from dnd.core.base_actions import BaseAction, Cost, PositionDiscoveryContract, TargetType
 from dnd.core.events import EventPhase, EventQueue, Range, RangeType, SummonAdmissionEvent
 from dnd.entity import Entity
@@ -18,6 +19,8 @@ class SummonSpell(SpellAction):
 
     family: SummonFamily
     form_id: str | None = None
+    breath_type: DamageType = DamageType.FIRE
+    shared_resistance: DamageType = DamageType.FIRE
     spell_school: str = "conjuration"
     concentration: bool = True
     target_type: TargetType = TargetType.POSITION
@@ -32,7 +35,7 @@ class SummonSpell(SpellAction):
         if self.form_id is None or self.end_position is None:
             raise ValueError("Choose a creature and one destination")
         choice = SummonSelection(family=self.family, form_id=self.form_id,
-            cast_at_level=self.cast_at_level, target_position=self.end_position)
+            cast_at_level=self.cast_at_level, target_position=self.end_position,breath_type=self.breath_type,shared_resistance=self.shared_resistance)
         selected_form(choice)
         return choice
 
@@ -134,3 +137,39 @@ class FlamingSphere(SummonSpell):
     form_id: str | None = "flaming_sphere"
     spell_level: int = 2
     concentration: bool = True
+
+
+class ConjureElemental(SummonSpell):
+    name:str="Conjure Elemental"
+    description:str="Summon an allied elemental until long rest; slot six unlocks Myrmidons."
+    family:SummonFamily=SummonFamily.ELEMENTAL
+    spell_level:int=5
+    concentration:bool=False
+
+class PlanarAlly(SummonSpell):
+    name:str="Planar Ally"
+    description:str="Summon an allied Deva, Djinni or Cambion until long rest."
+    family:SummonFamily=SummonFamily.PLANAR_ALLY
+    spell_level:int=6
+    concentration:bool=False
+
+class SummonDragon(SummonSpell):
+    name:str="Summon Dragon"
+    description:str="Summon a Draconic Spirit with independently chosen Breath and shared resistance."
+    family:SummonFamily=SummonFamily.DRAGON
+    form_id:str|None="draconic_spirit"
+    spell_level:int=5
+    def selection(self):
+        choice=super().selection()
+        elements=(DamageType.ACID,DamageType.COLD,DamageType.FIRE,DamageType.LIGHTNING,DamageType.POISON)
+        if choice.breath_type not in elements or choice.shared_resistance not in elements:raise ValueError("Choose one of the five elemental types")
+        return choice
+    def get_variant_facets(self):
+        return (*super().get_variant_facets(),ActionVariantFacet(key="damage_type",value=self.breath_type.value,label=self.breath_type.value+" Breath"),
+            ActionVariantFacet(key="resistance",value=self.shared_resistance.value,label=self.shared_resistance.value+" shared resistance"))
+    def get_discovery_variants(self,entity):
+        elements=(DamageType.ACID,DamageType.COLD,DamageType.FIRE,DamageType.LIGHTNING,DamageType.POISON)
+        return [variant.model_copy(update={"breath_type":breath,"shared_resistance":shared})
+            for variant in super().get_discovery_variants(entity) for breath in elements for shared in elements]
+    def get_discovery_template_name(self):
+        return f"{super().get_discovery_template_name()}__breath_{self.breath_type.value.lower()}__resist_{self.shared_resistance.value.lower()}"

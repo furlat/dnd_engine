@@ -2743,6 +2743,10 @@ class GridMap:
         if not self.spatial_crossing_allows(start, end, "propagation", requester_uuid,
                 subjective=subjective, terminal_provider_uuid=terminal_provider_uuid):
             return False
+        if access is not PhysicalAccess.PROJECTILE and not self.spatial_crossing_allows(
+                start, end, f"contact.{access.value}", requester_uuid, subjective=subjective,
+                terminal_provider_uuid=terminal_provider_uuid):
+            return False
         requester = BaseBlock.get(knowledge_observer_uuid or requester_uuid)
         senses = requester.get_senses() if requester is not None else None
 
@@ -3442,18 +3446,20 @@ class GridMap:
             self._complete_event_effect(effect)
         return tuple(pending.values())
 
-    def place_object_sections(self, sections: Tuple[Tuple[UUID, Tuple[int, int]], ...],
-                              *, parent_event: Optional[UUID] = None) -> Tuple[WorldObjectPlacement, ...]:
+    def prepare_object_sections(self, sections: Tuple[Tuple[UUID, Tuple[int, int]], ...],
+                              *, parent_event: Optional[UUID] = None) -> tuple[PreparedObjectPlacement, ...]:
         """Admit a wall's independent roots before publishing any placed section."""
         if not sections or len({identity for identity, _ in sections}) != len(sections):
             raise ValueError("wall requires unique ordered section identities")
         candidates = [self._object_placement_candidate(identity, anchor) for identity, anchor in sections]
         effects: list[Event] = []
+        admitted_objects: list[BaseBlock] = []
         try:
             for (identity, _), candidate in zip(sections, candidates):
                 obj = BaseBlock.get(identity)
                 if obj is None or identity in self._object_placements or obj.get_supporting_object_uuid() is not None:
                     raise ValueError("wall section must be an unplaced independent root")
+                admitted_objects.append(obj)
                 declaration = SpatialChangeEvent.object_placed(candidate.position, identity, candidate,
                     parent_event=parent_event, blocks_optics=obj.blocks_optics_at_center(),
                     blocks_propagation=obj.blocks_propagation(), blocks_walking=obj.blocks_walking(),
@@ -3470,16 +3476,33 @@ class GridMap:
             for effect in effects:
                 EventQueue.register(effect.cancel("Wall section admission failed"))
             raise
-        for candidate in candidates:
-            obj = BaseBlock.get(candidate.object_uuid)
-            assert obj is not None
+        return tuple(PreparedObjectPlacement(admitted_objects[index],candidate,
+            effects[index] if self._events_enabled else None) for index,candidate in enumerate(candidates))
+
+    def commit_object_sections(self, prepared: tuple[PreparedObjectPlacement, ...], *, publish: bool = True) -> Tuple[WorldObjectPlacement, ...]:
+        """Commit one admitted section batch before disclosing its completions."""
+        if not all(self.validate_prepared_object_placement(token) for token in prepared):
+            raise ValueError("Wall section changed during admission")
+        for token in prepared:
+            obj,candidate=token.obj,token.placement
             self._replace_placement_bands(candidate, add=True)
-            self._object_placements[candidate.object_uuid] = candidate
+            self._object_placements[obj.uuid] = candidate
             self.refresh_object_known_source(obj)
             self._bump_object_revisions(obj.uuid, self._object_revision_channels(obj), candidate.positions)
-        for effect in effects:
-            self._complete_event_effect(effect)
-        return tuple(candidates)
+        if publish:self.publish_object_sections(prepared)
+        return tuple(token.placement for token in prepared)
+
+    def publish_object_sections(self, prepared: tuple[PreparedObjectPlacement, ...]) -> None:
+        errors=[]
+        for token in prepared:
+            if token.effect is not None:
+                try:self._complete_event_effect(token.effect)
+                except BaseException as error:errors.append(error)
+        if errors:raise BaseExceptionGroup("Wall section publication failed",errors)
+
+    def place_object_sections(self, sections: Tuple[Tuple[UUID, Tuple[int, int]], ...],
+                              *, parent_event: Optional[UUID] = None) -> Tuple[WorldObjectPlacement, ...]:
+        return self.commit_object_sections(self.prepare_object_sections(sections,parent_event=parent_event))
 
     def move_object(
         self,

@@ -26,6 +26,10 @@ from dnd.core.events import Event, EventPhase, Range, RangeType, EventType, Even
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
 from dnd.spells.content_metadata import srd_action_identity
+from dnd.spells.spell_utils import validate_spell_recipients, spell_condition_profile
+from dnd.core.base_conditions import Duration
+from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
+from dnd.blocks.skills import all_skills
 
 
 class SeeInvisibilityEffect(BaseCondition):
@@ -460,3 +464,73 @@ class HuntersMark(SpellAction):
             return event.cancel(status_message="Quarry is absent")
         return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),HuntersMarkEffect(
             source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.source_entity_uuid,quarry_uuid=self.target_entity_uuid))
+
+
+class ForesightEffect(BaseCondition):
+    name: str = "Foresight"
+    description: str = "Advantage on attacks, checks and saves; incoming attacks have disadvantage; cannot be surprised."
+    prevents_surprise: bool = True
+    duration: Duration = Field(default_factory=lambda: Duration(duration=4800, duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        caster = Entity.get(self.source_entity_uuid)
+        if target is None or caster is None: return [], [], [], [], event.cancel(status_message="Foresight recipient absent")
+        modifiers = []
+        values = [target.equipment.attack_bonus]
+        for ability in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"):
+            values.extend((target.ability_scores.get_ability(ability).check_bonus,
+                target.saving_throws.get_saving_throw(ability).bonus))
+        values.extend(target.skill_set.get_skill(skill).skill_bonus for skill in all_skills)
+        for value in values:
+            ident = value.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+                value=AdvantageStatus.ADVANTAGE, source_entity_uuid=target.uuid))
+            modifiers.append((value.uuid, ident))
+        value = target.equipment.ac_bonus
+        ident = value.to_target_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+            value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=target.uuid))
+        modifiers.append((value.uuid, ident))
+        return modifiers, [], [], [], event.phase_to(EventPhase.EFFECT)
+
+
+class ForesightOwner(BaseCondition):
+    name: str = "Foresight Owner"
+    description: str = "One same-caster Foresight lease, retained across target changes."
+    recipient_uuid: UUID
+    duration: Duration = Field(default_factory=lambda: Duration(duration=4800, duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.recipient_uuid)
+        if target is None: return [], [], [], [], event.cancel(status_message="Foresight recipient absent")
+        child = ForesightEffect(name=f"Foresight:{self.source_entity_uuid}", source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target.uuid, parent_condition=self.uuid, effect_origin=self.effect_origin,
+            duration=Duration(duration_type=DurationType.PERMANENT))
+        result = target.add_condition(child, parent_event=event)
+        if result is None or result.canceled: return [], [], [], [], event.cancel(status_message="Foresight was not admitted")
+        self.add_linked_condition(target.uuid, child.uuid)
+        return [], [], [], [], event.phase_to(EventPhase.EFFECT)
+
+
+class Foresight(SpellAction):
+    name: str = "Foresight"
+    description: str = "Touch a willing creature for eight hours of foresight; tactical Action casting adaptation."
+    spell_level: int = 9
+    spell_school: str = "divination"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    target_type: TargetType = TargetType.ENTITY
+    include_self: bool = True
+    valid_target_filter: str = "self_or_allies"
+
+    def get_target_effect_profile(self, actor: Any):
+        return spell_condition_profile(self, actor, key="foresight", condition_type=ForesightEffect, beneficial=True)
+
+    def _validate(self, event: SpellEvent):
+        return validate_spell_recipients(self, event)
+
+    def _apply(self, event: SpellEvent):
+        if self.target_entity_uuid is None: return event.cancel(status_message="Recipient absent")
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT), ForesightOwner(
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.source_entity_uuid,
+            recipient_uuid=self.target_entity_uuid))

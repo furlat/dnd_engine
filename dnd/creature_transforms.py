@@ -7,6 +7,7 @@ the ordinary ``(modifiable_value_uuid, modifier_uuid)`` ownership rows used
 for exact, source-owned cleanup.
 """
 
+from dnd.core.geometry import grid_distance_feet
 from typing import Any, Optional, Protocol, runtime_checkable
 from uuid import UUID
 
@@ -38,6 +39,7 @@ class CreatureTransformTarget(Protocol):
     """Structural capability surface required by creature transforms."""
 
     uuid: UUID
+    position: tuple[int, int]
     action_economy: ActionEconomy
     equipment: Equipment
     saving_throws: SavingThrowSet
@@ -211,14 +213,13 @@ def close_range_auto_critical(
     context: Optional[dict[str, Any]] = None,
 ) -> Optional[CriticalModifier]:
     """Return automatic critical status for an attacker within five feet."""
-    del context
     if target_entity_uuid is None:
         return None
     source = _transform_target(source_entity_uuid)
     attacker = _transform_target(target_entity_uuid)
     if source is None or attacker is None:
         return None
-    if source.senses.get_feet_distance(attacker.senses.position) > 5:
+    if grid_distance_feet(source.position,(context or {}).get("attack_origin_position",attacker.senses.position)) > 5:
         return None
     return CriticalModifier(
         name="Close Range Auto-Critical",
@@ -234,7 +235,6 @@ def prone_distance_advantage(
     context: Optional[dict[str, Any]] = None,
 ) -> Optional[AdvantageModifier]:
     """Return prone-style advantage within five feet, else disadvantage."""
-    del context
     if target_entity_uuid is None:
         return None
     source = _transform_target(source_entity_uuid)
@@ -243,7 +243,7 @@ def prone_distance_advantage(
         return None
     status = (
         AdvantageStatus.ADVANTAGE
-        if source.senses.get_feet_distance(attacker.senses.position) <= 5
+        if grid_distance_feet(source.position,(context or {}).get("attack_origin_position",attacker.senses.position)) <= 5
         else AdvantageStatus.DISADVANTAGE
     )
     return AdvantageModifier(

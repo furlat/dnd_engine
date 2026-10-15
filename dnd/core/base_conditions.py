@@ -15,6 +15,7 @@ from pydantic import (
 from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Literal, Set
 
 from dnd.core.modifiers import ContextAwareCondition
+from dnd.core.creature_types import CreatureType
 from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
 from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue, SpatialChangeEvent, WorldTileState
@@ -552,7 +553,18 @@ class BaseCondition(BaseObject):
     grants_invisibility: bool = False
     suppresses_invisibility: bool = False
     blocks_opportunity_attacks: bool = False
+    source_creature_type: CreatureType | None = None
     immunity_names: tuple[str, ...] = ()
+    blocked_action_channels: frozenset[str] = frozenset()
+    prevents_hit_point_maximum_reduction: bool = False
+    denies_dexterity_ac: bool = False
+    blocks_spellcasting: bool = False
+    blocks_outward_actions: bool = False
+    blocks_external_contact: bool = False
+    destroyed_by_disintegrate: bool = False
+    blocks_magic_item_activation: bool = False
+    prevents_surprise: bool = False
+    cured_by_heal: bool = False
     blocks_healing: bool = False
     ignores_difficult_terrain: bool = False
     ignores_magical_speed_reduction: bool = False
@@ -1122,6 +1134,10 @@ class BaseCondition(BaseObject):
     def cancel_prepared_removal(self, reason: str) -> None:
         """Release provisional native removal phases after a graph veto."""
         del reason
+
+    def on_world_closed(self, parent_event: Event | None = None) -> None:
+        """Optional exact-owner cleanup before an administrative world detach."""
+        return None
 
     def prepare_removal_state(self, event: Event) -> Event:
         """Admit native cleanup before either voluntary or mandatory commitment."""

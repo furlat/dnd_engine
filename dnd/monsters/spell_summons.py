@@ -55,6 +55,9 @@ class SpellSummonParameters(BaseModel):
     proficiency: int = 2
     slot_level: int = Field(default=2,ge=2,le=9)
     spell_dc: int = 12
+    attack_bonus: int = 0
+    breath_type: DamageType = DamageType.FIRE
+    shared_resistance: DamageType = DamageType.FIRE
     effect_origin: EffectOrigin | None = None
 
 

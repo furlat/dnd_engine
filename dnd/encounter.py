@@ -380,6 +380,8 @@ class Encounter(BaseObject):
         )
 
         self.combatants[entity.uuid] = combatant
+        if self.state == EncounterState.ACTIVE:
+            entity.active_encounter_uuid = self.uuid
         if controller.execution_mode is ControllerExecutionMode.EXTERNAL:
             entity.is_player_companion=True
         return combatant
@@ -435,6 +437,7 @@ class Encounter(BaseObject):
                    and self.combatants[self.initiative_order[index]].joined_after_uuid == prepared.after_uuid):
                 index += 1
         self.combatants[prepared.entity.uuid] = prepared.combatant
+        prepared.entity.active_encounter_uuid = self.uuid
         if prepared.controller.execution_mode is ControllerExecutionMode.EXTERNAL:
             prepared.entity.is_player_companion=True
         self.initiative_order.insert(index, prepared.entity.uuid)
@@ -500,6 +503,9 @@ class Encounter(BaseObject):
                 self.turn_state = TurnState.ENDED
                 self._end_turn_execution()
         for entity_uuid in pending:
+            entity = Entity.get(entity_uuid)
+            if entity is not None and entity.active_encounter_uuid == self.uuid:
+                entity.active_encounter_uuid = None
             combatant = self.combatants.pop(entity_uuid, None)
             if combatant is not None:
                 combatant.remove_from_register()
@@ -608,6 +614,10 @@ class Encounter(BaseObject):
         self.round_number = 1
 
         Encounter._active_encounter = self
+        for entity_uuid in self.combatants:
+            entity = Entity.get(entity_uuid)
+            if entity is not None:
+                entity.active_encounter_uuid = self.uuid
 
         EventQueue.set_combat_log_callback(self._on_event_combat_log)
         EventQueue.set_perceiver_computer(_compute_perceivers)
@@ -647,6 +657,10 @@ class Encounter(BaseObject):
             self.end_turn()
 
         self.state = EncounterState.ENDED
+        for entity_uuid in self.combatants:
+            entity = Entity.get(entity_uuid)
+            if entity is not None and entity.active_encounter_uuid == self.uuid:
+                entity.active_encounter_uuid = None
         self.ended_at = datetime.now(UTC)
 
         if Encounter._active_encounter is self:
@@ -724,7 +738,7 @@ class Encounter(BaseObject):
             if not combatant.surprised:
                 continue
             entity = combatant.entity
-            if entity is None:
+            if entity is None or entity.prevents_surprise():
                 continue
             available_reactions = entity.action_economy.reactions.normalized_score
             if available_reactions > 0:
@@ -817,7 +831,7 @@ class Encounter(BaseObject):
         if not entity or not combatant:
             return None
 
-        if combatant.surprised and self.round_number == 1:
+        if combatant.surprised and self.round_number == 1 and not entity.prevents_surprise():
             return self._skip_surprised_turn(entity, combatant, controller)
 
         if combatant.is_dead or not combatant.is_alive:

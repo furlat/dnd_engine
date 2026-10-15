@@ -1,7 +1,7 @@
 from dnd.core.effect_types import EventResolutionRef, EffectOrigin
 from dnd.core.damage import DamageResolution
 from dnd.core.attack_types import NaturalWeaponSpec
-from typing import Callable, AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
+from typing import cast, Callable, AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from collections import defaultdict
@@ -304,6 +304,8 @@ class EntityConfig(BaseModel):
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
     size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
+    flesh_body: bool | None = None
+    cannot_manipulate_bodies: bool = False
     gaseous_body: bool = Field(default=False, description="Native body form affected by physical gas barriers.")
     native_plane_id: str = "material"
     current_plane_id: str = "material"
@@ -450,6 +452,8 @@ class Entity(BaseBlock):
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
     size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
+    flesh_body: bool | None = None
+    cannot_manipulate_bodies: bool = False
     gaseous_body: bool = Field(default=False, description="Native body form affected by physical gas barriers.")
     native_plane_id: str = "material"
     current_plane_id: str = "material"
@@ -525,6 +529,7 @@ class Entity(BaseBlock):
     turn_duration_interval: Optional[Tuple[UUID, int]] = Field(
         default=None, exclude=True, description="Existing active encounter turn interval for item effect application.",
     )
+    active_encounter_uuid: UUID | None = None
     is_my_turn: bool = Field(default=False, description="True when it's this entity's turn")
     non_blocking: bool = Field(default=False, description="When True, entity does not block movement through its cell")
     intrinsic_ignore_difficult_terrain: bool = Field(default=False, alias="ignore_difficult_terrain")
@@ -1863,6 +1868,8 @@ class Entity(BaseBlock):
             creature_type=config.creature_type,
             size=config.size,
             gaseous_body=config.gaseous_body,
+            flesh_body=config.flesh_body,
+            cannot_manipulate_bodies=config.cannot_manipulate_bodies,
             native_plane_id=config.native_plane_id, current_plane_id=config.current_plane_id,
             structural_base_size=config.size,
             has_ordinary_sight=config.has_ordinary_sight,
@@ -2119,6 +2126,9 @@ class Entity(BaseBlock):
                                   check_save_throw: bool = True,
                                   parent_event: Event | None = None) -> Event | None:
         """Shared native entity admission: identity, immunity, saving throw."""
+        if condition.source_creature_type is None:
+            source = Entity.get(condition.source_entity_uuid)
+            if source is not None: condition.source_creature_type = source.creature_type
         try:
             if condition.name is None:
                 raise ValueError("BaseCondition name is not set")
@@ -3308,11 +3318,14 @@ class Entity(BaseBlock):
         formula = self.equipment.resolve_armor_class_formula_candidate(
             self.ability_scores
         )
+        denies_dexterity = any(condition.contributions_active() and condition.denies_dexterity_ac
+            for condition in self.active_conditions_by_uuid.values())
         formula_ac: Optional[ModifiableValue] = None
         if formula is not None:
             unarmored_values = self.equipment.get_unarmored_ac_values(formula, use_register=use_register)
-            abilities = self.equipment.get_unarmored_abilities(formula)
-            ability_bonuses = [self.ability_scores.get_ability(ability).get_combined_values(use_register=use_register) for ability in abilities]
+            abilities = [ability for ability in self.equipment.get_unarmored_abilities(formula)
+                if not (denies_dexterity and ability == "dexterity")]
+            ability_bonuses = [self.ability_scores.get_ability(cast(AbilityName, ability)).get_combined_values(use_register=use_register) for ability in abilities]
             formula_ac = unarmored_values[0].combine_values(
                 unarmored_values[1:] + ability_bonuses, use_register=use_register
             )
@@ -3326,6 +3339,8 @@ class Entity(BaseBlock):
             max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
             combined_dexterity_bonus = self.ability_scores.get_ability("dexterity").get_combined_values(use_register=use_register)
 
+            if denies_dexterity:
+                combined_dexterity_bonus = ModifiableValue.create(source_entity_uuid=self.uuid,base_value=0,use_register=use_register)
             if max_dexterity_bonus is not None and combined_dexterity_bonus.normalized_score > max_dexterity_bonus.normalized_score:
                 combined_dexterity_bonus = max_dexterity_bonus
 
@@ -3669,6 +3684,7 @@ class Entity(BaseBlock):
         damage_type: DamageType,
         source_entity_uuid: UUID,
         damage_rolls: Optional[List[DiceRoll]] = None,
+        component_amounts: tuple[int, ...] | None = None,
         damages: Optional[List[Damage]] = None,
         parent_event: Optional[UUID] = None,
         critical_hit: bool = False,
@@ -3727,6 +3743,7 @@ class Entity(BaseBlock):
             normal_hit_point_damage_cap=normal_hit_point_damage_cap,
             zero_hp_disposition=zero_hp_disposition,
             damage_rolls=damage_rolls or [],
+            component_amounts=component_amounts,
             damages=event_damages,
             effect_id=effect_id,
             parent_event=parent_event,
@@ -3992,7 +4009,8 @@ class Entity(BaseBlock):
         self._runtime_agency_revoked = True
 
     def allows_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> bool:
-        return self.action_economy.allows_action_channels(channels)
+        return not any(condition.contributions_active() and condition.blocked_action_channels.intersection(channels)
+            for condition in self.active_conditions_by_uuid.values()) and self.action_economy.allows_action_channels(channels)
 
     def record_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> None:
         self.action_economy.record_action_channels(channels)
@@ -6231,7 +6249,7 @@ class Entity(BaseBlock):
     ) -> List[AvailableActionInfo]:
         """Collect SELF-targeting actions (Dash, Dodge, etc.)."""
         actions: List[AvailableActionInfo] = []
-        for registered_template in self.self_actions:
+        for registered_template in self.registered_actions:
             variants = (
                 discovery_variants.get(registered_template.uuid)
                 if discovery_variants is not None
@@ -6240,6 +6258,7 @@ class Entity(BaseBlock):
             if variants is None:
                 variants = registered_template.get_discovery_variants(self)
             for template in variants:
+                if template.effective_target_type is not TargetType.SELF:continue
                 template_name = template.get_discovery_template_name()
                 display_name = template.get_discovery_display_name()
                 can_afford = template.check_target_independent_costs()
@@ -6294,7 +6313,7 @@ class Entity(BaseBlock):
         actions: List[AvailableActionInfo] = []
         timing = action_timing_enabled()
         started = time.perf_counter() if timing else 0.0
-        registered_entity_actions = self.entity_actions
+        registered_entity_actions = self.registered_actions
         target_pool_cache: Dict[Tuple[str, bool, bool], Dict[UUID, Tuple[int, int]]] = {}
         if timing:
             record_action_timing("available_actions.entity_actions.list_templates_ms", started)
@@ -6709,7 +6728,7 @@ class Entity(BaseBlock):
         """
         grid = get_map()
         actions: List[AvailableActionInfo] = []
-        for registered_template in self.position_actions:
+        for registered_template in self.registered_actions:
             variants = (
                 discovery_variants.get(registered_template.uuid)
                 if discovery_variants is not None
@@ -7132,7 +7151,7 @@ class Entity(BaseBlock):
     ) -> List[AvailableActionInfo]:
         """Collect line-of-sight position actions."""
         actions: List[AvailableActionInfo] = []
-        for registered_template in self.position_actions:
+        for registered_template in self.registered_actions:
             variants = (
                 discovery_variants.get(registered_template.uuid)
                 if discovery_variants is not None
@@ -7271,7 +7290,7 @@ class Entity(BaseBlock):
         visible_position_set = self._prepare_aoe_caches(caster_visible_positions)
         self._prepare_position_preview_cache(visible_position_set)
 
-        for registered_template in self.position_actions:
+        for registered_template in self.registered_actions:
             variants = (
                 discovery_variants.get(registered_template.uuid)
                 if discovery_variants is not None

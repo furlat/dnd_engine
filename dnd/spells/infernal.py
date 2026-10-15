@@ -140,7 +140,7 @@ def _rebuke_processor(
         return None
     caster = Entity.get(source_entity_uuid)
     attacker = Entity.get(event.source_entity_uuid)
-    if caster is None or attacker is None:
+    if caster is None or attacker is None or caster.is_spellcasting_blocked():
         return None
     source_options = caster.spellcasting.learned_reaction_spell_sources(
         spell_ref.content_id,

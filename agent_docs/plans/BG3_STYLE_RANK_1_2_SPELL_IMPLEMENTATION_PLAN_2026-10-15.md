@@ -1223,7 +1223,7 @@ proposed profiles for this batch, with Q references for unresolved choices.
 | Flame Blade | Normal spell is nonconcentration, real item with melee spell accuracy/no ability damage; Extra Attack exception. The racial version differs and is not added. |
 | Divine Favor | BG3 three-turn concentration, not silently ten turns or the 2024 no-concentration form. |
 | Dancing Lights |30ft bright radius; no physical trap/vent occupancy. For all spell lights, native dim radius is additional beyond bright (§3.2). |
-| Flaming Sphere |20HP/AC16/30ft movement; Ram bonus action with5ft contact; immune fire/necrotic/poison/psychic, resistant physical/acid/lightning, vulnerable cold; toggled Ablaze/trail uses the selected Q9 cadence. No Explorer-mode doubled HP profile is added. |
+| Flaming Sphere |20HP/AC16/30ft movement; Ram bonus action with 5ft contact; immune fire/necrotic/poison/psychic, resistant physical/acid/lightning, vulnerable cold; toggled Ablaze/trail uses the selected Q9 cadence. No Explorer-mode doubled HP profile is added. |
 
 Sources supporting the refinements include
 [Hideous Laughter condition](https://bg3.wiki/wiki/Hideous_Laughter_(Condition)),
@@ -1561,3 +1561,8 @@ one-shot tick. Actual execution implements and tests those mechanics. Summons us
 existing autonomous allied controllers; no manual summon-control interface was
 added. BG3 adaptations and their deliberate rule choices remain documented in the
 per-spell cards and§1.3.
+
+
+## Subsequent human-requested anti-slop review of all 58 spells
+
+A fresh critical review found defects missed by the original acceptance, and repaired them within the approved scope. The [complete audit](../SPELL_58_ANTISLOP_REVIEW_2026-10-15.md) records every finding, all 58 root dispositions and all 12 body checks. The final combined spell/player/progression run passes **483 tests**; active architecture gates pass **36 tests** with 5 unchanged legacy deselections; typing has **zero new diagnostics** against the existing 92-diagnostic baseline. Both reviewers and the plan tracker passed the closing repairs. Original validation above remains historical evidence, including its documented baseline exclusions. No new commit, NDClient work or framework expansion was made for this review.

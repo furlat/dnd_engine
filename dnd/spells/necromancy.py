@@ -1923,6 +1923,8 @@ class HarmSource(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
             return [], [], [], [], declaration_event.cancel(status_message="Harm target not found")
+        if target.health.prevents_maximum_reduction():
+            return [], [], [], [], declaration_event.cancel(status_message="Maximum hit point reduction is prevented")
         effect = target.active_conditions.get("Harm")
         if effect is None:
             effect = HarmEffect(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid,
@@ -2629,10 +2631,13 @@ class SpareTheDying(SpellAction):
         return checked if checked is None or checked.canceled else checked.phase_to(EventPhase.EXECUTION)
 
     def _apply(self, event: SpellEvent) -> Optional[SpellEvent]:
+        effect = event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:
+            return effect
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target is None or not target.stabilize(parent_event=event):
-            return event.cancel(status_message="Target cannot be stabilized")
-        return event.phase_to(EventPhase.EFFECT, status_message=f"{target.name} is stable at 0 HP")
+        if target is None or not target.stabilize(parent_event=effect):
+            return effect.cancel(status_message="Target cannot be stabilized")
+        return effect.with_updates(status_message=f"{target.name} is stable at 0 HP")
 
 
 class RayOfSickness(SpellAction):

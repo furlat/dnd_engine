@@ -35,7 +35,7 @@ from dnd.core.events import (
     EventType,
     ExposedFlameEvent,
     ForcedMovementEvent,
-    PortalTransferEvent, MechanismActivationEvent,
+    PortalTransferEvent, MechanismActivationEvent, StandOfferEvent,
     HealEvent,
     HealRollResultEvent,
     InstantDeathEvent,
@@ -712,7 +712,7 @@ def _retained_event(event: Event, audience: PlayerAudience,
             copied = event.model_copy(update=common)
         case ShoveEvent():
             copied = event.model_copy(update={**common, "shover_athletics": None})
-        case AreaReachEvent() | MovementEvent() | JumpEvent() | TraverseConnectorEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent():
+        case AreaReachEvent() | MovementEvent() | JumpEvent() | TraverseConnectorEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | StandOfferEvent():
             copied = event.model_copy(update=common)
         case EntityCreatedEvent() | EntityFactionChangedEvent() | SensoryUpdateEvent() | LifeStateChangeEvent() | DeathEvent() | HealEvent() | TemporaryHitPointsChangedEvent() | ConditionStateChangedEvent():
             copied = event.model_copy(update=common)
@@ -755,7 +755,7 @@ def _actor_participants(event: Event) -> tuple[UUID, ...]:
             | SpatialChangeType.ENTITY_LEFT | SpatialChangeType.MOVEMENT_COLLISION
         )):
             return (event.entity_uuid,) if event.entity_uuid is not None else ()
-        case ConditionApplicationEvent() | ConditionRemovalEvent() | ConditionStateChangedEvent() | TakeDamageEvent() | DamageAppliedEvent() | HealEvent() | PortalTransferEvent():
+        case ConditionApplicationEvent() | ConditionRemovalEvent() | ConditionStateChangedEvent() | TakeDamageEvent() | DamageAppliedEvent() | HealEvent() | PortalTransferEvent() | StandOfferEvent():
             return (event.target_entity_uuid,) if event.target_entity_uuid is not None else ()
         case ActionEvent() | StepMovementEvent() | ForcedMovementEvent() | D20Event() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent():
             return tuple(identity for identity in (event.source_entity_uuid, event.target_entity_uuid)
@@ -1146,7 +1146,7 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 pass
             case TurnEvent() | RoundEvent() | EncounterEvent():
                 _reduce_turn_fact(result, event)
-            case AreaReachEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | SpatialEffectChangeEvent() | SpatialEffectInteractionEvent():
+            case AreaReachEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | StandOfferEvent() | SpatialEffectChangeEvent() | SpatialEffectInteractionEvent():
                 # Senses supplies committed positions and observed fixture state.
                 # Spatial lifecycle events retain causality, not another state writer.
                 pass

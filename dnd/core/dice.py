@@ -104,7 +104,7 @@ class DiceRoll(BaseModel):
     )
     effective_dice_count: Optional[int] = Field(
         default=None,
-        ge=1,
+        ge=0,
         description=(
             "Number of selected dice contributing to the natural result. A d20 "
             "with advantage still contributes one selected die."
@@ -112,7 +112,7 @@ class DiceRoll(BaseModel):
     )
     random_faces_rolled: Optional[int] = Field(
         default=None,
-        ge=1,
+        ge=0,
         description="Number of random die faces generated, including advantage alternatives.",
     )
     roll_type: RollType = Field(
@@ -187,8 +187,8 @@ class Dice(BaseModel):
     )
     count: int = Field(
         ...,
-        description="Number of dice in the base expression.",
-        ge=1,
+        description="Number of dice in the base expression; zero represents authored fixed damage.",
+        ge=0,
     )
     value: Literal[4, 6, 8, 10, 12, 20] = Field(
         ...,

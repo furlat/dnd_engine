@@ -31,7 +31,7 @@ from dnd.core.events import (
     AreaReachEvent, AttackD20RollResultEvent, D20Event, D20RollResultEvent, DamageAppliedEvent,
     DamageRollResultEvent, DeathEvent, DeathSaveEvent, EncounterEndEvent,
     EncounterEvent, EncounterStartEvent, EntityCreatedEvent, EntityFactionChangedEvent, Event, EventPhase, ExposedFlameEvent,
-    ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
+    ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, StandOfferEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
     ItemDestructionEvent, LifeStateChangeEvent, ReviveEvent, RoundEndEvent, RoundEvent, RoundStartEvent,
     SavingThrowD20RollResultEvent, SavingThrowEvent, SensoryUpdateEvent,
     SkillCheckD20RollResultEvent, SkillCheckEvent, SpatialChangeEvent, SpatialEffectChangeEvent, SpatialEffectInteractionEvent,
@@ -55,7 +55,7 @@ EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
     HealEvent, TemporaryHitPointsChangedEvent, DeathEvent, DeathSaveEvent, InstantDeathEvent, ReviveEvent,
     LifeStateChangeEvent, SensoryUpdateEvent, SpatialChangeEvent, TileElevationChangeEvent,
     SpatialEffectChangeEvent, SpatialEffectInteractionEvent, StepMovementEvent,
-    ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, EncounterEvent, EncounterStartEvent, EncounterEndEvent,
+    ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, StandOfferEvent, EncounterEvent, EncounterStartEvent, EncounterEndEvent,
     RoundEvent, RoundStartEvent, RoundEndEvent, TurnEvent, TurnStartEvent, TurnEndEvent,
 )}
 # Keep the original archive discriminator while the Python name describes both operations.

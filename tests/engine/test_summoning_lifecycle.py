@@ -26,7 +26,7 @@ from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spells.summoning import ConjureAnimals, ConjureFey, ConjureFiend, SpiritualWeapon, FlamingSphere
+from dnd.spells.summoning import ConjureAnimals, ConjureFey, ConjureFiend, SpiritualWeapon, FlamingSphere, ConjureElemental, PlanarAlly, SummonDragon
 from dnd.summoning.system import bind_summoning
 
 
@@ -279,7 +279,7 @@ def test_uncontrolled_fey_rejoins_without_its_former_summoner(battle):
 @pytest.mark.parametrize("form", SUMMON_FORMS, ids=lambda form:f"{form.family.value}-{form.form_id}")
 def test_all_authored_forms_cast_at_their_unlock_level(battle,form):
     _,_,system,caster,_ = battle
-    spells = {SummonFamily.ANIMALS: ConjureAnimals, SummonFamily.FEY: ConjureFey, SummonFamily.FIEND: ConjureFiend, SummonFamily.SPIRITUAL_WEAPON: SpiritualWeapon, SummonFamily.FLAMING_SPHERE: FlamingSphere}
+    spells = {SummonFamily.ANIMALS: ConjureAnimals, SummonFamily.FEY: ConjureFey, SummonFamily.FIEND: ConjureFiend, SummonFamily.SPIRITUAL_WEAPON: SpiritualWeapon, SummonFamily.FLAMING_SPHERE: FlamingSphere, SummonFamily.ELEMENTAL:ConjureElemental, SummonFamily.PLANAR_ALLY:PlanarAlly, SummonFamily.DRAGON:SummonDragon}
     result = spells[form.family](source_entity_uuid=caster.uuid, form_id=form.form_id,
         cast_at_level=max(3,form.minimum_slot), end_position=(4,2)).apply()
     assert result is not None and not result.canceled

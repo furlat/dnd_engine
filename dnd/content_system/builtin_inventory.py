@@ -42,6 +42,7 @@ from dnd.items.spell_items import (
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_DECLARATIONS
 from dnd.monsters.demon_variants import DEMON_VARIANT_DECLARATIONS
 from dnd.monsters.spell_summons import SPELL_SUMMON_DECLARATIONS
+from dnd.monsters.high_level_spell_summons import HIGH_LEVEL_SPELL_SUMMON_DECLARATIONS
 from dnd.monsters.beasts import BEAST_DECLARATIONS
 from dnd.monsters.fiends import FIEND_DECLARATIONS
 from dnd.monsters.goblins import GOBLIN_DECLARATIONS
@@ -97,6 +98,7 @@ _ALL_BUILT_IN_DECLARATIONS: tuple[
     *BESTIARY_CREATURE_DECLARATIONS,
     *DEMON_VARIANT_DECLARATIONS,
     *SPELL_SUMMON_DECLARATIONS,
+    *HIGH_LEVEL_SPELL_SUMMON_DECLARATIONS,
     *BEAST_DECLARATIONS,
     *GOBLIN_DECLARATIONS,
     *GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS,

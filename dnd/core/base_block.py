@@ -668,6 +668,14 @@ class BaseBlock(BaseModel):
         """Get all light sources attached to this block."""
         return self._attached_light_sources.copy()
 
+    def is_spellcasting_blocked(self) -> bool:
+        return any(condition.blocks_spellcasting and condition.contributions_active()
+            for condition in self.active_conditions_by_uuid.values())
+
+    def prevents_surprise(self) -> bool:
+        return any(condition.prevents_surprise and condition.contributions_active()
+            for condition in self.active_conditions_by_uuid.values())
+
     def is_enemy_of(self, other_uuid: UUID) -> bool:
         """Whether this block considers other_uuid an enemy.
         Default: True (unknown blocks are enemies).
