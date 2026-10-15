@@ -1956,6 +1956,16 @@ def create_weapon_attack_declaration_event(
 
 
 
+def grant_weapon_attack_batch(source_uuid: UUID,declaration: ActionEvent,execution: ActionEvent) -> None:
+    """Grant native Extra Attack credit for one paid weapon-attempt action."""
+    source=Entity.get(source_uuid)
+    if source is None or not source.action_economy.grant_attack_batch(execution.lineage_uuid):
+        return
+    if "ExtraAttacksGranted" not in source.active_conditions:
+        source.add_condition(ExtraAttacksGranted(source_entity_uuid=source.uuid,target_entity_uuid=source.uuid),
+            parent_event=declaration)
+
+
 @_core_action_identity(
     content_id="action.attack",
     display_name="Attack",
@@ -1963,6 +1973,8 @@ def create_weapon_attack_declaration_event(
     source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Attack",
     sort_order=30,
 )
+
+
 class Attack(BaseAction):
     """Weapon attack action.
 
@@ -2192,11 +2204,19 @@ class Attack(BaseAction):
         weapon = source.equipment.get_weapon(event.weapon_slot)
         if event.source_item_uuid is not None and (weapon is None or weapon.uuid != event.source_item_uuid):
             return False
+        if weapon is not None and weapon.spell_attack_profile is not None:
+            if weapon.spell_attack_profile.wielder_uuid!=source.uuid or not weapon.contributions_active():
+                return False
+            target=BaseBlock.get(event.target_entity_uuid) if event.target_entity_uuid else None
+            if target is not None and (SpellProtectionRegistry.is_protected(target.position,source.position,weapon.spell_attack_profile.effect_origin.base_spell_level or 2)
+                    or SpellProtectionRegistry.get_antimagic_suppressions(set(bresenham_line(source.position,target.position)))):
+                return False
         return weapon is None or event.weapon_slot in source.equipment.compatible_slots_for_actor(weapon)
 
     @staticmethod
     def attack_consequences(execution_event: AttackEvent, source_entity_uuid: UUID, *,
-                            physical_access: Optional[PhysicalAccess] = None) -> Optional[AttackEvent]:
+                            physical_access: Optional[PhysicalAccess] = None,
+                            on_hit: Callable[[AttackEvent], AttackEvent] | None = None) -> Optional[AttackEvent]:
             """
             Resolve an attack roll, damage rolls, and damage application.
 
@@ -2239,6 +2259,7 @@ class Attack(BaseAction):
                     target_entity_uuid=target_entity_uuid,
                     weapon_slot=weapon_slot,
                     physical_access=physical_access,
+                    on_hit=on_hit,
                 )
 
     @staticmethod
@@ -2250,6 +2271,7 @@ class Attack(BaseAction):
         target_entity_uuid: UUID,
         weapon_slot: WeaponSlot,
         physical_access: Optional[PhysicalAccess],
+        on_hit: Callable[[AttackEvent], AttackEvent] | None = None,
     ) -> AttackEvent:
             """Resolve one attack while both contextual targets are bound."""
             source_entity_uuid = source_entity.uuid
@@ -2269,6 +2291,13 @@ class Attack(BaseAction):
                 modifier = weapon.attack_bonus.get_base_modifier()
                 if modifier is not None:
                     attack_bonus.remove_modifier(modifier.uuid)
+            if item_suppressions and weapon is not None:
+                for identity in weapon.magical_attack_sources:
+                    owner=weapon.active_conditions_by_uuid.get(identity)
+                    if owner is not None:
+                        for modifier_ids in owner.modifers_uuids.values():
+                            for modifier_uuid in modifier_ids:
+                                attack_bonus.remove_modifier(modifier_uuid)
             ac = (target_entity.ac_bonus(source_entity.uuid) if isinstance(target_entity, Entity)
                   else ModifiableValue.create(source_entity_uuid=target_entity.uuid,
                       target_entity_uuid=source_entity.uuid, base_value=target_entity.armor_class, value_name="Object AC"))
@@ -2343,7 +2372,8 @@ class Attack(BaseAction):
             )
             record_action_timing("attack.roll_d20_ms", started)
             started = time.perf_counter()
-            crit_threshold = source_entity.get_crit_threshold(weapon_slot)
+            crit_threshold = (source_entity.get_spell_crit_threshold() if weapon is not None and weapon.spell_attack_profile is not None
+                else source_entity.get_crit_threshold(weapon_slot))
             attack_outcome = determine_attack_outcome(dice_roll, ac, crit_threshold)
             weapon = source_entity.equipment.get_weapon(weapon_slot)
             missile_size = (execution_event.natural_weapon.missile_size if execution_event.natural_weapon is not None
@@ -2396,6 +2426,10 @@ class Attack(BaseAction):
                 record_action_timing("attack.miss_completion_ms", started)
                 return completion_event
 
+            if on_hit is not None:
+                attack_event=on_hit(attack_event)
+                if attack_event.canceled:
+                    return attack_event
             started = time.perf_counter()
             damages = source_entity.get_damages(weapon_slot, target_entity_uuid, override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
             if item_suppressions and weapon is not None:
@@ -2408,7 +2442,14 @@ class Attack(BaseAction):
                     modifier = weapon.damage_bonus.get_base_modifier() if weapon.damage_bonus is not None else None
                     if modifier is not None and damages and damages[0].damage_bonus is not None:
                         damages[0].damage_bonus.remove_modifier(modifier.uuid)
-            damages.extend(execution_event.additional_damages)
+            if item_suppressions and weapon is not None and damages and damages[0].damage_bonus is not None:
+                for identity in weapon.magical_attack_sources:
+                    owner=weapon.active_conditions_by_uuid.get(identity)
+                    if owner is not None:
+                        for modifier_ids in owner.modifers_uuids.values():
+                            for modifier_uuid in modifier_ids:
+                                damages[0].damage_bonus.remove_modifier(modifier_uuid)
+            damages.extend(attack_event.additional_damages)
             record_action_timing("attack.get_damages_ms", started)
             started = time.perf_counter()
             attack_event = attack_event.phase_to(
@@ -2426,7 +2467,8 @@ class Attack(BaseAction):
 
             if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
                 started = time.perf_counter()
-                crit_extra_dice = source_entity.get_crit_extra_dice(weapon_slot)
+                crit_extra_dice = (source_entity.get_spell_crit_extra_dice() if weapon is not None and weapon.spell_attack_profile is not None
+                    else source_entity.get_crit_extra_dice(weapon_slot))
                 damage_packets = []
                 for damage in damages:
                     dice = damage.get_dice(attack_outcome=attack_event.attack_outcome, crit_extra_dice=crit_extra_dice)
@@ -2446,7 +2488,10 @@ class Attack(BaseAction):
                     target_entity_uuid=target_entity.uuid,
                     source_entity_name=source_entity.name,
                     target_entity_name=target_entity.name,
-                    weapon_slot=weapon_slot,
+                    weapon_slot=None if weapon is not None and weapon.spell_attack_profile is not None else weapon_slot,
+                    attack_kind=("spell" if weapon is not None and weapon.spell_attack_profile is not None else "natural" if execution_event.natural_weapon else
+                        "unarmed" if weapon is None or weapon.is_body_attack else "weapon"),
+                    source_item_uuid=weapon.uuid if weapon is not None else None,
                     attack_outcome=attack_event.attack_outcome,
                     damage_packets=damage_packets,
                     parent_event=attack_event.uuid,
@@ -2496,6 +2541,7 @@ class Attack(BaseAction):
                         damages=damages,
                         parent_event=attack_event.uuid,
                         critical_hit=attack_event.attack_outcome == AttackOutcome.CRIT,
+                        effect_origin=weapon.spell_attack_profile.effect_origin if weapon is not None and weapon.spell_attack_profile is not None else None,
                         impact_direction=(target_entity.position[0] - source_entity.position[0],
                                           target_entity.position[1] - source_entity.position[1]),
                     )
@@ -2506,6 +2552,7 @@ class Attack(BaseAction):
                     new_phase=EventPhase.EFFECT,
                     is_first=False,
                     damage_rolls=damage_rolls,
+                    damages=damages,
                     total_damage=actual_damage,
                     status_message=f"Damages taken: {[damage.total for damage in damage_rolls]}"
                 )
@@ -2535,14 +2582,7 @@ class Attack(BaseAction):
         super()._on_costs_committed(declaration, execution)
         if not any(cost.cost_type == "actions" and cost.cost > 0 for cost in self.effective_costs):
             return
-        source = Entity.get(self.source_entity_uuid)
-        if source is None or not source.action_economy.grant_attack_batch(execution.lineage_uuid):
-            return
-        if "ExtraAttacksGranted" not in source.active_conditions:
-            source.add_condition(
-                ExtraAttacksGranted(source_entity_uuid=source.uuid, target_entity_uuid=source.uuid),
-                parent_event=declaration,
-            )
+        grant_weapon_attack_batch(self.source_entity_uuid,declaration,execution)
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the attack action."""
@@ -3038,6 +3078,32 @@ class ShakeAwake(BaseAction):
     def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply the action cost for waking the sleeper."""
         return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
+
+
+@_core_action_identity(content_id="action.ally_help",display_name="Help",
+    description="Help an allied creature remove an effect that permits assistance.",
+    source_anchor="BG3 adapted ally assistance",sort_order=85)
+class AllyHelp(ShakeAwake):
+    name: str = "Help"
+    description: str = "Remove eligible spell effects from an ally within 7 feet."
+    valid_target_filter: str = "allies"
+
+    def get_range(self) -> Range:
+        return Range(type=RangeType.REACH,normal=7)
+
+    @staticmethod
+    def _wakeable_condition_uuids(target: Entity) -> tuple[UUID,...]:
+        return tuple(condition.uuid for condition in target.active_conditions_by_uuid.values()
+            if ConditionRemovalTrigger.ALLY_HELP in condition.removal_triggers)
+
+    def _validate(self,event: ActionEvent) -> ActionEvent:
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None or caster.uuid==target.uuid or not caster.is_ally(target):
+            return event.cancel(status_message="Help requires another allied creature")
+        if caster.senses.get_feet_distance(target.position)>7 or not self._wakeable_condition_uuids(target):
+            return event.cancel(status_message="No eligible effect within Help reach")
+        return event.phase_to(EventPhase.EXECUTION)
 
 
 @_core_action_identity(
@@ -4211,6 +4277,7 @@ class Shove(BaseAction):
         return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 class SpellEvent(ActionEvent):
+    weapon_attack_slot: WeaponSlot | None = None
     """Event payload for spell casting and spell effect logs."""
 
     target_kind: Literal["creature", "object"] = "creature"
@@ -4834,6 +4901,8 @@ class SpellAction(BaseAction):
             if contact is None:
                 return declaration.cancel(status_message="Object is out of spell reach")
             return declaration.with_updates(target_kind="object", target_position=contact)
+        if target.uuid==source.uuid:
+            return declaration if self.include_self else declaration.cancel(status_message="This spell does not allow self targeting")
         visible = validate_line_of_sight(declaration, source.uuid)
         if visible is None or visible.canceled:
             return visible
@@ -5159,7 +5228,7 @@ class SpellAction(BaseAction):
 
     def apply_owned_condition(self, event: SpellEvent, effect: BaseCondition) -> SpellEvent:
         """Admit both memberships and the exact sustain link before completion."""
-        target = Entity.get(effect.target_entity_uuid) if effect.target_entity_uuid else None
+        target = BaseBlock.get(effect.target_entity_uuid) if effect.target_entity_uuid else None
         if target is None:
             return event.cancel(status_message="Spell recipient no longer exists")
         if event.canceled:
@@ -5439,6 +5508,9 @@ class SpellAction(BaseAction):
                 recipients.append(target_uuid)
         return bool(branches), recipients
 
+    def get_spell_weapon_attack_slot(self) -> WeaponSlot | None:
+        return None
+
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for this spell."""
         source_entity = Entity.get(self.source_entity_uuid)
@@ -5463,8 +5535,9 @@ class SpellAction(BaseAction):
                     subjective=True, origin=self.get_target_origin())
         event = SpellEvent(
             event_type=EventType.CAST_SPELL if self.is_spell else EventType.BASE_ACTION,
+            weapon_attack_slot=self.get_spell_weapon_attack_slot(),
             target_kind="object" if isinstance(target_entity, BaseItem) else "creature",
-            target_position=(self.end_position if self.effective_target_type is TargetType.POSITION
+            target_position=(self.end_position if self.effective_target_type in (TargetType.POSITION,TargetType.POSITION_LOS)
                 else contact if isinstance(target_entity, BaseItem) else target_entity.position if target_entity else None),
             target_base_height_steps=placement.base_height_steps if placement else None,
             name=f"{self.name}",
@@ -5718,6 +5791,7 @@ _CORE_STANDARD_ACTION_TYPES = (
         Disengage,
         DropConcentration,
         ShakeAwake,
+        AllyHelp,
         Hide,
         Jump,
         Shove,

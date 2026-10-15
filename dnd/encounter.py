@@ -380,6 +380,8 @@ class Encounter(BaseObject):
         )
 
         self.combatants[entity.uuid] = combatant
+        if controller.execution_mode is ControllerExecutionMode.EXTERNAL:
+            entity.is_player_companion=True
         return combatant
 
     def get_controller_for(self, entity_uuid: UUID) -> Optional[Controller]:
@@ -433,6 +435,8 @@ class Encounter(BaseObject):
                    and self.combatants[self.initiative_order[index]].joined_after_uuid == prepared.after_uuid):
                 index += 1
         self.combatants[prepared.entity.uuid] = prepared.combatant
+        if prepared.controller.execution_mode is ControllerExecutionMode.EXTERNAL:
+            prepared.entity.is_player_companion=True
         self.initiative_order.insert(index, prepared.entity.uuid)
         if active_uuid is not None:
             self.current_turn_index = self.initiative_order.index(active_uuid)
@@ -529,6 +533,9 @@ class Encounter(BaseObject):
             raise ValueError(f"Entity {entity_uuid} is not in this encounter")
         previous_controller_uuid = combatant.controller_uuid
         combatant.controller_uuid = controller.uuid
+        entity=Entity.get(entity_uuid)
+        if entity is not None and controller.execution_mode is ControllerExecutionMode.EXTERNAL:
+            entity.is_player_companion=True
         return previous_controller_uuid
 
     @staticmethod

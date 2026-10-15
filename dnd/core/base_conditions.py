@@ -317,6 +317,7 @@ class BaseCondition(BaseObject):
     sustain_loss_policy: SustainLossPolicy = SustainLossPolicy.ORDINARY
 
     presence_return_handler_uuid: UUID | None = Field(default=None, exclude=True)
+    creation_presence_return_handlers: dict[UUID,UUID] = Field(default_factory=dict,exclude=True)
 
     def snapshot_summon_origin(self) -> SummonOrigin | None:
         return None
@@ -549,6 +550,9 @@ class BaseCondition(BaseObject):
     suppression_provider_uuids: Set[UUID] = Field(default_factory=set,
         description="Independent Antimagic providers gating this retained condition.")
     grants_invisibility: bool = False
+    suppresses_invisibility: bool = False
+    blocks_opportunity_attacks: bool = False
+    immunity_names: tuple[str, ...] = ()
     blocks_healing: bool = False
     ignores_difficult_terrain: bool = False
     ignores_magical_speed_reduction: bool = False

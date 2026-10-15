@@ -1,7 +1,7 @@
 from dnd.types.materials import Material
 from dnd.core.condition_types import ConditionDurationSummary, DurationType
 
-from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, WeaponAttackOverride
+from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, SpellWeaponProfile, WeaponAttackOverride
 """Equipment, armor, weapon, and shield models for entity combat gear."""
 
 from dataclasses import dataclass
@@ -324,9 +324,11 @@ class Weapon(EquippableItem):
             raise ValueError("Body attacks require explicitly owned intrinsic natural weapons")
         return self
 
+    spell_attack_profile: SpellWeaponProfile | None = None
     weapon_kind: WeaponKind | None = None
     material: Material | None = None
     attack_overrides: dict[UUID, WeaponAttackOverride] = Field(default_factory=dict)
+    magical_attack_sources: set[UUID] = Field(default_factory=set)
 
     def attack_override(self, wielder_uuid: UUID) -> WeaponAttackOverride | None:
         return next((value for identity, value in self.attack_overrides.items()
@@ -339,7 +341,9 @@ class Weapon(EquippableItem):
 
     def attack_is_magical(self, wielder_uuid: UUID) -> bool:
         override = self.attack_override(wielder_uuid)
-        return (self.is_magical and self.contributions_active()) or (override is not None and override.magical)
+        return (self.is_magical and self.contributions_active()) or (override is not None and override.magical) or any(
+            (owner:=BaseObject.get(identity)) is not None and owner.contributions_active()
+            for identity in self.magical_attack_sources)
 
     def selected_attack_ability(self, abilities: AbilityScores, requested: AbilityName | None) -> AbilityName | None:
         override = self.attack_override(abilities.source_entity_uuid)

@@ -56,3 +56,12 @@ class SummonControl(BaseCondition):
     sustain_loss_policy: SustainLossPolicy = SustainLossPolicy.REQUIRED
     original_controller_uuid: UUID
 
+
+
+class SpiritualWeaponOwner(BaseCondition):
+    name: str = "Spiritual Weapon Owner"
+    description: str = "Owns one independent spiritual weapon per caster without concentration."
+    condition_category: ConditionCategory = ConditionCategory.INTERNAL
+    child_removal_policy: Literal["none","any","last"] = "any"
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+    duration: Duration = Field(default_factory=lambda:Duration(duration_type=DurationType.PERMANENT))

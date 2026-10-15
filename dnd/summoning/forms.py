@@ -5,6 +5,7 @@ from types import MappingProxyType
 
 from dnd.core.content.recipes import ContentRecipe
 from dnd.monsters.beasts import BEAST_RECIPES_BY_ID
+from dnd.monsters.spell_summons import SPIRITUAL_WEAPON_RECIPE, FLAMING_SPHERE_RECIPE
 from dnd.monsters.fiends import FIEND_RECIPES_BY_ID
 from dnd.monsters.demon_variants import CORROSIVE_DEMON_RECIPE, DREAD_DEMON_RECIPE
 from dnd.monsters.srd_roster import SRD_CREATURE_DECLARATIONS_BY_ID
@@ -32,6 +33,10 @@ class SummonSpellSpecification:
 
 
 SPELL_SPECIFICATIONS = MappingProxyType({
+    SummonFamily.SPIRITUAL_WEAPON: SummonSpellSpecification(SummonFamily.SPIRITUAL_WEAPON,2,
+        SummonRules(duration_rounds=10,sustain=SummonSustain.NONE)),
+    SummonFamily.FLAMING_SPHERE: SummonSpellSpecification(SummonFamily.FLAMING_SPHERE,2,
+        SummonRules(duration_rounds=10,sustain=SummonSustain.EXISTENCE)),
     SummonFamily.ANIMALS: SummonSpellSpecification(SummonFamily.ANIMALS, 3,
         SummonRules(duration_rounds=600, sustain=SummonSustain.EXISTENCE)),
     SummonFamily.FEY: SummonSpellSpecification(SummonFamily.FEY, 6,
@@ -72,6 +77,10 @@ SUMMON_FORMS = tuple(
 ) + tuple(
     SummonForm(key, name, SummonFamily.FIEND, minimum, _FIEND_RECIPES[key], SummonManifestation.FIEND)
     for key, name, minimum in _FIEND_UNLOCKS
+)
+SUMMON_FORMS += (
+    SummonForm("spiritual_weapon","Spiritual Weapon",SummonFamily.SPIRITUAL_WEAPON,2,SPIRITUAL_WEAPON_RECIPE,SummonManifestation.SPELL_CONSTRUCT),
+    SummonForm("flaming_sphere","Flaming Sphere",SummonFamily.FLAMING_SPHERE,2,FLAMING_SPHERE_RECIPE,SummonManifestation.SPELL_CONSTRUCT),
 )
 _FORMS_BY_KEY = MappingProxyType({(form.family, form.form_id): form for form in SUMMON_FORMS})
 

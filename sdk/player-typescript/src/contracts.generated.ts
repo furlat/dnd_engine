@@ -912,7 +912,7 @@ export type Tags2 = ConditionTag[];
 /**
  * Observable state transition that removes a condition.
  */
-export type ConditionRemovalTrigger = "positive_damage_applied" | "shake_awake";
+export type ConditionRemovalTrigger = "positive_damage_applied" | "shake_awake" | "ally_help" | "wet_application";
 export type RemovalTriggers = ConditionRemovalTrigger[];
 /**
  * Degree of turn agency denied while a condition remains active.
@@ -1022,7 +1022,7 @@ export type CommitEventUuid = string | null;
 export type TerminalDeparture = boolean;
 export type SummonDepartureCause = "expired" | "dismissed" | "defeated" | "sustain_lost" | "closed";
 export type BirthEventUuid = string;
-export type SummonManifestation = "natural" | "fey_spirit" | "fiend";
+export type SummonManifestation = "spell_construct" | "natural" | "fey_spirit" | "fiend";
 export type Kind24 = "faction";
 export type EntityUuid4 = string;
 export type FactionAfter = string | null;
@@ -2981,6 +2981,41 @@ export type ItemStackCount = number | null;
  * Finite source-item charges consumed by successful execution.
  */
 export type ItemChargeCost = number;
+/**
+ * Human-readable cost label.
+ */
+export type Name16 = string;
+/**
+ * Action economy bucket consumed by this cost.
+ */
+export type CostType2 =
+  | "actions"
+  | "bonus_actions"
+  | "reactions"
+  | "movement"
+  | "spell_slot_1"
+  | "spell_slot_2"
+  | "spell_slot_3"
+  | "spell_slot_4"
+  | "spell_slot_5"
+  | "spell_slot_6"
+  | "spell_slot_7"
+  | "spell_slot_8"
+  | "spell_slot_9";
+/**
+ * Amount consumed from the action economy bucket.
+ */
+export type Cost1 = number;
+/**
+ * Optional named resource consumed in addition to the action economy bucket.
+ */
+export type ResourceName1 = string | null;
+/**
+ * Amount consumed from the named resource.
+ */
+export type ResourceCost1 = number;
+export type Trigger = "hit";
+export type ConditionalCosts = ConditionalCost[];
 /**
  * Deterministic hit points restored when declared by the action rule.
  */
@@ -5524,6 +5559,7 @@ export interface PlayerAction {
   loot_item_uuid?: LootItemUuid;
   item_stack_count?: ItemStackCount;
   item_charge_cost?: ItemChargeCost;
+  conditional_costs?: ConditionalCosts;
   fixed_healing?: FixedHealing;
   allocation_completion?: AllocationCompletion;
   variant_facets?: VariantFacets;
@@ -5701,6 +5737,17 @@ export interface TopologyEffectProfile {
   affects_movement?: AffectsMovement;
   affects_vision?: AffectsVision;
   affects_hazards?: AffectsHazards;
+}
+/**
+ * A published cost paid only when the declared trigger occurs.
+ */
+export interface ConditionalCost {
+  name?: Name16;
+  cost_type: CostType2;
+  cost: Cost1;
+  resource_name?: ResourceName1;
+  resource_cost?: ResourceCost1;
+  trigger?: Trigger;
 }
 /**
  * One action-owned choice exposed without parsing execution tokens.

@@ -243,8 +243,9 @@ def srd_spell_identity(
     description: str,
     school: str,
     level: int,
-    source_page: int,
+    source_page: int | None,
     sort_order: int,
+    srd_version: Literal["5.1", "5.2"] = "5.1",
     icon_key: str | None = None,
     dependencies: tuple[ContentDependency, ...] = (),
     adaptation_notes: str | None = None,
@@ -259,7 +260,7 @@ def srd_spell_identity(
     return behavior_identity(
         definition_kind=ContentDefinitionKind.SPELL,
         runtime_behavior_kind=RuntimeBehaviorKind.SPELL,
-        pack_id="content.srd_5_1_cc",
+        pack_id=f"content.srd_{srd_version.replace('.', '_')}_cc",
         content_id=content_id,
         version=1,
         descriptor=ContentDescriptorSpec(
@@ -279,14 +280,15 @@ def srd_spell_identity(
             ),
         ),
         provenance=ContentProvenance(
-            primary_source_id="wotc.srd_5_1_cc",
+            primary_source_id=f"wotc.srd_{srd_version.replace('.', '_')}_cc",
             source_anchor=(
-                f"SRD 5.1 (CC-BY-4.0), p. {source_page}, "
-                f"Spell Descriptions: {display_name}"
+                f"SRD {srd_version} (CC-BY-4.0), "
+                + (f"p. {source_page}, " if source_page is not None else "")
+                + f"Spell Descriptions: {display_name}"
             ),
             relation=(ContentProvenanceRelation.COMPATIBLE_ADAPTATION if adaptation_notes
                       else ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION),
-            adapted_from_source_id="wotc.srd_5_1_cc" if adaptation_notes else None,
+            adapted_from_source_id=f"wotc.srd_{srd_version.replace('.', '_')}_cc" if adaptation_notes else None,
             fidelity=ContentFidelity.PARTIAL,
             review_status=ContentReviewStatus.REVIEWED,
             notes=adaptation_notes or (
@@ -305,6 +307,7 @@ def srd_action_identity(
     description: str,
     parent_spell_name: str,
     source_page: int,
+    srd_version: Literal["5.1","5.2"] = "5.1",
     sort_order: int,
     dependencies: tuple[ContentDependency, ...] = (),
     adaptation_notes: str | None = None,
@@ -318,7 +321,7 @@ def srd_action_identity(
     return behavior_identity(
         definition_kind=ContentDefinitionKind.ACTION,
         runtime_behavior_kind=RuntimeBehaviorKind.ACTION,
-        pack_id="content.srd_5_1_cc",
+        pack_id=f"content.srd_{srd_version.replace('.', '_')}_cc",
         content_id=content_id,
         version=1,
         descriptor=ContentDescriptorSpec(
@@ -338,14 +341,14 @@ def srd_action_identity(
             ),
         ),
         provenance=ContentProvenance(
-            primary_source_id="wotc.srd_5_1_cc",
+            primary_source_id=f"wotc.srd_{srd_version.replace('.', '_')}_cc",
             source_anchor=(
-                f"SRD 5.1 (CC-BY-4.0), p. {source_page}, "
+                f"SRD {srd_version} (CC-BY-4.0), p. {source_page}, "
                 f"Spell Descriptions: {parent_spell_name}"
             ),
             relation=(ContentProvenanceRelation.COMPATIBLE_ADAPTATION if adaptation_notes
                       else ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION),
-            adapted_from_source_id="wotc.srd_5_1_cc" if adaptation_notes else None,
+            adapted_from_source_id=f"wotc.srd_{srd_version.replace('.', '_')}_cc" if adaptation_notes else None,
             fidelity=ContentFidelity.PARTIAL,
             review_status=ContentReviewStatus.REVIEWED,
             notes=adaptation_notes or (
@@ -362,7 +365,9 @@ def srd_reaction_identity(
     content_id: str,
     display_name: str,
     description: str,
-    source_page: int,
+    source_page: int | None,
+    srd_version: Literal["5.1","5.2"]="5.1",
+    adaptation_notes: str | None=None,
     sort_order: int,
     icon_key: str | None = None,
 ) -> Callable[[_DefinitionT], _DefinitionT]:
@@ -370,7 +375,7 @@ def srd_reaction_identity(
     return behavior_identity(
         definition_kind=ContentDefinitionKind.REACTION,
         runtime_behavior_kind=RuntimeBehaviorKind.REACTION,
-        pack_id="content.srd_5_1_cc",
+        pack_id=f"content.srd_{srd_version.replace('.', '_')}_cc",
         content_id=content_id,
         version=1,
         descriptor=ContentDescriptorSpec(
@@ -390,15 +395,18 @@ def srd_reaction_identity(
             ),
         ),
         provenance=ContentProvenance(
-            primary_source_id="wotc.srd_5_1_cc",
+            primary_source_id=f"wotc.srd_{srd_version.replace('.', '_')}_cc",
             source_anchor=(
-                f"SRD 5.1 (CC-BY-4.0), p. {source_page}, "
+                f"SRD {srd_version} (CC-BY-4.0), "
+                + (f"p. {source_page}, " if source_page is not None else "")
+                +
                 f"Spell Descriptions: {display_name}"
             ),
-            relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
+            relation=(ContentProvenanceRelation.COMPATIBLE_ADAPTATION if adaptation_notes else ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION),
+            adapted_from_source_id=f"wotc.srd_{srd_version.replace('.', '_')}_cc" if adaptation_notes else None,
             fidelity=ContentFidelity.PARTIAL,
             review_status=ContentReviewStatus.REVIEWED,
-            notes=(
+            notes=adaptation_notes or (
                 "Existing playable reaction behavior; metadata identity does "
                 "not claim that every rules edge case is complete."
             ),
@@ -452,3 +460,22 @@ def neurodragon_spell_identity(
             notes="Original playable spell behavior preserved exactly.",
         ),
     )
+
+
+def srd_condition_identity(*, content_id: str, display_name: str, description: str,
+                           srd_version: Literal["5.1","5.2"]="5.1"):
+    """Co-located spatial identity usable before upper composition is loaded."""
+    return behavior_identity(definition_kind=ContentDefinitionKind.CONDITION,
+        runtime_behavior_kind=RuntimeBehaviorKind.CONDITION,
+        pack_id=f"content.srd_{srd_version.replace('.', '_')}_cc",content_id=content_id,version=1,
+        descriptor=ContentDescriptorSpec(display_name=display_name,description=description,
+            tags=("condition",),visibility=ContentVisibility.PUBLIC,
+            presentation=ContentPresentation(icon_key=content_id,visual_variant_key=content_id,
+                vfx_profile=content_id,ui_group="conditions.condition"),
+            ordering=ContentOrdering(sort_group="conditions.condition",sort_order=0)),
+        provenance=ContentProvenance(primary_source_id=f"wotc.srd_{srd_version.replace('.', '_')}_cc",
+            source_anchor=f"SRD {srd_version}, spell behavior: {display_name}",
+            relation=ContentProvenanceRelation.COMPATIBLE_ADAPTATION,
+            adapted_from_source_id=f"wotc.srd_{srd_version.replace('.', '_')}_cc",
+            fidelity=ContentFidelity.PARTIAL,review_status=ContentReviewStatus.REVIEWED,
+            notes="BG3-style native spell adaptation."))

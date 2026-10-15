@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dnd.core.creature_types import DamageType
@@ -17,6 +19,7 @@ class DamageResolutionModel(BaseModel):
 class DamageComponentResolution(DamageResolutionModel):
     """Affinity resolution for one typed component of a damage packet."""
 
+    source_damage_uuid: UUID | None = None
     damage_type: DamageType = Field(description="Damage type of this component.")
     incoming_damage: int = Field(ge=0, description="Component damage before type affinity.")
     resistance_status: ResistanceStatus = Field(

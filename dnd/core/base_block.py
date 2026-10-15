@@ -199,6 +199,10 @@ class BaseBlock(BaseModel):
 
     @property
     def is_invisible(self) -> bool:
+        conditions = self.active_conditions_by_uuid.values()
+        if any(condition.suppresses_invisibility and condition.contributions_active()
+               for condition in conditions):
+            return False
         return self.intrinsic_invisibility or any(condition.grants_invisibility
             and condition.contributions_active() for condition in self.active_conditions_by_uuid.values())
 
@@ -1020,6 +1024,11 @@ class BaseBlock(BaseModel):
                 self.event_handlers_by_simple_trigger[trigger].append(event_handler)
             self.event_handlers_by_trigger[trigger].append(event_handler)
         EventQueue.add_event_handler(event_handler)
+        try:
+            event_handler.on_admitted()
+        except BaseException:
+            self.remove_event_handler(event_handler)
+            raise
 
     def remove_event_handler_from_dicts(self, event_handler: EventHandler) -> None:
         """Remove a handler from this block's local indexes.
@@ -1034,6 +1043,7 @@ class BaseBlock(BaseModel):
             if trigger.is_simple():
                 self.event_handlers_by_simple_trigger[trigger].remove(event_handler)
             self.event_handlers_by_trigger[trigger].remove(event_handler)
+        event_handler.on_removed()
 
     def remove_event_handler(self, event_handler: EventHandler) -> None:
         """Remove a handler from the queue and this block's local indexes.

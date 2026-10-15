@@ -3,6 +3,8 @@
 Contains: SpikeGrowth, Slow, Haste, Darkvision, JumpSpell, ExpeditiousRetreat, Disintegrate,
           EnhanceAbility, EnlargeReduce, Regenerate
 """
+from dnd.spells.spell_utils import spell_condition_profile
+
 from typing import cast
 from dnd.blocks.equipment import EquipmentEvent, Weapon, WeaponUnequipEvent
 from dnd.core.attack_types import WeaponAttackOverride
@@ -49,6 +51,7 @@ from dnd.core.condition_types import (
     HazardFilter,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.spell_execution import spell_execution_scope
 from dnd.types.world import OccupancyLayer
 from dnd.core.action_types import (
     ActionEconomyCostType,
@@ -71,25 +74,37 @@ from dnd.types.event_facts import LandingKind
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
     ArithmeticFactor,
+    ContextualNumericalModifier,
     NumericalModifier,
     AdvantageModifier,
     AdvantageStatus,
 )
 from dnd.core.values import ModifiableValue
-from dnd.core.aoe import AoEShape, Cube
+from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.conditions import Dashing, ConcentrationActionMarker, Prone
 from dnd.creature_transforms import apply_incapacitated_transform, remove_modifier_ownership
 from dnd.actions import AttackEvent, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, commit_forced_movement, resolve_fall_damage
 from dnd.spatial.area_conditions import AreaCondition
+from dnd.spatial.ignition import apply_elemental_surface_contacts
+from dnd.core.content.registration import get_content_declaration
+from dnd.core.content.spatial_effect_definitions import SpatialEffectTransitionDefinition
+from dnd.spatial.transitions import bind_spatial_interactions
+from dnd.spatial.environmental_conditions import WetSurface, WetSurfaceMembership, IceSurface, ElectrifiedWater, SteamCloud
+from dnd.spells.surfaces import SimpleToxinSurface
+from dnd.items.created_items import CreatedItemsLifetime, build_goodberry
+from dnd.blocks.base_item import BaseItem
+from dnd.core.events import SpatialEffectInteractionEvent
+from dnd.core.aoe import Sphere
+from dnd.types.spatial_effects import SpatialEffectTransitionAction, SpatialEffectInteractionOperation
 from dnd.types.spatial_effects import (
     SpatialEffectLayer,
     SpatialEffectOccupancyPolicy,
     SpatialEffectTriggerKind,
 )
-from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity
-from dnd.spells.spell_utils import fire_heal_roll_result
+from dnd.spells.content_metadata import srd_condition_identity, srd_action_identity, srd_spell_identity
+from dnd.spells.spell_utils import deliver_spell_damage, spell_position_error, spell_valid_positions, fire_heal_roll_result
 
 
 SPIKE_GROWTH_ZONE_CONTENT_REF = ContentRef(
@@ -2219,3 +2234,429 @@ class Shillelagh(SpellAction):
         return self.apply_owned_condition( event.phase_to(EventPhase.EFFECT), ShillelaghEffect(
             source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid, weapon_uuid=weapon.uuid,
             casting_ability=caster.spellcasting.resolve_spellcasting_ability(self.spellcasting_source_id)))
+
+
+class MagicWeaponEffect(BaseCondition):
+    name: str = "Magic Weapon"
+    description: str = "The exact weapon gains magical attacks and a nonstacking attack/damage bonus."
+    bonus: int = 1
+    duration: Duration = Field(default_factory=lambda:Duration(duration=None,duration_type=DurationType.UNTIL_LONG_REST))
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+
+    def model_post_init(self,context: object) -> None:
+        super().model_post_init(context)
+        self.name=f"Magic Weapon:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Magic Weapon"
+
+    def _apply(self,event: Event):
+        weapon=BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not isinstance(weapon,Weapon):
+            return [],[],[],[],event.cancel(status_message="Exact weapon no longer exists")
+        weapon.magical_attack_sources.add(self.uuid)
+        def strongest(source_uuid: UUID,target_uuid: UUID | None=None,context: dict | None=None):
+            contenders=[condition for condition in weapon.active_conditions_by_uuid.values()
+                if isinstance(condition,MagicWeaponEffect) and condition.contributions_active()]
+            winner=max(contenders,key=lambda condition:(condition.bonus,str(condition.uuid)),default=None)
+            if winner is not self:
+                return None
+            return NumericalModifier(name="Magic Weapon",value=self.bonus,source_entity_uuid=source_uuid,target_entity_uuid=target_uuid)
+        modifiers=[]
+        for value in (weapon.attack_bonus,weapon.damage_bonus):
+            if value is None:
+                continue
+            identity=value.self_contextual.add_value_modifier(ContextualNumericalModifier(name="Magic Weapon",
+                source_entity_uuid=weapon.uuid,target_entity_uuid=self.source_entity_uuid,callable=strongest))
+            modifiers.append((value.uuid,identity))
+        return modifiers,[],[],[],event.phase_to(EventPhase.EFFECT)
+
+    def _release_owned_runtime_state(self,*,parent_event: Event | None=None) -> None:
+        weapon=BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if isinstance(weapon,Weapon):
+            weapon.magical_attack_sources.discard(self.uuid)
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+
+class MagicWeapon(SpellAction):
+    name: str = "Magic Weapon"
+    description: str = "Enchant a held weapon until rest: +1 attack/damage, +2 at slot4, +3 at slot6."
+    spell_level: int = 2
+    spell_school: str = "transmutation"
+    target_type: TargetType = TargetType.ENTITY
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.REACH,normal=5))
+    valid_target_filter: str = "self_or_allies"
+    include_self: bool = True
+    concentration: bool = True
+    harmful: bool = False
+    weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
+    selected_weapon_uuid: UUID | None = None
+
+    def get_target_effect_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return spell_condition_profile(self,actor,key="magic_weapon",condition_type=MagicWeaponEffect,beneficial=True,
+            save_ability=None,fact=None,)
+
+    def _selected_weapon(self) -> Weapon | None:
+        recipient=Entity.get(self.target_entity_uuid or self.source_entity_uuid)
+        return recipient.equipment.get_weapon(self.weapon_slot) if recipient is not None else None
+
+    def get_variant_facets(self):
+        return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.weapon_slot.value,
+            label=self.weapon_slot.value.replace('_',' ').title()))
+
+    def get_discovery_variants(self,entity: Any):
+        return [variant.model_copy(update={"uuid":uuid4(),"weapon_slot":slot})
+            for variant in super().get_discovery_variants(entity) for slot in WeaponSlot]
+
+    def _validate(self,event: SpellEvent):
+        checked=self.validate_single_recipient(event)
+        if checked is None or checked.canceled:
+            return checked
+        weapon=self._selected_weapon()
+        if weapon is None or weapon.is_body_attack:
+            return event.cancel(status_message="Selected recipient must hold an eligible weapon")
+        self.selected_weapon_uuid=weapon.uuid
+        return checked.phase_to(EventPhase.EXECUTION)
+
+    def _apply(self,event: SpellEvent):
+        weapon=self._selected_weapon()
+        if weapon is None or weapon.uuid!=self.selected_weapon_uuid:
+            return event.cancel(status_message="Exact selected weapon is no longer held")
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),MagicWeaponEffect(
+            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=weapon.uuid,
+            bonus=3 if self.cast_at_level>=6 else 2 if self.cast_at_level>=4 else 1))
+
+
+@srd_condition_identity(content_id="spatial_effect.spell.plant_growth",display_name="Plant Growth",
+    description="Ten-turn vegetation imposes a strongest walking cost of four and burns away partially.")
+class PlantGrowthZone(AreaCondition):
+    name: str = "Plant Growth"
+    description: str = "Ten-turn vegetation imposes a strongest walking cost of four and burns away partially."
+    layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
+    occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
+    zone_shape: str = "sphere"
+    zone_radius_feet: int = 20
+    minimum_walking_cost: int = 4
+    has_visible_presence: bool = True
+    duration: Duration = Field(default_factory=lambda:Duration(duration=10,duration_type=DurationType.ROUNDS))
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+
+    def _apply(self,event: Event):
+        modifiers,handlers,children,spatial,effect=super()._apply(event)
+        reaction=bind_spatial_interactions(condition=self,transitions=(SpatialEffectTransitionDefinition(
+            operation=SpatialEffectInteractionOperation.IGNITE,action=SpatialEffectTransitionAction.REMOVE_AFFECTED),))
+        return modifiers,handlers,children,[*spatial,reaction.uuid],effect
+
+
+class PlantGrowth(SpellAction):
+    name: str = "Plant Growth"
+    description: str = "Create ten-turn vegetation in a twenty-foot radius: walking costs four feet per foot."
+    spell_level: int = 3
+    spell_school: str = "transmutation"
+    target_type: TargetType = TargetType.POSITION_LOS
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.RANGE,normal=60))
+    harmful: bool = True
+
+    def get_valid_positions(self):
+        return spell_valid_positions(self)
+
+    def _validate(self,event):
+        if (error:=spell_position_error(self)) is not None:
+            return event.cancel(status_message=error)
+        return super()._validate(event)
+
+    def _apply(self,event: SpellEvent):
+        caster=Entity.get(self.source_entity_uuid)
+        if caster is None or self.end_position is None:
+            return event.cancel(status_message="Plant Growth placement is absent")
+        effect=event.phase_to(EventPhase.EFFECT)
+        zone=PlantGrowthZone(source_entity_uuid=caster.uuid,position=self.end_position,
+            faction=caster.faction,content_ref=get_content_declaration(PlantGrowthZone).ref,
+            effect_origin=event.get_effect_origin())
+        admitted=zone.activate(parent_event=effect)
+        return effect if admitted is not None and not admitted.canceled else effect.cancel(status_message="Vegetation was not admitted")
+
+
+class RainWetEffect(WetSurfaceMembership):
+    name: str = "Rain Wet"
+    description: str = "Three-turn rain Wet lease and reveal, independent of water-surface membership."
+    suppresses_invisibility: bool = True
+    duration: Duration = Field(default_factory=lambda:Duration(duration=3,duration_type=DurationType.ROUNDS))
+
+    def on_membership_changed(self,event: Event) -> None:
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            target._notify_perceivability_changed(parent_event=event.uuid)
+
+
+class CreateOrDestroyWater(SpellAction):
+    name: str = "Create or Destroy Water"
+    description: str = "Create persistent water and three-turn rain Wet/reveal, or remove water-bearing patches."
+    spell_level: int = 1
+    spell_school: str = "transmutation"
+    target_type: TargetType = TargetType.POSITION_AOE
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.RANGE,normal=30))
+    mode: Literal["create","destroy"] = "create"
+    aoe_require_targets: bool = False
+    valid_target_filter: str = "all"
+    include_self: bool = True
+    harmful: bool = False
+
+    def model_post_init(self,context: object) -> None:
+        super().model_post_init(context)
+        if self.aoe_shape is None:
+            self.aoe_shape=Sphere(source_entity_uuid=self.source_entity_uuid,target=self.end_position or (0,0),
+                radius_feet=13+7*self.get_upcast_bonus())
+
+    def get_variant_facets(self):
+        return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.mode,label=self.mode.title()))
+
+    def get_discovery_variants(self,entity: Any):
+        result=[]
+        for variant in super().get_discovery_variants(entity):
+            if not isinstance(variant,CreateOrDestroyWater):
+                raise ValueError("Water spell variants require the authored spell")
+            for mode in ("create","destroy"):
+                shape=Sphere(source_entity_uuid=self.source_entity_uuid,target=self.end_position or (0,0),radius_feet=13+7*variant.get_upcast_bonus())
+                result.append(variant.model_copy(update={"uuid":uuid4(),"mode":mode,"aoe_shape":shape}))
+        return result
+
+    def _resolve_execution_targets(self):
+        return self._resolve_area_targets() if self.effective_target_type is TargetType.POSITION_AOE else super()._resolve_execution_targets()
+
+    def get_valid_positions(self):
+        return spell_valid_positions(self)
+
+    def _validate(self,event):
+        if (error:=spell_position_error(self)) is not None:
+            return event.cancel(status_message=error)
+        return super()._validate(event)
+
+    def _apply(self,event: SpellEvent):
+        effect=event.phase_to(EventPhase.EFFECT)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if self.mode=="create" and target is not None:
+            target.add_condition(RainWetEffect(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,
+                source_spatial_condition_uuid=event.lineage_uuid),parent_event=effect)
+        return effect
+
+    def _finalize_aoe(self,event: ActionEvent) -> None:
+        positions=set(event.resolved_area_positions or ())
+        if not positions or self.end_position is None:
+            return
+        if self.mode=="create":
+            interaction=SpatialEffectInteractionEvent(source_entity_uuid=self.source_entity_uuid,
+                positions=tuple(sorted(positions)),operation=SpatialEffectInteractionOperation.DOUSE,parent_event=event.uuid)
+            interaction.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
+            surface=WetSurface(source_entity_uuid=self.source_entity_uuid,position=self.end_position,
+                affected_positions=positions)
+            surface.activate(parent_event=event)
+        else:
+            for surface in tuple(get_map().get_spatial_conditions()):
+                if not isinstance(surface,(WetSurface,ElectrifiedWater,IceSurface,SteamCloud,SimpleToxinSurface)):
+                    continue
+                affected=surface.affected_positions & positions
+                if affected:
+                    remaining=surface.affected_positions-affected
+                    if remaining:
+                        surface.change_footprint(remaining,parent_event=event)
+                    else:
+                        surface.deactivate(parent_event=event)
+
+
+class DragonsBreathEffect(ConcentrationActionMarker):
+    name: str = "Dragon's Breath"
+    description: str = "The caster maintains an ally's elemental breath action."
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+    duration: Duration = Field(default_factory=lambda:Duration(duration=10,duration_type=DurationType.ROUNDS))
+
+
+@srd_action_identity(content_id="action.spell.dragons_breath.exhale",display_name="Exhale Dragon's Breath",
+    description="Use the retained caster's elemental breath in a fifteen-foot cone.",
+    parent_spell_name="Dragon's Breath",source_page=126,srd_version="5.2",sort_order=3220)
+class ExhaleDragonsBreath(SpellAction):
+    name: str = "Exhale Dragon's Breath"
+    description: str = "Fifteen-foot cone, retained caster DC and element; Dexterity save for half."
+    action_category: ActionCategory = ActionCategory.ABILITY
+    spell_level: int = 2
+    spell_school: str = "transmutation"
+    alt_skip_slot: bool = True
+    verbal: bool = False
+    target_type: TargetType = TargetType.POSITION_AOE
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.SELF))
+    include_self: bool = False
+    aoe_require_targets: bool = False
+    valid_target_filter: str = "all"
+    spell_damage_type: DamageType = DamageType.FIRE
+    original_caster_uuid: UUID
+    spell_dc: int
+    grant_condition_uuid: UUID
+    effect_origin: EffectOrigin
+
+    def spell_execution_scope(self):
+        binding=self.behavior_binding
+        return spell_execution_scope(source_entity_uuid=self.original_caster_uuid,damage_type=self.spell_damage_type,
+            cause_id=binding.behavior_id if binding else None)
+
+    def model_post_init(self,context: object) -> None:
+        super().model_post_init(context)
+        if self.aoe_shape is None:
+            self.aoe_shape=Cone(source_entity_uuid=self.source_entity_uuid,target=self.end_position or (1,0),length_feet=15)
+
+    def _create_declaration_event(self,parent_event: Event | None=None,use_register: bool=True):
+        event=super()._create_declaration_event(parent_event,use_register)
+        actor=Entity.get(self.source_entity_uuid)
+        origin=self.effect_origin.model_copy(update={"source_position":actor.position}) if actor else self.effect_origin
+        return event.with_updates(retained_effect_origin=origin) if isinstance(event,SpellEvent) else event
+
+    def validate_source_requirements_for_discovery(self) -> bool:
+        recipient=Entity.get(self.source_entity_uuid)
+        owner=recipient.active_conditions_by_uuid.get(self.grant_condition_uuid) if recipient else None
+        return (recipient is not None and recipient.health.life_state is LifeState.ALIVE
+            and owner is not None and owner.applied and owner.contributions_active())
+
+    def _validate(self,event: SpellEvent):
+        actor=Entity.get(self.source_entity_uuid)
+        if not self.validate_source_requirements_for_discovery():
+            return event.cancel(status_message="Dragon's Breath grant has ended or is suppressed")
+        if actor is None or self.end_position is None or self.end_position==actor.position:
+            return event.cancel(status_message="Choose a breath direction")
+        return super()._validate(event)
+
+    def _resolve_execution_targets(self):
+        return self._resolve_area_targets()
+
+    def _apply(self,event: SpellEvent):
+        if not self.validate_source_requirements_for_discovery():
+            return event.cancel(status_message="Dragon's Breath grant has ended or is suppressed")
+        caster=Entity.get(self.original_caster_uuid)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None:
+            return event.cancel(status_message="Breath source or recipient is absent")
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="dexterity",dc=self.spell_dc)
+        if effect.canceled:
+            return effect
+        damage=Damage(name="Dragon's Breath",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
+            damage_type=self.spell_damage_type,damage_dice=6,dice_numbers=1+self.cast_at_level,
+            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
+        roll=damage.get_dice(AttackOutcome.HIT).roll
+        return deliver_spell_damage(effect,target,damage,roll,amount=roll.total//2 if saved else roll.total)
+
+    def _finalize_aoe(self,event: ActionEvent) -> None:
+        apply_elemental_surface_contacts(event,set(event.resolved_area_positions or ()),self.spell_damage_type)
+
+
+class DragonsBreath(SpellAction):
+    name: str = "Dragon's Breath"
+    description: str = "Grant yourself or an ally a repeatable elemental breath action; ten-turn concentration."
+    spell_level: int = 2
+    spell_school: str = "transmutation"
+    concentration: bool = True
+    target_type: TargetType = TargetType.ENTITY
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.REACH,normal=5))
+    valid_target_filter: str = "self_or_allies"
+    include_self: bool = True
+    harmful: bool = False
+    element: Literal["acid","cold","fire","lightning","poison"] = "fire"
+    alt_cost_type: str | None = "bonus_actions"
+
+    def get_target_effect_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return spell_condition_profile(self,actor,key="dragons_breath",condition_type=DragonsBreathEffect,beneficial=True,
+            save_ability=None,fact=None,)
+
+    def get_variant_facets(self):
+        return (*super().get_variant_facets(),ActionVariantFacet(key="damage_type",value=self.element,label=self.element.title()))
+
+    def get_discovery_variants(self,entity: Any):
+        return [variant.model_copy(update={"uuid":uuid4(),"element":element})
+            for variant in super().get_discovery_variants(entity)
+            for element in ("acid","cold","fire","lightning","poison")]
+
+    def _validate(self,event: SpellEvent):
+        caster=Entity.get(self.source_entity_uuid)
+        recipient=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or recipient is None or (recipient.uuid!=caster.uuid and not caster.is_ally(recipient)):
+            return event.cancel(status_message="Choose yourself or a willing ally")
+        checked=self.validate_single_recipient(event)
+        return checked.phase_to(EventPhase.EXECUTION) if checked is not None and not checked.canceled else checked
+
+    def _apply(self,event: SpellEvent):
+        caster=Entity.get(self.source_entity_uuid)
+        recipient=Entity.get(self.target_entity_uuid or self.source_entity_uuid)
+        if caster is None or recipient is None:
+            return event.cancel(status_message="Breath recipient is absent")
+        marker=DragonsBreathEffect(source_entity_uuid=caster.uuid,target_entity_uuid=recipient.uuid,
+            action_name="Exhale Dragon's Breath")
+        admitted=self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),marker)
+        if admitted.canceled or not marker.applied:
+            return admitted
+        exhale=ExhaleDragonsBreath(source_entity_uuid=recipient.uuid,template=True,
+            original_caster_uuid=caster.uuid,spell_dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
+            grant_condition_uuid=marker.uuid,cast_at_level=self.cast_at_level,spell_damage_type=DamageType(self.element.capitalize()),
+            effect_origin=admitted.get_effect_origin())
+        marker.action_uuid=exhale.uuid
+        recipient.register_action(exhale)
+        return admitted
+
+
+class GoodberryBatch(CreatedItemsLifetime):
+    name: str = "Goodberry Batch"
+    description: str = "Owns exact berries until the creating caster's long rest."
+
+
+class Goodberry(SpellAction):
+    name: str = "Goodberry"
+    description: str = "Create four real berries in an ally's inventory; bonus-action 1d4 healing, until caster long rest."
+    spell_level: int = 1
+    spell_school: str = "transmutation"
+    target_type: TargetType = TargetType.ENTITY
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.REACH,normal=5))
+    valid_target_filter: str = "self_or_allies"
+    include_self: bool = True
+    harmful: bool = False
+    _berries: list[BaseItem] = PrivateAttr(default_factory=list)
+
+    def _validate(self,event: SpellEvent):
+        caster=Entity.get(self.source_entity_uuid)
+        recipient=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or recipient is None or (recipient.uuid!=caster.uuid and not caster.is_ally(recipient)):
+            return event.cancel(status_message="Choose yourself or a willing ally")
+        checked=self.validate_single_recipient(event)
+        return checked.phase_to(EventPhase.EXECUTION) if checked is not None and not checked.canceled else checked
+
+    def _apply_costs(self,event):
+        recipient=Entity.get(self.target_entity_uuid or self.source_entity_uuid)
+        self._berries=[build_goodberry(self.source_entity_uuid) for _ in range(4)]
+        if recipient is None or not recipient.inventory.can_add_all(self._berries):
+            return event.cancel(status_message="Recipient cannot carry all four berries")
+        return super()._apply_costs(event)
+
+    def _apply(self,event: SpellEvent):
+        caster=Entity.get(self.source_entity_uuid)
+        recipient=Entity.get(self.target_entity_uuid or self.source_entity_uuid)
+        if caster is None or recipient is None or not recipient.inventory.can_add_all(self._berries):
+            return event.cancel(status_message="Berry inventory admission changed")
+        batch=GoodberryBatch(source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid,
+            item_uuids=[item.uuid for item in self._berries])
+        admitted=self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),batch)
+        if admitted.canceled or not batch.applied:
+            return admitted
+        for berry in self._berries:
+            berry.creation_condition_uuid=batch.uuid
+            if not recipient.loot_item(berry,parent_event=admitted):
+                caster.remove_condition_by_uuid(batch.uuid,parent_event=admitted)
+                return admitted.cancel(status_message="Berry inventory admission changed")
+        return admitted
+
+    def apply(self,parent_event: Event | None=None):
+        try:
+            return super().apply(parent_event)
+        finally:
+            for berry in self._berries:
+                if berry.owner_uuid is None and berry.stored_in_uuid is None and berry.tile_uuid is None and berry.is_active:
+                    berry.retire()
+            self._berries=[]

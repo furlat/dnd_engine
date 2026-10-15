@@ -5021,7 +5021,9 @@
         "description": "Observable state transition that removes a condition.",
         "enum": [
           "positive_damage_applied",
-          "shake_awake"
+          "shake_awake",
+          "ally_help",
+          "wet_application"
         ],
         "title": "ConditionRemovalTrigger",
         "type": "string"
@@ -5269,6 +5271,78 @@
         ],
         "title": "ConditionTag",
         "type": "string"
+      },
+      "ConditionalCost": {
+        "description": "A published cost paid only when the declared trigger occurs.",
+        "properties": {
+          "name": {
+            "default": "A Cost",
+            "description": "Human-readable cost label.",
+            "title": "Name",
+            "type": "string"
+          },
+          "cost_type": {
+            "description": "Action economy bucket consumed by this cost.",
+            "enum": [
+              "actions",
+              "bonus_actions",
+              "reactions",
+              "movement",
+              "spell_slot_1",
+              "spell_slot_2",
+              "spell_slot_3",
+              "spell_slot_4",
+              "spell_slot_5",
+              "spell_slot_6",
+              "spell_slot_7",
+              "spell_slot_8",
+              "spell_slot_9"
+            ],
+            "title": "Cost Type",
+            "type": "string"
+          },
+          "cost": {
+            "description": "Amount consumed from the action economy bucket.",
+            "title": "Cost",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "resource_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional named resource consumed in addition to the action economy bucket.",
+            "title": "Resource Name"
+          },
+          "resource_cost": {
+            "default": 0,
+            "description": "Amount consumed from the named resource.",
+            "title": "Resource Cost",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "trigger": {
+            "const": "hit",
+            "default": "hit",
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cost_type",
+          "cost"
+        ],
+        "title": "ConditionalCost",
+        "type": "object",
+        "additionalProperties": false
       },
       "ConePresentationGeometry": {
         "additionalProperties": false,
@@ -13649,6 +13723,14 @@
             "type": "integer",
             "maximum": 9007199254740991
           },
+          "conditional_costs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ConditionalCost"
+            },
+            "title": "Conditional Costs",
+            "type": "array"
+          },
           "fixed_healing": {
             "anyOf": [
               {
@@ -19117,6 +19199,7 @@
       },
       "SummonManifestation": {
         "enum": [
+          "spell_construct",
           "natural",
           "fey_spirit",
           "fiend"

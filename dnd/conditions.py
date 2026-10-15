@@ -4,6 +4,9 @@ from types import MappingProxyType
 from dataclasses import dataclass
 
 from pydantic import Field, PrivateAttr
+from dnd.core.base_block import PreparedConditionRemovals
+from dnd.core.base_object import BaseObject
+from dnd.core.creature_types import CreatureType
 from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, ConditionStateChangedEvent, Duration
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
@@ -2962,3 +2965,96 @@ CORE_STANDARD_CONDITION_DECLARATIONS = tuple(
     CORE_STANDARD_CONDITION_DECLARATIONS_BY_CLASS[condition_type]
     for condition_type in _CORE_STANDARD_CONDITION_TYPES
 )
+
+
+class Revealed(BaseCondition):
+    """Source-owned reveal and anchored light; original invisibility stays intact."""
+    name: str = "Revealed"
+    description: str = "Cannot benefit from invisibility while this reveal is active."
+    suppresses_invisibility: bool = True
+    bright_radius_feet: int = 0
+    dim_radius_feet: int = 10
+    grants_attack_advantage: bool = False
+    light_source_uuid: Optional[UUID] = None
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    _removed_light: Optional[SpatialChangeEvent] = PrivateAttr(default=None)
+
+    def model_post_init(self,context: object) -> None:
+        super().model_post_init(context)
+        self.name=f"{self.get_display_name()}:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return type(self).model_fields["name"].default
+
+    def _apply(self,event: Event):
+        target=BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Reveal recipient no longer exists")
+        modifiers=[]
+        if self.grants_attack_advantage and isinstance(target,Entity):
+            value=target.equipment.ac_bonus
+            ident=value.to_target_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+                value=AdvantageStatus.ADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+            modifiers.append((value.uuid,ident))
+        grid=get_map()
+        position=grid.get_entity_position(target.uuid) or grid.get_object_position(target.uuid) or target.position
+        if self.bright_radius_feet or self.dim_radius_feet:
+            self.light_source_uuid=grid.add_light_source(position=position,bright_radius_feet=self.bright_radius_feet,
+                dim_radius_feet=self.dim_radius_feet,anchor_uuid=target.uuid,contribution_owner_uuid=self.uuid,
+                parent_event=event.uuid)
+        return modifiers,[],[],[],event.phase_to(EventPhase.EFFECT)
+
+    def _release_owned_runtime_state(self,*,parent_event: Optional[Event]=None) -> None:
+        if self.light_source_uuid is not None:
+            self._removed_light=get_map().remove_light_source(self.light_source_uuid,
+                parent_event=parent_event.uuid if parent_event else None,publish_event=not self.applied)
+            self.light_source_uuid=None
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+    def on_membership_changed(self,event: Event) -> None:
+        if self._removed_light is not None:
+            get_map()._fire_committed_spatial_event(self._removed_light)
+            self._removed_light=None
+        target=BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            target._notify_perceivability_changed(parent_event=event.uuid)
+
+    def on_suppression_changed(self) -> None:
+        target=BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            target._notify_perceivability_changed()
+
+
+def prepare_control_removals(target: Entity, names: frozenset[str], event: Event,
+                             source_types: frozenset[CreatureType] | None = None) -> PreparedConditionRemovals | None:
+    """Prepare exact matching roots and their children through the native removal graph."""
+    roots: dict[UUID,BaseCondition] = {}
+    for condition in tuple(target.active_conditions_by_uuid.values()):
+        if condition.name not in names and not names.intersection(condition.immunity_names):
+            continue
+        pending=[condition]
+        seen: set[UUID]=set()
+        while pending:
+            current=pending.pop()
+            if current.uuid in seen:
+                continue
+            seen.add(current.uuid)
+            parent_ids=current.additional_parent_conditions | ({current.parent_condition} if current.parent_condition else set())
+            parents=[parent for identity in parent_ids
+                if isinstance(parent:=BaseCondition.get(identity),BaseCondition)
+                and parent.target_entity_uuid==target.uuid and ConditionTag.CONCENTRATION not in parent.tags]
+            if parents:
+                pending.extend(parents)
+                continue
+            source=Entity.get(current.source_entity_uuid)
+            if source_types is None or (source is not None and source.creature_type in source_types):
+                roots[current.uuid]=current
+    prepared=PreparedConditionRemovals([])
+    visited: set[UUID] = set()
+    for root in roots.values():
+        canceled=BaseBlock._prepare_condition_removal_tree(root,condition_owner=target,expire=False,
+            parent_event=event,prepared=prepared.entries,visited=visited)
+        if canceled is not None:
+            BaseBlock._cancel_prepared_condition_removals(prepared.entries,canceled)
+            return None
+    return prepared

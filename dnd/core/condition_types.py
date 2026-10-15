@@ -41,6 +41,8 @@ class ConditionRemovalTrigger(str, Enum):
 
     POSITIVE_DAMAGE_APPLIED = "positive_damage_applied"
     SHAKE_AWAKE = "shake_awake"
+    ALLY_HELP = "ally_help"
+    WET_APPLICATION = "wet_application"
 
 
 class ConditionAgencyDenial(str, Enum):

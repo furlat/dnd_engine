@@ -5750,7 +5750,7 @@ class GridMap:
         pos = position or source.position
         total_radius_feet = source.bright_radius_feet + source.dim_radius_feet
         total_radius_tiles = max(total_radius_feet // 5, 1)
-        bright_radius_tiles = max(source.bright_radius_feet // 5, 1)
+        bright_radius_tiles = source.bright_radius_feet / 5
         very_bright_radius_tiles = source.very_bright_radius_feet / 5 if source.very_bright_radius_feet > 0 else 0
 
         visible_positions = self.compute_light_fov(pos, total_radius_tiles)
@@ -5763,7 +5763,7 @@ class GridMap:
             dist_tiles = math.sqrt(dx * dx + dy * dy)
             if very_bright_radius_tiles > 0 and dist_tiles <= very_bright_radius_tiles:
                 result[tile_pos] = LightLevel.VERY_BRIGHT
-            elif dist_tiles <= bright_radius_tiles:
+            elif source.bright_radius_feet > 0 and dist_tiles <= bright_radius_tiles:
                 result[tile_pos] = LightLevel.BRIGHT_LIGHT
             else:
                 result[tile_pos] = LightLevel.DIM_LIGHT

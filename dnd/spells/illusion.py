@@ -3,6 +3,8 @@
 Implemented here: Blur, Fear, Hypnotic Pattern, Color Spray, Invisibility,
 Greater Invisibility, Mirror Image, and Silence.
 """
+from dnd.spells.spell_utils import spell_condition_profile
+
 
 import random
 from typing import Any, Dict, Optional, List, Set, Tuple
@@ -31,7 +33,8 @@ from dnd.core.condition_types import (
     DurationType,
     HazardFilter,
 )
-from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event, EventQueue
+from dnd.core.creature_types import DamageType
+from dnd.core.events import Damage, DamageAppliedEvent, EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event, EventQueue
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.dice import AttackOutcome
@@ -1455,3 +1458,89 @@ class Silence(SpellAction):
             ),
             resolved_area_positions=tuple(sorted(zone.affected_positions)),
         )
+
+
+class PhantasmalForceEffect(BaseCondition):
+    name: str = "Phantasmal Force"
+    description: str = "Start-turn 1d6 damage follows largest positive external component; INT at turn end ends it."
+    spell_dc: int
+    damage_type: DamageType = DamageType.PSYCHIC
+    immunity_names: tuple[str,...] = ("Phantasmal Force",)
+    duration: Duration = Field(default_factory=lambda:Duration(duration=10,duration_type=DurationType.ROUNDS))
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+
+    def model_post_init(self,context: object) -> None:
+        super().model_post_init(context)
+        self.name=f"Phantasmal Force:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Phantasmal Force"
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Illusion recipient is absent")
+        def respond(boundary: Event,_: UUID):
+            if isinstance(boundary,DamageAppliedEvent):
+                if boundary.source_condition_uuid!=self.uuid and boundary.resolution is not None:
+                    components=[component for component in boundary.resolution.components if component.after_affinity_damage>0]
+                    if components:
+                        self.damage_type=max(components,key=lambda component:component.after_affinity_damage).damage_type
+                return None
+            caster=Entity.get(self.source_entity_uuid)
+            if caster is None:
+                target.remove_condition_by_uuid(self.uuid,parent_event=boundary)
+                return None
+            if boundary.event_type is EventType.TURN_END:
+                request=caster.create_saving_throw_request(target.uuid,"intelligence",self.spell_dc,parent_event=boundary.uuid,
+                    saving_throw_context=self.saving_throw_context(effect_id="spell.phantasmal_force.repeat"))
+                if target.saving_throw(request)[2]:
+                    target.remove_condition_by_uuid(self.uuid,parent_event=boundary)
+            else:
+                damage=Damage(name=self.name,source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
+                    damage_dice=6,dice_numbers=1,damage_type=self.damage_type,
+                    damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0),effect_origin=self.effect_origin)
+                roll=damage.get_dice(AttackOutcome.HIT).roll
+                target.receive_damage(roll.total,self.damage_type,caster.uuid,parent_event=boundary.uuid,
+                    damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,
+                    independent_resolution=True,source_condition_uuid=self.uuid)
+            return None
+        handler=EventHandler(name="Phantasmal Force turns and external damage",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_START,event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid),
+                Trigger(event_type=EventType.TURN_END,event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid),
+                Trigger(event_type=EventType.DAMAGE_APPLIED,event_phase=EventPhase.EFFECT,event_target_entity_uuid=target.uuid)],event_processor=respond)
+        target.add_event_handler(handler)
+        return [],[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class PhantasmalForce(SpellAction):
+    name: str = "Phantasmal Force"
+    description: str = "INT save or recurring adaptive damage while concentrating for ten turns."
+    spell_level: int = 2
+    spell_school: str = "illusion"
+    target_type: TargetType = TargetType.ENTITY
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.RANGE,normal=60))
+    concentration: bool = True
+    harmful: bool = True
+
+    def get_target_effect_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return spell_condition_profile(self,actor,key="phantasmal_force",condition_type=PhantasmalForceEffect,beneficial=False,
+            save_ability='intelligence',fact=None,)
+
+    def _validate(self,event: SpellEvent):
+        checked=self.validate_single_recipient(event)
+        return checked if checked is None or checked.canceled else checked.phase_to(EventPhase.EXECUTION)
+
+    def _apply(self,event: SpellEvent):
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None:
+            return event.cancel(status_message="Caster or illusion recipient is absent")
+        dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="intelligence",dc=dc)
+        if saved or effect.canceled:
+            return effect
+        return self.apply_owned_condition(effect,PhantasmalForceEffect(source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,spell_dc=dc))

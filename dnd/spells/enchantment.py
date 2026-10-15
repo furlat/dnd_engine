@@ -3,9 +3,23 @@
 Contains: HoldPerson, HoldPersonEffect, CharmPerson, TestBless, Sleep,
           Bane, BaneEffect, Bless, BlessEffect
 """
+from dnd.spells.spell_utils import spell_condition_profile
+
 import random
 from typing import Any, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
+from dnd.core.base_block import BaseBlock, PreparedConditionRemovals
+from dnd.blocks.skills import all_skills, SKILL_TO_ABILITY
+from dnd.creature_transforms import apply_incapacitated_transform
+from dnd.core.modifiers import NumericalModifier, ContextualAdvantageModifier
+from dnd.conditions import prepare_control_removals
+from dnd.spells.hit_effects import QuarrySustain, ReapplyQuarry, install_hit_rider
+from dnd.core.action_types import ActionVariantFacet
+from dnd.core.base_actions import Cost
+from dnd.actions import entity_action_economy_cost_evaluator
+from dnd.types.abilities import AbilityName
+from dnd.spells.content_metadata import srd_action_identity
+from uuid import uuid4
 
 from pydantic import Field, PrivateAttr
 
@@ -45,8 +59,10 @@ from dnd.creature_transforms import (
     apply_unconscious_transform,
 )
 from dnd.spells.content_metadata import srd_spell_identity
-from dnd.spells.spell_utils import validate_line_of_sight
+from dnd.spells.spell_utils import target_turn_expiry_handler, deliver_spell_damage, validate_line_of_sight
 
+from dnd.core.events import Damage
+from dnd.core.dice import AttackOutcome
 
 class CharmPerson(SpellAction):
     """Charm one or more humanoids after Wisdom saves.
@@ -1960,3 +1976,539 @@ class Command(SpellAction):
         return effect_event.with_updates(
             status_message=f"{target.name} is commanded to {self.command_word}"
         )
+
+
+class MockedEffect(BaseCondition):
+    """Spend disadvantage only when this recipient actually rolls an attack."""
+    name: str = "Vicious Mockery"
+    description: str = "Disadvantage on the next actual attack roll."
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    duration: Duration = Field(default_factory=lambda: Duration(duration=None,duration_type=DurationType.PERMANENT))
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Recipient no longer exists")
+        value = target.equipment.attack_bonus
+        modifier = value.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+            value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+        def consume(rolled: Event, _: UUID) -> Optional[Event]:
+            target.remove_condition_by_uuid(self.uuid,parent_event=rolled)
+            return None
+        handler = EventHandler(name="Consume Mockery after attack roll",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.ATTACK_D20_ROLL_RESULT,
+                event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid)],event_processor=consume)
+        target.add_event_handler(handler)
+        expiry=target_turn_expiry_handler(self,turn_ends=1)
+        target.add_event_handler(expiry)
+        return [(value.uuid,modifier)],[handler.uuid,expiry.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class ViciousMockery(SpellAction):
+    name: str = "Vicious Mockery"
+    description: str = "WIS save or psychic damage and disadvantage on the next attack."
+    spell_level: int = 0
+    spell_school: str = "enchantment"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE,normal=60))
+    target_type: TargetType = TargetType.ENTITY
+    spell_damage_type: DamageType = DamageType.PSYCHIC
+
+    def get_target_effect_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return spell_condition_profile(self,actor,key="vicious_mockery",condition_type=MockedEffect,beneficial=False,
+            save_ability='wisdom',fact=None,)
+
+    def get_outcome_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return self.saving_throw_damage_outcome_profile(actor,dice_count=self._get_cantrip_dice_count(self.caster_level),die_size=4,damage_type=DamageType.PSYCHIC,save_ability="wisdom",half_damage_on_save=False)
+
+    def _validate(self,event: SpellEvent) -> Optional[SpellEvent]:
+        checked = self.validate_single_recipient(event)
+        return checked if checked is None or checked.canceled else checked.phase_to(EventPhase.EXECUTION)
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None:
+            return event.cancel(status_message="Caster or recipient no longer exists")
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="wisdom",
+            dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
+        if saved or effect.canceled:
+            return effect
+        damage=Damage(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,damage_dice=4,
+            dice_numbers=self._get_cantrip_dice_count(self.caster_level),damage_bonus=caster.get_spell_damage_bonus(),
+            damage_type=DamageType.PSYCHIC)
+        roll=damage.get_dice(AttackOutcome.HIT).roll
+        effect=deliver_spell_damage(effect,target,damage,roll)
+        if effect.canceled:
+            return effect
+        target.add_condition(MockedEffect(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid),parent_event=effect)
+        return effect
+
+
+class AnimalFriendshipEffect(Charmed):
+    """A separate beast charm, broken by damage from the caster's original allies."""
+    name: str = "Animal Friendship"
+    immunity_names: tuple[str,...] = ("Charmed",)
+    caster_faction: Optional[str] = None
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10,duration_type=DurationType.ROUNDS))
+
+    def _apply(self,event: Event):
+        modifiers,handlers,children,spatial,effect=super()._apply(event)
+        if effect is None or effect.canceled:
+            return modifiers,handlers,children,spatial,effect
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        assert target is not None
+        def broken_by_damage(damaged: Event, _: UUID) -> Optional[Event]:
+            source=Entity.get(damaged.source_entity_uuid)
+            if source is not None and (source.uuid==self.source_entity_uuid or
+                    (self.caster_faction is not None and source.faction==self.caster_faction)):
+                target.remove_condition_by_uuid(self.uuid,parent_event=damaged)
+            return None
+        handler=EventHandler(name="Animal Friendship allied damage",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.DAMAGE_APPLIED,event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=target.uuid)],event_processor=broken_by_damage)
+        target.add_event_handler(handler)
+        return modifiers,[*handlers,handler.uuid],children,spatial,effect
+
+
+class AnimalFriendship(SpellAction):
+    name: str = "Animal Friendship"
+    description: str = "Charm a beast of Intelligence 3 or less; caster-allied damage ends the charm."
+    spell_level: int = 1
+    spell_school: str = "enchantment"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE,normal=60))
+    target_type: TargetType = TargetType.MULTI_ENTITY
+    harmful: bool = True
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag,...] = (SavingThrowEffectTag.CHARM,)
+    max_targets: int = 1
+    include_self: bool = False
+    allow_same_target: bool = False
+
+    def get_target_effect_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return spell_condition_profile(self,actor,key="animal_friendship",condition_type=AnimalFriendshipEffect,beneficial=False,
+            save_ability='wisdom',fact=None,included=frozenset({CreatureType.BEAST.value}),)
+
+    def get_multi_target_count(self) -> Optional[int]:
+        return max(1,self.cast_at_level)
+
+    def _validate(self,event: SpellEvent) -> Optional[SpellEvent]:
+        for uuid in (self.target_entity_uuid,*self.extra_target_entity_uuids):
+            target=Entity.get(uuid) if uuid else None
+            if target is None or target.creature_type is not CreatureType.BEAST or target.ability_scores.intelligence.ability_score.score>3:
+                return event.cancel(status_message="Only beasts with Intelligence 3 or less are eligible")
+        checked=super()._validate(event)
+        return checked if isinstance(checked,SpellEvent) else None
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None:
+            return event.cancel(status_message="Caster or beast no longer exists")
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="wisdom",
+            dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
+        if not saved and not effect.canceled:
+            return self.apply_owned_condition(effect,AnimalFriendshipEffect(source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,caster_faction=caster.faction))
+        return effect
+
+
+class DissonantFearEffect(BaseCondition):
+    name: str = "Dissonant Whispers Fear"
+    description: str = "Cannot move; attacks and ability checks have disadvantage even outside the caster's sight."
+    immunity_names: tuple[str,...] = ("Frightened",)
+    duration: Duration = Field(default_factory=lambda: Duration(duration=None,duration_type=DurationType.PERMANENT))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Fear recipient no longer exists")
+        modifiers=[]
+        for value in (target.equipment.attack_bonus,
+                      *(target.ability_scores.get_ability(ability).check_bonus for ability in ("strength","dexterity","constitution","intelligence","wisdom","charisma")),
+                      *(target.skill_set.get_skill(skill).skill_bonus for skill in all_skills)):
+            ident=value.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+                value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+            modifiers.append((value.uuid,ident))
+        for value in target.action_economy.speed_values:
+            ident=value.self_static.add_max_constraint(NumericalModifier(name=self.name,value=0,
+                source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+            modifiers.append((value.uuid,ident))
+        expiry=target_turn_expiry_handler(self,turn_ends=2)
+        target.add_event_handler(expiry)
+        return modifiers,[expiry.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class DissonantWhispers(SpellAction):
+    name: str = "Dissonant Whispers"
+    description: str = "WIS save for half psychic damage; failure gives two-turn fear."
+    spell_level: int = 1
+    spell_school: str = "enchantment"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE,normal=60))
+    target_type: TargetType = TargetType.ENTITY
+    spell_damage_type: DamageType = DamageType.PSYCHIC
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag,...] = (SavingThrowEffectTag.FEAR,)
+
+    def get_target_effect_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return spell_condition_profile(self,actor,key="dissonant_whispers",condition_type=DissonantFearEffect,beneficial=False,
+            save_ability='wisdom',fact='selected_target.condition.frightened',)
+
+    def get_outcome_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return self.saving_throw_damage_outcome_profile(actor,dice_count=3+self.get_upcast_bonus(),die_size=6,damage_type=DamageType.PSYCHIC,save_ability="wisdom",half_damage_on_save=True)
+
+    def _validate(self,event: SpellEvent) -> Optional[SpellEvent]:
+        checked=self.validate_single_recipient(event)
+        return checked if checked is None or checked.canceled else checked.phase_to(EventPhase.EXECUTION)
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None:
+            return event.cancel(status_message="Caster or recipient no longer exists")
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="wisdom",
+            dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
+        if effect.canceled:
+            return effect
+        damage=Damage(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,damage_dice=6,
+            dice_numbers=3+max(0,self.cast_at_level-1),damage_bonus=caster.get_spell_damage_bonus(),damage_type=DamageType.PSYCHIC)
+        roll=damage.get_dice(AttackOutcome.HIT).roll
+        effect=deliver_spell_damage(effect,target,damage,roll,amount=roll.total//2 if saved else roll.total)
+        if effect.canceled:
+            return effect
+        if not saved and target.is_active:
+            target.add_condition(DissonantFearEffect(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid),parent_event=effect)
+        return effect
+
+
+class HideousLaughterEffect(BaseCondition):
+    name: str = "Hideous Laughter"
+    description: str = "Prone and unable to act; WIS saves at turn end and with advantage after damage."
+    immunity_names: tuple[str,...] = ("Prone",)
+    spell_dc: int = 10
+    agency_denial: ConditionAgencyDenial = ConditionAgencyDenial.FULL_TURN
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10,duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Laughter recipient no longer exists")
+        modifiers=apply_incapacitated_transform(target,name=self.name,effect_source_uuid=self.source_entity_uuid)
+        def incoming_advantage(source_uuid: UUID,attacker_uuid: UUID | None=None,context: dict | None=None):
+            attacker=Entity.get(attacker_uuid) if attacker_uuid else None
+            if attacker is None or target.senses.get_feet_distance(attacker.position)>10:
+                return None
+            return AdvantageModifier(name=self.name,value=AdvantageStatus.ADVANTAGE,
+                source_entity_uuid=source_uuid,target_entity_uuid=attacker_uuid)
+        value=target.equipment.ac_bonus
+        ident=value.to_target_contextual.add_advantage_modifier(ContextualAdvantageModifier(
+            name=self.name,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid,
+            callable=incoming_advantage))
+        modifiers.append((value.uuid,ident))
+        for ability in ("strength","dexterity"):
+            value=target.saving_throws.get_saving_throw(ability).bonus
+            ident=value.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+                value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+            modifiers.append((value.uuid,ident))
+        def repeat(boundary: Event,_: UUID) -> Optional[Event]:
+            caster=Entity.get(self.source_entity_uuid)
+            if caster is None:
+                target.remove_condition_by_uuid(self.uuid,parent_event=boundary)
+                return None
+            bonus=target.saving_throws.get_saving_throw("wisdom").bonus
+            ident=None
+            if boundary.event_type is EventType.DAMAGE_APPLIED:
+                ident=bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Laughter damage save",
+                    value=AdvantageStatus.ADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=caster.uuid))
+            try:
+                request=caster.create_saving_throw_request(target_entity_uuid=target.uuid,ability_name="wisdom",
+                    dc=self.spell_dc,parent_event=boundary.uuid,
+                    saving_throw_context=self.saving_throw_context(effect_id="spell.hideous_laughter.repeat"))
+                _outcome,_roll,saved=target.saving_throw(request)
+            finally:
+                if ident is not None: bonus.self_static.remove_modifier(ident)
+            if saved: target.remove_condition_by_uuid(self.uuid,parent_event=boundary)
+            return None
+        handler=EventHandler(name="Laughter recovery",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END,event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid),
+                Trigger(event_type=EventType.DAMAGE_APPLIED,event_phase=EventPhase.EFFECT,event_target_entity_uuid=target.uuid)],event_processor=repeat)
+        target.add_event_handler(handler)
+        return modifiers,[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class HideousLaughter(SpellAction):
+    name: str = "Hideous Laughter"
+    description: str = "WIS save or persistent prone and inability to act; requires Intelligence 5+."
+    spell_level: int = 1
+    spell_school: str = "enchantment"
+    target_type: TargetType = TargetType.ENTITY
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE,normal=60))
+    concentration: bool = True
+    harmful: bool = True
+
+    def get_target_effect_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return spell_condition_profile(self,actor,key="hideous_laughter",condition_type=HideousLaughterEffect,beneficial=False,
+            save_ability='wisdom',fact='selected_target.condition.incapacitated',)
+
+    def _validate(self,event: SpellEvent) -> Optional[SpellEvent]:
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None or target.ability_scores.intelligence.ability_score.score<5:
+            return event.cancel(status_message="Target needs Intelligence 5 or greater")
+        checked=self.validate_single_recipient(event)
+        return checked if checked is None or checked.canceled else checked.phase_to(EventPhase.EXECUTION)
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None:
+            return event.cancel(status_message="Caster or recipient no longer exists")
+        dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="wisdom",dc=dc)
+        if saved or effect.canceled:
+            return effect
+        return self.apply_owned_condition(effect,HideousLaughterEffect(source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,spell_dc=dc))
+
+
+class HeroismEffect(BaseCondition):
+    name: str = "Heroism"
+    description: str = "Fear immunity and five source-owned temporary HP refreshed each turn."
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10,duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    _purge: PreparedConditionRemovals | None = PrivateAttr(default=None)
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Heroism recipient no longer exists")
+        self._purge=prepare_control_removals(target,frozenset({"Frightened"}),event)
+        if self._purge is None:
+            return [],[],[],[],event.cancel(status_message="Existing fear removal was rejected")
+        target.add_condition_immunity_source("Frightened",self.uuid)
+        def refresh(boundary: Event,_: UUID) -> Optional[Event]:
+            self._grant(target,boundary)
+            return None
+        handler=EventHandler(name="Heroism refresh",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_START,event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid)],event_processor=refresh)
+        target.add_event_handler(handler)
+        return [],[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+    def _grant(self,target: Entity,event: Event) -> None:
+        target.health.add_temporary_hit_points(5,self.source_entity_uuid,parent_event=event.uuid,source_id=f"condition.heroism.{self.uuid}")
+
+    def _commit_application(self,event: Event) -> None:
+        if self._purge is not None: BaseBlock.commit_owned_condition_removals(self._purge)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None: self._grant(target,event)
+
+    def publish_prepared_application(self) -> None:
+        if self._purge is not None and self._purge.committed_result is not None:
+            BaseBlock.publish_owned_condition_removals(self._purge)
+
+    def _release_owned_runtime_state(self,*,parent_event: Event | None = None) -> None:
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if self._purge is not None and self._purge.committed_result is None:
+            BaseBlock.cancel_owned_condition_removals(self._purge,"Heroism was not committed")
+        if target is not None:
+            target.remove_condition_immunity_source("Frightened",self.uuid)
+            grant=target.health.temporary_hit_points_grant
+            if grant is not None and grant.source_id==f"condition.heroism.{self.uuid}":
+                target.health.clear_temporary_hit_points(parent_event=parent_event.uuid if parent_event else None)
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+
+class Heroism(SpellAction):
+    name: str = "Heroism"
+    description: str = "Clear and prevent fear; refresh five temporary HP each turn."
+    spell_level: int = 1
+    spell_school: str = "enchantment"
+    target_type: TargetType = TargetType.MULTI_ENTITY
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH,normal=5))
+    valid_target_filter: str = "self_or_allies"
+    include_self: bool = True
+    concentration: bool = True
+    harmful: bool = False
+
+    def get_target_effect_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return spell_condition_profile(self,actor,key="heroism",condition_type=HeroismEffect,beneficial=True,
+            save_ability=None,fact=None,)
+
+    def get_multi_target_count(self) -> Optional[int]:
+        return max(1,self.cast_at_level)
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),HeroismEffect(
+            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid))
+
+
+class CalmedEffect(BaseCondition):
+    name: str = "Calm Emotions"
+    description: str = "Clear and prevent charm, fear and native rage effects."
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10,duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    _purge: PreparedConditionRemovals | None = PrivateAttr(default=None)
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Calm recipient no longer exists")
+        self._purge=prepare_control_removals(target,frozenset({"Charmed","Frightened","Raging","Frenzied"}),event)
+        if self._purge is None:
+            return [],[],[],[],event.cancel(status_message="Existing control removal was rejected")
+        for name in ("Charmed","Frightened","Raging","Frenzied"):
+            target.add_condition_immunity_source(name,self.uuid)
+        return [],[],[],[],event.phase_to(EventPhase.EFFECT)
+
+    def _commit_application(self,event: Event) -> None:
+        if self._purge is not None: BaseBlock.commit_owned_condition_removals(self._purge)
+
+    def publish_prepared_application(self) -> None:
+        if self._purge is not None and self._purge.committed_result is not None:
+            BaseBlock.publish_owned_condition_removals(self._purge)
+
+    def _release_owned_runtime_state(self,*,parent_event: Event | None = None) -> None:
+        if self._purge is not None and self._purge.committed_result is None:
+            BaseBlock.cancel_owned_condition_removals(self._purge,"Calm was not committed")
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            for name in ("Charmed","Frightened","Raging","Frenzied"):
+                target.remove_condition_immunity_source(name,self.uuid)
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+
+class CalmEmotions(SpellAction):
+    name: str = "Calm Emotions"
+    description: str = "Humanoids in the area lose charm, fear and rage and cannot regain them."
+    spell_level: int = 2
+    spell_school: str = "enchantment"
+    target_type: TargetType = TargetType.POSITION_AOE
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE,normal=60))
+    valid_target_filter: str = "all"
+    include_self: bool = True
+    concentration: bool = True
+    harmful: bool = False
+
+    def get_target_effect_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return spell_condition_profile(self,actor,key="calm_emotions",condition_type=CalmedEffect,beneficial=True,
+            save_ability=None,fact=None,included=frozenset({CreatureType.HUMANOID.value}),)
+
+    def model_post_init(self,context: Any) -> None:
+        super().model_post_init(context)
+        if self.aoe_shape is None:
+            self.aoe_shape=Sphere(source_entity_uuid=self.source_entity_uuid,target=self.end_position or (0,0),radius_feet=20)
+
+    def _resolve_execution_targets(self):
+        return self._resolve_area_targets() if self.effective_target_type is TargetType.POSITION_AOE else super()._resolve_execution_targets()
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        effect=event.phase_to(EventPhase.EFFECT)
+        if target is None or target.creature_type is not CreatureType.HUMANOID:
+            return effect
+        return self.apply_owned_condition(effect,CalmedEffect(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid))
+
+
+class HexQuarry(BaseCondition):
+    name: str = "Hex"
+    description: str = "Chosen ability checks and their skills have disadvantage; saves are unaffected."
+    ability: AbilityName = "strength"
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL,ConditionTag.CURSE})
+
+    def model_post_init(self,context: object) -> None:
+        super().model_post_init(context)
+        self.name=f"Hex:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Hex"
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Hex recipient is absent")
+        values=[target.ability_scores.get_ability(self.ability).check_bonus]
+        for skill_name in all_skills:
+            skill=target.skill_set.get_skill(skill_name)
+            if SKILL_TO_ABILITY[skill_name]==self.ability:
+                values.append(skill.skill_bonus)
+        modifiers=[]
+        for value in values:
+            identity=value.self_static.add_advantage_modifier(AdvantageModifier(name="Hex",value=AdvantageStatus.DISADVANTAGE,
+                source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+            modifiers.append((value.uuid,identity))
+        return modifiers,[],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+@srd_action_identity(content_id="action.spell.hex.reapply",display_name="Reapply Hex",
+    description="Choose a new quarry after the previous quarry is defeated.",parent_spell_name='Hex',source_page=154,sort_order=3010)
+class ReapplyHex(ReapplyQuarry):
+    name: str = "Reapply Hex"
+    description: str = "Choose a new quarry after the previous quarry is defeated."
+
+
+class HexEffect(QuarrySustain):
+    name: str = "Hex Sustain"
+    description: str = "Retains the caster's Hex and free reapplication until rest."
+    ability: AbilityName = "strength"
+
+    def create_quarry_condition(self,target: Entity) -> BaseCondition:
+        return HexQuarry(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,ability=self.ability)
+
+    def _apply(self,event: Event):
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(self.quarry_uuid)
+        if caster is None or target is None or not self.set_quarry(target,event):
+            return [],[],[],[],event.cancel(status_message="Quarry cannot be hexed")
+        handler=install_hit_rider(self,dice_count=1,die_size=6,damage_type=DamageType.NECROTIC,weapon_only=False,quarry=lambda:self.quarry_uuid)
+        action=ReapplyHex(source_entity_uuid=caster.uuid,sustain_uuid=self.uuid,template=True)
+        caster.register_action(action)
+        self.action_uuid=action.uuid
+        return [],[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class Hex(SpellAction):
+    name: str = "Hex"
+    description: str = "Attack-roll hits add 1d6 necrotic; chosen ability CHECKS have disadvantage."
+    spell_level: int = 1
+    spell_school: str = "enchantment"
+    target_type: TargetType = TargetType.ENTITY
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.RANGE,normal=60))
+    concentration: bool = True
+    harmful: bool = True
+    ability: AbilityName = "strength"
+    costs: list[Cost] = Field(default_factory=lambda:[Cost(name="Hex",cost_type="bonus_actions",cost=1,
+        evaluator=entity_action_economy_cost_evaluator)])
+
+    def get_variant_facets(self):
+        return (*super().get_variant_facets(),ActionVariantFacet(key="ability",value=self.ability,label=self.ability.title()))
+
+    def get_discovery_variants(self,entity: Any):
+        return [variant.model_copy(update={"uuid":uuid4(),"ability":ability})
+            for variant in super().get_discovery_variants(entity)
+            for ability in ("strength","dexterity","constitution","intelligence","wisdom","charisma")]
+
+    def _validate(self,event: SpellEvent):
+        checked=self.validate_single_recipient(event)
+        return checked if checked is None or checked.canceled else checked.phase_to(EventPhase.EXECUTION)
+
+    def _apply(self,event: SpellEvent):
+        if self.target_entity_uuid is None:
+            return event.cancel(status_message="Quarry is absent")
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),HexEffect(
+            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.source_entity_uuid,
+            quarry_uuid=self.target_entity_uuid,ability=self.ability))

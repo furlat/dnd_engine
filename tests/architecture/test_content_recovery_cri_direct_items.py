@@ -51,6 +51,7 @@ _BEHAVIOR_ITEM_IDS = frozenset({
     "armor.splint",
     "armor.plate",
     "consumable.healing_potion",
+    "consumable.goodberry",
     "consumable.potion_haste",
     "consumable.potion_greater_invisibility",
     "consumable.potion_true_seeing",

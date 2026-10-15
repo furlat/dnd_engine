@@ -3401,7 +3401,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2862
+        "line": 2883
       }
     ],
     "required": true,
@@ -3417,7 +3417,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2863
+        "line": 2884
       }
     ],
     "required": true,
@@ -3432,7 +3432,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2864
+        "line": 2885
       }
     ],
     "required": true,
@@ -3447,7 +3447,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2865
+        "line": 2886
       }
     ],
     "required": false,
@@ -3463,7 +3463,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2866
+        "line": 2887
       }
     ],
     "required": false,
@@ -3481,7 +3481,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2867
+        "line": 2888
       }
     ],
     "required": false,
@@ -3514,7 +3514,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2868
+        "line": 2889
       }
     ],
     "required": false,
@@ -3538,7 +3538,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2869
+        "line": 2890
       }
     ],
     "required": false,
@@ -3561,7 +3561,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2870
+        "line": 2891
       }
     ],
     "required": false,
@@ -3583,7 +3583,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2871
+        "line": 2892
       }
     ],
     "required": false,
@@ -3602,7 +3602,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2872
+        "line": 2893
       }
     ],
     "required": false,
@@ -5311,7 +5311,7 @@
     "owners": [
       {
         "file": "dnd/core/condition_types.py",
-        "line": 66
+        "line": 68
       }
     ],
     "required": true,
@@ -5325,7 +5325,7 @@
     "owners": [
       {
         "file": "dnd/core/condition_types.py",
-        "line": 67
+        "line": 69
       }
     ],
     "required": true,
@@ -6024,6 +6024,132 @@
       },
       "title": "Concentration Slots",
       "type": "array"
+    }
+  },
+  {
+    "field": "ConditionalCost.name",
+    "schema_pointer": "/$defs/ConditionalCost/properties/name",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 608
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": "A Cost",
+      "description": "Human-readable cost label.",
+      "title": "Name",
+      "type": "string"
+    }
+  },
+  {
+    "field": "ConditionalCost.cost_type",
+    "schema_pointer": "/$defs/ConditionalCost/properties/cost_type",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 608
+      }
+    ],
+    "required": true,
+    "schema": {
+      "description": "Action economy bucket consumed by this cost.",
+      "enum": [
+        "actions",
+        "bonus_actions",
+        "reactions",
+        "movement",
+        "spell_slot_1",
+        "spell_slot_2",
+        "spell_slot_3",
+        "spell_slot_4",
+        "spell_slot_5",
+        "spell_slot_6",
+        "spell_slot_7",
+        "spell_slot_8",
+        "spell_slot_9"
+      ],
+      "title": "Cost Type",
+      "type": "string"
+    }
+  },
+  {
+    "field": "ConditionalCost.cost",
+    "schema_pointer": "/$defs/ConditionalCost/properties/cost",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 608
+      }
+    ],
+    "required": true,
+    "schema": {
+      "description": "Amount consumed from the action economy bucket.",
+      "title": "Cost",
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "ConditionalCost.resource_name",
+    "schema_pointer": "/$defs/ConditionalCost/properties/resource_name",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 608
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional named resource consumed in addition to the action economy bucket.",
+      "title": "Resource Name"
+    }
+  },
+  {
+    "field": "ConditionalCost.resource_cost",
+    "schema_pointer": "/$defs/ConditionalCost/properties/resource_cost",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 608
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": 0,
+      "description": "Amount consumed from the named resource.",
+      "title": "Resource Cost",
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "ConditionalCost.trigger",
+    "schema_pointer": "/$defs/ConditionalCost/properties/trigger",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 610
+      }
+    ],
+    "required": false,
+    "schema": {
+      "const": "hit",
+      "default": "hit",
+      "title": "Trigger",
+      "type": "string"
     }
   },
   {
@@ -19096,7 +19222,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2598
+        "line": 2618
       }
     ],
     "required": true,
@@ -19117,7 +19243,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2599
+        "line": 2619
       }
     ],
     "required": true,
@@ -19137,7 +19263,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2600
+        "line": 2620
       }
     ],
     "required": true,
@@ -19171,7 +19297,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2601
+        "line": 2621
       }
     ],
     "required": true,
@@ -21137,6 +21263,25 @@
       "title": "Item Charge Cost",
       "type": "integer",
       "maximum": 9007199254740991
+    }
+  },
+  {
+    "field": "PlayerAction.conditional_costs",
+    "schema_pointer": "/$defs/PlayerAction/properties/conditional_costs",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ConditionalCost"
+      },
+      "title": "Conditional Costs",
+      "type": "array"
     }
   },
   {
@@ -25966,7 +26111,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2833
+        "line": 2854
       }
     ],
     "required": true,
@@ -25999,7 +26144,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2834
+        "line": 2855
       }
     ],
     "required": true,
@@ -26014,7 +26159,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2835
+        "line": 2856
       }
     ],
     "required": true,
@@ -26043,7 +26188,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2836
+        "line": 2857
       }
     ],
     "required": true,
@@ -26062,7 +26207,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2837
+        "line": 2858
       }
     ],
     "required": true,
@@ -26080,7 +26225,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2838
+        "line": 2859
       }
     ],
     "required": true,

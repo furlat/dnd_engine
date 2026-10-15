@@ -460,6 +460,11 @@ class BaseItem(BaseBlock):
         parent_event: Optional[Event] = None,
     ) -> ItemLocationStateEvent:
         """Publish one non-vetoable completion fact after location has committed."""
+        if BaseBlock.get(self.uuid) is not self and location not in (ItemLocation.MERGED,ItemLocation.DESTROYED):
+            location=ItemLocation.DESTROYED
+            owner_uuid=container_uuid=tile_uuid=None
+            position=world_placement=equipment_slot=None
+            stack_count=0
         self.refresh_antimagic_contributions()
         source_uuid = source_entity_uuid or owner_uuid or self.source_entity_uuid
         if location is ItemLocation.FLOOR and world_placement is None:
@@ -487,6 +492,10 @@ class BaseItem(BaseBlock):
         execution = declaration.phase_to(EventPhase.EXECUTION)
         effect = execution.phase_to(EventPhase.EFFECT)
         self.on_world_placement_committed(effect)
+        if BaseBlock.get(self.uuid) is not self and location not in (ItemLocation.MERGED,ItemLocation.DESTROYED):
+            effect=effect.with_updates(item_state=self.to_item_presentation_state(stack_count=0),
+                location=ItemLocation.DESTROYED,owner_uuid=None,container_uuid=None,tile_uuid=None,
+                position=None,world_placement=None,equipment_slot=None)
         return effect.phase_to(EventPhase.COMPLETION, use_register=True)
 
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,

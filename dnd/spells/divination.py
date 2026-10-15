@@ -7,7 +7,9 @@ from uuid import UUID
 from pydantic import Field, PrivateAttr
 
 from dnd.core.action_types import EntityTargetPerception
+from dnd.spells.hit_effects import QuarrySustain, ReapplyQuarry, install_hit_rider
 from dnd.core.base_actions import (
+    Cost,
     ActionInformationOperation,
     ActionWorldEffectAnchor,
     ActionWorldEffectCertainty,
@@ -22,7 +24,8 @@ from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import Event, EventPhase, Range, RangeType, EventType, EventHandler, Trigger, D20RollResultEvent
 from dnd.entity import Entity
-from dnd.actions import SpellAction, SpellEvent
+from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
+from dnd.spells.content_metadata import srd_action_identity
 
 
 class SeeInvisibilityEffect(BaseCondition):
@@ -395,3 +398,65 @@ class Guidance(SpellAction):
         return effect_event.with_updates(
             status_message=f"{target.name} gains Guidance"
         )
+
+
+class HuntersMarkQuarry(BaseCondition):
+    name: str = "Hunter's Mark"
+    description: str = "This caster's weapon hits add 1d6 matching weapon damage."
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+
+    def model_post_init(self,context: object) -> None:
+        super().model_post_init(context)
+        self.name=f"Hunter's Mark:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Hunter's Mark"
+
+
+@srd_action_identity(content_id="action.spell.hunters_mark.reapply",display_name="Reapply Hunter's Mark",
+    description="Choose a new quarry after the previous quarry is defeated.",parent_spell_name="Hunter's Mark",source_page=156,sort_order=3000)
+class ReapplyHuntersMark(ReapplyQuarry):
+    name: str = "Reapply Hunter's Mark"
+    description: str = "Choose a new quarry after the previous quarry is defeated."
+
+
+class HuntersMarkEffect(QuarrySustain):
+    name: str = "Hunter's Mark Sustain"
+    description: str = "Retains the caster's mark and free reapplication until rest."
+
+    def create_quarry_condition(self,target: Entity) -> BaseCondition:
+        return HuntersMarkQuarry(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid)
+
+    def _apply(self,event: Event):
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(self.quarry_uuid)
+        if caster is None or target is None or not self.set_quarry(target,event):
+            return [],[],[],[],event.cancel(status_message="Quarry cannot be marked")
+        handler=install_hit_rider(self,dice_count=1,die_size=6,damage_type=None,weapon_only=True,quarry=lambda:self.quarry_uuid)
+        action=ReapplyHuntersMark(source_entity_uuid=caster.uuid,sustain_uuid=self.uuid,template=True)
+        caster.register_action(action)
+        self.action_uuid=action.uuid
+        return [],[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class HuntersMark(SpellAction):
+    name: str = "Hunter's Mark"
+    description: str = "Mark a quarry: weapon hits add 1d6 matching weapon damage; reapply after defeat."
+    spell_level: int = 1
+    spell_school: str = "divination"
+    target_type: TargetType = TargetType.ENTITY
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.RANGE,normal=60))
+    concentration: bool = True
+    harmful: bool = True
+    costs: list[Cost] = Field(default_factory=lambda:[Cost(name="Hunter's Mark",cost_type="bonus_actions",cost=1,
+        evaluator=entity_action_economy_cost_evaluator)])
+
+    def _validate(self,event: SpellEvent):
+        checked=self.validate_single_recipient(event)
+        return checked if checked is None or checked.canceled else checked.phase_to(EventPhase.EXECUTION)
+
+    def _apply(self,event: SpellEvent):
+        if self.target_entity_uuid is None:
+            return event.cancel(status_message="Quarry is absent")
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),HuntersMarkEffect(
+            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.source_entity_uuid,quarry_uuid=self.target_entity_uuid))

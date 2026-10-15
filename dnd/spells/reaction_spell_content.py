@@ -20,7 +20,9 @@ from dnd.core.content.registration import (
     ContentDeclaration,
     get_content_declaration,
 )
+from dnd.core.creature_types import DamageType
 from dnd.core.events import EventHandler
+from dnd.classes.paladin import LearnedDivineSmiteHandler, create_learned_divine_smite_handler
 from dnd.spells.abjuration import (
     COUNTERSPELL_REACTION_DECLARATION,
     SHIELD_REACTION_DECLARATION,
@@ -104,12 +106,23 @@ class CounterspellLearnedSpell:
     """Non-clickable learned spell root for the Counterspell reaction."""
 
 
+@srd_spell_identity(content_id="spell.divine_smite",display_name="Divine Smite",
+    description="Automatic melee weapon hit: spend a toggled spell slot for radiant damage.",
+    school="evocation",level=1,source_page=None,srd_version="5.2",sort_order=3030,
+    dependencies=_installs_handler(get_content_declaration(LearnedDivineSmiteHandler)),
+    adaptation_notes="BG3 automatic per-slot toggles backed by existing shared Paladin feature; no reaction prompt.")
+class DivineSmiteLearnedSpell:
+    """Non-clickable learned root for the existing automatic smite handlers."""
+
+
+DIVINE_SMITE_SPELL_DECLARATION=get_content_declaration(DivineSmiteLearnedSpell)
 SHIELD_SPELL_DECLARATION = get_content_declaration(ShieldLearnedSpell)
 COUNTERSPELL_SPELL_DECLARATION = get_content_declaration(
     CounterspellLearnedSpell,
 )
 LEARNED_REACTION_SPELL_DECLARATIONS_BY_CLASS = MappingProxyType({
     ShieldLearnedSpell: SHIELD_SPELL_DECLARATION,
+    DivineSmiteLearnedSpell:DIVINE_SMITE_SPELL_DECLARATION,
     CounterspellLearnedSpell: COUNTERSPELL_SPELL_DECLARATION,
 })
 
@@ -178,6 +191,15 @@ _COUNTERSPELL_METADATA = SpellCatalogMetadata(
 
 
 LEARNED_REACTION_SPELL_SPECS: tuple[LearnedReactionSpellSpec, ...] = (
+    LearnedReactionSpellSpec(display_name="Divine Smite",definition_source=DivineSmiteLearnedSpell,
+        declaration=DIVINE_SMITE_SPELL_DECLARATION,school="evocation",level=1,catalog_order=3030,
+        handler_type=LearnedDivineSmiteHandler,handler_factory=create_learned_divine_smite_handler,
+        metadata=SpellCatalogMetadata(catalog_id="divine_smite",
+            description="Automatic toggled melee hit smite; pays only the selected slot on hit.",
+            target_type="entity",range_type="touch",range_ft=5,delivery="none",projectile_type=None,
+            aoe=None,damage_types=(DamageType.RADIANT,),healing=False,attack_roll=False,saving_throws=(),
+            concentration=False,ritual=False,verbal=False,somatic=False,material=False,
+            classes=("paladin",),subclasses=(),multi_target=None,recommended_asset_tags=("evocation","radiant"))),
     LearnedReactionSpellSpec(
         display_name="Shield",
         definition_source=ShieldLearnedSpell,

@@ -1,6 +1,7 @@
 from dnd.core.effect_types import EventResolutionRef, EffectOrigin
+from dnd.core.damage import DamageResolution
 from dnd.core.attack_types import NaturalWeaponSpec
-from typing import AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
+from typing import Callable, AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from collections import defaultdict
@@ -494,6 +495,8 @@ class Entity(BaseBlock):
         ge=0,
         description="Swimming speed in feet. Zero means no natural or granted swimming speed."
     )
+    is_player_companion: bool = Field(default=False,
+        description="Explicit companion membership retained through death and temporary AI control.")
     uses_death_saves: bool = Field(
         default=False,
         description="Whether this entity follows the player-style death saving throw rules at 0 HP."
@@ -2146,7 +2149,8 @@ class Entity(BaseBlock):
                 self._discard_uncommitted_condition_tree(condition)
                 return declaration_event
 
-            if self.check_condition_immunity(condition.name, condition=condition):
+            if any(self.check_condition_immunity(name, condition=condition)
+                   for name in (condition.name, *condition.immunity_names)):
                 target_name = self.name
                 condition_name = condition.name
                 entry = CombatLogEntry(data=EmptyLogData(),
@@ -2861,55 +2865,40 @@ class Entity(BaseBlock):
         )
         return event.phase_to(EventPhase.COMPLETION)
 
-    def revive(
-        self,
-        hit_points: int = 1,
-        reduce_exhaustion: bool = True,
-        parent_event: Optional[Event] = None,
-    ) -> bool:
-        """Restore a dead entity to life as a rules primitive.
-
-        Args:
-            hit_points: Minimum HP total after revival.
-            reduce_exhaustion: Whether revival reduces Exhaustion by one level.
-            parent_event: Optional parent event for condition cleanup lineage.
-
-        Returns:
-            True if the entity was dead or at 0 HP and is now revived.
-
-        Raises:
-            ValueError: If `hit_points` is less than 1.
-        """
-        if hit_points < 1:
+    def prepare_revival(self, hit_points: int=1, *, reduce_exhaustion: bool=False,
+                        parent_event: Event | None=None) -> ReviveEvent | None:
+        """Admit revival phases without altering life state or hit points."""
+        if hit_points<1:
             raise ValueError("hit_points must be at least 1")
         if (self.health.life_state is not LifeState.DEAD
                 or self.health.remains_disposition is RemainsDisposition.DISINTEGRATED):
+            return None
+        event=ReviveEvent(source_entity_uuid=self.uuid,source_entity_name=self.name,target_entity_uuid=self.uuid,
+            target_entity_name=self.name,entity_uuid=self.uuid,entity_name=self.name,hit_points=hit_points,
+            reduce_exhaustion=reduce_exhaustion,parent_event=parent_event.uuid if parent_event else None,use_register=False)
+        event=EventQueue.publish_declaration(event)
+        if not event.canceled:
+            event=event.phase_to(EventPhase.EXECUTION)
+        if not event.canceled:
+            event=event.phase_to(EventPhase.EFFECT)
+        return None if event.canceled else event
+
+    def commit_revival(self,event: ReviveEvent) -> bool:
+        """Commit an accepted native revival after companion placement admission."""
+        if (event.canceled or event.target_entity_uuid!=self.uuid or event.phase is not EventPhase.EFFECT
+                or self.health.life_state is not LifeState.DEAD
+                or self.health.remains_disposition is RemainsDisposition.DISINTEGRATED):
             return False
-        revive_event = ReviveEvent(
-            source_entity_uuid=self.uuid,
-            source_entity_name=self.name,
-            target_entity_uuid=self.uuid,
-            target_entity_name=self.name,
-            entity_uuid=self.uuid,
-            entity_name=self.name,
-            hit_points=hit_points,
-            reduce_exhaustion=reduce_exhaustion,
-            parent_event=parent_event.uuid if parent_event is not None else None,
-            phase=EventPhase.DECLARATION,
-        )
-        revive_event = revive_event.phase_to(EventPhase.EXECUTION)
-        if revive_event.canceled:
-            return False
-        self._set_normal_hp(hit_points)
+        self._set_normal_hp(event.hit_points)
         self.reset_death_save_state()
-        self._transition_life_state(
-            LifeState.ALIVE,
-            LifeStateChangeReason.REVIVAL,
-            revive_event,
-        )
-        revive_event = revive_event.phase_to(EventPhase.EFFECT)
-        revive_event.phase_to(EventPhase.COMPLETION)
+        self._transition_life_state(LifeState.ALIVE,LifeStateChangeReason.REVIVAL,event)
+        event.phase_to(EventPhase.COMPLETION)
         return True
+
+    def revive(self,hit_points: int=1,reduce_exhaustion: bool=True,parent_event: Event | None=None) -> bool:
+        """Restore an intact DEAD entity through interruptible native revival."""
+        prepared=self.prepare_revival(hit_points,reduce_exhaustion=reduce_exhaustion,parent_event=parent_event)
+        return prepared is not None and self.commit_revival(prepared)
 
     def on_turn_start(self, encounter_uuid: Optional[UUID] = None, round_number: int = 0, turn_index: int = 0) -> TurnStartEvent:
         """
@@ -3362,6 +3351,10 @@ class Entity(BaseBlock):
         Returns:
             Combined weapon attack bonus.
         """
+        weapon=None if natural_weapon else self.equipment.get_weapon(weapon_slot)
+        if weapon is not None and weapon.spell_attack_profile is not None:
+            return self.spell_attack_bonus(target_entity_uuid,casting_ability=weapon.spell_attack_profile.casting_ability)
+
         should_clear_target = False
         if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
@@ -3413,6 +3406,10 @@ class Entity(BaseBlock):
         Returns:
             Actor-baseline attack bonus, advantage, and critical rules.
         """
+        weapon=None if natural_weapon else self.equipment.get_weapon(weapon_slot)
+        if weapon is not None and weapon.spell_attack_profile is not None:
+            return self.spell_attack_outcome_baseline(casting_ability=weapon.spell_attack_profile.casting_ability)
+
         equipment_bonus, equipment_advantage = self.equipment.get_weapon_attack_baseline(
             self.ability_scores,
             weapon_slot,
@@ -3459,6 +3456,11 @@ class Entity(BaseBlock):
         Returns:
             Immutable damage formulas representing one ordinary hit.
         """
+        weapon=None if natural_weapon else self.equipment.get_weapon(weapon_slot)
+        if weapon is not None and weapon.spell_attack_profile is not None:
+            return (DamageRollProfile(dice_count=weapon.dice_numbers,die_size=weapon.damage_dice,
+                damage_type=weapon.damage_type.value,flat_bonus=self.get_spell_damage_bonus().normalized_score),)
+
         profiles = self.equipment.get_weapon_damage_profiles(
             self.ability_scores,
             weapon_slot,
@@ -3535,6 +3537,12 @@ class Entity(BaseBlock):
         Returns:
             Damage packets for the weapon attack.
         """
+        weapon=None if natural_weapon else self.equipment.get_weapon(weapon_slot)
+        if weapon is not None and weapon.spell_attack_profile is not None:
+            return [Damage(name=weapon.name,source_entity_uuid=self.uuid,target_entity_uuid=target_entity_uuid,
+                damage_dice=weapon.damage_dice,dice_numbers=weapon.dice_numbers,damage_type=weapon.damage_type,
+                damage_bonus=self.get_spell_damage_bonus(),effect_origin=weapon.spell_attack_profile.effect_origin)]
+
         should_clear_target = False
         if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
@@ -3672,6 +3680,7 @@ class Entity(BaseBlock):
         source_condition_uuid: UUID | None = None,
         normal_hit_point_damage_cap: int | None = None,
         zero_hp_disposition: RemainsDisposition = RemainsDisposition.INTACT,
+        on_resolved: Callable[[DamageResolution], None] | None = None,
     ) -> int:
         """Apply damage through the engine event lifecycle.
 
@@ -3818,6 +3827,8 @@ class Entity(BaseBlock):
         )
 
         take_damage_event = take_damage_event.phase_to(EventPhase.COMPLETION)
+        if on_resolved is not None and damage_resolution is not None:
+            on_resolved(damage_resolution)
 
         return actual_damage
 
@@ -4110,6 +4121,7 @@ class Entity(BaseBlock):
         target_entity_uuid: Optional[UUID] = None,
         *,
         spellcasting_source_id: Optional[UUID] = None,
+        casting_ability: AbilityName | None = None,
     ) -> ModifiableValue:
         """Build combined spell attack bonus.
 
@@ -4125,7 +4137,7 @@ class Entity(BaseBlock):
             should_clear_target = True
 
         ability = self.ability_scores.get_ability(
-            self.spellcasting.resolve_spellcasting_ability(
+            casting_ability or self.spellcasting.resolve_spellcasting_ability(
                 spellcasting_source_id
             )
         )
@@ -4146,6 +4158,7 @@ class Entity(BaseBlock):
         self,
         *,
         spellcasting_source_id: Optional[UUID] = None,
+        casting_ability: AbilityName | None = None,
     ) -> AttackRollBaseline:
         """Read the actor-side spell attack model without allocating values.
 
@@ -4157,7 +4170,7 @@ class Entity(BaseBlock):
             Typed attack-roll contribution for a spell action outcome profile.
         """
         ability = self.ability_scores.get_ability(
-            self.spellcasting.resolve_spellcasting_ability(
+            casting_ability or self.spellcasting.resolve_spellcasting_ability(
                 spellcasting_source_id
             )
         )
@@ -5542,7 +5555,9 @@ class Entity(BaseBlock):
         Includes path-based movement, line-of-sight positions, and AoE previews.
         """
         return [a for a in self.registered_actions
-                if a.effective_target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE)]
+                if a.effective_target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE)
+                or any(kind in (TargetType.POSITION,TargetType.POSITION_PATH,TargetType.POSITION_LOS,TargetType.POSITION_AOE)
+                    for kind in a.discovery_target_types)]
 
     @property
     def self_actions(self) -> List[BaseAction]:
@@ -5626,6 +5641,7 @@ class Entity(BaseBlock):
             configured_action_ref=template.configured_action_ref,
             target_type=target_type,
             position_selection=template.get_position_selection(),
+            conditional_costs=template.get_conditional_costs(),
             allocation_completion=template.get_allocation_completion(),
             variant_facets=template.get_variant_facets(),
             interaction_affordance=(ActionAffordance(surface="world", binding="source_item", default_priority=100)
@@ -5834,7 +5850,7 @@ class Entity(BaseBlock):
         include_dead: bool,
     ) -> Dict[UUID, Tuple[int, int]]:
         """Add admitted contact recipients without polluting perceived-pool caches."""
-        candidates = template.get_touch_target_candidates()
+        candidates = {**template.get_touch_target_candidates(),**template.get_additional_target_candidates()}
         if not candidates:
             return target_pool
         pool = dict(target_pool)
@@ -5842,7 +5858,7 @@ class Entity(BaseBlock):
             other = Entity.get(identity)
             if other is None or (identity == self.uuid and not template.include_self):
                 continue
-            if not include_dead and not self._has_positive_normal_hp_for_discovery(other):
+            if not (include_dead or template.include_dead) and not self._has_positive_normal_hp_for_discovery(other):
                 continue
             pool[identity] = position
         return pool
@@ -6300,6 +6316,8 @@ class Entity(BaseBlock):
                 )
 
             for template in variants:
+                if template.effective_target_type not in (TargetType.ENTITY,TargetType.MULTI_ENTITY,TargetType.CREATURE_OR_OBJECT):
+                    continue
                 started = time.perf_counter() if timing else 0.0
                 template_name = template.get_discovery_template_name()
                 template_label = self._timing_label(template_name)

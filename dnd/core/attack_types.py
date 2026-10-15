@@ -5,10 +5,19 @@ from dnd.core.creature_types import DamageType
 from typing import Literal
 from uuid import UUID
 from dnd.core.equipment_types import WeaponSlot
+from dnd.core.effect_types import EffectOrigin
 from dnd.types.abilities import AbilityName
 
 
 DamageDieValue = Literal[4, 6, 8, 10, 12, 20]
+
+
+class SpellWeaponProfile(BaseModel):
+    """Exact retained casting data for a real item making spell attacks."""
+    wielder_uuid: UUID
+    casting_ability: AbilityName
+    casting_source_id: UUID | None = None
+    effect_origin: EffectOrigin
 
 
 class WeaponAttackOverride(BaseModel):

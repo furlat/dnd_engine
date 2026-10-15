@@ -48,6 +48,7 @@ BUILT_IN_PACK_VERSIONS = MappingProxyType(
         CORE_RULES_PACK_ID: "1.0.0",
         NEURODRAGON_PACK_ID: "1.0.0",
         SRD_5_1_PACK_ID: "1.0.0",
+        "content.srd_5_2_cc": "1.0.0",
     },
 )
 BUILT_IN_PACK_DEPENDENCIES = MappingProxyType(
@@ -58,5 +59,6 @@ BUILT_IN_PACK_DEPENDENCIES = MappingProxyType(
             SRD_5_1_PACK_ID,
         }),
         SRD_5_1_PACK_ID: frozenset({CORE_RULES_PACK_ID}),
+        "content.srd_5_2_cc": frozenset({CORE_RULES_PACK_ID, SRD_5_1_PACK_ID}),
     },
 )

@@ -3,6 +3,8 @@
 Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web, Cloudkill,
           SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud
 """
+from dnd.conditions import Restrained
+from dnd.spells.hit_effects import AttackBackedSpell
 from dnd.types.physical_access import PhysicalAccess
 from typing import Any, ClassVar, Literal, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID, uuid4
@@ -57,6 +59,7 @@ from dnd.core.content.registration import (
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.condition_types import (
     ConditionCategory,
+    ConditionRemovalTrigger,
     ConditionTag,
     DurationType,
     HazardFilter,
@@ -84,7 +87,7 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.types.world import OccupancyLayer
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
+from dnd.actions import AttackEvent, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.environmental_conditions import (
@@ -118,7 +121,7 @@ from dnd.core.effect_types import EffectOrigin
 from dnd.core.elevation import support_distance_feet
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 from dnd.core.events import DamageAppliedEvent, SavingThrowEvent, PortalTransferEvent
-from dnd.spells.spell_utils import validate_line_of_sight
+from dnd.spells.spell_utils import deliver_spell_damage, validate_line_of_sight
 
 
 def _call_lightning_target_error(spell: SpellAction) -> Optional[str]:
@@ -5108,7 +5111,54 @@ class ProduceFlame(SpellAction):
             damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.FIRE)
         roll = damage.get_dice(resolution.outcome,
             crit_extra_dice=caster.get_spell_crit_extra_dice() if resolution.outcome == AttackOutcome.CRIT else 0).roll
-        target.receive_damage(amount=roll.total, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid,
-            parent_event=effect.uuid, damages=[damage], damage_rolls=[roll], effect_origin=event.get_effect_origin(),
-            critical_hit=resolution.outcome == AttackOutcome.CRIT)
-        return effect.with_updates(damages=[damage], damage_rolls=[roll])
+        return deliver_spell_damage(effect,target,damage,roll)
+
+
+class EnsnaringStrikeEffect(Restrained):
+    name: str = "Ensnaring Strike"
+    description: str = "Restrained with start-turn piercing damage; ally Help removes vines."
+    immunity_names: tuple[str,...] = ("Restrained",)
+    blocks_opportunity_attacks: bool = True
+    dice_count: int = 1
+    duration: Duration = Field(default_factory=lambda:Duration(duration=10,duration_type=DurationType.ROUNDS))
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+    removal_triggers: frozenset[ConditionRemovalTrigger] = frozenset({ConditionRemovalTrigger.ALLY_HELP})
+
+    def _apply(self,event: Event):
+        modifiers,handlers,children,spatial,effect=super()._apply(event)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None or effect is None or effect.canceled:
+            return modifiers,handlers,children,spatial,effect
+        def tick(boundary: Event,_: UUID):
+            damage=Damage(name=self.name,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,
+                damage_dice=6,dice_numbers=self.dice_count,damage_type=DamageType.PIERCING,
+                damage_bonus=ModifiableValue.create(source_entity_uuid=self.source_entity_uuid,base_value=0),effect_origin=self.effect_origin)
+            roll=damage.get_dice(AttackOutcome.HIT).roll
+            target.receive_damage(roll.total,DamageType.PIERCING,self.source_entity_uuid,parent_event=boundary.uuid,
+                damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,
+                independent_resolution=True,source_condition_uuid=self.uuid)
+            return None
+        handler=EventHandler(name="Ensnaring Strike piercing",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_START,event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid)],event_processor=tick)
+        target.add_event_handler(handler)
+        return modifiers,[*handlers,handler.uuid],children,spatial,effect
+
+
+class EnsnaringStrike(AttackBackedSpell):
+    name: str = "Ensnaring Strike"
+    description: str = "Weapon attempt; on hit pay bonus action/slot, STR save or ensnared."
+    spell_level: int = 1
+    spell_school: str = "conjuration"
+    concentration: bool = True
+
+    def apply_hit(self,event: SpellEvent,attack: AttackEvent) -> AttackEvent:
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None:
+            return attack
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="strength",
+            dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
+        if not saved and not effect.canceled:
+            self.apply_hit_condition(effect,EnsnaringStrikeEffect(source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,dice_count=self.cast_at_level))
+        return attack

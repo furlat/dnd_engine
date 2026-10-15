@@ -41,6 +41,7 @@ import dnd.spells.walls as walls
 import dnd.spells.wall_fields as wall_fields
 import dnd.spells.wall_constructions as wall_constructions
 import dnd.spells.summoning as summoning
+import dnd.items.created_items as created_items
 from dnd.spells.content_metadata import (
     SpellCatalogAoeShapeType,
     SpellCatalogAoeSpec,
@@ -59,6 +60,7 @@ from dnd.spells.content_metadata import (
 
 
 SRD_SPELL_PACK_ID = "content.srd_5_1_cc"
+SRD_5_2_SPELL_PACK_ID = "content.srd_5_2_cc"
 NEURODRAGON_SPELL_PACK_ID = "content.neurodragon"
 
 
@@ -176,6 +178,41 @@ def _catalog(
 
 
 SPELL_CONTENT_IDENTITY_SPECS: tuple[SpellContentIdentitySpec, ...] = (
+    SpellContentIdentitySpec("Spiritual Weapon",summoning.SpiritualWeapon,SRD_SPELL_PACK_ID,"spell.spiritual_weapon","evocation",2,182,3250,adaptation_notes="BG3 independent autonomous native allied summon, no concentration."),
+    SpellContentIdentitySpec("Flaming Sphere",summoning.FlamingSphere,SRD_SPELL_PACK_ID,"spell.flaming_sphere","conjuration",2,146,3260,adaptation_notes="BG3 autonomous native sphere, Ram, moving aura and native fire trail."),
+    SpellContentIdentitySpec("Flame Blade",evocation.FlameBlade,SRD_SPELL_PACK_ID,"spell.flame_blade","evocation",2,146,3210,adaptation_notes="BG3 ten-turn real scimitar, spell attacks and no concentration."),
+    SpellContentIdentitySpec("Revivify",necromancy.Revivify,SRD_SPELL_PACK_ID,"spell.revivify","necromancy",3,175,3240,adaptation_notes="BG3 intact dead/downed allied player companion; optional legal reposition, 1 HP."),
+    SpellContentIdentitySpec("Goodberry",transmutation.Goodberry,SRD_SPELL_PACK_ID,"spell.goodberry","transmutation",1,150,3200,adaptation_notes="BG3 four real 1d4 berries, until creating caster long rest."),
+    SpellContentIdentitySpec("Dragon's Breath",transmutation.DragonsBreath,SRD_5_2_SPELL_PACK_ID,"spell.dragons_breath","transmutation",2,126,3220),
+    SpellContentIdentitySpec("Vampiric Touch",necromancy.VampiricTouch,SRD_SPELL_PACK_ID,"spell.vampiric_touch","necromancy",3,190,3230,adaptation_notes="BG3 repeat attack and own-component post-mitigation healing."),
+    SpellContentIdentitySpec('Create or Destroy Water',transmutation.CreateOrDestroyWater,SRD_SPELL_PACK_ID,"spell.create_or_destroy_water",'transmutation',1,130,3130,adaptation_notes="BG3 native field/surface adaptation; approved implementation plan."),
+    SpellContentIdentitySpec('Chromatic Orb',evocation.ChromaticOrb,SRD_SPELL_PACK_ID,"spell.chromatic_orb",'evocation',1,125,3140,adaptation_notes="BG3 native field/surface adaptation; approved implementation plan."),
+    SpellContentIdentitySpec('Moonbeam',evocation.Moonbeam,SRD_SPELL_PACK_ID,"spell.moonbeam",'evocation',2,162,3150,adaptation_notes="BG3 native field/surface adaptation; approved implementation plan."),
+    SpellContentIdentitySpec('Acid Arrow',evocation.AcidArrow,SRD_SPELL_PACK_ID,"spell.acid_arrow",'evocation',2,114,3160,adaptation_notes="BG3 native field/surface adaptation; approved implementation plan."),
+    SpellContentIdentitySpec('Glyph of Warding',abjuration.GlyphOfWarding,SRD_SPELL_PACK_ID,"spell.glyph_of_warding",'abjuration',3,150,3170,adaptation_notes="BG3 native field/surface adaptation; approved implementation plan."),
+    SpellContentIdentitySpec('Plant Growth',transmutation.PlantGrowth,SRD_SPELL_PACK_ID,"spell.plant_growth",'transmutation',3,169,3180,adaptation_notes="BG3 native field/surface adaptation; approved implementation plan."),
+    SpellContentIdentitySpec("Dancing Lights",evocation.DancingLights,SRD_SPELL_PACK_ID,"spell.dancing_lights","evocation",0,131,3100,adaptation_notes="BG3 one movable native light, no physical creature."),
+    SpellContentIdentitySpec("Phantasmal Force",illusion.PhantasmalForce,SRD_SPELL_PACK_ID,"spell.phantasmal_force","illusion",2,168,3110,adaptation_notes="BG3 recurring adaptive damage using native resolved components."),
+    SpellContentIdentitySpec('Searing Smite',evocation.SearingSmite,SRD_SPELL_PACK_ID,"spell.searing_smite",'evocation',1,176,2630,adaptation_notes="BG3 native spell adaptation; approved implementation plan."),
+    SpellContentIdentitySpec('Ensnaring Strike',conjuration.EnsnaringStrike,SRD_SPELL_PACK_ID,"spell.ensnaring_strike",'conjuration',1,141,2640,adaptation_notes="BG3 native spell adaptation; approved implementation plan."),
+    SpellContentIdentitySpec('Branding Smite',evocation.BrandingSmite,SRD_SPELL_PACK_ID,"spell.branding_smite",'evocation',2,122,2650,adaptation_notes="BG3 native spell adaptation; approved implementation plan."),
+    SpellContentIdentitySpec('Magic Weapon',transmutation.MagicWeapon,SRD_SPELL_PACK_ID,"spell.magic_weapon",'transmutation',2,161,2660,adaptation_notes="BG3 native spell adaptation; approved implementation plan."),
+    SpellContentIdentitySpec("Divine Favor",evocation.DivineFavor,SRD_SPELL_PACK_ID,"spell.divine_favor","evocation",1,138,2600,adaptation_notes="BG3 three-turn native weapon rider."),
+    SpellContentIdentitySpec("Hunter's Mark",divination.HuntersMark,SRD_SPELL_PACK_ID,"spell.hunters_mark","divination",1,156,2610,adaptation_notes="BG3 caster-owned weapon mark and reapply."),
+    SpellContentIdentitySpec("Hex",enchantment.Hex,SRD_SPELL_PACK_ID,"spell.hex","enchantment",1,154,2620,adaptation_notes="BG3 check-only Hex and per-attack-hit rider."),
+    SpellContentIdentitySpec('Starry Wisp', evocation.StarryWisp, SRD_5_2_SPELL_PACK_ID, "spell.starry_wisp", 'evocation', 0, 165, 2440, adaptation_notes='Native SRD 5.2 cantrip.'),
+    SpellContentIdentitySpec('Sorcerous Burst', evocation.SorcerousBurst, SRD_5_2_SPELL_PACK_ID, "spell.sorcerous_burst", 'evocation', 0, 163, 2450, adaptation_notes='Native SRD 5.2 cantrip.'),
+    SpellContentIdentitySpec('Dissonant Whispers', enchantment.DissonantWhispers, SRD_5_2_SPELL_PACK_ID, "spell.dissonant_whispers", 'enchantment', 1, None, 2460, adaptation_notes='BG3-style adaptation using native systems; approved 36-spell plan.'),
+    SpellContentIdentitySpec('Faerie Fire', evocation.FaerieFire, SRD_SPELL_PACK_ID, "spell.faerie_fire", 'evocation', 1, 141, 2470, adaptation_notes='BG3-style adaptation using native systems; approved 36-spell plan.'),
+    SpellContentIdentitySpec('Heroism', enchantment.Heroism, SRD_SPELL_PACK_ID, "spell.heroism", 'enchantment', 1, 154, 2480, adaptation_notes='BG3-style adaptation using native systems; approved 36-spell plan.'),
+    SpellContentIdentitySpec('Hideous Laughter', enchantment.HideousLaughter, SRD_SPELL_PACK_ID, "spell.hideous_laughter", 'enchantment', 1, 154, 2490, adaptation_notes='BG3-style adaptation using native systems; approved 36-spell plan.'),
+    SpellContentIdentitySpec('Protection from Evil and Good', abjuration.ProtectionFromEvilAndGood, SRD_SPELL_PACK_ID, "spell.protection_from_evil_and_good", 'abjuration', 1, 172, 2500, adaptation_notes='BG3-style adaptation using native systems; approved 36-spell plan.'),
+    SpellContentIdentitySpec('Calm Emotions', enchantment.CalmEmotions, SRD_SPELL_PACK_ID, "spell.calm_emotions", 'enchantment', 2, 123, 2510, adaptation_notes='BG3-style adaptation using native systems; approved 36-spell plan.'),
+    SpellContentIdentitySpec('Pass without Trace', abjuration.PassWithoutTrace, SRD_SPELL_PACK_ID, "spell.pass_without_trace", 'abjuration', 2, 167, 2520, adaptation_notes='BG3-style adaptation using native systems; approved 36-spell plan.'),
+    SpellContentIdentitySpec("Spare the Dying", necromancy.SpareTheDying, SRD_SPELL_PACK_ID, "spell.spare_the_dying", "necromancy", 0, 181, 2400),
+    SpellContentIdentitySpec("Vicious Mockery", enchantment.ViciousMockery, SRD_SPELL_PACK_ID, "spell.vicious_mockery", "enchantment", 0, 191, 2410, adaptation_notes="BG3 next actual attack-roll disadvantage. https://bg3.wiki/wiki/Vicious_Mockery"),
+    SpellContentIdentitySpec("Animal Friendship", enchantment.AnimalFriendship, SRD_SPELL_PACK_ID, "spell.animal_friendship", "enchantment", 1, 115, 2420, adaptation_notes="BG3 ten-turn beast charm; caster-allied damage ends the effect. https://bg3.wiki/wiki/Animal_Friendship"),
+    SpellContentIdentitySpec("Ray of Sickness", necromancy.RayOfSickness, SRD_5_2_SPELL_PACK_ID, "spell.ray_of_sickness", "necromancy", 1, None, 2430, adaptation_notes="BG3 poison attack followed by CON save against two-turn Poisoned. https://bg3.wiki/wiki/Ray_of_Sickness"),
     SpellContentIdentitySpec("Conjure Animals", summoning.ConjureAnimals, SRD_SPELL_PACK_ID,
         "spell.conjure_animals", "conjuration", 3, 127, 2300,
         adaptation_notes="One chosen canonical beast per cast; cumulative stronger forms on upcast; native autonomous ally turns."),
@@ -335,6 +372,41 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     tuple[type[SpellAction], SpellCatalogMetadata],
     ...,
 ] = (
+    (summoning.SpiritualWeapon,_catalog('spiritual_weapon','Summon an autonomous spectral weapon for ten turns.','position','ranged',60,'none',classes=('cleric',))),
+    (summoning.FlamingSphere,_catalog('flaming_sphere','Summon an autonomous fire sphere with Ram, aura and fire trail.','position','ranged',60,'none',concentration=True,classes=('druid','wizard'))),
+    (evocation.FlameBlade,_catalog('flame_blade','Create a ten-turn real fire scimitar using retained spell accuracy.','self','self',0,'self',damage=(DamageType.FIRE,),classes=('druid',))),
+    (necromancy.Revivify,_catalog('revivify','Return an intact allied player companion at one HP; optional legal relocation.','entity','ranged',30,'none',healing=True,classes=('cleric','paladin'))),
+    (transmutation.Goodberry,_catalog('goodberry','Create four temporary berries with bonus-action 1d4 consumption.','entity','touch',5,'touch',healing=True,classes=('druid','ranger'))),
+    (transmutation.DragonsBreath,_catalog('dragons_breath','Grant an ally a retained elemental cone action.','entity','touch',5,'touch',concentration=True,classes=('sorcerer','wizard'))),
+    (necromancy.VampiricTouch,_catalog('vampiric_touch','Melee necrotic attack and half own-damage healing; repeat during concentration.','entity','touch',5,'touch',attack_roll=True,damage=(DamageType.NECROTIC,),healing=True,concentration=True,classes=('warlock','wizard'))),
+    (transmutation.CreateOrDestroyWater,_catalog('create_or_destroy_water','Create water/rain Wet or destroy water-bearing patches.','position_aoe','ranged',30,'aoe',area=_area('sphere',radius_ft=13),classes=('cleric','druid'))),
+    (evocation.ChromaticOrb,_catalog('chromatic_orb','Chosen elemental spell attack with native impact patch.','entity','ranged',60,'single_projectile',projectile='orb',attack_roll=True,damage=(DamageType.ACID,DamageType.COLD,DamageType.FIRE,DamageType.LIGHTNING,DamageType.POISON,DamageType.THUNDER),classes=('sorcerer','wizard'))),
+    (evocation.Moonbeam,_catalog('moonbeam','Three-foot recurring radiant field; action to relocate.','position','ranged',60,'none',area=_area('sphere',radius_ft=3),saves=_saving_throws('constitution'),damage=(DamageType.RADIANT,),concentration=True,classes=('druid',))),
+    (evocation.AcidArrow,_catalog('acid_arrow','Acid attack: half on miss, delayed hit damage and acid patch.','entity','ranged',60,'single_projectile',projectile='bolt',attack_roll=True,damage=(DamageType.ACID,),classes=('wizard',))),
+    (abjuration.GlyphOfWarding,_catalog('glyph_of_warding','Hostile-triggered glyph with elemental, Sleep and Detonation variants.','position','ranged',30,'none',area=_area('sphere',radius_ft=13),saves=_saving_throws('dexterity'),classes=('bard','cleric','wizard'))),
+    (transmutation.PlantGrowth,_catalog('plant_growth','Twenty-foot vegetation: strongest fourfold walking cost; burns away partially.','position','ranged',60,'none',area=_area('sphere',radius_ft=20),classes=('bard','druid','ranger'))),
+    (evocation.DancingLights,_catalog('dancing_lights','One movable thirty-foot bright light.','position','ranged',60,'none',concentration=True,classes=('bard','sorcerer','wizard'))),
+    (illusion.PhantasmalForce,_catalog('phantasmal_force','INT save or recurring damage follows external damage type.','entity','ranged',60,'none',saves=_saving_throws('intelligence'),concentration=True,classes=('bard','sorcerer','wizard'))),
+    (evocation.SearingSmite,_catalog('searing_smite','Weapon attempt, hit-only bonus/slot payment, initial fire and burn.','entity','touch',5,'touch',damage=(DamageType.FIRE,),attack_roll=True,concentration=True,classes=('paladin',))),
+    (conjuration.EnsnaringStrike,_catalog('ensnaring_strike','Weapon attempt, STR save or vines with piercing ticks.','entity','ranged',60,'none',saves=_saving_throws('strength'),attack_roll=True,concentration=True,classes=('ranger',))),
+    (evocation.BrandingSmite,_catalog('branding_smite','Weapon attempt, hit-only bonus/slot payment, radiant damage and reveal.','entity','ranged',60,'none',damage=(DamageType.RADIANT,),attack_roll=True,concentration=True,classes=('paladin',))),
+    (transmutation.MagicWeapon,_catalog('magic_weapon','Exact held weapon gains magical attacks and attack/damage bonus.','entity','touch',5,'touch',concentration=True,classes=('paladin','wizard'))),
+    (evocation.DivineFavor,_catalog('divine_favor','Weapon hits add 1d4 radiant for three turns.','self','self',0,'self',concentration=True,classes=('paladin',))),
+    (divination.HuntersMark,_catalog('hunters_mark','Weapon hits against a quarry add 1d6 matching damage.','entity','ranged',60,'none',concentration=True,classes=('ranger',))),
+    (enchantment.Hex,_catalog('hex','Attack hits add 1d6 necrotic and chosen ability checks have disadvantage.','entity','ranged',60,'none',concentration=True,classes=('warlock',))),
+    (evocation.StarryWisp, _catalog('starry_wisp', 'Radiant attack, ten-foot dim light and reveal.', 'entity', 'ranged', 60, 'single_projectile', projectile='radiance', damage=(DamageType.RADIANT,), attack_roll=True, classes=('bard','druid'))),
+    (evocation.SorcerousBurst, _catalog('sorcerous_burst', 'Chosen-element attack with bounded exploding d8s.', 'entity', 'ranged', 120, 'single_projectile', projectile='bolt', damage=(DamageType.ACID,DamageType.COLD,DamageType.FIRE,DamageType.LIGHTNING,DamageType.POISON,DamageType.PSYCHIC,DamageType.THUNDER), attack_roll=True, classes=('sorcerer',))),
+    (enchantment.DissonantWhispers, _catalog('dissonant_whispers', 'Psychic damage and two-turn fear; WIS half.', 'entity', 'ranged', 60, 'none', damage=(DamageType.PSYCHIC,), saves=_saving_throws('wisdom'), classes=('bard',))),
+    (evocation.FaerieFire, _catalog('faerie_fire', 'DEX save or reveal and attack advantage.', 'position_aoe', 'ranged', 60, 'aoe', area=_area('sphere',radius_ft=20), saves=_saving_throws('dexterity'), concentration=True, classes=('bard','druid'))),
+    (enchantment.Heroism, _catalog('heroism', 'Clear fear and refresh five temporary HP each turn.', 'multi_entity', 'touch', 5, 'touch', concentration=True, multi_target=_multi_target(1,1,False), classes=('bard','paladin'))),
+    (enchantment.HideousLaughter, _catalog('hideous_laughter', 'WIS save or persistent prone and inability to act.', 'entity', 'ranged', 60, 'none', saves=_saving_throws('wisdom'), concentration=True, classes=('bard','wizard'))),
+    (abjuration.ProtectionFromEvilAndGood, _catalog('protection_from_evil_and_good', 'Source-type protection against attacks, charm and fear.', 'entity', 'touch', 5, 'touch', concentration=True, classes=('cleric','paladin','warlock','wizard'))),
+    (enchantment.CalmEmotions, _catalog('calm_emotions', 'Humanoids lose charm, fear and rage and cannot regain them.', 'position_aoe', 'ranged', 60, 'aoe', area=_area('sphere',radius_ft=20), concentration=True, classes=('bard','cleric'))),
+    (abjuration.PassWithoutTrace, _catalog('pass_without_trace', 'Friendly thirty-foot moving aura grants +10 Stealth.', 'self', 'self', 0, 'self', concentration=True, classes=('druid','ranger'))),
+    (necromancy.SpareTheDying, _catalog('spare_the_dying', 'Stabilize a living creature at zero HP.', 'entity', 'touch', 5, 'none', classes=('cleric',))),
+    (enchantment.ViciousMockery, _catalog('vicious_mockery', 'Psychic damage and next attack disadvantage on failed WIS save.', 'entity', 'ranged', 60, 'none', damage=(DamageType.PSYCHIC,), saves=_saving_throws('wisdom'), classes=('bard',))),
+    (enchantment.AnimalFriendship, _catalog('animal_friendship', 'Charm a beast of Intelligence 3 or less.', 'multi_entity', 'ranged', 60, 'none', saves=_saving_throws('wisdom'), multi_target=_multi_target(1,1,False), classes=('bard','druid','ranger'))),
+    (necromancy.RayOfSickness, _catalog('ray_of_sickness', 'Poison attack followed by CON save against Poisoned.', 'entity', 'ranged', 60, 'ray', projectile='ray', attack_roll=True, damage=(DamageType.POISON,), saves=_saving_throws('constitution'), classes=('sorcerer','wizard'))),
     (summoning.ConjureAnimals, _catalog('conjure_animals', 'Summon one beast; higher slots unlock stronger creatures.', 'position', 'ranged', 60, 'none', concentration=True, classes=('druid', 'ranger'))),
     (summoning.ConjureFey, _catalog('conjure_fey', 'Summon a beast-shaped Fey spirit; lost concentration leaves it hostile for the remaining duration.', 'position', 'ranged', 60, 'none', concentration=True, classes=('druid', 'warlock'))),
     (summoning.ConjureFiend, _catalog('conjure_fiend', 'Summon one fiend while concentration holds; higher slots unlock stronger forms.', 'position', 'ranged', 60, 'none', concentration=True, classes=('warlock', 'wizard'))),
@@ -858,6 +930,13 @@ _SPELL_GRANTED_ACTION_TYPES_BY_CLASS: Mapping[
     type[SpellAction],
     tuple[type[object], ...],
 ] = MappingProxyType({
+    transmutation.Goodberry:(created_items.EatGoodberry,),
+    transmutation.DragonsBreath:(transmutation.ExhaleDragonsBreath,),
+    necromancy.VampiricTouch:(necromancy.VampiricTouchStrike,),
+    evocation.DancingLights:(evocation.MoveDancingLights,),
+    evocation.Moonbeam:(evocation.MoveMoonbeam,),
+    divination.HuntersMark:(divination.ReapplyHuntersMark,),
+    enchantment.Hex:(enchantment.ReapplyHex,),
     evocation.FireShield: (evocation.DismissFireShield,),
     conjuration.HeroesFeast: (
         conjuration.EatFromFeast,
@@ -920,8 +999,8 @@ def _declare_spell(spec: SpellContentIdentitySpec) -> ContentDeclaration:
     declaration = _get_optional_declaration(spec.spell_type)
     if declaration is None:
         description = f"Playable implementation of {spec.display_name}."
-        if spec.pack_id == SRD_SPELL_PACK_ID:
-            if spec.source_page is None:
+        if spec.pack_id in (SRD_SPELL_PACK_ID, SRD_5_2_SPELL_PACK_ID):
+            if spec.source_page is None and spec.pack_id == SRD_SPELL_PACK_ID:
                 raise ValueError(
                     f"SRD spell {spec.display_name} requires a source page",
                 )
@@ -932,6 +1011,7 @@ def _declare_spell(spec: SpellContentIdentitySpec) -> ContentDeclaration:
                 school=spec.school,
                 level=spec.level,
                 source_page=spec.source_page,
+                srd_version="5.2" if spec.pack_id == SRD_5_2_SPELL_PACK_ID else "5.1",
                 sort_order=spec.sort_order,
                 icon_key=spec.icon_key,
                 dependencies=_spell_runtime_dependencies(spec.spell_type),

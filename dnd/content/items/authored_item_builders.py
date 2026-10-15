@@ -69,6 +69,7 @@ from dnd.content.items.trap_hardware_builders import TRAP_HARDWARE_PROFILES, bui
 from dnd.content.items.ground_hardware_builders import GROUND_HARDWARE_PROFILES, build_ground_hardware
 from dnd.content.items.world_prop_builders import WORLD_PROP_PROFILES, build_world_prop
 from dnd.extensions.field_focus import build_field_kit
+from dnd.items.created_items import build_goodberry
 from dnd.items.consumables import (
     build_basic_poison_weapon_coat,
     build_concentration_fire_weapon_coat,
@@ -349,6 +350,12 @@ def _single_item_builder(
     return build
 
 
+def _build_goodberry(source_entity_uuid: UUID,quantity: int=1) -> BaseItem:
+    if quantity!=1:
+        raise ValueError("Individual goodberries retain exact UUIDs")
+    return build_goodberry(source_entity_uuid)
+
+
 def _build_healing_potion(
     source_entity_uuid: UUID,
     quantity: int = 1,
@@ -492,6 +499,7 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
         for item_id, definition in STATIC_BLOCKER_DEFINITIONS.items()
     },
     "consumable.healing_potion": _build_healing_potion,
+    "consumable.goodberry": _build_goodberry,
     "consumable.potion_haste": _single_item_builder(
         "consumable.potion_haste", build_haste_potion,
     ),

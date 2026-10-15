@@ -32,3 +32,25 @@ def ignite_surface_contacts(parent_event: Event, positions: Iterable[tuple[int, 
     interaction = interaction.phase_to(EventPhase.EFFECT)
     if not interaction.canceled:
         interaction.phase_to(EventPhase.COMPLETION)
+
+
+
+def apply_elemental_surface_contacts(parent_event: Event,positions: Iterable[tuple[int,int]],damage_type: DamageType,
+                                     *,occupancy_layer: OccupancyLayer | None=None) -> None:
+    """Dispatch native freeze/electrify/vaporize/ignite transitions over resolved cells."""
+    contacts=tuple(sorted(set(positions)))
+    if not contacts or parent_event.canceled:
+        return
+    operations={DamageType.FIRE:(SpatialEffectInteractionOperation.IGNITE,SpatialEffectInteractionOperation.VAPORIZE),
+        DamageType.COLD:(SpatialEffectInteractionOperation.FREEZE,),
+        DamageType.LIGHTNING:(SpatialEffectInteractionOperation.IGNITE,SpatialEffectInteractionOperation.ELECTRIFY)}.get(damage_type,())
+    for operation in operations:
+        interaction=EventQueue.publish_declaration(SpatialEffectInteractionEvent(source_entity_uuid=parent_event.source_entity_uuid,
+            source_entity_name=parent_event.source_entity_name,positions=contacts,operation=operation,
+            damage_type=damage_type,occupancy_layer=occupancy_layer,parent_event=parent_event.uuid,use_register=False))
+        if not interaction.canceled:
+            interaction=interaction.phase_to(EventPhase.EXECUTION)
+            if not interaction.canceled:
+                interaction=interaction.phase_to(EventPhase.EFFECT)
+                if not interaction.canceled:
+                    interaction.phase_to(EventPhase.COMPLETION)

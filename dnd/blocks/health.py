@@ -615,18 +615,31 @@ class Health(BaseBlock):
         """Resolve the existing interruptible packet through one defense owner."""
         if not event.damages:
             raise ValueError("TakeDamageEvent requires at least one typed damage component")
-        if (event.final_damage is None
-                and len(event.damage_rolls) == len(event.damages)
-                and len(event.damages) > 1):
-            components = [(roll.total, damage.damage_type)
-                          for roll, damage in zip(event.damage_rolls, event.damages)]
+        if len(event.damage_rolls) == len(event.damages) and len(event.damages) > 1:
+            amounts = [max(0, roll.total) for roll in event.damage_rolls]
+            adjustment = event.get_effective_damage() - sum(amounts)
+            if adjustment > 0:
+                amounts[0] += adjustment
+            else:
+                reduction = -adjustment
+                for index, amount in enumerate(amounts):
+                    removed = min(amount, reduction)
+                    amounts[index] -= removed
+                    reduction -= removed
+            components = [(amount, damage.damage_type)
+                          for amount, damage in zip(amounts, event.damages)]
+            identities = [damage.uuid for damage in event.damages]
         else:
             components = [(event.get_effective_damage(), event.damages[0].damage_type)]
-        return self.preview_damage_components(
+            identities = [event.damages[0].uuid]
+        resolution = self.preview_damage_components(
             components, event.normal_hit_point_damage_cap,
             declared_damage=event.total_damage,
             normal_hit_points_available=normal_hit_points_available,
         )
+        return resolution.model_copy(update={"components": tuple(
+            component.model_copy(update={"source_damage_uuid": identity})
+            for component, identity in zip(resolution.components, identities, strict=True))})
 
     def preview_damage_components(
         self,

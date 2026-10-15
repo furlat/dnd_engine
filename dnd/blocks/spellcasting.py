@@ -230,6 +230,9 @@ class SpellcastingBlock(BaseBlock):
         default_factory=dict,
         description="Spellcasting abilities keyed by exact progression source.",
     )
+    divine_smite_entitlements: Dict[UUID,int] = Field(default_factory=dict)
+    divine_smite_handler_uuids: Dict[int,UUID] = Field(default_factory=dict)
+
     learned_reaction_spell_handlers: Dict[
         str,
         LearnedReactionSpellOwnership,

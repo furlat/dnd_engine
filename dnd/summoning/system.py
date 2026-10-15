@@ -7,8 +7,8 @@ from dnd.actions import PreparedSpellConcentration, SpellAction, SpellEvent
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.content_system.installed_creature_materialization import materialize_installed_creature
-from dnd.core.base_block import BaseBlock, ConditionRemovalReceipt, PreparedInitialConditions
-from dnd.core.base_conditions import ConditionRemovalEvent, Duration
+from dnd.core.base_block import BaseBlock, ConditionRemovalReceipt, PreparedInitialConditions, PreparedConditionApplication
+from dnd.core.base_conditions import BaseCondition, ConditionRemovalEvent, Duration
 from dnd.core.condition_types import DurationType, InvoluntarySustainLoss
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
@@ -18,9 +18,11 @@ from dnd.core.gridmap import get_map
 from dnd.encounter import Encounter, EncounterState, PreparedCombatantJoin
 from dnd.entity import Entity, PreparedBirth
 from dnd.game import Game, PreparedDeployment, PreparedRetirement
-from dnd.summoning.conditions import SummonControl, Summoned
+from dnd.summoning.conditions import SummonControl, Summoned, SpiritualWeaponOwner
 from dnd.summoning.forms import SPELL_SPECIFICATIONS, selected_form
-from dnd.types.summoning import SummonDepartureCause, SummonManifestation, SummonOrigin, SummonRules, SummonSelection, SummonSustain, TerminalOwnerRelease
+from dnd.core.content.recipes import ContentRecipe
+from dnd.monsters.spell_summons import SpellSummonParameters, FlamingSphereAura
+from dnd.types.summoning import SummonFamily, SummonDepartureCause, SummonManifestation, SummonOrigin, SummonRules, SummonSelection, SummonSustain, TerminalOwnerRelease
 
 
 @dataclass(slots=True)
@@ -39,6 +41,7 @@ class PreparedSummon:
     deployment: PreparedDeployment
     join: PreparedCombatantJoin
     concentration: PreparedSpellConcentration | None
+    independent_owner: PreparedConditionApplication | None = None
     committed: bool = False
 
 
@@ -158,7 +161,16 @@ class SummoningSystem:
         caster = self.game.get_entity(event.source_entity_uuid)
         if caster is None:
             return None
-        entity = materialize_installed_creature(form.recipe, runtime_entity_uuid=uuid4(),
+        recipe=form.recipe
+        if selection.family in (SummonFamily.SPIRITUAL_WEAPON,SummonFamily.FLAMING_SPHERE):
+            casting_ability=caster.spellcasting.resolve_spellcasting_ability(action.spellcasting_source_id if action else None)
+            parameters=SpellSummonParameters(caster_uuid=caster.uuid,
+                casting_modifier=caster.ability_scores.get_ability(casting_ability).modifier,
+                proficiency=caster.proficiency_bonus.normalized_score,slot_level=selection.cast_at_level,
+                spell_dc=caster.spell_save_dc(spellcasting_source_id=action.spellcasting_source_id if action else None),
+                effect_origin=event.get_effect_origin())
+            recipe=ContentRecipe.create(ref=form.recipe.ref,parameters=parameters.model_dump(mode="json"))
+        entity = materialize_installed_creature(recipe, runtime_entity_uuid=uuid4(),
             display_name=form.display_name, faction=caster.faction, position=selection.target_position,
             deployment_role=CreatureDeploymentRole(role_id="summoning.creature"),
             possession_mode=CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY)
@@ -166,13 +178,14 @@ class SummoningSystem:
         initial: PreparedInitialConditions | None = None
         join: PreparedCombatantJoin | None = None
         concentration: PreparedSpellConcentration | None = None
+        independent_owner: PreparedConditionApplication | None = None
         try:
             if form.manifestation is SummonManifestation.FEY_SPIRIT:
                 entity.creature_type = CreatureType.FEY
             existence_uuid = uuid4()
             control_uuid = uuid4() if rules.sustain is SummonSustain.CONTROL else None
             origin = SummonOrigin(summoner_uuid=caster.uuid, cast_lineage_uuid=event.lineage_uuid,
-                recipe=form.recipe, form_id=form.form_id, manifestation=form.manifestation,
+                recipe=recipe, form_id=form.form_id, manifestation=form.manifestation,
                 existence_condition_uuid=existence_uuid, control_condition_uuid=control_uuid)
             existence = Summoned(uuid=existence_uuid, source_entity_uuid=caster.uuid,
                 target_entity_uuid=entity.uuid, origin=origin,
@@ -180,7 +193,12 @@ class SummoningSystem:
                 last_progressed_interval=(self.encounter.uuid, self.encounter.round_number))
             control = SummonControl(uuid=control_uuid, source_entity_uuid=caster.uuid,
                 target_entity_uuid=entity.uuid, original_controller_uuid=caster.uuid) if control_uuid else None
-            conditions = [existence, control] if control is not None else [existence]
+            conditions: list[BaseCondition] = [existence, control] if control is not None else [existence]
+            if selection.family is SummonFamily.FLAMING_SPHERE:
+                aura=FlamingSphereAura(source_entity_uuid=caster.uuid,target_entity_uuid=entity.uuid,
+                    spell_dc=parameters.spell_dc,dice_count=selection.cast_at_level,effect_origin=event.get_effect_origin())
+                conditions.append(aura)
+                existence.sub_conditions.append(aura.uuid)
             initial = entity.prepare_initial_conditions(conditions, parent_event=event)
             if control is not None:
                 existence.sub_conditions.append(control.uuid)
@@ -194,6 +212,14 @@ class SummoningSystem:
                 if not isinstance(admitted, PreparedSpellConcentration):
                     raise ValueError("Summon concentration was rejected")
                 concentration = admitted
+            if selection.family is SummonFamily.SPIRITUAL_WEAPON:
+                owner=SpiritualWeaponOwner(source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid,
+                    effect_origin=event.get_effect_origin())
+                owner.add_linked_condition(entity.uuid,existence.uuid)
+                admitted_owner=caster.prepare_condition_application(owner,parent_event=event)
+                if not isinstance(admitted_owner,PreparedConditionApplication):
+                    raise ValueError("Independent spiritual weapon ownership was rejected")
+                independent_owner=admitted_owner
             birth = entity.prepare_birth(initial_conditions=initial, parent_event=event, summon_origin=origin)
             error = self.placement_error(caster.uuid, selection, subjective=False)
             if error:
@@ -205,9 +231,11 @@ class SummoningSystem:
             if concentration is not None and selection.target_position in concentration.condition.prepared_removal_occupancies():
                 raise ValueError("Summon destination conflicts with concentration cleanup")
             return PreparedSummon(SummonMembership(entity, existence, control, controller),
-                initial, birth, deployment, join, concentration)
+                initial, birth, deployment, join, concentration, independent_owner)
         except BaseException as error:
             errors: list[BaseException] = []
+            if independent_owner is not None:
+                caster.cancel_condition_application(independent_owner,"Summon admission canceled")
             if concentration is not None and concentration.application is not None:
                 try:
                     concentration.owner.cancel_condition_application(concentration.application, "Summon admission canceled")
@@ -247,6 +275,11 @@ class SummoningSystem:
         errors: list[BaseException] = []
         try:
             with BaseBlock.condition_removal_scope():
+                if prepared.independent_owner is not None:
+                    caster=self.game.get_entity(event.source_entity_uuid)
+                    if caster is None:
+                        raise RuntimeError("Independent summon owner disappeared")
+                    caster.commit_condition_application(prepared.independent_owner)
                 if prepared.concentration is not None:
                     assert action is not None
                     action.commit_prepared_concentration(prepared.concentration, member.entity,
@@ -261,6 +294,11 @@ class SummoningSystem:
                     self._condition_members[member.control.uuid] = member
                 self._committed_casts.add(event.lineage_uuid)
                 prepared.committed = True
+                if prepared.independent_owner is not None:
+                    try:
+                        caster.publish_condition_application(prepared.independent_owner)
+                    except BaseException as error:
+                        errors.append(error)
                 try:
                     member.entity.publish_birth(prepared.birth)
                 except BaseException as error:

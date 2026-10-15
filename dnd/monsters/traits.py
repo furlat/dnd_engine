@@ -746,7 +746,7 @@ class BonusDamageFeature(BaseCondition):
         return event
 
     def _processor(self, event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-        if not isinstance(event, DamageRollResultEvent):
+        if not isinstance(event, DamageRollResultEvent) or event.attack_kind=="spell":
             return None
         owner = Entity.get(source_entity_uuid)
         target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
@@ -756,7 +756,7 @@ class BonusDamageFeature(BaseCondition):
             return None
         if event.attack_outcome not in {AttackOutcome.HIT, AttackOutcome.CRIT}:
             return None
-        if self.melee_only and owner.get_weapon_range(event.weapon_slot).type != RangeType.REACH:
+        if self.melee_only and (event.weapon_slot is None or owner.get_weapon_range(event.weapon_slot).type != RangeType.REACH):
             return None
         if self.requires_adjacent_ally and not _has_adjacent_ally(owner, target):
             return None

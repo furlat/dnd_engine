@@ -9,12 +9,15 @@ from dnd.core.content.recipes import ContentRecipe
 
 
 class SummonFamily(str, Enum):
+    SPIRITUAL_WEAPON = "spiritual_weapon"
+    FLAMING_SPHERE = "flaming_sphere"
     ANIMALS = "animals"
     FEY = "fey"
     FIEND = "fiend"
 
 
 class SummonManifestation(str, Enum):
+    SPELL_CONSTRUCT = "spell_construct"
     NATURAL = "natural"
     FEY_SPIRIT = "fey_spirit"
     FIEND = "fiend"

@@ -114,3 +114,23 @@ class ConjureFiend(SummonSpell):
     description: str = "Summon one fiend while concentration holds. Higher slots unlock stronger forms."
     family: SummonFamily = SummonFamily.FIEND
     spell_level: int = 3
+
+
+class SpiritualWeapon(SummonSpell):
+    name: str = "Spiritual Weapon"
+    description: str = "Summon a ten-turn autonomous allied spectral weapon; bonus action, no concentration."
+    family: SummonFamily = SummonFamily.SPIRITUAL_WEAPON
+    form_id: str | None = "spiritual_weapon"
+    spell_level: int = 2
+    spell_school: str = "evocation"
+    concentration: bool = False
+    alt_cost_type: str | None = "bonus_actions"
+
+
+class FlamingSphere(SummonSpell):
+    name: str = "Flaming Sphere"
+    description: str = "Summon a ten-turn autonomous allied sphere with saved Ram, enemy end-turn aura and native fire trail."
+    family: SummonFamily = SummonFamily.FLAMING_SPHERE
+    form_id: str | None = "flaming_sphere"
+    spell_level: int = 2
+    concentration: bool = True

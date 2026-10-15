@@ -307,7 +307,9 @@ type ConditionAgencyDenial = Literal['none', 'full_turn']
 type ConditionCategory = Literal['condition', 'status', 'internal']
 
 
-type ConditionRemovalTrigger = Literal['positive_damage_applied', 'shake_awake']
+type ConditionRemovalTrigger = Literal[
+    'positive_damage_applied', 'shake_awake', 'ally_help', 'wet_application'
+]
 
 
 class ConditionRemovedLogData(TypedDict):
@@ -327,6 +329,29 @@ type ConditionTag = Literal[
     'hit_point_maximum_reduction',
     'concentration',
 ]
+
+
+class ConditionalCost(TypedDict):
+    name: NotRequired[str]
+    cost_type: Literal[
+        'actions',
+        'bonus_actions',
+        'reactions',
+        'movement',
+        'spell_slot_1',
+        'spell_slot_2',
+        'spell_slot_3',
+        'spell_slot_4',
+        'spell_slot_5',
+        'spell_slot_6',
+        'spell_slot_7',
+        'spell_slot_8',
+        'spell_slot_9',
+    ]
+    cost: int
+    resource_name: NotRequired[str | None]
+    resource_cost: NotRequired[int]
+    trigger: NotRequired[Literal['hit']]
 
 
 type OriginItem = int
@@ -1714,7 +1739,7 @@ type SummonDepartureCause = Literal[
 ]
 
 
-type SummonManifestation = Literal['natural', 'fey_spirit', 'fiend']
+type SummonManifestation = Literal['spell_construct', 'natural', 'fey_spirit', 'fiend']
 
 
 class SurfaceLayer(TypedDict):
@@ -2814,6 +2839,7 @@ class PlayerAction(TypedDict):
     loot_item_uuid: NotRequired[str | None]
     item_stack_count: NotRequired[int | None]
     item_charge_cost: NotRequired[int]
+    conditional_costs: NotRequired[list[ConditionalCost]]
     fixed_healing: NotRequired[int | None]
     allocation_completion: NotRequired[Literal['selected_only', 'fill_primary']]
     variant_facets: NotRequired[list[ActionVariantFacet]]

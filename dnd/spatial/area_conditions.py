@@ -86,6 +86,7 @@ class SpatialCondition(BaseCondition):
     optical_obscurement: Optional[OpticalObscurement] = None
     blocks_physical_optics: bool = False
     has_visible_presence: bool = False
+    minimum_walking_cost: int = Field(default=1,ge=1)
     movement_expenditure_extra: float = Field(default=0, ge=0,
         description="Owned movement expenditure independent of difficult-terrain immunity.")
     _removal_publication: SpatialRemovalPublication | None = PrivateAttr(default=None)
@@ -1362,7 +1363,7 @@ class AreaCondition(SpatialCondition):
         parent_event: Optional[Event],
     ) -> List[Tuple[UUID, UUID]]:
         """Apply one owned walking-cost modifier per admitted position."""
-        if not self.adds_difficult_terrain:
+        if not self.adds_difficult_terrain and self.minimum_walking_cost==1:
             return []
         grid = get_map()
         owned: List[Tuple[UUID, UUID]] = []
@@ -1373,17 +1374,18 @@ class AreaCondition(SpatialCondition):
             if tile is None:
                 continue
             before = tile.get_movement_cost(MovementMode.WALKING)
+            if self.minimum_walking_cost>1 and before<=0:
+                continue
             modifier = NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid,
                 name=f"{self.name} Difficult Terrain",
-                value=1,
+                value=self.minimum_walking_cost if self.minimum_walking_cost>1 else 1,
             )
             modifier.contribution_owner_uuid = self.uuid
             modifier.contribution_position = position
             value = tile.edit_movement_cost(MovementMode.WALKING)
-            modifier_uuid = value.self_static.add_value_modifier(
-                modifier,
-            )
+            modifier_uuid = (value.self_static.add_min_constraint(modifier)
+                if self.minimum_walking_cost>1 else value.self_static.add_value_modifier(modifier))
             row = (value.uuid, modifier_uuid)
             self._terrain_modifiers[position] = row
             owned.append(row)

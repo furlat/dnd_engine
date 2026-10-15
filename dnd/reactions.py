@@ -27,6 +27,9 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
         The processed step event.
     """
     reaction_source_entity = Entity.get(source_entity_uuid)
+    if reaction_source_entity is not None and any(condition.blocks_opportunity_attacks
+            and condition.contributions_active() for condition in reaction_source_entity.active_conditions_by_uuid.values()):
+        return None
     event_source_entity = Entity.get(event.source_entity_uuid)
     if reaction_source_entity is None or event_source_entity is None:
         return event

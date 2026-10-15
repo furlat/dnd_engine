@@ -589,6 +589,8 @@ class Rage(BaseAction):
         if not entity:
             return False
 
+        if entity.check_condition_immunity("Raging"):
+            return False
         if "Frenzied" in entity.active_conditions:
             return False
 
@@ -599,6 +601,9 @@ class Rage(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
             return declaration_event.cancel(status_message="Entity not found")
+
+        if entity.check_condition_immunity("Raging"):
+            return declaration_event.cancel(status_message="Rage is prevented by an active protection")
 
         body_armor = entity.equipment.body_armor
         if body_armor and body_armor.type == ArmorType.HEAVY:
@@ -1045,6 +1050,9 @@ class Frenzy(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
+
+        if entity.check_condition_immunity("Raging"):
+            return declaration_event.cancel(status_message="Rage is prevented by an active protection")
 
         body_armor = entity.equipment.body_armor
         if body_armor and body_armor.type == ArmorType.HEAVY:

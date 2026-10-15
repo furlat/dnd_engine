@@ -315,7 +315,7 @@ def great_weapon_fighting_processor(
         Modified damage-roll event when primary weapon dice were rerolled, or
         ``None`` when the event is not eligible.
     """
-    if event.source_entity_uuid != source_entity_uuid:
+    if event.source_entity_uuid != source_entity_uuid or event.weapon_slot is None:
         return None
 
     entity = Entity.get(source_entity_uuid)

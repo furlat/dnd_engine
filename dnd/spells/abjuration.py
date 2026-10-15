@@ -6,12 +6,20 @@ Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
           Resistance, ShieldOfFaith, Aid, Sanctuary, BeaconOfHope,
           AntimagicField
 """
+from dnd.spells.spell_utils import spell_condition_profile
+
 import random
 from functools import partial
 from types import MappingProxyType
-from typing import Any, Dict, Optional, List, Set, Tuple, cast as type_cast
-from uuid import UUID
+from typing import Any, Dict, Literal, Optional, List, Set, Tuple, cast as type_cast
+from uuid import UUID, uuid4
+from dnd.core.base_block import PreparedConditionRemovals
+from dnd.core.creature_types import CreatureType
+from dnd.conditions import prepare_control_removals
+from dnd.spatial.memberships import MembershipAreaCondition, SpatialConditionMembershipSource
+from dnd.types.spatial_effects import SpatialEffectAnchorKind, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
 
+from dnd.spells.spell_utils import target_turn_expiry_handler, spell_position_error, spell_valid_positions
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
 
@@ -31,6 +39,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent, Duration, ConditionApplicationEvent, OutcomeProtection, SpellProtectionRegistry, SpellProtection
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
+    ConditionRemovalTrigger,
     ConditionCategory,
     ConditionTag,
     DurationType,
@@ -39,7 +48,9 @@ from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.effect_types import EffectOriginKind, AntimagicException
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, ForcedMovementEvent, PortalTransferEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
+from dnd.core.action_types import ActionVariantFacet
+from dnd.core.events import Damage, Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, ForcedMovementEvent, PortalTransferEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
+from dnd.types.character_progression import OriginCapability
 from dnd.types.actor import ConditionState, PendingSpatialReturn, SpatialDisposition
 from dnd.types.abilities import AbilityName
 from dnd.types.spell_suppression import SpellSuppression
@@ -68,13 +79,17 @@ from dnd.core.equipment_types import UnarmoredAc
 from dnd.core.dice import AttackOutcome, Dice
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterruptionLogData
 from dnd.entity import Entity, PreparedSpatialReturn
-from dnd.actions import SpellAction, SpellEvent, AttackEvent, entity_action_economy_cost_evaluator
+from dnd.core.values import ModifiableValue
+from dnd.spatial.ignition import apply_elemental_surface_contacts
+from dnd.actions import commit_forced_movement, SpellAction, SpellEvent, AttackEvent, ShoveEvent, entity_action_economy_cost_evaluator
 from dnd.creature_transforms import (
     apply_incapacitated_transform,
+    apply_unconscious_transform,
     remove_modifier_ownership,
 )
 from dnd.spells.content_metadata import (
     srd_action_identity,
+    srd_condition_identity,
     srd_reaction_identity,
     srd_spell_identity,
 )
@@ -1205,7 +1220,7 @@ class GlobeZone(AreaCondition):
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             if event.event_type not in (EventType.CAST_SPELL, EventType.BASE_ACTION):
                 return None
-            if not isinstance(event, SpellEvent):
+            if not isinstance(event, SpellEvent) or event.weapon_attack_slot is not None:
                 return None
 
             base_level = event.spell_level
@@ -2931,7 +2946,7 @@ class SanctuaryEffect(BaseCondition):
                         if event.target_entity_uuid in event.harmful_target_entity_uuids
                         else []
                     )
-                elif event.target_type is TargetType.POSITION:
+                elif event.target_type in (TargetType.POSITION,TargetType.POSITION_LOS):
                     targets = list({
                         target_uuid
                         for position in event.resolved_area_positions or ()
@@ -3311,7 +3326,7 @@ class AntimagicFieldZone(AreaCondition):
                 self.suppressed_conditions.pop(item.uuid, None)
             if item.magically_created and parent_event is not None:
                 condition = BaseCondition.get(item.creation_condition_uuid) if item.creation_condition_uuid else None
-                if isinstance(condition, BaseCondition) and condition.presence_return_handler_uuid is None:
+                if isinstance(condition, BaseCondition) and item.uuid not in condition.creation_presence_return_handlers:
                     handler = EventHandler(source_entity_uuid=item.source_entity_uuid, runs_while_suppressed=True,
                         contribution_owner_uuid=condition.uuid, name="Retained creation presence return",
                         trigger_conditions=[Trigger(event_type=kind, event_phase=EventPhase.EFFECT)
@@ -3319,7 +3334,7 @@ class AntimagicFieldZone(AreaCondition):
                         event_processor=partial(_refresh_antimagic_created_object, item_uuid=item.uuid))
                     EventQueue.add_event_handler(handler)
                     condition.event_handlers_uuids.append(handler.uuid)
-                    condition.presence_return_handler_uuid = handler.uuid
+                    condition.creation_presence_return_handlers[item.uuid] = handler.uuid
                 _refresh_antimagic_created_object(parent_event, self.source_entity_uuid, item_uuid=item.uuid)
             if (item.antimagic_suspended_placement is None and
                     (before != item.to_item_presentation_state() or previous_tokens != item.suppression_provider_uuids)):
@@ -3463,6 +3478,8 @@ class AntimagicFieldZone(AreaCondition):
                 return None
             if not isinstance(event, SpellEvent) or event.to_effect_origin().antimagic_exception is not None:
                 return None
+            if event.weapon_attack_slot is not None:
+                return None
             source = (event.propagation.source.position if event.propagation is not None
                 else event.effect_source_position or event.source_position)
             if source in self.affected_positions:
@@ -3476,7 +3493,7 @@ class AntimagicFieldZone(AreaCondition):
                 return None
             target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
             destination = (event.propagation.target.position if event.propagation is not None
-                else event.target_position if event.target_type is TargetType.POSITION
+                else event.target_position if event.target_type in (TargetType.POSITION,TargetType.POSITION_LOS)
                 else target.position if target is not None else event.target_position)
             if destination in self.affected_positions:
                 return event.cancel(status_message="Antimagic Field blocks this magical effect")
@@ -3592,3 +3609,402 @@ class AntimagicField(SpellAction):
             total_damage=0,
             status_message=f"Antimagic Field active around {caster.name}"
         )
+
+
+PROTECTED_CREATURE_TYPES=frozenset({CreatureType.ABERRATION,CreatureType.CELESTIAL,CreatureType.ELEMENTAL,
+    CreatureType.FEY,CreatureType.FIEND,CreatureType.UNDEAD})
+
+
+class ProtectionFromEvilAndGoodEffect(BaseCondition):
+    name: str = "Protection from Evil and Good"
+    description: str = "Listed creature types attack with disadvantage and cannot charm or frighten the recipient."
+    duration: Duration = Field(default_factory=lambda: Duration(duration=None,duration_type=DurationType.UNTIL_LONG_REST))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    _purge: PreparedConditionRemovals | None = PrivateAttr(default=None)
+
+    def _blocks_condition(self,entity: BaseBlock,_selected: BaseBlock | None,context: Dict[str,Any] | None) -> bool:
+        incoming=(context or {}).get("condition")
+        if not isinstance(incoming,BaseCondition):
+            return False
+        source=Entity.get(incoming.source_entity_uuid)
+        return source is not None and source.creature_type in PROTECTED_CREATURE_TYPES
+
+    def _attack_penalty(self,source_entity_uuid: UUID,target_entity_uuid: UUID | None = None,
+                        context: Dict[str,Any] | None = None) -> AdvantageModifier | None:
+        del context
+        attacker_uuid=target_entity_uuid if source_entity_uuid==self.target_entity_uuid else source_entity_uuid
+        attacker=Entity.get(attacker_uuid) if attacker_uuid else None
+        if attacker is None or attacker.creature_type not in PROTECTED_CREATURE_TYPES:
+            return None
+        return AdvantageModifier(name=self.name,value=AdvantageStatus.DISADVANTAGE,
+            source_entity_uuid=source_entity_uuid,target_entity_uuid=target_entity_uuid)
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Protection recipient no longer exists")
+        self._purge=prepare_control_removals(target,frozenset({"Charmed","Frightened"}),event,PROTECTED_CREATURE_TYPES)
+        if self._purge is None:
+            return [],[],[],[],event.cancel(status_message="Existing control removal was rejected")
+        for name in ("Charmed","Frightened"):
+            target.add_condition_immunity_source(name,self.uuid,immunity_check=self._blocks_condition)
+        value=target.equipment.ac_bonus
+        ident=value.to_target_contextual.add_advantage_modifier(ContextualAdvantageModifier(name=self.name,
+            source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid,callable=self._attack_penalty))
+        return [(value.uuid,ident)],[],[],[],event.phase_to(EventPhase.EFFECT)
+
+    def _commit_application(self,event: Event) -> None:
+        if self._purge is not None: BaseBlock.commit_owned_condition_removals(self._purge)
+
+    def publish_prepared_application(self) -> None:
+        if self._purge is not None and self._purge.committed_result is not None:
+            BaseBlock.publish_owned_condition_removals(self._purge)
+
+    def _release_owned_runtime_state(self,*,parent_event: Event | None = None) -> None:
+        if self._purge is not None and self._purge.committed_result is None:
+            BaseBlock.cancel_owned_condition_removals(self._purge,"Protection was not committed")
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            for name in ("Charmed","Frightened"): target.remove_condition_immunity_source(name,self.uuid)
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+
+class ProtectionFromEvilAndGood(SpellAction):
+    name: str = "Protection from Evil and Good"
+    description: str = "Protection from aberrations, celestials, elementals, fey, fiends and undead."
+    spell_level: int = 1
+    spell_school: str = "abjuration"
+    target_type: TargetType = TargetType.ENTITY
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH,normal=5))
+    include_self: bool = True
+    valid_target_filter: str = "self_or_allies"
+    concentration: bool = True
+    harmful: bool = False
+
+    def get_target_effect_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return spell_condition_profile(self,actor,key="protection_from_evil_and_good",condition_type=ProtectionFromEvilAndGoodEffect,beneficial=True,
+            save_ability=None,fact=None,)
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),ProtectionFromEvilAndGoodEffect(
+            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid or self.source_entity_uuid))
+
+
+class PassWithoutTraceEffect(BaseCondition):
+    name: str = "Pass without Trace"
+    description: str = "A friendly moving aura grants +10 Stealth until rest while concentration holds."
+    duration: Duration = Field(default_factory=lambda: Duration(duration=None,duration_type=DurationType.UNTIL_LONG_REST))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self,event: Event):
+        caster=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None:
+            return [],[],[],[],event.cancel(status_message="Aura caster no longer exists")
+        zone=PassWithoutTraceZone(source_entity_uuid=self.source_entity_uuid,position=caster.position,
+            anchor_uuid=caster.uuid,faction=caster.faction,content_ref=get_content_declaration(PassWithoutTraceZone).ref,
+            effect_origin=self.effect_origin)
+        result=zone.activate(parent_event=event)
+        if result is None or result.canceled or not zone.applied:
+            return [],[],[],[],event.cancel(status_message="Stealth aura could not be established")
+        self.add_linked_condition(zone.uuid,zone.uuid)
+        return [],[],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class PassWithoutTraceBonus(BaseCondition):
+    name: str = "Pass without Trace Bonus"
+    description: str = "+10 to Stealth checks while at least one friendly aura remains."
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Aura recipient no longer exists")
+        value=target.skill_set.get_skill("stealth").skill_bonus
+        ident=value.self_static.add_value_modifier(NumericalModifier(name=self.name,value=10,
+            source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+        return [(value.uuid,ident)],[],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class PassWithoutTraceMembership(SpatialConditionMembershipSource):
+    name: str = "Pass without Trace Membership"
+    description: str = "One exact source lease for the shared Stealth bonus."
+
+    def create_manifestation(self,target: Entity) -> BaseCondition:
+        return PassWithoutTraceBonus(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid)
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Aura recipient no longer exists")
+        child=next((condition for condition in target.active_conditions_by_uuid.values()
+                    if isinstance(condition,PassWithoutTraceBonus)),None)
+        if child is None:
+            child=self.create_manifestation(target)
+            child.parent_condition=self.uuid
+            applied=target.add_condition(child,parent_event=event)
+            if applied is None or applied.canceled:
+                return [],[],[],[],event.cancel(status_message="Stealth bonus was not admitted")
+        self.add_shared_subcondition(child)
+        return [],[],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+@srd_condition_identity(content_id="spatial_effect.spell.pass_without_trace",
+    display_name="Pass without Trace Aura",
+    description="Friendly creatures within 30 feet share a nonstacking Stealth bonus.")
+class PassWithoutTraceZone(MembershipAreaCondition):
+    name: str = "Pass without Trace Aura"
+    description: str = "Friendly creatures within 30 feet share a nonstacking Stealth bonus."
+    layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
+    occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
+    anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.ENTITY
+    zone_shape: str = "sphere"
+    zone_radius_feet: int = 30
+    duration: Duration = Field(default_factory=lambda: Duration(duration=None,duration_type=DurationType.PERMANENT))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    membership_trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.APPEAR,
+        SpatialEffectTriggerKind.ENTER,SpatialEffectTriggerKind.EFFECT_ENTERS_OCCUPANT})
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.APPEAR,
+        SpatialEffectTriggerKind.ENTER,SpatialEffectTriggerKind.LEAVE,SpatialEffectTriggerKind.EFFECT_ENTERS_OCCUPANT,
+        SpatialEffectTriggerKind.EFFECT_LEAVES_OCCUPANT})
+
+    def relocate_anchor(self,position: Tuple[int,int],*,parent_event: Event) -> bool:
+        if not self.is_active_spatial_condition() or position==self.position:
+            return False
+        previous=self.position
+        self.position=position
+        self.observation_revision+=1
+        try:
+            positions={cell for cell in self._compute_affected_positions() if get_map().has_tile(*cell)}
+            return self.change_footprint(positions,parent_event=parent_event)
+        except BaseException:
+            self.position=previous
+            self.observation_revision+=1
+            raise
+
+    def membership_source_class(self) -> type[SpatialConditionMembershipSource]:
+        return PassWithoutTraceMembership
+
+    def membership_applies_to(self,entity: Entity) -> bool:
+        caster=Entity.get(self.source_entity_uuid)
+        return caster is not None and (entity.uuid==caster.uuid or caster.is_ally(entity))
+
+    def _apply_appearance_effect(self,entity: Entity,*,parent_event: Event) -> None:
+        if self.membership_applies_to(entity): self.apply_membership(entity,parent_event=parent_event)
+
+    def _apply_effect_entry_effect(self,entity: Entity,*,parent_event: Event) -> None:
+        if self.membership_applies_to(entity): self.apply_membership(entity,parent_event=parent_event)
+
+    def _apply_effect_exit_effect(self,entity: Entity,*,parent_event: Event) -> None:
+        self.remove_membership(entity,parent_event=parent_event)
+
+
+class PassWithoutTrace(SpellAction):
+    name: str = "Pass without Trace"
+    description: str = "Friendly 30-foot moving aura: +10 Stealth until rest, concentration."
+    spell_level: int = 2
+    spell_school: str = "abjuration"
+    target_type: TargetType = TargetType.SELF
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    concentration: bool = True
+    harmful: bool = False
+
+    def get_target_effect_profile(self,actor: Any):
+        if not isinstance(actor,Entity):
+            return None
+        return spell_condition_profile(self,actor,key="pass_without_trace",condition_type=PassWithoutTraceEffect,beneficial=True,
+            save_ability=None,fact=None,)
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),PassWithoutTraceEffect(
+            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+
+
+class GlyphSleepEffect(BaseCondition):
+    name: str = "Glyph Sleep"
+    description: str = "Two-turn magical sleep; positive damage, assistance, successful Shove or Wet wakes the recipient."
+    immunity_names: tuple[str,...] = ("Sleep","Unconscious")
+    agency_denial: ConditionAgencyDenial = ConditionAgencyDenial.FULL_TURN
+    duration: Duration = Field(default_factory=lambda:Duration(duration=None,duration_type=DurationType.PERMANENT))
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+    removal_triggers: frozenset[ConditionRemovalTrigger] = frozenset({ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED,
+        ConditionRemovalTrigger.SHAKE_AWAKE,ConditionRemovalTrigger.ALLY_HELP,ConditionRemovalTrigger.WET_APPLICATION})
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None or target.has_origin_capability(OriginCapability.MAGICAL_SLEEP_IMMUNITY) or target.creature_type is CreatureType.UNDEAD:
+            return [],[],[],[],event.cancel(status_message="Recipient cannot be magically slept")
+        modifiers=apply_unconscious_transform(target,name=self.name,effect_source_uuid=self.source_entity_uuid)
+        def wake(boundary: Event,_: UUID):
+            target.remove_condition_by_uuid(self.uuid,parent_event=boundary)
+            return None
+        handler=EventHandler(name="Glyph Sleep wake on positive damage",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.DAMAGE_APPLIED,event_phase=EventPhase.EFFECT,event_target_entity_uuid=target.uuid)],event_processor=wake)
+        target.add_event_handler(handler)
+        def shoved(boundary: Event,_: UUID):
+            if isinstance(boundary,ShoveEvent) and boundary.contest_success:
+                target.remove_condition_by_uuid(self.uuid,parent_event=boundary)
+            return None
+        shove_handler=EventHandler(name="Glyph Sleep wake on successful shove",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.BASE_ACTION,event_phase=EventPhase.EFFECT,event_target_entity_uuid=target.uuid)],
+            event_processor=shoved)
+        target.add_event_handler(shove_handler)
+        expiry=target_turn_expiry_handler(self,turn_ends=2)
+        target.add_event_handler(expiry)
+        return modifiers,[handler.uuid,shove_handler.uuid,expiry.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+@srd_condition_identity(content_id="spatial_effect.spell.glyph_of_warding",display_name="Glyph of Warding",
+    description="One hostile-triggered thirteen-foot glyph; payload affects all occupants once.")
+class GlyphOfWardingZone(AreaCondition):
+    name: str = "Glyph of Warding"
+    description: str = "One hostile-triggered thirteen-foot glyph; payload affects all occupants once."
+    layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
+    occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
+    zone_shape: str = "sphere"
+    zone_radius_feet: int = 13
+    has_visible_presence: bool = True
+    spell_dc: int
+    dice_count: int = 5
+    payload: Literal["acid","cold","fire","lightning","thunder","sleep","detonation"] = "fire"
+    caster_faction: str | None=None
+    initial_trigger_pending: bool = True
+    armed: bool = True
+    duration: Duration = Field(default_factory=lambda:Duration(duration=None,duration_type=DurationType.PERMANENT))
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.APPEAR,SpatialEffectTriggerKind.ENTER})
+
+    def trigger(self,entrant: Entity,event: Event) -> None:
+        if self.initial_trigger_pending or not self.armed or not self.applied or not self.allows_contribution_at(entrant.position):
+            return
+        if entrant.uuid==self.source_entity_uuid or entrant.faction==self.caster_faction:
+            return
+        positions={cell for cell in self.affected_positions if self.allows_contribution_at(cell)}
+        targets=[target for target in self._occupants_at(positions) if self.allows_contribution_at(target.position)]
+        context=self.saving_throw_context(effect_id="spell.glyph_of_warding.payload")
+        # Disarm before payload: nested movement and damage cannot retrigger this glyph.
+        if not self.deactivate(parent_event=event):
+            return
+        self.armed=False
+        caster=Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return
+        for target in targets:
+            request=caster.create_saving_throw_request(target.uuid,"dexterity",self.spell_dc,
+                parent_event=event.uuid,saving_throw_context=context)
+            saved=target.saving_throw(request)[2]
+            if self.payload=="sleep":
+                if not saved:
+                    target.add_condition(GlyphSleepEffect(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
+                        effect_origin=self.effect_origin),parent_event=event)
+            elif self.payload=="detonation":
+                if not saved:
+                    delta=(target.position[0]-self.position[0],target.position[1]-self.position[1])
+                    direction=(1 if delta[0]>0 else -1 if delta[0]<0 else 0,1 if delta[1]>0 else -1 if delta[1]<0 else 0)
+                    if direction==(0,0):
+                        direction=(1,0)
+                    start=target.position
+                    end=(start[0]+4*direction[0],start[1]+4*direction[1])
+                    movement=ForcedMovementEvent(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
+                        start_position=start,end_position=end,direction=direction,intended_distance=20,actual_distance=20,
+                        cause="glyph_of_warding",effect_origin=self.effect_origin,parent_event=event.uuid)
+                    movement=movement.phase_to(EventPhase.EXECUTION)
+                    if not movement.canceled:
+                        movement=movement.phase_to(EventPhase.EFFECT)
+                        if not movement.canceled:
+                            commit_forced_movement(target,movement,parent_event=event)
+            else:
+                damage_type=DamageType[self.payload.upper()]
+                damage=Damage(name="Glyph of Warding",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
+                    damage_dice=8,dice_numbers=self.dice_count,damage_type=damage_type,effect_origin=self.effect_origin,
+                    damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
+                roll=damage.get_dice(AttackOutcome.HIT).roll
+                target.receive_damage(roll.total//2 if saved else roll.total,damage_type,caster.uuid,parent_event=event.uuid,
+                    damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,independent_resolution=True,
+                    source_condition_uuid=self.uuid)
+        if self.payload not in ("sleep","detonation"):
+            apply_elemental_surface_contacts(event,positions,DamageType[self.payload.upper()])
+
+    def _apply_appearance_effect(self,entity: Entity,*,parent_event: Event) -> None:
+        self.trigger(entity,parent_event)
+
+    def _create_zone_entry_handler(self) -> EventHandler:
+        def entry(event: Event,_: UUID):
+            entrant=Entity.get(event.entity_uuid) if isinstance(event,SpatialChangeEvent) and event.entity_uuid else None
+            if entrant is not None:
+                self.trigger(entrant,event)
+            return None
+        return EventHandler(name="Glyph of Warding Entry",source_entity_uuid=self.source_entity_uuid,
+            trigger_conditions=[Trigger(event_type=EventType.SPATIAL_ENTITY_ENTERED,event_phase=EventPhase.EFFECT)],event_processor=entry)
+
+
+class GlyphOfWardingEffect(BaseCondition):
+    name: str = "Glyph of Warding Sustain"
+    description: str = "One owned glyph until trigger, recast or long rest; no concentration."
+    child_removal_policy: Literal["none","any","last"] = "any"
+    position: Tuple[int,int]
+    payload: Literal["acid","cold","fire","lightning","thunder","sleep","detonation"]
+    spell_dc: int
+    dice_count: int
+    zone_uuid: UUID | None=None
+    duration: Duration = Field(default_factory=lambda:Duration(duration=None,duration_type=DurationType.UNTIL_LONG_REST))
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+    _committed_application: Event | None=PrivateAttr(default=None)
+
+    def _apply(self,event: Event):
+        caster=Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return [],[],[],[],event.cancel(status_message="Glyph caster is absent")
+        zone=GlyphOfWardingZone(source_entity_uuid=caster.uuid,position=self.position,payload=self.payload,
+            spell_dc=self.spell_dc,dice_count=self.dice_count,caster_faction=caster.faction,effect_origin=self.effect_origin,
+            content_ref=get_content_declaration(GlyphOfWardingZone).ref)
+        self.zone_uuid=zone.uuid
+        self.add_linked_condition(zone.uuid,zone.uuid)
+        admitted=zone.activate(parent_event=event)
+        if admitted is None or admitted.canceled or not zone.applied:
+            return [],[],[],[],event.cancel(status_message="Glyph placement was not admitted")
+        return [],[],[],[],event.phase_to(EventPhase.EFFECT)
+
+class GlyphOfWarding(SpellAction):
+    name: str = "Glyph of Warding"
+    description: str = "Thirteen-foot hostile-triggered glyph: elemental DEX half damage, Sleep or Detonation."
+    spell_level: int = 3
+    spell_school: str = "abjuration"
+    target_type: TargetType = TargetType.POSITION_LOS
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.RANGE,normal=30))
+    payload: Literal["acid","cold","fire","lightning","thunder","sleep","detonation"] = "fire"
+    harmful: bool = True
+
+    def get_variant_facets(self):
+        return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.payload,label=self.payload.title()))
+
+    def get_discovery_variants(self,entity: Any):
+        return [variant.model_copy(update={"uuid":uuid4(),"payload":payload})
+            for variant in super().get_discovery_variants(entity)
+            for payload in ("acid","cold","fire","lightning","thunder","sleep","detonation")]
+
+    def get_valid_positions(self):
+        return spell_valid_positions(self)
+
+    def _validate(self,event):
+        if (error:=spell_position_error(self)) is not None:
+            return event.cancel(status_message=error)
+        return super()._validate(event)
+
+    def _apply(self,event: SpellEvent):
+        caster=Entity.get(self.source_entity_uuid)
+        if caster is None or self.end_position is None:
+            return event.cancel(status_message="Glyph placement is absent")
+        marker=GlyphOfWardingEffect(
+            source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid,position=self.end_position,payload=self.payload,
+            spell_dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),dice_count=5+self.get_upcast_bonus())
+        admitted=self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),marker)
+        zone=BaseCondition.get(marker.zone_uuid) if marker.zone_uuid else None
+        if not admitted.canceled and marker.applied and isinstance(zone,GlyphOfWardingZone) and zone.applied:
+            zone.initial_trigger_pending=False
+            for target in zone._occupants_at(set(zone.affected_positions)):
+                zone.trigger(target,admitted)
+                if not zone.applied:
+                    break
+        return admitted

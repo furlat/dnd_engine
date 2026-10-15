@@ -9,6 +9,7 @@ from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import (
     ConditionCategory,
+    ConditionRemovalTrigger,
     ConditionTag,
     DurationType,
     HazardFilter,
@@ -438,6 +439,14 @@ class Wet(BaseCondition):
             status_message=f"Applied Wet to {target.name}",
         )
         return modifiers, [], [], [], effect
+
+
+    def on_membership_changed(self,event: Event) -> None:
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if self.applied and target is not None:
+            for condition in tuple(target.active_conditions_by_uuid.values()):
+                if ConditionRemovalTrigger.WET_APPLICATION in condition.removal_triggers:
+                    target.remove_condition_by_uuid(condition.uuid,parent_event=event)
 
 
 class WetSurfaceMembership(SpatialConditionMembershipSource):

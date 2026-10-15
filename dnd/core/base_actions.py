@@ -605,6 +605,11 @@ class BaseCost(BaseModel):
     resource_cost: int = Field(default=0, description="Amount consumed from the named resource.")
 
 
+class ConditionalCost(BaseCost):
+    """A published cost paid only when the declared trigger occurs."""
+    trigger: Literal["hit"] = "hit"
+
+
 class Cost(BaseCost):
     """Runtime action cost with optional affordability callbacks."""
 
@@ -1040,6 +1045,13 @@ class BaseAction(BaseObject):
         """
         return None
 
+    def get_conditional_runtime_costs(self) -> list[Cost]:
+        """Authored hit costs participate in native affordability, not upfront payment."""
+        return []
+
+    def get_conditional_costs(self) -> tuple[ConditionalCost,...]:
+        return tuple(ConditionalCost.model_validate(cost.model_dump()) for cost in self.get_conditional_runtime_costs())
+
     def get_fixed_healing(self, actor: Any) -> Optional[int]:
         """Return deterministic healing disclosed by this action rule.
 
@@ -1108,6 +1120,8 @@ class BaseAction(BaseObject):
     extra_target_positions: List[Tuple[int, int]] = Field(
         default_factory=list, description="Ordered additional positions for path selection.",
     )
+    discovery_target_types: tuple[TargetType,...] = ()
+
     position_selection: Optional[PositionSelection] = Field(
         default=None, description="Authored position selection arity and span limit.",
     )
@@ -1695,6 +1709,10 @@ class BaseAction(BaseObject):
                 and grid_distance_feet(source_position, position) <= 5
                 and grid.can_reach_between(source_position, position, PhysicalAccess.HAND, source.uuid))
 
+    def get_additional_target_candidates(self) -> Dict[UUID, Tuple[int,int]]:
+        """Explicit authored known recipients outside the ordinary contact pool."""
+        return {}
+
     def get_touch_target_candidates(self) -> Dict[UUID, Tuple[int, int]]:
         """Enumerate only local contact candidates; leave perceived pools unchanged."""
         if self.entity_target_perception is not EntityTargetPerception.TOUCH_CONTACT:
@@ -1872,14 +1890,14 @@ class BaseAction(BaseObject):
 
     def check_costs(self) -> bool:
         """Check whether the acting entity can afford all effective costs."""
-        costs = self.effective_costs
+        costs = [*self.effective_costs,*self.get_conditional_runtime_costs()]
         if self._source_cannot_take_actions(costs) or not self._allows_original_action_channels():
             return False
         return self._costs_are_affordable(costs)
 
     def check_target_independent_costs(self) -> bool:
         """Check source affordability without consulting selected-target state."""
-        costs = self.target_independent_effective_costs
+        costs = [*self.target_independent_effective_costs,*self.get_conditional_runtime_costs()]
         if self._source_cannot_take_actions(costs) or not self._allows_original_action_channels():
             return False
         return self._costs_are_affordable(costs)
@@ -1890,7 +1908,9 @@ class BaseAction(BaseObject):
 
     def _allows_original_action_channels(self) -> bool:
         source = BaseBlock.get(self.source_entity_uuid)
-        return source is None or source.allows_action_channels(self._original_action_channels())
+        channels=self._original_action_channels() | frozenset(ActionEconomyCostType(cost.cost_type)
+            for cost in self.get_conditional_runtime_costs() if cost.cost>0 and cost.cost_type in ("actions","bonus_actions"))
+        return source is None or source.allows_action_channels(channels)
 
     def _on_costs_committed(self, declaration: ActionEvent, execution: ActionEvent) -> None:
         """Record commitment before cancelable execution handlers run."""
@@ -2763,6 +2783,7 @@ class AvailableActionMetadata(BaseModel):
         ge=0,
         description="Finite source-item charges consumed by successful execution.",
     )
+    conditional_costs: tuple[ConditionalCost,...] = ()
     fixed_healing: Optional[int] = Field(
         default=None,
         ge=0,

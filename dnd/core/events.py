@@ -1088,6 +1088,14 @@ class BaseHandler(BaseObject):
         description="Block that registered this handler, used to clean block-local handler indexes."
     )
 
+    def on_admitted(self) -> None:
+        """Concrete composed handlers may admit their exact owned contributions."""
+        return None
+
+    def on_removed(self) -> None:
+        """Release concrete owned contributions when this handler is detached."""
+        return None
+
     def get_semantic_key(self) -> str:
         """Return an explicit/bound key or an explicit unbound diagnostic."""
         if self.semantic_key:
@@ -4576,6 +4584,7 @@ class Range(BaseModel):
 
 class Damage(BaseObject):
     """Damage dice specification plus damage type."""
+    effect_origin: EffectOrigin | None = None
 
     name: str = Field(default="Damage", description="Human-readable damage label.")
     damage_dice: Literal[4, 6, 8, 10, 12, 20] = Field(
@@ -4936,7 +4945,9 @@ class DamageRollResultEvent(DiceRollResultEvent):
         description="Event category for damage-roll result interception.",
     )
     roll_type: RollType = Field(default=RollType.DAMAGE, description="Roll category for damage results.")
-    weapon_slot: WeaponSlot = Field(description="Weapon slot used for the attack.")
+    weapon_slot: WeaponSlot | None = Field(default=None,description="Weapon slot; absent for spell attacks.")
+    attack_kind: Literal["weapon","spell","unarmed","natural"] = "weapon"
+    source_item_uuid: UUID | None = None
     attack_outcome: AttackOutcome = Field(description="Attack outcome associated with this damage roll.")
     damage_packets: List[DamageRollPacket] = Field(
         min_length=1,
