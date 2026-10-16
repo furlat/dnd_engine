@@ -92,7 +92,7 @@ def test_wind_wall_exact_corner_contact_and_near_miss(start, end, allowed):
     assert grid.spatial_crossing_allows(start, end, "propagation", mover.uuid)
 
 
-def test_wind_suppression_and_footprint_replacement_preserve_current_crossings():
+def test_wind_footprint_replacement_preserves_current_crossings():
     zone, mover = wind((-3., 0.), (3., 0.))
     grid = get_map()
 
@@ -101,12 +101,6 @@ def test_wind_suppression_and_footprint_replacement_preserve_current_crossings()
             mover.uuid, MovementMode.FLYING)
 
     assert not allowed(-2) and not allowed(2)
-    provider = uuid4()
-    assert zone.set_suppression(provider, True)
-    assert allowed(-2) and allowed(2)
-    assert zone.set_suppression(provider, False)
-    assert not allowed(-2) and not allowed(2)
-
     footprint = set(zone.affected_positions)
     assert zone.change_footprint({position for position in footprint if position[0] < 0},
         parent_event=cause(mover.uuid))

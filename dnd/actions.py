@@ -28,7 +28,7 @@ from dnd.spells.content_metadata import get_spell_catalog_metadata
 from dnd.types.summoning import SummonApplication
 from dnd.core.elevation import support_distance_feet
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
-from dnd.core.effect_types import AntimagicException, EffectOrigin
+from dnd.core.effect_types import EffectOrigin
 from dnd.core.action_types import ActionAffordance, ActionVariantFacet, RestrictedActionKind
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -75,7 +75,7 @@ from dnd.core.traversal_connectors import (
 )
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
-from dnd.core.geometry import grid_distance_feet, position_in_sector, bresenham_line
+from dnd.core.geometry import grid_distance_feet, position_in_sector
 from dnd.core.aoe import (
     Sphere,
     Cone,
@@ -353,17 +353,16 @@ def resolve_fall_damage(target: Entity, *, drop_feet: int, source_entity_uuid: U
     damage = Damage(name="Fall", source_entity_uuid=source_entity_uuid, target_entity_uuid=target.uuid, damage_dice=6, dice_numbers=dice_count,
         damage_bonus=ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=0), damage_type=DamageType.BLUDGEONING)
     roll = damage.get_dice(AttackOutcome.HIT).roll
-    cursor = EventQueue.event_cursor()
+    applied = 0
+
+    def record_damage(_incoming: TakeDamageEvent, result: DamageAppliedEvent | None) -> None:
+        nonlocal applied
+        if result is not None and result.phase is EventPhase.COMPLETION:
+            applied = result.applied_damage
+
     target.receive_damage(roll.total, DamageType.BLUDGEONING,
         source_entity_uuid=source_entity_uuid, damage_rolls=[roll], damages=[damage],
-        parent_event=parent_event.uuid, independent_resolution=True)
-    resolved = tuple(event for _, event in EventQueue.iter_events_since(cursor))
-    requests = {event.lineage_uuid for event in resolved
-        if isinstance(event, TakeDamageEvent) and event.parent_lineage == parent_event.lineage_uuid
-        and event.target_entity_uuid == target.uuid}
-    applied = sum(event.applied_damage for event in resolved
-        if isinstance(event, DamageAppliedEvent) and event.phase is EventPhase.COMPLETION
-        and event.parent_lineage in requests and event.target_entity_uuid == target.uuid)
+        parent_event=parent_event.uuid, independent_resolution=True, on_completed=record_damage)
     if applied > 0 and knock_prone and target.health.life_state is not LifeState.DEAD:
         target.add_condition(Prone(source_entity_uuid=source_entity_uuid,
             target_entity_uuid=target.uuid), parent_event=parent_event)
@@ -2210,8 +2209,7 @@ class Attack(BaseAction):
             if weapon.spell_attack_profile.wielder_uuid!=source.uuid or not weapon.contributions_active():
                 return False
             target=BaseBlock.get(event.target_entity_uuid) if event.target_entity_uuid else None
-            if target is not None and (SpellProtectionRegistry.is_protected(target.position,source.position,weapon.spell_attack_profile.effect_origin.base_spell_level or 2)
-                    or SpellProtectionRegistry.get_antimagic_suppressions(set(bresenham_line(source.position,target.position)))):
+            if target is not None and SpellProtectionRegistry.is_protected(target.position,source.position,weapon.spell_attack_profile.effect_origin.base_spell_level or 2):
                 return False
         return weapon is None or event.weapon_slot in source.equipment.compatible_slots_for_actor(weapon)
 
@@ -2280,26 +2278,7 @@ class Attack(BaseAction):
             started = time.perf_counter()
             override_ability = execution_event.override_ability
             weapon = None if execution_event.natural_weapon else source_entity.equipment.get_weapon(weapon_slot)
-            item_suppressions = (SpellProtectionRegistry.get_antimagic_suppressions(set(bresenham_line(
-                source_entity.position, execution_event.target_position or target_entity.position)))
-                if weapon is not None and weapon.antimagic_exception is None else ())
-            if item_suppressions and weapon is not None:
-                override_ability = source_entity.equipment._select_weapon_attack_ability(
-                    source_entity.ability_scores, weapon, override_ability, magical_properties_active=False).name
-                execution_event = execution_event.with_updates(attack_is_magical=False,
-                    item_magic_suppression_provider_uuids=tuple(row.provider_uuid for row in item_suppressions))
             attack_bonus = source_entity.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid, override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
-            if item_suppressions and weapon is not None and weapon.is_magical:
-                modifier = weapon.attack_bonus.get_base_modifier()
-                if modifier is not None:
-                    attack_bonus.remove_modifier(modifier.uuid)
-            if item_suppressions and weapon is not None:
-                for identity in weapon.magical_attack_sources:
-                    owner=weapon.active_conditions_by_uuid.get(identity)
-                    if owner is not None:
-                        for modifier_ids in owner.modifers_uuids.values():
-                            for modifier_uuid in modifier_ids:
-                                attack_bonus.remove_modifier(modifier_uuid)
             ac = (target_entity.ac_bonus(source_entity.uuid) if isinstance(target_entity, Entity)
                   else ModifiableValue.create(source_entity_uuid=target_entity.uuid,
                       target_entity_uuid=source_entity.uuid, base_value=target_entity.armor_class, value_name="Object AC"))
@@ -2436,23 +2415,6 @@ class Attack(BaseAction):
             damages = source_entity.get_damages(weapon_slot, target_entity_uuid, override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
             magical_attack = execution_event.attack_is_magical
             for damage in damages: damage.attack_magical = magical_attack
-            if item_suppressions and weapon is not None:
-                if damages:
-                    damages[0].damage_dice = weapon.damage_dice
-                if weapon.is_magical:
-                    extra_bonus_ids = {value.uuid for value in weapon.extra_damage_bonus}
-                    damages = [damage for damage in damages if damage.damage_bonus is None
-                        or damage.damage_bonus.uuid not in extra_bonus_ids]
-                    modifier = weapon.damage_bonus.get_base_modifier() if weapon.damage_bonus is not None else None
-                    if modifier is not None and damages and damages[0].damage_bonus is not None:
-                        damages[0].damage_bonus.remove_modifier(modifier.uuid)
-            if item_suppressions and weapon is not None and damages and damages[0].damage_bonus is not None:
-                for identity in weapon.magical_attack_sources:
-                    owner=weapon.active_conditions_by_uuid.get(identity)
-                    if owner is not None:
-                        for modifier_ids in owner.modifers_uuids.values():
-                            for modifier_uuid in modifier_ids:
-                                damages[0].damage_bonus.remove_modifier(modifier_uuid)
             damages.extend(attack_event.additional_damages)
             record_action_timing("attack.get_damages_ms", started)
             started = time.perf_counter()
@@ -4290,6 +4252,11 @@ class Shove(BaseAction):
         return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 class SpellEvent(ActionEvent):
+    def harmful_direct_recipients(self) -> tuple[UUID, ...]:
+        if self.target_type in (TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT, TargetType.MULTI_ENTITY):
+            return tuple(self.harmful_target_entity_uuids)
+        return ()
+
     spellcasting_source_id: UUID | None = None
     maximize_damage_dice: bool = False
     can_deal_damage: bool = False
@@ -4357,7 +4324,6 @@ class SpellEvent(ActionEvent):
     damage_types: List[DamageType] = Field(default_factory=list, description="Damage types for VFX (populated at declaration, updated on hit)")
 
     retained_effect_origin: EffectOrigin | None = None
-    antimagic_exception: AntimagicException | None = None
 
     def to_effect_origin(self) -> EffectOrigin:
         """Return dependency-neutral provenance for a persistent spell effect."""
@@ -4369,7 +4335,6 @@ class SpellEvent(ActionEvent):
             source_position=self.effect_source_position or self.source_position,
             base_spell_level=self.spell_level,
             effective_spell_level=self.cast_at_level,
-            antimagic_exception=self.antimagic_exception,
             spell_school=self.spell_school,
             spellcasting_source_id=self.spellcasting_source_id,
             harmful=self.harmful,
@@ -4820,7 +4785,6 @@ class SpellAction(BaseAction):
 
     action_category: ActionCategory = Field(default=ActionCategory.SPELL, description="Classifies this action as a spell.")
 
-    antimagic_exception: AntimagicException | None = None
 
     spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
     spell_school: str = Field(default="evocation", description="School of magic")
@@ -5673,7 +5637,6 @@ class SpellAction(BaseAction):
             magical_transfer=self.magical_transfer,
             spellcasting_source_id=self.spellcasting_source_id,
             verbal=self.verbal,
-            antimagic_exception=self.antimagic_exception,
             cast_origin=self.cast_origin,
             effect_source_position=self.get_target_origin(),
             area_propagation=self.aoe_shape.propagation if self.aoe_shape is not None else "line_of_effect",

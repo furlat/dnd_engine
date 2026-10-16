@@ -5642,11 +5642,6 @@ class GridMap:
             )
         )
 
-    def refresh_contribution_lights(self, parent_event: Optional[UUID] = None) -> None:
-        """Refresh condition-gated illumination without changing retained light data."""
-        for source in list(self._light_sources.values()):
-            if source.contribution_owner_uuid is not None:
-                self.move_light_source(source.uuid, source.position, parent_event=parent_event)
 
     def set_block_light_suppressed(
         self,

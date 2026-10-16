@@ -1423,14 +1423,18 @@ def test_every_structural_definition_has_one_exact_authored_owner() -> None:
                    for candidate in BUILT_IN_DECLARATION_INVENTORY) == 1
 
 
-def test_frozen_icon_snapshot_differs_only_by_explicit_grapple_retirement() -> None:
-    """The historical freeze stays immutable; today's one retirement is explicit."""
+def test_frozen_icon_snapshot_differs_only_by_explicit_retirements() -> None:
+    """The historical freeze stays immutable; today's retirements are explicit."""
     frozen = _artifact_json("current.icon_bindings")
     current = json.loads((REPOSITORY_ROOT / "content_data/ledgers/content_icon_bindings.json").read_bytes())
     retired = [row for row in frozen["definitions"]
-               if row["content_ref"]["content_id"] == "condition.grappled"]
-    assert len(retired) == 1
+               if row["content_ref"]["content_id"] in {"condition.grappled",
+                   "condition.spell.antimagic_field.zone", "spell.antimagic_field"}]
+    assert len(retired) == 3
     retained = [row for row in frozen["definitions"] if row not in retired]
-    assert current["definitions"] == retained
+    added = [row for row in current["definitions"]
+             if row["content_ref"]["content_id"] == "condition.spell.charm_person.effect"]
+    assert len(added) == 1 and added[0]["icon_key"] == "spell.charm-person"
+    assert [row for row in current["definitions"] if row not in added] == retained
     assert {key: value for key, value in current.items() if key not in ("definitions", "binding_digest")} == {
         key: value for key, value in frozen.items() if key not in ("definitions", "binding_digest")}

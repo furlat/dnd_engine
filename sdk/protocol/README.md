@@ -2,13 +2,29 @@
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
 owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
-320 shared definitions and 1,700 object-field rows. `protocol-identity.json` binds
-protocol 1 and player schema 9 to the exact canonical schema digest.
+325 shared definitions and 1,716 object-field rows. `protocol-identity.json` binds
+protocol 1 and player schema 11 to the exact canonical schema digest.
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
 - `field-ledger.json`: each reachable field, required/default shape and source owner.
 - The Python and TypeScript packages carry the same schema and digest.
+
+## Antimagic removal (schema 11)
+
+Antimagic Field and its live suppression-provider UUID fields were removed from
+condition/item presentation states, visual items and floor items. The
+`SpellSuppression.antimagic` discriminator was removed; ordinary Globe clipping
+records remain. Current clients must use the schema-11 identity. Native
+RecordedSequence schema 2 and public PlayerSequence schema 5 are unchanged.
+The exact preceding contract is archived under
+[`recordings/pre-antimagic-removal`](recordings/pre-antimagic-removal/README.md).
+The native offline event reader accepts named empty retired metadata on its
+concrete model fields, preserves opaque context and explicitly rejects active
+retired suppression. See the
+[engine implementation handoff](../../agent_docs/SPELL_CATALOG_REPAIR_AND_ANTIMAGIC_REMOVAL_HANDOFF_2026-10-16.md)
+for the complete field list and qualification. Earlier schema notes below remain
+historical contract documentation.
 
 Disclosed floor items and visible equipment preserve their native light radii;
 equipment also preserves `is_lit`. The dim radius extends beyond the bright

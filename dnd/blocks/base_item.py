@@ -12,8 +12,7 @@ from pydantic import Field, PrivateAttr, model_validator
 
 from dnd.core.base_block import BaseBlock, MovementMode, PreparedConditionRemovals
 from dnd.core.base_object import BaseObject
-from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
-from dnd.core.effect_types import AntimagicException, ObjectSectionVolume
+from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.life_types import RemainsDisposition
 from dnd.core.item_properties import ItemProperty
 from dnd.items.property_composition import ItemPropertyContribution, install_item_properties, release_item_properties
@@ -193,28 +192,7 @@ class BaseItem(BaseBlock):
 
 
 
-    def refresh_antimagic_contributions(self) -> None:
-        position = (self.antimagic_suspended_placement.position
-            if self.antimagic_suspended_placement is not None else self.get_position())
-        providers = ({row.provider_uuid for row in SpellProtectionRegistry.get_antimagic_suppressions({position})}
-            if position is not None else set())
-        current = set() if self.antimagic_exempt() else providers
-        if current != self.suppression_provider_uuids:
-            # Dependent condition footprints can extend beyond this item's placement.
-            get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
-        self.suppression_provider_uuids = current
-        for condition in self.active_conditions_by_uuid.values():
-            if condition.magical_origin and not condition.antimagic_exempt():
-                for identity in providers | condition.suppression_provider_uuids:
-                    suppressed = identity in providers
-                    if suppressed != (identity in condition.suppression_provider_uuids):
-                        # Parent contribution coverage is not indexed by the item.
-                        get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
-                    condition.set_suppression(identity, suppressed)
 
-    def on_world_placement_committed(self, event: Event) -> None:
-        self.refresh_antimagic_contributions()
-        super().on_world_placement_committed(event)
 
     def on_long_rest(self, actor_uuid: UUID) -> None:
         """Default possessions have no item-owned rest resource."""
@@ -224,23 +202,15 @@ class BaseItem(BaseBlock):
     is_consumable: bool = Field(default=False, description="Destroyed on use")
     is_magical: bool = Field(default=False, description="Rules-facing magic-item protection, independent of artwork.")
     removed_local_bands: tuple[tuple[int, int, int], ...] = ()
-    magically_created: bool = False
-    creation_condition_uuid: UUID | None = Field(default=None, exclude=True)
-    antimagic_suspended_placement: WorldObjectPlacement | None = Field(default=None, exclude=True)
-    antimagic_exception: AntimagicException | None = None
-    suppression_provider_uuids: set[UUID] = Field(default_factory=set, exclude=True)
 
     @classmethod
     def get_all_items(cls) -> tuple['BaseItem', ...]:
         """Read existing live block identities, including temporarily absent creations."""
         return tuple(block for block in BaseBlock._registry.values() if isinstance(block, BaseItem))
 
-    def antimagic_exempt(self) -> bool:
-        owner = BaseCondition.get(self.creation_condition_uuid) if self.creation_condition_uuid else None
-        return self.antimagic_exception is not None or (isinstance(owner, BaseCondition) and owner.antimagic_exempt())
 
     def contributions_active(self) -> bool:
-        return BaseBlock.get(self.uuid) is self and not self.suppression_provider_uuids
+        return BaseBlock.get(self.uuid) is self
 
     def allows_contribution_at(self, position: tuple[int, int] | None) -> bool:
         return self.contributions_active()
@@ -362,7 +332,6 @@ class BaseItem(BaseBlock):
         """
         return ItemPresentationState(
             item_uuid=self.uuid,
-            suppression_provider_uuids=tuple(sorted(self.suppression_provider_uuids, key=str)),
             item_id=self.item_id,
             name=self.name,
             description=self.description,
@@ -378,9 +347,7 @@ class BaseItem(BaseBlock):
             stack_id=self.stack_id,
             visual_item_name=self.visual_item_name or self.name,
             visual_variant_id=self.visual_variant_id,
-            item_effects=tuple(effect.model_copy(update={
-                "suppression_provider_uuids": tuple(sorted(condition.suppression_providers(), key=str)),
-            }) for condition in self.active_conditions_by_uuid.values()
+            item_effects=tuple(effect for condition in self.active_conditions_by_uuid.values()
                 if (effect := condition.snapshot_item_effect()) is not None),
             equipped_visual_policy=self.equipped_visual_policy,
             stack_count=self.stack_count if stack_count is None else stack_count,
@@ -465,7 +432,6 @@ class BaseItem(BaseBlock):
             owner_uuid=container_uuid=tile_uuid=None
             position=world_placement=equipment_slot=None
             stack_count=0
-        self.refresh_antimagic_contributions()
         source_uuid = source_entity_uuid or owner_uuid or self.source_entity_uuid
         if location is ItemLocation.FLOOR and world_placement is None:
             world_placement = get_map().get_object_placement(self.uuid)
@@ -496,7 +462,14 @@ class BaseItem(BaseBlock):
             effect=effect.with_updates(item_state=self.to_item_presentation_state(stack_count=0),
                 location=ItemLocation.DESTROYED,owner_uuid=None,container_uuid=None,tile_uuid=None,
                 position=None,world_placement=None,equipment_slot=None)
-        return effect.phase_to(EventPhase.COMPLETION, use_register=True)
+        completion = effect.phase_to(EventPhase.COMPLETION, use_register=False)
+        try:
+            return EventQueue.register(completion.model_copy(update={"use_register": True}))
+        finally:
+            committed = EventQueue.get_event_by_uuid(completion.uuid)
+            if committed is not None:
+                for condition in tuple(self.active_conditions_by_uuid.values()):
+                    condition.record_committed_publication(committed)
 
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
                        mode: MovementMode = MovementMode.WALKING) -> bool:
@@ -1383,6 +1356,7 @@ class UsableItem(BaseItem):
 
     recharge_on_long_rest: bool = False
     use_requirement: EquippedSourceRequirement | None = None
+    _resource_revision: int = PrivateAttr(default=0)
 
     def release_runtime_ownership(self) -> None:
         super().release_runtime_ownership()
@@ -1394,8 +1368,6 @@ class UsableItem(BaseItem):
         if self.is_magical and actor is not None and any(condition.blocks_magic_item_activation
                 and condition.contributions_active() for condition in actor.active_conditions_by_uuid.values()):
             return "Magic item activation is prevented by an active condition"
-        if self.is_magical and not self.contributions_active():
-            return "The item's magical properties are suppressed"
         requirement = self.use_requirement
         if requirement is not None and (not self.is_equipped or self.owner_uuid != actor_uuid
                 or self.equipped_slot != requirement.slot.value):
@@ -1413,11 +1385,18 @@ class UsableItem(BaseItem):
             item_uuid=self.uuid,item_id=self.item_id,item_name=self.name,amount=self.max_charges-before,
             resource_change=ItemResourceChange.RECHARGE,name="Item Charge Recharge",
             charges_before=before,charges_after=before,stack_count_before=self.stack_count,
-            stack_count_after=self.stack_count)
-        event = event.phase_to(EventPhase.EXECUTION).phase_to(EventPhase.EFFECT)
+            stack_count_after=self.stack_count, use_register=False)
+        event = EventQueue.publish_declaration(event)
+        if event.canceled:
+            return
+        event = event.phase_to(EventPhase.EXECUTION)
+        if event.canceled:
+            return
+        event = event.phase_to(EventPhase.EFFECT)
         if event.canceled:
             return
         self.charges = self.max_charges
+        self._resource_revision += 1
         event.phase_to(EventPhase.COMPLETION,charges_after=self.charges,status_message="Item recharged on long rest")
 
     def bind_dynamic_use_action(self, action: BaseAction) -> BaseAction:
@@ -1523,6 +1502,7 @@ class UsableItem(BaseItem):
         if self.charges < amount:
             return False
         self.charges -= amount
+        self._resource_revision += 1
         if self.charges == 0 and self.is_consumable:
             if self.stack_count > 1:
                 self.stack_count -= 1
@@ -1569,11 +1549,18 @@ class UsableItem(BaseItem):
             charges_after=self.charges,
             stack_count_before=self.stack_count,
             stack_count_after=self.stack_count,
+            use_register=False,
         )
+        declaration._resource_revision = self._resource_revision
+        declaration = EventQueue.publish_declaration(declaration)
+        if declaration.canceled:
+            return declaration
         execution = declaration.phase_to(
             EventPhase.EXECUTION,
             status_message="Finite item resource validated",
         )
+        if execution.canceled:
+            return execution
         effect = execution.phase_to(
             EventPhase.EFFECT,
             status_message="Finite item resource ready for consumption",
@@ -1592,12 +1579,7 @@ class UsableItem(BaseItem):
         if terminal is not None:
             return cast(ItemResourceChangeEvent, terminal)
         effect = cast(ItemResourceChangeEvent, history[-1])
-        admitted_at = EventQueue.get_event_index(history[0].uuid)
-        assert admitted_at is not None
-        changed_since_admission = any(
-            isinstance(event, ItemResourceChangeEvent)
-            and event.item_uuid == self.uuid and event.phase is EventPhase.COMPLETION
-            for _, event in EventQueue.iter_events_since(admitted_at + 1))
+        changed_since_admission = self._resource_revision != effect._resource_revision
         if (effect.phase is not EventPhase.EFFECT
                 or effect.resource_change is not ItemResourceChange.CONSUME
                 or effect.item_uuid != self.uuid or not self.is_active
@@ -1622,6 +1604,8 @@ class UsableItem(BaseItem):
 
 class ItemResourceChangeEvent(Event):
     """One committed consumption or recharge; historical event identity is unchanged."""
+
+    _resource_revision: int | None = PrivateAttr(default=None)
 
     name: str = Field(
         default="Item Charge Consumption",

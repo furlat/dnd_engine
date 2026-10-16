@@ -103,3 +103,36 @@ def legacy_damage_reference(event_uuid: UUID, lineage_uuid: UUID,
         return EventResolutionRef(lineage_uuid=lineage_uuid)
     raise ValueError(f"Legacy damage {event_uuid} lacks unambiguous resolution ownership; "
                      "preserve this recording and recapture this case with current producers")
+
+
+def recorded_retired_magic_fields(value: Any, *, owner: str = "event") -> Any:
+    """Retire named old native model fields, preserving opaque event context.
+
+    Active suppression cannot be represented by the new contract. Its original
+    recording stays explicitly unsupported; ordinary old metadata is accepted
+    only at the concrete origin/condition/item/protection field owners.
+    """
+    if isinstance(value, list):
+        return [recorded_retired_magic_fields(item, owner=owner) for item in value]
+    if not isinstance(value, dict):
+        return value
+    token_owner = owner in {"condition_state", "initial_condition_states", "item_state", "resulting_item",
+        "source_item_presentation", "item", "item_effects", "previous_state", "resulting_state",
+        "object_state", "items", "contained_items"}
+    protection_owner = owner in {"suppressions", "construction_suppressions", "spatial_suppressions"}
+    origin_owner = owner in {"event", "effect_origin", "retained_effect_origin"}
+    result = {}
+    for key, item in value.items():
+        retired_tokens = key == "suppression_provider_uuids" and token_owner or (
+            key == "item_magic_suppression_provider_uuids" and owner == "event")
+        if retired_tokens or key == "antimagic" and protection_owner:
+            valid_empty = item is False if key == "antimagic" else isinstance(item, list) and not item
+            if not valid_empty:
+                raise ValueError("Recording contains retired Antimagic suppression; preserve the original schema-10 archive")
+            continue
+        if key == "antimagic_exception" and origin_owner:
+            if item not in (None, "artifact", "deity"):
+                raise ValueError("Recording contains retired Antimagic Field; preserve the original schema-10 archive")
+            continue
+        result[key] = item if key == "context" else recorded_retired_magic_fields(item, owner=key)
+    return result

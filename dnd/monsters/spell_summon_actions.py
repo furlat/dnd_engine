@@ -43,7 +43,7 @@ from dnd.core.base_block import (
     PreparedConditionApplication,
     PreparedConditionRemovals,
 )
-from dnd.core.base_conditions import BaseCondition, Duration, SpellProtectionRegistry
+from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import ConditionRemovalTrigger, ConditionTag, DurationType
 from dnd.core.content.dependencies import ContentDependency, ContentDependencyRelation
 from dnd.core.content.descriptors import (
@@ -480,14 +480,11 @@ class ElementalMud(AreaCondition):
 
 
 def technique_cells(actor: Entity, origin: tuple[int, int], cells):
-    """Use native physical propagation and Antimagic for an emitted technique."""
-    if SpellProtectionRegistry.get_antimagic_suppressions({actor.position}):
-        return set()
+    """Use native physical propagation for an emitted technique."""
     return {
         cell
         for cell in cells
-        if not SpellProtectionRegistry.get_antimagic_suppressions({cell})
-        and get_map().can_reach_between(
+        if get_map().can_reach_between(
             origin, cell, PhysicalAccess.PROJECTILE, actor.uuid
         )
     }
@@ -624,10 +621,6 @@ class NativeSaveBurst(BaseAction):
             return event
         effect = event.phase_to(EventPhase.EFFECT)
         if effect.canceled:
-            return effect
-        if SpellProtectionRegistry.get_antimagic_suppressions(
-            {actor.position, target.position}
-        ):
             return effect
         previous = self.before_damage(target, effect)
         identity = effect.behavior_id or "action.monster.elemental_technique"
@@ -792,12 +785,6 @@ class ElementalWarp(BaseAction):
         crossing = crossing.phase_to(EventPhase.EXECUTION)
         if not crossing.canceled:
             crossing = crossing.phase_to(EventPhase.EFFECT)
-        if SpellProtectionRegistry.get_antimagic_suppressions(
-            {crossing.start_position, crossing.end_position}
-        ):
-            crossing = crossing.cancel(
-                status_message="Antimagic prevents the magical travel endpoint"
-            )
         if crossing.canceled:
             return effect.cancel(status_message=crossing.status_message)
         Entity.commit_position_transfers(((actor, self.end_position, crossing.uuid),))
@@ -1106,10 +1093,6 @@ class ElementalContactBurst(BaseAction):
         actor = Entity.get(self.source_entity_uuid)
         if actor is None:
             return event.cancel(status_message="Actor absent")
-        if SpellProtectionRegistry.get_antimagic_suppressions(
-            {actor.position, target.position}
-        ):
-            return effect
         if self.technique == "icicle":
             for _ in range(3):
                 resolution = resolve_spell_attack_values(
@@ -2270,7 +2253,7 @@ class DraconicBreathCadence(BaseCondition):
         handler = EventHandler(
             name=self.name,
             source_entity_uuid=actor.uuid,
-            runs_while_suppressed=True,
+
             trigger_conditions=[
                 Trigger(
                     event_type=EventType.BASE_ACTION,

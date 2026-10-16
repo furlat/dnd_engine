@@ -142,13 +142,14 @@ def test_rejected_same_name_parent_replacement_does_not_remove_borrowed_child() 
     assert original_child.additional_parent_conditions == set()
 
 
-def test_charm_retains_existing_same_name_replacement_policy() -> None:
+def test_charm_keeps_independent_relationships_for_different_sources() -> None:
     source, other, target = actors()
     cast(CharmPerson(source_entity_uuid=source.uuid, target_entity_uuid=target.uuid, cast_at_level=1))
-    first = target.active_conditions["Charmed"]
+    first = next(c for c in target.active_conditions_by_uuid.values() if c.get_display_name() == "Charmed")
     cast(CharmPerson(source_entity_uuid=other.uuid, target_entity_uuid=target.uuid, cast_at_level=1))
-    assert target.active_conditions["Charmed"].source_entity_uuid == other.uuid
-    assert first.uuid not in target.active_conditions_by_uuid
+    relationships = {c.source_entity_uuid for c in target.active_conditions_by_uuid.values() if c.get_display_name() == "Charmed"}
+    assert relationships == {source.uuid, other.uuid}
+    assert first.uuid in target.active_conditions_by_uuid
 
 
 @pytest.mark.parametrize("mode", ("blinded", "deafened"))

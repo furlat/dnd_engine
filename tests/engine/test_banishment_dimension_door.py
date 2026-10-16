@@ -14,7 +14,7 @@ from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.entity import Entity
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spells.abjuration import AntimagicField, Banishment
+from dnd.spells.abjuration import Banishment
 from dnd.spells.conjuration import DimensionDoor
 from dnd.types.actor import SpatialDisposition
 from tests.manual.spell_regression_support import create_spell_regression_actor, force_save_result, reset_spell_regression_arena
@@ -137,19 +137,6 @@ def test_rejected_passenger_cannot_partially_teleport_caster(scene):
     assert caster.action_economy.spell_slot_4.normalized_score == 2
 
 
-@pytest.mark.parametrize("destination,blocked", [((8, 4), True), ((5, 2), True), ((12, 2), False)])
-def test_dimension_door_checks_each_actual_endpoint_not_intervening_space(scene, destination, blocked):
-    caster, companion, _ = scene
-    field_owner = create_spell_regression_actor("Field", (8, 2), "enemies", spell_slots={8: 1})
-    field = AntimagicField(source_entity_uuid=field_owner.uuid).apply()
-    assert field is not None and not field.canceled
-    result = door(caster, companion, destination)
-    assert result is not None
-    if blocked:
-        assert (caster.position, companion.position) == ((2, 2), (3, 2))
-    else:
-        assert (caster.position, companion.position) == ((12, 2), (13, 2))
-    assert caster.action_economy.spell_slot_4.normalized_score == 2
 
 
 @pytest.mark.parametrize("foreign", [False, True])

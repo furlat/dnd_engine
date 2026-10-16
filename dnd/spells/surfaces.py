@@ -109,7 +109,7 @@ class SimpleToxinExposure(BaseCondition):
                     independent_resolution=True,source_condition_uuid=self.uuid)
             target.remove_condition_by_uuid(self.uuid,parent_event=boundary)
             return None
-        handler=EventHandler(name="Simple Toxin delayed damage",source_entity_uuid=target.uuid,runs_while_suppressed=True,
+        handler=EventHandler(name="Simple Toxin delayed damage",source_entity_uuid=target.uuid,
             trigger_conditions=[Trigger(event_type=EventType.TURN_END,event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid)],event_processor=tick)
         target.add_event_handler(handler)
         return [],[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)

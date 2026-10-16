@@ -496,7 +496,6 @@ class Weapon(EquippableItem):
             duration=ConditionDurationSummary(DurationType.PERMANENT, None),
             behavior_id="item.property.additional_damage", damage_type=damage_type,
             display_name=bonus.name,
-            suppression_provider_uuids=tuple(sorted(self.suppression_provider_uuids, key=str)) if self.is_magical else (),
         ) for bonus, damage_type in zip(self.extra_damage_bonus, self.extra_damage_type)
             if bonus.uuid not in owned))
         return state.model_copy(update={
@@ -565,8 +564,6 @@ class Weapon(EquippableItem):
     def get_extra_damages(self) -> List[Damage]:
         """Return extra damage payloads attached directly to this weapon."""
         damages = []
-        if self.is_magical and not self.contributions_active():
-            return damages
         for i in range(len(self.extra_damage_dices)):
             damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.extra_damage_dices[i], dice_numbers=self.extra_damage_dices_numbers[i], damage_bonus=self.extra_damage_bonus[i], damage_type=self.extra_damage_type[i]))
         return damages
@@ -951,10 +948,9 @@ class Equipment(BaseBlock):
         ability_block: AbilityScores,
         weapon: Optional[Weapon],
         override_ability: Optional[AbilityName],
-        *, magical_properties_active: bool = True,
     ) -> Ability:
         """Select the ability used by a weapon attack roll."""
-        if weapon is not None and magical_properties_active:
+        if weapon is not None:
             override_ability = weapon.selected_attack_ability(ability_block, override_ability)
         if override_ability is not None:
             return ability_block.get_ability(override_ability)
@@ -1122,7 +1118,7 @@ class Equipment(BaseBlock):
                     weapon.extra_damage_dices_numbers,
                     weapon.extra_damage_bonus,
                     weapon.extra_damage_type,
-                ) if not weapon.is_magical or weapon.contributions_active()
+                )
             )
         else:
             ability = self._select_weapon_damage_ability(

@@ -36,8 +36,6 @@ def _unseen_strike(event: Event, source_entity_uuid: UUID, *, item_uuid: UUID,
     attack = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event else None
     if not isinstance(attack, ActionEvent) or attack.event_type != EventType.ATTACK or attack.source_item_uuid != item_uuid:
         return None
-    if attack.item_magic_suppression_provider_uuids:
-        return None
     target = BaseBlock.get(event.target_entity_uuid) if event.target_entity_uuid else None
     senses = target.get_senses() if target is not None else None
     if senses is None:

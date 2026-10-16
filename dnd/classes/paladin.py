@@ -15,6 +15,7 @@ from dnd.core.events import (
     Trigger,
     Damage,
     DamageRollResultEvent,
+    EntityFactionChangedEvent,
 )
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.dice import AttackOutcome
@@ -22,7 +23,6 @@ from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import SpellProtectionRegistry
-from dnd.core.geometry import bresenham_line
 from dnd.core.effect_types import EffectOrigin, EffectOriginKind
 from dnd.blocks.spellcasting import DivineSmiteEntitlement
 from dnd.spells.content_metadata import srd_reaction_identity
@@ -155,9 +155,6 @@ def create_divine_smite_processor(slot_level: int):
                 and SpellProtectionRegistry.is_protected(
                     target.position, entity.position, slot_level
                 )
-            )
-            or SpellProtectionRegistry.get_antimagic_suppressions(
-                set(bresenham_line(entity.position, target.position))
             )
         ):
             return None
@@ -703,9 +700,6 @@ def improved_divine_smite(event, source_uuid):
     if (
         actor is None
         or target is None
-        or SpellProtectionRegistry.get_antimagic_suppressions(
-            set(bresenham_line(actor.position, target.position))
-        )
     ):
         return None
     damage = Damage(
@@ -927,6 +921,16 @@ class PaladinAuraZone(MembershipAreaCondition):
         source = Entity.get(self.source_entity_uuid)
         return aura_provider_active(source) and source.faction == entity.faction
 
+    def refresh_membership(self, entity, *, parent_event):
+        if (
+            entity.is_deployed
+            and entity.position in self.affected_positions
+            and self.membership_applies_to(entity)
+        ):
+            self.apply_membership(entity, parent_event=parent_event)
+        else:
+            self.remove_membership(entity, parent_event=parent_event)
+
     def relocate_anchor(self, position, *, parent_event):
         previous = self.position
         self.position = position
@@ -950,28 +954,6 @@ class PaladinAuraZone(MembershipAreaCondition):
     def _apply_effect_exit_effect(self, entity, *, parent_event):
         self.remove_membership(entity, parent_event=parent_event)
 
-    def _create_zone_turn_start_handler(self):
-        def refresh(event, _):
-            for target in Entity.get_all_entities():
-                inside = (
-                    target.is_deployed
-                    and target.position in self.affected_positions
-                    and self.membership_applies_to(target)
-                )
-                if inside:
-                    self.apply_membership(target, parent_event=event)
-                else:
-                    self.remove_membership(target, parent_event=event)
-
-        return EventHandler(
-            name="Paladin aura consciousness",
-            source_entity_uuid=self.source_entity_uuid,
-            trigger_conditions=[
-                Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EFFECT)
-            ],
-            event_processor=refresh,
-        )
-
 
 class PaladinAuraRoot(BaseCondition):
     description: str = "Owns one moving passive Paladin aura and its memberships."
@@ -994,6 +976,25 @@ class PaladinAuraRoot(BaseCondition):
                 and boundary.entity_uuid != actor.uuid
             ):
                 return None
+            if (
+                isinstance(boundary, EntityFactionChangedEvent)
+                and boundary.entity_uuid != actor.uuid
+            ):
+                zone = BaseCondition.get(self.zone_uuid)
+                recipient = Entity.get(boundary.entity_uuid)
+                if (
+                    isinstance(zone, PaladinAuraZone)
+                    and recipient is not None
+                    and (
+                        recipient.position in zone.affected_positions
+                        or any(
+                            target_uuid == recipient.uuid
+                            for target_uuid, _ in zone.linked_conditions
+                        )
+                    )
+                ):
+                    zone.refresh_membership(recipient, parent_event=boundary)
+                return None
             self.on_owner_placement_committed(boundary)
 
         handler = EventHandler(
@@ -1014,7 +1015,12 @@ class PaladinAuraRoot(BaseCondition):
                     event_phase=EventPhase.EFFECT,
                 ),
                 Trigger(
-                    event_type=EventType.LIFE_STATE_CHANGE,
+                    event_type=EventType.DAMAGE_APPLIED,
+                    event_phase=EventPhase.EFFECT,
+                    event_target_entity_uuid=actor.uuid,
+                ),
+                Trigger(
+                    event_type=EventType.HEALING_APPLIED,
                     event_phase=EventPhase.EFFECT,
                     event_target_entity_uuid=actor.uuid,
                 ),
@@ -1076,15 +1082,17 @@ class PaladinAuraRoot(BaseCondition):
                 if zone.zone_radius_feet != radius:
                     zone.zone_radius_feet = radius
                     zone.relocate_anchor(actor.position, parent_event=event)
-                for recipient in Entity.get_all_entities():
-                    if (
-                        recipient.is_deployed
-                        and recipient.position in zone.affected_positions
-                        and zone.membership_applies_to(recipient)
-                    ):
-                        zone.apply_membership(recipient, parent_event=event)
-                    else:
-                        zone.remove_membership(recipient, parent_event=event)
+                recipient_uuids = {
+                    recipient.uuid
+                    for recipient in zone._occupants_at(set(zone.affected_positions))
+                }
+                recipient_uuids.update(
+                    target_uuid for target_uuid, _ in zone.linked_conditions
+                )
+                for recipient_uuid in sorted(recipient_uuids, key=str):
+                    recipient = Entity.get(recipient_uuid)
+                    if recipient is not None:
+                        zone.refresh_membership(recipient, parent_event=event)
         finally:
             self._refreshing = False
 

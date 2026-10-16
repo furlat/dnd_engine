@@ -559,9 +559,22 @@ class Charmed(BaseCondition):
                 to_target_static_condition_uuid = skill_obj.skill_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Charmed",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=charmed_skill_check))
                 outs.append((skill_obj.skill_bonus.uuid,to_target_static_condition_uuid))
             effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied contextual advantage modifers from Charmed to {target_entity.name}")
-            return outs, [], [], [], effect_event
+            def prevent_harm(event: Event, _source_uuid: UUID) -> Event | None:
+                if isinstance(event, ActionEvent) and self.source_entity_uuid in event.harmful_direct_recipients():
+                    return event.cancel(status_message="Charmed prevents directly harming the charmer")
+                return None
+            handler = EventHandler(name="Charmed harmful recipient admission", source_entity_uuid=target_entity.uuid,
+                trigger_conditions=[Trigger(event_type=kind, event_phase=EventPhase.DECLARATION,
+                    event_source_entity_uuid=target_entity.uuid)
+                    for kind in (EventType.ATTACK, EventType.CAST_SPELL, EventType.BASE_ACTION)],
+                event_processor=prevent_harm)
+            target_entity.add_event_handler(handler)
+            return outs, [handler.uuid], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
+
+    def get_display_name(self) -> str:
+        return "Charmed"
 
     @staticmethod
     def charmed_attack_check(charmer_id: UUID, source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[AutoHitModifier]:
@@ -1907,6 +1920,7 @@ class Concentrating(BaseCondition):
 
     _active_slot_uuid: Optional[UUID] = PrivateAttr(default=None)
     _prepared_transfer: PreparedConcentrationTransfer | None = PrivateAttr(default=None)
+    _last_publication_uuid: UUID | None = PrivateAttr(default=None)
 
     def prepares_own_replacement(self) -> bool:
         return True
@@ -2066,35 +2080,42 @@ class Concentrating(BaseCondition):
             "concentration_slots": self.snapshot_concentration_slots(),
         })
 
+    def record_committed_publication(self, event: Event) -> None:
+        if isinstance(event, ItemLocationStateEvent) or (
+                isinstance(event, (ConditionApplicationEvent, ConditionStateChangedEvent))
+                and event.condition_state is not None
+                and event.condition_state.condition_uuid == self.uuid):
+            self._last_publication_uuid = event.uuid
+
     def publish_owner_state(self, parent_event: Event | None) -> None:
-        """Publish only a changed committed snapshot, using the existing event history."""
-        owner = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+        """Compare with this owner's one exact last committed publication."""
+        owner = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if owner is None or owner.active_conditions_by_uuid.get(self.uuid) is not self:
             return
-        recorded = EventQueue.get_events_by_target(owner.uuid)
+        previous = EventQueue.get_event_by_uuid(self._last_publication_uuid) if self._last_publication_uuid else None
         if isinstance(owner, BaseItem) and owner.tile_uuid is not None:
-            previous = next((event for event in reversed(recorded)
-                if isinstance(event, ItemLocationStateEvent) and event.phase is EventPhase.COMPLETION), None)
-            if previous is None or previous.item_state != owner.to_item_presentation_state():
+            prior = previous.item_state if isinstance(previous, ItemLocationStateEvent) else (
+                previous.resulting_item if isinstance(previous, ConditionApplicationEvent) else None)
+            if prior != owner.to_item_presentation_state():
                 owner.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
         elif isinstance(owner, Entity):
             state, stats = self.snapshot_state(), owner.snapshot_entity_stats()
-            previous = next((event for event in reversed(recorded)
-                if isinstance(event, (ConditionApplicationEvent, ConditionStateChangedEvent))
-                and event.phase is EventPhase.COMPLETION and event.condition_state is not None
-                and event.condition_state.condition_uuid == self.uuid), None)
-            if previous is not None and previous.condition_state == state and previous.resulting_stats == stats:
+            if isinstance(previous, (ConditionApplicationEvent, ConditionStateChangedEvent)) and (
+                    previous.condition_state == state and previous.resulting_stats == stats):
                 return
-            ConditionStateChangedEvent(
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=owner.uuid,
-                parent_event=parent_event.uuid if parent_event is not None else None,
-                parent_lineage=parent_event.lineage_uuid if parent_event is not None else None,
-                phase=EventPhase.COMPLETION,
-                condition_state=state,
-                resulting_stats=stats,
-                behavior_id=self.behavior_binding.behavior_id if self.behavior_binding is not None else None,
-            )
+            publication = ConditionStateChangedEvent(
+                source_entity_uuid=self.source_entity_uuid, target_entity_uuid=owner.uuid,
+                parent_event=parent_event.uuid if parent_event else None,
+                parent_lineage=parent_event.lineage_uuid if parent_event else None,
+                phase=EventPhase.COMPLETION, condition_state=state, resulting_stats=stats,
+                behavior_id=self.behavior_binding.behavior_id if self.behavior_binding else None,
+                use_register=False)
+            try:
+                EventQueue.register(publication.model_copy(update={"use_register": True}))
+            finally:
+                committed = EventQueue.get_event_by_uuid(publication.uuid)
+                if committed is not None:
+                    self.record_committed_publication(committed)
 
     def unlink_condition(self, condition_uuid: UUID, *, parent_event: Event) -> None:
         super().unlink_condition(condition_uuid, parent_event=parent_event)
@@ -2677,7 +2698,7 @@ class InvisibilityEffect(BaseCondition):
             self.creation_lineage_uuid = parent.lineage_uuid if parent else declaration_event.lineage_uuid
 
             handler = EventHandler(
-                name="Invisibility: Reveal", runs_while_suppressed=True,
+                name="Invisibility: Reveal", runs_while_owner_inactive=True,
                 source_entity_uuid=target_entity.uuid,
                 trigger_conditions=[
                     Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EFFECT,
@@ -3026,10 +3047,6 @@ class Revealed(BaseCondition):
         if target is not None:
             target._notify_perceivability_changed(parent_event=event.uuid)
 
-    def on_suppression_changed(self) -> None:
-        target=BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target is not None:
-            target._notify_perceivability_changed()
 
 
 def prepare_control_removals(target: Entity, names: frozenset[str], event: Event,

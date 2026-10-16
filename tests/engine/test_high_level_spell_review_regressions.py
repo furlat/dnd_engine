@@ -28,7 +28,6 @@ from dnd.items.consumables import build_healing_potion
 from dnd.spells.abjuration import (
     AntilifeShell,
     AntilifeShellZone,
-    AntimagicField,
     BreakEnchantment,
     DispelEvilAndGood,
     GlyphSleepEffect,
@@ -104,20 +103,6 @@ def test_sphere_self_dodge_and_nonspell_healing_remain_legal(game):
     assert healed == 5
 
 
-def test_suppressed_sphere_allows_external_shove(game):
-    caster = high_actor(game)
-    target = high_actor(game, "Inside", (8, 2))
-    helper = high_actor(game, "Helper", (7, 2))
-    nullifier = high_actor(game, "Antimagic", (10, 2), "foes")
-    cast(ResilientSphere, caster, target)
-    cast(AntimagicField, nullifier)
-    result = Shove(
-        source_entity_uuid=helper.uuid, target_entity_uuid=target.uuid
-    ).apply()
-    position = target.position
-    accepted = result is not None and not result.canceled
-    assert accepted
-    assert position != (8, 2)
 
 
 def test_tenacity_critical_miss_still_deals_four(battle):

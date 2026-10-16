@@ -12,7 +12,6 @@ from dnd.core.life_types import LifeState, RemainsDisposition
 from dnd.core.modifiers import NumericalModifier, ResistanceModifier, ResistanceStatus
 from dnd.items.created_items import GoodberryItem, FlameBladeItem
 from dnd.spells.evocation import FlameBlade
-from dnd.spells.abjuration import AntimagicField
 from dnd.core.gridmap import get_map
 from dnd.spells.transmutation import Goodberry, DragonsBreath, ExhaleDragonsBreath
 from dnd.spells.necromancy import VampiricTouch, VampiricTouchStrike, Revivify
@@ -191,22 +190,6 @@ def test_flame_blade_transfer_retires_exact_blade_and_preserves_other_weapon(gam
     assert caster.inventory.items[old.uuid] is old
 
 
-def test_all_goodberries_return_after_antimagic_blocker_leaves(game):
-    caster=combatant(game)
-    holder=combatant(game,'Holder',(3,2))
-    field_caster=combatant(game,'Field caster',(7,2),'foes',slots={8:2})
-    cast(Goodberry,caster,holder)
-    berries=[item for item in holder.inventory.items.values() if isinstance(item,GoodberryItem)]
-    holder.move((6,2))
-    for berry in berries:holder.drop_item(berry.uuid)
-    cast(AntimagicField,field_caster)
-    assert all(get_map().get_object_placement(berry.uuid) is None for berry in berries)
-    field_caster.remove_condition('Concentrating')
-    assert all(berry.antimagic_suspended_placement is not None for berry in berries)
-    holder.move((10,2))
-    assert all(get_map().get_object_placement(berry.uuid) is not None for berry in berries)
-    caster.on_long_rest()
-    assert all(BaseBlock.get(berry.uuid) is None for berry in berries)
 
 
 @pytest.mark.parametrize('blocked_event',[EventType.REVIVE,EventType.PORTAL_TRANSFER])
@@ -243,4 +226,3 @@ def test_ally_breath_uses_original_caster_dc_and_no_recipient_damage_bonus(game)
         and event.target_entity_uuid==enemy.uuid and event.phase is EventPhase.COMPLETION]
     assert saves and saves[0].dc==caster.spell_save_dc()
     assert enemy.get_hp()==hp-6
-

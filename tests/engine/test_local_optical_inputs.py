@@ -99,7 +99,7 @@ def test_subscriber_revisions_follow_local_geometry_light_and_occupancy():
     assert grid.observer_spatial_revisions(near) == (0, 0, 0, 0)
 
 
-def test_area_move_and_suppression_commit_optics_before_light_children():
+def test_area_move_and_footprint_change_commit_optics_before_light_children():
     reset_senses_state(width=6, height=1)
     grid = get_map()
     source, observer = uuid4(), uuid4()
@@ -125,13 +125,10 @@ def test_area_move_and_suppression_commit_optics_before_light_children():
                          for row in added)
     observations.clear()
     initial = grid.observer_spatial_revisions(observer)[0]
-    protection = SpellProtection(uuid=uuid4(), positions={(3, 0)}, max_blocked_level=9, suppresses_magic=True)
-    SpellProtectionRegistry.register(protection)
-    darkness.refresh_antimagic_suppression(parent_event=cause(source))
+    darkness.change_footprint({(4, 0)}, parent_event=cause(source))
     assert observations and all(not row[1] and row[2] > initial for row in observations)
     assert not grid.capture_optical_obscurements((3, 0), 0)
-    SpellProtectionRegistry.unregister(protection.uuid)
-    darkness.refresh_antimagic_suppression(parent_event=cause(source))
+    darkness.change_footprint({(3, 0)}, parent_event=cause(source))
     assert grid.get_optical_obscurements_at((3, 0), snapshot=grid.capture_optical_obscurements((3, 0), 0)) == {
         OpticalObscurement.MAGICAL_DARKNESS}
 

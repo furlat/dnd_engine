@@ -556,6 +556,7 @@ def create_goblin_caster(
         "goblinoid mobility."
     )
     entity.size = Size.SMALL
+    entity.structural_base_size = Size.SMALL
     entity.weight = weight
     for field_name, value in GOBLIN_APPEARANCE.model_dump().items():
         setattr(entity.appearance, field_name, value)

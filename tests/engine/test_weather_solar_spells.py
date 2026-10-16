@@ -290,28 +290,12 @@ def test_sunlight_contribution_gate_retains_identity_and_authored_toggle(scene):
     identity = owner.light_source_uuid
     tile = grid.get_tile(*caster.position)
     assert tile is not None and tile.resolved_light_level is LightLevel.BRIGHT_LIGHT
-    first, second = uuid4(), uuid4()
-    owner.set_suppression(first, True)
-    owner.set_suppression(second, True)
-    grid.refresh_contribution_lights()
-    assert not grid.is_sunlit(caster.position) and tile.resolved_light_level is LightLevel.DARKNESS
-    assert grid.get_light_source_position(identity) == caster.position
-    owner.set_suppression(first, False)
-    grid.refresh_contribution_lights()
-    assert not grid.is_sunlit(caster.position)
-    owner.set_suppression(second, False)
-    grid.refresh_contribution_lights()
-    assert grid.is_sunlit(caster.position) and owner.light_source_uuid == identity
     grid.toggle_light_source(identity, False)
-    owner.set_suppression(first, True)
-    grid.refresh_contribution_lights()
-    owner.set_suppression(first, False)
-    grid.refresh_contribution_lights()
     assert not grid.is_sunlit(caster.position)
+    assert grid.get_light_source_position(identity) == caster.position
     grid.toggle_light_source(identity, True)
-    assert grid.is_sunlit(caster.position)
-    SunbeamEffect.unregister(owner.uuid)
-    grid.refresh_contribution_lights()
+    assert grid.is_sunlit(caster.position) and owner.light_source_uuid == identity
+    caster.remove_condition("Concentrating")
     assert not grid.is_sunlit(caster.position) and tile.resolved_light_level is LightLevel.DARKNESS
 
 

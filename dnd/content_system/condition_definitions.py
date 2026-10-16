@@ -322,7 +322,6 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
 
     # SRD spell effects and zones.
     _srd(abjuration.AidEffect, ContentDefinitionKind.CONDITION, "condition.spell.aid"),
-    _srd(abjuration.AntimagicFieldZone, ContentDefinitionKind.CONDITION, "condition.spell.antimagic_field.zone"),
     _srd(abjuration.BanishedCondition, ContentDefinitionKind.CONDITION, "condition.spell.banishment"),
     _srd(abjuration.BeaconOfHopeEffect, ContentDefinitionKind.CONDITION, "condition.spell.beacon_of_hope"),
     _srd(abjuration.DeathWardEffect, ContentDefinitionKind.CONDITION, "condition.spell.death_ward"),
@@ -420,6 +419,7 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(enchantment.CommandGrovelEffect, ContentDefinitionKind.CONDITION, "condition.spell.command.grovel"),
     _srd(enchantment.CommandHaltEffect, ContentDefinitionKind.CONDITION, "condition.spell.command.halt"),
     _srd(enchantment.HoldMonsterEffect, ContentDefinitionKind.CONDITION, "condition.spell.hold_monster"),
+    _srd(enchantment.CharmPersonEffect, ContentDefinitionKind.CONDITION, "condition.spell.charm_person.effect"),
     _srd(enchantment.HoldPersonEffect, ContentDefinitionKind.CONDITION, "condition.spell.hold_person"),
     _srd(enchantment.PowerWordStunEffect, ContentDefinitionKind.CONDITION, "condition.spell.power_word_stun"),
     _srd(enchantment.SleepEffect, ContentDefinitionKind.CONDITION, "condition.spell.sleep"),

@@ -336,15 +336,16 @@ def test_hypnotic_pattern_keeps_only_its_real_charmed_child() -> None:
     effect = _apply_condition(HypnoticPatternEffect, source, target)
 
     assert "Hypnotic Pattern" in target.active_conditions
-    assert "Charmed" in target.active_conditions
+    charmed = next(c for c in target.active_conditions_by_uuid.values() if c.get_display_name() == "Charmed")
+    assert charmed.applied
     assert "Incapacitated" not in target.active_conditions
     assert len(effect.sub_conditions) == 1
-    assert target.active_conditions["Charmed"].uuid == effect.sub_conditions[0]
+    assert charmed.uuid == effect.sub_conditions[0]
     assert target.action_economy.action_permission.normalized_score == 0
 
     target.remove_condition_by_uuid(effect.uuid)
 
-    assert "Charmed" not in target.active_conditions
+    assert charmed.uuid not in target.active_conditions_by_uuid
     assert target.action_economy.action_permission.normalized_score == 1
 
 

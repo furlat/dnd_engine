@@ -21,7 +21,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
-from dnd.spells.abjuration import AntilifeShell, AntimagicField
+from dnd.spells.abjuration import AntilifeShell
 from dnd.spells.conjuration import DimensionDoor, MistyStep
 from dnd.spells.divination import SeeInvisibility
 from dnd.spells.enchantment import CharmMonster, PowerWordKill
@@ -412,14 +412,6 @@ def test_forcecage_disintegrate_breaches_cage_and_destroys_small_box(
         )
 
 
-def test_antilife_shell_partial_antimagic_suppresses_living_sweep_contact(game):
-    caster = high_actor(game, position=(5, 5))
-    living = high_actor(game, "Living", (7, 5), "foes")
-    antimagic = high_actor(game, "Antimagic", (8, 5), "others")
-    cast(AntilifeShell, caster)
-    cast(AntimagicField, antimagic)
-    caster.move((4, 5))
-    assert "Concentrating" in caster.active_conditions
 
 
 def test_resilient_sphere_protects_actual_under_threshold_instant_kill(game):

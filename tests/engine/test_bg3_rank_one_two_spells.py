@@ -6,7 +6,6 @@ Outputs: HP/life states, paid resources, legal targets and exact retained effect
 """
 from uuid import uuid4
 
-from dnd.spells.abjuration import AntimagicField
 from dnd.spells.illusion import Silence
 from dnd.spells.abjuration import register_counterspell_reaction
 import pytest
@@ -335,20 +334,16 @@ def test_pass_without_trace_following_aura_and_shared_sources(game):
     assert ally.skill_bonus(None,"stealth").normalized_score==baseline
 
 
-def test_mockery_deadline_expires_while_suppressed_by_antimagic(game):
+def test_mockery_deadline_expires_after_target_movement(game):
     caster=combatant(game)
     enemy=combatant(game,'Enemy',(6,2),'foes')
-    field_caster=combatant(game,'Field caster',(12,2),'foes',slots={8:1})
     force_save_result(enemy,'wisdom',succeeds=False)
     with fixed_dice_faces(10,2):paid(ViciousMockery,caster,enemy)
     assert 'Vicious Mockery' in set(enemy.active_conditions)
-    result=AntimagicField(source_entity_uuid=field_caster.uuid).apply()
-    assert result is not None and not result.canceled
     enemy.move((11,2))
     effect=enemy.active_conditions['Vicious Mockery']
-    assert not effect.contributions_active()
+    assert effect.contributions_active()
     enemy.on_turn_end()
-    field_caster.remove_condition('Concentrating')
     assert 'Vicious Mockery' not in set(enemy.active_conditions)
 
 
@@ -376,4 +371,3 @@ def test_new_spell_obeys_native_cast_interruption_before_damage(game,interruptio
     assert 'Ray of Sickness' not in set(enemy.active_conditions)
     assert caster.action_economy.actions.normalized_score==0
     assert caster.action_economy.spell_slot_1.normalized_score==3
-

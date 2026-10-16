@@ -29,7 +29,7 @@ export type Kind = "health";
 export type Status = "ok";
 export type Kind1 = "bootstrap";
 export type ProtocolVersion = 1;
-export type PlayerSchemaVersion = 10;
+export type PlayerSchemaVersion = 11;
 export type SchemaDigest = string;
 export type GameId = string;
 export type GameEpoch = string;
@@ -261,7 +261,6 @@ export type BehaviorId1 = string;
 export type DisplayName1 = string;
 export type Description1 = string;
 export type AppliedSourceEventCursor = number | null;
-export type SuppressionProviderUuids = string[];
 export type ItemEffects = ItemEffectPresentationState[];
 export type InterceptedByConditionUuid = string | null;
 export type ProjectileDeflectionPosition = [number, number] | null;
@@ -405,7 +404,6 @@ export type BaseHeightSteps3 = number;
 export type WidthFeet2 = number;
 export type HeightFeet2 = number;
 export type ResolvedAreaPositions = [number, number][] | null;
-export type Antimagic = boolean;
 export type ProviderUuid = string;
 export type Positions = [number, number][];
 export type AreaGeometry1 =
@@ -619,7 +617,6 @@ export type VisualVariantId = string | null;
  */
 export type EquippedVisualPolicy = "visible" | "hidden";
 export type ItemEffects1 = ItemEffectPresentationState[];
-export type SuppressionProviderUuids1 = string[];
 export type IsLit = boolean | null;
 export type VeryBrightRadiusFeet = number | null;
 export type BrightRadiusFeet = number | null;
@@ -627,7 +624,6 @@ export type DimRadiusFeet = number | null;
 export type Layers = VisualItem[];
 export type ArmorClass = number;
 export type ControlledItems = ItemPresentationState[] | null;
-export type SuppressionProviderUuids2 = string[];
 /**
  * Stable item instance identity.
  */
@@ -943,7 +939,6 @@ export type ProtectionId = string;
 export type BlockedEffectIds = string[];
 export type OutcomeProtections = OutcomeProtection[];
 export type AppliedSourceEventCursor1 = number | null;
-export type SuppressionProviderUuids3 = string[];
 export type DuplicateCount = number | null;
 export type SizeChange = ("enlarge" | "reduce") | null;
 export type MetamagicMode = ("quickened" | "twinned" | "distant") | null;
@@ -1263,7 +1258,6 @@ export type DimRadiusFeet3 = number | null;
 export type StackCount1 = number;
 export type IsPickable1 = boolean;
 export type ItemEffects3 = ItemEffectPresentationState[];
-export type SuppressionProviderUuids4 = string[];
 export type BlocksPropagation2 = boolean;
 export type ContactPassage2 = "structural" | "clear" | "blocked" | "light_weapons" | "hand_and_light_weapons";
 export type SupportedByUuid1 = string | null;
@@ -3657,7 +3651,6 @@ export interface ItemEffectPresentationState {
   description?: Description1;
   damage_type?: DamageType | null;
   applied_source_event_cursor?: AppliedSourceEventCursor;
-  suppression_provider_uuids?: SuppressionProviderUuids;
 }
 /**
  * Recorded native duration; clients never advance a separate clock.
@@ -3822,7 +3815,6 @@ export interface WallDome {
  * The protection responsible for excluding part of an admitted spell.
  */
 export interface SpellSuppression {
-  antimagic?: Antimagic;
   provider_uuid: ProviderUuid;
   positions: Positions;
   provider_content_ref?: ContentRef | null;
@@ -4028,7 +4020,6 @@ export interface VisualItem {
   visual_variant_id: VisualVariantId;
   equipped_visual_policy: EquippedVisualPolicy;
   item_effects?: ItemEffects1;
-  suppression_provider_uuids?: SuppressionProviderUuids1;
   is_lit?: IsLit;
   very_bright_radius_feet?: VeryBrightRadiusFeet;
   bright_radius_feet?: BrightRadiusFeet;
@@ -4043,7 +4034,6 @@ export interface VisualItem {
  * Location and equipped-slot membership live on the surrounding event.
  */
 export interface ItemPresentationState {
-  suppression_provider_uuids?: SuppressionProviderUuids2;
   item_uuid: ItemUuid1;
   item_id: ItemId1;
   name: Name2;
@@ -4180,7 +4170,6 @@ export interface ConditionState {
   agency_denial: ConditionAgencyDenial;
   outcome_protections: OutcomeProtections;
   applied_source_event_cursor?: AppliedSourceEventCursor1;
-  suppression_provider_uuids?: SuppressionProviderUuids3;
   duplicate_count?: DuplicateCount;
   size_change?: SizeChange;
   energy_type?: DamageType | null;
@@ -4585,7 +4574,6 @@ export interface FloorItem {
   stack_count?: StackCount1;
   is_pickable?: IsPickable1;
   item_effects?: ItemEffects3;
-  suppression_provider_uuids?: SuppressionProviderUuids4;
   blocks_propagation?: BlocksPropagation2;
   contact_passage?: ContactPassage2;
   supported_by_uuid?: SupportedByUuid1;

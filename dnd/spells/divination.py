@@ -1,12 +1,12 @@
 """Divination spells that reveal information or grant special senses."""
 
-import random
 from typing import Any, Optional, List, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
 from dnd.core.action_types import EntityTargetPerception
+from dnd.core.dice import roll_die_face
 from dnd.spells.hit_effects import QuarrySustain, ReapplyQuarry, install_hit_rider
 from dnd.core.base_actions import (
     Cost,
@@ -129,6 +129,8 @@ class SeeInvisibility(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts See Invisibility"
         )
+        if effect_event.canceled:
+            return effect_event
 
         see_invis = SeeInvisibilityEffect(
             source_entity_uuid=caster.uuid,
@@ -136,7 +138,9 @@ class SeeInvisibility(SpellAction):
         )
         see_invis.duration.duration_type = DurationType.ROUNDS
         see_invis.duration.duration = 600
-        caster.add_condition(see_invis, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, see_invis)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{caster.name} can now see invisible creatures"
@@ -247,6 +251,8 @@ class TrueSeeing(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} grants True Seeing to {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         true_seeing = TrueSeeingEffect(
             source_entity_uuid=caster.uuid,
@@ -254,7 +260,9 @@ class TrueSeeing(SpellAction):
         )
         true_seeing.duration.duration_type = DurationType.ROUNDS
         true_seeing.duration.duration = 600
-        target.add_condition(true_seeing, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, true_seeing)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{target.name} gains truesight (120ft)"
@@ -277,7 +285,7 @@ def _guidance_processor(
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
-    d4_value = random.randint(1, 4)
+    d4_value = roll_die_face(4)
     effective = event.get_effective_roll()
     new_total = effective.total + d4_value
     new_roll = effective.model_copy(update={"total": new_total})
@@ -386,6 +394,8 @@ class Guidance(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Guidance on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         guidance_effect = GuidanceEffect(
             source_entity_uuid=caster.uuid,
@@ -393,11 +403,10 @@ class Guidance(SpellAction):
         )
         guidance_effect.duration.duration_type = DurationType.ROUNDS
         guidance_effect.duration.duration = 10
-        target.add_condition(guidance_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, guidance_effect)
+        if effect_event.canceled:
+            return effect_event
 
-        concentration = self.ensure_concentration(effect_event)
-        if guidance_effect.applied:
-            concentration.add_linked_condition(target.uuid, guidance_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"{target.name} gains Guidance"

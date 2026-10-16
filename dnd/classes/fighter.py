@@ -27,7 +27,7 @@ from dnd.core.events import (
     Trigger, EventHandler, DamageRollResultEvent, RangeType, SavingThrowEvent
 )
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
-from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome
+from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome, roll_die_face
 from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, ContextualNumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.blocks.equipment import Weapon, Shield
@@ -44,7 +44,6 @@ from dnd.actions import (
 from pydantic import Field
 from typing import Optional, List, Tuple
 from uuid import UUID, uuid4
-import random
 
 
 def create_modified_dice_roll(original: DiceRoll, new_results: List[int]) -> DiceRoll:
@@ -355,7 +354,7 @@ def great_weapon_fighting_processor(
         rerolled_dice = []
         for r in results:
             if r <= 2:
-                new_result = random.randint(1, weapon.damage_dice)
+                new_result = roll_die_face(weapon.damage_dice)
                 new_results.append(new_result)
                 rerolled_dice.append(f"{r}→{new_result}")
             else:

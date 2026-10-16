@@ -110,3 +110,88 @@ def test_old_resource_record_defaults_to_consumption_and_recharge_is_explicit(eq
     restored = decode_event(encode_event(recharge))
     assert isinstance(restored, ItemResourceChangeEvent)
     assert restored.resource_change is ItemResourceChange.RECHARGE
+
+
+def test_other_items_and_unrelated_events_do_not_invalidate_prepared_resource(equipped_pack):
+    owner, pack = equipped_pack
+    prepared = prepare(owner, pack)
+    other = build_authored_item("gear.wayfarer_pack", owner.uuid)
+    assert owner.loot_item(other)
+    other.commit_prepared_charge(prepare(owner, other))
+    other.on_long_rest(owner.uuid)
+    for _ in range(100):
+        Event(source_entity_uuid=owner.uuid, event_type=EventType.BASE_ACTION, phase=EventPhase.COMPLETION)
+    result = pack.commit_prepared_charge(prepared)
+    assert result.phase is EventPhase.COMPLETION and pack.charges == 0
+    assert other.charges == 1
+
+
+@pytest.mark.parametrize("phase", [EventPhase.DECLARATION, EventPhase.EFFECT])
+def test_refused_sibling_resource_operation_does_not_invalidate_preparation(equipped_pack, phase):
+    owner, pack = equipped_pack
+    prepared = prepare(owner, pack)
+    handler = EventHandler(source_entity_uuid=owner.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.ITEM_CHARGE_CONSUMPTION,
+            event_phase=phase, event_target_entity_uuid=pack.uuid)],
+        event_processor=lambda event, _: event.cancel(status_message="Resource operation refused"))
+    owner.add_event_handler(handler)
+    refused = prepare(owner, pack)
+    EventQueue.remove_event_handler(handler)
+    assert refused.canceled and pack.charges == 1
+    result = pack.commit_prepared_charge(prepared)
+    assert result.phase is EventPhase.COMPLETION and pack.charges == 0
+
+
+def test_declaration_time_spend_and_recharge_invalidates_preparation(equipped_pack):
+    owner, pack = equipped_pack
+    changed = False
+
+    def change_during_admission(event, _):
+        nonlocal changed
+        if not changed:
+            changed = True
+            pack.commit_prepared_charge(prepare(owner, pack))
+            pack.on_long_rest(owner.uuid)
+        return None
+
+    owner.add_event_handler(EventHandler(source_entity_uuid=owner.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.ITEM_CHARGE_CONSUMPTION,
+            event_phase=EventPhase.DECLARATION, event_target_entity_uuid=pack.uuid)],
+        event_processor=change_during_admission))
+    prepared = prepare(owner, pack)
+    result = pack.commit_prepared_charge(prepared)
+    assert changed and result.canceled and pack.charges == 1
+    terminal, = terminal_versions(prepared)
+    assert terminal.phase is EventPhase.CANCEL
+
+
+@pytest.mark.parametrize("phase", [EventPhase.DECLARATION, EventPhase.EXECUTION, EventPhase.EFFECT])
+def test_refused_recharge_preserves_charges_and_prior_preparation(equipped_pack, phase):
+    owner, _ = equipped_pack
+    item = UsableItem(source_entity_uuid=owner.uuid, item_id="test.finite_resource",
+        name="Two-charge item", charges=1, max_charges=2, recharge_on_long_rest=True)
+    assert owner.loot_item(item)
+    prepared = prepare(owner, item)
+    handler = EventHandler(source_entity_uuid=owner.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.ITEM_CHARGE_CONSUMPTION,
+            event_phase=phase, event_target_entity_uuid=item.uuid)],
+        event_processor=lambda event, _: event.cancel(status_message="Recharge refused"))
+    owner.add_event_handler(handler)
+    item.on_long_rest(owner.uuid)
+    remaining = item.charges
+    EventQueue.remove_event_handler(handler)
+    result = item.commit_prepared_charge(prepared)
+    assert remaining == 1 and result.phase is EventPhase.COMPLETION and item.charges == 0
+
+
+def test_stack_rollover_spends_once_and_invalidates_older_preparation(equipped_pack):
+    owner, _ = equipped_pack
+    potion = build_authored_item("consumable.healing_potion", owner.uuid, quantity=2)
+    assert owner.loot_item(potion)
+    stale = prepare(owner, potion)
+    accepted = prepare(owner, potion)
+    completed = potion.commit_prepared_charge(accepted)
+    repeated = potion.commit_prepared_charge(accepted)
+    refused = potion.commit_prepared_charge(stale)
+    assert completed.phase is EventPhase.COMPLETION and repeated.uuid == completed.uuid
+    assert refused.canceled and potion.stack_count == 1 and potion.charges == 1

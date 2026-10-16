@@ -128,7 +128,7 @@ def source_turn_expiry_handler(owner: BaseCondition, application: Event, *,
         return None
 
     return EventHandler(name=f"{owner.name} source-turn expiry", source_entity_uuid=owner.source_entity_uuid,
-        runs_while_suppressed=True,
+        runs_while_owner_inactive=True,
         trigger_conditions=[
             Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EFFECT,
                 event_source_entity_uuid=owner.source_entity_uuid),
@@ -205,7 +205,7 @@ def target_turn_expiry_handler(owner: BaseCondition,*,turn_ends: int) -> EventHa
             target.remove_condition_by_uuid(owner.uuid,parent_event=event)
         return None
     return EventHandler(name=f"{owner.get_display_name()} turn deadline",source_entity_uuid=owner.target_entity_uuid,
-        runs_while_suppressed=True,trigger_conditions=[Trigger(event_type=EventType.TURN_END,event_phase=EventPhase.EFFECT,
+        runs_while_owner_inactive=True,trigger_conditions=[Trigger(event_type=EventType.TURN_END,event_phase=EventPhase.EFFECT,
             event_source_entity_uuid=owner.target_entity_uuid)],event_processor=expire)
 
 

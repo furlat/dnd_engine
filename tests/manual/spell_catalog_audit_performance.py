@@ -4,7 +4,7 @@ Run from the repository root:
     uv run --no-sync python -m tests.manual.spell_catalog_audit_performance
 
 This is a profiler benchmark, not a gameplay test or a timing gate. It records
-work after setup for remote item changes, field movement, unrelated turn-end
+work after setup for remote item changes, unrelated turn-end
 dispatch, and an unchanged concentration publication after synthetic history.
 No engine methods are replaced. Optional .prof files allow deeper inspection.
 Counts identify the current implementation; they are deliberately not asserted.
@@ -35,15 +35,15 @@ from dnd.core.item_types import ItemLocation
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spells.abjuration import AntilifeShell, AntimagicField
+from dnd.spells.abjuration import AntilifeShell
 from dnd.spells.enchantment import HoldPersonEffect
 from dnd.spells.transmutation import Goodberry, Haste
 from tests.manual.spell_regression_support import create_spell_regression_actor
 
 PROFILE_FUNCTIONS = frozenset({
-    "_refresh_items", "get_all_items", "_refresh_areas", "get_all_entities",
-    "refresh_contribution_lights", "to_item_presentation_state", "_set_suppression",
-    "allows_contribution_at", "get_antimagic_suppressions", "_area_shape",
+    "get_all_items", "get_all_entities", "_occupants_at",
+    "to_item_presentation_state",
+    "allows_contribution_at", "_area_shape",
     "publish_owner_state", "get_events_by_target", "repeat_save_processor",
 })
 
@@ -98,30 +98,22 @@ def cast(spell: type[SpellAction], caster: Entity, target: Entity | None = None)
     assert result is not None and not result.canceled, result
 
 
-def antimagic_samples(profile_directory: Path | None) -> list[dict]:
+def ordinary_item_samples(profile_directory: Path | None) -> list[dict]:
     samples = []
     for item_count in (1, 25, 100):
         reset_engine_runtime(grid_size=(40, 10))
         game = Game()
         try:
-            caster = create_spell_regression_actor("Field caster", (2, 2), "heroes", spell_slots={8: 1})
-            remote = create_spell_regression_actor("Remote item owner", (30, 2), "heroes")
+            remote = create_spell_regression_actor("Item owner", (30, 2), "heroes")
             items = [build_authored_item("weapon.dagger", remote.uuid) for _ in range(item_count)]
             for item in items:
                 assert remote.inventory.add_item(item)
             assert remote.drop_item(items[-1].uuid, (30, 3)) is items[-1]
-            cast(AntimagicField, caster)
-            operations = (
-                ("exact_item_state", partial(items[-1].publish_location_state, ItemLocation.FLOOR)),
-                ("remote_object_move", partial(get_map().move_object, items[-1].uuid, (31, 3))),
-                ("field_one_cell_move", partial(Entity.commit_position_transfers, ((caster, (3, 2), None),))),
-            )
-            for name, operation in operations:
-                sample = measure(f"antimagic_{name}_{item_count}", operation, profile_directory)
-                sample["registered_items"] = len(BaseItem.get_all_items())
-                samples.append(sample)
+            sample = measure(f"ordinary_remote_object_move_{item_count}",
+                partial(get_map().move_object, items[-1].uuid, (31, 3)), profile_directory)
             assert get_map().get_object_placement(items[-1].uuid).position == (31, 3)
-            assert caster.position == (3, 2)
+            sample["registered_items"] = len(BaseItem.get_all_items())
+            samples.append(sample)
         finally:
             game.close()
     return samples
@@ -148,28 +140,20 @@ def unrelated_turn_samples(profile_directory: Path | None) -> list[dict]:
     return samples
 
 
-def antimagic_creation_samples(profile_directory: Path | None) -> list[dict]:
-    """Move remote berries that never entered the field, including after removal."""
+def ordinary_creation_samples(profile_directory: Path | None) -> list[dict]:
     samples = []
     for batches in (1, 4):
         reset_engine_runtime(grid_size=(40, 10))
         game = Game()
         try:
-            caster = create_spell_regression_actor("Field caster", (2, 2), "heroes", spell_slots={8: 1})
-            remote = create_spell_regression_actor("Berry caster", (30, 2), "heroes", spell_slots={1: batches})
+            caster = create_spell_regression_actor("Berry caster", (30, 2), "heroes", spell_slots={1: batches})
             for _ in range(batches):
-                cast(Goodberry, remote)
-            cast(AntimagicField, caster)
-            for field_active, destination in ((True, (31, 2)), (False, (32, 2))):
-                if not field_active:
-                    caster.remove_condition("Concentrating")
-                    assert "Concentrating" not in caster.active_conditions
-                sample = measure(f"remote_creations_{batches * 4}_field_{field_active}",
-                    partial(Entity.commit_position_transfers, ((remote, destination, None),)), profile_directory)
-                sample["never_suppressed_berries"] = batches * 4
-                sample["field_active"] = field_active
-                samples.append(sample)
-                assert remote.position == destination
+                cast(Goodberry, caster)
+            sample = measure(f"ordinary_berry_move_{batches * 4}",
+                partial(Entity.commit_position_transfers, ((caster, (31, 2), None),)), profile_directory)
+            assert caster.position == (31, 2)
+            sample["created_berries"] = batches * 4
+            samples.append(sample)
         finally:
             game.close()
     return samples
@@ -223,7 +207,7 @@ def antilife_samples(profile_directory: Path | None) -> list[dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--case", choices=("all", "antimagic", "antimagic-creations", "unrelated-turn", "concentration", "antilife"), default="all")
+    parser.add_argument("--case", choices=("all", "items", "creations", "unrelated-turn", "concentration", "antilife"), default="all")
     parser.add_argument("--profile-directory", type=Path)
     args = parser.parse_args()
     if args.profile_directory is not None:
@@ -232,7 +216,7 @@ def main() -> None:
         "python": sys.executable, "python_version": platform.python_version(),
         "platform": platform.platform(), "timing_scope": "profiled operation only; excludes imports and setup"}), flush=True)
     try:
-        for name, run in (("antimagic", antimagic_samples), ("antimagic-creations", antimagic_creation_samples),
+        for name, run in (("items", ordinary_item_samples), ("creations", ordinary_creation_samples),
                           ("unrelated-turn", unrelated_turn_samples),
                           ("concentration", concentration_samples), ("antilife", antilife_samples)):
             if args.case in ("all", name):

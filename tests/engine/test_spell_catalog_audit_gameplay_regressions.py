@@ -1,7 +1,7 @@
 """Native gameplay regressions confirmed by the full spell ownership audit.
 
-These desired-behavior tests stay strict-xfail until their named audit finding
-is repaired. ``--runxfail`` must fail on the advertised gameplay assertion.
+The retained independent cases are ordinary regressions after repair.
+Feature-specific Antimagic cases were retired with the feature.
 """
 
 from dataclasses import replace
@@ -18,7 +18,6 @@ from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventHandler, EventPhase, EventType, Trigger
 from dnd.entity import Entity
-from dnd.spells.abjuration import AntimagicField
 from dnd.spells.enchantment import CharmPerson, HoldMonster, HoldPerson
 from dnd.spells.evocation import CureWounds, FireBolt
 from dnd.spells.illusion import HypnoticPattern
@@ -74,11 +73,6 @@ def wizard(game, prepared=(), *, species=Species.HUMAN):
     return actor
 
 
-def cover_with_antimagic(game, recipient):
-    caster = combatant(game, "Antimagic owner", (2, 3))
-    cast(AntimagicField, caster)
-    assert recipient.position == (2, 2)
-    return caster
 
 
 def reject_condition_application(actor, condition_type):
@@ -105,7 +99,6 @@ def reject_condition_application(actor, condition_type):
     )
 
 
-@pytest.mark.xfail(strict=True, reason="SC-01: Hold Person replaces another hold's paralysis")
 def test_ending_hold_person_preserves_another_active_hold(game):
     monster_caster = combatant(game)
     person_caster = combatant(game, "Second caster", (2, 3))
@@ -123,14 +116,13 @@ def test_ending_hold_person_preserves_another_active_hold(game):
     assert actions == 0
 
 
-@pytest.mark.xfail(strict=True, reason="SC-02: Charmed admits harmful nonattack spells against its charmer")
 def test_charmed_actor_cannot_hold_its_charmer(game):
     charmer = combatant(game)
     target = combatant(game, "Charmed enemy", (3, 2), "foes")
     force_save_result(target, "wisdom", succeeds=False)
     force_save_result(charmer, "wisdom", succeeds=False)
     cast(CharmPerson, charmer, target)
-    assert "Charmed" in target.active_conditions
+    assert any(c.get_display_name() == "Charmed" for c in target.active_conditions_by_uuid.values())
 
     result = HoldPerson(
         source_entity_uuid=target.uuid,
@@ -146,21 +138,19 @@ def test_charmed_actor_cannot_hold_its_charmer(game):
     assert actions == 1
 
 
-@pytest.mark.xfail(strict=True, reason="SC-03: Charm Person lacks its own harmful-action removal")
 def test_charm_person_ends_when_the_charmer_harms_its_recipient(game):
     charmer = combatant(game)
     target = combatant(game, "Charmed enemy", (3, 2), "foes")
     force_save_result(target, "wisdom", succeeds=False)
     cast(CharmPerson, charmer, target)
-    assert "Charmed" in target.active_conditions
+    assert any(c.get_display_name() == "Charmed" for c in target.active_conditions_by_uuid.values())
 
     target.receive_damage(1, DamageType.FORCE, charmer.uuid)
 
-    conditions = set(target.active_conditions)
+    conditions = {c.get_display_name() for c in target.active_conditions_by_uuid.values()}
     assert "Charmed" not in conditions
 
 
-@pytest.mark.xfail(strict=True, reason="SC-03 duration: Charm Person exposes only a permanent charm")
 def test_charm_person_has_a_finite_owning_spell_duration(game):
     charmer = combatant(game)
     target = combatant(game, "Charmed enemy", (3, 2), "foes")
@@ -183,74 +173,12 @@ def test_charm_person_has_a_finite_owning_spell_duration(game):
     assert finite is True, durations
 
 
-@pytest.mark.xfail(strict=True, reason="SC-04 Shield: interception from inside Antimagic")
-def test_antimagic_prevents_shield_reaction_interception_and_payment(game):
-    actor = wizard(game, ("spell.shield",))
-    enemy = combatant(game, "Attacker", (3, 2), "foes")
-    cover_with_antimagic(game, actor)
-    slots = actor.action_economy.spell_slot_1.normalized_score
-    assert actor.ac_bonus().normalized_score == 9
-
-    with fixed_dice_faces(10, *([2] * 20)):
-        result = Attack(
-            source_entity_uuid=enemy.uuid,
-            target_entity_uuid=actor.uuid,
-            weapon_slot=WeaponSlot.MELEE_MAIN,
-        ).apply()
-
-    canceled = result.canceled if result is not None else None
-    outcome = result.attack_outcome if result is not None else None
-    reactions = actor.action_economy.reactions.normalized_score
-    remaining_slots = actor.action_economy.spell_slot_1.normalized_score
-    assert canceled is False
-    assert outcome is AttackOutcome.HIT
-    assert reactions == 1
-    assert remaining_slots == slots
 
 
-@pytest.mark.xfail(strict=True, reason="SC-04 Counterspell: interrupts outside spells from inside Antimagic")
-def test_antimagic_prevents_counterspell_reaction_and_payment(game):
-    actor = wizard(game, ("spell.counterspell",))
-    enemy = combatant(game, "Outside caster", (8, 2), "foes")
-    recipient = combatant(game, "Outside ally", (10, 2))
-    cover_with_antimagic(game, actor)
-    slots = actor.action_economy.spell_slot_3.normalized_score
-    before = recipient.get_hp()
-
-    with fixed_dice_faces(15, 2):
-        result = FireBolt(
-            source_entity_uuid=enemy.uuid,
-            target_entity_uuid=recipient.uuid,
-        ).apply()
-
-    canceled = result.canceled if result is not None else None
-    hp = recipient.get_hp()
-    reactions = actor.action_economy.reactions.normalized_score
-    remaining_slots = actor.action_economy.spell_slot_3.normalized_score
-    assert canceled is False
-    assert hp < before
-    assert reactions == 1
-    assert remaining_slots == slots
 
 
-@pytest.mark.xfail(strict=True, reason="SC-04 Rebuke: ignores canceled own casting admission")
-def test_antimagic_prevents_native_tiefling_rebuke_and_payment(game):
-    actor = wizard(game, species=Species.TIEFLING)
-    enemy = combatant(game, "Outside damage source", (8, 2), "foes")
-    cover_with_antimagic(game, actor)
-    force_save_result(enemy, "dexterity", succeeds=False)
-    before = enemy.get_hp()
-
-    with fixed_dice_faces(5, *([2] * 10)):
-        actor.receive_damage(1, DamageType.FORCE, enemy.uuid)
-
-    hp = enemy.get_hp()
-    reactions = actor.action_economy.reactions.normalized_score
-    assert hp == before
-    assert reactions == 1
 
 
-@pytest.mark.xfail(strict=True, reason="SC-07 replacement: restores the previous size snapshot out of order")
 def test_replacing_enlarge_stays_enlarged_and_final_removal_restores_base_size(game):
     first = combatant(game)
     second = combatant(game, "Second caster", (2, 3))
@@ -268,7 +196,6 @@ def test_replacing_enlarge_stays_enlarged_and_final_removal_restores_base_size(g
     assert (replacement_size, final_size) == (enlarged_size, original_size)
 
 
-@pytest.mark.xfail(strict=True, reason="SC-07 admission: rejected Enlarge leaves a permanent raw size change")
 def test_rejected_enlarge_condition_does_not_change_creature_size(game):
     caster = combatant(game)
     target = combatant(game, "Recipient", (3, 2))
@@ -287,7 +214,6 @@ def test_rejected_enlarge_condition_does_not_change_creature_size(game):
     assert size == original_size
 
 
-@pytest.mark.xfail(strict=True, reason="SC-08: rejected Retreat retains its usable bonus Dash")
 def test_rejected_retreat_condition_does_not_grant_bonus_dash(game):
     caster = combatant(game)
     reject_condition_application(caster, ExpeditiousRetreatEffect)
@@ -304,46 +230,10 @@ def test_rejected_retreat_condition_does_not_grant_bonus_dash(game):
     assert dash_count == 0
 
 
-@pytest.mark.xfail(strict=True, reason="SC-08 suppression: Retreat's unowned Dash remains usable in Antimagic")
-def test_antimagic_disables_the_bonus_dash_granted_by_retreat(game):
-    caster = combatant(game)
-    cast(ExpeditiousRetreat, caster)
-    cover_with_antimagic(game, caster)
-    active = caster.active_conditions["Expeditious Retreat"].contributions_active()
-    assert active is False
-    caster.action_economy.reset_all_costs()
-    dash = next(
-        (action for action in caster.registered_actions if isinstance(action, BonusDash)),
-        None,
-    )
-    before = caster.action_economy.movement_remaining()
-
-    result = dash.instantiate().apply() if dash is not None else None
-
-    canceled = result.canceled if result is not None else dash is None
-    movement = caster.action_economy.movement_remaining()
-    bonus_actions = caster.action_economy.bonus_actions.normalized_score
-    assert canceled is True
-    assert movement == before
-    assert bonus_actions == 1
 
 
-@pytest.mark.xfail(strict=True, reason="SC-07 suppression: Enlarge's raw size remains active in Antimagic")
-def test_antimagic_temporarily_suppresses_the_size_granted_by_enlarge(game):
-    caster = combatant(game)
-    original_size = caster.size
-    cast(EnlargeReduce, caster, caster)
-    assert caster.size != original_size
-
-    cover_with_antimagic(game, caster)
-
-    active = caster.active_conditions["Enlarge/Reduce"].contributions_active()
-    size = caster.size
-    assert active is False
-    assert size == original_size
 
 
-@pytest.mark.xfail(strict=True, reason="SC-05: native target admission rejects self Haste")
 def test_haste_can_target_its_own_caster_with_normal_costs(game):
     caster = combatant(game)
     slots = caster.action_economy.spell_slot_3.normalized_score
@@ -367,8 +257,8 @@ def test_haste_can_target_its_own_caster_with_normal_costs(game):
 @pytest.mark.parametrize(
     "denial",
     [
-        pytest.param("immunity", marks=pytest.mark.xfail(strict=True, reason="SC-10: Hypnotic Pattern incapacitates despite native charm immunity")),
-        pytest.param("admission", marks=pytest.mark.xfail(strict=True, reason="SC-10: Hypnotic Pattern incapacitates despite denied Charmed child")),
+        pytest.param("immunity"),
+        pytest.param("admission"),
         None,
     ],
 )
@@ -395,17 +285,18 @@ def test_hypnotic_pattern_requires_its_charm_before_incapacitating(game, denial)
     assert ("Hypnotic Pattern" in conditions) is (denial is None)
 
 
-@pytest.mark.xfail(strict=True, reason="SC-12: ending one Chill Touch removes another caster's healing block")
 def test_ending_one_chill_touch_preserves_another_casters_healing_block(game):
     first = combatant(game)
     second = combatant(game, "Second caster", (2, 3))
     target = combatant(game, "Recipient", (4, 2), "foes")
     healer = combatant(game, "Recipient ally", (5, 2), "foes")
     for caster in (first, second):
-        with fixed_dice_faces(15, 2):
+        with fixed_dice_faces(20, *([2] * 10)):
             cast(ChillTouch, caster, target)
-    second.remove_condition("Chill Touch Effect")
-    assert "Chill Touch Effect" in first.active_conditions
+    effects = [c for c in target.active_conditions_by_uuid.values() if c.blocks_healing]
+    assert len(effects) == 2
+    second.on_turn_start()
+    assert any(c.get_display_name() == "Chill Touch Effect" for c in target.active_conditions_by_uuid.values())
     before = target.get_hp()
 
     with fixed_dice_faces(2):

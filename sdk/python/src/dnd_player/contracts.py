@@ -1399,7 +1399,7 @@ class PreviewRequest(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[10]]
+    player_schema_version: NotRequired[Literal[11]]
     schema_digest: str
 
 
@@ -2208,7 +2208,6 @@ class ConditionState(TypedDict):
     agency_denial: ConditionAgencyDenial
     outcome_protections: list[OutcomeProtection]
     applied_source_event_cursor: NotRequired[int | None]
-    suppression_provider_uuids: NotRequired[list[str]]
     duplicate_count: NotRequired[int | None]
     size_change: NotRequired[Literal['enlarge', 'reduce'] | None]
     energy_type: NotRequired[DamageType | None]
@@ -2398,7 +2397,6 @@ class ItemEffectPresentationState(TypedDict):
     description: NotRequired[str]
     damage_type: NotRequired[DamageType | None]
     applied_source_event_cursor: NotRequired[int | None]
-    suppression_provider_uuids: NotRequired[list[str]]
 
 
 class ItemRemnantState(TypedDict):
@@ -2609,7 +2607,6 @@ class VisualItem(TypedDict):
     visual_variant_id: str | None
     equipped_visual_policy: EquippedVisualPolicy
     item_effects: NotRequired[list[ItemEffectPresentationState]]
-    suppression_provider_uuids: NotRequired[list[str]]
     is_lit: NotRequired[bool | None]
     very_bright_radius_feet: NotRequired[int | None]
     bright_radius_feet: NotRequired[int | None]
@@ -2967,7 +2964,6 @@ class PreviewResponse(TypedDict):
 
 
 class SpellSuppression(TypedDict):
-    antimagic: NotRequired[bool]
     provider_uuid: str
     positions: list[list[Position]]
     provider_content_ref: NotRequired[ContentRef | None]
@@ -3061,7 +3057,6 @@ class FloorItem(TypedDict):
     stack_count: NotRequired[int]
     is_pickable: NotRequired[bool]
     item_effects: NotRequired[list[ItemEffectPresentationState]]
-    suppression_provider_uuids: NotRequired[list[str]]
     blocks_propagation: NotRequired[bool]
     contact_passage: NotRequired[ContactPassage]
     supported_by_uuid: NotRequired[str | None]
@@ -3092,7 +3087,6 @@ class FloorItem(TypedDict):
 
 
 class ItemPresentationState(TypedDict):
-    suppression_provider_uuids: NotRequired[list[str]]
     item_uuid: str
     item_id: str
     name: str

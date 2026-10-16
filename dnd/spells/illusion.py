@@ -8,7 +8,6 @@ from dnd.spells.spell_utils import validate_spell_recipients, spell_condition_pr
 from dnd.spells.enchantment import DissonantFearEffect
 
 
-import random
 from typing import Any, Dict, Optional, List, Set, Tuple
 from uuid import UUID
 
@@ -39,7 +38,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.events import Damage, DamageAppliedEvent, EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event, EventQueue
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier
 from dnd.core.saving_throw_types import SavingThrowEffectTag
-from dnd.core.dice import AttackOutcome
+from dnd.core.dice import AttackOutcome, roll_die_face
 from dnd.core.aoe import AoEShape, Cone, Cube, Sphere
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
@@ -66,6 +65,7 @@ class BlurEffect(BaseCondition):
 
     Attackers have disadvantage on attack rolls against you.
     """
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
     name: str = Field(default="Blur", description="Condition name.")
     description: str = Field(default="Your body becomes blurred, giving attackers disadvantage", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
@@ -162,16 +162,18 @@ class Blur(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} becomes blurred"
         )
+        if effect_event.canceled:
+            return effect_event
 
         blur_effect = BlurEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid
         )
-        caster.add_condition(blur_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, blur_effect)
+        if effect_event.canceled:
+            return effect_event
 
-        concentration = self.ensure_concentration(effect_event)
 
-        concentration.add_linked_condition(caster.uuid, blur_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"{caster.name} casts Blur (concentration)"
@@ -282,7 +284,7 @@ class FearEffect(BaseCondition):
             name=f"Fear Repeat Save ({target_uuid})",
             source_entity_uuid=target_uuid,
             trigger_conditions=[
-                Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT)
+                Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT, event_source_entity_uuid=target_uuid)
             ],
             event_processor=repeat_save_processor
         )
@@ -391,6 +393,8 @@ class Fear(SpellAction):
             target_entity_name=target.name,
             status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.with_updates(
@@ -403,12 +407,10 @@ class Fear(SpellAction):
             caster_uuid=caster.uuid,
             spell_dc=dc
         )
-        target.add_condition(fear_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, fear_effect)
+        if effect_event.canceled:
+            return effect_event
 
-        concentration = self.ensure_concentration(effect_event)
-
-        if fear_effect.applied:
-            concentration.add_linked_condition(target.uuid, fear_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"{target.name} is Frightened by Fear"
@@ -455,15 +457,16 @@ class HypnoticPatternEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        charmed = Charmed(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid,
-            tags={ConditionTag.MAGICAL}
-        )
-        sub_event = target.add_condition(charmed, parent_event=declaration_event)
-        if sub_event and sub_event.phase == EventPhase.COMPLETION:
-            sub_condition_uuids.append(charmed.uuid)
+        key = f"Charmed:{self.source_entity_uuid}"
+        charmed = target.active_conditions.get(key)
+        if charmed is None:
+            charmed = Charmed(name=key, immunity_names=("Charmed",),
+                source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid,
+                parent_condition=self.uuid, tags={ConditionTag.MAGICAL})
+            result = target.add_condition(charmed, parent_event=declaration_event)
+            if result is None or result.canceled or not charmed.applied:
+                return [], [], [], [], declaration_event.cancel(status_message="Charmed was not admitted")
+        self.add_shared_subcondition(charmed)
 
         outs = apply_incapacitated_transform(
             target,
@@ -506,7 +509,7 @@ class HypnoticPatternEffect(BaseCondition):
             name=f"Hypnotic Pattern Damage Break ({target_uuid})",
             source_entity_uuid=target_uuid,
             trigger_conditions=[
-                Trigger(event_type=EventType.DAMAGE_APPLIED, event_phase=EventPhase.EFFECT)
+                Trigger(event_type=EventType.DAMAGE_APPLIED, event_phase=EventPhase.EFFECT, event_target_entity_uuid=target_uuid)
             ],
             event_processor=damage_break_processor
         )
@@ -628,6 +631,8 @@ class HypnoticPattern(SpellAction):
             target_entity_name=target.name,
             status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.with_updates(
@@ -638,12 +643,10 @@ class HypnoticPattern(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid
         )
-        target.add_condition(hp_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, hp_effect)
+        if effect_event.canceled:
+            return effect_event
 
-        concentration = self.ensure_concentration(effect_event)
-
-        if hp_effect.applied:
-            concentration.add_linked_condition(target.uuid, hp_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"{target.name} is mesmerized by Hypnotic Pattern"
@@ -771,7 +774,7 @@ class ColorSpray(SpellAction):
 
         if self.hp_pool_rolled == 0:
             dice_count, dice_value = self.get_hp_pool_dice()
-            roll_results = [random.randint(1, dice_value) for _ in range(dice_count)]
+            roll_results = [roll_die_face(dice_value) for _ in range(dice_count)]
             total = sum(roll_results)
             self.hp_pool_rolled = total
             self.hp_pool_remaining = total
@@ -812,6 +815,8 @@ class ColorSpray(SpellAction):
             target_entity_name=target.name,
             status_message=f"Color Spray affecting {target.name} ({target.get_hp()} HP)"
         )
+        if effect_event.canceled:
+            return effect_event
 
         color_spray_effect = ColorSprayEffect(
             source_entity_uuid=caster.uuid,
@@ -823,7 +828,9 @@ class ColorSpray(SpellAction):
                 target_entity_uuid=caster.uuid
             )
         )
-        target.add_condition(color_spray_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, color_spray_effect)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{target.name} is blinded by Color Spray ({target.get_hp()} HP)"
@@ -912,18 +919,19 @@ class Invisibility(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Invisibility on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         invis_effect = InvisibilityEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             tags={ConditionTag.MAGICAL}
         )
-        target.add_condition(invis_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, invis_effect)
+        if effect_event.canceled:
+            return effect_event
 
-        concentration = self.ensure_concentration(effect_event)
 
-        if invis_effect.applied:
-            concentration.add_linked_condition(target.uuid, invis_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"{caster.name} casts Invisibility on {target.name} (concentration)"
@@ -1002,18 +1010,19 @@ class GreaterInvisibility(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Greater Invisibility on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         invis_effect = GreaterInvisibilityEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             tags={ConditionTag.MAGICAL}
         )
-        target.add_condition(invis_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, invis_effect)
+        if effect_event.canceled:
+            return effect_event
 
-        concentration = self.ensure_concentration(effect_event)
 
-        if invis_effect.applied:
-            concentration.add_linked_condition(target.uuid, invis_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"{caster.name} casts Greater Invisibility on {target.name} (concentration)"
@@ -1215,12 +1224,16 @@ class MirrorImage(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} creates mirror images"
         )
+        if effect_event.canceled:
+            return effect_event
 
         mirror_effect = MirrorImageEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid
         )
-        caster.add_condition(mirror_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, mirror_effect)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{caster.name} casts Mirror Image (3 duplicates, +9 AC)"

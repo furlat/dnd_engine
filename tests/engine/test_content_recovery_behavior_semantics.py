@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-import pytest
-
-import dnd.spells.abjuration as abjuration
 from dnd.actions import Attack, AttackEvent, SpellAction, SpellEvent
 from dnd.actions_functional import register_spell
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
@@ -45,10 +42,10 @@ from dnd.spells.abjuration import (
 from dnd.spells.effect_ids import COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
 from tests.spell_test_exports import (
     ALL_SPELLS,
+    SPELL_CONTENT_DECLARATIONS_BY_CLASS,
     Fireball,
     FireBolt,
     MagicMissile,
-    SPELL_CONTENT_DECLARATIONS_BY_CLASS,
 )
 
 
@@ -498,9 +495,7 @@ def test_counterspell_uses_third_rank_floor_for_low_spells_and_cantrips() -> Non
     assert counterspeller.action_economy.spell_slot_3.normalized_score == 0
 
 
-def test_counterspell_check_outcomes_spend_exact_committed_resources(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_counterspell_check_outcomes_spend_exact_committed_resources() -> None:
     """Failed and successful checks spend both casts but cancel only on success."""
     game = _reset_behavior_state()
     caster = _counterspell_caster(
@@ -519,14 +514,13 @@ def test_counterspell_check_outcomes_spend_exact_committed_resources(
     )
     register_counterspell_reaction(counterspeller)
     Entity.update_all_entities_senses()
-    monkeypatch.setattr(abjuration.random, "randint", lambda _low, _high: 1)
-
-    failed = MagicMissile(
-        source_entity_uuid=caster.uuid,
-        target_entity_uuid=counterspeller.uuid,
-        cast_at_level=5,
-        template=False,
-    ).apply()
+    with fixed_dice_faces(*([1] * 8)):
+        failed = MagicMissile(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=counterspeller.uuid,
+            cast_at_level=5,
+            template=False,
+        ).apply()
 
     assert isinstance(failed, SpellEvent)
     assert not failed.canceled and failed.phase is EventPhase.COMPLETION
@@ -552,14 +546,13 @@ def test_counterspell_check_outcomes_spend_exact_committed_resources(
     )
     register_counterspell_reaction(counterspeller)
     Entity.update_all_entities_senses()
-    monkeypatch.setattr(abjuration.random, "randint", lambda _low, _high: 20)
-
-    succeeded = MagicMissile(
-        source_entity_uuid=caster.uuid,
-        target_entity_uuid=counterspeller.uuid,
-        cast_at_level=5,
-        template=False,
-    ).apply()
+    with fixed_dice_faces(20):
+        succeeded = MagicMissile(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=counterspeller.uuid,
+            cast_at_level=5,
+            template=False,
+        ).apply()
 
     assert isinstance(succeeded, SpellEvent) and succeeded.canceled
     assert succeeded.outcome_code == COUNTERSPELL_INTERRUPTION_OUTCOME_CODE

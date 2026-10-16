@@ -5,7 +5,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.life_types import LifeState
-from dnd.spells.abjuration import Sanctuary, GlobeOfInvulnerability, AntimagicField
+from dnd.spells.abjuration import Sanctuary, GlobeOfInvulnerability
 from dnd.spells.conjuration import ProduceFlame
 from dnd.spells.illusion import Silence
 from tests.engine.test_roster_support_spells import actor, cast, game
@@ -85,7 +85,7 @@ def test_direct_flame_rejects_self_or_range_before_payment(game,self_target):
     assert target.get_hp() == hp
 
 
-@pytest.mark.parametrize('protection',[GlobeOfInvulnerability,AntimagicField])
+@pytest.mark.parametrize('protection',[GlobeOfInvulnerability])
 def test_direct_flame_respects_spell_protection(game,protection):
     caster,enemy=actor(game),actor(game,'Defender',(7,2),'foes')
     cast(protection,enemy)

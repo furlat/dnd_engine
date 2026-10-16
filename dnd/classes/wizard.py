@@ -49,7 +49,7 @@ class WizardRecoveryState(BaseCondition):
             EventHandler(
                 name="Wizard completed rests",
                 source_entity_uuid=actor.uuid,
-                runs_while_suppressed=True,
+
                 trigger_conditions=[
                     Trigger(
                         event_type=EventType.REST_COMPLETED,
@@ -67,7 +67,7 @@ class WizardRecoveryState(BaseCondition):
             EventHandler(
                 name="Wizard committed expenditure",
                 source_entity_uuid=actor.uuid,
-                runs_while_suppressed=True,
+
                 trigger_conditions=[
                     Trigger(
                         event_type=EventType.ACTION_COSTS_COMMITTED,

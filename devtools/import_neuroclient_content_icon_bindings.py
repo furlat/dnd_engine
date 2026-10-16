@@ -56,6 +56,7 @@ EXPECTED_STYLE_ID = "fantasy-classic-v1"
 
 
 _HUMAN_REVIEWED_BINDINGS = {
+    "content.srd_5_1_cc:condition:condition.spell.charm_person.effect@1": "spell.charm-person",
     # Creator apparel packages use the exact icon owned by their principal
     # reviewed body recipe; footwear remains visible in package contents.
     (
@@ -813,6 +814,8 @@ _HUMAN_REVIEWED_BINDINGS.update({
 
 
 _RETIRED_PUBLIC_IDENTITIES = frozenset({
+    "content.srd_5_1_cc:condition:condition.spell.antimagic_field.zone@1",
+    "content.srd_5_1_cc:spell:spell.antimagic_field@1",
     "content.neurodragon:background:background.adventurer@1",
     "content.srd_5_1_cc:background:background.acolyte@1",
     "content.srd_5_1_cc:species:species.dragonborn@1",

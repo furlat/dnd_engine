@@ -13,7 +13,7 @@ from dnd.core.effect_types import ApplicationResolutionRef, EventResolutionRef, 
 from dnd.types.event_facts import SpatialChangeType
 
 from pydantic import BeforeValidator, PlainSerializer, TypeAdapter
-from dnd.player.compatibility import recorded_area_policy, recorded_application, recorded_combat_log, legacy_damage_reference
+from dnd.player.compatibility import recorded_area_policy, recorded_application, recorded_combat_log, legacy_damage_reference, recorded_retired_magic_fields
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, TraverseConnectorEvent, ShoveEvent, SpellEvent
 from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
@@ -163,7 +163,7 @@ def decode_event(value: Any) -> Event:
     """Read a recorded concrete event without ambient runtime construction."""
     if isinstance(value, Event):
         return value
-    payload = dict(value)
+    payload = recorded_retired_magic_fields(dict(value))
     wire_type = payload.pop("wire_type", None)
     if wire_type not in EVENT_MODELS:
         raise ValueError(f"unknown or missing recorded event wire_type: {wire_type}")

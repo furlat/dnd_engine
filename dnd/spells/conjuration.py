@@ -121,7 +121,7 @@ from dnd.types.spatial_effects import (
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.elevation import support_distance_feet
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
-from dnd.core.events import DamageAppliedEvent, SavingThrowEvent, PortalTransferEvent
+from dnd.core.events import DamageAppliedEvent, TakeDamageEvent, SavingThrowEvent, PortalTransferEvent
 from dnd.spells.spell_utils import deliver_spell_damage, validate_line_of_sight
 
 
@@ -154,6 +154,8 @@ def _apply_call_lightning(spell: SpellAction, event: SpellEvent, *, dc: int) -> 
         return event.cancel(status_message="Caster or target not found")
     effect, _, success = spell.resolve_saving_throw(
         event, caster=caster, target=target, ability_name="dexterity", dc=dc)
+    if effect.canceled:
+        return effect
     damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
         damage_dice=10, dice_numbers=3 + spell.get_upcast_bonus(),
         damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.LIGHTNING)
@@ -359,6 +361,8 @@ class PoisonSpray(SpellAction):
         )
 
         effect_event = execution_event.phase_to(EventPhase.EFFECT, save_success=success)
+        if effect_event.canceled:
+            return effect_event
         packet = resolve_saved_spell_damage(poison_damage, parent_event=effect_event, saved=success, success_fraction=0)
         damage_roll = packet.final_roll
 
@@ -490,6 +494,8 @@ class AcidSplash(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
 
         num_dice = self._get_cantrip_dice_count(self.caster_level)
@@ -4456,7 +4462,6 @@ GUARDIAN_FOOTPRINT_OFFSETS = ((0, 0), (1, 0), (0, 1), (1, 1))
 
 
 class GuardianOfFaithObject(BaseItem):
-    magically_created: bool = True
     """Spectral world-object anchor for the direct guardian condition."""
     name: str = Field(default="Guardian of Faith", description="Display name for the guardian of faith object item.")
     description: str = Field(default="A large spectral guardian hovers in this space", description="Rules-facing summary for the guardian of faith object item.")
@@ -4577,19 +4582,20 @@ class GuardianOfFaithZone(AreaCondition):
                 saving_throw_context=SavingThrowContext(cause_id=zone.content_ref.content_id,
                     effect_id="spell.guardian_of_faith.damage", is_magical=True))
             _, _, success = entity.saving_throw(request)
-            cursor = EventQueue.event_cursor()
+            applied_damage = 0
+
+            def record_damage(_incoming: TakeDamageEvent, result: DamageAppliedEvent | None) -> None:
+                nonlocal applied_damage
+                if result is not None and result.phase is EventPhase.COMPLETION:
+                    applied_damage = result.applied_damage
+
             entity.receive_damage(amount=10 if success else 20, damage_type=DamageType.RADIANT,
                 source_entity_uuid=zone.source_entity_uuid, independent_resolution=True,
                 effect_origin=zone.effect_origin, parent_event=event.uuid, source_condition_uuid=zone.uuid,
                 spatial_source=SpatialDamageSource(spatial_effect_uuid=zone.uuid, position=entity.position,
                     target_position=entity.position, base_height_steps=get_map().get_support_elevation_feet(entity.position) // 5,
-                    exposure="contact"))
-            zone.damage_dealt += sum(result.applied_damage for _, result in EventQueue.iter_events_since(cursor)
-                if isinstance(result, DamageAppliedEvent) and result.phase is EventPhase.COMPLETION
-                and result.source_condition_uuid == zone.uuid and result.target_entity_uuid == entity.uuid
-                and result.parent_event is not None
-                and (incoming := EventQueue.get_event_by_uuid(result.parent_event)) is not None
-                and incoming.parent_event == event.uuid)
+                    exposure="contact"), on_completed=record_damage)
+            zone.damage_dealt += applied_damage
             if zone.damage_dealt >= zone.damage_budget:
                 guardian = BaseItem.get(zone.anchor_uuid)
                 if isinstance(guardian, GuardianOfFaithObject):
@@ -4696,7 +4702,6 @@ class GuardianOfFaith(SpellAction):
             ),
             effect_origin=execution_event.get_effect_origin(),
         )
-        guardian.creation_condition_uuid = zone.uuid
         zone_result = zone.activate(parent_event=effect_event)
         if zone_result is None or zone_result.canceled or not zone.applied:
             guardian.retire(parent_event=effect_event)
@@ -4830,11 +4835,6 @@ class HeroesFeastSource(BaseCondition):
         if self._changed_effect is not None and not self._changed_effect.refresh(committing=self):
             self._changed_effect = None
 
-    def on_suppression_changed(self) -> None:
-        for identity in self.sub_conditions:
-            child = BaseCondition.get(identity)
-            if isinstance(child, HeroesFeastBuff) and child.applied:
-                child.refresh()
 
     def _remove(self, event: Event | None = None):
         for identity in self.sub_conditions:
@@ -4937,7 +4937,6 @@ class EatFromFeast(BaseAction):
 
 
 class HeroesFeastObject(UsableItem):
-    magically_created: bool = True
     """A magnificent feast that appears on the ground.
     Creatures can eat from it to gain the Heroes' Feast buff.
     """
@@ -5052,7 +5051,6 @@ class HeroesFeast(SpellAction):
         feast.place_on_grid(position, parent_event=effect_event.uuid)
         lifetime = HeroesFeastLifetime(source_entity_uuid=caster.uuid, position=position,
             anchor_uuid=feast.uuid, effect_origin=feast.effect_origin)
-        feast.creation_condition_uuid = lifetime.uuid
         admitted = lifetime.activate(parent_event=effect_event)
         if admitted is None or admitted.canceled or not lifetime.applied:
             feast.retire(parent_event=effect_event)

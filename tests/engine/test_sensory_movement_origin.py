@@ -7,14 +7,13 @@ import pytest
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.conditions import Invisible
 from dnd.core.base_block import LightLevel, SenseMode, SensesType
-from dnd.core.events import EventPhase, EventQueue, EventType, SpatialChangeEvent
+from dnd.core.events import Event, EventPhase, EventQueue, EventType, SpatialChangeEvent
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalDoor
 from dnd.types.world import CardinalDirection
 from dnd.player.event_record import decode_event, encode_event
 from dnd.spatial.environmental_conditions import SpikeTrap
-from dnd.spells.abjuration import AntimagicFieldZone
 from dnd.spells.conjuration import DarknessZone, FogCloudZone
 from dnd.types.senses import OpticalObscurement
 from dnd.types.senses import reduce_senses_snapshot
@@ -114,22 +113,21 @@ def test_moving_light_and_explicit_obscurement_with_nonoptical_trap():
     assert grid.has_spatial_condition(trap.uuid)
 
 
-def test_partly_suppressed_fog_still_blocks_and_restores_sight():
+def test_partial_fog_footprint_still_blocks_and_removal_restores_sight():
     reset_senses_state(width=8, height=3)
     observer = create_skeleton(name="Observer", position=(0, 1), darkvision=False)
     target = create_skeleton(name="Target", position=(6, 1), darkvision=False)
-    caster = create_skeleton(name="Field carrier", position=(3, 0), darkvision=False)
     fog = FogCloudZone(source_entity_uuid=observer.uuid, position=(3, 1),
         affected_positions={(3, 1), (4, 1)})
     fog.activate(parent_event=None)
     assert target.uuid not in observer.senses.entities
-    field = AntimagicFieldZone(source_entity_uuid=caster.uuid, anchor_uuid=caster.uuid,
-        position=caster.position, zone_radius_feet=5)
-    field.activate(parent_event=None)
-    assert target.uuid not in observer.senses.entities  # The second fog cell still contributes.
-    Entity.update_entity_position(caster, (3, 1))
+    cause = Event(source_entity_uuid=observer.uuid, event_type=EventType.BASE_ACTION,
+                  phase=EventPhase.EFFECT)
+    fog.change_footprint({(4, 1)}, parent_event=cause)
+    assert target.uuid not in observer.senses.entities
+    fog.change_footprint({(4, 0)}, parent_event=cause)
     assert target.uuid in observer.senses.entities
-    Entity.update_entity_position(caster, (3, 0))
+    fog.change_footprint({(3, 1)}, parent_event=cause)
     assert target.uuid not in observer.senses.entities
     fog.deactivate()
     assert target.uuid in observer.senses.entities

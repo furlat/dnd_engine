@@ -81,10 +81,6 @@ class ObservedChangeRef(BaseModel):
     owner_uuid: UUID
 
 
-class AntimagicException(str, Enum):
-    ARTIFACT = "artifact"
-    DEITY = "deity"
-    FIELD = "antimagic_field"
 
 
 class EffectOriginKind(str, Enum):
@@ -108,7 +104,6 @@ class EffectOrigin(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     kind: EffectOriginKind = Field(default=EffectOriginKind.UNKNOWN)
-    antimagic_exception: AntimagicException | None = None
     source_id: Optional[str] = Field(default=None)
     source_event_lineage_uuid: Optional[str] = Field(default=None)
     source_position: Optional[Tuple[int, int]] = Field(default=None)
@@ -130,7 +125,6 @@ class EffectOrigin(BaseModel):
         source_position: Optional[Tuple[int, int]] = None,
         base_spell_level: int,
         effective_spell_level: int,
-        antimagic_exception: AntimagicException | None = None,
         spell_school: str | None = None,
         spellcasting_source_id: UUID | None = None,
         harmful: bool = False,
@@ -140,7 +134,6 @@ class EffectOrigin(BaseModel):
         """Create explicit spell provenance from a spell event payload."""
         return cls(
             kind=EffectOriginKind.SPELL,
-            antimagic_exception=antimagic_exception,
             source_id=source_id,
             source_event_lineage_uuid=source_event_lineage_uuid,
             source_position=source_position,

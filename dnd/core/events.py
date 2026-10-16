@@ -1072,7 +1072,7 @@ class BaseHandler(BaseObject):
         default=True,
         description="Whether queue dispatch should invoke this handler.",
     )
-    runs_while_suppressed: bool = Field(default=False,
+    runs_while_owner_inactive: bool = Field(default=False,
         description="Native duration/final cleanup reaction, independent of effect contribution.")
     player_toggleable: bool = Field(
         default=False,
@@ -1121,7 +1121,7 @@ class BaseHandler(BaseObject):
         Returns:
             A modified/canceled event, the same event, or None for no change.
         """
-        if not self.enabled or (not self.runs_while_suppressed and not self.contributions_active()):
+        if not self.enabled or (not self.runs_while_owner_inactive and not self.contributions_active()):
             return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
@@ -1151,7 +1151,7 @@ class EventHandler(BaseHandler):
         Returns:
             A modified/canceled event, the same event, or None for no change.
         """
-        if not self.enabled or (not self.runs_while_suppressed and not self.contributions_active()):
+        if not self.enabled or (not self.runs_while_owner_inactive and not self.contributions_active()):
             return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
@@ -1216,7 +1216,7 @@ class SpatialHandler(BaseHandler):
         Returns:
             A modified/canceled event, the same event, or None for no change.
         """
-        if not self.enabled or (not self.runs_while_suppressed and not self.contributions_active()):
+        if not self.enabled or (not self.runs_while_owner_inactive and not self.contributions_active()):
             return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid

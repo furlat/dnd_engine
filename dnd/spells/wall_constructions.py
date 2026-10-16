@@ -20,7 +20,7 @@ from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.events import Event, EventHandler, EventType, Trigger, PortalTransferEvent, EventPhase, EventQueue, ForcedMovementEvent, ItemDestructionEvent, Range, RangeType, SpatialChangeEvent
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import ItemLocation, ItemPresentationState
+from dnd.core.item_types import ItemPresentationState
 from dnd.core.life_types import RemainsDisposition
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
 from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, WallDome, WallPolyline, WallRing, WallSegment
@@ -225,20 +225,7 @@ class SolidWallZone(AreaCondition):
     def resolve_condition_footprint(self) -> set[tuple[int, int]]:
         return self._apply_spell_protection({p for p in wall_shell_cells(self.geometry) if get_map().has_tile(*p)})
 
-    def antimagic_exempt(self) -> bool:
-        return self.material == "stone" or super().antimagic_exempt()
 
-    def allows_contribution_at(self, position: tuple[int, int] | None) -> bool:
-        return self.material == "stone" or super().allows_contribution_at(position)
-
-    def refresh_antimagic_suppression(self, *, parent_event: Event) -> None:
-        previous = self.spatial_suppressions
-        super().refresh_antimagic_suppression(parent_event=parent_event)
-        if previous != self.spatial_suppressions:
-            for identity in self.sections:
-                item = BaseBlock.get(identity)
-                if isinstance(item, BaseItem):
-                    item.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
 
     def blocks_crossing_between(self, start, end, channel, requester_uuid, mode,
                                 terminal_provider_uuid=None) -> bool:
@@ -686,7 +673,6 @@ class ConstructWall(SpellAction):
                 item = WallSection(source_entity_uuid=caster.uuid, wall_owner_uuid=zone.uuid,
                     item_id=f"spell_construction.{self.construction_material}.section", name=f"{self.name} section",
                     geometry=section, magical_force=self.construction_material == "force",
-                    creation_condition_uuid=zone.uuid,
                     armor_class=12 if self.construction_material == "ice" else 15,
                     health=None if self.construction_material == "force" else BaseItem.create_item_health(caster.uuid, hp),
                     is_invisible=self.construction_material == "force",
@@ -971,8 +957,7 @@ class Forcecage(SpellAction):
                 cells=wall_shell_cells(section);anchor=min(cells)
                 item=WallSection(source_entity_uuid=caster.uuid,wall_owner_uuid=zone.uuid,
                     item_id="spell_construction.forcecage.section",name="Forcecage section",geometry=section,
-                    magical_force=True,force_owner_disintegration="whole" if self.cage_form=="box" else "section",
-                    creation_condition_uuid=zone.uuid,is_invisible=True,health=None,
+                    magical_force=True,force_owner_disintegration="whole" if self.cage_form=="box" else "section",is_invisible=True,health=None,
                     world_placement_spec=WorldPlacementSpec(kind=WorldPlacementKind.CENTER,occupies_bands=False,
                         vertical_extent_steps=ceil(section.height_feet/5),footprint_offsets=tuple(sorted((x-anchor[0],y-anchor[1]) for x,y in cells))))
                 pending.append((item,anchor));get_map().validate_object_placement(item.uuid,anchor)

@@ -11,7 +11,6 @@ from dnd.actions import (
 )
 from dnd.classes.divine import Turned, turn_creature, turning_targets
 from dnd.core.base_actions import BaseAction, Cost, TargetType
-from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.dice import AttackOutcome, Dice
 from dnd.core.effect_types import EffectOrigin, EffectOriginKind
@@ -57,10 +56,8 @@ class TurnUndead(BaseAction):
 
     def _validate(self, event):
         actor = Entity.get(self.source_entity_uuid)
-        if actor is None or SpellProtectionRegistry.get_antimagic_suppressions(
-            {actor.position}
-        ):
-            return event.cancel(status_message="Divine turning is suppressed")
+        if actor is None:
+            return event.cancel(status_message="Actor absent")
         return super()._validate(event)
 
     def _apply(self, event):
@@ -113,10 +110,8 @@ class PreserveLife(BaseAction):
 
     def _validate(self, event):
         actor = Entity.get(self.source_entity_uuid)
-        if actor is None or SpellProtectionRegistry.get_antimagic_suppressions(
-            {actor.position}
-        ):
-            return event.cancel(status_message="Preserve Life is suppressed")
+        if actor is None:
+            return event.cancel(status_message="Actor absent")
         return super()._validate(event)
 
     def _apply(self, event):

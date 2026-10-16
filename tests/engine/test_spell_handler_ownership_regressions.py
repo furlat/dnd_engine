@@ -80,12 +80,10 @@ def test_active_wet_owns_admission_without_changing_sleep_rule(game, burn_type):
     result = target.add_condition(sleep)
     assert result is not None and not result.canceled and sleep.applied
     target.remove_condition_by_uuid(sleep.uuid)
-    token = uuid4()
-    right.set_suppression(token, True)
+    target.remove_condition_by_uuid(right.uuid)
     burn = burn_type(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, **extra)
     result = target.add_condition(burn)
     assert result is not None and not result.canceled and burn.applied
-    right.set_suppression(token, False)
     target.add_condition(Wet(name="New water", source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
     assert not burn.applied
 
@@ -262,38 +260,19 @@ def test_independent_new_water_owners_dry_individually_and_respect_native_veto(g
     assert first.applied and not second.applied
 
 
-def test_aura_suppression_and_removal_restore_reduction_admission(game):
+def test_aura_removal_restores_reduction_admission(game):
     caster = high_actor(game)
-    ally = high_actor(game,"Ally",(3, 2))
-    foe = high_actor(game,"Foe",(4, 2),"foes")
-    drain = LifeDrainReduction(source_entity_uuid=foe.uuid,target_entity_uuid=ally.uuid,amount=10)
+    ally = high_actor(game, "Ally", (3, 2))
+    foe = high_actor(game, "Foe", (4, 2), "foes")
+    drain = LifeDrainReduction(source_entity_uuid=foe.uuid, target_entity_uuid=ally.uuid, amount=10)
     ally.add_condition(drain)
-    cast(AuraOfLife,caster)
+    cast(AuraOfLife, caster)
     maximum = ally.get_max_hp()
-    benefit = next(effect for effect in ally.active_conditions_by_uuid.values()
-                   if effect.get_display_name().startswith("Aura of Life"))
-    token=uuid4()
-    benefit.set_suppression(token,True)
-    cause=Event(source_entity_uuid=foe.uuid,event_type=EventType.BASE_ACTION)
-    drain.add_reduction(3,cause)
-    assert ally.get_max_hp()==maximum-3
-    benefit.set_suppression(token,False)
-    drain.add_reduction(3,cause)
-    assert ally.get_max_hp()==maximum-3
+    cause = Event(source_entity_uuid=foe.uuid, event_type=EventType.BASE_ACTION)
+    drain.add_reduction(3, cause)
+    current = ally.get_max_hp()
+    assert current == maximum
     caster.remove_condition("Concentrating")
-    drain.add_reduction(3,cause)
-    assert ally.get_max_hp()==maximum-6
-
-
-def test_suppressed_burning_does_not_grant_winters_brittle(battle):
-    _,_,_,caster,enemy=battle
-    actor=summon(battle,"water_elemental").entity
-    Entity.update_entity_position(enemy,(5,2))
-    force_save_result(enemy,"constitution",succeeds=False)
-    burn=Burning(source_entity_uuid=caster.uuid,target_entity_uuid=enemy.uuid)
-    enemy.add_condition(burn)
-    burn.set_suppression(uuid4(),True)
-    use(actor,WintersBreath,end_position=enemy.position)
-    assert burn.applied and "Brittle" not in enemy.active_conditions
-    enemy.receive_damage(2,DamageType.COLD,caster.uuid)
-    assert "Brittle" not in enemy.active_conditions
+    drain.add_reduction(3, cause)
+    current = ally.get_max_hp()
+    assert current == maximum - 3

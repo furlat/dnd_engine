@@ -14,7 +14,6 @@ from dnd.core.events import EventPhase, EventQueue, TakeDamageEvent
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import ChainLightning
-from dnd.spells.abjuration import AntimagicField
 from tests.manual.spell_regression_support import create_spell_regression_actor, reset_spell_regression_arena, force_save_result
 
 
@@ -102,12 +101,9 @@ def test_object_is_an_explicit_primary_or_secondary_and_save_halves_only_its_rec
     assert primary.get_normal_hp() == 240
 
 
-def test_secondary_uses_primary_contact_when_caster_diagonal_crosses_antimagic(scene):
+def test_secondary_uses_primary_contact_across_caster_diagonal(scene):
     caster, (primary, _, _, _) = scene
     secondary = create_spell_regression_actor('Corner secondary', (8, 11), 'monsters')
-    field_owner = create_spell_regression_actor('Field owner', (5, 8), 'monsters', spell_slots={8: 1})
-    field = AntimagicField(source_entity_uuid=field_owner.uuid).apply()
-    assert field is not None and not field.canceled
     force_save_result(secondary, 'dexterity', succeeds=False)
     Entity.update_all_entities_senses(max_distance=300)
     row, option = choice(caster, primary)

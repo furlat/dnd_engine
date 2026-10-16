@@ -3407,15 +3407,6 @@
           "default": null,
           "title": "Applied Source Event Cursor"
         },
-        "suppression_provider_uuids": {
-          "default": [],
-          "items": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "title": "Suppression Provider Uuids",
-          "type": "array"
-        },
         "duplicate_count": {
           "anyOf": [
             {
@@ -7382,15 +7373,6 @@
           "title": "Item Effects",
           "type": "array"
         },
-        "suppression_provider_uuids": {
-          "default": [],
-          "items": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "title": "Suppression Provider Uuids",
-          "type": "array"
-        },
         "blocks_propagation": {
           "default": false,
           "title": "Blocks Propagation",
@@ -8570,15 +8552,6 @@
           ],
           "default": null,
           "title": "Applied Source Event Cursor"
-        },
-        "suppression_provider_uuids": {
-          "default": [],
-          "items": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "title": "Suppression Provider Uuids",
-          "type": "array"
         }
       },
       "required": [
@@ -8612,15 +8585,6 @@
     "ItemPresentationState": {
       "description": "Immutable item data needed to materialize an equipment/inventory row.\n\nThe model deliberately contains only primitive values and dependency-leaf\nenums. It can therefore be carried by cold event/replay contracts without\nimporting concrete items, Entity, runtime registries, or server DTOs.\nLocation and equipped-slot membership live on the surrounding event.",
       "properties": {
-        "suppression_provider_uuids": {
-          "default": [],
-          "items": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "title": "Suppression Provider Uuids",
-          "type": "array"
-        },
         "item_uuid": {
           "description": "Stable item instance identity.",
           "format": "uuid",
@@ -14267,8 +14231,8 @@
           "maximum": 9007199254740991
         },
         "player_schema_version": {
-          "const": 10,
-          "default": 10,
+          "const": 11,
+          "default": 11,
           "title": "Player Schema Version",
           "type": "integer",
           "minimum": -9007199254740991,
@@ -16830,11 +16794,6 @@
     "SpellSuppression": {
       "description": "The protection responsible for excluding part of an admitted spell.",
       "properties": {
-        "antimagic": {
-          "default": false,
-          "title": "Antimagic",
-          "type": "boolean"
-        },
         "provider_uuid": {
           "format": "uuid",
           "title": "Provider Uuid",
@@ -18374,15 +18333,6 @@
             "$ref": "#/$defs/ItemEffectPresentationState"
           },
           "title": "Item Effects",
-          "type": "array"
-        },
-        "suppression_provider_uuids": {
-          "default": [],
-          "items": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "title": "Suppression Provider Uuids",
           "type": "array"
         },
         "is_lit": {

@@ -19,7 +19,7 @@ from dnd.core.action_types import (
     RestrictedActionGrantProvider,
     RestrictedActionKind,
 )
-from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRef, EventResolutionRef, EffectPropagationLink, EffectOrigin
+from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRef, EventResolutionRef, EffectPropagationLink, EffectOrigin, EffectOriginKind
 from dnd.core.events import ActionApplicationCommittedEvent, ActionCostsCommittedEvent, Event, EventType, EventPhase, EventProcessor, Range, EventQueue
 from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
 from dnd.types.world import MovementMode
@@ -629,13 +629,21 @@ class Cost(BaseCost):
 
 
 class ActionEvent(Event):
+    def harmful_direct_recipients(self) -> tuple[UUID, ...]:
+        """Direct hostile recipients, excluding incidental area contact."""
+        origin = self.get_effect_origin()
+        if (self.event_type is EventType.ATTACK or
+                origin is not None and origin.harmful and not origin.area_application):
+            primary = (self.target_entity_uuid,) if self.target_entity_uuid is not None else ()
+            return tuple(dict.fromkeys((*primary, *self.declared_target_entity_uuids)))
+        return ()
+
     effect_origin: EffectOrigin | None = None
 
     def get_effect_origin(self) -> EffectOrigin | None:
         return self.effect_origin
 
     font_conversion: FontConversion | None = None
-    item_magic_suppression_provider_uuids: tuple[UUID, ...] = ()
     """Event emitted by the base action pipeline."""
 
     action_economy_spent: bool = Field(
@@ -2013,6 +2021,12 @@ class BaseAction(BaseObject):
         if self.effect_origin is not None:
             event.effect_origin = self.effect_origin.model_copy(update={"source_event_lineage_uuid": str(event.lineage_uuid),
                 "source_position":source_block.position if source_block is not None else None})
+        elif self.harmful:
+            event.effect_origin = EffectOrigin(kind=EffectOriginKind.ACTION,
+                source_id=self.semantic_key, source_event_lineage_uuid=str(event.lineage_uuid),
+                source_position=source_block.position if source_block is not None else None,
+                harmful=True, area_application=self.effective_target_type in (
+                    TargetType.POSITION, TargetType.POSITION_LOS, TargetType.POSITION_AOE))
         event.description = self.description
         if source_block is not None:
             event.source_entity_name = source_block.name

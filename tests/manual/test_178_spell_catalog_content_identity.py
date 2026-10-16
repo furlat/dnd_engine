@@ -166,7 +166,6 @@ EXPECTED_CATALOG_IDS = (
     "sunburst",
     "power_word_stun",
     "incendiary_cloud",
-    "antimagic_field",
     "power_word_kill",
     "mass_heal",
 )

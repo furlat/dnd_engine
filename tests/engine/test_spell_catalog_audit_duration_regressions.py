@@ -16,21 +16,17 @@ from tests.engine.test_high_level_spell_controls import high_actor
 from tests.engine.test_roster_support_spells import game as game  # noqa: PLC0414 - pytest fixture re-export
 from tests.manual.spell_regression_support import force_save_result
 
-FINITE_LIFETIME_BUG = pytest.mark.xfail(
-    strict=True, reason="SC-11: finite spell lifetime is left permanent"
-)
-
 
 @pytest.mark.parametrize(
     "spell_type,effect_name,self_target,area_target",
     [
-        pytest.param(HoldPerson, "Hold Person", False, False, marks=FINITE_LIFETIME_BUG),
-        pytest.param(Bless, "Bless", False, False, marks=FINITE_LIFETIME_BUG),
-        pytest.param(Bane, "Bane", False, False, marks=FINITE_LIFETIME_BUG),
-        pytest.param(Haste, "Haste", False, False, marks=FINITE_LIFETIME_BUG),
-        pytest.param(Blur, "Blur", True, False, marks=FINITE_LIFETIME_BUG),
-        pytest.param(Slow, "Slowed", False, True, marks=FINITE_LIFETIME_BUG),
-        pytest.param(BestowCurse, "Bestow Curse", False, False, marks=FINITE_LIFETIME_BUG),
+        pytest.param(HoldPerson, "Hold Person", False, False),
+        pytest.param(Bless, "Bless", False, False),
+        pytest.param(Bane, "Bane", False, False),
+        pytest.param(Haste, "Haste", False, False),
+        pytest.param(Blur, "Blur", True, False),
+        pytest.param(Slow, "Slowed", False, True),
+        pytest.param(BestowCurse, "Bestow Curse", False, False),
         (HoldMonster, "Hold Monster", False, False),
         (MirrorImage, "Mirror Image", True, False),
     ],

@@ -366,7 +366,6 @@ SPELL_CONTENT_IDENTITY_SPECS: tuple[SpellContentIdentitySpec, ...] = (
     SpellContentIdentitySpec("Sunburst", evocation.Sunburst, SRD_SPELL_PACK_ID, "spell.sunburst", "evocation", 8, 184, 1040),
     SpellContentIdentitySpec("Power Word Stun", enchantment.PowerWordStun, SRD_SPELL_PACK_ID, "spell.power_word_stun", "enchantment", 8, 170, 1050),
     SpellContentIdentitySpec("Incendiary Cloud", conjuration.IncendiaryCloud, SRD_SPELL_PACK_ID, "spell.incendiary_cloud", "conjuration", 8, 157, 1060),
-    SpellContentIdentitySpec("Antimagic Field", abjuration.AntimagicField, SRD_SPELL_PACK_ID, "spell.antimagic_field", "abjuration", 8, 117, 1070),
     SpellContentIdentitySpec("Power Word Kill", enchantment.PowerWordKill, SRD_SPELL_PACK_ID, "spell.power_word_kill", "enchantment", 9, 170, 1080),
     SpellContentIdentitySpec("Mass Heal", evocation.MassHeal, SRD_SPELL_PACK_ID, "spell.mass_heal", "evocation", 9, 163, 1090),
 )
@@ -913,10 +912,6 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     (conjuration.IncendiaryCloud, _catalog(
         'incendiary_cloud', '20ft sphere fire cloud, 10d8 fire (DEX half), heavily obscured', 'position', 'ranged', 60, 'aoe',
         area=_area('sphere', radius_ft=20), damage=(DamageType.FIRE,), saves=_saving_throws('dexterity'), concentration=True, tags=('fire', 'sphere', 'concentration'),
-    )),
-    (abjuration.AntimagicField, _catalog(
-        'antimagic_field', '10ft sphere suppresses all magic, concentration', 'self', 'self', 0, 'aoe',
-        area=_area('sphere', radius_ft=10), concentration=True, tags=('sphere', 'concentration'),
     )),
     (enchantment.PowerWordKill, _catalog(
         'power_word_kill', 'If target has <=100 HP, it dies instantly. No save.', 'entity', 'ranged', 60, 'none',

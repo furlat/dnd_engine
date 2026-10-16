@@ -17,7 +17,6 @@ from dnd.items.spell_payloads import (
     ThrowSpellPayload,
     TouchDelayedFireball,
 )
-from dnd.spells.abjuration import AntimagicField
 from dnd.spells.evocation import DelayedBlastFireball, FreezingSphere
 from dnd.spells.wall_constructions import WallOfForce
 from tests.engine.test_high_level_spell_controls import (
@@ -272,33 +271,6 @@ def test_freezing_blast_before_force_wall_cannot_harm_or_ice_far_side(game):
     )
 
 
-@pytest.mark.parametrize("kind", [FreezingSphere, DelayedBlastFireball])
-def test_suppressed_payload_deadline_consumes_without_deferred_blast(game, kind):
-    caster = high_actor(game)
-    holder = high_actor(game, "Holder", (8, 2))
-    victim = high_actor(game, "Victim", (9, 2), "foes")
-    suppressor = high_actor(game, "Suppressor", (8, 3), "others")
-    if kind is FreezingSphere:
-        # Create in hand reach, then move the holder into the suppression area.
-        holder.move((3, 2))
-        cast(kind, caster, holder, delivery="portable")
-        item = payload(holder)
-        holder.move((8, 2))
-    else:
-        cast(kind, caster, end_position=holder.position)
-        item = next(
-            item
-            for item in BaseItem.get_all_items()
-            if isinstance(item, SpellPayloadItem)
-        )
-    cast(AntimagicField, suppressor)
-    hp = victim.get_hp()
-    for _ in range(10):
-        caster.on_turn_end()
-    assert BaseBlock.get(item.uuid) is None and victim.get_hp() == hp
-    suppressor.remove_condition("Concentrating")
-    caster.on_turn_end()
-    assert victim.get_hp() == hp
 
 
 @pytest.mark.parametrize("ending", ["destruction", "rest", "caster_death"])

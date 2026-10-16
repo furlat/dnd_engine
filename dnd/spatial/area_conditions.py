@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 
 from pydantic import Field, PrivateAttr, StrictInt, model_validator
 
-from dnd.blocks.base_item import BaseItem
 from dnd.core.base_block import BaseBlock, LightLevel, MovementMode, PreparedConditionRemovals
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.condition_types import DurationType, HazardFilter
@@ -184,14 +183,8 @@ class SpatialCondition(BaseCondition):
         if not super().contributions_active():
             return False
         anchor = BaseBlock.get(self.anchor_uuid) if self.anchor_uuid else None
-        return not ((isinstance(anchor, Entity) and anchor.is_spatially_suspended)
-            or (isinstance(anchor, BaseItem) and anchor.antimagic_suspended_placement is not None))
+        return not (isinstance(anchor, Entity) and anchor.is_spatially_suspended)
 
-    def on_suppression_changed(self) -> None:
-        """Invalidate settled source contributions before dependent child work."""
-        if self.is_active_spatial_condition():
-            get_map().invalidate_spatial_caches(
-                {"movement", "optical", "propagation"}, self.affected_positions)
 
     def is_active_spatial_condition(self) -> bool:
         """Verify activity against the authoritative map collection."""
@@ -526,8 +519,6 @@ class SpatialCondition(BaseCondition):
             if event.object_uuid != anchor_uuid:
                 return None
             anchor = BaseBlock.get(anchor_uuid)
-            if isinstance(anchor, BaseItem) and anchor.antimagic_suspended_placement is not None:
-                return None
             if (event.event_type is EventType.SPATIAL_OBJECT_REMOVED
                     or event.object_state is not None
                     and event.object_state.integrity is ItemIntegrity.DESTROYED
@@ -542,7 +533,7 @@ class SpatialCondition(BaseCondition):
 
         return EventHandler(
             name=f"{self.name} Anchor Movement",
-            runs_while_suppressed=True,
+            runs_while_owner_inactive=True,
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[
                 Trigger(
@@ -663,9 +654,6 @@ class SpatialCondition(BaseCondition):
         )
         self.affected_positions = normalized
         self.observation_revision += 1
-        if self.magical_origin and not self.antimagic_exempt():
-            self.spatial_suppressions = (*tuple(row for row in self.spatial_suppressions if not row.antimagic),
-                *SpellProtectionRegistry.get_antimagic_suppressions(normalized))
         for handler_uuid in self.spatial_handler_uuids:
             EventQueue.update_spatial_handler_positions(
                 handler_uuid,
@@ -1125,14 +1113,12 @@ class AreaCondition(SpatialCondition):
         """Resolve once, retaining the cause beside the resulting native cells."""
         spell_level = self._protection_spell_level()
         origin = self.effect_origin
-        self.spatial_suppressions = (SpellProtectionRegistry.get_antimagic_suppressions(positions)
-            if self.magical_origin and not self.antimagic_exempt() else ())
-        if spell_level is not None and self.magical_origin and not self.antimagic_exempt() and origin is not None and origin.source_position is not None:
+        self.spatial_suppressions = ()
+        if spell_level is not None and self.magical_origin and origin is not None and origin.source_position is not None:
             self.spatial_suppressions = SpellProtectionRegistry.get_suppressions(
                 origin.source_position, spell_level, positions)
             for suppression in self.spatial_suppressions:
-                if not suppression.antimagic:
-                    positions.difference_update(suppression.positions)
+                positions.difference_update(suppression.positions)
         return positions
 
     def move_zone(
@@ -1172,30 +1158,6 @@ class AreaCondition(SpatialCondition):
             return None
         return self.effect_origin.base_spell_level
 
-    def refresh_antimagic_suppression(self, *, parent_event: Event) -> None:
-        if not self.magical_origin or self.antimagic_exempt():
-            return
-        previous = self.spatial_suppressions
-        current = tuple(row for row in previous if not row.antimagic) + (
-            SpellProtectionRegistry.get_antimagic_suppressions(set(self.affected_positions)))
-        if current == previous:
-            return
-        before = {position for row in previous if row.antimagic for position in row.positions}
-        after = {position for row in current if row.antimagic for position in row.positions}
-        self.spatial_suppressions = current
-        grid = get_map()
-        grid.invalidate_spatial_caches(
-            {"movement", "optical", "propagation"}, self.affected_positions)
-        change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
-            previous_positions=set(self.affected_positions), affected_positions=set(self.affected_positions),
-            parent_event=parent_event)
-        self._remove_light_positions(after, parent_event=change)
-        self._apply_light_positions(before - after, parent_event=change)
-        for position in before ^ after:
-            grid.publish_tile_mechanics_changed(position, source_entity_uuid=self.source_entity_uuid,
-                parent_event=change.uuid)
-        spatial_senses_system(change)
-        self._complete_change(change)
 
     def _create_zone_entry_handler(self) -> EventHandler:
         raise NotImplementedError
@@ -1596,7 +1558,6 @@ class AreaCondition(SpatialCondition):
                         parent_event=change_effect,
                     )
         self._remove_terrain_positions(removed, parent_event=change_effect)
-        self._remove_light_positions(removed, parent_event=change_effect)
         grid.set_spatial_condition_positions(
             condition=self,
             crossing_channels=self.crossing_channels,
@@ -1606,13 +1567,11 @@ class AreaCondition(SpatialCondition):
         )
         self.affected_positions = normalized
         self.observation_revision += 1
-        if self.magical_origin and not self.antimagic_exempt():
-            self.spatial_suppressions = (*tuple(row for row in self.spatial_suppressions if not row.antimagic),
-                *SpellProtectionRegistry.get_antimagic_suppressions(normalized))
         for handler_uuid in self.spatial_handler_uuids:
             EventQueue.update_spatial_handler_positions(handler_uuid, normalized)
         grid.invalidate_spatial_caches(
             {"movement", "optical", "propagation"}, previous | normalized)
+        self._remove_light_positions(removed, parent_event=change_effect)
         new_modifiers = self._apply_terrain_positions(
             added,
             parent_event=change_effect,

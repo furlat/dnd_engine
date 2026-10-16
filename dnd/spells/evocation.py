@@ -15,7 +15,6 @@ from dnd.actions import AttackEvent
 from dnd.core.elevation import support_distance_feet
 from dnd.types.actor import ConditionState
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
-import random
 from typing import Any, ClassVar, Literal, Optional, List, Set, Tuple
 from uuid import UUID
 
@@ -63,7 +62,7 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import bind_runtime_action_before_admission
 from dnd.core.condition_types import ConditionCategory, ConditionRemovalTrigger, ConditionTag, DurationType, HazardFilter
 from dnd.core.values import ModifiableValue
-from dnd.core.dice import AttackOutcome, Dice, RollType
+from dnd.core.dice import AttackOutcome, Dice, RollType, roll_die_face
 from dnd.core.effect_types import EffectOrigin, EffectOriginKind, EffectEndpoint, EffectPropagationLink, ApplicationMembership
 from dnd.core.life_types import LifeState
 from dnd.core.saving_throw_types import SavingThrowContext
@@ -521,6 +520,8 @@ class SacredFlame(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
 
         num_dice = self._get_cantrip_dice_count(self.caster_level)
@@ -672,6 +673,14 @@ class MagicMissile(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
+        effect_event = execution_event.phase_to(
+            EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Magic Missile dart targets {target.name}",
+        )
+        if effect_event.canceled:
+            return effect_event
+
         dart_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -686,18 +695,17 @@ class MagicMissile(SpellAction):
         )
 
         damage_dice = dart_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = finalize_spell_damage_roll(dart_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
+        damage_roll = finalize_spell_damage_roll(dart_damage, damage_dice.roll, parent_event=effect_event, effect_origin=self.effect_origin)
 
         actual_damage = target.receive_damage(
             amount=damage_roll.total,
             damage_type=DamageType.FORCE,
             source_entity_uuid=caster.uuid,
-            parent_event=execution_event.uuid,
+            parent_event=effect_event.uuid,
             effect_id=MAGIC_MISSILE_DAMAGE_EFFECT_ID,
         )
 
-        return execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
+        return effect_event.with_updates(
             target_entity_name=target.name,
             damages=[dart_damage],
             damage_rolls=[damage_roll],
@@ -1244,6 +1252,8 @@ class BurningHands(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1388,6 +1398,8 @@ class LightningBolt(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1560,6 +1572,8 @@ class Thunderwave(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1745,6 +1759,8 @@ class Shatter(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1998,6 +2014,8 @@ class ConeOfCold(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -2128,7 +2146,7 @@ class SunburstBlindedEffect(BaseCondition):
             name=f"Sunburst Blindness Repeat Save ({target_uuid})",
             source_entity_uuid=target_uuid,
             trigger_conditions=[
-                Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT)
+                Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT, event_source_entity_uuid=target_uuid)
             ],
             event_processor=repeat_save_processor
         )
@@ -2589,7 +2607,7 @@ class GuidingBoltMarked(BaseCondition):
                     event_source_entity_uuid=caster_uuid,
                 )
             ],
-            runs_while_suppressed=True,
+            runs_while_owner_inactive=True,
             event_processor=expire_on_caster_turn_end,
         )
 
@@ -3206,6 +3224,8 @@ class GustOfWind(SpellAction):
             save_ability="strength", save_dc=dc,
             status_message=f"Gust of Wind hits {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         _apply_gust_push(target, dc, caster.position, caster.uuid, effect_event)
 
@@ -3990,14 +4010,16 @@ class PrismaticSpray(SpellAction):
             save_dc=dc,
             status_message=f"Prismatic ray strikes {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
-        color_roll = random.randint(1, 8)
+        color_roll = roll_die_face(8)
         if color_roll == 8:
 
-            color1 = random.randint(1, 7)
-            color2 = random.randint(1, 7)
+            color1 = roll_die_face(7)
+            color2 = roll_die_face(7)
             while color2 == color1:
-                color2 = random.randint(1, 7)
+                color2 = roll_die_face(7)
             self._apply_color_effect(color1, target, caster, dc, effect_event)
             self._apply_color_effect(color2, target, caster, dc, effect_event)
             color_text = f"colors {color1} + {color2}"
@@ -4094,6 +4116,10 @@ class TrueStrike(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
+        effect_event = execution_event.phase_to(EventPhase.EFFECT)
+        if effect_event.canceled:
+            return effect_event
+
         ability_name: AbilityName = type_cast(AbilityName, caster.spellcasting.spellcasting_ability or "intelligence")
 
         extra_dice = self._get_cantrip_dice_count(self.caster_level) - 1
@@ -4105,10 +4131,9 @@ class TrueStrike(SpellAction):
             additional_damages=additional, costs=[], template=False)
         bind_runtime_action_before_admission(attack, current_binding=attack.behavior_binding,
             runtime_owner_uuid=caster.uuid)
-        attack_result = attack.apply(parent_event=execution_event)
+        attack_result = attack.apply(parent_event=effect_event)
 
-        return execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
+        return effect_event.with_updates(
             status_message=f"{self.name}: {attack_result.status_message}" if attack_result else f"{self.name} failed"
         )
 
@@ -4205,6 +4230,8 @@ class FlameStrike(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         fire_count = self.base_fire_dice + upcast_bonus
         damage_bonus = caster.get_spell_damage_bonus()
@@ -4361,6 +4388,8 @@ class Light(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Light on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         light_effect = LightEffect(
             source_entity_uuid=caster.uuid,
@@ -4369,11 +4398,10 @@ class Light(SpellAction):
         )
         light_effect.duration.duration_type = DurationType.ROUNDS
         light_effect.duration.duration = 10
-        target.add_condition(light_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, light_effect)
+        if effect_event.canceled:
+            return effect_event
 
-        concentration = self.ensure_concentration(effect_event)
-        if light_effect.applied:
-            concentration.add_linked_condition(target.uuid, light_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"Light shines from {target.name}"
@@ -4551,6 +4579,8 @@ class CureWounds(SpellAction):
             target_entity_name=target.name,
             status_message=f"Cure Wounds heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Cure Wounds")
         actual = target.receive_healing(
@@ -4621,6 +4651,8 @@ class HealingWord(SpellAction):
             target_entity_name=target.name,
             status_message=f"Healing Word heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Healing Word")
         actual = target.receive_healing(
@@ -4698,6 +4730,8 @@ class PrayerOfHealing(SpellAction):
             target_entity_name=target.name,
             status_message=f"Prayer of Healing heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Prayer of Healing")
         actual = target.receive_healing(
@@ -4782,6 +4816,8 @@ class MassHealingWord(SpellAction):
             target_entity_name=target.name,
             status_message=f"Mass Healing Word heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Mass Healing Word")
         actual = target.receive_healing(
@@ -4868,6 +4904,8 @@ class MassCureWounds(SpellAction):
             target_entity_name=target.name,
             status_message=f"Mass Cure Wounds heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Mass Cure Wounds")
         actual = target.receive_healing(
@@ -4934,6 +4972,8 @@ class HealSpell(SpellAction):
             target_entity_name=target.name,
             status_message=f"Heal restores {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         actual = target.receive_healing(
             heal_amount, caster.uuid,
@@ -5028,6 +5068,8 @@ class MassHeal(SpellAction):
             target_entity_name=target.name,
             status_message=f"Mass Heal heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         actual = target.receive_healing(
             heal_amount, caster.uuid,
@@ -5055,6 +5097,7 @@ class DivineWordEffect(BaseCondition):
     description: str = Field(default="Affected by Divine Word", description="Rules-facing summary for the divine word effect condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the divine word effect for cleanup and filtering.")
     duration_rounds: int = Field(default=10, description="Number of rounds that nonlethal divine word effect effects persist.")
+    _lethal: bool = PrivateAttr(default=False)
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
@@ -5070,18 +5113,13 @@ class DivineWordEffect(BaseCondition):
         execution_event = declaration_event
 
         current_hp = target.get_hp()
+        self._lethal = current_hp <= 20
 
-        if current_hp <= 20:
+        if self._lethal:
 
             effect_event = execution_event.phase_to(
                 EventPhase.EFFECT,
                 status_message=f"Divine Word kills {target.name}"
-            )
-            target.receive_damage(
-                amount=99999,
-                damage_type=DamageType.FORCE,
-                source_entity_uuid=self.source_entity_uuid,
-                parent_event=effect_event.uuid,
             )
             return [], [], [], [], effect_event
 
@@ -5139,6 +5177,18 @@ class DivineWordEffect(BaseCondition):
             status_message=f"Divine Word affects {target.name} ({self.duration_rounds} rounds)"
         )
         return [], handler_uuids, sub_conditions_uuids, [], effect_event
+
+    def _commit_application(self, effect_event: Event) -> None:
+        if not self._lethal:
+            return
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            target.receive_damage(
+                amount=99999,
+                damage_type=DamageType.FORCE,
+                source_entity_uuid=self.source_entity_uuid,
+                parent_event=effect_event.uuid,
+            )
 
     def _create_duration_handler(self) -> EventHandler:
         """Remove this condition after duration_rounds turns."""
@@ -5220,12 +5270,16 @@ class DivineWord(SpellAction):
             target_entity_name=target.name,
             status_message=f"Divine Word targets {target.name} ({current_hp} HP)"
         )
+        if effect_event.canceled:
+            return effect_event
 
         condition = DivineWordEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
         )
-        target.add_condition(condition, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, condition)
+        if effect_event.canceled:
+            return effect_event
 
         if current_hp <= 20:
             outcome = "killed outright"
@@ -5682,8 +5736,6 @@ class DancingLightsEffect(ConcentrationActionMarker):
     tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
     _removed_light: SpatialChangeEvent | None = PrivateAttr(default=None)
 
-    def contributions_active(self) -> bool:
-        return super().contributions_active() and not SpellProtectionRegistry.get_antimagic_suppressions({self.position})
 
     def _apply(self,event: Event):
         self.light_source_uuid=get_map().add_light_source(self.position,bright_radius_feet=30,dim_radius_feet=0,
@@ -6058,7 +6110,7 @@ class AcidArrowEffect(BaseCondition):
                     independent_resolution=True,source_condition_uuid=self.uuid)
             target.remove_condition_by_uuid(self.uuid,parent_event=boundary)
             return None
-        handler=EventHandler(name="Acid Arrow delayed damage",source_entity_uuid=target.uuid,runs_while_suppressed=True,
+        handler=EventHandler(name="Acid Arrow delayed damage",source_entity_uuid=target.uuid,
             trigger_conditions=[Trigger(event_type=EventType.TURN_END,event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid)],event_processor=tick)
         target.add_event_handler(handler)
         return [],[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)
@@ -6172,7 +6224,6 @@ class FlameBlade(SpellAction):
             blade.retire(parent_event=admitted)
             return admitted
         blade.lifetime_condition_uuid=marker.uuid
-        blade.creation_condition_uuid=marker.uuid
         if not caster.loot_item(blade,parent_event=admitted) or not caster.equip_item(blade.uuid,WeaponSlot.MELEE_MAIN):
             caster.remove_condition_by_uuid(marker.uuid,parent_event=admitted)
             return admitted.cancel(status_message="Blade could not be equipped")
@@ -6208,7 +6259,7 @@ class VitriolicResidue(BaseCondition):
             target.remove_condition_by_uuid(self.uuid, parent_event=boundary)
             return None
         handler = EventHandler(name="Vitriolic residue deadline", source_entity_uuid=target.uuid,
-            runs_while_suppressed=True, trigger_conditions=[Trigger(event_type=EventType.TURN_END,
+            runs_while_owner_inactive=True, trigger_conditions=[Trigger(event_type=EventType.TURN_END,
                 event_phase=EventPhase.EFFECT, event_source_entity_uuid=target.uuid)], event_processor=tick)
         target.add_event_handler(handler)
         return [], [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
@@ -6463,8 +6514,6 @@ def sword_anchor_error(caster: Entity, old_position: Tuple[int,int], destination
         return "Sword anchor must be visible to its caster"
     if not get_map().can_reach_between(old_position,destination,PhysicalAccess.PROJECTILE,caster.uuid):
         return "A physical boundary blocks the sword movement"
-    if SpellProtectionRegistry.get_antimagic_suppressions({destination}):
-        return "Sword anchor is suppressed"
     return None
 
 

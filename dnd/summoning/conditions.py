@@ -83,7 +83,7 @@ class IndependentSummonOwner(SpiritualWeaponOwner):
             owner.remove_condition_by_uuid(self.uuid,parent_event=boundary)
             return None
         handler=EventHandler(name="Independent summon caster death",source_entity_uuid=self.source_entity_uuid,
-            runs_while_suppressed=True,trigger_conditions=[
+            runs_while_owner_inactive=True,trigger_conditions=[
                 Trigger(event_type=EventType.DEATH,event_phase=EventPhase.EFFECT,event_target_entity_uuid=owner.uuid),
                 Trigger(event_type=EventType.INSTANT_DEATH,event_phase=EventPhase.EFFECT,event_target_entity_uuid=owner.uuid)],event_processor=ending)
         owner.add_event_handler(handler)

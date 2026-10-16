@@ -47,7 +47,6 @@ from dnd.monsters.spell_summon_actions import (
     WintersBreath,
 )
 from dnd.monsters.traits import MultiattackAction, NaturalAttack
-from dnd.spells.abjuration import AntimagicField
 from dnd.spells.enchantment import CharmPerson
 from dnd.spells.illusion import Invisibility
 from dnd.spells.necromancy import Revivify

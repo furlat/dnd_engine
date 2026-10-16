@@ -59,7 +59,6 @@ class GoodberryItem(UsableItem):
     name: str = "Goodberry"
     description: str = "A temporary magical berry. Eat as a bonus action to heal 1d4."
     is_magical: bool = True
-    magically_created: bool = True
     is_consumable: bool = True
     is_pickable: bool = True
     charges: int = 1
@@ -117,7 +116,6 @@ class FlameBladeItem(Weapon):
     name: str = "Flame Blade"
     description: str = "Temporary scimitar making melee spell attacks without ability damage."
     is_magical: bool = True
-    magically_created: bool = True
     is_pickable: bool = True
     damage_dice: int = 6
     dice_numbers: int = 3

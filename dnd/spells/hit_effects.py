@@ -15,7 +15,6 @@ from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import Damage, DamageRollResultEvent, Event, EventQueue, EventHandler, EventPhase, EventType, Range, RangeType, Trigger
-from dnd.core.geometry import bresenham_line
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.life_types import LifeState
 from dnd.core.values import ModifiableValue
@@ -23,7 +22,7 @@ from dnd.entity import Entity
 
 
 def spell_component_allowed(owner: BaseCondition, target_uuid: UUID) -> bool:
-    """Apply existing Globe/contact/Antimagic decisions to this component only."""
+    """Apply existing Globe/contact decisions to this component only."""
     caster=Entity.get(owner.source_entity_uuid)
     target=Entity.get(target_uuid)
     if caster is None or target is None or not owner.contributions_active():
@@ -31,13 +30,12 @@ def spell_component_allowed(owner: BaseCondition, target_uuid: UUID) -> bool:
     origin=owner.effect_origin
     level=origin.base_spell_level if origin is not None and origin.base_spell_level is not None else 1
     source_position=origin.source_position if origin is not None and origin.source_position is not None else caster.position
-    return (not SpellProtectionRegistry.is_protected(target.position,source_position,level)
-        and not SpellProtectionRegistry.get_antimagic_suppressions(set(bresenham_line(caster.position,target.position))))
+    return not SpellProtectionRegistry.is_protected(target.position,source_position,level)
 
 
 def install_hit_rider(owner: BaseCondition,*,dice_count: int,die_size: Literal[4,6,8,10,12,20],
                       damage_type: DamageType | None,weapon_only: bool,
-                      quarry: Callable[[], UUID | None] | None=None) -> EventHandler:
+                      quarry: Callable[[], UUID | None] | None=None, recipient_uuid: UUID | None=None) -> EventHandler:
     """Append one exact-source component at native attack damage finalization."""
     caster=Entity.get(owner.source_entity_uuid)
     if caster is None:
@@ -46,6 +44,8 @@ def install_hit_rider(owner: BaseCondition,*,dice_count: int,die_size: Literal[4
         if not isinstance(event,DamageRollResultEvent) or event.target_entity_uuid is None:
             return None
         if event.attack_outcome not in (AttackOutcome.HIT,AttackOutcome.CRIT):
+            return None
+        if recipient_uuid is not None and event.target_entity_uuid != recipient_uuid:
             return None
         if weapon_only and event.attack_kind!="weapon":
             return None
@@ -304,4 +304,4 @@ def hit_spell_payload_allowed(spell: SpellAction,event: SpellEvent) -> bool:
     if caster is None or target is None:
         return False
     origin=event.get_effect_origin()
-    return not SpellProtectionRegistry.is_protected(target.position,origin.source_position or caster.position,spell.spell_level) and not SpellProtectionRegistry.get_antimagic_suppressions(set(bresenham_line(caster.position,target.position)))
+    return not SpellProtectionRegistry.is_protected(target.position,origin.source_position or caster.position,spell.spell_level)

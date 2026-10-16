@@ -1,0 +1,19 @@
+{"kind": "environment", "python": "3.13.12", "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39", "source": "/home/tommaso/.codex/worktrees/spells-rank-one-two/dnd_engine"}
+{"kind": "operation", "remote_actors": 1, "operation": "owner_membership", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 3, "_occupants_at": 3}
+{"kind": "operation", "remote_actors": 1, "operation": "remote_faction", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}
+{"kind": "operation", "remote_actors": 1, "operation": "owner_move", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 6, "_occupants_at": 12}
+{"kind": "operation", "remote_actors": 1, "operation": "remote_move_control", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}
+{"kind": "operation", "remote_actors": 1, "operation": "owner_turn_control", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}
+{"kind": "operation", "remote_actors": 1, "operation": "remote_turn_control", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}
+{"kind": "operation", "remote_actors": 25, "operation": "owner_membership", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 3, "_occupants_at": 3}
+{"kind": "operation", "remote_actors": 25, "operation": "remote_faction", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}
+{"kind": "operation", "remote_actors": 25, "operation": "owner_move", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 6, "_occupants_at": 12}
+{"kind": "operation", "remote_actors": 25, "operation": "remote_move_control", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}
+{"kind": "operation", "remote_actors": 25, "operation": "owner_turn_control", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}
+{"kind": "operation", "remote_actors": 25, "operation": "remote_turn_control", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}
+{"kind": "operation", "remote_actors": 100, "operation": "owner_membership", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 3, "_occupants_at": 3}
+{"kind": "operation", "remote_actors": 100, "operation": "remote_faction", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}
+{"kind": "operation", "remote_actors": 100, "operation": "owner_move", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 6, "_occupants_at": 12}
+{"kind": "operation", "remote_actors": 100, "operation": "remote_move_control", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}
+{"kind": "operation", "remote_actors": 100, "operation": "owner_turn_control", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}
+{"kind": "operation", "remote_actors": 100, "operation": "remote_turn_control", "get_all_entities": 0, "remove_membership": 0, "apply_membership": 0, "_occupants_at": 0}

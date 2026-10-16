@@ -26,6 +26,7 @@ from dnd.core.dice import AttackOutcome
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.spell_damage import roll_spell_damage
 from dnd.core.events import (
+    EventQueue,
     Event,
     EventHandler,
     EventPhase,
@@ -178,6 +179,24 @@ def _rebuke_processor(
     if selected_source is None or cast_rank is None:
         return None
 
+    declaration = ActionEvent(
+        name="Hellish Rebuke",
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=attacker.uuid,
+        source_entity_name=caster.name,
+        target_entity_name=attacker.name,
+        parent_event=event.uuid,
+        phase=EventPhase.DECLARATION,
+        costs=[], use_register=False,
+    )
+    origin = EffectOrigin.spell(source_id=spell_ref.content_id,
+        source_event_lineage_uuid=str(declaration.lineage_uuid),source_position=caster.position,
+        base_spell_level=1,effective_spell_level=cast_rank,spell_school="evocation",
+        spellcasting_source_id=selected_source.source_id,harmful=True)
+    declaration=declaration.with_updates(effect_origin=origin)
+    declaration = EventQueue.publish_declaration(declaration)
+    if declaration.canceled:
+        return None
     caster.action_economy.consume("reactions", 1)
     if selected_source.resource_name is not None:
         if not caster.action_economy.consume_resource(
@@ -188,23 +207,12 @@ def _rebuke_processor(
     else:
         caster.action_economy.consume(spell_slot_cost_type(cast_rank), 1)
 
-    declaration = ActionEvent(
-        name="Hellish Rebuke",
-        source_entity_uuid=caster.uuid,
-        target_entity_uuid=attacker.uuid,
-        source_entity_name=caster.name,
-        target_entity_name=attacker.name,
-        parent_event=event.uuid,
-        phase=EventPhase.DECLARATION,
-        costs=[],
-    )
-    origin = EffectOrigin.spell(source_id=spell_ref.content_id,
-        source_event_lineage_uuid=str(declaration.lineage_uuid),source_position=caster.position,
-        base_spell_level=1,effective_spell_level=cast_rank,spell_school="evocation",
-        spellcasting_source_id=selected_source.source_id,harmful=True)
-    declaration=declaration.with_updates(effect_origin=origin)
     execution = declaration.phase_to(EventPhase.EXECUTION)
+    if execution.canceled:
+        return None
     effect = execution.phase_to(EventPhase.EFFECT)
+    if effect.canceled:
+        return None
     save_request = caster.create_saving_throw_request(
         attacker.uuid,
         "dexterity",

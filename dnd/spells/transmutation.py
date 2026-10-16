@@ -318,6 +318,7 @@ class SpikeGrowth(SpellAction):
 
 
 class SlowedEffect(BaseCondition):
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10, duration_type=DurationType.ROUNDS))
     """Apply Slow's per-target failed-save debuff bundle.
 
     The engine models speed, Armor Class, Dexterity-save, reaction, action or
@@ -575,6 +576,8 @@ class Slow(SpellAction):
             target_entity_name=target.name,
             status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.with_updates(
@@ -588,11 +591,9 @@ class Slow(SpellAction):
             spell_dc=dc,
             tags={ConditionTag.MAGICAL}
         )
-        target.add_condition(slowed, parent_event=effect_event)
-
-        concentration = self.ensure_concentration(effect_event)
-        if slowed.applied:
-            concentration.add_linked_condition(target.uuid, slowed.uuid)
+        effect_event = self.apply_owned_condition(effect_event, slowed)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{target.name} is Slowed"
@@ -643,6 +644,7 @@ class HasteEffect(BaseCondition):
     The budget never mutates ordinary actions or Extra Attack. Removal can apply
     one round of directly owned lethargy.
     """
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
     name: str = Field(default="Haste", description="Condition name.")
     description: str = Field(
         default=(
@@ -785,6 +787,7 @@ class Haste(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=30),
         description="Maximum range for the target.",
     )
+    include_self: bool = True
     valid_target_filter: str = Field(default="all", description="Target filter key for available action discovery.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
@@ -798,7 +801,7 @@ class Haste(SpellAction):
             return declaration_event.cancel(status_message="No target")
 
         contact = caster.senses.entities.get(target.uuid)
-        if contact is None or not contact.visual:
+        if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message=f"{target.name} not visible")
 
         distance = self.get_target_distance(target.senses.position)
@@ -823,6 +826,8 @@ class Haste(SpellAction):
             target_entity_name=target.name,
             status_message=f"Hasting {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         haste_effect = HasteEffect(
             source_entity_uuid=caster.uuid,
@@ -830,11 +835,10 @@ class Haste(SpellAction):
             caster_uuid=caster.uuid,
             tags={ConditionTag.MAGICAL}
         )
-        target.add_condition(haste_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, haste_effect)
+        if effect_event.canceled:
+            return effect_event
 
-        concentration = self.ensure_concentration(effect_event)
-        if haste_effect.applied:
-            concentration.add_linked_condition(target.uuid, haste_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"{target.name} is Hasted"
@@ -937,13 +941,17 @@ class DarkvisionSpell(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} grants darkvision to {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         darkvision_effect = DarkvisionEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             tags={ConditionTag.MAGICAL}
         )
-        target.add_condition(darkvision_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, darkvision_effect)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{target.name} gains darkvision (60ft)"
@@ -1167,17 +1175,18 @@ class JumpSpell(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Jump on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         jump_effect = JumpEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             tags={ConditionTag.MAGICAL}
         )
-        target.add_condition(jump_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, jump_effect)
+        if effect_event.canceled:
+            return effect_event
 
-        concentration = self.ensure_concentration(effect_event)
-        if jump_effect.applied:
-            concentration.add_linked_condition(target.uuid, jump_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"{target.name}'s jump distance tripled"
@@ -1235,31 +1244,25 @@ class ExpeditiousRetreatEffect(BaseCondition):
     """Grants a bonus action Dash each turn."""
     name: str = Field(default="Expeditious Retreat", description="Condition name.")
     description: str = Field(default="You can Dash as a bonus action", description="Rules-facing condition summary.")
-    _action_name: str = PrivateAttr(default="Dash (Bonus)")
+    _action_uuid: UUID | None = PrivateAttr(default=None)
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], None
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], None
+    def _apply(self, declaration_event: Event):
+        return [], [], [], [], declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
 
-        bonus_dash = BonusDash(source_entity_uuid=target.uuid, template=True)
-        target.register_action(bonus_dash)
+    def _commit_application(self, event: Event) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            action = BonusDash(source_entity_uuid=target.uuid, template=True,
+                               contribution_owner_uuid=self.uuid)
+            target.register_action(action)
+            self._action_uuid = action.uuid
 
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self}
-        ) if declaration_event else None
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        if self.target_entity_uuid:
-            target = Entity.get(self.target_entity_uuid)
-            if target:
-                target.unregister_action(self._action_name)
-        return super()._remove(event)
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None and self._action_uuid is not None:
+            target.unregister_action_by_uuid(self._action_uuid)
+        self._action_uuid = None
+        super()._release_owned_runtime_state(parent_event=parent_event)
 
 
 class ExpeditiousRetreat(SpellAction):
@@ -1284,16 +1287,18 @@ class ExpeditiousRetreat(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Expeditious Retreat"
         )
+        if effect_event.canceled:
+            return effect_event
 
         retreat_effect = ExpeditiousRetreatEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
             tags={ConditionTag.MAGICAL}
         )
-        caster.add_condition(retreat_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, retreat_effect)
+        if effect_event.canceled:
+            return effect_event
 
-        concentration = self.ensure_concentration(effect_event)
-        concentration.add_linked_condition(caster.uuid, retreat_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"{caster.name} can now Dash as a bonus action"
@@ -1335,6 +1340,12 @@ class EnhanceAbilityEffect(BaseCondition):
             status_message=f"Enhanced {self.ability_type.title()} on {target.name}"
         )
 
+        return outs, [], [], [], effect_event
+
+    def _commit_application(self, effect_event: Event) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return
         if self.ability_type == "constitution":
             healing = Healing(
                 source_entity_uuid=self.source_entity_uuid,
@@ -1345,8 +1356,6 @@ class EnhanceAbilityEffect(BaseCondition):
             )
             temp_hp = healing.get_dice().roll.total
             target.health.add_temporary_hit_points(temp_hp, self.source_entity_uuid, parent_event=effect_event.uuid)
-
-        return outs, [], [], [], effect_event
 
 
 class EnhanceAbility(SpellAction):
@@ -1416,12 +1425,13 @@ class EnhanceAbility(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        concentration = self.ensure_concentration(execution_event)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             status_message=f"Enhancing {self.enhance_ability_type.title()} on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         effect = EnhanceAbilityEffect(
             source_entity_uuid=caster.uuid,
@@ -1429,23 +1439,13 @@ class EnhanceAbility(SpellAction):
             ability_type=self.enhance_ability_type,
             tags={ConditionTag.MAGICAL}
         )
-        target.add_condition(effect, parent_event=effect_event)
-        if effect.applied:
-            concentration.add_linked_condition(target.uuid, effect.uuid)
+        effect_event = self.apply_owned_condition(effect_event, effect)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"Enhanced {self.enhance_ability_type.title()} on {target.name}"
         )
-
-_SIZE_ORDER = [Size.TINY, Size.SMALL, Size.MEDIUM, Size.LARGE, Size.HUGE, Size.GARGANTUAN]
-
-
-def _shift_size(current: Size, delta: int) -> Size:
-    """Shift size up or down, clamping to valid range."""
-    idx = _SIZE_ORDER.index(current)
-    new_idx = max(0, min(len(_SIZE_ORDER) - 1, idx + delta))
-    return _SIZE_ORDER[new_idx]
-
 
 class EnlargeReduceEffect(BaseCondition):
     """Change target size and Strength roll advantage state.
@@ -1457,7 +1457,6 @@ class EnlargeReduceEffect(BaseCondition):
     name: str = Field(default="Enlarge/Reduce", description="Condition name.")
     description: str = Field(default="Size changed by magic", description="Rules-facing condition summary.")
     mode: Literal["enlarge", "reduce"] = Field(default="enlarge", description="Either 'enlarge' or 'reduce'.")
-    original_size: Optional[str] = Field(default=None, description="Original size value restored when the effect ends.")
 
     def snapshot_state(self) -> ConditionState:
         return super().snapshot_state().model_copy(update={"size_change": self.mode})
@@ -1469,13 +1468,9 @@ class EnlargeReduceEffect(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        self.original_size = target.size.value
-
         if self.mode == "enlarge":
-            target.size = _shift_size(target.size, 1)
             adv_value = AdvantageStatus.ADVANTAGE
         else:
-            target.size = _shift_size(target.size, -1)
             adv_value = AdvantageStatus.DISADVANTAGE
 
         str_ability = target.ability_scores.get_ability("strength")
@@ -1507,15 +1502,16 @@ class EnlargeReduceEffect(BaseCondition):
 
         return outs, [], [], [], effect_event
 
-    def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
-        """Restore original size on removal."""
+    def _commit_application(self, event: Event) -> None:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target and self.original_size:
-            try:
-                target.size = Size(self.original_size)
-            except ValueError:
-                pass
-        return super()._remove(removal_event)
+        if target is not None:
+            target.add_temporary_size_step(self.uuid, 1 if self.mode == "enlarge" else -1)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            target.remove_temporary_size_step(self.uuid)
+        super()._release_owned_runtime_state(parent_event=parent_event)
 
 
 class EnlargeReduce(SpellAction):
@@ -1606,12 +1602,13 @@ class EnlargeReduce(SpellAction):
                     status_message=f"{target.name} resists {self.name} (CON save)"
                 )
 
-        concentration = self.ensure_concentration(execution_event)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             status_message=f"{'Enlarging' if self.enlarge_mode == 'enlarge' else 'Reducing'} {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         effect = EnlargeReduceEffect(
             source_entity_uuid=caster.uuid,
@@ -1619,9 +1616,9 @@ class EnlargeReduce(SpellAction):
             mode=self.enlarge_mode,
             tags={ConditionTag.MAGICAL}
         )
-        target.add_condition(effect, parent_event=effect_event)
-        if effect.applied:
-            concentration.add_linked_condition(target.uuid, effect.uuid)
+        effect_event = self.apply_owned_condition(effect_event, effect)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{target.name} {'enlarged' if self.enlarge_mode == 'enlarge' else 'reduced'} to {target.size.value}"
@@ -1900,7 +1897,6 @@ class RegeneratingEffect(BaseCondition):
                     event_source_entity_uuid=self.target_entity_uuid
                 )
             ],
-            runs_while_suppressed=True,
             event_processor=self._on_turn_start
         )
         target.add_event_handler(handler)
@@ -1993,6 +1989,8 @@ class Regenerate(SpellAction):
             target_entity_name=target.name,
             status_message=f"Regenerate heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Regenerate")
         actual = target.receive_healing(
@@ -2006,7 +2004,9 @@ class Regenerate(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid
         )
-        target.add_condition(regen, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, regen)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             total_damage=0,
@@ -2168,7 +2168,7 @@ class ShillelaghEffect(BaseCondition):
                 actor.remove_condition_by_uuid(self.uuid, parent_event=transition)
             return None
 
-        handler = EventHandler(name="Shillelagh release", source_entity_uuid=caster.uuid, runs_while_suppressed=True,
+        handler = EventHandler(name="Shillelagh release", source_entity_uuid=caster.uuid, runs_while_owner_inactive=True,
             trigger_conditions=[Trigger(event_type=EventType.WEAPON_UNEQUIP, event_phase=EventPhase.EFFECT),
                 Trigger(event_type=EventType.WEAPON_EQUIP, event_phase=EventPhase.COMPLETION),
                 Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.COMPLETION,
@@ -2442,6 +2442,8 @@ class CreateOrDestroyWater(SpellAction):
 
     def _apply(self,event: SpellEvent):
         effect=event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:
+            return effect
         target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if self.mode=="create" and target is not None:
             target.add_condition(RainWetEffect(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,
@@ -2649,7 +2651,6 @@ class Goodberry(SpellAction):
         if admitted.canceled or not batch.applied:
             return admitted
         for berry in self._berries:
-            berry.creation_condition_uuid=batch.uuid
             if not recipient.loot_item(berry,parent_event=admitted):
                 caster.remove_condition_by_uuid(batch.uuid,parent_event=admitted)
                 return admitted.cancel(status_message="Berry inventory admission changed")

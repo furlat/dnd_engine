@@ -269,6 +269,61 @@ def test_fall_absorbed_by_temporary_hp_still_knocks_prone_unless_no_damage(scene
     assert ('Prone' in target.active_conditions) is not immune
 
 
+@pytest.mark.parametrize("canceled", [False, True])
+def test_fall_prone_uses_resolved_damage_despite_reactive_healing(scene, canceled):
+    caster, target = scene
+    target.faction = caster.faction
+    Entity.update_entity_position(caster, (3, 2))
+    raise_support([(3, 2), (4, 2)], 10)
+    before = target.get_normal_hp()
+
+    def heal_after_damage(event, _):
+        target.receive_healing(event.applied_damage, target.uuid, parent_event=event.uuid)
+        return None
+
+    target.add_event_handler(EventHandler(source_entity_uuid=target.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.DAMAGE_APPLIED,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=target.uuid)],
+        event_processor=heal_after_damage))
+    if canceled:
+        target.add_event_handler(EventHandler(source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+                event_phase=EventPhase.EFFECT, event_target_entity_uuid=target.uuid)],
+            event_processor=lambda event, _: event.cancel(status_message="Fall damage refused")))
+    Entity.update_all_entities_senses(max_distance=125)
+    with fixed_dice_faces(*([2] * 64)):
+        result = Shove(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid).apply()
+    canceled_move = result.canceled
+    assert not canceled_move and target.position == (5, 2)
+    assert target.get_normal_hp() == before
+    assert ("Prone" in target.active_conditions) is not canceled
+
+
+def test_fall_admission_temp_hp_keeps_prone_consistent_with_completed_damage_facts(scene):
+    caster, target = scene
+    target.faction = caster.faction
+    Entity.update_entity_position(caster, (3, 2))
+    raise_support([(3, 2), (4, 2)], 10)
+
+    def grant_during_admission(event, _):
+        target.health.add_temporary_hit_points(10, target.uuid)
+        return None
+
+    target.add_event_handler(EventHandler(source_entity_uuid=target.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=target.uuid)],
+        event_processor=grant_during_admission))
+    Entity.update_all_entities_senses(max_distance=125)
+    cursor = EventQueue.event_cursor()
+    with fixed_dice_faces(*([2] * 64)):
+        result = Shove(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid).apply()
+    canceled_move = result.canceled
+    facts = damage_since(cursor)
+    prone = "Prone" in target.active_conditions
+    assert not canceled_move and target.position == (5, 2)
+    assert prone is bool(facts)
+
+
 def test_thunderwave_uses_same_ledge_landing(scene):
     caster, target = scene
     Entity.update_entity_position(caster, (3, 2))

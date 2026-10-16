@@ -1,6 +1,6 @@
 """Paid mark/favor casts, real weapon/spell attacks, and retained quarry state."""
 from dnd.spells.transmutation import SlowedEffect, Shillelagh
-from dnd.spells.abjuration import AntimagicField, GlobeOfInvulnerability
+from dnd.spells.abjuration import GlobeOfInvulnerability
 from dnd.spells.evocation import FlameBlade
 from dnd.entity import Entity
 import pytest
@@ -260,25 +260,9 @@ def test_magic_weapon_composes_with_shillelagh_and_follows_real_transfer(game):
     assert weapon.attack_bonus.normalized_score==0 and not weapon.attack_is_magical(recipient.uuid)
 
 
-@pytest.mark.parametrize('contact',[False,True])
-def test_magic_weapon_arrow_crossing_or_contacting_antimagic_keeps_physical_damage(game,contact):
-    caster=combatant(game,position=(1,2))
-    enemy=combatant(game,'Enemy',(10,2),'foes')
-    field_caster=combatant(game,'Field',(5,3),slots={8:1})
-    weapon=equip(caster,'weapon.longbow',WeaponSlot.RANGED_MAIN)
-    cast(MagicWeapon,caster,weapon_slot=WeaponSlot.RANGED_MAIN)
-    assert weapon.attack_bonus.normalized_score==1
-    cast(AntimagicField,field_caster)
-    if contact:Entity.update_entity_position(enemy,(6,2))
-    Entity.update_all_entities_senses()
-    hp=enemy.get_hp()
-    with fixed_dice_faces(15,5):result=cast(Attack,caster,enemy,weapon_slot=WeaponSlot.RANGED_MAIN)
-    assert enemy.get_hp()==hp-5
-    assert result.item_magic_suppression_provider_uuids and not result.attack_is_magical
-    assert weapon.attack_bonus.normalized_score==1
 
 
-@pytest.mark.parametrize('protection',[GlobeOfInvulnerability,AntimagicField])
+@pytest.mark.parametrize('protection',[GlobeOfInvulnerability])
 def test_attack_backed_smite_protection_stops_rider_and_preserves_physical_hit(game,protection):
     caster=combatant(game,position=(4,2))
     enemy=combatant(game,'Enemy',(5,2),'foes')

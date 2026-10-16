@@ -17,7 +17,7 @@ from dnd.entity import Entity
 from dnd.monsters.traits import MagicResistance
 from dnd.spells.necromancy import Blight, Eyebite, FingerOfDeath, Harm, HarmSource
 from dnd.spells.evocation import CircleOfDeath
-from dnd.spells.abjuration import AntimagicField, GreaterRestoration, LesserRestoration, SanctuaryEffect
+from dnd.spells.abjuration import GreaterRestoration, LesserRestoration, SanctuaryEffect
 from dnd.spells.illusion import Silence
 from tests.engine.support import set_hp
 from tests.manual.spell_regression_support import (
@@ -154,21 +154,6 @@ def test_eyebite_respects_sanctuary_before_action_or_slot_payment(repeat):
     assert "Sickened" not in target.active_conditions
 
 
-def test_eyebite_repeat_cannot_apply_its_effect_inside_antimagic():
-    caster, target = scene()
-    cast_eyebite(caster, target)
-    target.remove_condition("Sickened")
-    shield = AntimagicField(source_entity_uuid=target.uuid,
-        target_entity_uuid=target.uuid, alt_skip_slot=True).apply()
-    assert shield is not None and not shield.canceled
-    caster.action_economy.reset_all_costs()
-    strike = caster.get_action_template("Eyebite Strike")
-    assert strike is not None
-    with fixed_dice_faces(*([2] * 10)):
-        event = strike.instantiate(target_entity_uuid=target.uuid).apply()
-    assert event is not None and event.canceled
-    assert "Sickened" not in target.active_conditions
-    assert caster.get_action_template("Eyebite Strike") is not None
 
 
 def test_eyebite_repeat_is_nonverbal_noncast_and_retains_its_exact_source():
@@ -472,6 +457,38 @@ def test_harm_reduction_uses_committed_damage_before_reactive_healing():
     cast_harm(caster, target, face=2)
     assert target.get_max_hp() == maximum - 28
     assert target.get_normal_hp() <= target.get_max_hp()
+
+
+def test_refused_harm_damage_does_not_reduce_maximum_hp():
+    caster, target = scene()
+    before = target.get_normal_hp(), target.get_max_hp()
+    target.add_event_handler(EventHandler(source_entity_uuid=target.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=target.uuid)],
+        event_processor=lambda event, _: event.cancel(status_message="Harm damage refused")))
+    result = cast_harm(caster, target)
+    after = target.get_normal_hp(), target.get_max_hp()
+    assert after == before and result.total_damage == 0
+    assert not any(isinstance(condition, HarmSource) for condition in target.active_conditions_by_uuid.values())
+
+
+def test_harm_admission_temp_hp_uses_completed_damage_for_its_reduction():
+    caster, target = scene()
+    maximum = target.get_max_hp()
+
+    def grant_during_admission(event, _):
+        target.health.add_temporary_hit_points(10, target.uuid)
+        return None
+
+    target.add_event_handler(EventHandler(source_entity_uuid=target.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=target.uuid)],
+        event_processor=grant_during_admission))
+    result = cast_harm(caster, target)
+    accepted = next(event.final_damage for event in result.get_children_events()
+        if isinstance(event, TakeDamageEvent) and event.phase is EventPhase.COMPLETION and not event.canceled)
+    reduction = maximum - target.get_max_hp()
+    assert reduction == accepted and result.total_damage == accepted
 
 
 

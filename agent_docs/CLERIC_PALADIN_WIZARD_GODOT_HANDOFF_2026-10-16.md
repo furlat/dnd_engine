@@ -5,13 +5,18 @@ Branch: `codex/spells-rank-one-two`. Implementation baseline: `a1349f52e8b`.
 No NDClient files were edited. This document describes the delivered engine
 contracts; validation results are recorded in implementation-plan section16.
 
+Current update: the subsequent
+[spell repair and Antimagic removal handoff](SPELL_CATALOG_REPAIR_AND_ANTIMAGIC_REMOVAL_HANDOFF_2026-10-16.md)
+describes the delivered repairs and exact wire removals. Antimagic Field is no
+longer installed. Current class spell counts and schema below reflect that update.
+
 ## Rules and delivered scope
 
 Cleric/Life, Paladin/Devotion and Wizard/Evocation are playable through20 using
 the existing direct creator and ordered level mutation. BG3 rules apply where
 available; SRD5.1 supplies features beyond BG3's cap. Spell identities remain
-restricted to SRD5.1/5.2. There are61 eligible installed Cleric roots,23 Paladin
-and107 Wizard; these counts overlap and are not a distinct-spell total.
+restricted to SRD5.1/5.2. There are60 eligible installed Cleric roots,23 Paladin
+and106 Wizard; these counts overlap and are not a distinct-spell total.
 
 Life and Devotion selection happens at1; Evocation at2. No BG3-only Holy Rebuke
 was added. Devotion's always-prepared spell pairs start at3. At17, Flame Strike
@@ -62,7 +67,7 @@ scale by total character level. No client-side slot-table calculation is needed.
 
 ## Public protocol and discovery
 
-The current player protocol is **schema10**, protocol version1. Canonical
+The current player protocol is **schema11**, protocol version1. Canonical
 schema/OpenAPI/field ledger are under `sdk/protocol`; both
 `sdk/python/src/dnd_player` and `sdk/player-typescript/src` are regenerated.
 The current player SDK is the supported surface. The historical

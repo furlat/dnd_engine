@@ -5,9 +5,9 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
 from dnd.core.base_object import BaseObject
-from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent, SpellProtectionRegistry
+from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent
 from dnd.core.condition_types import (
-    HazardFilter, InvoluntarySustainLoss, SustainLossPolicy, ConditionTag,
+    HazardFilter, InvoluntarySustainLoss, SustainLossPolicy,
 )
 from dnd.core.item_types import ItemPresentationState, ItemReleaseReason
 from dnd.core.content.runtime import (
@@ -1819,13 +1819,6 @@ class BaseBlock(BaseModel):
             if declaration_event.canceled:
                 self._discard_uncommitted_condition_tree(condition)
                 return declaration_event
-            position = self.get_position()
-            if (position is not None and condition.magical_origin and not condition.antimagic_exempt()
-                    and ConditionTag.CONCENTRATION not in condition.tags):
-                parent = BaseCondition.get(condition.parent_condition) if condition.parent_condition else None
-                if not isinstance(parent, BaseCondition) or not parent.magical_origin:
-                    condition.suppression_provider_uuids.update(row.provider_uuid for row in
-                        SpellProtectionRegistry.get_antimagic_suppressions({position}))
             effect = condition.prepare_application(declaration_event=declaration_event)
             if effect is None or effect.canceled:
                 self._discard_uncommitted_condition_tree(condition)
@@ -1952,11 +1945,17 @@ class BaseBlock(BaseModel):
         try:
             publication = prepared.publication
             assert publication is not None
-            prepared.completion = prepared.effect.phase_to(
+            completion = prepared.effect.phase_to(
                 EventPhase.COMPLETION, condition_state=publication.condition_state,
                 resulting_stats=publication.resulting_stats, resulting_tile=publication.resulting_tile,
-                resulting_item=publication.resulting_item,
+                resulting_item=publication.resulting_item, use_register=False,
             )
+            try:
+                prepared.completion = EventQueue.register(completion.model_copy(update={"use_register": True}))
+            finally:
+                committed = EventQueue.get_event_by_uuid(completion.uuid)
+                if committed is not None:
+                    prepared.condition.record_committed_publication(committed)
             prepared.condition.applied_source_event_cursor = EventQueue.event_cursor()
         except BaseException as error:
             errors.append(error)

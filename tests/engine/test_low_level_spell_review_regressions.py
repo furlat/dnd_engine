@@ -10,7 +10,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
-from dnd.spells.abjuration import AntimagicField, ProtectionFromEvilAndGood
+from dnd.spells.abjuration import ProtectionFromEvilAndGood
 from dnd.spells.conjuration import EnsnaringStrike
 from dnd.spells.divination import HuntersMark, ReapplyHuntersMark
 from dnd.spells.enchantment import (
@@ -310,15 +310,12 @@ def test_protection_cures_only_eligible_new_charm_source(game):
     assert sources == {human.uuid}, sources
 
 
-def test_dissonant_deadline_expires_while_antimagic_suppresses(game):
+def test_dissonant_deadline_expires_through_native_turns(game):
     caster = combatant(game)
     target = combatant(game, "Enemy", (5, 2), "foes")
-    blocker = combatant(game, "Antimagic", (5, 3), "foes", slots={8: 3})
     force_save_result(target, "wisdom", succeeds=False)
     cast(DissonantWhispers, caster, target)
     assert target.action_economy.current_speed() == 0
-    cast(AntimagicField, blocker)
-    assert target.action_economy.current_speed() > 0
     target.on_turn_start()
     target.on_turn_end()
     target.on_turn_start()

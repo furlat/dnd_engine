@@ -8,7 +8,7 @@ from dnd.conditions import Frightened, Poisoned
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import DamageAppliedEvent, EventPhase, EventQueue, EventType
+from dnd.core.events import DamageAppliedEvent, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, ResistanceModifier, ResistanceStatus
 from dnd.entity import Entity
@@ -160,6 +160,58 @@ def test_guardian_counts_resolved_temp_hp_absorption(game, resistance, expected)
         Entity.update_entity_position(enemy, (8, 3))
     assert enemy.get_normal_hp() == before
     assert zone.damage_dealt == expected
+
+
+@pytest.mark.parametrize("canceled", [False, True])
+def test_guardian_counter_uses_own_packet_despite_reactive_damage_and_healing(game, canceled):
+    caster, enemy = actor(game), actor(game, "Enemy", (8, 2), "foes")
+    force_save_result(enemy, "dexterity", succeeds=False)
+    cast(GuardianOfFaith, caster, end_position=(5, 2))
+    zone = zones(GuardianOfFaithZone)[0]
+    before = enemy.get_normal_hp()
+
+    def react(event, _):
+        if event.source_condition_uuid == zone.uuid:
+            enemy.receive_damage(7, DamageType.FIRE, caster.uuid, parent_event=event.uuid,
+                independent_resolution=True)
+            enemy.receive_healing(event.applied_damage + 7, enemy.uuid, parent_event=event.uuid)
+        return None
+
+    enemy.add_event_handler(EventHandler(source_entity_uuid=enemy.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.DAMAGE_APPLIED,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=enemy.uuid)], event_processor=react))
+    if canceled:
+        enemy.add_event_handler(EventHandler(source_entity_uuid=enemy.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+                event_phase=EventPhase.EFFECT, event_target_entity_uuid=enemy.uuid)],
+            event_processor=lambda event, _: event.cancel(status_message="Damage refused")))
+    with fixed_dice_faces(10):
+        Entity.update_entity_position(enemy, (8, 3))
+    assert enemy.get_normal_hp() == before
+    assert zone.damage_dealt == (0 if canceled else 20)
+
+
+def test_guardian_admission_temp_hp_keeps_counter_equal_to_its_applied_fact(game):
+    caster, enemy = actor(game), actor(game, "Enemy", (8, 2), "foes")
+    force_save_result(enemy, "dexterity", succeeds=False)
+    cast(GuardianOfFaith, caster, end_position=(5, 2))
+    zone = zones(GuardianOfFaithZone)[0]
+
+    def grant_during_admission(event, _):
+        enemy.health.add_temporary_hit_points(10, enemy.uuid)
+        return None
+
+    enemy.add_event_handler(EventHandler(source_entity_uuid=enemy.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=enemy.uuid)],
+        event_processor=grant_during_admission))
+    cursor = EventQueue.event_cursor()
+    with fixed_dice_faces(10):
+        Entity.update_entity_position(enemy, (8, 3))
+    facts = [event.applied_damage for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, DamageAppliedEvent) and event.phase is EventPhase.COMPLETION
+        and event.source_condition_uuid == zone.uuid]
+    assert facts and zone.damage_dealt == sum(facts)
 
 
 def test_feast_full_benefits_and_exact_tenth_recipient_turn_expiry(game):

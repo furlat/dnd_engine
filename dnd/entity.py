@@ -476,7 +476,6 @@ class Entity(BaseBlock):
     spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT
     pending_spatial_return: PendingSpatialReturn | None = None
     pending_spatial_return_handler_uuid: UUID | None = Field(default=None, exclude=True)
-    antimagic_presence_owner_uuid: UUID | None = Field(default=None, exclude=True)
     is_spatially_suspended: bool = Field(
         default=False,
         description="Whether a retained Entity is temporarily absent from the world.",
@@ -489,6 +488,8 @@ class Entity(BaseBlock):
         default_factory=dict,
         description="Source-owned durable size contributions.",
     )
+    temporary_size_steps: Dict[UUID, int] = Field(default_factory=dict)
+
     origin_capability_sources: Dict[OriginCapability, Set[UUID]] = Field(
         default_factory=dict,
         description="Source-owned durable non-numerical origin capabilities.",
@@ -1044,7 +1045,7 @@ class Entity(BaseBlock):
         if self.pending_spatial_return_handler_uuid is not None:
             return
         handler = EventHandler(name="Pending spatial return", source_entity_uuid=self.uuid,
-            runs_while_suppressed=True, event_processor=self._retry_spatial_return,
+            runs_while_owner_inactive=True, event_processor=self._retry_spatial_return,
             trigger_conditions=[Trigger(event_type=kind, event_phase=EventPhase.EFFECT)
                 for kind in (EventType.SPATIAL_ENTITY_LEFT, EventType.SPATIAL_TILE_CHANGED,
                              EventType.SPATIAL_OBJECT_REMOVED, EventType.SPATIAL_OBJECT_CHANGED)])
@@ -1913,19 +1914,28 @@ class Entity(BaseBlock):
                 f"structural size contributions disagree: {values}",
             )
         self.structural_size_sources[source_id] = size
-        self.size = size
+        self._resolve_size_contributions()
 
     def remove_structural_size_source(self, source_id: UUID) -> bool:
         """Remove exactly one durable size source and restore its predecessor."""
         if self.structural_size_sources.pop(source_id, None) is None:
             return False
-        remaining = set(self.structural_size_sources.values())
-        self.size = (
-            next(iter(remaining))
-            if remaining
-            else self.structural_base_size
-        )
+        self._resolve_size_contributions()
         return True
+
+    def _resolve_size_contributions(self) -> None:
+        sizes = tuple(Size)
+        durable = next(iter(self.structural_size_sources.values()), self.structural_base_size)
+        index = sizes.index(durable) + sum(self.temporary_size_steps.values())
+        self.size = sizes[max(0, min(len(sizes) - 1, index))]
+
+    def add_temporary_size_step(self, owner_uuid: UUID, step: int) -> None:
+        self.temporary_size_steps[owner_uuid] = step
+        self._resolve_size_contributions()
+
+    def remove_temporary_size_step(self, owner_uuid: UUID) -> None:
+        self.temporary_size_steps.pop(owner_uuid, None)
+        self._resolve_size_contributions()
 
     def add_origin_capability_source(
         self,
@@ -3709,6 +3719,7 @@ class Entity(BaseBlock):
         zero_hp_disposition: RemainsDisposition = RemainsDisposition.INTACT,
         ignores_resistance_immunity: bool = False,
         on_resolved: Callable[[DamageResolution], None] | None = None,
+        on_completed: Callable[[TakeDamageEvent, DamageAppliedEvent | None], None] | None = None,
     ) -> int:
         """Apply damage through the engine event lifecycle.
 
@@ -3727,6 +3738,9 @@ class Entity(BaseBlock):
             critical_hit: Whether this damage came from a critical hit, for
                 damage-at-0 death-save failures.
             effect_id: Stable identity used by typed effect protections.
+            on_completed: Receives this operation's final incoming event and
+                optional applied-damage result after incoming completion. Each
+                result retains its actual admitted/canceled phase.
 
         Returns:
             Actual HP lost after handlers, cancellation, and resistances.
@@ -3783,13 +3797,14 @@ class Entity(BaseBlock):
         temporary_hp_after = max(0, self.health.temporary_hit_points.normalized_score)
         temporary_hit_point_damage = max(0, temporary_hp_before - temporary_hp_after)
         applied_damage = actual_damage + temporary_hit_point_damage
+        applied_event: DamageAppliedEvent | None = None
         if applied_damage > 0 and damage_resolution is not None:
             if (actual_damage > 0 and normal_hp_before <= 0 and self.uses_death_saves
                     and self.health.life_state in (LifeState.DYING, LifeState.STABLE)):
                 # Already-down actors stay at zero. Publish that actual pool;
                 # the resolved damage still owns death-save failures/overkill.
                 self._set_normal_hp(0)
-            self._complete_damage_applied_event(
+            applied_event = self._complete_damage_applied_event(
                 source_entity_uuid=source_entity_uuid,
                 damage_type=damage_type,
                 damages=take_damage_event.damages,
@@ -3858,6 +3873,8 @@ class Entity(BaseBlock):
         take_damage_event = take_damage_event.phase_to(EventPhase.COMPLETION)
         if on_resolved is not None and damage_resolution is not None:
             on_resolved(damage_resolution)
+        if on_completed is not None:
+            on_completed(take_damage_event, applied_event)
 
         return actual_damage
 

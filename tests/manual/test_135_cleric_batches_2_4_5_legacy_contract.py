@@ -6,7 +6,6 @@ not already asserted by the active engine-book suite.
 """
 
 from uuid import uuid4
-from unittest.mock import patch
 
 import pytest
 
@@ -206,10 +205,7 @@ def test_resistance_modifies_one_save_then_cleans_concentration() -> None:
         ability_name="wisdom",
         dc=12,
     )
-    with (
-        fixed_dice_faces(10),
-        patch("dnd.spells.abjuration.random.randint", return_value=4),
-    ):
+    with fixed_dice_faces(10, 4):
         _, roll, _ = target.saving_throw(request)
 
     assert roll.total == 14

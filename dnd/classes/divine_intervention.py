@@ -15,7 +15,7 @@ from dnd.content.items.environment_item_builders import build_storage_chest
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome
-from dnd.core.effect_types import EffectOrigin, EffectOriginKind, AntimagicException
+from dnd.core.effect_types import EffectOrigin, EffectOriginKind
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     Damage,
@@ -109,7 +109,6 @@ def intervention_origin():
     return EffectOrigin(
         kind=EffectOriginKind.ACTION,
         magical=True,
-        antimagic_exception=AntimagicException.DEITY,
         source_id=INTERVENTION_ID,
     )
 

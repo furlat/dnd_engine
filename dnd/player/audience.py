@@ -132,8 +132,8 @@ def _join_effect(first: PerceivedSpatialEffect, second: PerceivedSpatialEffect) 
     for row in second.suppressions:
         prior = protections.get(row.provider_uuid)
         if prior is not None and (
-                prior.antimagic, prior.provider_content_ref, prior.area_geometry, prior.anchor_elevation_steps
-                ) != (row.antimagic, row.provider_content_ref, row.area_geometry, row.anchor_elevation_steps):
+                prior.provider_content_ref, prior.area_geometry, prior.anchor_elevation_steps
+                ) != (row.provider_content_ref, row.area_geometry, row.anchor_elevation_steps):
             return None
         protections[row.provider_uuid] = row.model_copy(update={
             'positions': tuple(sorted(set(row.positions) | (set(prior.positions) if prior else set())))})
@@ -503,5 +503,3 @@ class SeatAssignment:
     seat_id: str
     controlled: tuple[tuple[str, str], ...]
     observers: tuple[tuple[str, str], ...] | None = None
-
-

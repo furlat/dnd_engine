@@ -61,8 +61,6 @@ def payload_blast(
     parent: Event,
 ) -> None:
     """Native connected reach, saves, independent packets and material contacts."""
-    if SpellProtectionRegistry.get_antimagic_suppressions({center}):
-        return
     damage_type = DamageType.COLD if kind == "freezing" else DamageType.FIRE
     spell_id = (
         "spell.freezing_sphere"
@@ -220,7 +218,6 @@ class SpellPayloadItem(UsableItem):
     effect_origin: EffectOrigin | None = None
     lifetime_uuid: UUID | None = None
     is_magical: bool = True
-    magically_created: bool = True
     is_consumable: bool = False
     is_pickable: bool = True
     weight: float = 0.1
@@ -604,7 +601,7 @@ class SpellPayloadLifetime(BaseCondition):
             EventHandler(
                 name="Original caster payload clock",
                 source_entity_uuid=caster.uuid,
-                runs_while_suppressed=True,
+                runs_while_owner_inactive=True,
                 trigger_conditions=[
                     Trigger(
                         event_type=EventType.TURN_END,
@@ -617,7 +614,7 @@ class SpellPayloadLifetime(BaseCondition):
             EventHandler(
                 name="Payload caster ending",
                 source_entity_uuid=caster.uuid,
-                runs_while_suppressed=True,
+                runs_while_owner_inactive=True,
                 trigger_conditions=[
                     Trigger(
                         event_type=kind,
@@ -760,7 +757,6 @@ def commit_payload_cast(
                 if not isinstance(concentration, PreparedSpellConcentration):
                     return event.cancel(status_message="Payload concentration refused")
             item.lifetime_uuid = owner.uuid
-            item.creation_condition_uuid = owner.uuid
             publication_error = None
             try:
                 if recipient is not None:

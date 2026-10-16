@@ -2,8 +2,9 @@
 
 Date: 2026-10-16. Worktree:
 `/home/tommaso/.codex/worktrees/spells-rank-one-two/dnd_engine`.
-Branch: `codex/spells-rank-one-two`, current implementation over `a1349f52e8b`.
-Status: proposed implementation plan; production implementation has not started.
+Branch: `codex/spells-rank-one-two`, repair over checkpoint `059ad0af4c9`.
+Status: implemented and qualified; actual implementation record is in section 11.
+The human explicitly waived the push prerequisite; continue in this worktree.
 
 ## 1. Requested result and boundaries
 
@@ -152,7 +153,7 @@ unchanged. Use the repository's existing exporters, not hand edits:
 ```bash
 uv run --no-sync python -m devtools.export_player_protocol
 uv run --no-sync python -m devtools.generate_player_python
-node sdk/player-typescript/tools/generate.mjs
+(cd sdk/player-typescript && node tools/generate.mjs)
 ```
 
 This updates the schema, identity, OpenAPI, field ledger and current Python/TS
@@ -527,3 +528,69 @@ These are independent plan reviews, not human approval to begin this plan or
 implementation signoff. Production code and tests were not changed in this
 planning turn. Actual implementation still requires its own adherence monitor,
 qualification and final reviews described above.
+
+## 11. Implementation record, 2026-10-16
+
+Sections 1–10 above retain the approved design and historical plan-review record.
+The human subsequently authorized implementation and explicitly waived the push
+prerequisite after the local checkpoint. Work remains in this worktree above
+`059ad0af4c9`; no client/frontend source was edited.
+
+All seven implementation phases are delivered:
+
+1. Checkpointed prior spell/class/audit work; retained immutable audit Markdown,
+   coverage CSV and baseline JSONL. A read-only adherence sub-agent monitored
+   implementation; anti-slop and anti-OOP reviewers checked actual code.
+2. Removed live AM content and otherwise-unused runtime queries/fields/hooks,
+   migrated mixed tests, preserved Globe/Banishment/construction/item lifetime,
+   regenerated protocol-1/schema-11 contracts and archived the exact old contract.
+3. Repaired all 34 audited EFFECT-admission cases and a further native True Strike
+   child-attack case. Bestow Curse uses one accepted attack-packet hit rider;
+   reactions have independent native positive/cancellation/cost coverage.
+4. Corrected shared paralysis, recipient/source-owned Chill Touch healing blocks,
+   required Charmed admission, exact size contributions, owned bonus Dash and
+   finite source-specific Charm Person relationships. Greater Restoration follows
+   exact family/parent leases and removal vetoes. Native secondary-only direct
+   harmful abilities obey Charmed; incidental area damage remains permitted.
+5. Corrected self Haste and native ten-turn expiry. Bestow Curse rank policy is
+   explicit. Its non-attack saved/automatic/ongoing spell bonus remains deferred
+   exactly as section 9 permits; no broader spell-damage support is claimed.
+6. Recipient-filtered triggers avoid unrelated dispatch; concentration stores one
+   last committed event UUID with exact index lookup; Antilife uses local swept
+   occupancy/crossings. Post-repair measurements are saved separately. Ordinary
+   optics tests exposed and fixed footprint/cache-before-light update ordering.
+7. Executed final gameplay/player/SDK and architecture checks, source lint/export
+   consistency and diff validation. Reviewed concrete archive field owners;
+   opaque context stays untouched, old active suppression explicitly rejects.
+
+Actual-code anti-OOP review is approved, including its final executed 62-case
+review and both last edge-case counterexamples. Actual-code anti-slop review is
+approved, including scoped icon ledger/render verification, archive context,
+restoration repairs and the final two deltas (20 independent passing cases).
+The existing class/Godot handoff now carries current class counts/schema and a
+link to the repair handoff; the historical AM packet explicitly states retirement.
+**Final plan-adherence review approved:** independently reran the complete
+140-case repair lane and verified all seven phases, schema/archive identity,
+baseline failure evidence, cold inputs, current handoffs and no-client scope.
+No finite plan gap remains.
+
+Qualification: **140 repair tests pass**, **101 final boundary tests pass**;
+the affected/shared engine selection has **960 passes and six pre-existing
+failures**. Other overlapping runs: **587** Python SDK/player/progression/codegen,
+**225** player, **63** TypeScript SDK, **50** optics/sensory and the scoped frozen
+icon architecture check all pass. These counts must not be summed as unique
+tests. All six final engine failures occur among **69 failures independently
+reproduced at the unchanged checkpoint**. Two unchanged legacy import/collection
+failures were explicitly excluded; unrelated expectations were not weakened.
+
+Current installed inventory is **186 identities / 181 primary roots** after AM
+removal; class eligibility maps are Cleric 60, Paladin 23 and Wizard 106.
+Current protocol 1/schema 11 has 325 shared definitions and 1,716 fields, with
+matching native/Python/TypeScript identity. Native recording schema 2 and public
+sequence schema 5 remain unchanged.
+
+Complete behavior, exact wire removals, test commands/baseline qualifications,
+performance counts and the remaining Curse policy are in the
+[implementation handoff](../SPELL_CATALOG_REPAIR_AND_ANTIMAGIC_REMOVAL_HANDOFF_2026-10-16.md).
+Machine-readable qualification and checkpoint failure node IDs are in
+[the qualification record](../SPELL_CATALOG_REPAIR_QUALIFICATION_2026-10-16.json).

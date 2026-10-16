@@ -110,7 +110,6 @@ class VisualItem:
     visual_variant_id: str | None
     equipped_visual_policy: EquippedVisualPolicy
     item_effects: tuple[ItemEffectPresentationState, ...] = ()
-    suppression_provider_uuids: tuple[UUID, ...] = ()
     is_lit: bool | None = None
     very_bright_radius_feet: Annotated[int, Field(ge=0)] | None = None
     bright_radius_feet: Annotated[int, Field(ge=0)] | None = None
@@ -652,7 +651,6 @@ class FloorItem:
     stack_count: int = 1
     is_pickable: bool = True
     item_effects: tuple[ItemEffectPresentationState, ...] = ()
-    suppression_provider_uuids: tuple[UUID, ...] = ()
     blocks_propagation: bool = False
     contact_passage: ContactPassage = ContactPassage.STRUCTURAL
     supported_by_uuid: UUID | None = None

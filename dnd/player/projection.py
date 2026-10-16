@@ -107,7 +107,6 @@ def _visual_loadout(actor: ActorState) -> VisualLoadout:
             visual_variant_id=items[identity].visual_variant_id,
             equipped_visual_policy=items[identity].equipped_visual_policy,
             item_effects=items[identity].item_effects,
-            suppression_provider_uuids=items[identity].suppression_provider_uuids,
             is_lit=items[identity].is_lit,
             very_bright_radius_feet=items[identity].very_bright_radius_feet,
             bright_radius_feet=items[identity].bright_radius_feet,
@@ -736,7 +735,6 @@ def _floor_item(item: ItemPresentationState, residues: tuple[ObjectResidueState,
     return FloorItem(item_uuid=item.item_uuid, item_id=item.item_id, name=item.name,
         visual_item_name=item.visual_item_name, visual_variant_id=item.visual_variant_id,
         stack_count=item.stack_count, is_pickable=item.is_pickable, item_effects=item.item_effects,
-        suppression_provider_uuids=item.suppression_provider_uuids,
         map_char=item.map_char, boundary_structure=item.boundary_structure,
         contact_passage=item.contact_passage,
         supported_by_uuid=item.supported_by_uuid,
@@ -1605,5 +1603,3 @@ def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> Player
             f"{lineage.observer_uuid}:{lineage.root.lineage_uuid}"),
         root=root, events=nodes, version_rows=versions, start_cursor=start_cursor,
         end_cursor=state.next_occurrence, observations=observations, world_updates=updates, audience=state.remembered.audience)
-
-

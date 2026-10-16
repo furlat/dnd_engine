@@ -196,13 +196,13 @@ def test_explicit_object_after_value_updates_a_known_object_with_no_surviving_ba
 def test_remote_section_visibility_and_provider_after_values_refresh_construction_suppression():
     provider = uuid4()
     section = placed(item('Stationary section').model_copy(update={'construction_suppressions': (
-        SpellSuppression(provider_uuid=provider, antimagic=True, positions=((4, 0),)),)}), (0, 0))
+        SpellSuppression(provider_uuid=provider, positions=((4, 0),)),)}), (0, 0))
     identity = section.item.item_uuid
     start = initial((section,), ((0, 0),), {
         identity: PerceivedContact(position=(0, 0), visual=True, special_senses=())})
     observed = PerceivedSpatialEffect(content_ref=ContentRef(pack_id='test.projection',
         definition_kind=ContentDefinitionKind.CONDITION, content_id='condition.test.projection',
-        content_version=1, definition_contract_hash='0'*64), name='Antimagic', description='',
+        content_version=1, definition_contract_hash='0'*64), name='Globe of Invulnerability', description='',
         positions=((4, 0),), owner_revision=1, area_geometry=SpherePresentationGeometry(center=(4, 0), radius_feet=5))
     changed = observed.model_copy(update={'area_geometry': SpherePresentationGeometry(center=(4, 0), radius_feet=10),
         'owner_revision': 2})
