@@ -89,6 +89,7 @@ class SpatialEffectInteractionOperation(str, Enum):
     ELECTRIFY = "electrify"
     VAPORIZE = "vaporize"
     DISPERSE = "disperse"
+    DRY = "dry"
 
 
 class SpatialEffectInteractionIntensity(str, Enum):

@@ -22,6 +22,7 @@ from dnd.core.content.registration import creature_factory, get_content_declarat
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.dice import AttackOutcome
 from dnd.core.effect_types import EffectOrigin
+from dnd.core.spell_damage import roll_spell_damage
 from dnd.core.events import Damage, Event, EventHandler, EventPhase, EventType, Range, RangeType, SpatialChangeEvent, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue
@@ -70,7 +71,7 @@ def _sphere_damage(caster_uuid: UUID,target: Entity,*,dc: int,dice_count: int,ev
     damage=Damage(name="Flaming Sphere",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
         damage_dice=6,dice_numbers=dice_count,damage_type=DamageType.FIRE,effect_origin=origin,
         damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
-    roll=damage.get_dice(AttackOutcome.HIT).roll
+    roll=roll_spell_damage(damage, parent_event=event, attack_outcome=AttackOutcome.HIT, effect_origin=origin)
     target.receive_damage(roll.total//2 if saved else roll.total,DamageType.FIRE,caster.uuid,
         damages=[damage],damage_rolls=[roll],parent_event=event.uuid,effect_origin=origin)
 
@@ -151,7 +152,7 @@ class FlamingSphereAura(BaseCondition):
                     damage=Damage(name="Flaming Sphere object contact",source_entity_uuid=caster.uuid,target_entity_uuid=item.uuid,
                         damage_dice=6,dice_numbers=self.dice_count,damage_type=DamageType.FIRE,effect_origin=self.effect_origin,
                         damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
-                    roll=damage.get_dice(AttackOutcome.HIT).roll
+                    roll=roll_spell_damage(damage, parent_event=turn, attack_outcome=AttackOutcome.HIT, effect_origin=self.effect_origin)
                     item.receive_damage(roll.total,DamageType.FIRE,caster.uuid,damages=[damage],damage_rolls=[roll],parent_event=turn)
                 apply_elemental_surface_contacts(turn,positions,DamageType.FIRE)
             return None

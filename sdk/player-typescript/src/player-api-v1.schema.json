@@ -2345,6 +2345,7 @@
             "starting",
             "waiting_for_human",
             "advancing",
+            "outside_encounter",
             "delivery_blocked",
             "terminal",
             "failed",
@@ -2481,7 +2482,10 @@
       "enum": [
         "class.barbarian",
         "class.fighter",
-        "class.sorcerer"
+        "class.sorcerer",
+        "class.cleric",
+        "class.paladin",
+        "class.wizard"
       ],
       "title": "CharacterClass",
       "type": "string"
@@ -2490,7 +2494,10 @@
       "enum": [
         "subclass.barbarian.berserker",
         "subclass.fighter.champion",
-        "subclass.sorcerer.draconic_bloodline"
+        "subclass.sorcerer.draconic_bloodline",
+        "subclass.cleric.life_domain",
+        "subclass.paladin.oath_of_devotion",
+        "subclass.wizard.school_of_evocation"
       ],
       "title": "CharacterSubclass",
       "type": "string"
@@ -2989,6 +2996,8 @@
               "end_turn": "#/$defs/EndTurnIntent",
               "equip": "#/$defs/EquipIntent",
               "execute_selection": "#/$defs/ExecuteSelectionIntent",
+              "prepare_spells": "#/$defs/PrepareSpellsIntent",
+              "study_spell_mastery": "#/$defs/StudySpellMasteryIntent",
               "toggle_handler": "#/$defs/ToggleHandlerIntent",
               "unequip": "#/$defs/UnequipIntent"
             },
@@ -3009,6 +3018,12 @@
             },
             {
               "$ref": "#/$defs/ToggleHandlerIntent"
+            },
+            {
+              "$ref": "#/$defs/PrepareSpellsIntent"
+            },
+            {
+              "$ref": "#/$defs/StudySpellMasteryIntent"
             }
           ],
           "title": "Intent"
@@ -7039,6 +7054,15 @@
       "description": "Kinds of state transitions that handlers and logs can subscribe to.",
       "enum": [
         "base_action",
+        "action_application_committed",
+        "action_costs_committed",
+        "condition_membership_committed",
+        "rest_resources_recovered",
+        "permanent_feature_used",
+        "rest_completed",
+        "spell_mastery_studied",
+        "spellbook_changed",
+        "spell_preparation_changed",
         "attack",
         "movement",
         "step_movement",
@@ -7052,6 +7076,8 @@
         "take_damage",
         "damage_applied",
         "heal",
+        "healing_applied",
+        "maximum_hit_point_reduction",
         "temporary_hit_points_changed",
         "cast_spell",
         "attack_miss",
@@ -7084,6 +7110,8 @@
         "save_d20_roll",
         "check_d20_roll",
         "damage_roll_result",
+        "spell_damage_roll_result",
+        "spatial_effect_application",
         "heal_roll_result",
         "enemy_spotted",
         "enemy_killed",
@@ -11600,6 +11628,43 @@
           "default": null,
           "title": "Discovery Actor Uuid"
         },
+        "spellcasting_source_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spellcasting Source Id"
+        },
+        "spellcasting_provider_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spellcasting Provider Id"
+        },
+        "spellcasting_ability": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spellcasting Ability"
+        },
         "template_name": {
           "description": "Engine command token for execution; never authored presentation identity.",
           "title": "Template Name",
@@ -12567,6 +12632,30 @@
             "$ref": "#/$defs/AvailableHandlerInfo"
           },
           "title": "Handler Details",
+          "type": "array"
+        },
+        "scribed_spell_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Scribed Spell Ids",
+          "type": "array"
+        },
+        "permanent_feature_uses": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Permanent Feature Uses",
+          "type": "array"
+        },
+        "prepared_spell_selections": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PreparedSpellSelection"
+          },
+          "title": "Prepared Spell Selections",
           "type": "array"
         }
       },
@@ -14036,6 +14125,48 @@
       "title": "PositionPathSelection",
       "type": "object"
     },
+    "PrepareSpellsIntent": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "prepare_spells",
+          "default": "prepare_spells",
+          "title": "Kind",
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/PreparedSpellSelection"
+        }
+      },
+      "required": [
+        "selection"
+      ],
+      "title": "PrepareSpellsIntent",
+      "type": "object"
+    },
+    "PreparedSpellSelection": {
+      "description": "Ordered prepared spells owned by one semantic casting source.",
+      "properties": {
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "spell_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Spell Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "source_id",
+        "spell_ids"
+      ],
+      "title": "PreparedSpellSelection",
+      "type": "object",
+      "additionalProperties": false
+    },
     "PreviewRequest": {
       "additionalProperties": false,
       "properties": {
@@ -14136,8 +14267,8 @@
           "maximum": 9007199254740991
         },
         "player_schema_version": {
-          "const": 9,
-          "default": 9,
+          "const": 10,
+          "default": 10,
           "title": "Player Schema Version",
           "type": "integer",
           "minimum": -9007199254740991,
@@ -15699,7 +15830,8 @@
         "freeze",
         "electrify",
         "vaporize",
-        "disperse"
+        "disperse",
+        "dry"
       ],
       "title": "SpatialEffectInteractionOperation",
       "type": "string"
@@ -16529,6 +16661,32 @@
       "title": "SpellInterruptionLogData",
       "type": "object"
     },
+    "SpellMasteryStudy": {
+      "additionalProperties": false,
+      "properties": {
+        "rank_one_spell_id": {
+          "title": "Rank One Spell Id",
+          "type": "string"
+        },
+        "rank_two_spell_id": {
+          "title": "Rank Two Spell Id",
+          "type": "string"
+        },
+        "hours": {
+          "default": 8,
+          "title": "Hours",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "rank_one_spell_id",
+        "rank_two_spell_id"
+      ],
+      "title": "SpellMasteryStudy",
+      "type": "object"
+    },
     "SpellSaveLogData": {
       "additionalProperties": false,
       "description": "Structured data for a single save-based spell target.\n\nAttributes:\n    caster_name: Display name of the spellcaster.\n    caster_uuid: UUID string of the spellcaster.\n    target_name: Display name of the spell target.\n    target_uuid: UUID string of the spell target.\n    spell_name: Display name of the spell.\n    spell_level: Slot level or spell level used for display.\n    save_ability: Ability used for the saving throw.\n    save_dc: Difficulty Class for the spell save.\n    save_roll: Saving throw roll display data.\n    save_bonus_breakdown: Modifiers contributing to the save.\n    save_advantage_breakdown: Advantage and disadvantage sources.\n    save_success: Whether the target succeeded on the save.\n    damage_rolls: Damage rolls before save adjustment.\n    base_damage: Damage before save-based reduction.\n    final_damage: Damage after save-based reduction.\n    damage_type: Damage type label.\n    target_hp_after: Target HP after spell resolution, if known.",
@@ -17273,6 +17431,25 @@
         "status"
       ],
       "title": "StreamStatus",
+      "type": "object"
+    },
+    "StudySpellMasteryIntent": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "study_spell_mastery",
+          "default": "study_spell_mastery",
+          "title": "Kind",
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/SpellMasteryStudy"
+        }
+      },
+      "required": [
+        "selection"
+      ],
+      "title": "StudySpellMasteryIntent",
       "type": "object"
     },
     "SubjectBinding": {

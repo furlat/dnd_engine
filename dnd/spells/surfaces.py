@@ -16,7 +16,8 @@ from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition
-from dnd.spatial.environmental_conditions import IceSurface, FireSurface, ElectrifiedWater
+from dnd.spatial.environmental_conditions import IceSurface, FireSurface, ElectrifiedWater, DRY_TRANSITION
+from dnd.spatial.transitions import bind_spatial_interactions
 from dnd.spatial.ignition import apply_elemental_surface_contacts
 from dnd.spatial.memberships import MembershipAreaCondition, SpatialConditionMembershipSource
 from dnd.spells.content_metadata import srd_condition_identity
@@ -129,6 +130,13 @@ class SimpleToxinSurface(AreaCondition):
     tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.APPEAR,SpatialEffectTriggerKind.ENTER})
     first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = trigger_kinds
+
+    def _apply(self, event: Event):
+        modifiers, handlers, children, spatial, effect = super()._apply(event)
+        if effect is not None and not effect.canceled:
+            handler = bind_spatial_interactions(condition=self, transitions=(DRY_TRANSITION,))
+            spatial.append(handler.uuid)
+        return modifiers, handlers, children, spatial, effect
 
     def expose(self,target: Entity,event: Event) -> None:
         caster=Entity.get(self.source_entity_uuid)

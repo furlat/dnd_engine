@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from dnd.content.characters.class_definitions import FIGHTER_DEFINITION, BARBARIAN_DEFINITION, SORCERER_DEFINITION
+from dnd.content.characters.class_definitions import FIGHTER_DEFINITION, BARBARIAN_DEFINITION, SORCERER_DEFINITION, CLERIC_DEFINITION, PALADIN_DEFINITION, WIZARD_DEFINITION
 from dnd.content.items.authored_item_builders import DIRECT_ITEM_BUILDERS
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.player.content import UIContentManifest
@@ -28,7 +28,9 @@ def ui_content_manifest() -> UIContentManifest:
     loaded=SERVER_CONTENT_SYSTEM_RUNTIME.require()
     levels=(*FIGHTER_DEFINITION.levels,*FIGHTER_DEFINITION.champion_levels,
         *BARBARIAN_DEFINITION.levels,*BARBARIAN_DEFINITION.berserker_levels,
-        *SORCERER_DEFINITION.levels,*SORCERER_DEFINITION.draconic_levels)
+        *SORCERER_DEFINITION.levels,*SORCERER_DEFINITION.draconic_levels,
+        *CLERIC_DEFINITION.levels,*CLERIC_DEFINITION.subclass_levels,*PALADIN_DEFINITION.levels,*PALADIN_DEFINITION.subclass_levels,
+        *WIZARD_DEFINITION.levels,*WIZARD_DEFINITION.subclass_levels)
     features=frozenset(value for level in levels
         for value in (*level.feature_ids,*(value for choice in level.choices for value in choice.allowed_values))
         if value.startswith(('class_feature.','feat.','metamagic.')))

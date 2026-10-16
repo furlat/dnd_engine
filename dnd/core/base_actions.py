@@ -19,8 +19,8 @@ from dnd.core.action_types import (
     RestrictedActionGrantProvider,
     RestrictedActionKind,
 )
-from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRef, EventResolutionRef, EffectPropagationLink
-from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range, EventQueue
+from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRef, EventResolutionRef, EffectPropagationLink, EffectOrigin
+from dnd.core.events import ActionApplicationCommittedEvent, ActionCostsCommittedEvent, Event, EventType, EventPhase, EventProcessor, Range, EventQueue
 from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
 from dnd.types.world import MovementMode
 from dnd.types.class_features import FontConversion
@@ -260,6 +260,9 @@ class ActionDiscoveryDescription(BaseModel):
     is_spell_variant: bool = False
     damage_types: tuple[DamageType, ...] = ()
     loot_item_uuid: UUID | None = None
+    spellcasting_source_id: UUID | None = None
+    spellcasting_provider_id: str | None = None
+    spellcasting_ability: str | None = None
 
 
 class ActionOutcomeProfile(BaseModel):
@@ -626,6 +629,11 @@ class Cost(BaseCost):
 
 
 class ActionEvent(Event):
+    effect_origin: EffectOrigin | None = None
+
+    def get_effect_origin(self) -> EffectOrigin | None:
+        return self.effect_origin
+
     font_conversion: FontConversion | None = None
     item_magic_suppression_provider_uuids: tuple[UUID, ...] = ()
     """Event emitted by the base action pipeline."""
@@ -680,6 +688,10 @@ class ActionEvent(Event):
         description="Complete entity target selection captured when the action is declared.",
     )
     application: ApplicationMembership | None = None
+    application_intercepted_by: UUID | None = Field(
+        default=None,
+        description="An owned handler resolved this accepted application instead of its authored effect.",
+    )
     propagation: EffectPropagationLink | None = None
 
     @property
@@ -977,6 +989,7 @@ class BaseAction(BaseObject):
         default=ActionCategory.ABILITY,
         description="Broad action classification used by discovery and UI layers.",
     )
+    effect_origin: EffectOrigin | None = Field(default=None, description="Authored nonspell effect provenance, captured per admitted action.")
     presentation_kind: ActionPresentationKind = Field(
         default=ActionPresentationKind.DEFAULT,
         description="Stable presentation meaning copied to every action event phase.",
@@ -1294,6 +1307,10 @@ class BaseAction(BaseObject):
         if self.effective_target_type not in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE):
             raise ValueError(f"Action {self.name} doesn't target positions (target_type={self.effective_target_type})")
         self.end_position = position
+
+    def get_effect_origin_for_preview(self) -> EffectOrigin | None:
+        """Factual authored provenance without constructing an execution event."""
+        return self.effect_origin
 
     def get_range(self) -> Optional[Range]:
         """Get the range of this action.
@@ -1923,6 +1940,13 @@ class BaseAction(BaseObject):
         source = BaseBlock.get(self.source_entity_uuid)
         if source is not None:
             source.record_action_channels(self._original_action_channels())
+        committed = EventQueue.publish_committed_phase(ActionCostsCommittedEvent(
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.source_entity_uuid,
+            parent_event=declaration.uuid, action_lineage_uuid=declaration.lineage_uuid,
+            named_resource_costs=tuple((cost.resource_name, cost.resource_cost) for cost in execution.costs
+                if cost.resource_name is not None and cost.resource_cost > 0),
+            effect_origin=execution.get_effect_origin(), phase=EventPhase.EFFECT, use_register=False))
+        committed.phase_to(EventPhase.COMPLETION)
 
     def _costs_are_affordable(self, costs: Sequence["Cost"]) -> bool:
         """Evaluate one already-transformed cost sequence."""
@@ -1985,8 +2009,11 @@ class BaseAction(BaseObject):
             presentation_kind=self.presentation_kind,
         )
         event.name = self.name or "Action"
-        event.description = self.description
         source_block = BaseBlock.get(self.source_entity_uuid)
+        if self.effect_origin is not None:
+            event.effect_origin = self.effect_origin.model_copy(update={"source_event_lineage_uuid": str(event.lineage_uuid),
+                "source_position":source_block.position if source_block is not None else None})
+        event.description = self.description
         if source_block is not None:
             event.source_entity_name = source_block.name
         return event
@@ -2177,18 +2204,37 @@ class BaseAction(BaseObject):
                 per_target_event = cast(ActionEvent, EventQueue.register(per_target_event))
                 if per_target_event.canceled:
                     continue
-                result_event = self._apply(per_target_event)
+                result_event = (per_target_event.phase_to(EventPhase.EFFECT)
+                                if per_target_event.application_intercepted_by is not None else self._apply(per_target_event))
                 if result_event is None or result_event.canceled:
                     continue
                 result_event = cast(ActionEvent, result_event)
                 if result_event.phase is not EventPhase.EFFECT:
                     raise ValueError(f"Action {self.name} target application must end at effect phase")
+                self._publish_application_commit(result_event)
                 total_damage += result_event.total_damage or 0
                 result_event.phase_to(EventPhase.COMPLETION,
                     status_message=result_event.status_message or f"{self.name} target application completed")
         finally:
             self.target_entity_uuid = original_target
         return total_damage
+
+    def get_authored_spell_id(self) -> str | None:
+        """Ordinary actions have no spell identity."""
+        return None
+
+    def _publish_application_commit(self, effect_event: ActionEvent) -> None:
+        """Observe one admitted target application after effect vetoes finish."""
+        if effect_event.canceled:
+            return
+        committed = EventQueue.publish_committed_phase(ActionApplicationCommittedEvent(
+            source_entity_uuid=effect_event.source_entity_uuid,
+            target_entity_uuid=effect_event.target_entity_uuid,
+            action_id=effect_event.behavior_id, spell_id=self.get_authored_spell_id(),
+            interception_provider_uuid=effect_event.application_intercepted_by,
+            effect_origin=effect_event.get_effect_origin(), parent_event=effect_event.uuid,
+            phase=EventPhase.EFFECT, use_register=False))
+        committed.phase_to(EventPhase.COMPLETION)
 
     def _apply_target_applications(
         self, execution_event: ActionEvent, effect_event: ActionEvent,
@@ -2485,7 +2531,8 @@ class BaseAction(BaseObject):
                     record_phase("finalize_aoe", started)
             else:
                 started = start_phase()
-                effect_event = self._apply(execution_event)
+                effect_event = (execution_event.phase_to(EventPhase.EFFECT)
+                                if execution_event.application_intercepted_by is not None else self._apply(execution_event))
                 record_phase("apply_effect", started)
 
             if effect_event is None or effect_event.canceled:
@@ -2497,6 +2544,8 @@ class BaseAction(BaseObject):
                 raise ValueError(
                     f"Action {self.name} must finish authored mechanics at effect phase"
                 )
+            if self.effective_target_type not in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
+                self._publish_application_commit(effect_event)
             if self.requires_concentration:
                 started = start_phase()
                 self._cleanup_concentration(effect_event)
@@ -2690,6 +2739,9 @@ class AvailableActionMetadata(BaseModel):
     discovery_index: int = 0
     discovery_runtime: UUID | None = None
     discovery_actor_uuid: UUID | None = None
+    spellcasting_source_id: UUID | None = None
+    spellcasting_provider_id: str | None = None
+    spellcasting_ability: str | None = None
     template_name: str = Field(
         description=(
             "Engine command token for execution; never authored presentation "

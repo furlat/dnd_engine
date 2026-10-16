@@ -33,6 +33,7 @@ from dnd.core.spell_execution import current_spell_execution
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 from dnd.core.events import (
+    HealingAppliedEvent, RestCompletedEvent,
     Damage, Event, EventPhase, EventQueue, Range, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     TakeDamageEvent, DamageAppliedEvent, DeathSaveEvent, InstantDeathEvent, DeathEvent, HealEvent,
@@ -388,6 +389,12 @@ class Entity(BaseBlock):
     prepared_spell_selections: Tuple[PreparedSpellSelection, ...] = Field(
         default=(),
         description="Prepared spells grouped by their exact semantic source.",
+    )
+    scribed_spell_ids: Tuple[str, ...] = Field(
+        default=(), description="Permanent authored spells transcribed into this character's Wizard book.",
+    )
+    permanent_feature_uses: Tuple[str, ...] = Field(
+        default=(), description="Exact non-recharging feature uses supplied by captured character state.",
     )
     feature_toggle_selections: Tuple[FeatureToggleSelection, ...] = Field(
         default=(),
@@ -1197,6 +1204,7 @@ class Entity(BaseBlock):
             background=self.character_background,
             applied_origin_state=self.applied_origin_state,
             applied_class_levels=self.applied_class_levels,
+            scribed_spell_ids=self.scribed_spell_ids, permanent_feature_uses=self.permanent_feature_uses,
             ability_scores=tuple(
                 (ability.name, ability.ability_score.score)
                 for ability in self.ability_scores.abilities_list
@@ -1760,12 +1768,13 @@ class Entity(BaseBlock):
         previous = self.faction
         self.faction = faction
         get_map().invalidate_occupancy_paths({self.position})
-        return EventQueue.publish_completed_fact(EntityFactionChangedEvent(
+        changed = EventQueue.publish_committed_phase(EntityFactionChangedEvent(
             source_entity_uuid=self.uuid, target_entity_uuid=self.uuid,
             entity_uuid=self.uuid, previous_faction=previous, faction_after=faction,
             parent_event=parent_event.uuid if parent_event is not None else None,
-            phase=EventPhase.COMPLETION, use_register=False,
+            phase=EventPhase.EFFECT, use_register=False,
         ))
+        return changed.phase_to(EventPhase.COMPLETION)
 
     @classmethod
     def get_all_entities(cls) -> List['Entity']:
@@ -2350,6 +2359,9 @@ class Entity(BaseBlock):
     def on_short_rest(self) -> None:
         """Apply entity-level short-rest recovery."""
         self.action_economy.on_short_rest()
+        rest = EventQueue.publish_committed_phase(RestCompletedEvent(source_entity_uuid=self.uuid,
+            target_entity_uuid=self.uuid, rest_type="short_rest", phase=EventPhase.EFFECT, use_register=False))
+        rest.phase_to(EventPhase.COMPLETION)
 
     def spend_hit_dice(
         self,
@@ -2422,6 +2434,9 @@ class Entity(BaseBlock):
         for item in holdings.values():
             item.on_long_rest(self.uuid)
         self.health.on_long_rest()
+        rest = EventQueue.publish_committed_phase(RestCompletedEvent(source_entity_uuid=self.uuid,
+            target_entity_uuid=self.uuid, rest_type="long_rest", phase=EventPhase.EFFECT, use_register=False))
+        rest.phase_to(EventPhase.COMPLETION)
         return True
 
     def snapshot_entity_stats(self) -> EntityStatsState:
@@ -2823,12 +2838,7 @@ class Entity(BaseBlock):
         )
         event = event.phase_to(EventPhase.EXECUTION)
 
-        bonus = ModifiableValue.create(
-            source_entity_uuid=self.uuid,
-            target_entity_uuid=self.uuid,
-            base_value=0,
-            value_name="Death Saving Throw",
-        )
+        bonus = self.health.death_save_bonus
         roll, roll_event = self.roll_d20_event(
             bonus,
             RollType.SAVE,
@@ -2836,7 +2846,7 @@ class Entity(BaseBlock):
             parent_event=event.uuid,
         )
         natural_roll = get_natural_roll(roll)
-        succeeded = natural_roll >= 10
+        succeeded = roll.total >= 10
         became_stable = False
         regained_hit_point = False
         died = False
@@ -2851,6 +2861,7 @@ class Entity(BaseBlock):
             regained_hit_point = True
             succeeded = True
         elif natural_roll == 1:
+            succeeded = False
             died = self.add_death_save_failure(2, self.uuid, event.uuid) is not None
         elif succeeded:
             self.death_save_successes = min(3, self.death_save_successes + 1)
@@ -3696,6 +3707,7 @@ class Entity(BaseBlock):
         source_condition_uuid: UUID | None = None,
         normal_hit_point_damage_cap: int | None = None,
         zero_hp_disposition: RemainsDisposition = RemainsDisposition.INTACT,
+        ignores_resistance_immunity: bool = False,
         on_resolved: Callable[[DamageResolution], None] | None = None,
     ) -> int:
         """Apply damage through the engine event lifecycle.
@@ -3732,7 +3744,7 @@ class Entity(BaseBlock):
         ]
 
         request_lineage = uuid4()
-        take_damage_event = TakeDamageEvent(
+        take_damage_event = TakeDamageEvent(ignores_resistance_immunity=ignores_resistance_immunity,
             lineage_uuid=request_lineage,
             resolution_ref=EventResolutionRef(lineage_uuid=request_lineage) if independent_resolution else None,
             name="Take Damage",
@@ -3908,7 +3920,7 @@ class Entity(BaseBlock):
         source_description: str = "",
         parent_event: Optional[UUID] = None,
         spell_level: int = 0,
-        *, source_condition_uuid: Optional[UUID] = None,
+        *, source_condition_uuid: Optional[UUID] = None, effect_origin: EffectOrigin | None = None,
     ) -> int:
         """Apply healing through the engine event lifecycle.
 
@@ -3928,6 +3940,7 @@ class Entity(BaseBlock):
             Actual HP restored after caps and blockers.
         """
         heal_event = HealEvent(
+            effect_origin=effect_origin,
             name="Heal",
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=self.uuid,
@@ -3964,6 +3977,11 @@ class Entity(BaseBlock):
             "resulting_normal_hp": self.get_normal_hp(),
             "resulting_temporary_hp": max(0, self.health.temporary_hit_points.normalized_score),
         })
+        applied = EventQueue.publish_committed_phase(HealingAppliedEvent(
+            source_entity_uuid=source_entity_uuid, target_entity_uuid=self.uuid,
+            parent_event=heal_event.uuid, effect_origin=effect_origin, actual_healing=actual_healing,
+            phase=EventPhase.EFFECT, use_register=False))
+        applied.phase_to(EventPhase.COMPLETION)
         heal_event.phase_to(EventPhase.COMPLETION)
 
         return actual_healing
@@ -5687,6 +5705,9 @@ class Entity(BaseBlock):
             performs_attack=template.performs_attack,
             base_template_name=base_template_name,
             spell_level=description_facts.spell_level,
+            spellcasting_source_id=description_facts.spellcasting_source_id,
+            spellcasting_provider_id=description_facts.spellcasting_provider_id,
+            spellcasting_ability=description_facts.spellcasting_ability,
             cast_at_level=description_facts.cast_at_level,
             is_spell_variant=description_facts.is_spell_variant,
             requires_concentration=template.requires_concentration,

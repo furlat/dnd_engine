@@ -16,6 +16,7 @@ from dnd.core.base_actions import (
 )
 from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec
 from dnd.core.values import ModifiableValue
+from dnd.core.spell_damage import finalize_spell_damage_roll
 from dnd.core.condition_types import ConditionRemovalTrigger, DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
@@ -23,6 +24,7 @@ from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, TakeDamageEvent, DamageAppliedEvent, SkillCheckEvent, SpatialChangeEvent, MovementTrajectory
 from dnd.types.abilities import AbilityName
 from dnd.types.spell_suppression import SpellSuppression
+from dnd.spells.content_metadata import get_spell_catalog_metadata
 from dnd.types.summoning import SummonApplication
 from dnd.core.elevation import support_distance_feet
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
@@ -2475,6 +2477,7 @@ class Attack(BaseAction):
                 for damage in damages:
                     dice = damage.get_dice(attack_outcome=attack_event.attack_outcome, crit_extra_dice=crit_extra_dice)
                     roll = dice.roll
+                    roll = finalize_spell_damage_roll(damage,roll,parent_event=attack_event)
                     damage_packets.append(
                         DamageRollPacket(
                             damage=damage,
@@ -4287,11 +4290,16 @@ class Shove(BaseAction):
         return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 class SpellEvent(ActionEvent):
+    spellcasting_source_id: UUID | None = None
+    maximize_damage_dice: bool = False
+    can_deal_damage: bool = False
     weapon_attack_slot: WeaponSlot | None = None
     """Event payload for spell casting and spell effect logs."""
 
     target_kind: Literal["creature", "object"] = "creature"
     summon_application: SummonApplication | None = None
+    magical_transfer: bool = False
+    authored_spell_id: str | None = None
     target_position: Optional[tuple[int, int]] = None
     target_base_height_steps: Optional[int] = None
     name: str = Field(default="Spell Cast", description="A spell cast event")
@@ -4356,12 +4364,17 @@ class SpellEvent(ActionEvent):
         if self.retained_effect_origin is not None:
             return self.retained_effect_origin
         return EffectOrigin.spell(
-            source_id=self.spell_id,
+            source_id=self.authored_spell_id or self.spell_id,
             source_event_lineage_uuid=str(self.lineage_uuid),
             source_position=self.effect_source_position or self.source_position,
             base_spell_level=self.spell_level,
             effective_spell_level=self.cast_at_level,
             antimagic_exception=self.antimagic_exception,
+            spell_school=self.spell_school,
+            spellcasting_source_id=self.spellcasting_source_id,
+            harmful=self.harmful,
+            area_application=self.target_type is TargetType.POSITION_AOE or self.area_geometry is not None,
+            maximize_damage_dice=self.maximize_damage_dice,
         )
 
     def get_effect_origin(self) -> EffectOrigin:
@@ -4797,6 +4810,7 @@ def resolve_spell_attack_values(caster:Entity,target:Entity|BaseItem,parent_even
     )
 
 class SpellAction(BaseAction):
+    magical_transfer: bool = False
     """Base class for all spells. Handles metadata and variant generation.
 
     Spell subclasses implement their own `_apply()` logic. This base class
@@ -4822,6 +4836,9 @@ class SpellAction(BaseAction):
     is_variant: bool = Field(default=False, description="Whether this is an upcast variant")
 
     caster_level: int = Field(default=1, description="Level of the caster (for cantrip scaling)")
+    cast_cost_grant_id: UUID | None = Field(default=None, description="Exact native grant paying this base-rank cast instead of a spell slot.")
+    cast_cost_label: str | None = None
+    retained_casting_ability: AbilityName | None = None
     spellcasting_source_id: Optional[UUID] = Field(
         default=None,
         description=(
@@ -5057,6 +5074,7 @@ class SpellAction(BaseAction):
         """Build the actor-baseline model for a spell attack rule."""
         baseline = caster.spell_attack_outcome_baseline(
             spellcasting_source_id=self.spellcasting_source_id,
+            casting_ability=self.retained_casting_ability,
         )
         advantage = baseline.advantage
         if self.get_range().type is RangeType.RANGE and caster.is_threatened():
@@ -5103,6 +5121,7 @@ class SpellAction(BaseAction):
         """
         return resolve_spell_attack_values(caster,target,parent_event_uuid,
             ranged=self.get_range().type is RangeType.RANGE,spellcasting_source_id=self.spellcasting_source_id,
+            casting_ability=self.retained_casting_ability,
             extra_advantage_modifiers=extra_advantage_modifiers,attack_origin_position=attack_origin_position)
 
     def automatic_damage_outcome_profile(
@@ -5196,8 +5215,13 @@ class SpellAction(BaseAction):
         return synced_event, save_roll, success
 
     def describe_discovery(self) -> ActionDiscoveryDescription:
+        actor = Entity.get(self.source_entity_uuid)
+        source = actor.spellcasting.sources.get(self.spellcasting_source_id) if actor is not None else None
         return ActionDiscoveryDescription(spell_level=self.spell_level, cast_at_level=self.cast_at_level,
             is_spell_variant=self.is_variant,
+            spellcasting_source_id=self.spellcasting_source_id,
+            spellcasting_provider_id=source.provider_id if source is not None else None,
+            spellcasting_ability=source.ability if source is not None else None,
             damage_types=(self.spell_damage_type,) if self.spell_damage_type is not None else ())
 
     def get_concentration_owner(self) -> Entity | BaseItem | None:
@@ -5390,7 +5414,40 @@ class SpellAction(BaseAction):
                 if entity.has_spell_slot_capacity(slot_level):
                     variants.append(self._create_variant(cast_at_level=slot_level))
 
+        for grant in entity.spellcasting.free_cast_grants.values():
+            if (grant.source_id == self.spellcasting_source_id and grant.spell_id == self.get_authored_spell_id()
+                    and grant.cast_rank == self.spell_level
+                    and (not grant.outside_encounter_only or entity.active_encounter_uuid is None)):
+                costs = [cost for cost in self._get_costs_for_level(self.spell_level) if not cost.cost_type.startswith("spell_slot")]
+                if grant.resource_name is not None:
+                    costs.append(Cost(name=grant.label, cost_type="actions", cost=0, resource_name=grant.resource_name,
+                        resource_cost=1, resource_evaluator=entity_resource_cost_evaluator))
+                variants.append(self._create_variant(cast_at_level=self.spell_level, costs=costs,
+                    cast_cost_grant_id=grant.grant_id, cast_cost_label=grant.label))
         return variants
+
+    def casting_entitlement_error(self) -> str | None:
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return "Caster is missing"
+        authored = self.get_authored_spell_id()
+        if self.spellcasting_source_id is not None and authored is not None and authored.startswith("spell."):
+            if self.spellcasting_source_id not in caster.spellcasting.sources:
+                return "The casting source is no longer available"
+            entitlements = caster.spellcasting.spell_entitlements.get(self.spellcasting_source_id)
+            if entitlements is not None and authored not in entitlements:
+                return "This spell is no longer prepared by this source"
+        if self.cast_cost_grant_id is not None:
+            grant = caster.spellcasting.free_cast_grants.get(self.cast_cost_grant_id)
+            if (grant is None or grant.source_id != self.spellcasting_source_id or grant.spell_id != authored
+                    or grant.cast_rank != self.cast_at_level
+                    or grant.outside_encounter_only and caster.active_encounter_uuid is not None):
+                return "The selected casting cost is no longer available"
+        return None
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        error = self.casting_entitlement_error()
+        return declaration_event.cancel(status_message=error) if error else super()._validate(declaration_event)
 
     def get_discovery_variants(self, entity: Any) -> List[BaseAction]:
         """Return spell forms that should appear in action discovery.
@@ -5419,6 +5476,8 @@ class SpellAction(BaseAction):
     def get_discovery_template_name(self) -> str:
         """Return a stable execution name for this spell discovery row."""
         base_name = self.name or "Unknown"
+        if self.cast_cost_grant_id is not None:
+            base_name += f" [{self.cast_cost_label}]"
         if self.is_variant and self.spell_level > 0:
             base_name = (
                 f"{base_name}{SPELL_SLOT_TEMPLATE_SEPARATOR}"
@@ -5435,6 +5494,8 @@ class SpellAction(BaseAction):
     def get_discovery_display_name(self) -> str:
         """Return a human-facing label for this spell discovery row."""
         base_name = self.name or "Unknown"
+        if self.cast_cost_grant_id is not None:
+            return f"{base_name} ({self.cast_cost_label})"
         if self.is_variant and self.spell_level > 0:
             return f"{base_name} (Level {self.cast_at_level})"
         return base_name
@@ -5500,6 +5561,17 @@ class SpellAction(BaseAction):
         costs.extend(self.alt_extra_costs)
         return costs
 
+    def get_effect_origin_for_preview(self) -> EffectOrigin | None:
+        caster=Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return None
+        harmful,_=self.get_harmful_intent(caster,[])
+        return EffectOrigin.spell(source_id=self.get_authored_spell_id(),source_event_lineage_uuid=None,
+            source_position=caster.position,base_spell_level=self.spell_level,effective_spell_level=self.cast_at_level,
+            spell_school=self.spell_school,spellcasting_source_id=self.spellcasting_source_id,
+            harmful=harmful,area_application=self.effective_target_type is TargetType.POSITION_AOE
+                or self.get_selection_geometry() is not None)
+
     def get_harmful_intent(
         self,
         caster: Entity,
@@ -5534,6 +5606,23 @@ class SpellAction(BaseAction):
     def get_spell_weapon_attack_slot(self) -> WeaponSlot | None:
         return None
 
+    def get_authored_spell_id(self) -> str | None:
+        """Return exact authored identity without relying on a presentation name."""
+        if self.behavior_binding is not None:
+            return self.behavior_binding.behavior_id
+        try:
+            return get_content_declaration(type(self)).ref.content_id
+        except ValueError:
+            return self.semantic_key
+
+    def has_authored_damage(self) -> bool:
+        if self.spell_damage_type is not None:
+            return True
+        try:
+            return bool(get_spell_catalog_metadata(type(self)).damage_types)
+        except ValueError:
+            return False
+
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for this spell."""
         source_entity = Entity.get(self.source_entity_uuid)
@@ -5565,6 +5654,7 @@ class SpellAction(BaseAction):
             target_base_height_steps=placement.base_height_steps if placement else None,
             name=f"{self.name}",
             spell_id=normalize_spell_id(self.name or ""),
+            authored_spell_id=self.get_authored_spell_id(),
             target_type=self.effective_target_type,
             harmful=harmful,
             harmful_target_entity_uuids=harmful_targets,
@@ -5579,6 +5669,9 @@ class SpellAction(BaseAction):
             spell_level=self.spell_level,
             cast_at_level=self.cast_at_level,
             spell_school=self.spell_school,
+            can_deal_damage=self.has_authored_damage(),
+            magical_transfer=self.magical_transfer,
+            spellcasting_source_id=self.spellcasting_source_id,
             verbal=self.verbal,
             antimagic_exception=self.antimagic_exception,
             cast_origin=self.cast_origin,
@@ -5614,6 +5707,9 @@ class SpellAction(BaseAction):
 
     def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply the costs of the spell."""
+        error = self.casting_entitlement_error()
+        if error:
+            return execution_event.cancel(status_message=error)
         return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
     def _get_cantrip_dice_count(self, caster_level: int) -> int:

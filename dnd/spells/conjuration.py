@@ -3,6 +3,7 @@
 Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web, Cloudkill,
           SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud
 """
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll, resolve_saved_spell_damage
 from dnd.conditions import Restrained
 from dnd.spells.hit_effects import AttackBackedSpell
 from dnd.types.physical_access import PhysicalAccess
@@ -156,7 +157,7 @@ def _apply_call_lightning(spell: SpellAction, event: SpellEvent, *, dc: int) -> 
     damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
         damage_dice=10, dice_numbers=3 + spell.get_upcast_bonus(),
         damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.LIGHTNING)
-    roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+    roll = roll_spell_damage(damage, parent_event=event, effect_origin=spell.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
     amount = roll.total // 2 if success else roll.total
     target.receive_damage(amount=amount, damage_type=DamageType.LIGHTNING,
         source_entity_uuid=caster.uuid, parent_event=effect.uuid)
@@ -344,13 +345,6 @@ class PoisonSpray(SpellAction):
         )
         _, _save_roll, success = target.saving_throw(save_request)
 
-        if success:
-            return execution_event.phase_to(
-                EventPhase.EFFECT,
-                save_success=True,
-                total_damage=0,
-                status_message=f"{target.name} saves against Poison Spray"
-            )
 
         num_dice = self._get_cantrip_dice_count(self.caster_level)
         damage_bonus = caster.get_spell_damage_bonus()
@@ -364,22 +358,22 @@ class PoisonSpray(SpellAction):
             damage_type=DamageType.POISON
         )
 
-        damage_dice = poison_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        effect_event = execution_event.phase_to(EventPhase.EFFECT, save_success=success)
+        packet = resolve_saved_spell_damage(poison_damage, parent_event=effect_event, saved=success, success_fraction=0)
+        damage_roll = packet.final_roll
 
         target.receive_damage(
-            amount=damage_roll.total,
+            amount=packet.applied_amount,
             damage_type=DamageType.POISON,
             source_entity_uuid=caster.uuid,
             parent_event=execution_event.uuid
         )
 
-        return execution_event.phase_to(
-            EventPhase.EFFECT,
-            save_success=False,
+        return effect_event.with_updates(
+            save_success=success,
             damages=[poison_damage],
             damage_rolls=[damage_roll],
-            total_damage=damage_roll.total,
+            total_damage=packet.applied_amount,
             status_message=f"Poison Spray: {damage_roll.total} poison to {target.name}"
         )
 
@@ -497,11 +491,6 @@ class AcidSplash(SpellAction):
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        if success:
-            return effect_event.with_updates(
-                total_damage=0,
-                status_message=f"{target.name} avoids the acid"
-            )
 
         num_dice = self._get_cantrip_dice_count(self.caster_level)
         damage_bonus = caster.get_spell_damage_bonus()
@@ -515,11 +504,11 @@ class AcidSplash(SpellAction):
             damage_type=DamageType.ACID
         )
 
-        damage_dice = acid_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        packet = resolve_saved_spell_damage(acid_damage, parent_event=effect_event, saved=success, success_fraction=0)
+        damage_roll = packet.final_roll
 
         target.receive_damage(
-            amount=damage_roll.total,
+            amount=packet.applied_amount,
             damage_type=DamageType.ACID,
             source_entity_uuid=caster.uuid,
             parent_event=effect_event.uuid
@@ -528,12 +517,13 @@ class AcidSplash(SpellAction):
         return effect_event.with_updates(
             damages=[acid_damage],
             damage_rolls=[damage_roll],
-            total_damage=damage_roll.total,
+            total_damage=packet.applied_amount,
             status_message=f"Acid Splash: {damage_roll.total} acid to {target.name}"
         )
 
 
 class MistyStep(SpellAction):
+    magical_transfer: bool = True
     """Misty Step - 2nd level Conjuration
 
     Briefly surrounded by silvery mist, you teleport up to 30 feet to an
@@ -1598,7 +1588,7 @@ class BlackTentaclesZone(RestrainingAreaCondition):
             damage_bonus=damage_bonus,
             damage_type=DamageType.BLUDGEONING,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         entity.receive_damage(
             roll.total,
             DamageType.BLUDGEONING,
@@ -1913,7 +1903,7 @@ class CloudkillZone(AreaCondition):
             damage_bonus=damage_bonus,
             damage_type=DamageType.POISON,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         entity.receive_damage(
             roll.total // 2 if success else roll.total,
             DamageType.POISON,
@@ -2328,7 +2318,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
             damage_bonus=damage_bonus,
             damage_type=self.damage_type,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         rolled = roll.total
         entity.receive_damage(
             rolled // 2 if success else rolled,
@@ -3254,7 +3244,7 @@ class InsectPlagueZone(AreaCondition):
             damage_bonus=damage_bonus,
             damage_type=DamageType.PIERCING,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         entity.receive_damage(
             roll.total // 2 if success else roll.total,
             DamageType.PIERCING,
@@ -3499,7 +3489,7 @@ class IncendiaryCloudZone(AreaCondition):
             damage_bonus=damage_bonus,
             damage_type=DamageType.FIRE,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         entity.receive_damage(
             roll.total // 2 if success else roll.total,
             DamageType.FIRE,
@@ -4307,6 +4297,7 @@ class SleetStorm(SpellAction):
 
 
 class DimensionDoor(SpellAction):
+    magical_transfer: bool = True
     """A paid teleport with an optional nearby willing companion."""
     name: str = "Dimension Door"
     description: str = "Teleport alone or with a willing companion within 500ft; blocked arrival deals 4d6 force."
@@ -4401,7 +4392,7 @@ class DimensionDoor(SpellAction):
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
             dice_numbers=4, damage_dice=6, damage_type=DamageType.FORCE,
             damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0))
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=effect, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         for actor in participants:
             actor.receive_damage(amount=roll.total, damage_type=DamageType.FORCE,
                 source_entity_uuid=caster.uuid, parent_event=effect.uuid,
@@ -5114,8 +5105,7 @@ class ProduceFlame(SpellAction):
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
             damage_dice=8, dice_numbers=self._get_cantrip_dice_count(self.caster_level),
             damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.FIRE)
-        roll = damage.get_dice(resolution.outcome,
-            crit_extra_dice=caster.get_spell_crit_extra_dice() if resolution.outcome == AttackOutcome.CRIT else 0).roll
+        roll = roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=resolution.outcome, crit_extra_dice=caster.get_spell_crit_extra_dice() if resolution.outcome == AttackOutcome.CRIT else 0)
         return deliver_spell_damage(effect,target,damage,roll)
 
 
@@ -5138,7 +5128,7 @@ class EnsnaringStrikeEffect(Restrained):
             damage=Damage(name=self.name,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,
                 damage_dice=6,dice_numbers=self.dice_count,damage_type=DamageType.PIERCING,
                 damage_bonus=ModifiableValue.create(source_entity_uuid=self.source_entity_uuid,base_value=0),effect_origin=self.effect_origin)
-            roll=damage.get_dice(AttackOutcome.HIT).roll
+            roll=roll_spell_damage(damage, parent_event=boundary, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             target.receive_damage(roll.total,DamageType.PIERCING,self.source_entity_uuid,parent_event=boundary.uuid,
                 damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,
                 independent_resolution=True,source_condition_uuid=self.uuid)

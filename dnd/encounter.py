@@ -661,6 +661,7 @@ class Encounter(BaseObject):
             entity = Entity.get(entity_uuid)
             if entity is not None and entity.active_encounter_uuid == self.uuid:
                 entity.active_encounter_uuid = None
+                entity.action_economy.reset_all_costs()
         self.ended_at = datetime.now(UTC)
 
         if Encounter._active_encounter is self:

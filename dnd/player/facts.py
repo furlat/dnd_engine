@@ -36,6 +36,7 @@ from dnd.types.traps import TrapState
 from dnd.types.physical_access import ContactPassage
 from dnd.types.world import MovementMode, OccupancyLayer
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
+from dnd.types.character_progression import PreparedSpellSelection
 from dnd.types.abilities import AbilityName
 from dnd.types.actor import TemporaryHitPointsGrant, SpatialDisposition
 from dnd.types.class_features import FontConversion, IndomitableReroll, RelentlessRageIntervention
@@ -74,6 +75,9 @@ class PlayerCharacterSheet:
     maximum_hp: int = 0
     compatible_item_slots: tuple[tuple[UUID, tuple[str, ...]], ...] = ()
     handler_details: tuple[AvailableHandlerInfo, ...] = ()
+    scribed_spell_ids: tuple[str, ...] = ()
+    permanent_feature_uses: tuple[str, ...] = ()
+    prepared_spell_selections: tuple[PreparedSpellSelection, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

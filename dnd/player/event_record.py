@@ -28,6 +28,7 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.content.runtime import EffectiveHandlerPresentation
 from dnd.core.events import (
+    SpellMasteryStudiedEvent, ConditionMembershipCommittedEvent, RestResourcesRecoveredEvent, PermanentFeatureUsedEvent, ActionApplicationCommittedEvent, MaximumHitPointReductionEvent, EffectApplicationEvent, ActionCostsCommittedEvent, RestCompletedEvent, SpellbookChangedEvent, SpellPreparationChangedEvent, HealingAppliedEvent, SpellDamageRollResultEvent,
     AreaReachEvent, AttackD20RollResultEvent, D20Event, D20RollResultEvent, DamageAppliedEvent,
     DamageRollResultEvent, DeathEvent, DeathSaveEvent, EncounterEndEvent,
     EncounterEvent, EncounterStartEvent, EntityCreatedEvent, EntityFactionChangedEvent, Event, EventPhase, ExposedFlameEvent,
@@ -44,7 +45,8 @@ from dnd.core.events import (
 # must first acquire a retained capture contract; they cannot decode by importing
 # arbitrary classes named by a file. Technical headers remain ordinary Event.
 EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
-    Event, ActionEvent, AreaReachEvent, WorldInitializedEvent, WorldModifiedEvent, EntityCreatedEvent, EntityFactionChangedEvent, ConditionStateChangedEvent,
+    EffectApplicationEvent, ActionCostsCommittedEvent, RestCompletedEvent, SpellbookChangedEvent, SpellPreparationChangedEvent, HealingAppliedEvent, SpellDamageRollResultEvent,
+    Event, ActionEvent, SpellMasteryStudiedEvent, ConditionMembershipCommittedEvent, RestResourcesRecoveredEvent, PermanentFeatureUsedEvent, ActionApplicationCommittedEvent, MaximumHitPointReductionEvent, AreaReachEvent, WorldInitializedEvent, WorldModifiedEvent, EntityCreatedEvent, EntityFactionChangedEvent, ConditionStateChangedEvent,
     AttackEvent, SpellEvent, MovementEvent, JumpEvent, TraverseConnectorEvent, ShoveEvent, CounterspellReactionEvent,
     EquipmentEvent, WeaponEquipEvent, WeaponUnequipEvent, ArmorEquipEvent,
     ArmorUnequipEvent, ShieldEquipEvent, ShieldUnequipEvent, ItemLocationStateEvent,
@@ -101,13 +103,24 @@ ADDITIVE_FIELDS = {
     DamageAppliedEvent: {"body_release", "critical_hit", "impact_direction", "spatial_source"},
     TakeDamageEvent: {"intercepted_by_condition_uuid", "spatial_source", "effect_origin"},
     HealEvent: {"source_condition_uuid"},
-    EntityCreatedEvent: {"healing_blocked", "occupancy_layer", "temporary_hit_points_grant", "summon_origin", "initial_condition_states"},
+    EntityCreatedEvent: {"healing_blocked", "occupancy_layer", "temporary_hit_points_grant", "summon_origin", "initial_condition_states", "scribed_spell_ids", "permanent_feature_uses"},
     SensoryUpdateEvent: {"observed_changes", "hazardous_cells_changed", "spatial_effects_changed", "spatial_effects_removed"},
     SpatialChangeEvent: {"commit_event_uuid", "tile_state", "tile_present", "object_state", "previous_occupancy_layer", "occupancy_layer", "terminal_release"},
     MovementEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
     JumpEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
     StepMovementEvent: {"movement_mode", "from_layer", "to_layer", "resolved_speed_feet"},
 }
+
+# Optional admission/provenance facts added by the native spell ownership repair.
+for _model in EVENT_MODELS.values():
+    for _field in ("effect_origin", "spellcasting_source_id", "maximize_damage_dice", "ignores_resistance_immunity"):
+        if _field in _model.model_fields:
+            ADDITIVE_FIELDS.setdefault(_model, set()).add(_field)
+
+for _model in EVENT_MODELS.values():
+    if "application_intercepted_by" in _model.model_fields:
+        ADDITIVE_FIELDS.setdefault(_model, set()).add("application_intercepted_by")
+ADDITIVE_FIELDS[SpellEvent].update({"magical_transfer", "authored_spell_id", "can_deal_damage"})
 
 # Retained pre-interruption completion archives did not record these declarations.
 # They suffice for completion replay, but cannot establish a cancellation receipt.

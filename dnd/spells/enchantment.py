@@ -3,6 +3,7 @@
 Contains: HoldPerson, HoldPersonEffect, CharmPerson, TestBless, Sleep,
           Bane, BaneEffect, Bless, BlessEffect
 """
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll, resolve_saved_spell_damage
 from dnd.spells.spell_utils import validate_spell_recipients, spell_condition_profile
 
 import random
@@ -42,6 +43,7 @@ from dnd.core.condition_types import (
 )
 from dnd.types.character_progression import OriginCapability
 from dnd.core.events import (
+    ActionApplicationCommittedEvent,
     Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger,
     D20RollResultEvent, SavingThrowEvent,
 )
@@ -2037,14 +2039,15 @@ class ViciousMockery(SpellAction):
             return event.cancel(status_message="Caster or recipient no longer exists")
         effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="wisdom",
             dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
-        if saved or effect.canceled:
+        if effect.canceled:
             return effect
         damage=Damage(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,damage_dice=4,
             dice_numbers=self._get_cantrip_dice_count(self.caster_level),damage_bonus=caster.get_spell_damage_bonus(),
             damage_type=DamageType.PSYCHIC)
-        roll=damage.get_dice(AttackOutcome.HIT).roll
-        effect=deliver_spell_damage(effect,target,damage,roll)
-        if effect.canceled:
+        packet=resolve_saved_spell_damage(damage, parent_event=effect, saved=saved, success_fraction=0)
+        roll=packet.final_roll
+        effect=deliver_spell_damage(effect,target,damage,roll,amount=packet.applied_amount)
+        if effect.canceled or saved:
             return effect
         target.add_condition(MockedEffect(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid),parent_event=effect)
         return effect
@@ -2194,7 +2197,7 @@ class DissonantWhispers(SpellAction):
             return effect
         damage=Damage(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,damage_dice=6,
             dice_numbers=3+max(0,self.cast_at_level-1),damage_bonus=caster.get_spell_damage_bonus(),damage_type=DamageType.PSYCHIC)
-        roll=damage.get_dice(AttackOutcome.HIT).roll
+        roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         effect=deliver_spell_damage(effect,target,damage,roll,amount=roll.total//2 if saved else roll.total)
         if effect.canceled:
             return effect
@@ -2661,7 +2664,6 @@ class FeeblemindEffect(BaseCondition):
     spell_dc: int
     blocks_spellcasting: bool = True
     blocks_magic_item_activation: bool = True
-    cured_by_heal: bool = True
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.ABILITY_SCORE_REDUCTION})
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.PERMANENT))
 
@@ -2675,7 +2677,16 @@ class FeeblemindEffect(BaseCondition):
                 contribution_owner_uuid=self.uuid)
             value.add_fixed_score(modifier)
             modifiers.append((value.uuid, modifier.uuid))
-        return modifiers, [], [], [], event.phase_to(EventPhase.EFFECT)
+        def cure(incoming: Event, _: UUID):
+            if (isinstance(incoming, ActionApplicationCommittedEvent) and not incoming.canceled
+                    and incoming.spell_id == "spell.heal" and self.applied and self.contributions_active()):
+                target.remove_condition_by_uuid(self.uuid, parent_event=incoming)
+            return None
+        handler = EventHandler(name="Feeblemind accepted Heal cure", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.ACTION_APPLICATION_COMMITTED,event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=target.uuid)], event_processor=cure)
+        target.add_event_handler(handler)
+        return modifiers, [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
 
     def recover_after_thirty_days(self, adjudication: Event) -> bool:
         """GM/native time adjudication, deliberately absent from player actions."""
@@ -2716,7 +2727,7 @@ class Feeblemind(SpellAction):
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, dice_numbers=4,
             damage_dice=6, damage_type=DamageType.PSYCHIC,
             damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0))
-        effect = deliver_spell_damage(effect, target, damage, damage.get_dice(AttackOutcome.HIT).roll)
+        effect = deliver_spell_damage(effect, target, damage, roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0))
         if effect.canceled or saved or not target.is_active: return effect
         return self.apply_owned_condition(effect, FeeblemindEffect(source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid, spell_dc=dc))

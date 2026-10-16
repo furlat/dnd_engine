@@ -14,6 +14,7 @@ from dnd.core.item_types import ItemIntegrity
 from dnd.core.content.identities import ContentRef
 from dnd.core.effect_types import EffectOriginKind
 from dnd.core.events import (
+    EffectApplicationEvent,
     Event,
     EventHandler,
     EventPhase,
@@ -1271,6 +1272,8 @@ class AreaCondition(SpatialCondition):
         """Apply the exact first-per-turn fence declared by this condition."""
         if not self._occupancy_admits_trigger(kind, target_entity_uuid, event):
             return False
+        if not self.admits_application(target_entity_uuid, event):
+            return False
         if kind not in self.first_per_turn_trigger_kinds:
             return True
         turn_execution_id = event.turn_execution_id
@@ -1279,6 +1282,21 @@ class AreaCondition(SpatialCondition):
         if self._last_trigger_turn_by_target.get(target_entity_uuid) == turn_execution_id:
             return False
         self._last_trigger_turn_by_target[target_entity_uuid] = turn_execution_id
+        return True
+
+    def admits_application(self, target_entity_uuid: UUID, event: Event) -> bool:
+        """Admit a recipient before any save or effect, independently of cadence."""
+        if self.effect_origin is not None:
+            admission = EventQueue.publish_declaration(EffectApplicationEvent(use_register=False, source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=target_entity_uuid, parent_event=event.uuid,
+                spatial_effect_uuid=self.uuid, source_position=self.position, target_position=Entity.get(target_entity_uuid).position,
+                effect_origin=self.effect_origin.model_copy(update={"area_application":self.layer is SpatialEffectLayer.FIELD})))
+            if admission.canceled:
+                return False
+            admission = admission.phase_to(EventPhase.EXECUTION)
+            if admission.canceled:
+                return False
+            admission.phase_to(EventPhase.COMPLETION)
         return True
 
     def _wrap_trigger_admission(

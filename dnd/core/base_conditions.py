@@ -555,16 +555,14 @@ class BaseCondition(BaseObject):
     blocks_opportunity_attacks: bool = False
     source_creature_type: CreatureType | None = None
     immunity_names: tuple[str, ...] = ()
+    blocked_while_wet: bool = False
     blocked_action_channels: frozenset[str] = frozenset()
-    prevents_hit_point_maximum_reduction: bool = False
     denies_dexterity_ac: bool = False
     blocks_spellcasting: bool = False
     blocks_outward_actions: bool = False
     blocks_external_contact: bool = False
-    destroyed_by_disintegrate: bool = False
     blocks_magic_item_activation: bool = False
     prevents_surprise: bool = False
-    cured_by_heal: bool = False
     blocks_healing: bool = False
     ignores_difficult_terrain: bool = False
     ignores_magical_speed_reduction: bool = False

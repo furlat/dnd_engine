@@ -6,6 +6,8 @@ Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
           Resistance, ShieldOfFaith, Aid, Sanctuary, BeaconOfHope,
           AntimagicField
 """
+from dnd.spells.reaction_costs import choose_reaction_spell_cost, commit_reaction_spell_cost
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
 from dnd.spells.spell_utils import apply_concentrating_zone, validate_spell_recipients, spell_condition_profile
 
 import random
@@ -55,7 +57,7 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.effect_types import EffectOriginKind, AntimagicException
 from dnd.core.action_types import ActionVariantFacet
-from dnd.core.events import Damage, Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, ForcedMovementEvent, PortalTransferEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
+from dnd.core.events import EffectApplicationEvent, Damage, Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, ForcedMovementEvent, PortalTransferEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
 from dnd.types.character_progression import OriginCapability
 from dnd.types.actor import ConditionState, PendingSpatialReturn, SpatialDisposition
 from dnd.types.abilities import AbilityName
@@ -322,8 +324,8 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
     if not entity.action_economy.can_afford("reactions", 1):
         return None
 
-    slot_level = entity.get_lowest_spell_slot(1)
-    if slot_level is None:
+    payment = choose_reaction_spell_cost(entity,"spell.shield",1)
+    if payment is None:
         return None
 
     if isinstance(event, AttackEvent) and event.ac:
@@ -340,6 +342,9 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
         if event.dice_roll.total >= current_ac + 5:
             return None
 
+        if not commit_reaction_spell_cost(entity,payment,event):
+            return None
+
         event.ac.self_static.add_value_modifier(
             NumericalModifier.create(
                 source_entity_uuid=source_entity_uuid,
@@ -348,9 +353,6 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
                 value=5
             )
         )
-
-        entity.action_economy.consume("reactions", 1)
-        entity.action_economy.consume(spell_slot_cost_type(slot_level), 1)
 
         buff = ShieldBuff(
             source_entity_uuid=source_entity_uuid,
@@ -365,8 +367,8 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
         )
 
     if _is_magic_missile_damage(event):
-        entity.action_economy.consume("reactions", 1)
-        entity.action_economy.consume(spell_slot_cost_type(slot_level), 1)
+        if not commit_reaction_spell_cost(entity,payment,event):
+            return None
 
         buff = ShieldBuff(
             source_entity_uuid=source_entity_uuid,
@@ -1001,17 +1003,15 @@ def counterspell_reaction_processor(
     if not entity.action_economy.can_afford("reactions", 1):
         return None
 
-    if entity.get_lowest_spell_slot(3) is None:
-        return None
-
     if not isinstance(event, SpellEvent):
         return None
     spell_cast_level = event.cast_at_level or event.spell_level
 
-    auto_slot = entity.get_lowest_spell_slot(max(3, spell_cast_level))
-    if auto_slot is not None:
-        entity.action_economy.consume("reactions", 1)
-        entity.action_economy.consume(spell_slot_cost_type(auto_slot), 1)
+    payment=choose_reaction_spell_cost(entity,"spell.counterspell",3,preferred_rank=max(3,spell_cast_level))
+    if payment is None or not commit_reaction_spell_cost(entity,payment,event):
+        return None
+    if payment.cast_rank >= spell_cast_level:
+        auto_slot=payment.cast_rank
         _complete_counterspell_reaction(
             event,
             entity,
@@ -1026,33 +1026,12 @@ def counterspell_reaction_processor(
             outcome_source_entity_uuid=entity.uuid,
         )
 
-    cheap_slot = entity.get_lowest_spell_slot(3)
-    if cheap_slot is None:
-        return None
-
-    entity.action_economy.consume("reactions", 1)
-    entity.action_economy.consume(spell_slot_cost_type(cheap_slot), 1)
+    cheap_slot = payment.cast_rank
 
     dc = 10 + spell_cast_level
     ability_name: AbilityName = entity.spellcasting.spellcasting_ability
-    if learned_spell_ref is not None:
-        source_ids = (
-            entity.spellcasting.learned_reaction_spell_source_ids(
-                learned_spell_ref.content_id,
-            )
-        )
-        if not source_ids:
-            return None
-        ability_name = max(
-            (
-                entity.spellcasting.resolve_spellcasting_ability(source_id)
-                for source_id in source_ids
-            ),
-            key=lambda candidate: (
-                entity.ability_scores.get_ability(candidate).modifier,
-                candidate,
-            ),
-        )
+    if payment.source_id is not None:
+        ability_name=entity.spellcasting.resolve_spellcasting_ability(payment.source_id)
     check_total = entity.roll_d20(entity.ability_check_bonus(None, ability_name),
         RollType.CHECK, ability_name=ability_name, parent_event=event.uuid).total
     if check_total >= dc:
@@ -1265,7 +1244,7 @@ class GlobeZone(AreaCondition):
             name="Globe Spell Blocker",
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(event_type=kind, event_phase=phase)
-                for kind in (EventType.CAST_SPELL, EventType.BASE_ACTION)
+                for kind in (EventType.CAST_SPELL, EventType.BASE_ACTION, EventType.EFFECT_APPLICATION)
                 for phase in (EventPhase.EXECUTION, EventPhase.EFFECT)],
             event_processor=processor
         )
@@ -3468,6 +3447,16 @@ class AntimagicFieldZone(AreaCondition):
 
     def _create_spell_blocker(self) -> EventHandler:
         def block(event: Event, _source_uuid: UUID) -> Event | None:
+            if isinstance(event, EffectApplicationEvent):
+                origin = event.effect_origin
+                if not (origin.magical or origin.kind is EffectOriginKind.SPELL) or origin.antimagic_exception is not None:
+                    return None
+                positions = {event.source_position, event.target_position} - {None}
+                if event.source_position is not None and event.target_position is not None:
+                    positions.update(bresenham_line(event.source_position, event.target_position))
+                if positions & self.affected_positions:
+                    return event.cancel(status_message="Antimagic Field blocks this magical application")
+                return None
             if isinstance(event, PortalTransferEvent):
                 origin = event.effect_origin
                 if origin is not None and origin.kind is EffectOriginKind.SPELL and origin.antimagic_exception is None:
@@ -3480,6 +3469,19 @@ class AntimagicFieldZone(AreaCondition):
                     path = event.disclosed_path or tuple(bresenham_line(event.start_position, event.end_position))
                     if set(path) & self.affected_positions:
                         return event.cancel(status_message="Antimagic Field blocks the magical transfer")
+                return None
+            if isinstance(event, ActionEvent) and not isinstance(event, SpellEvent):
+                origin = event.get_effect_origin()
+                if origin is None or not origin.magical or origin.antimagic_exception is not None:
+                    return None
+                source = origin.source_position
+                target = Entity.get(event.target_entity_uuid)
+                destination = target.position if target is not None else None
+                positions = {source, destination} - {None}
+                if source is not None and destination is not None:
+                    positions.update(bresenham_line(source, destination))
+                if positions & self.affected_positions:
+                    return event.cancel(status_message="Antimagic Field blocks this magical application")
                 return None
             if not isinstance(event, SpellEvent) or event.to_effect_origin().antimagic_exception is not None:
                 return None
@@ -3509,7 +3511,7 @@ class AntimagicFieldZone(AreaCondition):
             return None
         return EventHandler(source_entity_uuid=self.source_entity_uuid, name="Antimagic effect admission",
             trigger_conditions=[Trigger(event_type=kind, event_phase=phase)
-                for kind in (EventType.CAST_SPELL, EventType.BASE_ACTION)
+                for kind in (EventType.CAST_SPELL, EventType.BASE_ACTION, EventType.EFFECT_APPLICATION)
                 for phase in (EventPhase.EXECUTION, EventPhase.EFFECT)] + [
                 Trigger(event_type=EventType.FORCED_MOVEMENT, event_phase=EventPhase.EXECUTION),
                 Trigger(event_type=EventType.PORTAL_TRANSFER, event_phase=EventPhase.EXECUTION)], event_processor=block)
@@ -3924,7 +3926,7 @@ class GlyphOfWardingZone(AreaCondition):
                 damage=Damage(name="Glyph of Warding",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
                     damage_dice=8,dice_numbers=self.dice_count,damage_type=damage_type,effect_origin=self.effect_origin,
                     damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
-                roll=damage.get_dice(AttackOutcome.HIT).roll
+                roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
                 target.receive_damage(roll.total//2 if saved else roll.total,damage_type,caster.uuid,parent_event=event.uuid,
                     damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,independent_resolution=True,
                     source_condition_uuid=self.uuid)
@@ -3981,6 +3983,9 @@ class GlyphOfWarding(SpellAction):
     payload: Literal["acid","cold","fire","lightning","thunder","sleep","detonation"] = "fire"
     harmful: bool = True
 
+    def has_authored_damage(self) -> bool:
+        return self.payload in ("acid", "cold", "fire", "lightning", "thunder")
+
     def get_variant_facets(self):
         return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.payload,label=self.payload.title()))
 
@@ -4018,7 +4023,6 @@ class GlyphOfWarding(SpellAction):
 class AuraOfLifeBenefit(BaseCondition):
     name: str = "Aura of Life"
     description: str = "Necrotic resistance; prevents new maximum HP loss; restores an allied living creature at 0 HP to 1 HP before its death save."
-    prevents_hit_point_maximum_reduction: bool = True
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, event: Event):
@@ -4031,13 +4035,22 @@ class AuraOfLifeBenefit(BaseCondition):
         def revive(boundary: Event, _: UUID):
             if self.applied and self.contributions_active() and target.uuid != self.source_entity_uuid and                    target.health.life_state is not LifeState.DEAD and target.get_hp() == 0:
                 target.receive_healing(1, self.source_entity_uuid, parent_event=boundary.uuid,
-                    source_description="Aura of Life")
+                    source_description="Aura of Life", effect_origin=self.effect_origin)
             return None
         handler = EventHandler(name="Aura of Life start-turn healing", source_entity_uuid=target.uuid,
             trigger_conditions=[Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EXECUTION,
                 event_source_entity_uuid=target.uuid)], event_processor=revive)
         target.add_event_handler(handler)
-        return [(value.uuid, ident)], [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
+        def prevent_reduction(incoming: Event, _: UUID):
+            if not incoming.canceled and self.applied and self.contributions_active():
+                return incoming.cancel(status_message="Aura of Life prevents new maximum HP reduction")
+            return None
+        protection = EventHandler(name="Aura of Life maximum HP protection", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.MAXIMUM_HIT_POINT_REDUCTION,
+                event_phase=EventPhase.DECLARATION, event_target_entity_uuid=target.uuid)],
+            event_processor=prevent_reduction)
+        target.add_event_handler(protection)
+        return [(value.uuid, ident)], [handler.uuid, protection.uuid], [], [], event.phase_to(EventPhase.EFFECT)
 
 
 class AuraOfLifeMembership(SpatialConditionMembershipSource):

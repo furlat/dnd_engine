@@ -29,13 +29,21 @@ export type Kind = "health";
 export type Status = "ok";
 export type Kind1 = "bootstrap";
 export type ProtocolVersion = 1;
-export type PlayerSchemaVersion = 9;
+export type PlayerSchemaVersion = 10;
 export type SchemaDigest = string;
 export type GameId = string;
 export type GameEpoch = string;
 export type AudienceId = string;
 export type Lifecycle =
-  "starting" | "waiting_for_human" | "advancing" | "delivery_blocked" | "terminal" | "failed" | "closing" | "closed";
+  | "starting"
+  | "waiting_for_human"
+  | "advancing"
+  | "outside_encounter"
+  | "delivery_blocked"
+  | "terminal"
+  | "failed"
+  | "closing"
+  | "closed";
 export type InputActorUuid = string | null;
 export type StateRevision = string | null;
 export type Reason =
@@ -803,6 +811,15 @@ export type TargetEntityUuid8 = string;
  */
 export type EventType =
   | "base_action"
+  | "action_application_committed"
+  | "action_costs_committed"
+  | "condition_membership_committed"
+  | "rest_resources_recovered"
+  | "permanent_feature_used"
+  | "rest_completed"
+  | "spell_mastery_studied"
+  | "spellbook_changed"
+  | "spell_preparation_changed"
   | "attack"
   | "movement"
   | "step_movement"
@@ -816,6 +833,8 @@ export type EventType =
   | "take_damage"
   | "damage_applied"
   | "heal"
+  | "healing_applied"
+  | "maximum_hit_point_reduction"
   | "temporary_hit_points_changed"
   | "cast_spell"
   | "attack_miss"
@@ -848,6 +867,8 @@ export type EventType =
   | "save_d20_roll"
   | "check_d20_roll"
   | "damage_roll_result"
+  | "spell_damage_roll_result"
+  | "spatial_effect_application"
   | "heal_roll_result"
   | "enemy_spotted"
   | "enemy_killed"
@@ -1190,7 +1211,8 @@ export type SpatialEffectChangeOperation =
 /**
  * Environmental operations which may affect spatial conditions.
  */
-export type SpatialEffectInteractionOperation = "ignite" | "douse" | "freeze" | "electrify" | "vaporize" | "disperse";
+export type SpatialEffectInteractionOperation =
+  "ignite" | "douse" | "freeze" | "electrify" | "vaporize" | "disperse" | "dry";
 export type RemovedPositions = [number, number][];
 export type Kind32 = "object_damage";
 export type ObjectUuid1 = string;
@@ -2389,10 +2411,16 @@ export type Values = string[];
 export type Choices = OriginChoiceSelection[];
 export type StepId = string;
 export type CharacterLevel = number;
-export type CharacterClass = "class.barbarian" | "class.fighter" | "class.sorcerer";
+export type CharacterClass =
+  "class.barbarian" | "class.fighter" | "class.sorcerer" | "class.cleric" | "class.paladin" | "class.wizard";
 export type ResultingClassLevel = number;
 export type CharacterSubclass =
-  "subclass.barbarian.berserker" | "subclass.fighter.champion" | "subclass.sorcerer.draconic_bloodline";
+  | "subclass.barbarian.berserker"
+  | "subclass.fighter.champion"
+  | "subclass.sorcerer.draconic_bloodline"
+  | "subclass.cleric.life_domain"
+  | "subclass.paladin.oath_of_devotion"
+  | "subclass.wizard.school_of_evocation";
 export type ChoiceId1 = string;
 export type Values1 = string[];
 export type Choices1 = ClassChoiceSelection[];
@@ -2441,6 +2469,11 @@ export type Enabled1 = boolean;
  */
 export type TriggerEvent = string;
 export type HandlerDetails = AvailableHandlerInfo[];
+export type ScribedSpellIds = string[];
+export type PermanentFeatureUses = string[];
+export type SourceId1 = string;
+export type SpellIds = string[];
+export type PreparedSpellSelections = PreparedSpellSelection[];
 export type Sheets = PlayerCharacterSheet[];
 export type Kind65 = "ack";
 export type ActorUuid1 = string;
@@ -2509,6 +2542,9 @@ export type DiscoveryGeneration1 = number;
 export type DiscoveryIndex = number;
 export type DiscoveryRuntime = string | null;
 export type DiscoveryActorUuid = string | null;
+export type SpellcastingSourceId = string | null;
+export type SpellcastingProviderId = string | null;
+export type SpellcastingAbility = string | null;
 /**
  * Engine command token for execution; never authored presentation identity.
  */
@@ -3165,7 +3201,14 @@ export type IsHazardous = boolean;
 export type CommandNumber = number;
 export type ActorUuid3 = string;
 export type StateRevision5 = string;
-export type Intent = ExecuteSelectionIntent | EndTurnIntent | EquipIntent | UnequipIntent | ToggleHandlerIntent;
+export type Intent =
+  | ExecuteSelectionIntent
+  | EndTurnIntent
+  | EquipIntent
+  | UnequipIntent
+  | ToggleHandlerIntent
+  | PrepareSpellsIntent
+  | StudySpellMasteryIntent;
 export type Kind75 = "execute_selection";
 export type DiscoveryGeneration3 = number;
 export type Kind76 = "end_turn";
@@ -3186,24 +3229,29 @@ export type Kind79 = "toggle_handler";
 export type DiscoveryGeneration4 = number;
 export type HandlerUuid = string;
 export type Enabled2 = boolean;
-export type Kind80 = "receipt";
+export type Kind80 = "prepare_spells";
+export type Kind81 = "study_spell_mastery";
+export type RankOneSpellId = string;
+export type RankTwoSpellId = string;
+export type Hours = number;
+export type Kind82 = "receipt";
 export type Receipt =
   PendingReceipt | CommittedReceipt | RejectedReceipt | IndeterminateReceipt | ExpiredReceipt | UnknownReceipt;
 export type GameId4 = string;
 export type GameEpoch4 = string;
 export type AudienceId4 = string;
 export type CommandNumber1 = number;
-export type Kind81 = "pending";
+export type Kind83 = "pending";
 export type GameId5 = string;
 export type GameEpoch5 = string;
 export type AudienceId5 = string;
 export type CommandNumber2 = number;
-export type Kind82 = "committed";
+export type Kind84 = "committed";
 export type GameId6 = string;
 export type GameEpoch6 = string;
 export type AudienceId6 = string;
 export type CommandNumber3 = number;
-export type Kind83 = "rejected";
+export type Kind85 = "rejected";
 export type Reason4 =
   | "stale_state"
   | "stale_discovery"
@@ -3218,23 +3266,23 @@ export type GameId7 = string;
 export type GameEpoch7 = string;
 export type AudienceId7 = string;
 export type CommandNumber4 = number;
-export type Kind84 = "indeterminate";
+export type Kind86 = "indeterminate";
 export type IncidentId1 = string;
 export type GameId8 = string;
 export type GameEpoch8 = string;
 export type AudienceId8 = string;
 export type CommandNumber5 = number;
-export type Kind85 = "expired";
+export type Kind87 = "expired";
 export type GameId9 = string;
 export type GameEpoch9 = string;
 export type AudienceId9 = string;
 export type CommandNumber6 = number;
-export type Kind86 = "unknown";
-export type Kind87 = "content";
+export type Kind88 = "unknown";
+export type Kind89 = "content";
 export type Revision3 = string;
 export type Descriptors = ContentDescriptor[];
-export type Kind88 = "ready";
-export type Kind89 = "stream_status";
+export type Kind90 = "ready";
+export type Kind91 = "stream_status";
 export type Generation2 = string;
 export type ObserverUuid5 = string;
 export type LineageUuid5 = string;
@@ -3251,7 +3299,7 @@ export type EncounterLogIndex = number;
 export type OperationEndCursor = number;
 export type CombatLogAppends = CombatLogAppend[];
 export type ContentAdditions1 = ContentDescriptor[];
-export type Kind90 = "operation";
+export type Kind92 = "operation";
 export type StateRevision6 = string;
 export type CommandNumber7 = number | null;
 export type ApiError =
@@ -3282,140 +3330,140 @@ export type ApiError =
   | ErrorGameFailed
   | ErrorGameClosed
   | ErrorInternalFailure;
-export type Kind91 = "error";
+export type Kind93 = "error";
 export type IncidentId2 = string | null;
 export type Code = "invalid_request";
 export type HttpStatus = 400;
 export type Retryable = false;
-export type Kind92 = "error";
+export type Kind94 = "error";
 export type IncidentId3 = string | null;
 export type Code1 = "unauthenticated";
 export type HttpStatus1 = 401;
 export type Retryable1 = false;
-export type Kind93 = "error";
+export type Kind95 = "error";
 export type IncidentId4 = string | null;
 export type Code2 = "forbidden";
 export type HttpStatus2 = 403;
 export type Retryable2 = false;
-export type Kind94 = "error";
+export type Kind96 = "error";
 export type IncidentId5 = string | null;
 export type Code3 = "game_not_found";
 export type HttpStatus3 = 404;
 export type Retryable3 = false;
-export type Kind95 = "error";
+export type Kind97 = "error";
 export type IncidentId6 = string | null;
 export type Code4 = "epoch_mismatch";
 export type HttpStatus4 = 409;
 export type Retryable4 = false;
-export type Kind96 = "error";
+export type Kind98 = "error";
 export type IncidentId7 = string | null;
 export type Code5 = "audience_mismatch";
 export type HttpStatus5 = 403;
 export type Retryable5 = false;
-export type Kind97 = "error";
+export type Kind99 = "error";
 export type IncidentId8 = string | null;
 export type Code6 = "attachment_replaced";
 export type HttpStatus6 = 409;
 export type Retryable6 = false;
-export type Kind98 = "error";
+export type Kind100 = "error";
 export type IncidentId9 = string | null;
 export type Code7 = "attachment_conflict";
 export type HttpStatus7 = 409;
 export type Retryable7 = false;
-export type Kind99 = "error";
+export type Kind101 = "error";
 export type IncidentId10 = string | null;
 export type Code8 = "command_conflict";
 export type HttpStatus8 = 409;
 export type Retryable8 = false;
-export type Kind100 = "error";
+export type Kind102 = "error";
 export type IncidentId11 = string | null;
 export type Code9 = "command_number";
 export type HttpStatus9 = 409;
 export type Retryable9 = false;
-export type Kind101 = "error";
+export type Kind103 = "error";
 export type IncidentId12 = string | null;
 export type Code10 = "stale_state";
 export type HttpStatus10 = 409;
 export type Retryable10 = false;
-export type Kind102 = "error";
+export type Kind104 = "error";
 export type IncidentId13 = string | null;
 export type Code11 = "stale_discovery";
 export type HttpStatus11 = 409;
 export type Retryable11 = false;
-export type Kind103 = "error";
+export type Kind105 = "error";
 export type IncidentId14 = string | null;
 export type Code12 = "not_your_turn";
 export type HttpStatus12 = 409;
 export type Retryable12 = false;
-export type Kind104 = "error";
+export type Kind106 = "error";
 export type IncidentId15 = string | null;
 export type Code13 = "catch_up_required";
 export type HttpStatus13 = 409;
 export type Retryable13 = false;
-export type Kind105 = "error";
+export type Kind107 = "error";
 export type IncidentId16 = string | null;
 export type Code14 = "query_superseded";
 export type HttpStatus14 = 409;
 export type Retryable14 = false;
-export type Kind106 = "error";
+export type Kind108 = "error";
 export type IncidentId17 = string | null;
 export type Code15 = "invalid_cursor";
 export type HttpStatus15 = 400;
 export type Retryable15 = false;
-export type Kind107 = "error";
+export type Kind109 = "error";
 export type IncidentId18 = string | null;
 export type Code16 = "resume_unavailable";
 export type HttpStatus16 = 410;
 export type Retryable16 = false;
-export type Kind108 = "error";
+export type Kind110 = "error";
 export type IncidentId19 = string | null;
 export type Code17 = "protocol_mismatch";
 export type HttpStatus17 = 409;
 export type Retryable17 = false;
-export type Kind109 = "error";
+export type Kind111 = "error";
 export type IncidentId20 = string | null;
 export type Code18 = "request_too_large";
 export type HttpStatus18 = 413;
 export type Retryable18 = false;
-export type Kind110 = "error";
+export type Kind112 = "error";
 export type IncidentId21 = string | null;
 export type Code19 = "response_too_large";
 export type HttpStatus19 = 500;
 export type Retryable19 = false;
-export type Kind111 = "error";
+export type Kind113 = "error";
 export type IncidentId22 = string | null;
 export type Code20 = "busy";
 export type HttpStatus20 = 429;
 export type Retryable20 = true;
 export type RetryAfterMs = number;
-export type Kind112 = "error";
+export type Kind114 = "error";
 export type IncidentId23 = string | null;
 export type Code21 = "starting";
 export type HttpStatus21 = 503;
 export type Retryable21 = true;
 export type RetryAfterMs1 = number;
-export type Kind113 = "error";
+export type Kind115 = "error";
 export type IncidentId24 = string | null;
 export type Code22 = "recording_capacity";
 export type HttpStatus22 = 503;
 export type Retryable22 = true;
 export type RetryAfterMs2 = number;
-export type Kind114 = "error";
+export type Kind116 = "error";
 export type IncidentId25 = string | null;
 export type Code23 = "game_terminal";
 export type HttpStatus23 = 409;
 export type Retryable23 = false;
-export type Kind115 = "error";
+export type Kind117 = "error";
 export type IncidentId26 = string | null;
 export type Code24 = "game_failed";
 export type HttpStatus24 = 503;
 export type Retryable24 = false;
-export type Kind116 = "error";
+export type Kind118 = "error";
 export type IncidentId27 = string | null;
 export type Code25 = "game_closed";
 export type HttpStatus25 = 410;
 export type Retryable25 = false;
-export type Kind117 = "error";
+export type Kind119 = "error";
 export type IncidentId28 = string | null;
 export type Code26 = "internal_failure";
 export type HttpStatus26 = 500;
@@ -5357,6 +5405,9 @@ export interface PlayerCharacterSheet {
   maximum_hp?: MaximumHp2;
   compatible_item_slots?: CompatibleItemSlots;
   handler_details?: HandlerDetails;
+  scribed_spell_ids?: ScribedSpellIds;
+  permanent_feature_uses?: PermanentFeatureUses;
+  prepared_spell_selections?: PreparedSpellSelections;
 }
 /**
  * Selections required to rebuild one installed character origin.
@@ -5408,6 +5459,13 @@ export interface AvailableHandlerInfo {
   uuid: Uuid3;
   enabled: Enabled1;
   trigger_event: TriggerEvent;
+}
+/**
+ * Ordered prepared spells owned by one semantic casting source.
+ */
+export interface PreparedSpellSelection {
+  source_id: SourceId1;
+  spell_ids: SpellIds;
 }
 export interface AckRequest {
   cursor: PlayerCursor;
@@ -5508,6 +5566,9 @@ export interface PlayerAction {
   discovery_index?: DiscoveryIndex;
   discovery_runtime?: DiscoveryRuntime;
   discovery_actor_uuid?: DiscoveryActorUuid;
+  spellcasting_source_id?: SpellcastingSourceId;
+  spellcasting_provider_id?: SpellcastingProviderId;
+  spellcasting_ability?: SpellcastingAbility;
   template_name: TemplateName;
   semantic_key?: SemanticKey1;
   behavior_id: BehaviorId9;
@@ -5914,8 +5975,21 @@ export interface ToggleHandler {
   handler_uuid: HandlerUuid;
   enabled: Enabled2;
 }
-export interface ReceiptResponse {
+export interface PrepareSpellsIntent {
   kind?: Kind80;
+  selection: PreparedSpellSelection;
+}
+export interface StudySpellMasteryIntent {
+  kind?: Kind81;
+  selection: SpellMasteryStudy;
+}
+export interface SpellMasteryStudy {
+  rank_one_spell_id: RankOneSpellId;
+  rank_two_spell_id: RankTwoSpellId;
+  hours?: Hours;
+}
+export interface ReceiptResponse {
+  kind?: Kind82;
   receipt: Receipt;
 }
 export interface PendingReceipt {
@@ -5923,14 +5997,14 @@ export interface PendingReceipt {
   game_epoch: GameEpoch4;
   audience_id: AudienceId4;
   command_number: CommandNumber1;
-  kind?: Kind81;
+  kind?: Kind83;
 }
 export interface CommittedReceipt {
   game_id: GameId5;
   game_epoch: GameEpoch5;
   audience_id: AudienceId5;
   command_number: CommandNumber2;
-  kind?: Kind82;
+  kind?: Kind84;
   cursor: PlayerCursor;
 }
 export interface RejectedReceipt {
@@ -5938,7 +6012,7 @@ export interface RejectedReceipt {
   game_epoch: GameEpoch6;
   audience_id: AudienceId6;
   command_number: CommandNumber3;
-  kind?: Kind83;
+  kind?: Kind85;
   reason: Reason4;
 }
 export interface IndeterminateReceipt {
@@ -5946,7 +6020,7 @@ export interface IndeterminateReceipt {
   game_epoch: GameEpoch7;
   audience_id: AudienceId7;
   command_number: CommandNumber4;
-  kind?: Kind84;
+  kind?: Kind86;
   incident_id: IncidentId1;
 }
 export interface ExpiredReceipt {
@@ -5954,29 +6028,29 @@ export interface ExpiredReceipt {
   game_epoch: GameEpoch8;
   audience_id: AudienceId8;
   command_number: CommandNumber5;
-  kind?: Kind85;
+  kind?: Kind87;
 }
 export interface UnknownReceipt {
   game_id: GameId9;
   game_epoch: GameEpoch9;
   audience_id: AudienceId9;
   command_number: CommandNumber6;
-  kind?: Kind86;
+  kind?: Kind88;
 }
 export interface ContentResponse {
-  kind?: Kind87;
+  kind?: Kind89;
   revision: Revision3;
   descriptors: Descriptors;
 }
 export interface StreamReady {
-  kind?: Kind88;
+  kind?: Kind90;
   protocol: ProtocolIdentity;
   after: PlayerCursor;
   head: PlayerCursor;
   status: StatusSnapshot;
 }
 export interface StreamStatus {
-  kind?: Kind89;
+  kind?: Kind91;
   status: StatusSnapshot;
 }
 export interface PlayerOperation {
@@ -5985,7 +6059,7 @@ export interface PlayerOperation {
   hud: PlayerHUDSnapshot | null;
   combat_log_appends: CombatLogAppends;
   content_additions: ContentAdditions1;
-  kind?: Kind90;
+  kind?: Kind92;
   protocol: ProtocolIdentity;
   cursor: PlayerCursor;
   state_revision: StateRevision6;
@@ -6014,98 +6088,98 @@ export interface CombatLogAppend {
   entry: CombatLogEntry;
 }
 export interface ErrorInvalidRequest {
-  kind?: Kind91;
+  kind?: Kind93;
   incident_id?: IncidentId2;
   code?: Code;
   http_status?: HttpStatus;
   retryable?: Retryable;
 }
 export interface ErrorUnauthenticated {
-  kind?: Kind92;
+  kind?: Kind94;
   incident_id?: IncidentId3;
   code?: Code1;
   http_status?: HttpStatus1;
   retryable?: Retryable1;
 }
 export interface ErrorForbidden {
-  kind?: Kind93;
+  kind?: Kind95;
   incident_id?: IncidentId4;
   code?: Code2;
   http_status?: HttpStatus2;
   retryable?: Retryable2;
 }
 export interface ErrorGameNotFound {
-  kind?: Kind94;
+  kind?: Kind96;
   incident_id?: IncidentId5;
   code?: Code3;
   http_status?: HttpStatus3;
   retryable?: Retryable3;
 }
 export interface ErrorEpochMismatch {
-  kind?: Kind95;
+  kind?: Kind97;
   incident_id?: IncidentId6;
   code?: Code4;
   http_status?: HttpStatus4;
   retryable?: Retryable4;
 }
 export interface ErrorAudienceMismatch {
-  kind?: Kind96;
+  kind?: Kind98;
   incident_id?: IncidentId7;
   code?: Code5;
   http_status?: HttpStatus5;
   retryable?: Retryable5;
 }
 export interface ErrorAttachmentReplaced {
-  kind?: Kind97;
+  kind?: Kind99;
   incident_id?: IncidentId8;
   code?: Code6;
   http_status?: HttpStatus6;
   retryable?: Retryable6;
 }
 export interface ErrorAttachmentConflict {
-  kind?: Kind98;
+  kind?: Kind100;
   incident_id?: IncidentId9;
   code?: Code7;
   http_status?: HttpStatus7;
   retryable?: Retryable7;
 }
 export interface ErrorCommandConflict {
-  kind?: Kind99;
+  kind?: Kind101;
   incident_id?: IncidentId10;
   code?: Code8;
   http_status?: HttpStatus8;
   retryable?: Retryable8;
 }
 export interface ErrorCommandNumber {
-  kind?: Kind100;
+  kind?: Kind102;
   incident_id?: IncidentId11;
   code?: Code9;
   http_status?: HttpStatus9;
   retryable?: Retryable9;
 }
 export interface ErrorStaleState {
-  kind?: Kind101;
+  kind?: Kind103;
   incident_id?: IncidentId12;
   code?: Code10;
   http_status?: HttpStatus10;
   retryable?: Retryable10;
 }
 export interface ErrorStaleDiscovery {
-  kind?: Kind102;
+  kind?: Kind104;
   incident_id?: IncidentId13;
   code?: Code11;
   http_status?: HttpStatus11;
   retryable?: Retryable11;
 }
 export interface ErrorNotYourTurn {
-  kind?: Kind103;
+  kind?: Kind105;
   incident_id?: IncidentId14;
   code?: Code12;
   http_status?: HttpStatus12;
   retryable?: Retryable12;
 }
 export interface ErrorCatchUpRequired {
-  kind?: Kind104;
+  kind?: Kind106;
   incident_id?: IncidentId15;
   code?: Code13;
   http_status?: HttpStatus13;
@@ -6113,21 +6187,21 @@ export interface ErrorCatchUpRequired {
   required_cursor: PlayerCursor;
 }
 export interface ErrorQuerySuperseded {
-  kind?: Kind105;
+  kind?: Kind107;
   incident_id?: IncidentId16;
   code?: Code14;
   http_status?: HttpStatus14;
   retryable?: Retryable14;
 }
 export interface ErrorInvalidCursor {
-  kind?: Kind106;
+  kind?: Kind108;
   incident_id?: IncidentId17;
   code?: Code15;
   http_status?: HttpStatus15;
   retryable?: Retryable15;
 }
 export interface ErrorResumeUnavailable {
-  kind?: Kind107;
+  kind?: Kind109;
   incident_id?: IncidentId18;
   code?: Code16;
   http_status?: HttpStatus16;
@@ -6135,28 +6209,28 @@ export interface ErrorResumeUnavailable {
   earliest_cursor: PlayerCursor | null;
 }
 export interface ErrorProtocolMismatch {
-  kind?: Kind108;
+  kind?: Kind110;
   incident_id?: IncidentId19;
   code?: Code17;
   http_status?: HttpStatus17;
   retryable?: Retryable17;
 }
 export interface ErrorRequestTooLarge {
-  kind?: Kind109;
+  kind?: Kind111;
   incident_id?: IncidentId20;
   code?: Code18;
   http_status?: HttpStatus18;
   retryable?: Retryable18;
 }
 export interface ErrorResponseTooLarge {
-  kind?: Kind110;
+  kind?: Kind112;
   incident_id?: IncidentId21;
   code?: Code19;
   http_status?: HttpStatus19;
   retryable?: Retryable19;
 }
 export interface ErrorBusy {
-  kind?: Kind111;
+  kind?: Kind113;
   incident_id?: IncidentId22;
   code?: Code20;
   http_status?: HttpStatus20;
@@ -6164,7 +6238,7 @@ export interface ErrorBusy {
   retry_after_ms?: RetryAfterMs;
 }
 export interface ErrorStarting {
-  kind?: Kind112;
+  kind?: Kind114;
   incident_id?: IncidentId23;
   code?: Code21;
   http_status?: HttpStatus21;
@@ -6172,7 +6246,7 @@ export interface ErrorStarting {
   retry_after_ms?: RetryAfterMs1;
 }
 export interface ErrorRecordingCapacity {
-  kind?: Kind113;
+  kind?: Kind115;
   incident_id?: IncidentId24;
   code?: Code22;
   http_status?: HttpStatus22;
@@ -6180,28 +6254,28 @@ export interface ErrorRecordingCapacity {
   retry_after_ms?: RetryAfterMs2;
 }
 export interface ErrorGameTerminal {
-  kind?: Kind114;
+  kind?: Kind116;
   incident_id?: IncidentId25;
   code?: Code23;
   http_status?: HttpStatus23;
   retryable?: Retryable23;
 }
 export interface ErrorGameFailed {
-  kind?: Kind115;
+  kind?: Kind117;
   incident_id?: IncidentId26;
   code?: Code24;
   http_status?: HttpStatus24;
   retryable?: Retryable24;
 }
 export interface ErrorGameClosed {
-  kind?: Kind116;
+  kind?: Kind118;
   incident_id?: IncidentId27;
   code?: Code25;
   http_status?: HttpStatus25;
   retryable?: Retryable25;
 }
 export interface ErrorInternalFailure {
-  kind?: Kind117;
+  kind?: Kind119;
   incident_id?: IncidentId28;
   code?: Code26;
   http_status?: HttpStatus26;

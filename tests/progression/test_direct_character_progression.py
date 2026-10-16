@@ -259,9 +259,13 @@ def test_public_mixed_fighter_sorcerer_add_remove_uses_terminal_facts() -> None:
             EventType.ENTITY_LEVEL_REMOVED,
         }
     ) == (
+        EventPhase.EFFECT,
         EventPhase.COMPLETION,
+        EventPhase.EFFECT,
         EventPhase.COMPLETION,
+        EventPhase.EFFECT,
         EventPhase.COMPLETION,
+        EventPhase.EFFECT,
         EventPhase.COMPLETION,
     )
 

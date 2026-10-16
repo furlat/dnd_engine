@@ -70,6 +70,7 @@ from dnd.content.items.ground_hardware_builders import GROUND_HARDWARE_PROFILES,
 from dnd.content.items.world_prop_builders import WORLD_PROP_PROFILES, build_world_prop
 from dnd.extensions.field_focus import build_field_kit
 from dnd.items.created_items import build_goodberry
+from dnd.items.divine_rewards import build_devotees_mace
 from dnd.items.consumables import (
     build_basic_poison_weapon_coat,
     build_concentration_fire_weapon_coat,
@@ -499,6 +500,7 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
         for item_id, definition in STATIC_BLOCKER_DEFINITIONS.items()
     },
     "consumable.healing_potion": _build_healing_potion,
+    "weapon.devotees_mace": _single_item_builder("weapon.devotees_mace",build_devotees_mace),
     "consumable.goodberry": _build_goodberry,
     "consumable.potion_haste": _single_item_builder(
         "consumable.potion_haste", build_haste_potion,

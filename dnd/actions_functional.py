@@ -673,6 +673,12 @@ def preview_available_selection(
                 affected_positions = tuple(area_target.affected_positions or ())
                 affected_entity_uuids = tuple(area_target.affected_entity_uuids or ())
                 affected_entity_names = tuple(area_target.affected_entity_names or ())
+                origin=bound.get_effect_origin_for_preview()
+                if origin is not None:
+                    included=[index for index,identity in enumerate(affected_entity_uuids)
+                        if EventQueue.preview_application_admitted(origin,entity.uuid,identity)]
+                    affected_entity_uuids=tuple(affected_entity_uuids[index] for index in included)
+                    affected_entity_names=tuple(affected_entity_names[index] for index in included if index<len(affected_entity_names))
                 if template.aoe_shape is not None and primary.position is not None:
                     try:
                         geometry = snapshot_aoe_presentation_geometry(template.aoe_shape,

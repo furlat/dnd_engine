@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from pydantic import Field
 
 from dnd.core.base_block import BaseBlock, LightLevel
-from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, Duration
 from dnd.core.condition_types import (
     ConditionCategory,
     ConditionRemovalTrigger,
@@ -185,6 +185,11 @@ FIRE_SURFACE_TRANSITIONS = (
     ),
 )
 
+DRY_TRANSITION = SpatialEffectTransitionDefinition(
+    operation=SpatialEffectInteractionOperation.DRY,
+    action=SpatialEffectTransitionAction.REMOVE_AFFECTED,
+)
+
 WET_SURFACE_TRANSITIONS = (
     SpatialEffectTransitionDefinition(
         operation=SpatialEffectInteractionOperation.FREEZE,
@@ -207,6 +212,7 @@ WET_SURFACE_TRANSITIONS = (
 )
 
 ICE_SURFACE_TRANSITIONS = (
+    DRY_TRANSITION,
     SpatialEffectTransitionDefinition(
         operation=SpatialEffectInteractionOperation.VAPORIZE,
         action=(
@@ -438,7 +444,19 @@ class Wet(BaseCondition):
             update={"condition": self},
             status_message=f"Applied Wet to {target.name}",
         )
-        return modifiers, [], [], [], effect
+        def reject_incompatible(incoming: Event, _: UUID):
+            if (isinstance(incoming, ConditionApplicationEvent) and not incoming.canceled
+                    and self.applied and self.contributions_active()
+                    and incoming.condition.blocked_while_wet):
+                return incoming.cancel(status_message="Active Wet prevents this condition")
+            return None
+
+        handler = EventHandler(name="Wet condition admission", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.CONDITION_APPLICATION,
+                event_phase=EventPhase.DECLARATION, event_target_entity_uuid=target.uuid)],
+            event_processor=reject_incompatible)
+        target.add_event_handler(handler)
+        return modifiers, [handler.uuid], [], [], effect
 
 
     def on_membership_changed(self,event: Event) -> None:
@@ -507,6 +525,14 @@ class WetSurfaceMembership(SpatialConditionMembershipSource):
 
 class WetAreaCondition(MembershipAreaCondition):
     """Continuous Wet membership shared by water-bearing conditions."""
+
+    def _apply(self, execution_event: Event):
+        modifiers, handlers, children, spatial, effect = super()._apply(execution_event)
+        if effect is not None and not effect.canceled:
+            handler = bind_spatial_interactions(condition=self, transitions=(DRY_TRANSITION,))
+            spatial.append(handler.uuid)
+        return modifiers, handlers, children, spatial, effect
+
 
     membership_tags: frozenset[ConditionTag] = frozenset()
     membership_trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(

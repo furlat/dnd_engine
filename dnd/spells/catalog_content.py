@@ -462,7 +462,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     (transmutation.Longstrider, _catalog('longstrider', 'Touch: speed+10ft for1hour; upcast adds recipients.', 'multi_entity', 'touch', 5, 'touch', multi_target=_multi_target(1, 1, False), classes=('bard','druid','ranger','wizard'))),
     (transmutation.Barkskin, _catalog('barkskin', 'Touch: AC floor16, concentration1hour.', 'entity', 'touch', 5, 'touch', concentration=True, classes=('druid','ranger'))),
     (transmutation.Fly, _catalog('fly', 'Touch:60ft flying speed, concentration10minutes; ground-to-ground adaptation.', 'multi_entity', 'touch', 5, 'touch', concentration=True, multi_target=_multi_target(1, 1, False), classes=('sorcerer','warlock','wizard'))),
-    (evocation.FireShield, _catalog('fire_shield', 'Warm/cold resistance,10ft light and2d8 melee retaliation for10minutes.', 'self', 'self', 0, 'self', classes=('wizard',))),
+    (evocation.FireShield, _catalog('fire_shield', 'Warm/cold resistance,10ft light and2d8 melee retaliation for10minutes.', 'self', 'self', 0, 'self', damage=(DamageType.FIRE,DamageType.COLD), classes=('wizard',))),
     (evocation.FireBolt, _catalog(
         'fire_bolt', 'Hurl a mote of fire at a target', 'entity', 'ranged', 120, 'single_projectile',
         projectile='bolt', damage=(DamageType.FIRE,), attack_roll=True, classes=('wizard', 'sorcerer', 'warlock'), tags=('fire', 'bolt'),

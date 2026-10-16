@@ -16,6 +16,11 @@ from types import MappingProxyType
 import dnd.classes.barbarian as barbarian
 import dnd.classes.feats as feats
 import dnd.classes.fighter as fighter
+import dnd.classes.divine as divine
+import dnd.classes.divine_intervention as intervention
+import dnd.items.divine_rewards as divine_rewards
+import dnd.classes.paladin as paladin
+import dnd.classes.wizard as wizard
 import dnd.classes.rage as rage
 import dnd.conditions as conditions
 import dnd.extensions.aegis_spark as aegis_spark
@@ -133,6 +138,20 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     ConditionBehaviorIdentitySpec,
     ...,
 ] = (
+    _srd(intervention.InterventionUseOwner,ContentDefinitionKind.CONDITION,"condition.class.cleric.intervention_use"),
+    _srd(divine_rewards.HealingIncenseZone,ContentDefinitionKind.CONDITION,"spatial_effect.item.devotees_mace.healing_incense"),
+    _srd(paladin.CleansingTouchCapacity, ContentDefinitionKind.CONDITION,"condition.class.paladin.cleansing_capacity"),
+    _srd(paladin.DivineSenseEffect, ContentDefinitionKind.CONDITION, "condition.class.paladin.divine_sense"),
+    _srd(paladin.PaladinAuraBenefit, ContentDefinitionKind.CONDITION, "condition.class.paladin.aura_benefit"),
+    _srd(paladin.PaladinAuraMembership, ContentDefinitionKind.CONDITION, "condition.class.paladin.aura_membership"),
+    _srd(paladin.PaladinAuraZone, ContentDefinitionKind.CONDITION, "spatial_effect.class.paladin.aura"),
+    _srd(paladin.PaladinAuraRoot, ContentDefinitionKind.CONDITION, "condition.class.paladin.aura_owner"),
+    _srd(paladin.SacredWeaponEffect, ContentDefinitionKind.CONDITION, "condition.class.paladin.sacred_weapon"),
+    _srd(paladin.PurityOfSpirit, ContentDefinitionKind.CONDITION, "condition.class.paladin.purity_of_spirit"),
+    _srd(paladin.HolyNimbusEffect, ContentDefinitionKind.CONDITION, "condition.class.paladin.holy_nimbus"),
+    _srd(divine.ClassFeatureLifetime, ContentDefinitionKind.CONDITION, "condition.class.feature_lifetime"),
+    _srd(wizard.WizardRecoveryState, ContentDefinitionKind.CONDITION, "condition.class.wizard.recovery_state"),
+    _srd(divine.Turned, ContentDefinitionKind.CONDITION, "condition.class.divine.turned"),
     *tuple(_srd(kind,ContentDefinitionKind.CONDITION,identity) for kind,identity in summon_actions.SUMMON_CONDITION_IDENTITIES),
     _srd(payloads.SpellPayloadLifetime,ContentDefinitionKind.CONDITION,"condition.spell.payload_lifetime"),
     _srd(wall_constructions.ForcecageZone,ContentDefinitionKind.CONDITION,"spatial_effect.spell.forcecage"),

@@ -1,5 +1,6 @@
 """Ice Knife's selected attack and subsequent unpaid area effect."""
 
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
 from uuid import uuid5
 
 from pydantic import Field
@@ -91,8 +92,7 @@ class IceKnife(SpellAction):
             damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
                 damage_type=DamageType.PIERCING, damage_dice=10, dice_numbers=1,
                 damage_bonus=caster.get_spell_damage_bonus())
-            roll = damage.get_dice(resolution.outcome,
-                crit_extra_dice=caster.get_spell_crit_extra_dice() if critical else 0).roll
+            roll = roll_spell_damage(damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=resolution.outcome, crit_extra_dice=caster.get_spell_crit_extra_dice() if critical else 0)
             dealt = target.receive_damage(roll.total, DamageType.PIERCING, caster.uuid,
                 damages=[damage], damage_rolls=[roll], parent_event=effect.uuid,
                 critical_hit=critical, effect_id="spell.ice_knife.piercing",
@@ -136,7 +136,7 @@ class IceKnife(SpellAction):
             return
         cold = Damage(source_entity_uuid=caster.uuid, damage_type=DamageType.COLD,
             damage_dice=6, dice_numbers=2 + self.get_upcast_bonus(), damage_bonus=caster.get_spell_damage_bonus())
-        roll = cold.get_dice(AttackOutcome.HIT).roll
+        roll = roll_spell_damage(cold, parent_event=parent, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         total = 0
         for index, recipient in enumerate(recipients):
             application = SpellEvent(name="Ice Knife burst", spell_id="ice_knife", effect_id=ICE_KNIFE_BURST,

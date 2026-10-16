@@ -24,7 +24,7 @@ from dnd.player.selection import selection_target_pool
 from dnd.player.choice_projection import project_selection_preview
 from dnd.player.session import (Session, advance_controller, close_session, create_authored_session, create_session,
     _player_choices_for_transport, end_player_turn, equip_player_item, execute_player_action,
-    preview_player_selection, toggle_player_handler, unequip_player_item)
+    preview_player_selection, toggle_player_handler, unequip_player_item, prepare_player_spells, study_player_spell_mastery)
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_catalog import encounter_recipe
 from server.framing import MAX_PACKET_BYTES, read_packet, write_packet
@@ -45,6 +45,8 @@ class Runtime:
 def boundary(session: Session, seat: str, revision: str) -> BoundaryState:
     encounter = session.encounter
     actor = encounter.get_current_entity()
+    if encounter.state is EncounterState.ENDED:
+        return BoundaryState(lifecycle='outside_encounter', input_actor_uuid=None, state_revision=revision)
     if encounter.state is not EncounterState.ACTIVE:
         return BoundaryState(lifecycle='terminal', input_actor_uuid=None, state_revision=None)
     waiting = (encounter.turn_state is TurnState.IN_PROGRESS and actor is not None
@@ -64,12 +66,14 @@ def start(request: Start) -> tuple[Runtime, Reply, tuple[BaseModel, ...]]:
     random.seed(request.test_seed)
     if not SERVER_CONTENT_SYSTEM_RUNTIME.is_installed:
         SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
+    if request.player_builds is not None and (request.recipe is not None or request.assignments is not None):
+        raise ValueError("Direct player builds require the ordinary skirmish deployment")
     if request.recipe is not None or request.assignments is not None:
         reset_engine_runtime()
         recipe = request.recipe or encounter_recipe(request.encounter_id or 'encounter.lantern_crypt')
         session = create_authored_session(recipe, seat_assignments=request.assignments)
     else:
-        session = create_session(encounter_id=request.encounter_id)
+        session = create_session(encounter_id=request.encounter_id, player_builds=request.player_builds)
     try:
         if set(session.seats) != set(request.audience_ids):
             raise ValueError('Configured credentials must match native external seats')
@@ -98,13 +102,17 @@ def start(request: Start) -> tuple[Runtime, Reply, tuple[BaseModel, ...]]:
         raise
 
 
-def authorize(runtime: Runtime, seat: str, actor: UUID, revision: str) -> None:
+def authorize(runtime: Runtime, seat: str, actor: UUID, revision: str, *, outside_encounter: bool = False) -> None:
     audience = runtime.session.seats.get(seat)
     if audience is None or not audience.controls(actor):
         raise CommandRejected('not_your_turn')
     publication = runtime.publications[seat]
     if publication.state_revision != revision:
         raise CommandRejected('stale_state')
+    if outside_encounter and runtime.session.encounter.state is EncounterState.ENDED:
+        native = runtime.session.game.entities.get(actor)
+        if native is not None and native.active_encounter_uuid is None:
+            return
     if boundary(runtime.session, seat, revision).input_actor_uuid != actor:
         raise CommandRejected('not_your_turn')
 
@@ -129,7 +137,8 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
     if isinstance(request, (Start, EndGame, Close)):
         raise ValueError('Unexpected lifecycle request')
     if isinstance(request, (Choices, Preview, Command)):
-        authorize(runtime, request.seat_id, request.request.actor_uuid, request.request.state_revision)
+        authorize(runtime, request.seat_id, request.request.actor_uuid, request.request.state_revision,
+            outside_encounter=not isinstance(request, Command) or request.request.intent.kind != "end_turn")
     if isinstance(request, Choices):
         query = request.request
         publication = runtime.publications[request.seat_id]
@@ -162,6 +171,10 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
                     extra_target_uuids=tuple(target.target_uuid for target in selected[1:]),
                     extra_target_positions=intent.selection.extra_target_positions,
                     prefer_safe=intent.selection.prefer_safe)
+            case intent if intent.kind == 'prepare_spells':
+                operation = prepare_player_spells(session, command.actor_uuid, intent.selection)
+            case intent if intent.kind == 'study_spell_mastery':
+                operation=study_player_spell_mastery(session,command.actor_uuid,intent.selection)
             case intent if intent.kind == 'end_turn':
                 operation = end_player_turn(session, command.actor_uuid)
             case intent if intent.kind == 'equip':

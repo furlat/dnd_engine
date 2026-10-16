@@ -6,6 +6,7 @@ from pydantic import ConfigDict, Field
 from uuid import UUID
 
 from dnd.core.equipment_types import EquipmentSlot
+from dnd.types.character_progression import PreparedSpellSelection
 
 
 class CommandRejected(ValueError):
@@ -45,3 +46,9 @@ class ToggleHandler:
     __pydantic_config__: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
     handler_uuid: UUID
     enabled: Annotated[bool, Field(strict=True)]
+
+
+@dataclass(frozen=True, slots=True)
+class PrepareSpells:
+    __pydantic_config__: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+    selection: PreparedSpellSelection

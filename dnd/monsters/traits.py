@@ -1616,8 +1616,11 @@ class LifeDrainReduction(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
             return [], [], [], [], event.cancel(status_message="Victim missing")
-        if target.health.prevents_maximum_reduction():
-            return [], [], [], [], event.cancel(status_message="Maximum hit point reduction is prevented")
+        admission = target.health.prepare_maximum_hit_point_reduction(self.amount,
+            self.source_entity_uuid, parent_event=event.uuid, source_condition_uuid=self.uuid)
+        if admission.canceled:
+            return [], [], [], [], event.cancel(status_message=admission.status_message)
+        self.amount = admission.amount
         current_hp = max(0, target.get_normal_hp())
         value = target.health.max_hit_points_bonus
         modifier = NumericalModifier(name=self.name, value=-self.amount,
@@ -1630,8 +1633,13 @@ class LifeDrainReduction(BaseCondition):
 
     def add_reduction(self, amount: int, event: Event) -> None:
         victim=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if victim is None or amount <= 0 or victim.health.prevents_maximum_reduction():
+        if victim is None or amount <= 0 or not self.applied:
             return
+        admission = victim.health.prepare_maximum_hit_point_reduction(amount,
+            event.source_entity_uuid, parent_event=event.uuid, source_condition_uuid=self.uuid)
+        if admission.canceled:
+            return
+        amount = admission.amount
         hp=max(0,victim.get_normal_hp())
         value=victim.health.max_hit_points_bonus
         for handle in self.modifers_uuids.get(value.uuid,[]):

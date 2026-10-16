@@ -95,7 +95,7 @@ class SpellcastingSource(BaseModel):
     maximum_spell_rank: int = Field(
         ge=0,
         le=9,
-        description="Highest spell rank this source can learn or prepare.",
+        description="Own-class spell rank ceiling; shared-slot book eligibility is validated separately.",
     )
     ritual_policy: RitualPreparationPolicy | None = Field(
         default=None,
@@ -140,6 +140,20 @@ class SpellcastingSource(BaseModel):
                 f"progression and provider level: expected {expected_rank}",
             )
         return self
+
+
+class FreeSpellCastGrant(BaseModel):
+    """One exact source's base-rank alternative to paying a normal slot."""
+
+    model_config = ConfigDict(frozen=True)
+    grant_id: UUID
+    provider_id: str
+    source_id: UUID
+    spell_id: str
+    cast_rank: int = Field(ge=1, le=9)
+    label: str
+    resource_name: str | None = None
+    outside_encounter_only: bool = False
 
 
 class LearnedReactionSpellSource(BaseModel):
@@ -212,6 +226,13 @@ class SpellDamageAffinityContribution(BaseModel):
     )
 
 
+class DivineSmiteEntitlement(BaseModel):
+    """Exact source authority, separate from the shared automatic slot toggles."""
+    model_config = ConfigDict(frozen=True)
+    maximum_slot_rank: int = Field(default=5, ge=1, le=5)
+    origin_kind: Literal["class", "spell"] = "class"
+
+
 class SpellcastingBlock(BaseBlock):
     """Spell-specific modifiers that are always present on an entity.
 
@@ -230,7 +251,10 @@ class SpellcastingBlock(BaseBlock):
         default_factory=dict,
         description="Spellcasting abilities keyed by exact progression source.",
     )
-    divine_smite_entitlements: Dict[UUID,int] = Field(default_factory=dict)
+    spell_entitlements: Dict[UUID, Tuple[str, ...]] = Field(default_factory=dict)
+    free_cast_grants: Dict[UUID, FreeSpellCastGrant] = Field(default_factory=dict)
+    overchannel_uses: int = Field(default=0, ge=0)
+    divine_smite_entitlements: Dict[UUID,DivineSmiteEntitlement] = Field(default_factory=dict)
     divine_smite_handler_uuids: Dict[int,UUID] = Field(default_factory=dict)
 
     learned_reaction_spell_handlers: Dict[
@@ -243,6 +267,8 @@ class SpellcastingBlock(BaseBlock):
             "lifetime."
         ),
     )
+    learned_reaction_preferences: Dict[str, bool] = Field(default_factory=dict, exclude=True,
+        description="Runtime automatic-reaction choices retained across preparation changes.")
     spell_damage_affinity_contributions: Dict[
         UUID,
         SpellDamageAffinityContribution,

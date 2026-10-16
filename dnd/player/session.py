@@ -17,6 +17,9 @@ from dnd.ai.runtime.subjective_projection import clear_subjective_projection_fac
 from dnd.content.characters.premades import (
     FIGHTER_PREMADE_ID, SORCERER_PREMADE_ID, create_premade_character,
 )
+from dnd.characters.mastery import study_spell_mastery,SpellMasteryStudy
+from dnd.content.characters.spellcasting_grants import change_prepared_spells
+from dnd.types.character_progression import PreparedSpellSelection
 from dnd.content.characters.builds import CharacterBuild, create_character, resolve_character_build
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
@@ -153,6 +156,8 @@ def _snapshot_sheets(session: Session, identities: tuple[UUID, ...]) -> tuple[Pl
             maximum_hp=actor.get_max_hp(), species=actor.character_species,
             species_variant=actor.character_species_variant, background=actor.character_background,
             origin=actor.applied_origin_state, class_levels=actor.applied_class_levels,
+            scribed_spell_ids=actor.scribed_spell_ids, permanent_feature_uses=actor.permanent_feature_uses,
+            prepared_spell_selections=actor.prepared_spell_selections,
             abilities=tuple((ability.name, ability.ability_score.score) for ability in actor.ability_scores.abilities_list),
             skills=tuple(skill.name for skill in actor.skill_set.proficiencies),
             expertise=tuple(skill.name for skill in actor.skill_set.expertise),
@@ -312,6 +317,10 @@ def create_authored_session(recipe: EncounterRecipe, *,
 
 def _current_player(session: Session, actor_uuid: UUID) -> Entity:
     encounter = session.encounter
+    if encounter.state is EncounterState.ENDED and actor_uuid in session.player_uuids:
+        actor = session.game.entities.get(actor_uuid)
+        if actor is not None and actor.active_encounter_uuid is None:
+            return actor
     actor = encounter.get_current_entity()
     if (encounter.state is not EncounterState.ACTIVE
             or encounter.turn_state is not TurnState.IN_PROGRESS
@@ -434,6 +443,13 @@ def preview_player_selection(session: Session, actor_uuid: UUID, action: Availab
 
 
 def _operation(session: Session, start_cursor: int, boundary: AdvanceResult | None = None) -> Operation:
+    # Outside combat there is no retained turn to spend or end. Each bounded
+    # operation closes its ordinary turn budget, without a rest or effect tick.
+    if session.encounter.state is EncounterState.ENDED:
+        for identity in session.player_uuids:
+            actor = session.game.entities.get(identity)
+            if actor is not None:
+                actor.action_economy.reset_all_costs()
     end_cursor = EventQueue.event_cursor()
     session.discovery.revision += 1
     session.discovery.previews.clear()
@@ -535,6 +551,30 @@ def unequip_player_item(session: Session, actor_uuid: UUID, slot: EquipmentSlot,
     return _operation(session, start)
 
 
+def prepare_player_spells(session: Session, actor_uuid: UUID, selection: PreparedSpellSelection) -> Operation:
+    actor = session.game.entities.get(actor_uuid)
+    if actor is None or actor_uuid not in session.player_uuids:
+        raise CommandRejected("This actor is not an admitted player character")
+    start = EventQueue.event_cursor()
+    try:
+        change_prepared_spells(actor, selection)
+    except (ValueError, RuntimeError) as error:
+        raise CommandRejected("invalid_selection") from error
+    return _operation(session, start)
+
+
+def study_player_spell_mastery(session: Session, actor_uuid: UUID, selection: SpellMasteryStudy) -> Operation:
+    actor=session.game.entities.get(actor_uuid)
+    if actor is None or actor_uuid not in session.player_uuids:
+        raise CommandRejected("This actor is not an admitted player character")
+    start=EventQueue.event_cursor()
+    try:
+        study_spell_mastery(actor,selection)
+    except (ValueError,RuntimeError) as error:
+        raise CommandRejected("invalid_selection") from error
+    return _operation(session,start)
+
+
 def toggle_player_handler(session: Session, actor_uuid: UUID, handler_uuid: UUID, enabled: bool) -> Operation:
     actor = _current_player(session, actor_uuid)
     if not any(row.uuid == handler_uuid for row in actor.get_player_toggleable_handler_infos()):
@@ -549,6 +589,8 @@ def toggle_player_handler(session: Session, actor_uuid: UUID, handler_uuid: UUID
 
 def end_player_turn(session: Session, actor_uuid: UUID) -> Operation:
     """End this human turn without starting the next actor's decision."""
+    if session.encounter.state is not EncounterState.ACTIVE:
+        raise CommandRejected("not_your_turn")
     _current_player(session, actor_uuid)
     start = EventQueue.event_cursor()
     session.encounter.complete_current_turn()

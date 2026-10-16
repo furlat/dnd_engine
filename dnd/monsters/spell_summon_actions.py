@@ -167,8 +167,7 @@ def owns_fact(target: Entity, identity: str) -> bool:
     return any(
         condition.contributions_active()
         and (
-            condition.semantic_key == identity
-            or condition.name == identity
+            condition.get_semantic_key() == identity
             or identity in condition.immunity_names
         )
         for condition in target.active_conditions_by_uuid.values()
@@ -176,6 +175,7 @@ def owns_fact(target: Entity, identity: str) -> bool:
 
 
 class Shocked(BaseCondition):
+    immunity_names: tuple[str, ...] = ("Shocked",)
     name: str = "Shocked"
     description: str = (
         "Two-turn reaction denial and disadvantage on DEX checks and saves."
@@ -252,6 +252,8 @@ class TremblingLegs(BaseCondition):
 
 
 class Burning(BaseCondition):
+    blocked_while_wet: bool = True
+    immunity_names: tuple[str, ...] = ("Burning",)
     name: str = "Burning"
     description: str = (
         "Two turns of 1d4 fire at turn start; Wet prevents or removes it."
@@ -267,8 +269,8 @@ class Burning(BaseCondition):
             if self.target_entity_uuid is not None
             else None
         )
-        if target is None or "Wet" in target.active_conditions:
-            return [], [], [], [], event.cancel(status_message="Wet prevents Burning")
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Burn recipient absent")
 
         def tick(boundary, _):
             condition_damage(
@@ -301,6 +303,7 @@ class Burning(BaseCondition):
 
 
 class Chilled(BaseCondition):
+    immunity_names: tuple[str, ...] = ("Chilled",)
     name: str = "Chilled"
     description: str = "Two-turn Cold vulnerability and Fire resistance."
     tags: set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
@@ -972,7 +975,7 @@ class WintersBreath(NativeSaveBurst):
         return tuple(
             condition.uuid
             for condition in target.active_conditions_by_uuid.values()
-            if condition.get_display_name() == "Burning"
+            if condition.contributions_active() and "Burning" in condition.immunity_names
         )
 
     def after_damage(self, target, event, saved, previous):
@@ -1935,7 +1938,7 @@ class DrainingKiss(BaseAction):
                 for condition in target.active_conditions_by_uuid.values()
                 if isinstance(condition, Charmed)
                 and condition.effect_origin is not None
-                and condition.effect_origin.source_id == "charm_person"
+                and condition.effect_origin.source_id in ("spell.charm_person", "charm_person")
                 and condition.source_entity_uuid == self.source_entity_uuid
                 and condition.contributions_active()
             ),

@@ -2,6 +2,7 @@
 
 Contains: Blight, BlindnessDeafness, FalseLife, ChillTouch, NecroticBless, Eyebite, BestowCurse
 """
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
 from typing import Literal, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
@@ -344,7 +345,7 @@ class ChillTouch(SpellAction):
         )
 
         damage_dice = necrotic_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(necrotic_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         effect_event=deliver_spell_damage(effect_event,target,necrotic_damage,damage_roll)
         if effect_event.canceled:
@@ -513,7 +514,7 @@ class Blight(SpellAction):
         if is_plant:
             raw_damage = num_dice * 8 + damage_bonus_value
         else:
-            damage_roll = necrotic_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+            damage_roll = roll_spell_damage(necrotic_damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             damage_rolls.append(damage_roll)
             raw_damage = damage_roll.total
 
@@ -1699,7 +1700,7 @@ class FingerOfDeath(SpellAction):
             damage_dice=8, dice_numbers=num_dice, damage_bonus=damage_bonus,
             damage_type=DamageType.NECROTIC
         )
-        damage_roll = necrotic_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        damage_roll = roll_spell_damage(necrotic_damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         raw_damage = damage_roll.total + self.flat_damage
 
         final_damage = raw_damage // 2 if success else raw_damage
@@ -1822,7 +1823,7 @@ class InflictWounds(SpellAction):
             damage_type=DamageType.NECROTIC,
         )
         damage_dice = necrotic_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(necrotic_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         effect_event=deliver_spell_damage(effect_event,target,necrotic_damage,damage_roll)
         if effect_event.canceled:
@@ -1923,8 +1924,12 @@ class HarmSource(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
             return [], [], [], [], declaration_event.cancel(status_message="Harm target not found")
-        if target.health.prevents_maximum_reduction():
-            return [], [], [], [], declaration_event.cancel(status_message="Maximum hit point reduction is prevented")
+        if self.reduction > 0:
+            admission = target.health.prepare_maximum_hit_point_reduction(self.reduction,
+                self.source_entity_uuid, parent_event=declaration_event.uuid, source_condition_uuid=self.uuid)
+            if admission.canceled:
+                return [], [], [], [], declaration_event.cancel(status_message=admission.status_message)
+            self.reduction = admission.amount
         effect = target.active_conditions.get("Harm")
         if effect is None:
             effect = HarmEffect(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid,
@@ -2031,7 +2036,7 @@ class Harm(SpellAction):
             ),
             damage_type=DamageType.NECROTIC,
         )
-        damage_roll = necrotic_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        damage_roll = roll_spell_damage(necrotic_damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         raw_damage = damage_roll.total
         final_damage = raw_damage // 2 if success else raw_damage
 
@@ -2677,8 +2682,7 @@ class RayOfSickness(SpellAction):
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
             dice_numbers=2+max(0,self.cast_at_level-1), damage_dice=8,
             damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.POISON)
-        roll = damage.get_dice(attack_outcome=attack.outcome,
-            crit_extra_dice=caster.get_spell_crit_extra_dice() if attack.outcome is AttackOutcome.CRIT else 0).roll
+        roll = roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=attack.outcome, crit_extra_dice=caster.get_spell_crit_extra_dice() if attack.outcome is AttackOutcome.CRIT else 0)
         effect=deliver_spell_damage(effect,target,damage,roll)
         if effect.canceled:
             return effect
@@ -2733,9 +2737,9 @@ def _vampiric_touch(action: SpellAction,event: SpellEvent) -> SpellEvent:
             if component.source_damage_uuid==damage.uuid:
                 amount=(component.after_affinity_damage-reduction)//2
                 if amount>0:
-                    caster.receive_healing(amount,caster.uuid,source_description="Vampiric Touch",parent_event=effect.uuid)
+                    caster.receive_healing(amount,caster.uuid,source_description="Vampiric Touch",parent_event=effect.uuid, spell_level=effect.cast_at_level, effect_origin=effect.get_effect_origin())
                 return
-    return deliver_spell_damage(effect,target,damage,damage.get_dice(attack.outcome,crit_extra_dice=caster.get_spell_crit_extra_dice()).roll,on_resolved=heal)
+    return deliver_spell_damage(effect,target,damage,roll_spell_damage(damage, parent_event=event, effect_origin=action.effect_origin, attack_outcome=attack.outcome, crit_extra_dice=caster.get_spell_crit_extra_dice()),on_resolved=heal)
 
 
 @srd_action_identity(content_id="action.spell.vampiric_touch.strike",display_name="Vampiric Touch Strike",
@@ -2817,6 +2821,7 @@ class VampiricTouch(SpellAction):
             return admitted.cancel(status_message="Vampiric Touch caster is absent")
         strike=VampiricTouchStrike(source_entity_uuid=self.source_entity_uuid,template=True,
             grant_condition_uuid=marker.uuid,cast_at_level=self.cast_at_level,
+            retained_casting_ability=caster.spellcasting.resolve_spellcasting_ability(self.spellcasting_source_id),
             spellcasting_source_id=self.spellcasting_source_id,effect_origin=marker.effect_origin)
         marker.action_uuid=strike.uuid
         caster.register_action(strike)
@@ -2939,7 +2944,7 @@ class Revivify(SpellAction):
             if not target.commit_revival(self._revival):
                 return effect.cancel(status_message="Companion revival admission changed")
         else:
-            target.receive_healing(1,self.source_entity_uuid,source_description="Revivify",parent_event=effect.uuid,spell_level=3)
+            target.receive_healing(1,self.source_entity_uuid,source_description="Revivify",parent_event=effect.uuid,spell_level=3,effect_origin=effect.get_effect_origin())
             if target.health.life_state is not LifeState.ALIVE:
                 return effect.with_updates(status_message="Companion healing was prevented")
         if self._transfer is not None:

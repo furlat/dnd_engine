@@ -3,6 +3,7 @@
 Contains: SpikeGrowth, Slow, Haste, Darkvision, JumpSpell, ExpeditiousRetreat, Disintegrate,
           EnhanceAbility, EnlargeReduce, Regenerate
 """
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
 from dnd.spells.spell_utils import spell_condition_profile, condition_save, validate_spell_recipients
 from dnd.conditions import Restrained, Petrified
 
@@ -62,7 +63,7 @@ from dnd.core.action_types import (
 )
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, ForcedMovementEvent
+    Event, EventPhase, EventType, EventHandler, EventQueue, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, ForcedMovementEvent
 )
 from dnd.types.abilities import AbilityName
 from dnd.types.actor import ConditionState
@@ -195,7 +196,7 @@ class SpikeGrowthZone(AreaCondition):
                 damage_dice=type_cast(Literal[4, 6, 8, 10, 12, 20], value), dice_numbers=count, damage_bonus=dmg_bonus,
                 damage_type=DamageType.PIERCING
             )
-            damage_roll = damage_obj.get_dice(attack_outcome=AttackOutcome.HIT).roll
+            damage_roll = roll_spell_damage(damage_obj, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             entity.receive_damage(damage_roll.total, DamageType.PIERCING, source_uuid,
                                   parent_event=event.uuid, effect_id=effect_id,
                                   independent_resolution=True, effect_origin=self.effect_origin)
@@ -1022,15 +1023,6 @@ class Disintegrate(SpellAction):
                 return effect
             return (effect.with_updates(status_message=f"{recipient.name} disintegrated")
                     if recipient.disintegrate(effect) else effect.cancel(status_message="Object retirement was refused"))
-        occupant = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        force_creation = next((condition for condition in occupant.active_conditions_by_uuid.values()
-            if condition.destroyed_by_disintegrate and condition.contributions_active()), None) if occupant is not None else None
-        if occupant is not None and force_creation is not None:
-            effect = execution_event.phase_to(EventPhase.EFFECT)
-            if effect.canceled: return effect
-            if not occupant.remove_condition_by_uuid(force_creation.uuid, parent_event=effect):
-                return effect.cancel(status_message="Force sphere destruction was refused")
-            return effect.with_updates(status_message="Force sphere disintegrated; occupant unharmed")
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -1078,7 +1070,7 @@ class Disintegrate(SpellAction):
             damage_type=DamageType.FORCE
         )
         damage_dice = force_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(force_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
         final_damage = damage_roll.total
 
         target.receive_damage(
@@ -1707,7 +1699,7 @@ def _resolve_telekinetic_transfer(caster: Entity, target: Entity,
         for sides, count, damage_type in packets:
             damage = Damage(name="Telekinesis impact", source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, damage_dice=sides, dice_numbers=count,
                 damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0), damage_type=damage_type)
-            roll = damage.get_dice(AttackOutcome.HIT).roll
+            roll = roll_spell_damage(damage, parent_event=parent, effect_origin=None, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             target.receive_damage(roll.total, damage_type, source_entity_uuid=caster.uuid,
                 damage_rolls=[roll], damages=[damage], parent_event=landing.uuid,
                 effect_origin=origin, independent_resolution=True)
@@ -1927,6 +1919,8 @@ class RegeneratingEffect(BaseCondition):
             target.receive_healing(
                 1, self.source_entity_uuid,
                 source_description="Regenerate: 1 HP",
+                spell_level=self.effect_origin.effective_spell_level if self.effect_origin is not None else 7,
+                effect_origin=self.effect_origin,
                 source_condition_uuid=self.uuid,
                 parent_event=event.uuid
             )
@@ -2005,7 +1999,7 @@ class Regenerate(SpellAction):
             healing_roll.total, caster.uuid,
             source_description=f"Regenerate: {healing_roll.total}",
             parent_event=effect_event.uuid,
-            spell_level=self.cast_at_level
+            spell_level=self.cast_at_level, effect_origin=effect_event.get_effect_origin()
         )
 
         regen = RegeneratingEffect(
@@ -2466,16 +2460,13 @@ class CreateOrDestroyWater(SpellAction):
                 affected_positions=positions)
             surface.activate(parent_event=event)
         else:
-            for surface in tuple(get_map().get_spatial_conditions()):
-                if not isinstance(surface,(WetSurface,ElectrifiedWater,IceSurface,SteamCloud,SimpleToxinSurface)):
-                    continue
-                affected=surface.affected_positions & positions
-                if affected:
-                    remaining=surface.affected_positions-affected
-                    if remaining:
-                        surface.change_footprint(remaining,parent_event=event)
-                    else:
-                        surface.deactivate(parent_event=event)
+            interaction = EventQueue.publish_declaration(SpatialEffectInteractionEvent(
+                source_entity_uuid=self.source_entity_uuid, positions=tuple(sorted(positions)),
+                operation=SpatialEffectInteractionOperation.DRY, parent_event=event.uuid, use_register=False))
+            for phase in (EventPhase.EXECUTION, EventPhase.EFFECT, EventPhase.COMPLETION):
+                if interaction.canceled:
+                    break
+                interaction = interaction.phase_to(phase)
 
 
 class DragonsBreathEffect(ConcentrationActionMarker):
@@ -2553,7 +2544,7 @@ class ExhaleDragonsBreath(SpellAction):
         damage=Damage(name="Dragon's Breath",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
             damage_type=self.spell_damage_type,damage_dice=6,dice_numbers=1+self.cast_at_level,
             damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
-        roll=damage.get_dice(AttackOutcome.HIT).roll
+        roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         return deliver_spell_damage(effect,target,damage,roll,amount=roll.total//2 if saved else roll.total)
 
     def _finalize_aoe(self,event: ActionEvent) -> None:

@@ -1,3 +1,5 @@
+from dnd.core.events import Healing
+from dnd.spells.spell_utils import fire_heal_roll_result
 """Canonical Neurodragon consumables and their definition-owned behavior."""
 
 from functools import partial
@@ -299,10 +301,12 @@ class _DrinkHealingPotionAction(_PotionDrinkAction):
         description="Hit points restored by this potion action.",
     )
 
+    healing_dice_count: int = Field(default=0,ge=0)
+
     def get_fixed_healing(self, actor: Any) -> Optional[int]:
         """Return the potion's deterministic restoration amount."""
         _ = actor
-        return self.heal_amount
+        return self.heal_amount if self.healing_dice_count == 0 else None
 
     def _validate(
         self,
@@ -323,8 +327,13 @@ class _DrinkHealingPotionAction(_PotionDrinkAction):
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
+        amount = self.heal_amount
+        if self.healing_dice_count:
+            healing=Healing(source_entity_uuid=entity.uuid,target_entity_uuid=entity.uuid,healing_dice=4,
+                dice_numbers=self.healing_dice_count,healing_bonus=ModifiableValue.create(source_entity_uuid=entity.uuid,base_value=self.heal_amount))
+            amount=fire_heal_roll_result(entity.uuid,entity.uuid,healing,execution_event,"Healing Potion").total
         entity.receive_healing(
-            self.heal_amount,
+            amount,
             entity.uuid,
             source_description="Potion of Healing",
             parent_event=execution_event.uuid,
@@ -1122,6 +1131,7 @@ def build_healing_potion(
     *,
     stack_count: int = 1,
     heal_amount: int = 7,
+    healing_dice_count: int = 0,
 ) -> UsableItem:
     """Construct a healing-potion stack directly."""
     if heal_amount < 0:
@@ -1132,10 +1142,10 @@ def build_healing_potion(
         use_action_templates=[_DrinkHealingPotionAction(
             source_entity_uuid=uuid4(),
             source_item_uuid=uuid4(),
-            heal_amount=heal_amount,
+            heal_amount=heal_amount, healing_dice_count=healing_dice_count,
             template=True,
         )],
-        stack_id=f"healing_potion_{heal_amount}",
+        stack_id=f"healing_potion_{heal_amount}_{healing_dice_count}" if healing_dice_count else f"healing_potion_{heal_amount}",
         stack_count=stack_count,
     )
 

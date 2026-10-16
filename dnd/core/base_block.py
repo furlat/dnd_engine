@@ -1,3 +1,4 @@
+from dnd.core.events import ConditionMembershipCommittedEvent
 from dnd.core.action_types import ActionEconomyCostType
 from typing import AbstractSet, Dict, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
 from uuid import UUID, uuid4
@@ -1513,6 +1514,12 @@ class BaseBlock(BaseModel):
                     errors.append(error)
             try:
                 row.condition.on_membership_changed(row.effect)
+                if row.condition.target_entity_uuid is not None:
+                    membership = EventQueue.publish_committed_phase(ConditionMembershipCommittedEvent(
+                        source_entity_uuid=row.condition.target_entity_uuid, target_entity_uuid=row.condition.target_entity_uuid,
+                        condition_uuid=row.condition.uuid, present=False, parent_event=row.effect.uuid,
+                        phase=EventPhase.EFFECT, use_register=False))
+                    membership.phase_to(EventPhase.COMPLETION)
             except BaseException as error:
                 errors.append(error)
             try:
@@ -1935,6 +1942,11 @@ class BaseBlock(BaseModel):
             errors.append(error)
         try:
             prepared.condition.on_membership_changed(prepared.effect)
+            membership = EventQueue.publish_committed_phase(ConditionMembershipCommittedEvent(
+                source_entity_uuid=self.uuid, target_entity_uuid=self.uuid,
+                condition_uuid=prepared.condition.uuid, present=True, parent_event=prepared.effect.uuid,
+                phase=EventPhase.EFFECT, use_register=False))
+            membership.phase_to(EventPhase.COMPLETION)
         except BaseException as error:
             errors.append(error)
         try:

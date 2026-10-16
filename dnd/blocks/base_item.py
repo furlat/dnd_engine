@@ -1384,6 +1384,11 @@ class UsableItem(BaseItem):
     recharge_on_long_rest: bool = False
     use_requirement: EquippedSourceRequirement | None = None
 
+    def release_runtime_ownership(self) -> None:
+        super().release_runtime_ownership()
+        for action in self.use_action_templates:
+            action.remove_from_register()
+
     def use_admission_error(self, actor_uuid: UUID) -> Optional[str]:
         actor = BaseBlock.get(actor_uuid)
         if self.is_magical and actor is not None and any(condition.blocks_magic_item_activation

@@ -1,5 +1,6 @@
 """Permeable wall fields composed from geometry, area triggers and damage facts."""
 
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
 from typing import ClassVar, Literal
 from uuid import UUID
 
@@ -56,7 +57,7 @@ def apply_wall_damage(zone: AreaCondition, entity: Entity, spec: WallDamageSpec,
     damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=entity.uuid,
         damage_dice=spec.die, dice_numbers=spec.dice_count,
         damage_bonus=caster.get_spell_damage_bonus(), damage_type=spec.damage_type)
-    roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+    roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=zone.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
     entity.receive_damage(roll.total // 2 if success else roll.total, spec.damage_type, caster.uuid,
         damage_rolls=[roll], damages=[damage], parent_event=parent_event.uuid, effect_id=spec.effect_id,
         independent_resolution=not formation, effect_origin=zone.effect_origin,

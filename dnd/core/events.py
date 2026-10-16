@@ -839,6 +839,8 @@ class EntityCreatedEvent(Event):
     background: Optional[Background] = None
     applied_origin_state: Optional[AppliedOriginState] = None
     applied_class_levels: Tuple[AppliedClassLevel, ...] = ()
+    scribed_spell_ids: Tuple[str, ...] = ()
+    permanent_feature_uses: Tuple[str, ...] = ()
     ability_scores: Tuple[Tuple[AbilityName, StrictInt], ...] = ()
     skill_proficiencies: Tuple[SkillName, ...] = ()
     skill_expertise: Tuple[SkillName, ...] = ()
@@ -931,6 +933,8 @@ class _EntityLevelFact(Event):
     resulting_class_levels: Tuple[Tuple[CharacterClass, StrictInt], ...] = ()
     applied_origin_state: Optional[AppliedOriginState] = None
     applied_class_levels: Tuple[AppliedClassLevel, ...] = ()
+    scribed_spell_ids: Tuple[str, ...] = ()
+    permanent_feature_uses: Tuple[str, ...] = ()
     prepared_spell_selections: Tuple[PreparedSpellSelection, ...] = ()
     feature_toggle_selections: Tuple[FeatureToggleSelection, ...] = ()
     changed_feature_ids: Tuple[str, ...] = ()
@@ -1074,6 +1078,8 @@ class BaseHandler(BaseObject):
         default=False,
         description="Whether player-facing controls may enable or disable this handler.",
     )
+    application_preview_filter: Callable[[EffectOrigin, UUID, UUID], bool] | None = Field(default=None,exclude=True,repr=False,
+        description="Pure recipient admission predicate shared with selection preview; never emits events or mutates state.")
     validation_only: bool = Field(
         default=False,
         description=(
@@ -2026,16 +2032,24 @@ class EventQueue:
                 "timestamp": datetime.now(UTC),
             }),
         )
-        cls._store_event(committed)
+        errors: list[BaseException] = []
+        try:
+            cls._store_event(committed)
+        except BaseException as error:
+            errors.append(error)
         for handler in cls._get_handlers_for_event(committed):
             if handler.enabled:
-                cls._invoke_handler(
-                    handler,
-                    committed.model_copy(
-                        update={"use_register": False},
-                        deep=True,
-                    ),
-                )
+                try:
+                    cls._invoke_handler(
+                        handler,
+                        committed.model_copy(update={"use_register": False}, deep=True),
+                    )
+                except BaseException as error:
+                    errors.append(error)
+        if errors:
+            for error in errors[1:]:
+                errors[0].add_note(f"Another committed-fact observer failed: {error!r}")
+            raise errors[0]
         return committed
 
     @classmethod
@@ -2366,6 +2380,13 @@ class EventQueue:
             cls._event_handler_order[event_handler.uuid] = cls._next_event_handler_order
             cls._next_event_handler_order += 1
         cls._event_handlers_by_source_entity_uuid[event_handler.source_entity_uuid].append(event_handler)
+
+    @classmethod
+    def preview_application_admitted(cls, origin: EffectOrigin, source_uuid: UUID, target_uuid: UUID) -> bool:
+        """Query the source's declared pure recipient filters without dispatch."""
+        return all(handler.application_preview_filter(origin,source_uuid,target_uuid)
+            for handler in cls.get_handlers_by_source_entity(source_uuid)
+            if handler.enabled and handler.contributions_active() and handler.application_preview_filter is not None)
 
     @classmethod
     def event_handler_order(cls) -> Tuple[UUID, ...]:
@@ -5046,6 +5067,36 @@ class DamageRollResultEvent(DiceRollResultEvent):
         )
 
 
+class SpellDamageRollResultEvent(DiceRollResultEvent):
+    """Raw native spell packet before save reduction and damage affinities."""
+
+    name: str = "Spell Damage Roll Result"
+    event_type: EventType = EventType.SPELL_DAMAGE_ROLL_RESULT
+    roll_type: RollType = RollType.DAMAGE
+    damage: Damage
+    effect_origin: EffectOrigin
+    original_roll: DiceRoll
+    final_roll: DiceRoll
+    save_success: bool | None = None
+    success_damage_fraction: float = Field(default=1, ge=0, le=1)
+
+    @property
+    def applied_amount(self) -> int:
+        if self.canceled:
+            return 0
+        fraction = self.success_damage_fraction if self.save_success else 1
+        return max(0, int(self.final_roll.total * fraction))
+
+    def replace_roll(self, new_roll: DiceRoll, handler_name: str, reason: str) -> Self:
+        if new_roll.roll_type is not RollType.DAMAGE:
+            raise ValueError("Spell damage requires a damage-category roll")
+        modification = RollModification(operation=RollModificationOperation.REPLACE,
+            handler_name=handler_name, previous_total=self.final_roll.total,
+            final_total=new_roll.total, reason=reason)
+        return self.with_updates(final_roll=new_roll,
+            roll_modifications=[*self.roll_modifications, modification])
+
+
 class HealRollResultEvent(DiceRollResultEvent):
     """Healing-roll result event fired before healing is applied.
 
@@ -5060,6 +5111,7 @@ class HealRollResultEvent(DiceRollResultEvent):
     )
     roll_type: RollType = Field(default=RollType.HEAL, description="Roll category for healing results.")
     spell_name: str = Field(default="", description="Name of the healing spell or effect.")
+    effect_origin: EffectOrigin | None = None
     original_roll: DiceRoll = Field(description="Original immutable healing roll.")
     final_roll: DiceRoll = Field(description="Healing roll to apply after handler modifications.")
 
@@ -5138,6 +5190,7 @@ class TakeDamageEvent(Event):
         description="Event category for damage application.",
     )
     total_damage: int = Field(description="Total damage before any modifications")
+    ignores_resistance_immunity: bool = False
     relentless_rage: RelentlessRageIntervention | None = None
     intercepted_by_condition_uuid: UUID | None = None
     spatial_source: SpatialDamageSource | None = None
@@ -5324,6 +5377,110 @@ class TemporaryHitPointsChangedEvent(Event):
     grant: TemporaryHitPointsGrant | None = None
 
 
+class EffectApplicationEvent(Event):
+    """Recipient admission before an authored effect resolves saves or riders."""
+
+    event_type: EventType = EventType.EFFECT_APPLICATION
+    name: str = "Effect Application"
+    spatial_effect_uuid: UUID | None = None
+    source_position: tuple[int, int] | None = None
+    target_position: tuple[int, int] | None = None
+    effect_origin: EffectOrigin
+
+
+class ActionCostsCommittedEvent(Event):
+    """Accepted action cost boundary before cancelable execution dispatch."""
+
+    event_type: EventType = EventType.ACTION_COSTS_COMMITTED
+    name: str = "Action Costs Committed"
+    action_lineage_uuid: UUID
+    effect_origin: EffectOrigin | None = None
+    named_resource_costs: Tuple[Tuple[str, int], ...] = ()
+
+
+class ConditionMembershipCommittedEvent(Event):
+    """Actual native condition membership after authoritative indexes changed."""
+    name: str = "Condition Membership Committed"
+    event_type: EventType = EventType.CONDITION_MEMBERSHIP_COMMITTED
+    condition_uuid: UUID
+    present: bool
+
+
+class RestResourcesRecoveredEvent(Event):
+    """Actual named rest-resource restoration without completing a rest."""
+    name: str = "Rest Resources Recovered"
+    event_type: EventType = EventType.REST_RESOURCES_RECOVERED
+    resource_names: tuple[str,...]
+
+
+class PermanentFeatureUsedEvent(Event):
+    """Explicit irreversible feature usage value, safe for capture/rebuild."""
+    name: str = "Permanent Feature Used"
+    event_type: EventType = EventType.PERMANENT_FEATURE_USED
+    permanent_feature_uses: tuple[str,...]
+
+
+class RestCompletedEvent(Event):
+    """A completed native rest, emitted only when recovery actually succeeded."""
+
+    event_type: EventType = EventType.REST_COMPLETED
+    name: str = "Rest Completed"
+    rest_type: Literal["short_rest", "long_rest"]
+
+
+class SpellMasteryStudiedEvent(Event):
+    """Completed bounded eight-hour study with explicit rebuildable choices."""
+    name: str = "Spell Mastery Studied"
+    event_type: EventType = EventType.SPELL_MASTERY_STUDIED
+    hours: int = Field(default=8,ge=8,le=8)
+    applied_class_levels: Tuple[AppliedClassLevel,...]
+
+
+class SpellbookChangedEvent(Event):
+    """Committed character-owned knowledge; independent of a spell cast."""
+
+    event_type: EventType = EventType.SPELLBOOK_CHANGED
+    name: str = "Spellbook Changed"
+    learned_spell_id: str
+    scribed_spell_ids: Tuple[str, ...]
+
+
+class SpellPreparationChangedEvent(Event):
+    """Committed replacement of one exact source's selected preparation."""
+
+    event_type: EventType = EventType.SPELL_PREPARATION_CHANGED
+    name: str = "Spell Preparation Changed"
+    casting_source_id: str
+    prepared_spell_selections: Tuple[PreparedSpellSelection, ...]
+
+
+class ActionApplicationCommittedEvent(Event):
+    """An accepted application fact, without copied cast/attack presentation."""
+
+    event_type: EventType = EventType.ACTION_APPLICATION_COMMITTED
+    action_id: str | None = None
+    spell_id: str | None = None
+    interception_provider_uuid: UUID | None = None
+    effect_origin: EffectOrigin | None = None
+
+    def get_effect_origin(self) -> EffectOrigin | None:
+        return self.effect_origin
+
+    def generate_combat_log(self) -> None:
+        return None
+
+
+class MaximumHitPointReductionEvent(Event):
+    """Admit one new maximum-HP loss before any reduction modifier changes."""
+
+    event_type: EventType = EventType.MAXIMUM_HIT_POINT_REDUCTION
+    amount: int = Field(gt=0)
+    source_condition_uuid: UUID | None = None
+
+    def generate_combat_log(self) -> None:
+        return None
+
+
 class HealEvent(Event):
     """Healing-application event for HP restoration and blocking."""
 
@@ -5335,6 +5492,7 @@ class HealEvent(Event):
     source_description: str = Field(default="", description="Human-readable description of the healing source.")
     was_blocked: bool = Field(default=False, description="Whether healing was blocked by an effect.")
     spell_level: int = Field(default=0, description="Spell level used, or 0 for non-spell healing.")
+    effect_origin: EffectOrigin | None = None
 
     resulting_hp: Optional[int] = Field(
         default=None,
@@ -5394,6 +5552,15 @@ class HealEvent(Event):
             ),
             success=True
         )
+
+
+class HealingAppliedEvent(Event):
+    """Non-cancelable healing result emitted after normal HP was committed."""
+
+    event_type: EventType = EventType.HEALING_APPLIED
+    name: str = "Healing Applied"
+    actual_healing: int
+    effect_origin: EffectOrigin | None = None
 
 
 class EncounterEvent(Event):

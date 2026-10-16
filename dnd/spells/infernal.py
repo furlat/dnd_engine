@@ -22,7 +22,9 @@ from dnd.core.content.dependencies import (
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.dice import AttackOutcome, Dice, RollType
+from dnd.core.dice import AttackOutcome
+from dnd.core.effect_types import EffectOrigin
+from dnd.core.spell_damage import roll_spell_damage
 from dnd.core.events import (
     Event,
     EventHandler,
@@ -32,6 +34,7 @@ from dnd.core.events import (
     RangeType,
     TakeDamageEvent,
     Trigger,
+    Damage,
 )
 from dnd.core.creature_types import DamageType
 from dnd.core.saving_throw_types import SavingThrowContext
@@ -195,6 +198,11 @@ def _rebuke_processor(
         phase=EventPhase.DECLARATION,
         costs=[],
     )
+    origin = EffectOrigin.spell(source_id=spell_ref.content_id,
+        source_event_lineage_uuid=str(declaration.lineage_uuid),source_position=caster.position,
+        base_spell_level=1,effective_spell_level=cast_rank,spell_school="evocation",
+        spellcasting_source_id=selected_source.source_id,harmful=True)
+    declaration=declaration.with_updates(effect_origin=origin)
     execution = declaration.phase_to(EventPhase.EXECUTION)
     effect = execution.phase_to(EventPhase.EFFECT)
     save_request = caster.create_saving_throw_request(
@@ -211,22 +219,22 @@ def _rebuke_processor(
         ),
     )
     _, _, saved = attacker.saving_throw(save_request)
-    damage_dice = Dice(
-        count=2 + max(0, cast_rank - 1),
-        value=10,
-        bonus=ModifiableValue.create(
+    damage = Damage(source_entity_uuid=caster.uuid,target_entity_uuid=attacker.uuid,
+        name="Hellish Rebuke",dice_numbers=2 + max(0, cast_rank - 1),
+        damage_dice=10,damage_type=DamageType.FIRE,effect_origin=origin,
+        damage_bonus=ModifiableValue.create(
             source_entity_uuid=caster.uuid,
             base_value=0,
             value_name="Hellish Rebuke damage",
         ),
-        roll_type=RollType.DAMAGE,
-        attack_outcome=AttackOutcome.HIT,
-    ).roll
+    )
+    damage_dice=roll_spell_damage(damage,parent_event=effect,attack_outcome=AttackOutcome.HIT)
     attacker.receive_damage(
         damage_dice.total // 2 if saved else damage_dice.total,
         DamageType.FIRE,
         caster.uuid,
         damage_rolls=[damage_dice],
+        damages=[damage],effect_origin=origin,
         parent_event=effect.uuid,
         effect_id="spell.hellish_rebuke.damage",
     )

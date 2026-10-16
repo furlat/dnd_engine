@@ -1088,6 +1088,27 @@ class ActionEconomy(BaseBlock):
                 modifier.remove_from_register()
         self._release_unused_normal_spell_slot_floors()
 
+    def recover_spell_slots(self, rank: int, count: int = 1) -> int:
+        """Restore existing slot debits without creating slot capacity."""
+        if count < 1:
+            raise ValueError("Slot recovery count must be positive")
+        cost_type = spell_slot_cost_type(rank)
+        value = self.spell_slot_value(rank)
+        remaining = count
+        for modifier in tuple(self.get_cost_modifiers(cost_type)):
+            restored = min(remaining, max(0, -modifier.value))
+            if not restored:
+                continue
+            modifier.value += restored
+            remaining -= restored
+            if modifier.value == 0:
+                value.self_static.remove_value_modifier(modifier.uuid)
+                modifier.remove_from_register()
+            if not remaining:
+                break
+        self._release_unused_normal_spell_slot_floors()
+        return count - remaining
+
     def consume(self, cost_type: CostType, amount: int, cost_name: Optional[str] = None, *, movement_mode: MovementMode = MovementMode.WALKING) -> None:
         """Consume a turn resource, named action bucket, or spell slot.
 

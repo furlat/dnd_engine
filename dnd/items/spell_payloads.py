@@ -41,6 +41,8 @@ from dnd.core.geometry import grid_distance_feet
 from dnd.core.gridmap import PreparedObjectPlacement, get_map
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.core.values import ModifiableValue
+from dnd.core.spell_damage import roll_spell_damage
+from dnd.core.effect_applications import admit_effect_application
 from dnd.entity import Entity
 from dnd.spatial.environmental_conditions import IceSurface
 from dnd.spatial.ignition import apply_elemental_surface_contacts
@@ -68,7 +70,7 @@ def payload_blast(
         else "spell.delayed_blast_fireball"
     )
     level = 6 if kind == "freezing" else 7
-    emitted = origin.model_copy(update={"source_position": center}) if origin else None
+    emitted = origin.model_copy(update={"source_position": center, "area_application":True,"harmful":True}) if origin else None
     visited: set[UUID] = set()
     displayed: set[tuple[int, int]] = set()
     # A destroyed ordinary barrier may expose another connected region. Reuse
@@ -137,6 +139,9 @@ def payload_blast(
             if target is None:
                 continue
             success = False
+            if emitted is not None and not admit_effect_application(source_uuid, target.uuid,
+                    origin=emitted, parent=effect, source_position=center, target_position=target.position):
+                continue
             if isinstance(target, Entity):
                 request = SavingThrowEvent(
                     source_entity_uuid=source_uuid,
@@ -163,7 +168,7 @@ def payload_blast(
                     source_entity_uuid=source_uuid, base_value=0
                 ),
             )
-            roll = damage.get_dice(AttackOutcome.HIT).roll
+            roll = roll_spell_damage(damage, parent_event=effect, attack_outcome=AttackOutcome.HIT, effect_origin=emitted)
             amount = roll.total // 2 if success else roll.total
             if isinstance(target, Entity):
                 target.receive_damage(

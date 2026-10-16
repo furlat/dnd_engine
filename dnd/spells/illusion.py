@@ -3,6 +3,7 @@
 Implemented here: Blur, Fear, Hypnotic Pattern, Color Spray, Invisibility,
 Greater Invisibility, Mirror Image, and Silence.
 """
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
 from dnd.spells.spell_utils import validate_spell_recipients, spell_condition_profile, condition_save, condition_damage, target_turn_expiry_handler, spell_position_error
 from dnd.spells.enchantment import DissonantFearEffect
 
@@ -1508,7 +1509,7 @@ class PhantasmalForceEffect(BaseCondition):
                 damage=Damage(name=self.name,source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
                     damage_dice=6,dice_numbers=1,damage_type=self.damage_type,
                     damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0),effect_origin=self.effect_origin)
-                roll=damage.get_dice(AttackOutcome.HIT).roll
+                roll=roll_spell_damage(damage, parent_event=boundary, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
                 target.receive_damage(roll.total,self.damage_type,caster.uuid,parent_event=boundary.uuid,
                     damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,
                     independent_resolution=True,source_condition_uuid=self.uuid)

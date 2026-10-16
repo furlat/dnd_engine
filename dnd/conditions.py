@@ -1625,6 +1625,7 @@ class Petrified(BaseCondition):
     sort_order=150,
 )
 class Poisoned(BaseCondition):
+    immunity_names: tuple[str, ...] = ("Poisoned",)
     """Poison condition that penalizes attacks and ability checks."""
 
     name: str = Field(default="Poisoned", description="Condition name.")
@@ -1658,6 +1659,7 @@ class Poisoned(BaseCondition):
     sort_order=160,
 )
 class Prone(BaseCondition):
+    immunity_names: tuple[str, ...] = ("Prone",)
     """Prone condition with distance-sensitive incoming attack modifiers.
 
     The engine also implements an immediate stand-up branch if the target is

@@ -20,6 +20,7 @@ from dnd.spells.abjuration import CounterspellReactionEvent
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent, ConditionStateChangedEvent
 from dnd.core.events import (
+    SpellMasteryStudiedEvent, ConditionMembershipCommittedEvent, RestResourcesRecoveredEvent, PermanentFeatureUsedEvent, ActionApplicationCommittedEvent, MaximumHitPointReductionEvent, EffectApplicationEvent, ActionCostsCommittedEvent, RestCompletedEvent, SpellbookChangedEvent, SpellPreparationChangedEvent, HealingAppliedEvent, SpellDamageRollResultEvent,
     AreaReachEvent,
     DamageAppliedEvent,
     DamageRollResultEvent,
@@ -701,6 +702,21 @@ def _retained_event(event: Event, audience: PlayerAudience,
             copied = event.model_copy(update={**common, "context": {}, "damage_packets": packets})
         case D20RollResultEvent():
             copied = event.model_copy(update={**common, "context": {}, "bonus": None})
+        case SpellDamageRollResultEvent():
+            copied = event.model_copy(update={**common,"context":{},"damage":event.damage.model_copy(
+                update={"use_register":False,"context":None,"damage_bonus":None})})
+        case SpellbookChangedEvent():
+            copied = event.model_copy(update=common if audience.controls(event.source_entity_uuid) else {
+                **common,"scribed_spell_ids":(),"learned_spell_id":""})
+        case SpellMasteryStudiedEvent():
+            copied = event.model_copy(update=common if audience.controls(event.source_entity_uuid) else {
+                **common,"applied_class_levels":()})
+        case PermanentFeatureUsedEvent():
+            copied = event.model_copy(update=common if audience.controls(event.source_entity_uuid) else {
+                **common,"permanent_feature_uses":()})
+        case SpellPreparationChangedEvent():
+            copied = event.model_copy(update=common if audience.controls(event.source_entity_uuid) else {
+                **common,"prepared_spell_selections":(),"casting_source_id":""})
         case HealRollResultEvent():
             copied = event.model_copy(update={**common, "context": {}})
         case D20Event():
@@ -708,6 +724,8 @@ def _retained_event(event: Event, audience: PlayerAudience,
                 **common, "dice": None, "dc": event.get_dc(),
                 "bonus": event.dice_roll.bonus if event.dice_roll is not None else None,
             })
+        case SpellMasteryStudiedEvent() | ConditionMembershipCommittedEvent() | RestResourcesRecoveredEvent() | PermanentFeatureUsedEvent() | ActionApplicationCommittedEvent() | MaximumHitPointReductionEvent() | EffectApplicationEvent() | ActionCostsCommittedEvent() | RestCompletedEvent() | HealingAppliedEvent():
+            copied = event.model_copy(update=common)
         case CounterspellReactionEvent():
             copied = event.model_copy(update=common)
         case ShoveEvent():
@@ -1134,7 +1152,10 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 # Audience capture retains only the causal header for an
                 # unrelated observer whose sensory payload has no consumer.
                 pass
-            case ActionEvent() | TakeDamageEvent() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent() | D20Event():
+            case SpellMasteryStudiedEvent() | ConditionMembershipCommittedEvent() | RestResourcesRecoveredEvent() | PermanentFeatureUsedEvent() | ActionApplicationCommittedEvent() | MaximumHitPointReductionEvent() | EffectApplicationEvent() | ActionCostsCommittedEvent() | RestCompletedEvent() | HealingAppliedEvent():
+                # Admission/causal facts have no extra after-values or choreography.
+                pass
+            case ActionEvent() | TakeDamageEvent() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent() | SpellDamageRollResultEvent() | SpellbookChangedEvent() | SpellPreparationChangedEvent() | D20Event():
                 # These facts explain causality. Only the committed applied
                 # packet changes HP, so aggregate totals cannot apply it twice.
                 pass

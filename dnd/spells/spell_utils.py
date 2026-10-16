@@ -3,6 +3,7 @@
 Contains helpers used across multiple spell school modules to avoid
 cross-spell-file imports.
 """
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
 from dnd.core.events import SavingThrowEvent
 from dnd.types.abilities import AbilityName
 from dnd.core.values import ModifiableValue
@@ -78,6 +79,7 @@ def fire_heal_roll_result(
         source_entity_name=caster.name if isinstance(caster, Entity) else None,
         target_entity_name=target.name if isinstance(target, Entity) else None,
         spell_name=spell_name,
+        effect_origin=parent_event.get_effect_origin(),
         original_roll=original_roll,
         final_roll=original_roll.model_copy(deep=True),
         parent_event=parent_event.uuid,
@@ -237,7 +239,7 @@ def condition_damage(owner: BaseCondition, target: Entity, boundary: Event, *,
         target_entity_uuid=target.uuid, dice_numbers=count, damage_dice=die, damage_type=damage_type,
         damage_bonus=ModifiableValue.create(source_entity_uuid=source, base_value=0),
         effect_origin=owner.effect_origin)
-    roll = damage.get_dice(AttackOutcome.HIT).roll
+    roll = roll_spell_damage(damage, parent_event=boundary, effect_origin=owner.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
     target.receive_damage(roll.total, damage_type, source, damages=[damage], damage_rolls=[roll],
         parent_event=boundary.uuid, effect_origin=owner.effect_origin,
         independent_resolution=True, source_condition_uuid=owner.uuid)

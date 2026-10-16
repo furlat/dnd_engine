@@ -1,0 +1,188 @@
+spell_id,display_name,level,school,registered_pack,source_file,source_line,class_or_handler,static_review,native_probe_this_audit,finding_ids,evidence
+spell.acid_splash,Acid Splash,0,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,381,AcidSplash,reviewed; no spell-specific finding,not individually executed,,
+spell.chill_touch,Chill Touch,0,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,234,ChillTouch,reviewed; see finding IDs,targeted scenario executed,SC-12,tests/engine/test_spell_catalog_audit_gameplay_regressions.py
+spell.dancing_lights,Dancing Lights,0,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,5748,DancingLights,reviewed; no spell-specific finding,not individually executed,,
+spell.eldritch_blast,Eldritch Blast,0,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,2734,EldritchBlast,reviewed; no spell-specific finding,not individually executed,,
+spell.fire_bolt,Fire Bolt,0,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,154,FireBolt,reviewed; no spell-specific finding,targeted scenario executed,,native audit regression control/setup; no complete rules acceptance claim
+spell.guidance,Guidance,0,divination,content.srd_5_1_cc,dnd/spells/divination.py,350,Guidance,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.light,Light,0,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,4301,Light,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.poison_spray,Poison Spray,0,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,289,PoisonSpray,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.produce_flame,Produce Flame,0,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,5066,ProduceFlame,reviewed; no spell-specific finding,not individually executed,,
+spell.ray_of_frost,Ray of Frost,0,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,330,RayOfFrost,reviewed; no spell-specific finding,not individually executed,,
+spell.resistance,Resistance,0,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,2534,Resistance,reviewed; no spell-specific finding,not individually executed,,
+spell.sacred_flame,Sacred Flame,0,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,452,SacredFlame,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.shillelagh,Shillelagh,0,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,2187,Shillelagh,reviewed; no spell-specific finding,not individually executed,,
+spell.shocking_grasp,Shocking Grasp,0,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,2330,ShockingGrasp,reviewed; no spell-specific finding,not individually executed,,
+spell.sorcerous_burst,Sorcerous Burst,0,evocation,content.srd_5_2_cc,dnd/spells/evocation.py,5442,SorcerousBurst,reviewed; no spell-specific finding,not individually executed,,
+spell.spare_the_dying,Spare the Dying,0,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,2612,SpareTheDying,reviewed; no spell-specific finding,not individually executed,,
+spell.starry_wisp,Starry Wisp,0,evocation,content.srd_5_2_cc,dnd/spells/evocation.py,5398,StarryWisp,reviewed; no spell-specific finding,not individually executed,,
+spell.thaumaturgy,Thaumaturgy,0,transmutation,content.srd_5_1_cc,dnd/spells/infernal.py,62,Thaumaturgy,reviewed; no spell-specific finding,not individually executed,,
+spell.true_strike,True Strike,0,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,4019,TrueStrike,reviewed; no spell-specific finding,not individually executed,,
+spell.vicious_mockery,Vicious Mockery,0,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,2011,ViciousMockery,reviewed; no spell-specific finding,not individually executed,,
+spell.animal_friendship,Animal Friendship,1,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,2090,AnimalFriendship,reviewed; no spell-specific finding,not individually executed,,
+spell.bane,Bane,1,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,1400,Bane,reviewed; see finding IDs,targeted scenario executed,SC-11,tests/engine/test_spell_catalog_audit_duration_regressions.py
+spell.bless,Bless,1,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,1500,Bless,reviewed; see finding IDs,targeted scenario executed,SC-11,tests/engine/test_spell_catalog_audit_duration_regressions.py
+spell.burning_hands,Burning Hands,1,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,1136,BurningHands,reviewed; no spell-specific finding,not individually executed,,
+spell.charm_person,Charm Person,1,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,71,CharmPerson,reviewed; see finding IDs,targeted scenario executed,SC-02;SC-03,tests/engine/test_spell_catalog_audit_gameplay_regressions.py
+spell.chromatic_orb,Chromatic Orb,1,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,5955,ChromaticOrb,reviewed; no spell-specific finding,not individually executed,,
+spell.color_spray,Color Spray,1,illusion,content.srd_5_1_cc,dnd/spells/illusion.py,690,ColorSpray,reviewed; no spell-specific finding,not individually executed,,
+spell.command,Command,1,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,1852,Command,reviewed; no spell-specific finding,not individually executed,,
+spell.create_or_destroy_water,Create or Destroy Water,1,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,2400,CreateOrDestroyWater,reviewed; no spell-specific finding,not individually executed,,
+spell.cure_wounds,Cure Wounds,1,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,4505,CureWounds,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.dissonant_whispers,Dissonant Whispers,1,enchantment,content.srd_5_2_cc,dnd/spells/enchantment.py,2164,DissonantWhispers,reviewed; no spell-specific finding,not individually executed,,
+spell.divine_favor,Divine Favor,1,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,5572,DivineFavor,reviewed; no spell-specific finding,not individually executed,,
+spell.divine_smite,Divine Smite,1,evocation,content.srd_5_2_cc,dnd/classes/paladin.py,388,LearnedDivineSmiteHandler,reviewed; no spell-specific finding,not individually executed,,
+spell.ensnaring_strike,Ensnaring Strike,1,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,5142,EnsnaringStrike,reviewed; no spell-specific finding,not individually executed,,
+spell.expeditious_retreat,Expeditious Retreat,1,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,1265,ExpeditiousRetreat,reviewed; see finding IDs,targeted scenario executed,SC-08;SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py; tests/engine/test_spell_catalog_audit_gameplay_regressions.py
+spell.faerie_fire,Faerie Fire,1,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,5523,FaerieFire,reviewed; no spell-specific finding,not individually executed,,
+spell.false_life,False Life,1,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,68,FalseLife,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.fog_cloud,Fog Cloud,1,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,2633,FogCloud,reviewed; no spell-specific finding,not individually executed,,
+spell.goodberry,Goodberry,1,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,2614,Goodberry,reviewed; see finding IDs,targeted scenario executed,SC-P1,tests/manual/spell_catalog_audit_performance.py (creation interaction exercised; not a defect in Goodberry itself)
+spell.grease,Grease,1,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,773,Grease,reviewed; no spell-specific finding,not individually executed,,
+spell.guiding_bolt,Guiding Bolt,1,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,2597,GuidingBolt,reviewed; no spell-specific finding,not individually executed,,
+spell.healing_word,Healing Word,1,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,4569,HealingWord,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.hellish_rebuke,Hellish Rebuke,1,evocation,content.srd_5_1_cc,dnd/spells/infernal.py,115,HellishRebukeLearnedSpell,reviewed; see finding IDs,targeted scenario executed,SC-04,tests/engine/test_spell_catalog_audit_gameplay_regressions.py (innate Tiefling casting path)
+spell.heroism,Heroism,1,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,2348,Heroism,reviewed; no spell-specific finding,not individually executed,,
+spell.hex,Hex,1,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,2500,Hex,reviewed; no spell-specific finding,not individually executed,,
+spell.hideous_laughter,Hideous Laughter,1,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,2265,HideousLaughter,reviewed; no spell-specific finding,not individually executed,,
+spell.hunters_mark,Hunter's Mark,1,divination,content.srd_5_1_cc,dnd/spells/divination.py,446,HuntersMark,reviewed; no spell-specific finding,not individually executed,,
+spell.ice_knife,Ice Knife,1,conjuration,content.neurodragon,dnd/spells/ice_knife.py,48,IceKnife,reviewed; no spell-specific finding,not individually executed,,
+spell.inflict_wounds,Inflict Wounds,1,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,1728,InflictWounds,reviewed; no spell-specific finding,not individually executed,,
+spell.jump,Jump,1,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,1127,JumpSpell,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.longstrider,Longstrider,1,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,2036,Longstrider,reviewed; no spell-specific finding,targeted scenario executed,,native audit regression control/setup; no complete rules acceptance claim
+spell.mage_armor,Mage Armor,1,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,558,MageArmor,reviewed; no spell-specific finding,not individually executed,,
+spell.magic_missile,Magic Missile,1,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,565,MagicMissile,reviewed; no spell-specific finding,targeted scenario executed,,native audit regression control/setup; no complete rules acceptance claim
+spell.protection_from_evil_and_good,Protection from Evil and Good,1,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,3679,ProtectionFromEvilAndGood,reviewed; no spell-specific finding,not individually executed,,
+spell.ray_of_sickness,Ray of Sickness,1,necromancy,content.srd_5_2_cc,dnd/spells/necromancy.py,2648,RayOfSickness,reviewed; no spell-specific finding,not individually executed,,
+spell.sanctuary,Sanctuary,1,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,2978,Sanctuary,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.searing_smite,Searing Smite,1,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,5634,SearingSmite,reviewed; no spell-specific finding,not individually executed,,
+spell.shield,Shield,1,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,396,ShieldReactionHandler,reviewed; see finding IDs,targeted scenario executed,SC-04,tests/engine/test_spell_catalog_audit_gameplay_regressions.py
+spell.shield_of_faith,Shield of Faith,1,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,2632,ShieldOfFaith,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.sleep,Sleep,1,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,907,Sleep,reviewed; see finding IDs,not individually executed,SC-P2,tests/manual/spell_catalog_audit_performance.py (Hold Person executed; other listed routes statically reviewed)
+spell.thunderwave,Thunderwave,1,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,1426,Thunderwave,reviewed; no spell-specific finding,not individually executed,,
+spell.acid_arrow,Acid Arrow,2,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,6067,AcidArrow,reviewed; no spell-specific finding,not individually executed,,
+spell.aid,Aid,2,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,2741,Aid,reviewed; no spell-specific finding,not individually executed,,
+spell.barkskin,Barkskin,2,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,2078,Barkskin,reviewed; no spell-specific finding,not individually executed,,
+spell.blindness_deafness,Blindness/Deafness,2,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,632,BlindnessDeafness,reviewed; see finding IDs,not individually executed,SC-P2,tests/manual/spell_catalog_audit_performance.py (Hold Person executed; other listed routes statically reviewed)
+spell.blur,Blur,2,illusion,content.srd_5_1_cc,dnd/spells/illusion.py,108,Blur,reviewed; see finding IDs,targeted scenario executed,SC-09;SC-11,tests/engine/test_spell_catalog_audit_admission_regressions.py; tests/engine/test_spell_catalog_audit_duration_regressions.py
+spell.branding_smite,Branding Smite,2,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,5659,BrandingSmite,reviewed; no spell-specific finding,not individually executed,,
+spell.calm_emotions,Calm Emotions,2,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,2409,CalmEmotions,reviewed; no spell-specific finding,not individually executed,,
+spell.continual_flame,Continual Flame,2,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,4443,ContinualFlame,reviewed; no spell-specific finding,not individually executed,,
+spell.darkness,Darkness,2,evocation,content.srd_5_1_cc,dnd/spells/conjuration.py,2803,Darkness,reviewed; no spell-specific finding,not individually executed,,
+spell.darkvision,Darkvision,2,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,881,DarkvisionSpell,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.dragons_breath,Dragon's Breath,2,transmutation,content.srd_5_2_cc,dnd/spells/transmutation.py,2554,DragonsBreath,reviewed; no spell-specific finding,not individually executed,,
+spell.enhance_ability,Enhance Ability,2,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,1352,EnhanceAbility,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.enlarge_reduce,Enlarge/Reduce,2,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,1521,EnlargeReduce,reviewed; see finding IDs,targeted scenario executed,SC-07;SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py; tests/engine/test_spell_catalog_audit_gameplay_regressions.py
+spell.flame_blade,Flame Blade,2,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,6141,FlameBlade,reviewed; no spell-specific finding,not individually executed,,
+spell.flaming_sphere,Flaming Sphere,2,conjuration,content.srd_5_1_cc,dnd/spells/summoning.py,133,FlamingSphere,reviewed; no spell-specific finding,not individually executed,,
+spell.gust_of_wind,Gust of Wind,2,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,3150,GustOfWind,reviewed; no spell-specific finding,not individually executed,,
+spell.hold_person,Hold Person,2,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,342,HoldPerson,reviewed; see finding IDs,targeted scenario executed,SC-01;SC-11;SC-P2,tests/engine/test_spell_catalog_audit_duration_regressions.py; tests/engine/test_spell_catalog_audit_gameplay_regressions.py; tests/manual/spell_catalog_audit_performance.py (Hold Person executed; other listed routes statically reviewed)
+spell.invisibility,Invisibility,2,illusion,content.srd_5_1_cc,dnd/spells/illusion.py,842,Invisibility,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.lesser_restoration,Lesser Restoration,2,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,1624,LesserRestoration,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.magic_weapon,Magic Weapon,2,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,2285,MagicWeapon,reviewed; no spell-specific finding,not individually executed,,
+spell.mirror_image,Mirror Image,2,illusion,content.srd_5_1_cc,dnd/spells/illusion.py,1164,MirrorImage,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.misty_step,Misty Step,2,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,525,MistyStep,reviewed; no spell-specific finding,not individually executed,,
+spell.moonbeam,Moonbeam,2,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,5914,Moonbeam,reviewed; no spell-specific finding,not individually executed,,
+spell.necrotic_bless,Necrotic Bless,2,necromancy,content.neurodragon,dnd/spells/necromancy.py,788,NecroticBless,reviewed; no spell-specific finding,not individually executed,,
+spell.pass_without_trace,Pass without Trace,2,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,3810,PassWithoutTrace,reviewed; no spell-specific finding,not individually executed,,
+spell.phantasmal_force,Phantasmal Force,2,illusion,content.srd_5_1_cc,dnd/spells/illusion.py,1525,PhantasmalForce,reviewed; no spell-specific finding,not individually executed,,
+spell.prayer_of_healing,Prayer of Healing,2,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,4639,PrayerOfHealing,reviewed; no spell-specific finding,not individually executed,,
+spell.protection_from_poison,Protection from Poison,2,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,1922,ProtectionFromPoison,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.scorching_ray,Scorching Ray,2,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,709,ScorchingRay,reviewed; no spell-specific finding,not individually executed,,
+spell.see_invisibility,See Invisibility,2,divination,content.srd_5_1_cc,dnd/spells/divination.py,72,SeeInvisibility,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.shatter,Shatter,2,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,1633,Shatter,reviewed; no spell-specific finding,not individually executed,,
+spell.silence,Silence,2,illusion,content.srd_5_1_cc,dnd/spells/illusion.py,1369,Silence,reviewed; no spell-specific finding,not individually executed,,
+spell.spike_growth,Spike Growth,2,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,226,SpikeGrowth,reviewed; no spell-specific finding,not individually executed,,
+spell.spiritual_weapon,Spiritual Weapon,2,evocation,content.srd_5_1_cc,dnd/spells/summoning.py,122,SpiritualWeapon,reviewed; no spell-specific finding,not individually executed,,
+spell.web,Web,2,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,1129,Web,reviewed; no spell-specific finding,not individually executed,,
+spell.beacon_of_hope,Beacon of Hope,3,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,3133,BeaconOfHope,reviewed; no spell-specific finding,not individually executed,,
+spell.bestow_curse,Bestow Curse,3,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,2447,BestowCurse,reviewed; see finding IDs,targeted scenario executed,SC-06;SC-09;SC-11;SC-P2,tests/engine/test_spell_catalog_audit_admission_regressions.py; tests/engine/test_spell_catalog_audit_damage_regressions.py; tests/engine/test_spell_catalog_audit_duration_regressions.py; tests/manual/spell_catalog_audit_performance.py (Hold Person executed; other listed routes statically reviewed)
+spell.call_lightning,Call Lightning,3,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,224,CallLightning,reviewed; no spell-specific finding,not individually executed,,
+spell.conjure_animals,Conjure Animals,3,conjuration,content.srd_5_1_cc,dnd/spells/summoning.py,101,ConjureAnimals,reviewed; no spell-specific finding,not individually executed,,
+spell.conjure_fiend,Conjure Fiend,3,conjuration,content.neurodragon,dnd/spells/summoning.py,115,ConjureFiend,reviewed; no spell-specific finding,not individually executed,,
+spell.counterspell,Counterspell,3,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,1073,CounterspellReactionHandler,reviewed; see finding IDs,targeted scenario executed,SC-04,tests/engine/test_spell_catalog_audit_gameplay_regressions.py
+spell.daylight,Daylight,3,evocation,content.srd_5_1_cc,dnd/spells/conjuration.py,3025,Daylight,reviewed; no spell-specific finding,not individually executed,,
+spell.fear,Fear,3,illusion,content.srd_5_1_cc,dnd/spells/illusion.py,291,Fear,reviewed; see finding IDs,not individually executed,SC-P2,tests/manual/spell_catalog_audit_performance.py (Hold Person executed; other listed routes statically reviewed)
+spell.fireball,Fireball,3,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,872,Fireball,reviewed; no spell-specific finding,not individually executed,,
+spell.fly,Fly,3,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,2121,Fly,reviewed; no spell-specific finding,not individually executed,,
+spell.glyph_of_warding,Glyph of Warding,3,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,3976,GlyphOfWarding,reviewed; no spell-specific finding,not individually executed,,
+spell.haste,Haste,3,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,766,Haste,reviewed; see finding IDs,targeted scenario executed,SC-05;SC-09;SC-11;SC-P3,tests/engine/test_spell_catalog_audit_admission_regressions.py; tests/engine/test_spell_catalog_audit_duration_regressions.py; tests/engine/test_spell_catalog_audit_gameplay_regressions.py; tests/manual/spell_catalog_audit_performance.py (shared Concentrating owner)
+spell.hypnotic_pattern,Hypnotic Pattern,3,illusion,content.srd_5_1_cc,dnd/spells/illusion.py,515,HypnoticPattern,reviewed; see finding IDs,targeted scenario executed,SC-10;SC-P2,tests/engine/test_spell_catalog_audit_gameplay_regressions.py; tests/manual/spell_catalog_audit_performance.py (Hold Person executed; other listed routes statically reviewed)
+spell.lightning_bolt,Lightning Bolt,3,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,1282,LightningBolt,reviewed; no spell-specific finding,not individually executed,,
+spell.mass_healing_word,Mass Healing Word,3,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,4716,MassHealingWord,reviewed; no spell-specific finding,not individually executed,,
+spell.plant_growth,Plant Growth,3,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,2357,PlantGrowth,reviewed; no spell-specific finding,not individually executed,,
+spell.protection_from_energy,Protection from Energy,3,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,682,ProtectionFromEnergy,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.remove_curse,Remove Curse,3,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,1782,RemoveCurse,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.revivify,Revivify,3,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,2831,Revivify,reviewed; no spell-specific finding,not individually executed,,
+spell.sleet_storm,Sleet Storm,3,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,4212,SleetStorm,reviewed; no spell-specific finding,not individually executed,,
+spell.slow,Slow,3,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,471,Slow,reviewed; see finding IDs,targeted scenario executed,SC-11,tests/engine/test_spell_catalog_audit_duration_regressions.py
+spell.spirit_guardians,Spirit Guardians,3,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,2447,SpiritGuardians,reviewed; no spell-specific finding,not individually executed,,
+spell.stinking_cloud,Stinking Cloud,3,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,3855,StinkingCloud,reviewed; no spell-specific finding,not individually executed,,
+spell.vampiric_touch,Vampiric Touch,3,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,2791,VampiricTouch,reviewed; no spell-specific finding,not individually executed,,
+spell.wind_wall,Wind Wall,3,evocation,content.srd_5_1_cc,dnd/spells/wall_fields.py,324,WindWall,reviewed; no spell-specific finding,not individually executed,,
+spell.aura_of_life,Aura of Life,4,abjuration,content.srd_5_2_cc,dnd/spells/abjuration.py,4093,AuraOfLife,reviewed; no spell-specific finding,not individually executed,,
+spell.banishment,Banishment,4,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,1481,Banishment,reviewed; no spell-specific finding,not individually executed,,
+spell.blight,Blight,4,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,385,Blight,reviewed; no spell-specific finding,not individually executed,,
+spell.charm_monster,Charm Monster,4,enchantment,content.srd_5_2_cc,dnd/spells/enchantment.py,2545,CharmMonster,reviewed; no spell-specific finding,not individually executed,,
+spell.death_ward,Death Ward,4,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,2084,DeathWard,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.dimension_door,Dimension Door,4,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,4299,DimensionDoor,reviewed; no spell-specific finding,not individually executed,,
+spell.fire_shield,Fire Shield,4,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,5336,FireShield,reviewed; no spell-specific finding,not individually executed,,
+spell.freedom_of_movement,Freedom of Movement,4,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,2373,FreedomOfMovement,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.greater_invisibility,Greater Invisibility,4,illusion,content.srd_5_1_cc,dnd/spells/illusion.py,933,GreaterInvisibility,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.guardian_of_faith,Guardian of Faith,4,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,4615,GuardianOfFaith,reviewed; no spell-specific finding,not individually executed,,
+spell.ice_storm,Ice Storm,4,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,3294,IceStorm,reviewed; no spell-specific finding,not individually executed,,
+spell.phantasmal_killer,Phantasmal Killer,4,illusion,content.srd_5_1_cc,dnd/spells/illusion.py,1599,PhantasmalKiller,reviewed; no spell-specific finding,not individually executed,,
+spell.resilient_sphere,Resilient Sphere,4,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,6397,ResilientSphere,reviewed; no spell-specific finding,not individually executed,,
+spell.stoneskin,Stoneskin,4,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,831,Stoneskin,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.vitriolic_sphere,Vitriolic Sphere,4,evocation,content.srd_5_2_cc,dnd/spells/evocation.py,6217,VitriolicSphere,reviewed; no spell-specific finding,not individually executed,,
+spell.wall_of_fire,Wall of Fire,4,evocation,content.srd_5_1_cc,dnd/spells/walls.py,181,WallOfFire,reviewed; no spell-specific finding,not individually executed,,
+spell.antilife_shell,Antilife Shell,5,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,4359,AntilifeShell,reviewed; see finding IDs,targeted scenario executed,SC-P4,tests/manual/spell_catalog_audit_performance.py
+spell.cloudkill,Cloudkill,5,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,2021,Cloudkill,reviewed; no spell-specific finding,not individually executed,,
+spell.cone_of_cold,Cone of Cold,5,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,1919,ConeOfCold,reviewed; no spell-specific finding,not individually executed,,
+spell.conjure_elemental,Conjure Elemental,5,conjuration,content.srd_5_1_cc,dnd/spells/summoning.py,142,ConjureElemental,reviewed; no spell-specific finding,not individually executed,,
+spell.dispel_evil_and_good,Dispel Evil and Good,5,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,4298,DispelEvilAndGood,reviewed; no spell-specific finding,not individually executed,,
+spell.flame_strike,Flame Strike,5,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,4136,FlameStrike,reviewed; no spell-specific finding,not individually executed,,
+spell.greater_restoration,Greater Restoration,5,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,1688,GreaterRestoration,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.hold_monster,Hold Monster,5,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,550,HoldMonster,reviewed; see finding IDs,targeted scenario executed,SC-01;SC-P2,tests/engine/test_spell_catalog_audit_gameplay_regressions.py; tests/manual/spell_catalog_audit_performance.py (Hold Person executed; other listed routes statically reviewed) (positive finite-duration control; overlap counterexample for Hold Person)
+spell.insect_plague,Insect Plague,5,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,3313,InsectPlague,reviewed; no spell-specific finding,not individually executed,,
+spell.mass_cure_wounds,Mass Cure Wounds,5,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,4800,MassCureWounds,reviewed; no spell-specific finding,not individually executed,,
+spell.summon_dragon,Summon Dragon,5,conjuration,content.srd_5_2_cc,dnd/spells/summoning.py,156,SummonDragon,reviewed; no spell-specific finding,not individually executed,,
+spell.telekinesis,Telekinesis,5,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,1806,Telekinesis,reviewed; no spell-specific finding,not individually executed,,
+spell.wall_of_force,Wall of Force,5,evocation,content.srd_5_1_cc,dnd/spells/wall_constructions.py,777,WallOfForce,reviewed; no spell-specific finding,not individually executed,,
+spell.wall_of_stone,Wall of Stone,5,evocation,content.srd_5_1_cc,dnd/spells/wall_constructions.py,769,WallOfStone,reviewed; no spell-specific finding,not individually executed,,
+spell.blade_barrier,Blade Barrier,6,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,6294,BladeBarrier,reviewed; no spell-specific finding,not individually executed,,
+spell.chain_lightning,Chain Lightning,6,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,3663,ChainLightning,reviewed; no spell-specific finding,not individually executed,,
+spell.circle_of_death,Circle of Death,6,necromancy,content.srd_5_1_cc,dnd/spells/evocation.py,1783,CircleOfDeath,reviewed; no spell-specific finding,not individually executed,,
+spell.conjure_fey,Conjure Fey,6,conjuration,content.srd_5_1_cc,dnd/spells/summoning.py,108,ConjureFey,reviewed; no spell-specific finding,not individually executed,,
+spell.disintegrate,Disintegrate,6,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,953,Disintegrate,reviewed; no spell-specific finding,not individually executed,,
+spell.eyebite,Eyebite,6,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,1503,Eyebite,reviewed; no spell-specific finding,not individually executed,,
+spell.flesh_to_stone,Flesh to Stone,6,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,2716,FleshToStone,reviewed; no spell-specific finding,not individually executed,,
+spell.freezing_sphere,Freezing Sphere,6,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,6674,FreezingSphere,reviewed; no spell-specific finding,not individually executed,,
+spell.globe_of_invulnerability,Globe of Invulnerability,6,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,1314,GlobeOfInvulnerability,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.harm,Harm,6,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,1969,Harm,reviewed; no spell-specific finding,not individually executed,,
+spell.heal,Heal,6,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,4886,HealSpell,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.heroes_feast,Heroes' Feast,6,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,5008,HeroesFeast,reviewed; no spell-specific finding,not individually executed,,
+spell.irresistible_dance,Irresistible Dance,6,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,2634,IrresistibleDance,reviewed; no spell-specific finding,not individually executed,,
+spell.planar_ally,Planar Ally,6,conjuration,content.srd_5_1_cc,dnd/spells/summoning.py,149,PlanarAlly,reviewed; no spell-specific finding,not individually executed,,
+spell.sunbeam,Sunbeam,6,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,3606,Sunbeam,reviewed; no spell-specific finding,not individually executed,,
+spell.true_seeing,True Seeing,6,divination,content.srd_5_1_cc,dnd/spells/divination.py,183,TrueSeeing,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.wall_of_ice,Wall of Ice,6,evocation,content.srd_5_1_cc,dnd/spells/wall_constructions.py,760,WallOfIce,reviewed; no spell-specific finding,not individually executed,,
+spell.wall_of_thorns,Wall of Thorns,6,conjuration,content.srd_5_1_cc,dnd/spells/wall_fields.py,251,WallOfThorns,reviewed; no spell-specific finding,not individually executed,,
+spell.arcane_sword,Arcane Sword,7,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,6609,ArcaneSword,reviewed; no spell-specific finding,not individually executed,,
+spell.delayed_blast_fireball,Delayed Blast Fireball,7,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,6758,DelayedBlastFireball,reviewed; no spell-specific finding,not individually executed,,
+spell.divine_word,Divine Word,7,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,5179,DivineWord,reviewed; no spell-specific finding,not individually executed,,
+spell.finger_of_death,Finger of Death,7,necromancy,content.srd_5_1_cc,dnd/spells/necromancy.py,1599,FingerOfDeath,reviewed; no spell-specific finding,not individually executed,,
+spell.forcecage,Forcecage,7,evocation,content.srd_5_1_cc,dnd/spells/wall_constructions.py,921,Forcecage,reviewed; no spell-specific finding,not individually executed,,
+spell.prismatic_spray,Prismatic Spray,7,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,3874,PrismaticSpray,reviewed; no spell-specific finding,not individually executed,,
+spell.regenerate,Regenerate,7,transmutation,content.srd_5_1_cc,dnd/spells/transmutation.py,1935,Regenerate,reviewed; see finding IDs,targeted scenario executed,SC-09,tests/engine/test_spell_catalog_audit_admission_regressions.py
+spell.antimagic_field,Antimagic Field,8,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,3563,AntimagicField,reviewed; see finding IDs,targeted scenario executed,SC-P1,tests/manual/spell_catalog_audit_performance.py
+spell.feeblemind,Feeblemind,8,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,2700,Feeblemind,reviewed; no spell-specific finding,not individually executed,,
+spell.holy_aura,Holy Aura,8,abjuration,content.srd_5_1_cc,dnd/spells/abjuration.py,4184,HolyAura,reviewed; no spell-specific finding,not individually executed,,
+spell.incendiary_cloud,Incendiary Cloud,8,conjuration,content.srd_5_1_cc,dnd/spells/conjuration.py,3605,IncendiaryCloud,reviewed; no spell-specific finding,not individually executed,,
+spell.power_word_stun,Power Word Stun,8,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,1188,PowerWordStun,reviewed; see finding IDs,targeted scenario executed,SC-09;SC-P2,tests/engine/test_spell_catalog_audit_admission_regressions.py; tests/manual/spell_catalog_audit_performance.py (Hold Person executed; other listed routes statically reviewed)
+spell.sunburst,Sunburst,8,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,2137,Sunburst,reviewed; see finding IDs,not individually executed,SC-P2,tests/manual/spell_catalog_audit_performance.py (Hold Person executed; other listed routes statically reviewed)
+spell.foresight,Foresight,9,divination,content.srd_5_1_cc,dnd/spells/divination.py,516,Foresight,reviewed; no spell-specific finding,not individually executed,,
+spell.mass_heal,Mass Heal,9,evocation,content.srd_5_1_cc,dnd/spells/evocation.py,4956,MassHeal,reviewed; no spell-specific finding,not individually executed,,
+spell.power_word_heal,Power Word Heal,9,enchantment,content.srd_5_2_cc,dnd/spells/evocation.py,6256,PowerWordHeal,reviewed; no spell-specific finding,not individually executed,,
+spell.power_word_kill,Power Word Kill,9,enchantment,content.srd_5_1_cc,dnd/spells/enchantment.py,676,PowerWordKill,reviewed; no spell-specific finding,not individually executed,,
+spell.weird,Weird,9,illusion,content.srd_5_1_cc,dnd/spells/illusion.py,1671,Weird,reviewed; no spell-specific finding,not individually executed,,

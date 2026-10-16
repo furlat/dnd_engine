@@ -218,6 +218,7 @@ class BoundaryState(TypedDict):
         'starting',
         'waiting_for_human',
         'advancing',
+        'outside_encounter',
         'delivery_blocked',
         'terminal',
         'failed',
@@ -250,13 +251,23 @@ type BoundaryStructureKind = Literal[
 type CardinalDirection = Literal['north', 'south', 'east', 'west']
 
 
-type CharacterClass = Literal['class.barbarian', 'class.fighter', 'class.sorcerer']
+type CharacterClass = Literal[
+    'class.barbarian',
+    'class.fighter',
+    'class.sorcerer',
+    'class.cleric',
+    'class.paladin',
+    'class.wizard',
+]
 
 
 type CharacterSubclass = Literal[
     'subclass.barbarian.berserker',
     'subclass.fighter.champion',
     'subclass.sorcerer.draconic_bloodline',
+    'subclass.cleric.life_domain',
+    'subclass.paladin.oath_of_devotion',
+    'subclass.wizard.school_of_evocation',
 ]
 
 
@@ -813,6 +824,15 @@ class EventResolutionRef(TypedDict):
 
 type EventType = Literal[
     'base_action',
+    'action_application_committed',
+    'action_costs_committed',
+    'condition_membership_committed',
+    'rest_resources_recovered',
+    'permanent_feature_used',
+    'rest_completed',
+    'spell_mastery_studied',
+    'spellbook_changed',
+    'spell_preparation_changed',
     'attack',
     'movement',
     'step_movement',
@@ -826,6 +846,8 @@ type EventType = Literal[
     'take_damage',
     'damage_applied',
     'heal',
+    'healing_applied',
+    'maximum_hit_point_reduction',
     'temporary_hit_points_changed',
     'cast_spell',
     'attack_miss',
@@ -858,6 +880,8 @@ type EventType = Literal[
     'save_d20_roll',
     'check_d20_roll',
     'damage_roll_result',
+    'spell_damage_roll_result',
+    'spatial_effect_application',
     'heal_roll_result',
     'enemy_spotted',
     'enemy_killed',
@@ -1360,6 +1384,11 @@ class PositionPathSelection(TypedDict):
     origin_start_offset_cells: NotRequired[int]
 
 
+class PreparedSpellSelection(TypedDict):
+    source_id: str
+    spell_ids: list[str]
+
+
 class PreviewRequest(TypedDict):
     actor_uuid: str
     state_revision: str
@@ -1370,7 +1399,7 @@ class PreviewRequest(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[9]]
+    player_schema_version: NotRequired[Literal[10]]
     schema_digest: str
 
 
@@ -1588,7 +1617,7 @@ type SpatialEffectChangeOperation = Literal[
 
 
 type SpatialEffectInteractionOperation = Literal[
-    'ignite', 'douse', 'freeze', 'electrify', 'vaporize', 'disperse'
+    'ignite', 'douse', 'freeze', 'electrify', 'vaporize', 'disperse', 'dry'
 ]
 
 
@@ -1660,6 +1689,12 @@ class SpellInterruptionLogData(TypedDict):
     succeeded: bool
 
 
+class SpellMasteryStudy(TypedDict):
+    rank_one_spell_id: str
+    rank_two_spell_id: str
+    hours: NotRequired[int]
+
+
 class SpherePresentationGeometry(TypedDict):
     shape: NotRequired[Literal['sphere']]
     center: list[CenterItem]
@@ -1723,6 +1758,11 @@ class StreamReady(TypedDict):
 class StreamStatus(TypedDict):
     kind: NotRequired[Literal['stream_status']]
     status: StatusSnapshot
+
+
+class StudySpellMasteryIntent(TypedDict):
+    kind: NotRequired[Literal['study_spell_mastery']]
+    selection: SpellMasteryStudy
 
 
 class SubjectBinding(TypedDict):
@@ -2432,6 +2472,9 @@ class PlayerCharacterSheet(TypedDict):
     maximum_hp: NotRequired[int]
     compatible_item_slots: NotRequired[list[list[str | list[str]]]]
     handler_details: NotRequired[list[AvailableHandlerInfo]]
+    scribed_spell_ids: NotRequired[list[str]]
+    permanent_feature_uses: NotRequired[list[str]]
+    prepared_spell_selections: NotRequired[list[PreparedSpellSelection]]
 
 
 class PlayerHUDSnapshot(TypedDict):
@@ -2440,6 +2483,11 @@ class PlayerHUDSnapshot(TypedDict):
     revision: int
     initiative: list[str]
     sheets: list[PlayerCharacterSheet]
+
+
+class PrepareSpellsIntent(TypedDict):
+    kind: NotRequired[Literal['prepare_spells']]
+    selection: PreparedSpellSelection
 
 
 class ReceiptResponse(TypedDict):
@@ -2791,6 +2839,9 @@ class PlayerAction(TypedDict):
     discovery_index: NotRequired[int]
     discovery_runtime: NotRequired[str | None]
     discovery_actor_uuid: NotRequired[str | None]
+    spellcasting_source_id: NotRequired[str | None]
+    spellcasting_provider_id: NotRequired[str | None]
+    spellcasting_ability: NotRequired[str | None]
     template_name: str
     semantic_key: NotRequired[str]
     behavior_id: str
@@ -2972,6 +3023,8 @@ class CommandRequest(TypedDict):
         | EquipIntent
         | UnequipIntent
         | ToggleHandlerIntent
+        | PrepareSpellsIntent
+        | StudySpellMasteryIntent
     )
 
 

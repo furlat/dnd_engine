@@ -6,6 +6,7 @@ Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
           CureWounds, HealingWord, PrayerOfHealing, MassHealingWord,
           MassCureWounds, HealSpell, MassHeal
 """
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll, resolve_saved_spell_damage
 from dnd.spells.spell_utils import validate_spell_recipients, spell_condition_profile, condition_damage, target_turn_expiry_handler, apply_concentrating_zone
 
 from typing import cast
@@ -25,7 +26,7 @@ from dnd.spells.wall_fields import BladeBarrierZone, WallDamageSpec, field_geome
 from dnd.core.action_types import PositionPathSelection, EntityDestinationSelection
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.effect_types import EffectOrigin
-from dnd.core.events import StandOfferEvent, HealEvent
+from dnd.core.events import ActionApplicationCommittedEvent, StandOfferEvent, HealEvent
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.modifiers import ArithmeticFactor
 from dnd.core.creature_types import Size
@@ -264,7 +265,7 @@ class FireBolt(SpellAction):
         )
 
         damage_dice = fire_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(fire_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         effect_event=deliver_spell_damage(effect_event,target,fire_damage,damage_roll)
         if effect_event.canceled:
@@ -429,7 +430,7 @@ class RayOfFrost(SpellAction):
         )
 
         damage_dice = cold_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(cold_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         effect_event=deliver_spell_damage(effect_event,target,cold_damage,damage_roll)
         if effect_event.canceled:
@@ -521,11 +522,6 @@ class SacredFlame(SpellAction):
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        if success:
-            return effect_event.with_updates(
-                total_damage=0,
-                status_message=f"{self.name} - target saved"
-            )
 
         num_dice = self._get_cantrip_dice_count(self.caster_level)
 
@@ -539,11 +535,11 @@ class SacredFlame(SpellAction):
             damage_type=DamageType.RADIANT
         )
 
-        damage_dice = radiant_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        packet = resolve_saved_spell_damage(radiant_damage, parent_event=effect_event, saved=success, success_fraction=0)
+        damage_roll = packet.final_roll
 
         target.receive_damage(
-            amount=damage_roll.total,
+            amount=packet.applied_amount,
             damage_type=DamageType.RADIANT,
             source_entity_uuid=caster.uuid,
             parent_event=effect_event.uuid
@@ -552,7 +548,7 @@ class SacredFlame(SpellAction):
         return effect_event.with_updates(
             damages=[radiant_damage],
             damage_rolls=[damage_roll],
-            total_damage=damage_roll.total,
+            total_damage=packet.applied_amount,
             status_message=f"{self.name} dealt {damage_roll.total} radiant damage"
         )
 
@@ -690,7 +686,7 @@ class MagicMissile(SpellAction):
         )
 
         damage_dice = dart_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(dart_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         actual_damage = target.receive_damage(
             amount=damage_roll.total,
@@ -852,7 +848,7 @@ class ScorchingRay(SpellAction):
         )
 
         damage_dice = fire_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(fire_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         effect_event=deliver_spell_damage(effect_event,target,fire_damage,damage_roll)
         if effect_event.canceled:
@@ -1112,7 +1108,7 @@ class Fireball(SpellAction):
         fire_damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
             damage_dice=6, dice_numbers=self.get_damage_dice_count(),
             damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.FIRE)
-        damage_roll = fire_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        damage_roll = roll_spell_damage(fire_damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         final_damage = damage_roll.total // 2 if success else damage_roll.total
         if final_damage > 0:
             if isinstance(target, BaseItem):
@@ -1262,7 +1258,7 @@ class BurningHands(SpellAction):
         )
 
         damage_dice = fire_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(fire_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
@@ -1406,7 +1402,7 @@ class LightningBolt(SpellAction):
         )
 
         damage_dice = lightning_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(lightning_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
@@ -1578,7 +1574,7 @@ class Thunderwave(SpellAction):
         )
 
         damage_dice = thunder_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(thunder_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
@@ -1763,7 +1759,7 @@ class Shatter(SpellAction):
         )
 
         damage_dice = thunder_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(thunder_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
@@ -1896,7 +1892,7 @@ class CircleOfDeath(SpellAction):
         )
 
         damage_dice = necrotic_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(necrotic_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
@@ -2016,7 +2012,7 @@ class ConeOfCold(SpellAction):
         )
 
         damage_dice = cold_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(cold_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
@@ -2259,7 +2255,7 @@ class Sunburst(SpellAction):
         )
 
         damage_dice = radiant_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(radiant_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
@@ -2442,7 +2438,7 @@ class ShockingGrasp(SpellAction):
         )
 
         damage_dice = lightning_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(lightning_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         effect_event=deliver_spell_damage(effect_event,target,lightning_damage,damage_roll)
         if effect_event.canceled:
@@ -2711,7 +2707,7 @@ class GuidingBolt(SpellAction):
         )
 
         damage_dice = radiant_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(radiant_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         effect_event=deliver_spell_damage(effect_event,target,radiant_damage,damage_roll)
         if effect_event.canceled:
@@ -2864,7 +2860,7 @@ class EldritchBlast(SpellAction):
         )
 
         damage_dice = force_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
-        damage_roll = damage_dice.roll
+        damage_roll = finalize_spell_damage_roll(force_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
 
         effect_event=deliver_spell_damage(effect_event,target,force_damage,damage_roll)
         if effect_event.canceled:
@@ -3395,8 +3391,8 @@ class IceStorm(SpellAction):
             ),
             damage_type=DamageType.COLD
         )
-        bludg_roll = bludg_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
-        cold_roll = cold_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        bludg_roll = roll_spell_damage(bludg_damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
+        cold_roll = roll_spell_damage(cold_damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         total = bludg_roll.total + cold_roll.total
         applied_rolls = [bludg_roll, cold_roll]
         if success:
@@ -3536,7 +3532,7 @@ def _apply_sunbeam(spell: SpellAction, event: SpellEvent, *, dc: int,
     damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
         damage_dice=8, dice_numbers=6, damage_bonus=caster.get_spell_damage_bonus(),
         damage_type=DamageType.RADIANT)
-    roll = damage.get_dice(AttackOutcome.HIT).roll
+    roll = roll_spell_damage(damage, parent_event=event, effect_origin=spell.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
     amount = roll.total // 2 if success else roll.total
     target.receive_damage(amount, DamageType.RADIANT, caster.uuid,
         damage_rolls=[roll], damages=[damage], parent_event=effect.uuid, effect_origin=origin)
@@ -3785,7 +3781,7 @@ class ChainLightning(SpellAction):
             return effect
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=recipient.uuid,
             damage_dice=8, dice_numbers=10, damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.LIGHTNING)
-        rolled = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        rolled = roll_spell_damage(damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         amount = rolled.total // 2 if success else rolled.total
         if isinstance(recipient, BaseItem):
             recipient.receive_damage(amount, DamageType.LIGHTNING, caster.uuid,
@@ -3941,7 +3937,7 @@ class PrismaticSpray(SpellAction):
                 damage_dice=6, dice_numbers=10, damage_bonus=damage_bonus,
                 damage_type=color_damage[color]
             )
-            damage_roll = prismatic_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+            damage_roll = roll_spell_damage(prismatic_damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             final_damage = damage_roll.total // 2 if success else damage_roll.total
             target.receive_damage(final_damage, color_damage[color], caster.uuid, parent_event=parent_event.uuid)
 
@@ -4226,8 +4222,8 @@ class FlameStrike(SpellAction):
             ),
             damage_type=DamageType.RADIANT
         )
-        fire_roll = fire_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
-        radiant_roll = radiant_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        fire_roll = roll_spell_damage(fire_damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
+        radiant_roll = roll_spell_damage(radiant_damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         total = fire_roll.total + radiant_roll.total
         applied_rolls = [fire_roll, radiant_roll]
         if success:
@@ -4481,18 +4477,18 @@ class ContinualFlame(SpellAction):
         return effect.with_updates(status_message=f"A permanent heatless flame shines from {item.name}")
 
 
-def _get_spellcasting_ability_modifier(caster: Entity) -> int:
+def _get_spellcasting_ability_modifier(caster: Entity, spellcasting_source_id: UUID | None = None) -> int:
     """Get the caster's spellcasting ability modifier (e.g. WIS for Cleric)."""
     return caster.ability_scores.get_ability(
-        caster.spellcasting.spellcasting_ability
+        caster.spellcasting.sources[spellcasting_source_id].ability if spellcasting_source_id is not None else caster.spellcasting.spellcasting_ability
     ).modifier
 
 
 def _create_healing(
-    caster: Entity, num_dice: int, die_value: int, spell_name: str
+    caster: Entity, num_dice: int, die_value: int, spell_name: str, *, spellcasting_source_id: UUID | None = None
 ) -> Healing:
     """Create a Healing spec with the caster's spellcasting ability modifier as bonus."""
-    wis_mod = _get_spellcasting_ability_modifier(caster)
+    wis_mod = _get_spellcasting_ability_modifier(caster, spellcasting_source_id)
     return Healing(
         name=spell_name,
         source_entity_uuid=caster.uuid,
@@ -4548,7 +4544,7 @@ class CureWounds(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        healing = _create_healing(caster, self.cast_at_level, 8, "Cure Wounds")
+        healing = _create_healing(caster, self.cast_at_level, 8, "Cure Wounds", spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -4561,7 +4557,7 @@ class CureWounds(SpellAction):
             healing_roll.total, caster.uuid,
             source_description=f"Cure Wounds: {healing_roll.total}",
             parent_event=effect_event.uuid,
-            spell_level=self.cast_at_level
+            spell_level=self.cast_at_level, effect_origin=effect_event.get_effect_origin()
         )
 
         return effect_event.with_updates(
@@ -4618,7 +4614,7 @@ class HealingWord(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        healing = _create_healing(caster, self.cast_at_level, 4, "Healing Word")
+        healing = _create_healing(caster, self.cast_at_level, 4, "Healing Word", spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -4631,7 +4627,7 @@ class HealingWord(SpellAction):
             healing_roll.total, caster.uuid,
             source_description=f"Healing Word: {healing_roll.total}",
             parent_event=effect_event.uuid,
-            spell_level=self.cast_at_level
+            spell_level=self.cast_at_level, effect_origin=effect_event.get_effect_origin()
         )
 
         return effect_event.with_updates(
@@ -4695,7 +4691,7 @@ class PrayerOfHealing(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        healing = _create_healing(caster, self.cast_at_level, 8, "Prayer of Healing")
+        healing = _create_healing(caster, self.cast_at_level, 8, "Prayer of Healing", spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -4708,7 +4704,7 @@ class PrayerOfHealing(SpellAction):
             healing_roll.total, caster.uuid,
             source_description=f"Prayer of Healing: {healing_roll.total}",
             parent_event=effect_event.uuid,
-            spell_level=self.cast_at_level
+            spell_level=self.cast_at_level, effect_origin=effect_event.get_effect_origin()
         )
 
         return effect_event.with_updates(
@@ -4779,7 +4775,7 @@ class MassHealingWord(SpellAction):
             return execution_event.cancel(status_message="Caster or target not found")
 
         num_dice = 1 + max(0, self.cast_at_level - 3)
-        healing = _create_healing(caster, num_dice, 4, "Mass Healing Word")
+        healing = _create_healing(caster, num_dice, 4, "Mass Healing Word", spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -4792,7 +4788,7 @@ class MassHealingWord(SpellAction):
             healing_roll.total, caster.uuid,
             source_description=f"Mass Healing Word: {healing_roll.total}",
             parent_event=effect_event.uuid,
-            spell_level=self.cast_at_level
+            spell_level=self.cast_at_level, effect_origin=effect_event.get_effect_origin()
         )
 
         return effect_event.with_updates(
@@ -4865,7 +4861,7 @@ class MassCureWounds(SpellAction):
             return execution_event.cancel(status_message="Caster or target not found")
 
         num_dice = self.cast_at_level - 2
-        healing = _create_healing(caster, num_dice, 8, "Mass Cure Wounds")
+        healing = _create_healing(caster, num_dice, 8, "Mass Cure Wounds", spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -4878,7 +4874,7 @@ class MassCureWounds(SpellAction):
             healing_roll.total, caster.uuid,
             source_description=f"Mass Cure Wounds: {healing_roll.total}",
             parent_event=effect_event.uuid,
-            spell_level=self.cast_at_level
+            spell_level=self.cast_at_level, effect_origin=effect_event.get_effect_origin()
         )
 
         return effect_event.with_updates(
@@ -4943,12 +4939,9 @@ class HealSpell(SpellAction):
             heal_amount, caster.uuid,
             source_description=source_desc,
             parent_event=effect_event.uuid,
-            spell_level=self.cast_at_level
+            spell_level=self.cast_at_level, effect_origin=effect_event.get_effect_origin()
         )
 
-        for condition in tuple(target.active_conditions_by_uuid.values()):
-            if condition.cured_by_heal:
-                target.remove_condition_by_uuid(condition.uuid, parent_event=effect_event)
         if "Blinded" in target.active_conditions:
             target.remove_condition("Blinded", parent_event=effect_event)
         if "Deafened" in target.active_conditions:
@@ -5040,7 +5033,7 @@ class MassHeal(SpellAction):
             heal_amount, caster.uuid,
             source_description=source_desc,
             parent_event=effect_event.uuid,
-            spell_level=self.cast_at_level
+            spell_level=self.cast_at_level, effect_origin=effect_event.get_effect_origin()
         )
 
         self.healing_pool_remaining -= actual
@@ -5304,7 +5297,7 @@ class FireShieldEffect(BaseCondition):
             damage = Damage(source_entity_uuid=owner.uuid, target_entity_uuid=attacker.uuid,
                 damage_dice=8, dice_numbers=2, damage_type=damage_type,
                 damage_bonus=ModifiableValue.create(source_entity_uuid=owner.uuid, base_value=0, value_name="Fire Shield damage"))
-            roll = damage.get_dice(AttackOutcome.HIT).roll
+            roll = roll_spell_damage(damage, parent_event=attack, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             attacker.receive_damage(amount=roll.total, damage_type=damage_type, source_entity_uuid=owner.uuid,
                 parent_event=attack.uuid, damages=[damage], damage_rolls=[roll], effect_origin=self.effect_origin,
                 independent_resolution=True, source_condition_uuid=self.uuid,
@@ -5437,7 +5430,7 @@ class StarryWisp(SpellAction):
         damage=Damage(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
             dice_numbers=self._get_cantrip_dice_count(self.caster_level),damage_dice=8,
             damage_bonus=caster.get_spell_damage_bonus(),damage_type=DamageType.RADIANT)
-        roll=damage.get_dice(attack.outcome,crit_extra_dice=caster.get_spell_crit_extra_dice() if attack.outcome is AttackOutcome.CRIT else 0).roll
+        roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=attack.outcome, crit_extra_dice=caster.get_spell_crit_extra_dice() if attack.outcome is AttackOutcome.CRIT else 0)
         effect=deliver_spell_damage(effect,target,damage,roll)
         if effect.canceled:
             return effect
@@ -5499,7 +5492,7 @@ class SorcerousBurst(SpellAction):
         damage=Damage(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
             dice_numbers=self._get_cantrip_dice_count(self.caster_level),damage_dice=8,
             damage_bonus=caster.get_spell_damage_bonus(),damage_type=dtype)
-        initial=damage.get_dice(attack.outcome,crit_extra_dice=caster.get_spell_crit_extra_dice() if attack.outcome is AttackOutcome.CRIT else 0).roll
+        initial=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=attack.outcome, crit_extra_dice=caster.get_spell_crit_extra_dice() if attack.outcome is AttackOutcome.CRIT else 0)
         faces=list(initial.results) if isinstance(initial.results,list) else [initial.results]
         ability=caster.spellcasting.resolve_spellcasting_ability(self.spellcasting_source_id)
         cap=max(0,caster.ability_scores.get_ability(ability).modifier)
@@ -5600,6 +5593,7 @@ class DivineFavor(SpellAction):
 
 
 class SearingSmiteEffect(BaseCondition):
+    blocked_while_wet: bool = True
     name: str = "Searing Smite Burn"
     description: str = "Start-turn CON save ends the burn; failure takes 1d6 fire. Wet or Help ends it."
     spell_dc: int
@@ -5609,8 +5603,8 @@ class SearingSmiteEffect(BaseCondition):
 
     def _apply(self,event: Event):
         target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target is None or "Wet" in target.active_conditions:
-            return [],[],[],[],event.cancel(status_message="Wet recipients do not retain this burn")
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Burn recipient absent")
         def burn(boundary: Event,_: UUID):
             caster=Entity.get(self.source_entity_uuid)
             if caster is None:
@@ -5626,7 +5620,7 @@ class SearingSmiteEffect(BaseCondition):
             damage=Damage(name="Searing Smite Burn",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
                 damage_dice=6,dice_numbers=1,damage_type=DamageType.FIRE,
                 damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0),effect_origin=self.effect_origin)
-            roll=damage.get_dice(AttackOutcome.HIT).roll
+            roll=roll_spell_damage(damage, parent_event=boundary, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             target.receive_damage(roll.total,DamageType.FIRE,caster.uuid,parent_event=boundary.uuid,
                 damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,
                 independent_resolution=True,source_condition_uuid=self.uuid)
@@ -5815,7 +5809,7 @@ class MoonbeamZone(AreaCondition):
         damage=Damage(name="Moonbeam",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
             damage_dice=10,dice_numbers=self.dice_count,damage_type=DamageType.RADIANT,
             damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0),effect_origin=self.effect_origin)
-        roll=damage.get_dice(AttackOutcome.HIT).roll
+        roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         target.receive_damage(roll.total//2 if saved else roll.total,DamageType.RADIANT,caster.uuid,
             parent_event=event.uuid,damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,
             independent_resolution=True,source_condition_uuid=self.uuid)
@@ -5951,7 +5945,7 @@ class Moonbeam(SpellAction):
             if isinstance(zone,MoonbeamZone) and zone.applied:
                 zone.initial_exposure_pending=False
                 for target in zone._occupants_at(set(zone.affected_positions)):
-                    if zone.applied and zone.allows_contribution_at(target.position):
+                    if zone.applied and zone.allows_contribution_at(target.position) and zone.admits_application(target.uuid,admitted):
                         zone.expose(target,admitted)
         else:
             action.remove_from_register()
@@ -6026,7 +6020,7 @@ class ChromaticOrb(SpellAction):
                 damage=Damage(name="Chromatic Orb",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
                     damage_dice=8,dice_numbers=(3 if self.element=="thunder" else 2)+self.get_upcast_bonus(),
                     damage_type=DamageType[self.element.upper()],damage_bonus=caster.get_spell_damage_bonus())
-                roll=damage.get_dice(attack.outcome,crit_extra_dice=caster.get_spell_crit_extra_dice() if attack.outcome is AttackOutcome.CRIT else 0).roll
+                roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=attack.outcome, crit_extra_dice=caster.get_spell_crit_extra_dice() if attack.outcome is AttackOutcome.CRIT else 0)
                 effect=deliver_spell_damage(effect,target,damage,roll)
                 if effect.canceled:
                     return effect
@@ -6058,7 +6052,7 @@ class AcidArrowEffect(BaseCondition):
                 damage=Damage(name="Acid Arrow",source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,
                     damage_dice=4,dice_numbers=self.dice_count,damage_type=DamageType.ACID,effect_origin=self.effect_origin,
                     damage_bonus=ModifiableValue.create(source_entity_uuid=self.source_entity_uuid,base_value=0))
-                roll=damage.get_dice(AttackOutcome.HIT).roll
+                roll=roll_spell_damage(damage, parent_event=boundary, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
                 target.receive_damage(roll.total,DamageType.ACID,self.source_entity_uuid,parent_event=boundary.uuid,
                     damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,
                     independent_resolution=True,source_condition_uuid=self.uuid)
@@ -6132,8 +6126,7 @@ class AcidArrow(SpellAction):
             hit=attack.outcome in (AttackOutcome.HIT,AttackOutcome.CRIT)
             damage=Damage(name="Acid Arrow",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
                 damage_dice=4,dice_numbers=4+self.get_upcast_bonus(),damage_type=DamageType.ACID,damage_bonus=caster.get_spell_damage_bonus())
-            roll=damage.get_dice(attack.outcome if hit else AttackOutcome.HIT,
-                crit_extra_dice=caster.get_spell_crit_extra_dice() if attack.outcome is AttackOutcome.CRIT else 0).roll
+            roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=attack.outcome if hit else AttackOutcome.HIT, crit_extra_dice=caster.get_spell_crit_extra_dice() if attack.outcome is AttackOutcome.CRIT else 0)
             effect=deliver_spell_damage(effect,target,damage,roll,amount=roll.total if hit else roll.total//2)
             if effect.canceled:
                 return effect
@@ -6253,7 +6246,7 @@ class VitriolicSphere(SpellAction):
         if effect.canceled: return effect
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, damage_dice=4,
             dice_numbers=10+2*self.get_upcast_bonus(), damage_type=DamageType.ACID, damage_bonus=caster.get_spell_damage_bonus())
-        roll = damage.get_dice(AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         effect = deliver_spell_damage(effect, target, damage, roll, amount=roll.total//2 if saved else roll.total)
         if not saved and not effect.canceled and target.is_active:
             effect = self.apply_owned_condition(effect, VitriolicResidue(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
@@ -6286,7 +6279,7 @@ class PowerWordHeal(SpellAction):
             if cures is None: return effect.cancel(status_message="Healing cures were not admitted")
             try:
                 target.receive_healing(target.get_max_hp(), self.source_entity_uuid, parent_event=effect.uuid,
-                    source_description=self.name, spell_level=9)
+                    source_description=self.name, spell_level=9, effect_origin=effect.get_effect_origin())
             except BaseException:
                 BaseBlock.cancel_owned_condition_removals(cures,"Power Word Heal interrupted")
                 raise
@@ -6344,7 +6337,6 @@ class ResilientSphereEffect(BaseCondition):
     blocks_spellcasting: bool = True
     blocks_outward_actions: bool = True
     blocks_external_contact: bool = True
-    destroyed_by_disintegrate: bool = True
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.PERMANENT))
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
@@ -6357,7 +6349,16 @@ class ResilientSphereEffect(BaseCondition):
                 source_entity_uuid=target.uuid))
             modifiers.append((value.uuid, ident))
         def boundary(incoming: Event, _: UUID):
-            if incoming.canceled: return None
+            if incoming.canceled or not self.contributions_active(): return None
+            if (isinstance(incoming, SpellEvent) and incoming.phase is EventPhase.EXECUTION
+                    and incoming.target_entity_uuid == target.uuid and incoming.authored_spell_id == "spell.disintegrate"
+                    and incoming.application_intercepted_by is None):
+                return incoming.with_updates(application_intercepted_by=self.uuid,
+                    status_message="Disintegrate strikes the force sphere; occupant unharmed")
+            if (isinstance(incoming, ActionApplicationCommittedEvent)
+                    and incoming.interception_provider_uuid == self.uuid):
+                target.remove_condition_by_uuid(self.uuid, parent_event=incoming)
+                return None
             if incoming.event_type == EventType.TAKE_DAMAGE and (incoming.target_entity_uuid == target.uuid or incoming.source_entity_uuid == target.uuid):
                 return incoming.cancel(status_message="Resilient Sphere prevents damage")
             if incoming.event_type == EventType.FORCED_MOVEMENT and (incoming.target_entity_uuid == target.uuid or incoming.source_entity_uuid == target.uuid):
@@ -6370,7 +6371,7 @@ class ResilientSphereEffect(BaseCondition):
             if isinstance(incoming, ConditionApplicationEvent) and incoming.target_entity_uuid == target.uuid and                    incoming.source_entity_uuid != target.uuid and incoming.condition.uuid != self.uuid:
                 return incoming.cancel(status_message="A condition cannot cross Resilient Sphere")
             if isinstance(incoming, SpellEvent) and incoming.source_entity_uuid != target.uuid:
-                if incoming.spell_id in {"disintegrate", "dispel_magic"}: return None
+                if incoming.authored_spell_id in {"spell.disintegrate", "spell.dispel_magic"}: return None
                 if incoming.target_entity_uuid == target.uuid:
                     return incoming.cancel(status_message="Spell cannot cross Resilient Sphere")
                 if incoming.resolved_area_positions is not None and target.position in incoming.resolved_area_positions:
@@ -6379,6 +6380,10 @@ class ResilientSphereEffect(BaseCondition):
             return None
         triggers = [Trigger(event_type=kind, event_phase=EventPhase.EFFECT) for kind in
             (EventType.TAKE_DAMAGE, EventType.FORCED_MOVEMENT, EventType.INSTANT_DEATH, EventType.HEAL, EventType.CAST_SPELL, EventType.BASE_ACTION)]
+        triggers.append(Trigger(event_type=EventType.CAST_SPELL,event_phase=EventPhase.EXECUTION,
+            event_target_entity_uuid=target.uuid))
+        triggers.append(Trigger(event_type=EventType.ACTION_APPLICATION_COMMITTED,event_phase=EventPhase.EFFECT,
+            event_target_entity_uuid=target.uuid))
         triggers.append(Trigger(event_type=EventType.CONDITION_APPLICATION,event_phase=EventPhase.DECLARATION,
             event_target_entity_uuid=target.uuid))
         handler = EventHandler(name="Resilient Sphere boundary", source_entity_uuid=target.uuid,
@@ -6436,6 +6441,7 @@ class ArcaneSwordEffect(BaseCondition):
         caster = Entity.get(self.source_entity_uuid)
         if caster is None: return [], [], [], [], event.cancel(status_message="Sword caster absent")
         for action in (ArcaneSwordStrike(source_entity_uuid=caster.uuid, grant_condition_uuid=self.uuid,
+                retained_casting_ability=caster.spellcasting.resolve_spellcasting_ability(self.spellcasting_source_id),
                 spellcasting_source_id=self.spellcasting_source_id, template=True),
                 MoveArcaneSword(source_entity_uuid=caster.uuid, grant_condition_uuid=self.uuid, template=True)):
             caster.register_action(action)
@@ -6478,7 +6484,7 @@ def arcane_sword_attack(action: SpellAction, event: SpellEvent, anchor: Tuple[in
     damage = Damage(name="Arcane Sword", source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
         dice_numbers=3,damage_dice=10,damage_type=DamageType.FORCE,
         damage_bonus=caster.get_spell_damage_bonus(),effect_origin=effect.get_effect_origin())
-    return deliver_spell_damage(effect,target,damage,damage.get_dice(resolution.outcome).roll)
+    return deliver_spell_damage(effect,target,damage,roll_spell_damage(damage, parent_event=event, effect_origin=action.effect_origin, attack_outcome=resolution.outcome, crit_extra_dice=0))
 
 
 @srd_action_identity(content_id="action.spell.arcane_sword.strike", display_name="Arcane Sword Strike",

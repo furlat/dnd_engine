@@ -1,5 +1,6 @@
 """Native wall spells composed from existing spatial, damage and action owners."""
 
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
 from typing import Literal
 from math import hypot
 
@@ -131,7 +132,7 @@ class WallOfFireZone(AreaCondition):
             damage_dice=8, dice_numbers=self.damage_dice_count,
             damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.FIRE,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         contact = entity.position if entity.position in self.flame_positions else min(
             (position for position in self.flame_positions if self._heat_reaches(position, entity.position)),
             key=lambda position: (hypot(position[0] - entity.position[0], position[1] - entity.position[1]), position),

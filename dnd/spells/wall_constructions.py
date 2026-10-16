@@ -860,9 +860,9 @@ class ForcecageZone(SolidWallZone):
             origin=incoming.effect_source_position or incoming.source_position
             if origin is None: return None
             inside=self.contains(origin)
-            if inside and incoming.spell_id in {"misty_step","dimension_door"}: return None
+            if inside and incoming.magical_transfer: return None
             terminal=BaseBlock.get(incoming.target_entity_uuid) if incoming.target_entity_uuid else None
-            if incoming.spell_id=="disintegrate" and isinstance(terminal,WallSection) and terminal.wall_owner_uuid==self.uuid:return None
+            if incoming.authored_spell_id=="spell.disintegrate" and isinstance(terminal,WallSection) and terminal.wall_owner_uuid==self.uuid:return None
             target=BaseBlock.get(incoming.target_entity_uuid) if incoming.target_entity_uuid else None
             destination=target.position if target is not None else incoming.target_position or incoming.aoe_position or origin
             if destination is not None and inside != self.contains(destination):

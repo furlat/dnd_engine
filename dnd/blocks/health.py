@@ -15,7 +15,7 @@ from random import randint
 from functools import cached_property
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import EventPhase, EventQueue, TakeDamageEvent, TemporaryHitPointsChangedEvent
+from dnd.core.events import EventPhase, EventQueue, MaximumHitPointReductionEvent, TakeDamageEvent, TemporaryHitPointsChangedEvent
 from dnd.types.actor import TemporaryHitPointsGrant
 
 
@@ -335,6 +335,7 @@ class Health(BaseBlock):
     )
     max_hit_points_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Max Hit Points Bonus"), description="Max Hit Points Bonus, e.g. Aid spell")
     temporary_hit_points: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Temporary Hit Points"), description="Temporary Hit Points, e.g. False Life spell")
+    death_save_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Death Saving Throw"))
     temporary_hit_points_grant: TemporaryHitPointsGrant | None = None
     damage_taken: int = Field(default=0,ge=0, description="The amount of damage taken")
     damage_reduction: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Damage Reduction"), description="Damage Reduction, e.g. Damage Resistance")
@@ -513,6 +514,7 @@ class Health(BaseBlock):
         normal_hit_point_damage_cap: Optional[int] = None,
         normal_hit_points_available: Optional[int] = None,
         attack_magical: tuple[bool | None, ...] = (),
+        ignores_resistance_immunity: bool = False,
     ) -> DamageApplicationPreview:
         """Resolve typed components through affinities, defenses, and HP pools."""
         component_resolutions: list[DamageComponentResolution] = []
@@ -525,6 +527,8 @@ class Health(BaseBlock):
                     f"{damage_type!r}"
                 )
             resistance_status = self.get_resistance(damage_type, attack_magical=attack_magical[index] if attack_magical else None)
+            if ignores_resistance_immunity and resistance_status in (ResistanceStatus.RESISTANCE, ResistanceStatus.IMMUNITY):
+                resistance_status = ResistanceStatus.NONE
             multiplier = {ResistanceStatus.IMMUNITY:0, ResistanceStatus.RESISTANCE:0.5, ResistanceStatus.VULNERABILITY:2, ResistanceStatus.NONE:1}[resistance_status]
             after_affinity_damage = max(0, int(damage * multiplier))
             component_resolutions.append(
@@ -651,6 +655,7 @@ class Health(BaseBlock):
             declared_damage=event.total_damage,
             attack_magical=tuple(damage.attack_magical for damage in event.damages[:len(components)]),
             normal_hit_points_available=normal_hit_points_available,
+            ignores_resistance_immunity=event.ignores_resistance_immunity,
         )
         return resolution.model_copy(update={"components": tuple(
             component.model_copy(update={"source_damage_uuid": identity})
@@ -664,12 +669,14 @@ class Health(BaseBlock):
         declared_damage: Optional[int] = None,
         normal_hit_points_available: Optional[int] = None,
         attack_magical: tuple[bool | None, ...] = (),
+        ignores_resistance_immunity: bool = False,
     ) -> DamageApplicationPreview:
         """Preview mixed typed damage without mutating health state."""
         incoming_damage = sum(max(0, damage) for damage, _ in components)
         return self._preview_damage_components(
             components,
             attack_magical=attack_magical,
+            ignores_resistance_immunity=ignores_resistance_immunity,
             declared_damage=(incoming_damage if declared_damage is None else declared_damage),
             normal_hit_point_damage_cap=normal_hit_point_damage_cap,
             normal_hit_points_available=normal_hit_points_available,
@@ -715,10 +722,18 @@ class Health(BaseBlock):
         preview = self.preview_damage(damage, damage_type, normal_hit_point_damage_cap)
         return self.apply_damage_preview(preview, source_entity_uuid)
 
-    def prevents_maximum_reduction(self) -> bool:
-        owner = BaseBlock.get(self.source_entity_uuid)
-        return owner is not None and any(condition.prevents_hit_point_maximum_reduction
-            and condition.contributions_active() for condition in owner.active_conditions_by_uuid.values())
+    def prepare_maximum_hit_point_reduction(self, amount: int, source_entity_uuid: UUID,
+            *, parent_event: UUID | None = None, source_condition_uuid: UUID | None = None):
+        """Publish factual admission shared by initial and cumulative HP loss."""
+        event = EventQueue.publish_declaration(MaximumHitPointReductionEvent(
+            source_entity_uuid=source_entity_uuid, target_entity_uuid=self.source_entity_uuid,
+            amount=amount, source_condition_uuid=source_condition_uuid,
+            parent_event=parent_event, use_register=False))
+        for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
+            if event.canceled:
+                break
+            event = event.phase_to(phase)
+        return event if event.canceled else event.phase_to(EventPhase.COMPLETION)
 
     def is_healing_blocked(self) -> bool:
         """Check if healing is blocked by a condition (e.g., Chill Touch).

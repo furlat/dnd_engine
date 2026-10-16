@@ -123,7 +123,6 @@ def test_aura_life_prevents_new_loss_keeps_old_loss_and_resists_necrotic(game):
     )
     assert ally.get_max_hp() == maximum
     ally.move((12, 2))
-    assert not ally.health.prevents_maximum_reduction()
     assert ally.get_max_hp() == maximum
 
 

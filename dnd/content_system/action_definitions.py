@@ -12,9 +12,15 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 import dnd.items.spell_items as spell_items
+from dnd.items.scroll_learning import LearnSpellFromScroll
 import dnd.actions as actions
 import dnd.classes.barbarian as barbarian
 import dnd.classes.fighter as fighter
+import dnd.classes.cleric as cleric
+import dnd.classes.divine_intervention as intervention
+import dnd.items.divine_rewards as divine_rewards
+import dnd.classes.paladin as paladin
+import dnd.classes.wizard as wizard
 import dnd.classes.rage as rage
 import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
@@ -138,6 +144,21 @@ def _original(
 
 
 ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
+    _srd(intervention.SunderHeretical,"action.class.cleric.divine_intervention.sunder_heretical","Divine Intervention: Sunder the Heretical","Once per character, a50ft enemy radiant burst.",root_owned=True),
+    _srd(intervention.OpulentRevival,"action.class.cleric.divine_intervention.opulent_revival","Divine Intervention: Opulent Revival","Once per character, bounded allied recovery and half-HP companion revival.",root_owned=True),
+    _srd(intervention.ArmThyServant,"action.class.cleric.divine_intervention.arm_thy_servant","Divine Intervention: Arm Thy Servant","Once per character, a permanent Devotee mace.",root_owned=True),
+    _srd(intervention.GoldenGenerosity,"action.class.cleric.divine_intervention.golden_generosity","Divine Intervention: Golden Generosity","Once per character, a permanent native chest containing seven potions.",root_owned=True),
+    _original(divine_rewards.HealingIncense,"action.item.devotees_mace.healing_incense","Healing Incense Aura","The equipped mace grants a ten-turn healing aura once per long rest."),
+    _srd(paladin.DivineSense, "action.class.paladin.divine_sense", "Divine Sense", "Gain two-turn attack advantage against celestial, fiend and undead.", root_owned=True),
+    _srd(paladin.LayOnHands, "action.class.paladin.lay_on_hands", "Lay on Hands", "Spend native healing charges to heal or cure a touched ally.", root_owned=True),
+    _srd(paladin.TurnUnholy, "action.class.paladin.turn_unholy", "Turn the Unholy", "Turn visible fiends and undead using Paladin CHA.", root_owned=True),
+    _srd(paladin.SacredWeapon, "action.class.paladin.sacred_weapon", "Sacred Weapon", "Enchant an exact held weapon for ten turns.", root_owned=True),
+    _srd(paladin.CleansingTouch, "action.class.paladin.cleansing_touch", "Cleansing Touch", "End one exact eligible spell on a willing touched recipient.", root_owned=True),
+    _srd(paladin.HolyNimbus, "action.class.paladin.holy_nimbus", "Holy Nimbus", "Shine for ten turns and damage nearby enemies at their turn start.", root_owned=True),
+    _srd(wizard.ArcaneRecovery, "action.class.wizard.arcane_recovery", "Arcane Recovery", "Recover a spent shared slot outside combat using Wizard recovery points.", root_owned=True),
+    _srd(cleric.TurnUndead, "action.class.cleric.turn_undead", "Turn Undead", "Turn visible undead within30 feet for three turns.", root_owned=True),
+    _srd(cleric.PreserveLife, "action.class.cleric.preserve_life", "Preserve Life", "Heal nearby living allies with Channel Divinity.", root_owned=True),
+    _srd(LearnSpellFromScroll, "action.wizard.learn_scroll", "Learn Spell", "Transcribe an eligible scroll into the Wizard book without gold cost."),
     *tuple(_srd(kind,identity,kind.model_fields["name"].default,"Approved summon creature technique using native actions.")
         for kind,identity in summon_actions.SUMMON_ACTION_IDENTITIES),
     _srd(payloads.ThrowSpellPayload,"action.spell.payload.throw","Throw Spell Sphere","Throw a retained sphere, retiring the item before its explosion."),
