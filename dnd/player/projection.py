@@ -567,7 +567,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
             return MechanismActivationFact(mechanism_uuid=event.mechanism_uuid if observed is not None else None,
                 mechanism_content_id=event.mechanism_content_ref.content_id, target_entity_uuid=target,
                 origin_position=origin, direction=event.direction, affected_positions=positions,
-                end_position=event.end_position if event.end_position in visible else None,
+                end_position=event.end_position if event.end_position is not None and cell_in(visible, event.end_position) else None,
                 committed=event.committed)
         case PortalTransferEvent():
             if target is None:
