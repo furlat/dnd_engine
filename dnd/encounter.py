@@ -73,8 +73,22 @@ def _compute_revealed_entities(event: Event, child_logs: List[CombatLogEntry]) -
     return revealed
 
 
+# Owned by the Encounter system, whose event computers are this module's functions: one string per
+# entity id (observers and participants), so event-time grants and log perceivers share their
+# strings instead of stringifying an id per version. Cleared whenever the encounter installs or
+# removes its computers; bounded by the encounter's entities. A pure UUID-to-text table.
+_ID_STRINGS: Dict[UUID, str] = {}
+
+
+def _id_string(identity: UUID) -> str:
+    text = _ID_STRINGS.get(identity)
+    if text is None:
+        text = _ID_STRINGS[identity] = str(identity)
+    return text
+
+
 def _compute_perceivers(event: Event) -> Set[str]:
-    """Return observer UUIDs that should receive an event log."""
+    """Return observer UUIDs that should receive an event log (a fresh set of shared id strings)."""
     grid = get_map()
 
     positions: Set[Tuple[int, int]] = event.get_affected_positions()
@@ -88,29 +102,38 @@ def _compute_perceivers(event: Event) -> Set[str]:
 
     perceivers = spatial_senses_system.observers_granted(positions)
     perceivers.update(uuid for uuid in participant_uuids if uuid)
-    return {str(uuid) for uuid in perceivers}
+    return {_id_string(uuid) for uuid in perceivers}
 
 
-def _compute_identified_entity_observers(event: Event) -> Dict[str, FrozenSet[str]]:
+def _compute_identified_entity_observers(
+    event: Event, previous: Dict[str, FrozenSet[str]],
+) -> Dict[str, FrozenSet[str]]:
     """Capture which observers identify each entity participating in an event.
 
     A participant identifies itself; an observer subscribed to its cell
     identifies it when the participant is among that observer's contacts.
+    `previous` is the grants mapping the version carries from its predecessor:
+    the grants are computed for every version, and when every participant's grant
+    is unchanged the carried mapping is returned itself (grants are shared frozen
+    values), so versions share one mapping while it holds.
     """
     grid = get_map()
-    grants: Dict[str, FrozenSet[str]] = {}
     participant_uuids = {
         entity_uuid
         for entity_uuid in event.get_participant_entity_uuids()
         if Entity.get(entity_uuid) is not None
     }
-
+    rows: List[Tuple[str, FrozenSet[str]]] = []
     for participant_uuid in participant_uuids:
+        key = _id_string(participant_uuid)
         position = grid.get_entity_position(participant_uuid)
-        grants[str(participant_uuid)] = (frozenset((str(participant_uuid),)) if position is None
-            else spatial_senses_system.identifying_observers(participant_uuid, position))
-
-    return grants
+        rows.append((key, frozenset((key,)) if position is None
+            else spatial_senses_system.identifying_observers(participant_uuid, position)))
+    if len(rows) == len(previous) and all(
+            held_key == key and (held is observers or held == observers)
+            for (held_key, held), (key, observers) in zip(previous.items(), rows)):
+        return previous
+    return dict(rows)
 
 
 class EncounterState(str, Enum):
@@ -611,6 +634,7 @@ class Encounter(BaseObject):
                 entity.active_encounter_uuid = self.uuid
 
         EventQueue.set_combat_log_callback(self._on_event_combat_log)
+        _ID_STRINGS.clear()
         EventQueue.set_perceiver_computer(_compute_perceivers)
         EventQueue.set_revealed_computer(_compute_revealed_entities)
         EventQueue.set_identified_entity_observer_computer(_compute_identified_entity_observers)
@@ -662,6 +686,7 @@ class Encounter(BaseObject):
         EventQueue.set_perceiver_computer(None)
         EventQueue.set_revealed_computer(None)
         EventQueue.set_identified_entity_observer_computer(None)
+        _ID_STRINGS.clear()
 
         self._notify_controllers_encounter_end()
 

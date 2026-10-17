@@ -1,4 +1,5 @@
 """Serial native owner. No HTTP handlers, sockets, renderer or client rules."""
+from collections import Counter
 from contextlib import redirect_stdout
 from dataclasses import dataclass
 import gc
@@ -230,6 +231,39 @@ def response_bytes(session: Session, response: BaseModel) -> bytes:
     return response.model_dump_json().encode()
 
 
+def collect_between_requests() -> tuple[int, Counter]:
+    """The worker's one collection point, after a request's reply is written.
+
+    Automatic collection is off (`run_process`): reference counting frees what the
+    engine drops, and requests create almost no reference cycles. Here the objects
+    the request left are scanned once, cycles found are counted by type (each one is
+    a bug to fix in the code that created it), and the survivors are frozen, so the
+    next collection scans only what the next request leaves, whatever the world's size.
+    """
+    gc.set_debug(gc.DEBUG_SAVEALL)
+    try:
+        found = gc.collect()
+        cycles = Counter(type(member).__name__ for member in gc.garbage)
+        gc.garbage.clear()
+    finally:
+        gc.set_debug(0)
+    if found:
+        gc.collect()
+        print(f'gc: collection found {found} objects in reference cycles: {dict(cycles.most_common(8))}',
+            file=sys.stderr)
+    gc.freeze()
+    return found, cycles
+
+
+def collect_frozen_cycles() -> tuple[int, Counter]:
+    """The deep check, for test and measurement runs (and EndGame's own unfreeze): every frozen
+    survivor is scanned once more, so a cycle that formed among older objects (a removed
+    condition, a dead creature) is found and reported. It is a full-heap pass, so it never runs
+    between gameplay requests; a cycle it finds is a bug to fix where it is created."""
+    gc.unfreeze()
+    return collect_between_requests()
+
+
 def main() -> None:
     output = sys.stdout.buffer
     runtime = None
@@ -250,7 +284,11 @@ def main() -> None:
                         close_session(runtime.session)
                         runtime = None
                         reset_engine_runtime()
+                        # The ended game's frozen survivors are scanned once more, so no cycle
+                        # of it outlives the game; then only the import graph is frozen again.
+                        gc.unfreeze()
                         gc.collect()
+                        gc.freeze()
                         reply, records = Reply(ended_epoch=request.game_epoch), ()
                     elif runtime is None:
                         if not isinstance(request, Start):
@@ -282,6 +320,7 @@ def main() -> None:
                 # the next EndGame boundary. Loop variables also retain values.
                 request = response = encoded = reply = records = None
                 record = None
+                collect_between_requests()
         finally:
             if runtime is not None:
                 close_session(runtime.session)
@@ -290,16 +329,17 @@ def main() -> None:
 def run_process() -> None:
     """Enter a fresh worker; imported schemas live until process exit.
 
-    Freeze only the pre-Start import graph, never a live encounter. New game
-    objects retain normal cyclic collection. Pre-existing cycles orphaned later
-    may survive until this worker exits. Completed game graphs are reset and
-    collected at EndGame, never frozen into the reusable import graph.
+    The pre-Start import graph is frozen, then automatic collection is off: each
+    request's survivors are collected and frozen after its reply
+    (`collect_between_requests`). EndGame unfreezes and collects the ended game, so
+    its graph never stays frozen into the reusable import graph.
     """
     if SERVER_CONTENT_SYSTEM_RUNTIME.is_installed or EventQueue.event_cursor() != 0:
         raise RuntimeError('Worker process entry requires a fresh native runtime')
     protocol_identity()
     gc.collect()
     gc.freeze()
+    gc.disable()
     main()
 
 

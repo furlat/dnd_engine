@@ -34,7 +34,7 @@ __all__ = [
     "DeathSaveEvent", "InstantDeathEvent", "DeathEvent",
 ]
 
-from dnd.types.event_facts import (GroupEntryKind, HandlerGroupDispatch, LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
+from dnd.types.event_facts import (JOINS_A_STEP, SIMULTANEOUS_ENTRIES, GroupEntryKind, HandlerGroupDispatch, LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -49,7 +49,7 @@ from dnd.types.class_features import IndomitableReroll, RelentlessRageInterventi
 from dnd.types.summoning import SummonOrigin, SummonSelection, TerminalOwnerRelease
 
 from dnd.core.combat_log import DeathLogData, DeathSaveLogData, ForcedMovementLogData, SpatialChangeLogData, SpatialInteractionLogData, StepMovementLogData, TurnLogData
-from dnd.core.combat_log import summarize_target_entries
+from dnd.core.combat_log import CombatLogData, summarize_target_entries
 from dnd.core.combat_log import (
     CombatLogEntry,
     CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
@@ -74,6 +74,8 @@ from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.creature_types import DamageType
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode
+from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues
+from dnd.core.cells import mask_positions, mask_union
 from dnd.types.traps import TrapState
 from dnd.types.residues import BodyReleaseResult
 from dnd.types.spatial_effects import (
@@ -108,6 +110,7 @@ from dnd.core.action_execution import MovementProvocationPolicy
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
 from datetime import UTC, datetime
+from bisect import bisect_right
 from collections import defaultdict
 from typing import Callable, Tuple
 import logging
@@ -169,15 +172,27 @@ class OpenGroup:
     # settle (a zone's own change): settled observers need no second pass.
     completes_after: Set[UUID] = field(default_factory=set)
 
+    def holds_simultaneous_entry(self) -> bool:
+        """Whether a simultaneous entry is open (`SIMULTANEOUS_ENTRIES`). A move step alone only
+        settles perception once: its handlers, departures and reactions run as without a group."""
+        return any(kind in SIMULTANEOUS_ENTRIES for kind in self.kinds)
 
-def merge_grants(grants: Dict[str, FrozenSet[str]], added: Mapping[str, FrozenSet[str]]) -> None:
-    """Union observer grants into one version's dict; a value is replaced only when the union adds observers."""
+
+def merged_grants(grants: Dict[str, FrozenSet[str]], added: Mapping[str, FrozenSet[str]]) -> Dict[str, FrozenSet[str]]:
+    """The union of observer grants, as a shared frozen mapping.
+
+    `grants` itself when `added` adds no observer; otherwise a new mapping in which a value is
+    replaced only where the union adds observers. Neither input is edited.
+    """
+    merged = grants
     for identity, observers in added.items():
-        held = grants.get(identity)
-        if held is None:
-            grants[identity] = observers
-        elif not observers <= held:
-            grants[identity] = held | observers
+        held = merged.get(identity)
+        if held is not None and observers <= held:
+            continue
+        if merged is grants:
+            merged = dict(grants)
+        merged[identity] = observers if held is None else held | observers
+    return merged
 
 
 def value_log_rows(rows: Sequence[ValueBreakdownRow]) -> List[ModifierBreakdown]:
@@ -334,11 +349,13 @@ class Event(BaseModel):
     )
     lineage_children_events: List[UUID] = Field(
         default_factory=list,
-        description="Child event UUIDs accumulated across this lineage's earlier phases.",
+        description=("Child event UUIDs accumulated across this lineage's earlier phases, as stored; "
+                     "later children are read through EventQueue.child_links."),
     )
     children_events: List[UUID] = Field(
         default_factory=list,
-        description="Child event UUIDs attached during this event version's phase.",
+        description=("Child event UUIDs attached during this event version's phase, as stored; "
+                     "later children are read through EventQueue.child_links."),
     )
     parent_lineage: Optional[UUID] = Field(
         default=None,
@@ -495,7 +512,7 @@ class Event(BaseModel):
             EventQueue.run_pre_completion_callbacks(self)
             if EventQueue._identified_entity_observer_computer is not None:
                 phase_updates["located_entity_observer_uuids"] = (
-                    EventQueue._identified_entity_observer_computer(self))
+                    EventQueue._identified_entity_observer_computer(self, self.located_entity_observer_uuids))
             completion_locations = phase_updates.get(
                 "located_entity_observer_uuids",
                 self.located_entity_observer_uuids,
@@ -504,7 +521,8 @@ class Event(BaseModel):
                 self.completion_position_observer_evidence(completion_locations)
             )
 
-            all_children = list(dict.fromkeys(self.lineage_children_events + self.children_events))
+            children, lineage_children = EventQueue.child_links(self)
+            all_children = list(dict.fromkeys(lineage_children + children))
             phase_updates['lineage_children_events'] = all_children
             phase_updates['children_events'] = all_children
 
@@ -522,7 +540,8 @@ class Event(BaseModel):
                     seen_lineages.add(child.lineage_uuid)
             phase_updates['children_lineages'] = child_lineages
         else:
-            phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
+            children, lineage_children = EventQueue.child_links(self)
+            phase_updates['lineage_children_events'] = lineage_children + children
             phase_updates['children_events'] = []
 
         if new_phase == EventPhase.COMPLETION:
@@ -530,21 +549,27 @@ class Event(BaseModel):
                 temp_event = self.model_copy(update=phase_updates)
                 combat_log = temp_event.generate_combat_log()
                 if combat_log is not None:
-                    # The log shares the version's frozen grant values; neither mutates them.
-                    combat_log.identified_entity_observer_uuids = temp_event.identified_entity_observer_uuids
-                    combat_log.located_entity_observer_uuids = temp_event.located_entity_observer_uuids
-                    combat_log.located_position_observer_uuids = temp_event.located_position_observer_uuids
+                    # Built by copy-update: a generated log may be the previous version's
+                    # frozen value. The log shares the version's frozen grant values.
+                    log_updates: Dict[str, Any] = {
+                        'identified_entity_observer_uuids': temp_event.identified_entity_observer_uuids,
+                        'located_entity_observer_uuids': temp_event.located_entity_observer_uuids,
+                        'located_position_observer_uuids': temp_event.located_position_observer_uuids,
+                    }
                     if EventQueue._perceiver_computer:
-                        combat_log.perceiver_uuids = EventQueue.perceivers_for_event(temp_event)
+                        log_updates['perceiver_uuids'] = EventQueue.perceivers_for_event(temp_event)
 
                     child_logs = temp_event._collect_child_combat_logs()
                     if child_logs:
-                        combat_log.sub_entries = child_logs
-                        _enrich_multi_entity_log_from_children(combat_log, child_logs)
+                        log_updates['sub_entries'] = child_logs
+                        log_updates['data'] = _multi_entity_log_data(combat_log.data, child_logs)
 
                     if EventQueue._revealed_computer:
-                        combat_log.revealed_entity_uuids |= EventQueue._revealed_computer(temp_event, child_logs or [])
+                        revealed = set(combat_log.revealed_entity_uuids)
+                        revealed |= EventQueue._revealed_computer(temp_event, child_logs or [])
+                        log_updates['revealed_entity_uuids'] = revealed
 
+                    combat_log = combat_log.model_copy(update=log_updates)
                     phase_updates['combat_log'] = combat_log
 
                     if self.parent_event is None and EventQueue._combat_log_callback:
@@ -587,16 +612,6 @@ class Event(BaseModel):
             EventQueue._combat_log_callback(canceled)
         return canceled
 
-    def add_child_event(self, child_event: 'Event'):
-        """Add a child event to current-phase and lineage-level child lists.
-
-        Args:
-            child_event: Event version caused by this event.
-        """
-        self.children_events.append(child_event.uuid)
-        if child_event.uuid not in self.lineage_children_events:
-            self.lineage_children_events.append(child_event.uuid)
-
     def get_children_events(self) -> List['Event']:
         """Get all children events of the current event.
 
@@ -610,7 +625,7 @@ class Event(BaseModel):
                 if lineage_events:
                     result.append(lineage_events[-1])
             return result
-        resolved = [EventQueue.get_event_by_uuid(child_event) for child_event in self.children_events]
+        resolved = [EventQueue.get_event_by_uuid(child_event) for child_event in EventQueue.child_links(self)[0]]
         return [out for out in resolved if out is not None]
 
     def get_parent_event(self) -> Optional['Event']:
@@ -652,7 +667,7 @@ class Event(BaseModel):
                     child_logs.extend(events[-1]._collect_child_combat_logs())
         else:
             seen_lineages: Set[UUID] = set()
-            for child_uuid in self.lineage_children_events:
+            for child_uuid in EventQueue.child_links(self)[1]:
                 child = EventQueue.get_event_by_uuid(child_uuid)
                 if child is None or child.lineage_uuid in seen_lineages:
                     continue
@@ -676,7 +691,18 @@ class Event(BaseModel):
         self,
     ) -> tuple[EffectiveHandlerPresentation, ...]:
         """Return exact reaction evidence retained across this event lineage."""
-        return self._effective_handler_presentations
+        return EventQueue.handler_presentations(self)
+
+    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+        """A copy carries this version's reaction evidence as of now.
+
+        A stored version is frozen: reactions dispatched on it after its store are
+        held by the queue (`EventQueue.handler_presentations`), and every copy takes
+        the evidence current at copy time.
+        """
+        copied = super().model_copy(update=update, deep=deep)
+        copied._effective_handler_presentations = EventQueue.handler_presentations(self)
+        return copied
 
     def post(self, **updates) -> Self:
         """Create a modified version of this event and rebroadcast it.
@@ -695,6 +721,10 @@ class Event(BaseModel):
         updates['uuid'] = uuid4()
         if 'lineage_uuid' not in updates:
             updates['lineage_uuid'] = self.lineage_uuid
+        # A modified version continues this version's child links unless the update names its own.
+        children, lineage_children = EventQueue.child_links(self)
+        updates.setdefault('children_events', children)
+        updates.setdefault('lineage_children_events', lineage_children)
 
         updated_event = self.model_copy(update=updates)
 
@@ -1006,18 +1036,16 @@ class EntityLevelRemovedEvent(_EntityLevelFact):
     )
 
 
-def _enrich_multi_entity_log_from_children(
-    combat_log: CombatLogEntry, child_logs: List[CombatLogEntry],
-) -> None:
-    """Record target membership once alongside the one child-detail tree."""
-    if combat_log.data.kind != "multi_entity_action":
-        return
+def _multi_entity_log_data(data: CombatLogData, child_logs: List[CombatLogEntry]) -> CombatLogData:
+    """A log's data with target membership recorded once alongside the one child-detail tree."""
+    if data.kind != "multi_entity_action":
+        return data
     target_categories = {CombatLogEntryType.ACTION, CombatLogEntryType.ATTACK,
         CombatLogEntryType.HEAL, CombatLogEntryType.SPELL_DAMAGE, CombatLogEntryType.SPELL_SAVE}
     indices = tuple(i for i, child in enumerate(child_logs)
                     if child.entry_type in target_categories and child.target_uuid is not None)
-    indices = indices[:combat_log.data.total_targets]
-    combat_log.data = summarize_target_entries(combat_log.data, child_logs, indices)
+    indices = indices[:data.total_targets]
+    return summarize_target_entries(data, child_logs, indices)
 
 
 
@@ -1286,6 +1314,11 @@ class EventQueue:
     """
 
     _events_by_lineage: Dict[UUID, List[Event]] = defaultdict(list)
+    # Child links are the queue's (P7b): per lineage, the UUIDs of stored versions whose parent
+    # version belongs to it, in store order. A stored version is never edited when a child arrives.
+    _lineage_children: Dict[UUID, List[UUID]] = defaultdict(list)
+    # Reaction evidence dispatched on an already-stored version, by version UUID (P7b).
+    _dispatched_presentations: Dict[UUID, Tuple[EffectiveHandlerPresentation, ...]] = {}
     _events_by_uuid: Dict[UUID, Event] = {}
     _event_indexes_by_uuid: Dict[UUID, int] = {}
     _events_by_type: Dict[EventType, List[Event]] = defaultdict(list)
@@ -1362,7 +1395,8 @@ class EventQueue:
     _combat_log_callback: Optional[Callable[['Event'], None]] = None
     _perceiver_computer: Optional[Callable[['Event'], Set[str]]] = None
     _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
-    _identified_entity_observer_computer: Optional[Callable[['Event'], Dict[str, FrozenSet[str]]]] = None
+    _identified_entity_observer_computer: Optional[Callable[
+        ['Event', Dict[str, FrozenSet[str]]], Dict[str, FrozenSet[str]]]] = None
 
     @classmethod
     def begin_turn_execution(cls, execution_id: Optional[UUID] = None) -> UUID:
@@ -1419,7 +1453,7 @@ class EventQueue:
     @classmethod
     def set_identified_entity_observer_computer(
         cls,
-        func: Optional[Callable[['Event'], Dict[str, FrozenSet[str]]]],
+        func: Optional[Callable[['Event', Dict[str, FrozenSet[str]]], Dict[str, FrozenSet[str]]]],
     ) -> None:
         """Register the event-time participant identity provider.
 
@@ -1429,16 +1463,17 @@ class EventQueue:
         possessed when the event began.
 
         Args:
-            func: Callback returning a fresh dict of participant UUID keys to
-                the frozen observer UUID sets that currently identify each
-                participant. Versions share those frozen values.
+            func: Callback given the version and the grants mapping it carries,
+                returning the participant UUID keys mapped to the frozen observer
+                UUID sets that currently identify each participant: the carried
+                mapping itself when nothing changed. Versions share these values.
         """
         cls._identified_entity_observer_computer = func
 
     @classmethod
     def perceivers_for_event(cls, event: 'Event') -> Set[str]:
         """Use the installed event-time observation policy for informational entries."""
-        return set(cls._perceiver_computer(event)) if cls._perceiver_computer else set()
+        return cls._perceiver_computer(event) if cls._perceiver_computer else set()
 
     @classmethod
     def push_combat_log(cls, entry: 'CombatLogEntry', source_entity_uuid: UUID) -> None:
@@ -1517,7 +1552,7 @@ class EventQueue:
     def _invoke_handler(cls, handler: BaseHandler, event: Event) -> Optional[Event]:
         """Invoke one matched handler and publish passive effect evidence."""
         group = cls._open_group.get()
-        if (group is not None and not group.settling
+        if (group is not None and not group.settling and group.holds_simultaneous_entry()
                 and handler.group_dispatch is HandlerGroupDispatch.AFTER_GROUP):
             stored = event.model_copy(deep=True)
             group.deferred.append(lambda: cls._replay_handler(handler.uuid, stored))
@@ -1592,7 +1627,7 @@ class EventQueue:
                 emitted.lineage_uuid
                 for emitted in cls._all_events[before_event_index:]
             ))
-            result._effective_handler_presentations = (
+            presentations = (
                 *result.effective_handler_presentations,
                 EffectiveHandlerPresentation(
                     dispatch_index=evidence.dispatch_index,
@@ -1607,6 +1642,11 @@ class EventQueue:
                     outcome=evidence.outcome,
                 ),
             )
+            if cls._events_by_uuid.get(result.uuid) is result:
+                # The dispatched version is stored and frozen: the queue holds its evidence.
+                cls._dispatched_presentations[result.uuid] = presentations
+            else:
+                result._effective_handler_presentations = presentations
         cls._handler_dispatch_cursor += 1
         for callback in tuple(cls._on_handler_dispatch_callbacks):
             try:
@@ -1743,6 +1783,10 @@ class EventQueue:
         """
         current = cls._open_group.get()
         if current is not None:
+            if not current.holds_simultaneous_entry() and kind not in JOINS_A_STEP:
+                # A move step's facts settle before an entry it does not cause starts inside it
+                # (another step, a transfer, a trap): never across steps.
+                cls._settle_open_group(current)
             current.kinds.append(kind)
             # A nested area shares its own roll inside a group that doesn't.
             widened = shares_damage_rolls and not current.shares_damage_rolls
@@ -1772,6 +1816,19 @@ class EventQueue:
         cls._replay_deferred(group)
 
     @classmethod
+    def _settle_open_group(cls, group: OpenGroup) -> None:
+        """Settle what an open group recorded so far, and keep it open. Every system and settler
+        drains what it holds, so the group's close settles only what came after."""
+        group.settling = True
+        try:
+            for system in tuple(cls._pre_completion_systems.values()):
+                system.settle_group(group)
+            for settle in group.settlers:
+                settle(group.root_uuid)
+        finally:
+            group.settling = False
+
+    @classmethod
     def _replay_deferred(cls, group: OpenGroup) -> None:
         """Phase B: deferred work in arrival order, each as its own group (plan §5.1)."""
         root = cls.get_event_by_uuid(group.root_uuid) if group.root_uuid is not None else None
@@ -1783,7 +1840,7 @@ class EventQueue:
     def after_group(cls, run: Callable[[], None]) -> None:
         """Run ``run`` in phase B of the open group, or now when none is open."""
         group = cls._open_group.get()
-        if group is not None and not group.settling:
+        if group is not None and not group.settling and group.holds_simultaneous_entry():
             group.deferred.append(run)
         else:
             run()
@@ -1999,10 +2056,10 @@ class EventQueue:
             if result.canceled:
                 if defer_cancellation:
                     return result
-                return cls._record_handler_result(result)
+                return cls._record_handler_result(result, current_event)
 
             if result.modified:
-                current_event = cls._record_handler_result(result)
+                current_event = cls._record_handler_result(result, current_event)
 
         return current_event
 
@@ -2167,13 +2224,11 @@ class EventQueue:
         if event.phase not in (EventPhase.EXECUTION, EventPhase.EFFECT):
             raise ValueError("Only execution and effect phases can be committed facts")
 
-        committed = cast(
-            EventT,
-            event.model_copy(update={
-                "use_register": True,
-                "timestamp": datetime.now(UTC),
-            }),
-        )
+        # The owner's unregistered value becomes the stored version itself, as in
+        # publish_preflighted; callers hold only the returned version.
+        committed = event
+        committed.use_register = True
+        committed.timestamp = datetime.now(UTC)
         errors: list[BaseException] = []
         try:
             cls._store_event(committed)
@@ -2252,18 +2307,24 @@ class EventQueue:
         return tuple(stored)
 
     @classmethod
-    def _record_handler_result(cls, result: Event) -> Event:
-        """Store one handler-produced version without duplicating event identity."""
-        if not result.use_register:
-            result = result.model_copy(update={"use_register": True})
+    def _record_handler_result(cls, result: Event, dispatched: Event) -> Event:
+        """Store one handler-produced version without duplicating event identity.
+
+        The stored version continues the child links of the version its handler was dispatched with.
+        """
         stored_event = cls._events_by_uuid.get(result.uuid)
         if stored_event is result:
             return result
+        update: Dict[str, Any] = {}
+        if not result.use_register:
+            update["use_register"] = True
         if stored_event is not None:
-            result = result.model_copy(update={
-                "uuid": uuid4(),
-                "timestamp": datetime.now(UTC),
-            })
+            update.update(uuid=uuid4(), timestamp=datetime.now(UTC))
+        children, lineage_children = cls.child_links(dispatched)
+        if result.children_events != children or result.lineage_children_events != lineage_children:
+            update.update(children_events=children, lineage_children_events=lineage_children)
+        if update:
+            result = result.model_copy(update=update)
         cls._store_event(result)
         return result
 
@@ -2271,6 +2332,36 @@ class EventQueue:
     def get_event_by_uuid(cls, uuid: UUID) -> Optional[Event]:
         """Return an event version by UUID, if it is indexed."""
         return cls._events_by_uuid.get(uuid)
+
+    @classmethod
+    def handler_presentations(cls, event: Event) -> Tuple[EffectiveHandlerPresentation, ...]:
+        """One version's reaction evidence as of now.
+
+        The stored version itself: the evidence it was stored with, extended by the
+        reactions dispatched on it since. Any other value (a copy, an unstored
+        version): the evidence it carries.
+        """
+        if cls._events_by_uuid.get(event.uuid) is event:
+            return cls._dispatched_presentations.get(event.uuid, event._effective_handler_presentations)
+        return event._effective_handler_presentations
+
+    @classmethod
+    def child_links(cls, event: Event) -> Tuple[List[UUID], List[UUID]]:
+        """One version's (children_events, lineage_children_events) as of now.
+
+        A stored version keeps the lists it was stored with; every child of its lineage stored after
+        it follows, read from the queue's lineage index. A version this queue never stored has only
+        its own lists. The returned lists are shared values: callers do not edit them.
+        """
+        position = cls._event_indexes_by_uuid.get(event.uuid)
+        later = cls._lineage_children.get(event.lineage_uuid)
+        if position is None or not later:
+            return event.children_events, event.lineage_children_events
+        start = bisect_right(later, position, key=cls._event_indexes_by_uuid.__getitem__)
+        if start == len(later):
+            return event.children_events, event.lineage_children_events
+        tail = later[start:]
+        return event.children_events + tail, event.lineage_children_events + tail
 
     @classmethod
     def _store_event(
@@ -2287,22 +2378,19 @@ class EventQueue:
             raise ValueError(f"Event UUID collision for {event.uuid}")
         timing = action_timing_enabled()
         total_started = time.perf_counter() if timing else 0.0
-        # Grants are shared frozen values: each version holds one dict of them,
-        # and a union makes a new value only when it adds observers.
-        started = time.perf_counter() if timing else 0.0
-        identified = dict(event.identified_entity_observer_uuids)
-        if timing:
-            record_action_timing("event_queue.store.copy_identified_ms", started)
+        # Grants are shared frozen values: a version keeps its predecessor's mapping
+        # unless a union adds observers, and no stored mapping is ever edited.
+        identified = event.identified_entity_observer_uuids
         if cls._identified_entity_observer_computer is None:
             located = event.located_entity_observer_uuids
         else:
             # Location grants are this version's own; identity accumulates.
             started = time.perf_counter() if timing else 0.0
-            located = cls._identified_entity_observer_computer(event)
+            located = cls._identified_entity_observer_computer(event, event.located_entity_observer_uuids)
             if timing:
                 record_action_timing("event_queue.store.compute_identified_ms", started)
             started = time.perf_counter() if timing else 0.0
-            merge_grants(identified, located)
+            identified = merged_grants(identified, located)
             if timing:
                 record_action_timing("event_queue.store.merge_identified_ms", started)
 
@@ -2313,7 +2401,7 @@ class EventQueue:
                 # Canceled children retain the same causal parent as completed
                 # ones; relationship identity exists before any terminal phase.
                 event.parent_lineage = parent_event.lineage_uuid
-            merge_grants(identified, parent_event.identified_entity_observer_uuids)
+            identified = merged_grants(identified, parent_event.identified_entity_observer_uuids)
         event.identified_entity_observer_uuids = identified
         event.located_entity_observer_uuids = located
         if timing:
@@ -2323,13 +2411,8 @@ class EventQueue:
         cls._events_by_lineage[event.lineage_uuid].append(event)
         cls._events_by_uuid[event.uuid] = event
 
-        if event.parent_event:
-            if parent_event and event.uuid not in parent_event.children_events:
-                parent_event.add_child_event(event)
-                for lineage_event in cls._events_by_lineage.get(parent_event.lineage_uuid, []):
-                    if lineage_event.uuid != parent_event.uuid:
-                        if event.uuid not in lineage_event.lineage_children_events:
-                            lineage_event.add_child_event(event)
+        if parent_event is not None:
+            cls._lineage_children[parent_event.lineage_uuid].append(event.uuid)
         if timing:
             record_action_timing("event_queue.store.lineage_ms", started)
 
@@ -2782,6 +2865,8 @@ class EventQueue:
         cls._events_by_source.clear()
         cls._events_by_target.clear()
         cls._events_by_lineage.clear()
+        cls._lineage_children.clear()
+        cls._dispatched_presentations.clear()
         cls._event_handlers.clear()
         cls._event_handler_order.clear()
         cls._next_event_handler_order = 0
@@ -3256,21 +3341,15 @@ class SensoryUpdateEvent(Event):
         default=False,
         description="Whether this update changed the observer's grid position.",
     )
-    effective_light_levels_changed: Dict[str, int] = Field(
-        default_factory=dict,
-        description=(
-            "Changed backend-resolved subjective light after-values, keyed as 'x,y'."
-        ),
+    effective_light_levels_changed: CellValues = Field(
+        default=EMPTY_VALUES,
+        description="Changed backend-resolved subjective light after-values (LightLevel per cell).",
     )
-    ambient_light_levels_changed: Dict[str, int] = Field(default_factory=dict,
-        description="Recorded current native tile baseline illumination for visible cells.")
-    objective_light_levels_changed: Dict[str, int] = Field(default_factory=dict,
-        description="Recorded current objective levels for visible cells, before sense-mode conversion.")
     light_sources_changed: Dict[UUID, PerceivedLightSource] = Field(default_factory=dict)
     light_sources_removed: Dict[UUID, int] = Field(default_factory=dict)
-    hazardous_cells_changed: Dict[str, bool] = Field(
-        default_factory=dict,
-        description="Native resolved hazard after-values for visible cells, keyed as 'x,y'.",
+    hazardous_cells_changed: CellValues = Field(
+        default=EMPTY_VALUES,
+        description="Native resolved hazard after-values for visible cells (1 hazardous, 0 not).",
     )
     spatial_effects_changed: Dict[UUID, PerceivedSpatialEffect] = Field(
         default_factory=dict,
@@ -3288,16 +3367,16 @@ class SensoryUpdateEvent(Event):
         default=SensoryUpdateReason.UNKNOWN,
         description="Reason category used by clients to interpret the delta.",
     )
-    visible_cells_added: List[Tuple[int, int]] = Field(
-        default_factory=list,
+    visible_cells_added: CellMask = Field(
+        default=EMPTY_CELLS,
         description="Cells newly visible to the observer.",
     )
-    visible_cells_removed: List[Tuple[int, int]] = Field(
-        default_factory=list,
+    visible_cells_removed: CellMask = Field(
+        default=EMPTY_CELLS,
         description="Cells no longer visible to the observer.",
     )
-    seen_cells_added: List[Tuple[int, int]] = Field(
-        default_factory=list,
+    seen_cells_added: CellMask = Field(
+        default=EMPTY_CELLS,
         description="Cells newly added to the observer's explored area.",
     )
     entity_contacts_changed: Dict[UUID, PerceivedContact] = Field(
@@ -3366,17 +3445,10 @@ class SensoryUpdateEvent(Event):
         """Reject runtime owners and callables from sensory after-values."""
         pending: List[Any] = [
             self.observer_position,
-            self.effective_light_levels_changed,
-            self.objective_light_levels_changed,
-            self.ambient_light_levels_changed,
             self.light_sources_changed,
             self.light_sources_removed,
-            self.hazardous_cells_changed,
             self.spatial_effects_changed,
             self.spatial_effects_removed,
-            self.visible_cells_added,
-            self.visible_cells_removed,
-            self.seen_cells_added,
             self.entity_contacts_changed,
             self.entity_contacts_removed,
             self.object_contacts_changed,
@@ -3402,12 +3474,8 @@ class SensoryUpdateEvent(Event):
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         """Return every grid cell referenced by this sensory delta."""
-        positions: Set[Tuple[int, int]] = set(self.visible_cells_added)
-        for key in self.hazardous_cells_changed:
-            x, y = key.split(",", maxsplit=1)
-            positions.add((int(x), int(y)))
-        positions.update(self.visible_cells_removed)
-        positions.update(self.seen_cells_added)
+        positions: Set[Tuple[int, int]] = set(mask_positions(mask_union(self.visible_cells_added,
+            self.hazardous_cells_changed.cells, self.visible_cells_removed, self.seen_cells_added)))
         positions.update(
             contact.position for contact in self.entity_contacts_changed.values()
         )
@@ -4529,7 +4597,7 @@ class ForcedMovementEvent(Event):
         )
         evidence[position_evidence_key(self.start_position)] = self.located_entity_observer_uuids.get(entity_key, frozenset())
         evidence[position_evidence_key(self.end_position)] = completion_locations.get(entity_key, frozenset())
-        for child_uuid in self.lineage_children_events:
+        for child_uuid in EventQueue.child_links(self)[1]:
             child = EventQueue.get_event_by_uuid(child_uuid)
             if (isinstance(child, SpatialChangeEvent)
                     and child.change_type is SpatialChangeType.ENTITY_ENTERED
@@ -4599,7 +4667,7 @@ class StepMovementEvent(Event):
         )
         evidence[position_evidence_key(self.from_position)] = self.located_entity_observer_uuids.get(entity_key, frozenset())
         evidence[position_evidence_key(self.to_position)] = completion_locations.get(entity_key, frozenset())
-        for child_uuid in self.lineage_children_events:
+        for child_uuid in EventQueue.child_links(self)[1]:
             child = EventQueue.get_event_by_uuid(child_uuid)
             if (isinstance(child, SpatialChangeEvent)
                     and child.change_type is SpatialChangeType.ENTITY_ENTERED

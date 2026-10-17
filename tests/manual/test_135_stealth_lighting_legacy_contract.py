@@ -57,6 +57,7 @@ from dnd.spells.conjuration import DarknessZone
 from dnd.spells.evocation import FireBolt
 from dnd.spells.illusion import GreaterInvisibility
 from tests.engine.support import get_max_hp, reset_combat_state, set_hp
+from dnd.types.cells import value_at
 
 
 THIS_FILE = "tests/manual/test_135_stealth_lighting_legacy_contract.py"
@@ -1107,7 +1108,7 @@ def test_magical_darkness_controls_attack_discovery_by_sense_mode() -> None:
     assert target.uuid in attacker.senses.entities
     assert target_is_discoverable(attacker, target.uuid)
     assert (
-        capture_senses_snapshot(attacker.senses).effective_light_levels[target.position]
+        value_at(capture_senses_snapshot(attacker.senses).effective_light_levels, target.position)
         == LightLevel.BRIGHT_LIGHT
     )
 

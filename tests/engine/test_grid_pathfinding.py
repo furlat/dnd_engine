@@ -40,6 +40,7 @@ from dnd.types.spatial_effects import (
 )
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from tests.engine.support import reset_combat_state
+from dnd.types.cells import cell_in
 
 
 _grid_game: Game | None = None
@@ -588,7 +589,7 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
     assert not grid.can_transition((1, 1), (2, 1), actor.uuid)
 
     jump = Jump(source_entity_uuid=actor.uuid, template=True)
-    assert (3, 1) in capture_senses_snapshot(actor.senses).visible
+    assert cell_in(capture_senses_snapshot(actor.senses).visible, (3, 1))
     assert not grid.raycast_clear((1, 1), (3, 1), channel=WorldEdgeChannel.PROPAGATION)
     assert (3, 1) not in jump.get_valid_positions()
 

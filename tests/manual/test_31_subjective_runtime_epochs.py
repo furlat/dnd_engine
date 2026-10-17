@@ -53,6 +53,7 @@ from dnd.spells.illusion import Blur, GreaterInvisibility, MirrorImage
 from dnd.spells.necromancy import BestowCurse, EyebiteStrike
 from tests.manual.test_53_srd_monster_traits import _materialize_srd_fixture, reset_srd_trait_state
 from tests.content_identity import synthetic_action_identity
+from dnd.core.cells import mask_positions
 
 
 @pytest.fixture(autouse=True)
@@ -1313,7 +1314,7 @@ def test_aoe_discovery_reuses_previews_until_subjective_contacts_change(
     contact_uuid, old_position = next(iter(archmage.senses.entities.items()))
     visible_positions = [
         position
-        for position, is_visible in ((position, True) for position in capture_senses_snapshot(archmage.senses).visible)
+        for position, is_visible in ((position, True) for position in mask_positions(capture_senses_snapshot(archmage.senses).visible))
         if is_visible and position != old_position
     ]
     archmage.senses.entities[contact_uuid] = visible_positions[0]

@@ -51,6 +51,8 @@ from dnd.types.spatial_effects import (
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.types.senses import OpticalObscurement, PerceivedContact
 from tests.engine.support import reset_combat_state
+from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, cell_in, no_cells, value_at
+from dnd.core.cells import mask_positions
 
 
 _MAGICAL_DARKNESS_CELL_CONTENT_REF = ContentRef(
@@ -199,11 +201,11 @@ def test_eb_12_001_geometric_fov_is_filtered_by_effective_light() -> None:
     observer.update_entity_senses(max_distance=5)
 
     assert observer.uuid in spatial_senses_system.observers_granted({(3, 0)})
-    assert (3, 0) not in capture_senses_snapshot(observer.senses).visible
-    assert capture_senses_snapshot(observer.senses).visible == set()
-    assert capture_senses_snapshot(observer.senses).effective_light_levels == {}
+    assert not cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
+    assert capture_senses_snapshot(observer.senses).visible == EMPTY_CELLS
+    assert capture_senses_snapshot(observer.senses).effective_light_levels == EMPTY_VALUES
     assert target.uuid not in observer.senses.entities
-    assert (3, 0) not in capture_senses_snapshot(observer.senses).seen
+    assert not cell_in(capture_senses_snapshot(observer.senses).seen, (3, 0))
 
 
 def test_eb_12_002_sense_modes_subjectively_upgrade_light() -> None:
@@ -219,28 +221,28 @@ def test_eb_12_002_sense_modes_subjectively_upgrade_light() -> None:
     ]
 
     observer.update_entity_senses(max_distance=18)
-    assert (15, 0) not in capture_senses_snapshot(observer.senses).effective_light_levels
-    assert capture_senses_snapshot(observer.senses).effective_light_levels[(10, 0)] == LightLevel.DIM_LIGHT
-    assert capture_senses_snapshot(observer.senses).effective_light_levels[(5, 0)] == LightLevel.BRIGHT_LIGHT
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (15, 0)) is None
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (10, 0)) == LightLevel.DIM_LIGHT
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (5, 0)) == LightLevel.BRIGHT_LIGHT
 
     zone = MagicalDarknessCellZone(
         source_entity_uuid=observer.uuid,
         position=(2, 0),
     )
     assert zone.activate(parent_event=_spatial_cause(observer.uuid)) is not None
-    assert (2, 0) not in capture_senses_snapshot(observer.senses).effective_light_levels
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (2, 0)) is None
 
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.DEVILS_SIGHT, range_feet=120)
     ]
     observer.update_entity_senses(max_distance=18)
-    assert capture_senses_snapshot(observer.senses).effective_light_levels[(2, 0)] == LightLevel.BRIGHT_LIGHT
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (2, 0)) == LightLevel.BRIGHT_LIGHT
 
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=60)
     ]
     observer.update_entity_senses(max_distance=18)
-    assert capture_senses_snapshot(observer.senses).effective_light_levels[(2, 0)] == LightLevel.BRIGHT_LIGHT
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (2, 0)) == LightLevel.BRIGHT_LIGHT
 
 
 def test_eb_12_003_light_sources_use_shared_optical_topology() -> None:
@@ -460,13 +462,13 @@ def test_eb_12_004_light_change_reveals_subscribed_dark_cells_reactively() -> No
     assert target.uuid not in observer.senses.entities
     get_map().add_light_source((3, 0), bright_radius_feet=5, dim_radius_feet=0)
 
-    assert (3, 0) in capture_senses_snapshot(observer.senses).visible
-    assert (3, 0) in capture_senses_snapshot(observer.senses).seen
+    assert cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
+    assert cell_in(capture_senses_snapshot(observer.senses).seen, (3, 0))
     assert target.uuid in observer.senses.entities
     updates = completed_sensory_updates(observer.uuid)
     light_updates = [event for event in updates if event.update_reason == SensoryUpdateReason.LIGHT]
     assert light_updates
-    assert any((3, 0) in event.visible_cells_added for event in light_updates)
+    assert any(cell_in(event.visible_cells_added, (3, 0)) for event in light_updates)
     assert any(target.uuid in event.entity_contacts_changed for event in light_updates)
 
 
@@ -637,7 +639,7 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
     Entity.update_all_entities_senses(max_distance=5)
 
     assert target.uuid in observer.senses.entities
-    assert (3, 0) in capture_senses_snapshot(observer.senses).visible
+    assert cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
 
     zone = MagicalDarknessCellZone(
         source_entity_uuid=observer.uuid,
@@ -650,10 +652,10 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
     assert darkness_tile is not None
     assert darkness_tile.resolved_light_level == LightLevel.DARKNESS
     assert target.uuid not in observer.senses.entities
-    assert (3, 0) not in capture_senses_snapshot(observer.senses).visible
+    assert not cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
     add_updates = [
         event for event in completed_sensory_updates(observer.uuid)
-        if (3, 0) in event.visible_cells_removed
+        if cell_in(event.visible_cells_removed, (3, 0))
         and target.uuid in event.entity_contacts_removed
     ]
     assert add_updates
@@ -664,8 +666,8 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
     restored_tile = get_map().get_tile(2, 0)
     assert restored_tile is not None
     assert restored_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert (2, 0) in capture_senses_snapshot(observer.senses).visible
-    assert (3, 0) in capture_senses_snapshot(observer.senses).visible
+    assert cell_in(capture_senses_snapshot(observer.senses).visible, (2, 0))
+    assert cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
     assert target.uuid in observer.senses.entities
     removal_updates = [
         event
@@ -675,7 +677,7 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
         and target.uuid in event.entity_contacts_changed
     ]
     assert removal_updates
-    assert (3, 0) in removal_updates[-1].visible_cells_added
+    assert cell_in(removal_updates[-1].visible_cells_added, (3, 0))
 
 
 def test_eb_12_012_passive_perception_changes_emit_replacement_payloads() -> None:
@@ -1175,8 +1177,8 @@ def test_eb_12_021_movement_perception_matches_explicit_cold_recompute() -> None
     assert marker.uuid in mover.senses.objects
     assert mover.senses._paths_dirty is True
     movement_snapshot = {
-        "visible": set(capture_senses_snapshot(mover.senses).visible),
-        "seen": set(capture_senses_snapshot(mover.senses).seen),
+        "visible": set(mask_positions(capture_senses_snapshot(mover.senses).visible)),
+        "seen": set(mask_positions(capture_senses_snapshot(mover.senses).seen)),
         "entities": dict(mover.senses.entities),
         "objects": dict(mover.senses.objects),
         "granted": _granted_cells(mover),
@@ -1184,8 +1186,8 @@ def test_eb_12_021_movement_perception_matches_explicit_cold_recompute() -> None
 
     mover.update_entity_senses(max_distance=5)
     cold_snapshot = {
-        "visible": set(capture_senses_snapshot(mover.senses).visible),
-        "seen": set(capture_senses_snapshot(mover.senses).seen),
+        "visible": set(mask_positions(capture_senses_snapshot(mover.senses).visible)),
+        "seen": set(mask_positions(capture_senses_snapshot(mover.senses).seen)),
         "entities": dict(mover.senses.entities),
         "objects": dict(mover.senses.objects),
         "granted": _granted_cells(mover),
@@ -1441,7 +1443,7 @@ def test_eb_12_028a_near_side_wall_is_visible_without_far_tile_content() -> None
         position=(1, 0),
         visual=True,
     )
-    assert (1, 0) not in capture_senses_snapshot(observer.senses).visible
+    assert not cell_in(capture_senses_snapshot(observer.senses).visible, (1, 0))
     assert far_entity.uuid not in observer.senses.entities
 
 
@@ -1474,8 +1476,8 @@ def test_eb_12_028b_nonvisual_senses_create_contacts_not_visual_cells(
         visual=False,
         special_senses=(sense_type,),
     )
-    assert (3, 0) not in capture_senses_snapshot(observer.senses).visible
-    assert (3, 0) not in capture_senses_snapshot(observer.senses).effective_light_levels
+    assert not cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (3, 0)) is None
 
     target.add_condition(Invisible(
         source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
@@ -1488,8 +1490,8 @@ def test_eb_12_028b_nonvisual_senses_create_contacts_not_visual_cells(
             if position[0] <= 4 else None
         )
         assert observer.senses.entities.get(target.uuid) == expected
-        assert capture_senses_snapshot(observer.senses).visible == set()
-        assert capture_senses_snapshot(observer.senses).effective_light_levels == {}
+        assert capture_senses_snapshot(observer.senses).visible == EMPTY_CELLS
+        assert capture_senses_snapshot(observer.senses).effective_light_levels == EMPTY_VALUES
         updates = [
             event for _, event in EventQueue.iter_events_since(cursor)
             if event.event_type is EventType.SENSORY_UPDATE
@@ -1502,8 +1504,8 @@ def test_eb_12_028b_nonvisual_senses_create_contacts_not_visual_cells(
         assert updates[0].entity_contacts_removed == (
             {target.uuid} if expected is None else set()
         )
-        assert updates[0].visible_cells_added == []
-        assert updates[0].effective_light_levels_changed == {}
+        assert no_cells(updates[0].visible_cells_added)
+        assert updates[0].effective_light_levels_changed == EMPTY_VALUES
         observer.update_entity_senses(max_distance=5)
         assert observer.senses.entities.get(target.uuid) == expected
 

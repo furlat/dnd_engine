@@ -165,6 +165,17 @@ class GroupEntryKind(str, Enum):
     PORTAL_TRANSFER = "portal_transfer"
     MATERIAL_INTERACTION = "material_interaction"
     DEPLOYMENT = "deployment"
+    # One creature's move step: its facts (left, entered, the zones and lights that follow it)
+    # settle perception once; it is not simultaneous, so handlers run as without a group.
+    MOVE_STEP = "move_step"
+
+
+# The entries whose facts happen at once: inside them, after-group handlers, summon departures and
+# reactions wait for the group's settlement (plan §5.3). A move step is one creature's own step.
+SIMULTANEOUS_ENTRIES: frozenset[GroupEntryKind] = frozenset(GroupEntryKind) - {GroupEntryKind.MOVE_STEP}
+# What a move step causes and joins it: the zones anchored to the mover follow it. Any other entry
+# opened inside a step starts after the step's facts settled.
+JOINS_A_STEP: frozenset[GroupEntryKind] = frozenset({GroupEntryKind.ZONE_MOVE})
 
 
 class HandlerGroupDispatch(str, Enum):

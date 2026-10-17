@@ -10,12 +10,12 @@ from dnd.core.gridmap import get_map
 from dnd.core.modifiers import ContextualNumericalModifier, NumericalModifier
 from dnd.player.event_record import decode_event, encode_event
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.types.senses import reduce_senses_snapshot
 from dnd.types.world import CardinalDirection
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 from tests.engine.test_senses_light_stealth import create_skeleton, reset_senses_state
 from tests.engine.test_sensory_initial_replay import sensory_since
 from dnd.core.values import Channel, Kind, add_modifier
+from dnd.core.sensory_fold import reduce_senses_snapshot
 
 
 @pytest.fixture(autouse=True)

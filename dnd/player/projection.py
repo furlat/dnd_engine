@@ -14,6 +14,8 @@ from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, Spell
 from dnd.spells.abjuration import CounterspellReactionEvent
 from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
+from dnd.core.cells import mask_positions, mask_union
+from dnd.types.cells import EMPTY_CELLS, CellMask, cell_in, no_cells
 from dnd.types.senses import SensesSnapshot, PerceivedContact, PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.spell_suppression import SpellSuppression
@@ -260,8 +262,8 @@ def _sighting(effect: PerceivedSpatialEffect) -> SpatialEffectSighting:
 def _sensory_fact(event: SensoryUpdateEvent, keys: "NativeKeys") -> SensoryFact:
     return SensoryFact(observer_uuid=event.observer_uuid, initial=event.initial,
         observer_position=event.observer_position, observer_position_changed=event.observer_position_changed,
-        effective_light_levels_changed=dict(event.effective_light_levels_changed),
-        hazardous_cells_changed=dict(event.hazardous_cells_changed),
+        effective_light_levels_changed=event.effective_light_levels_changed,
+        hazardous_cells_changed=event.hazardous_cells_changed,
         light_sources_changed=dict(event.light_sources_changed),
         light_sources_removed=dict(event.light_sources_removed),
         spatial_effect_sightings={identity: _sighting(effect) for identity, effect in event.spatial_effects_changed.items()},
@@ -269,8 +271,8 @@ def _sensory_fact(event: SensoryUpdateEvent, keys: "NativeKeys") -> SensoryFact:
             description=effect.description) for identity, effect in event.spatial_effects_changed.items()},
         spatial_effects_removed=frozenset(event.spatial_effects_removed),
         cause_occurrence=_version_key(keys, event.cause_event_uuid),
-        visible_cells_added=tuple(event.visible_cells_added), visible_cells_removed=tuple(event.visible_cells_removed),
-        seen_cells_added=tuple(event.seen_cells_added),
+        visible_cells_added=event.visible_cells_added, visible_cells_removed=event.visible_cells_removed,
+        seen_cells_added=event.seen_cells_added,
         entity_contacts_changed=dict(event.entity_contacts_changed),
         entity_contacts_removed=frozenset(event.entity_contacts_removed),
         object_contacts_changed=dict(event.object_contacts_changed),
@@ -315,7 +317,7 @@ def _held_content_at_event(event: Event, observer: PlayerAudience, actors: dict[
 class DeclarationSenses:
     """Detached event-entry grants; explored history is not a delivery grant."""
 
-    visible: frozenset[tuple[int, int]]
+    visible: CellMask
     entities: dict[UUID, PerceivedContact]
     objects: dict[UUID, PerceivedContact]
     spatial_effects: dict[UUID, PerceivedSpatialEffect]
@@ -332,7 +334,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
         case AreaReachEvent():
             positions = tuple(position for position in event.newly_reached_positions
                 if _position_allowed(event, position, observer)
-                or senses is not None and position in senses.visible)
+                or senses is not None and cell_in(senses.visible, position))
             if not positions:
                 return None
             return AreaReachFact(stage_index=event.stage_index, newly_reached_positions=positions,
@@ -359,8 +361,8 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                     return None
                 positions = tuple(position for position in event.previous_positions
                     if position in observed.positions
-                    and (position in declaration_senses.visible or position in observed.visible_volume_positions)
-                    and position in senses.visible)
+                    and (cell_in(declaration_senses.visible, position) or position in observed.visible_volume_positions)
+                    and cell_in(senses.visible, position))
                 return SpatialEffectStateFact(spatial_effect_uuid=event.spatial_effect_uuid,
                     positions=positions, previous_state=None, state=None,
                     operation=event.operation, interaction_operation=interaction_operation,
@@ -370,11 +372,11 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                 prior = declaration_senses.spatial_effects.get(event.spatial_effect_uuid) if declaration_senses is not None else None
                 removed_positions = tuple(position for position in event.previous_positions
                     if position not in event.affected_positions and prior is not None and position in prior.positions
-                    and declaration_senses is not None and position in declaration_senses.visible
-                    and senses is not None and position in senses.visible)
+                    and declaration_senses is not None and cell_in(declaration_senses.visible, position)
+                    and senses is not None and cell_in(senses.visible, position))
                 positions = tuple(position for position in event.affected_positions
                     if observed is not None and position in observed.positions
-                    and senses is not None and (position in senses.visible or position in observed.visible_volume_positions))
+                    and senses is not None and (cell_in(senses.visible, position) or position in observed.visible_volume_positions))
                 return SpatialEffectStateFact(spatial_effect_uuid=event.spatial_effect_uuid,
                     positions=positions, previous_state=None, state=None, operation=event.operation,
                     interaction_operation=interaction_operation, removed_positions=removed_positions
@@ -388,7 +390,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
             # events do not carry separate coordinate-grant metadata.
             positions = tuple(position for position in event.affected_positions
                 if position in observed.positions and senses is not None
-                and (position in senses.visible or position in observed.visible_volume_positions))
+                and (cell_in(senses.visible, position) or position in observed.visible_volume_positions))
             return SpatialEffectStateFact(spatial_effect_uuid=event.spatial_effect_uuid,
                 positions=positions, previous_state=event.previous_trap_state, state=event.trap_state,
                 operation=event.operation, previous_pressed=event.previous_pressed,
@@ -450,7 +452,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                 and any(snapshot is not None
                     and (owner := snapshot.spatial_effects.get(event.intercepted_by_condition_uuid)) is not None
                     and tuple(floor(value+.5) for value in event.projectile_deflection_position) in owner.positions
-                    and tuple(floor(value+.5) for value in event.projectile_deflection_position) in snapshot.visible
+                    and cell_in(snapshot.visible, tuple(floor(value+.5) for value in event.projectile_deflection_position))
                     for snapshot in (senses, declaration_senses)))
             return AttackFact(source_entity_uuid=source, target_entity_uuid=target,
                 behavior_id=event.behavior_id, name=event.name, weapon_slot=event.weapon_slot,
@@ -464,7 +466,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                 target_position=event.target_position if event.target_kind == "object" and (
                     observer.controls(source) or event.target_position is not None and (
                         _position_allowed(event, event.target_position, observer)
-                        or declaration_senses is not None and event.target_position in declaration_senses.visible)) else None,
+                        or declaration_senses is not None and cell_in(declaration_senses.visible, event.target_position))) else None,
                 target_base_height_steps=event.target_base_height_steps if event.target_kind == "object" else None,
                 attack_source_kind=event.attack_source_kind)
         case SpellEvent():
@@ -485,8 +487,8 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                     (endpoint.kind == "creature" and not _identified(event, endpoint.uuid, observer)
                      or endpoint.kind == "object" and endpoint.uuid not in observed_objects)
                     or not (_position_allowed(event, endpoint.position, observer)
-                        or senses is not None and endpoint.position in senses.visible
-                        or declaration_senses is not None and endpoint.position in declaration_senses.visible)
+                        or senses is not None and cell_in(senses.visible, endpoint.position)
+                        or declaration_senses is not None and cell_in(declaration_senses.visible, endpoint.position))
                     for endpoint in (event.propagation.source, event.propagation.target)):
                 return None
             source_position = event.source_position
@@ -507,21 +509,21 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                 if isinstance(event.area_geometry, (ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry))
                 else event.aoe_position)
             if area_position is not None and not (_position_allowed(event, area_position, observer)
-                    or senses is not None and area_position in senses.visible
-                    or declaration_senses is not None and area_position in declaration_senses.visible):
+                    or senses is not None and cell_in(senses.visible, area_position)
+                    or declaration_senses is not None and cell_in(declaration_senses.visible, area_position)):
                 area_position = None
             resolved_positions = event.resolved_area_positions
             if resolved_positions is not None:
                 resolved_positions = tuple(position for position in resolved_positions
                     if _position_allowed(event, position, observer)
-                    or senses is not None and position in senses.visible
-                    or declaration_senses is not None and position in declaration_senses.visible)
+                    or senses is not None and cell_in(senses.visible, position)
+                    or declaration_senses is not None and cell_in(declaration_senses.visible, position))
             return SpellFact(source_entity_uuid=source, target_entity_uuid=target,
                 target_kind=event.target_kind,
                 target_position=event.target_position if event.target_kind == "object" and (
                     observer.controls(source) or event.target_position is not None and (
                         _position_allowed(event, event.target_position, observer)
-                        or declaration_senses is not None and event.target_position in declaration_senses.visible)) else None,
+                        or declaration_senses is not None and cell_in(declaration_senses.visible, event.target_position))) else None,
                 target_base_height_steps=event.target_base_height_steps if event.target_kind == "object" else None,
                 behavior_id=event.behavior_id, name=event.name, source_position=source_position,
                 cast_origin=event.cast_origin,
@@ -540,7 +542,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                 suppressions=tuple(SpellSuppression(provider_uuid=suppression.provider_uuid,
                     positions=tuple(position for position in suppression.positions
                         if _position_allowed(event, position, observer)
-                        or senses is not None and position in senses.visible))
+                        or senses is not None and cell_in(senses.visible, position)))
                     for suppression in event.suppressions
                     if (senses is not None and suppression.provider_uuid in senses.spatial_effects)
                     or (declaration_senses is not None and suppression.provider_uuid in declaration_senses.spatial_effects)))
@@ -556,17 +558,16 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
             # Environmental discharges have no moving actor from which to infer
             # coordinate grants. Preserve this release's already witnessed cells
             # when its own cloud obscures them before completion.
-            visible = set(senses.visible) if senses is not None else set()
-            if declaration_senses is not None:
-                visible.update(declaration_senses.visible)
-            positions = tuple(position for position in event.affected_positions if position in visible)
-            origin = event.origin_position if event.origin_position in visible else None
+            visible = mask_union(senses.visible if senses is not None else EMPTY_CELLS,
+                declaration_senses.visible if declaration_senses is not None else EMPTY_CELLS)
+            positions = tuple(position for position in event.affected_positions if cell_in(visible, position))
+            origin = event.origin_position if event.origin_position is not None and cell_in(visible, event.origin_position) else None
             if origin is None and not positions:
                 return None
             return MechanismActivationFact(mechanism_uuid=event.mechanism_uuid if observed is not None else None,
                 mechanism_content_id=event.mechanism_content_ref.content_id, target_entity_uuid=target,
                 origin_position=origin, direction=event.direction, affected_positions=positions,
-                end_position=event.end_position if event.end_position in visible else None,
+                end_position=event.end_position if event.end_position is not None and cell_in(visible, event.end_position) else None,
                 committed=event.committed)
         case PortalTransferEvent():
             if target is None:
@@ -616,7 +617,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                           if senses is not None else None)
                 contact = senses.entities.get(target) if senses is not None else None
                 if (effect is None or spatial_source.position not in effect.positions
-                        or senses is None or spatial_source.position not in senses.visible
+                        or senses is None or not cell_in(senses.visible, spatial_source.position)
                         or not (observer.controls(target) or contact is not None and contact.visual
                             and contact.position == spatial_source.target_position)):
                     spatial_source = None
@@ -648,13 +649,13 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                     deposited = recorded.deposited_position
                     if (deposited is not None and deposited != recorded.position
                             and not _position_allowed(event, deposited, observer)
-                            and (senses is None or deposited not in senses.visible)):
+                            and (senses is None or not cell_in(senses.visible, deposited))):
                         deposited = None
                     regions = []
                     for region in recorded.regions:
                         positions = tuple(cell for cell in region.positions
                             if cell == recorded.position or _position_allowed(event, cell, observer)
-                            or senses is not None and cell in senses.visible)
+                            or senses is not None and cell_in(senses.visible, cell))
                         if positions:
                             regions.append(BodyReleaseRegion(ellipse=region.ellipse,
                                 elevation_steps=region.elevation_steps, positions=positions))
@@ -907,7 +908,7 @@ def _object_observed(world: PresentationTarget, identity: UUID) -> bool:
     dx, dy = _DELTAS[direction]
     # Boundary appearance belongs to either observed incident support, including
     # a wall which stops its author's cell from entering optical visibility.
-    return (x, y) in senses.visible or (x + dx, y + dy) in senses.visible
+    return cell_in(senses.visible, (x, y)) or cell_in(senses.visible, (x + dx, y + dy))
 
 
 def _observed_object(world: PresentationTarget, remembered: PlayerState, identity: UUID,
@@ -919,9 +920,9 @@ def _observed_object(world: PresentationTarget, remembered: PlayerState, identit
     if direction is not None and world.senses is not None:
         x, y = obj.placement.position
         dx, dy = _DELTAS[direction]
-        if (x, y) in world.senses.visible:
+        if cell_in(world.senses.visible, (x, y)):
             visible_faces.add(_OPPOSITE[direction])
-        if (x + dx, y + dy) in world.senses.visible:
+        if cell_in(world.senses.visible, (x + dx, y + dy)):
             visible_faces.add(direction)
     previous = remembered.objects.get(identity)
     retained: dict[UUID, ObjectResidueState] = {}
@@ -952,7 +953,7 @@ def _observed_object(world: PresentationTarget, remembered: PlayerState, identit
             retained_suppression = outcome.model_copy(update={"provider_content_ref": provider.content_ref,
                 "area_geometry": provider.area_geometry, "anchor_elevation_steps": provider.anchor_elevation_steps})
         if retained_suppression is not None:
-            admitted = set(outcome.positions) & (senses.visible if senses is not None else set())
+            admitted = {position for position in outcome.positions if senses is not None and cell_in(senses.visible, position)}
             suppressions.append(retained_suppression.model_copy(update={"positions": tuple(sorted(admitted))}))
     item = obj.item.model_copy(update={"remnant_state": _observed_remnant(
         obj.item.remnant_state, remembered.objects, observed_objects),
@@ -1069,7 +1070,7 @@ def _world_update(world: PresentationTarget, remembered: PlayerState, occurrence
     tiles = []
     tile_changes = []
     for position in sorted(positions):
-        if position not in senses.visible or position not in world.tiles:
+        if not cell_in(senses.visible, position) or position not in world.tiles:
             continue
         current = world.tiles[position]
         previous = remembered.tiles.get(position)
@@ -1096,7 +1097,7 @@ def _world_update(world: PresentationTarget, remembered: PlayerState, occurrence
                 for identity in observed_ids}
     removed = tuple(sorted((identity for identity in identities
         if identity in remembered.objects and identity not in observed
-        and any(position in senses.visible for position in remembered.objects[identity].placement.positions)),
+        and any(cell_in(senses.visible, position) for position in remembered.objects[identity].placement.positions)),
         key=index.remembered_order.__getitem__))
     changed = {identity: value for identity, value in observed.items()
                if remembered.objects.get(identity) != value}
@@ -1109,7 +1110,7 @@ def _world_update(world: PresentationTarget, remembered: PlayerState, occurrence
             changed[identity] = replace(previous, contained_items=None)
     objects = tuple(changed[identity] for identity in sorted(changed, key=str))
     connectors = tuple(row for row in world.world.connectors
-                       if all(point in senses.visible for point in row.endpoints))
+                       if all(cell_in(senses.visible, point) for point in row.endpoints))
     if not tiles and not tile_changes and not objects and not removed and connectors == remembered.connectors:
         return None
     update = WorldUpdate(occurrence=occurrence, tiles=tuple(tiles), objects=objects,
@@ -1285,7 +1286,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...]
         while next_delivery is not None and next_delivery[1] <= indexes[event.uuid]:
             senses = private_world.senses
             delivery_declarations[next_delivery[0]] = (None if senses is None else DeclarationSenses(
-                frozenset(senses.visible), dict(senses.entities), dict(senses.objects), dict(senses.spatial_effects)))
+                senses.visible, dict(senses.entities), dict(senses.objects), dict(senses.spatial_effects)))
             next_delivery = next(pending_deliveries, None)
         while admission is not None and indexes[admission.event_uuid] <= indexes[event.uuid]:
             private_actors[admission.actor.uuid] = admission.actor
@@ -1342,9 +1343,10 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...]
                 # In particular initialization can add carried lights after the
                 # actor-free WorldInitializedEvent was recorded.
                 world_changed = apply_world_fact(private_world, event)
-                positions.update(event.visible_cells_added)
-                object_positions.update(event.visible_cells_added)
-                object_positions.update(event.visible_cells_removed)
+                added = mask_positions(event.visible_cells_added)
+                positions.update(added)
+                object_positions.update(added)
+                object_positions.update(mask_positions(event.visible_cells_removed))
                 changed_objects.update(event.object_contacts_changed)
                 changed_objects.update(event.object_contacts_removed)
                 for identity in set(event.spatial_effects_changed) | event.spatial_effects_removed:
@@ -1615,12 +1617,13 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
                 previous_spatial.pop((fact.observer_uuid, identity), None)
                 state.spatial_values.pop((fact.observer_uuid, identity), None)
             fact = replace(fact, spatial_effect_sightings=changed)
-            if not (fact.initial or fact.observer_position_changed or fact.effective_light_levels_changed
-                    or fact.visible_cells_added or fact.visible_cells_removed or fact.seen_cells_added
+            if not (fact.initial or fact.observer_position_changed or not no_cells(fact.effective_light_levels_changed.cells)
+                    or not no_cells(fact.visible_cells_added) or not no_cells(fact.visible_cells_removed)
+                    or not no_cells(fact.seen_cells_added)
                     or fact.entity_contacts_changed or fact.entity_contacts_removed
                     or fact.object_contacts_changed or fact.object_contacts_removed
                     or fact.sense_modes_changed or fact.passive_perception_changed or fact.visual_access_changed
-                    or fact.hazardous_cells_changed or fact.spatial_effect_sightings or fact.spatial_effects_removed
+                    or not no_cells(fact.hazardous_cells_changed.cells) or fact.spatial_effect_sightings or fact.spatial_effects_removed
                     or fact.light_sources_changed or fact.light_sources_removed):
                 fact = None
             node = replace(node, fact=fact)

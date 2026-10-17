@@ -122,6 +122,7 @@ from tests.engine.support import (
     reset_combat_state,
     set_hp,
 )
+from dnd.types.cells import cell_in, value_at
 
 
 def attack_read(entity, weapon_slot, target_uuid, context):
@@ -2342,8 +2343,8 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     assert center_tile is not None
     assert center_tile.resolved_light_level == LightLevel.DARKNESS
     assert not center_tile.blocks_optics_at_center()
-    assert (11, 10) not in capture_senses_snapshot(darkvision_observer.senses).visible
-    assert (11, 10) not in capture_senses_snapshot(darkvision_observer.senses).effective_light_levels
+    assert not cell_in(capture_senses_snapshot(darkvision_observer.senses).visible, (11, 10))
+    assert value_at(capture_senses_snapshot(darkvision_observer.senses).effective_light_levels, (11, 10)) is None
     assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((11, 10))] == {
         OpticalObscurement.MAGICAL_DARKNESS
     }

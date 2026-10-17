@@ -228,3 +228,29 @@ Hard rules:
   - Assembly deploys as one group: Start ~8.5 → ~5.2 s, seat initialization 4.3 → 1.6 s.
   - The birth fact is built once less.
   - **Finding:** the seat merge (`audience.py:_contacts`) ranks a multi-observer seat's contact by observation cursor, so the merged contact's `special_senses` depends on event history order, not on state. Grouped deploys flip it for two torches in turn_undead. Proposed next-phase fix: a state-based merge (union of the seat's observers' senses).
+- 2026-10-18: **Integrator decision, logged per the human's "log, don't raise": a move step settles perception once (PV1a-3, 753daa151 / 4c4080606).** This supersedes plan §5.2's "each Move step settle per fact" and "Move steps aren't groups".
+  - An arrival opens a MOVE_STEP group; its zone moves and lights settle once per step, never across steps.
+  - Effects:
+    1. one sensory update per observer per step, caused by the arrival (Spirit Guardians 180 → 90 per move);
+    2. a light consumer reads the settled step, in every group;
+    3. phase-B work deferred by a joining zone move runs at the step's close.
+  - Per-step and per-op observer state, objective events and the cold oracle are equal on 7 cases.
+- 2026-10-18: **Event-version census (Fireball, 564 versions, 193 lineages).**
+  - 371 versions are intermediate phases. Rules fetch 8 of them, handlers run on 12, and 97 are a child's parent.
+  - 273 (48 % of all versions) are used by nothing except the machinery (`phase_to` fetching the previous version) and the iterating consumers (capture's version rows, the AI's open-events map).
+  - Next (integrator, after P7b merges): lazy version materialization. The current version stays in a per-lineage slot and is stored only when a child, a handler, a rule fetch or an iterating consumer needs it.
+  - Then area-effect batching: Fireball has 10 blood-residue deposits from damage applications and 5 item-destruction object changes, each its own lineage × 4 phases.
+- 2026-10-18: **P7b merged (ddc108493), with PV1b (f7d644c60) and PV1a-3 (9687bfa43), in the int2 copy.**
+  - P7b rows 1–3: stored versions are frozen, capture holds them by reference, and grants are shared when unchanged. Fireball publication 130.5 → 89.9 ms, young survivors 61K → 45K (agent medians at its base).
+  - Row 4 (141 equal WorldTileState rebuilds at completion) stays: a deferred removal fact is published after light writes, so the earlier state can't be reused.
+  - Logged rule-level differences (test-built events only):
+    1. Earlier versions that carry a pre-set combat log no longer get the completion's `sub_entries` written into them afterwards.
+    2. The Greater Invisibility check's log is on its completion, not also on the stored EFFECT version.
+  - Logged bug, pre-existing: about 30 `phase_to(..., update={"condition": self})` calls leave a stray `update` key in the version's `__dict__`.
+- 2026-10-18: **Lazy version materialization measured and dropped (integrator).** Prototype saved as a scratch patch, not committed.
+  - Fireball at the P7b head, cProfile: storing all 564 versions is ~35 ms profiled, about 15 ms unprofiled out of ~226 ms. Over half of that is the per-version grant computation (`_compute_identified_entity_observers`, 564 calls), which a held version still needs.
+  - Consumers iterating versions are cheap: `iter_events_since` 0.2 ms, `get_events_by_lineage` 0.3 ms.
+  - The prototype stored 514 of 564 versions, and the time it saved was within noise.
+  - It changed AI behaviour: a held version stored later lands after its lineage's later versions in the occurrence index, so the AI's open-events map saw versions out of order. ai_decision ran 1 op instead of 4.
+  - The settlement multiplier is already gone: Fireball emits 30 SensoryUpdateEvents (one per observer), not one per spatial lineage. Residue and item-destruction lineages each cost their own rule work, ~4 ms all together.
+  - Conclusion: event volume is not a remaining multiplier. Plan §6b's lazy-version item is dropped.

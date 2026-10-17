@@ -25,6 +25,7 @@ import json
 from pathlib import Path
 import pstats
 import sys
+from random import Random
 from time import perf_counter
 from uuid import uuid4, uuid5
 
@@ -322,6 +323,8 @@ class Measurement:
         self.collection_ms = Counter()
         self.young_survivors = 0
         self.gc_debt_ms = 0.0
+        self.cycles_found = 0
+        self.cycle_types = {}
         self._collection_started = 0.0
         self._young_before = 0
         self.schema_builds = []
@@ -367,17 +370,20 @@ class Measurement:
             reset_action_timing_recorder(timing_token)
             reset_action_count_recorder(count_token)
 
-    def settle_gc_debt(self):
-        """One full collection outside the timed span, so an op is charged only for collections it triggers
-        itself. Its time is reported as `full_pass_ms_before`: what one full pass costs at this heap size."""
+    def collect_after(self):
+        """The worker's collection point after a request (`worker.collect_between_requests`), outside the
+        timed span: its time and the reference cycles it found are reported with the op that left them."""
         started = perf_counter()
-        gc.collect()
+        found, cycles = worker.collect_between_requests()
         self.gc_debt_ms = (perf_counter() - started) * 1000
+        self.cycles_found = found
+        self.cycle_types = dict(cycles.most_common(8))
 
     def gc_report(self):
         return {'schema_builds': self.schema_builds, 'gc': {'collections': {str(generation): count for generation, count in sorted(self.collections.items())},
             'ms': {str(generation): round(elapsed, 3) for generation, elapsed in sorted(self.collection_ms.items())},
-            'young_survivors': self.young_survivors, 'full_pass_ms_before': round(self.gc_debt_ms, 3)}}
+            'young_survivors': self.young_survivors, 'collect_after_ms': round(self.gc_debt_ms, 3),
+            'cycles_found': self.cycles_found, 'cycle_types': self.cycle_types}}
 
     def report(self):
         if self.mode == 'ordinary':
@@ -401,7 +407,6 @@ def measured_operation(runtime, mode, kind, action_factory, faces=()):
     before = actor_states(runtime)
     cursor = EventQueue.event_cursor()
     marks = {}
-    measurement.settle_gc_debt()
 
     def operation():
         marks['start'] = perf_counter()
@@ -423,6 +428,7 @@ def measured_operation(runtime, mode, kind, action_factory, faces=()):
         return outcome, encoded
 
     outcome, encoded = measurement.run(operation)
+    measurement.collect_after()
     if outcome is None or outcome.canceled or outcome.phase.value != 'completion':
         reason = outcome.status_message if outcome is not None else 'no outcome'
         raise AssertionError(f'{kind}: the action failed to complete ({reason})')
@@ -448,7 +454,6 @@ def measured_request(mode, kind, request):
     measurement = Measurement(mode)
     cursor = EventQueue.event_cursor()
     span = {}
-    measurement.settle_gc_debt()
 
     def timed():
         started = perf_counter()
@@ -457,6 +462,7 @@ def measured_request(mode, kind, request):
         finally:
             span['ms'] = (perf_counter() - started) * 1000
     response = measurement.run(timed)
+    measurement.collect_after()
     elapsed = span['ms']
     return response, {'kind': kind, 'total_ms': elapsed, 'event_versions': EventQueue.event_cursor() - cursor,
         'response_bytes': len(response.model_dump_json().encode('utf-8')) if response is not None else 0,
@@ -777,6 +783,80 @@ def agreement_case(accepts, godmode, recipe_options=None):
     return case
 
 
+
+def memory_census(kind, started_round, found, cycles, elapsed):
+    with open('/proc/self/statm') as statm:
+        rss_pages = int(statm.read().split()[1])
+    return {'kind': kind, 'round': started_round, 'ms': elapsed, 'cycles_found': found,
+        'cycle_types': dict(cycles.most_common(8)), 'frozen_objects': gc.get_freeze_count(),
+        'tracked_unfrozen': len(gc.get_objects()), 'rss_mb': rss_pages * 4096 / 2**20}
+
+
+def long_game_case(turns):
+    """Seeded play for `turns` human turns. Each turn makes up to three Choices → Preview → Command rounds with a
+    random affordable row and target, then ends the turn; the native AI plays every other turn. At each round end
+    the worker's round check runs (`worker.collect_frozen_cycles`) and the memory census is recorded."""
+
+    def case(runtime, driver, mode, caster_uuid):
+        rng = Random(20261017)
+        encounter = runtime.session.encounter
+        operations = []
+
+        def request(kind, call):
+            """(accepted, response); an Advance is accepted with no response body."""
+            round_before = encounter.round_number
+            try:
+                response, row = measured_request(mode, kind, call)
+            except AssertionError as error:
+                operations.append({'kind': 'rejected', 'request': kind, 'error': str(error)[:200]})
+                return False, None
+            operations.append(row)
+            if encounter.round_number != round_before:
+                started = perf_counter()
+                found, cycles = worker.collect_frozen_cycles()
+                operations.append(memory_census('round_check', round_before, found, cycles,
+                    (perf_counter() - started) * 1000))
+            return True, response
+
+        for _ in range(turns):
+            while worker.needs_advance(runtime.session):
+                if not request('advance', lambda: driver.dispatch(Advance()))[0]:
+                    break
+            holders = [(seat, publication.boundary.input_actor_uuid) for seat, publication in runtime.publications.items()
+                if publication.boundary.input_actor_uuid is not None]
+            if not holders:
+                break
+            seat, actor_uuid = holders[0]
+            for _ in range(3):
+                accepted, response = request('choices', lambda: driver.choices(seat, actor_uuid))
+                if not accepted:
+                    break
+                choices = response.choices
+                rows = [row for row in (*choices.self_actions, *choices.entity_actions, *choices.position_actions,
+                    *choices.object_actions) if row.can_afford and choices.target_sets[row.target_set]]
+                if not rows:
+                    break
+                action = rng.choice(rows)
+                target = rng.choice(choices.target_sets[action.target_set])
+                selection = ActionSelection(action_index=action.discovery_index, target_indices=(target.index,),
+                    extra_target_positions=(), prefer_safe=False)
+                accepted, preview = request('preview', lambda: driver.preview(seat, actor_uuid,
+                    choices.discovery_generation, selection))
+                if not accepted or not preview.preview.can_confirm:
+                    continue
+                request(f'command {action.behavior_id}', lambda: driver.command(seat, actor_uuid,
+                    ExecuteSelectionIntent(discovery_generation=choices.discovery_generation, selection=selection)))
+                if runtime.publications[seat].boundary.input_actor_uuid != actor_uuid:
+                    break
+            if runtime.publications[seat].boundary.input_actor_uuid == actor_uuid:
+                request('end_turn', lambda: driver.command(seat, actor_uuid, EndTurnIntent()))
+        started = perf_counter()
+        found, cycles = worker.collect_frozen_cycles()
+        operations.append(memory_census('final_check', encounter.round_number, found, cycles,
+            (perf_counter() - started) * 1000))
+        return operations
+    return case
+
 CASES = {
     # P1/P2 gate rows (P0b-1).
     'fireball': (False, sequence_case(cast('spell.fireball', aim=FIREBALL_AIM))),
@@ -827,6 +907,7 @@ CASES = {
     'mass_healing_word': (False, sequence_case(cast('spell.mass_healing_word', targets=ALLY_NAMES)),
         {'roster': 'damaged_party'}),
     'ai_decision': (False, ai_turn_case, {'blue_ai': True}),
+    'long_game': (True, long_game_case(50), {'blue_ai': True}),
     # Gate (b) of PD1b: discovery and Command agree.
     'agreement_caster': (True, agreement_case(lambda seat, actor: actor.name == CASTER_NAME, True)),
     'agreement_fighter': (False, agreement_case(lambda seat, actor: seat == 'blue', False)),
@@ -850,6 +931,7 @@ def run(args):
         started = perf_counter()
         report['setup'] = prepare_world(runtime, caster_uuid)
         report['setup_ms'] = (perf_counter() - started) * 1000
+        worker.collect_between_requests()
         report['operations'] = case(runtime, driver, args.mode, caster_uuid)
         runtime = driver.runtime  # a case may continue in a fresh world
         report['status'] = 'passed'

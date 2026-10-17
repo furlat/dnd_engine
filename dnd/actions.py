@@ -561,6 +561,20 @@ class MovementEvent(ActionEvent):
         )
 
 
+@dataclass(frozen=True)
+class MovementCostAvailable:
+    """A movement cost's affordability check, as data: the mode the cost was built for.
+
+    A bound method of the Move here made every Move and its own Cost a reference cycle.
+    """
+
+    movement_mode: MovementMode
+
+    def __call__(self, entity_uuid: UUID, cost_type: CostType, cost: int) -> bool:
+        entity = Entity.get(entity_uuid)
+        return entity is not None and entity.action_economy.movement_remaining(self.movement_mode) >= cost
+
+
 @_core_action_identity(
     content_id="action.move",
     display_name="Move",
@@ -568,6 +582,7 @@ class MovementEvent(ActionEvent):
     source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Movement and Position",
     sort_order=10,
 )
+
 class Move(BaseAction):
     """Path-based movement action that walks cell by cell.
 
@@ -627,10 +642,6 @@ class Move(BaseAction):
             movement_mode=self.movement_mode, subjective=True)
         return paths.get(end_position)
 
-    def _movement_cost_evaluator(self, entity_uuid: UUID, cost_type: CostType, cost: int) -> bool:
-        entity = Entity.get(entity_uuid)
-        return entity is not None and entity.action_economy.movement_remaining(self.movement_mode) >= cost
-
     def _setup_costs_from_path(self) -> None:
         """Rebuild the movement cost from the resolved path and terrain."""
         if self.path is not None and self.use_movement_cost:
@@ -656,7 +667,7 @@ class Move(BaseAction):
                     name="Movement Cost",
                     cost_type="movement",
                     cost=feet_cost,
-                    evaluator=self._movement_cost_evaluator,
+                    evaluator=MovementCostAvailable(self.movement_mode),
                 )
             )
 
@@ -842,7 +853,7 @@ class Move(BaseAction):
                     )
 
                 feet_cost = int(total_cost * 5)
-                costs.append(Cost(name="Movement Cost", cost_type="movement", cost=feet_cost, evaluator=self._movement_cost_evaluator))
+                costs.append(Cost(name="Movement Cost", cost_type="movement", cost=feet_cost, evaluator=MovementCostAvailable(self.movement_mode)))
 
         return MovementEvent(
             name=f"{self.name}",

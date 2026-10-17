@@ -29,7 +29,7 @@ export type Kind = "health";
 export type Status = "ok";
 export type Kind1 = "bootstrap";
 export type ProtocolVersion = 1;
-export type PlayerSchemaVersion = 12;
+export type PlayerSchemaVersion = 13;
 export type SchemaDigest = string;
 export type GameId = string;
 export type GameEpoch = string;
@@ -1193,10 +1193,13 @@ export type Initial = boolean;
  */
 export type ObserverPosition = [number, number];
 export type ObserverPositionChanged = boolean;
+export type X0 = number;
+export type Y0 = number;
+export type Width1 = number;
+export type Height1 = number;
+export type Bits = string;
+export type Values = string;
 export type CauseOccurrence = number | null;
-export type VisibleCellsAdded = [number, number][];
-export type VisibleCellsRemoved = [number, number][];
-export type SeenCellsAdded = [number, number][];
 /**
  * Observed grid position.
  *
@@ -2420,7 +2423,7 @@ export type FlexibleAbilityBonuses = [
   number
 ][];
 export type ChoiceId = string;
-export type Values = string[];
+export type Values1 = string[];
 export type Choices = OriginChoiceSelection[];
 export type StepId = string;
 export type CharacterLevel = number;
@@ -2435,7 +2438,7 @@ export type CharacterSubclass =
   | "subclass.paladin.oath_of_devotion"
   | "subclass.wizard.school_of_evocation";
 export type ChoiceId1 = string;
-export type Values1 = string[];
+export type Values2 = string[];
 export type Choices1 = ClassChoiceSelection[];
 export type ClassLevels = AppliedClassLevel[];
 export type Abilities = ["strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma", number][];
@@ -4499,11 +4502,11 @@ export interface SensoryFact {
   initial: Initial;
   observer_position: ObserverPosition;
   observer_position_changed: ObserverPositionChanged;
-  effective_light_levels_changed: EffectiveLightLevelsChanged;
+  effective_light_levels_changed?: CellValues;
   cause_occurrence: CauseOccurrence;
-  visible_cells_added: VisibleCellsAdded;
-  visible_cells_removed: VisibleCellsRemoved;
-  seen_cells_added: SeenCellsAdded;
+  visible_cells_added?: CellMask1;
+  visible_cells_removed?: CellMask2;
+  seen_cells_added?: CellMask3;
   entity_contacts_changed: EntityContactsChanged;
   entity_contacts_removed: EntityContactsRemoved;
   object_contacts_changed: ObjectContactsChanged;
@@ -4515,15 +4518,63 @@ export interface SensoryFact {
   visual_access_changed: VisualAccessChanged;
   visual_access: VisualAccess;
   paths_dirty: PathsDirty;
-  hazardous_cells_changed?: HazardousCellsChanged;
+  hazardous_cells_changed?: CellValues1;
   spatial_effect_sightings?: SpatialEffectSightings;
   spatial_effect_content?: SpatialEffectContent;
   spatial_effects_removed?: SpatialEffectsRemoved;
   light_sources_changed?: LightSourcesChanged;
   light_sources_removed?: LightSourcesRemoved;
 }
-export interface EffectiveLightLevelsChanged {
-  [k: string]: number;
+/**
+ * One byte per cell of `cells`, in its cell order (x, then y).
+ */
+export interface CellValues {
+  cells: CellMask;
+  values: Values;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask1 {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask2 {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask3 {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits;
 }
 export interface EntityContactsChanged {
   [k: string]: PerceivedContact;
@@ -4546,8 +4597,12 @@ export interface SenseMode {
   sense_type: SensesType1;
   range_feet?: RangeFeet;
 }
-export interface HazardousCellsChanged {
-  [k: string]: boolean;
+/**
+ * One byte per cell of `cells`, in its cell order (x, then y).
+ */
+export interface CellValues1 {
+  cells: CellMask;
+  values: Values;
 }
 export interface SpatialEffectSightings {
   [k: string]: SpatialEffectSighting;
@@ -5519,7 +5574,7 @@ export interface AppliedOriginState {
  */
 export interface OriginChoiceSelection {
   choice_id: ChoiceId;
-  values: Values;
+  values: Values1;
 }
 /**
  * One ordered class-level step installed on an Entity.
@@ -5537,7 +5592,7 @@ export interface AppliedClassLevel {
  */
 export interface ClassChoiceSelection {
   choice_id: ChoiceId1;
-  values: Values1;
+  values: Values2;
 }
 export interface PlayerResource {
   key: Key;

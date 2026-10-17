@@ -496,10 +496,11 @@ def remove_last_class_level(entity: Entity) -> EntityLevelRemovedEvent:
     if parent_event is not None:
         completed.lineage_uuid = parent_event.lineage_uuid
         completed.parent_event = parent_event.parent_event
-        completed.children_events = list(parent_event.children_events)
+        parent_children, parent_lineage_children = EventQueue.child_links(parent_event)
+        completed.children_events = list(parent_children)
         completed.lineage_children_events = list(dict.fromkeys((
-            *parent_event.lineage_children_events,
-            *parent_event.children_events,
+            *parent_lineage_children,
+            *parent_children,
         )))
     fact_committed = False
     try:

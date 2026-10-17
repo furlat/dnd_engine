@@ -54,6 +54,8 @@ from tests.manual.authored_encounter_support import (
     reset_authored_encounter_state,
 )
 from dnd.core.values import Channel, Kind, add_modifier
+from dnd.types.cells import no_cells
+from dnd.core.cells import mask_positions
 
 
 @pytest.fixture(autouse=True)
@@ -913,7 +915,7 @@ def test_bright_visibility_skips_per_tile_effective_light(
 
     actor.update_entity_visibility(max_distance=20)
 
-    assert capture_senses_snapshot(actor.senses).visible
+    assert not no_cells(capture_senses_snapshot(actor.senses).visible)
 
 
 def test_dark_visibility_still_uses_subjective_light_resolution(
@@ -966,7 +968,7 @@ def test_bright_light_refresh_skips_per_tile_effective_light(
     callback._light_positions_requiring_visibility_refresh(changed_positions)
     callback._update_visibility_for_light_positions(changed_positions)
 
-    assert changed_positions <= set(capture_senses_snapshot(actor.senses).visible)
+    assert changed_positions <= set(mask_positions(capture_senses_snapshot(actor.senses).visible))
 
 
 def test_dark_light_refresh_still_uses_subjective_light_resolution(
@@ -1080,7 +1082,7 @@ def test_full_budget_move_refreshes_visibility_without_full_path_radius() -> Non
     assert actor.action_economy.movement_remaining() == 0
     assert actor.senses.path_max_distance == 0
     assert actor.senses._paths_dirty is False
-    assert capture_senses_snapshot(actor.senses).visible
+    assert not no_cells(capture_senses_snapshot(actor.senses).visible)
     assert after.remaining_movement == 0
     exhausted_move = next(
         action

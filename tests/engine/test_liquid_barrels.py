@@ -35,6 +35,7 @@ from dnd.spells.conjuration import GreaseZone
 from dnd.types.residues import ResidueEllipse
 from dnd.types.spatial_effects import SpatialEffectInteractionIntensity, SpatialEffectInteractionOperation
 from dnd.types.world import OccupancyLayer
+from dnd.types.cells import cell_in
 
 
 CONTENTS = ("oil", "water", "grease", "blood", "poison", "dread_blood")
@@ -355,7 +356,7 @@ def test_visible_material_publishes_only_its_observed_cells(world: Game, content
     cause = completed(0)[-1]
     hidden.activate(parent_event=cause)
     observer.update_entity_senses()
-    assert (4, 1) in capture_senses_snapshot(observer.senses).visible
+    assert cell_in(capture_senses_snapshot(observer.senses).visible, (4, 1))
     assert hidden.uuid not in observer.senses.spatial_effects
 
 

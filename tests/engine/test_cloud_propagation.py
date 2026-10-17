@@ -20,6 +20,7 @@ from dnd.spells.conjuration import (
 )
 from tests.manual.spell_regression_support import create_spell_regression_actor, reset_spell_regression_arena
 from dnd.types.world import CardinalDirection
+from dnd.types.cells import cell_in
 
 
 CLOUDS = (FogCloud, Darkness, StinkingCloud, Cloudkill, IncendiaryCloud, InsectPlague)
@@ -139,7 +140,7 @@ def test_known_cloud_upper_surface_clears_finite_wall_without_revealing_floor_or
     assert (7, 8) in get_map().get_spatial_condition_positions(zone.uuid)
     observed = caster.senses.spatial_effects[zone.uuid]
     assert (7, 8) not in observed.visible_volume_positions
-    assert (7, 8) not in capture_senses_snapshot(caster.senses).visible and victim.uuid not in caster.senses.entities
+    assert not cell_in(capture_senses_snapshot(caster.senses).visible, (7, 8)) and victim.uuid not in caster.senses.entities
     grants = {row.position: row for row in observed.upper_volume_surfaces}
     assert ((7, 8) in grants) is (height == 2)
     if height == 2:
@@ -168,7 +169,7 @@ def test_upper_surface_updates_when_a_door_behind_another_wall_closes_and_reopen
     assert not any(row.position == (8, 8) for row in caster.senses.spatial_effects[zone.uuid].upper_volume_surfaces)
     door.open()
     assert caster.senses.spatial_effects[zone.uuid].upper_volume_surfaces == initial
-    assert (8, 8) not in capture_senses_snapshot(caster.senses).visible
+    assert not cell_in(capture_senses_snapshot(caster.senses).visible, (8, 8))
 
 
 def test_observer_support_height_refreshes_cloud_surface_sight_without_revealing_ground():
@@ -184,6 +185,6 @@ def test_observer_support_height_refreshes_cloud_surface_sight_without_revealing
     assert grid.set_tile_elevation(caster.position, height=2, surface_kind=ElevationSurfaceKind.ORDINARY, slope_axis=None)
     raised = caster.senses.spatial_effects[zone.uuid].upper_volume_surfaces
     assert raised != initial
-    assert (8, 8) not in capture_senses_snapshot(caster.senses).visible
+    assert not cell_in(capture_senses_snapshot(caster.senses).visible, (8, 8))
     assert grid.set_tile_elevation(caster.position, height=0, surface_kind=ElevationSurfaceKind.ORDINARY, slope_axis=None)
     assert caster.senses.spatial_effects[zone.uuid].upper_volume_surfaces == initial
