@@ -185,3 +185,13 @@ Hard rules:
   - Fix: stage dependency inside the one path. The view is f(walls, obscurement, light, position, senses) and contacts are g(view, occupancy, target facts); a settlement recomputes only the stages whose inputs changed.
   - PV1a's report did not include move rows; integration timing should have caught this before the merge.
   - Also: the gen-2 pause (~260 ms) now lands inside Sleet's event construction in all 3 base runs.
+- 2026-10-17: **Sweep r17 (PV1a merge): 10 new failures**, all in PV1a's code; fix owned by PV1a-2 item −1.
+  - Cold-runtime counters `perception_revision` / `_identity_grants_revision` are not falsy (5 pack-loader tests).
+  - D3 regression: a duration tick re-solves observers.
+  - The terrain tile-fact count changed.
+  - Creator-object discovery order (×2), and dead-target filters in discovery.
+  - End to end at 859a48752 (one loaded run):
+    - Sleet cast 539 ms (native 336 with gen-2 inside, publication 180);
+    - Fireball 605 ms (native 441 with gen-2);
+    - Spirit Guardians moves 533–781 ms (native 423–668);
+    - AI decisions 113–189, with the acting decision at 757 ms (gen-2).
