@@ -685,7 +685,11 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 - **AI knowledge system (the catch-up's one owner).** `AIKnowledge` starts at cursor 0 and folds the whole history on the assignment's first decision: ~193 ms of the 398 ms sampled first Advance (`smp_ai`, loaded).
   - One AI-knowledge system owns the `AIKnowledge` values, keyed by assignment, and advances them at the EventQueue batch dispatch.
   - A new assignment starts from the same cold composition the seats use. Assignments are created at session setup, in the summon cast, on rebind, and lazily in `_ensure_assignment`.
-  - Deleted: the `consume` call in `project_world` and the lazy creation branch.
+  - Deleted: the lazy creation branch (unreachable) and the whole-history catch-up.
+  - **Integrator decisions (AIK, 2026-10-17):**
+    - One function, "advance this assignment's knowledge to the current cursor", called at batch dispatch for every assignment and by each decision or guard read for its own assignment. A read folds only the current batch's pending versions. The movement guard has to learn before a move completes (`tests/ai/test_event_knowledge.py`), so the pull can't be deleted outright.
+    - A cold start from live state would be a second, inexact path. The objective part (world, actors, pending conditions, open events) is the same for every assignment: it is one shared fold per session, advanced once per batch. Each assignment folds only its observers' sensory facts, from the observers' birth. Creation is folded from the record at the explicit creation site.
+    - Knowledge is keyed by the assignment object: opened at creation, dropped at close, cleared on generation reset.
   - **Gate:** at the first decision, `AIKnowledge` equals today's full replay on the GC cases, or the memory differences are listed for sign-off; the summon-cast row is measured.
 - **Navigation:** one path search over a cost grid with a predecessor array. `walkable`, `paths`, `path_costs`, `safe_*` and `collision_blocked` stop being per-cell dicts and sets.
 - **Gate:** the turn-start rows within the ceiling.
