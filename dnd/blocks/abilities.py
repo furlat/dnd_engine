@@ -153,7 +153,7 @@ class Ability(BaseBlock):
             score_normalizer=ability_score_normalizer,
             use_register=use_register,
         )
-        ability_modifier.generated_from.append(self.ability_score.uuid)
+        ability_modifier.generated_from = (*ability_modifier.generated_from, self.ability_score.uuid)
         return ability_modifier.combine_values([self.modifier_bonus], use_register=use_register)
 
     @classmethod

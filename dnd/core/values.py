@@ -3,7 +3,7 @@ from fractions import Fraction
 from math import prod
 
 from pydantic import Field, computed_field, model_validator
-from typing import List, Optional, Dict, Any, Callable, ClassVar, Union, Self
+from typing import List, Optional, Dict, Any, Callable, ClassVar, Tuple, Union, Self
 from uuid import UUID, uuid4, uuid5
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import DamageType, Size
@@ -96,8 +96,8 @@ class BaseValue(BaseObject):
         exclude=True,
         description="Callable that converts raw scores into normalized scores."
     )
-    generated_from: List[UUID] = Field(
-        default_factory=list,
+    generated_from: Tuple[UUID, ...] = Field(
+        default=(),
         description="Value UUIDs that were combined or copied to produce this value."
     )
     global_normalizer: bool = Field(
@@ -698,7 +698,7 @@ class StaticValue(BaseValue):
             size_modifiers={**self.size_modifiers, **{k: v for other in others for k, v in other.size_modifiers.items()}},
             damage_type_modifiers={**self.damage_type_modifiers, **{k: v for other in others for k, v in other.damage_type_modifiers.items()}},
             resistance_modifiers={**self.resistance_modifiers, **{k: v for other in others for k, v in other.resistance_modifiers.items()}},
-            generated_from=[self.uuid] + [other.uuid for other in others],
+            generated_from=(self.uuid, *(other.uuid for other in others)),
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
             score_normalizer=self.score_normalizer,
@@ -1361,7 +1361,7 @@ class ContextualValue(BaseValue):
             size_modifiers=merge_dicts(self.size_modifiers, *(other.size_modifiers for other in others)),
             damage_type_modifiers=merge_dicts(self.damage_type_modifiers, *(other.damage_type_modifiers for other in others)),
             resistance_modifiers=merge_dicts(self.resistance_modifiers, *(other.resistance_modifiers for other in others)),
-            generated_from=[self.uuid] + [other.uuid for other in others],
+            generated_from=(self.uuid, *(other.uuid for other in others)),
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
             target_entity_uuid=self.target_entity_uuid,
@@ -1516,7 +1516,7 @@ class ModifiableValue(BaseValue):
         Returns:
             New modifiable value with initialized self and outgoing channels.
         """
-        normalizer = score_normalizer if score_normalizer is not None else lambda x: x
+        normalizer = score_normalizer if score_normalizer is not None else identity
 
         def owned_uuid(name: str) -> UUID:
             if identity_uuid is None:
@@ -2046,7 +2046,7 @@ class ModifiableValue(BaseValue):
             to_target_contextual=self.to_target_contextual.combine_values([other.to_target_contextual for other in others], use_register=use_register),
             from_target_static=new_from_target_static,
             from_target_contextual=new_from_target_contextual,
-            generated_from=[self.uuid] + [other.uuid for other in others],
+            generated_from=(self.uuid, *(other.uuid for other in others)),
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
             target_entity_uuid=self.target_entity_uuid,

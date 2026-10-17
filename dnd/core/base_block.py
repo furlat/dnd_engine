@@ -21,7 +21,6 @@ from dnd.core.events import (
     EventQueue,
     EventType,
     SpatialChangeEvent,
-    Trigger,
     WorldTileState,
 )
 from dnd.core.item_properties import ItemWearerValues
@@ -43,7 +42,6 @@ from dnd.types.world_placement import (
     WorldObjectPlacement,
 )
 
-from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Iterator, Protocol
@@ -235,7 +233,7 @@ class BaseBlock(BaseModel):
         description="Runtime condition immunity checks keyed by condition name."
     )
     active_conditions_by_source: Dict[UUID, List[str]] = Field(
-        default_factory=lambda: defaultdict(list),
+        default_factory=dict,
         exclude=True,
         description="Active condition names grouped by source entity UUID."
     )
@@ -243,16 +241,6 @@ class BaseBlock(BaseModel):
     event_handlers: Dict[UUID, EventHandler] = Field(
         default_factory=dict,
         description="Local event handlers owned by this block."
-    )
-    event_handlers_by_trigger: Dict[Trigger, List[EventHandler]] = Field(
-        default_factory=lambda: defaultdict(list),
-        exclude=True,
-        description="Local event handlers indexed by full trigger."
-    )
-    event_handlers_by_simple_trigger: Dict[Trigger, List[EventHandler]] = Field(
-        default_factory=lambda: defaultdict(list),
-        exclude=True,
-        description="Local event handlers indexed by simplified trigger."
     )
 
     allow_events_conditions: bool = Field(default=False,description="If True, events and conditions will be allowed to be added to the block")
@@ -1047,10 +1035,6 @@ class BaseBlock(BaseModel):
         )
         event_handler.owner_block = self
         self.event_handlers[event_handler.uuid] = event_handler
-        for trigger in event_handler.trigger_conditions:
-            if trigger.is_simple():
-                self.event_handlers_by_simple_trigger[trigger].append(event_handler)
-            self.event_handlers_by_trigger[trigger].append(event_handler)
         EventQueue.add_event_handler(event_handler)
         try:
             event_handler.on_admitted()
@@ -1067,10 +1051,6 @@ class BaseBlock(BaseModel):
         if not self.allow_events_conditions:
             return None
         self.event_handlers.pop(event_handler.uuid)
-        for trigger in event_handler.trigger_conditions:
-            if trigger.is_simple():
-                self.event_handlers_by_simple_trigger[trigger].remove(event_handler)
-            self.event_handlers_by_trigger[trigger].remove(event_handler)
         event_handler.on_removed()
 
     def remove_event_handler(self, event_handler: EventHandler) -> None:
@@ -1091,19 +1071,12 @@ class BaseBlock(BaseModel):
             raise ValueError("block event handler order contains duplicate UUIDs")
         if set(ordered_uuids) != set(self.event_handlers):
             raise ValueError("block event handler order must name every handler")
-        order = {handler_uuid: index for index, handler_uuid in enumerate(ordered_uuids)}
         handlers = dict(self.event_handlers)
         self.event_handlers.clear()
         self.event_handlers.update(
             (handler_uuid, handlers[handler_uuid])
             for handler_uuid in ordered_uuids
         )
-        for index in (
-            self.event_handlers_by_trigger,
-            self.event_handlers_by_simple_trigger,
-        ):
-            for rows in index.values():
-                rows.sort(key=lambda handler: order[handler.uuid])
 
     def get_event_handler_by_name(self, name: str) -> Optional[EventHandler]:
         """Find the first local event handler matching a name.
@@ -1924,7 +1897,7 @@ class BaseBlock(BaseModel):
         assert name is not None
         self.active_conditions[name] = prepared.condition
         self.active_conditions_by_uuid[prepared.condition.uuid] = prepared.condition
-        self.active_conditions_by_source[prepared.condition.source_entity_uuid].append(name)
+        self.active_conditions_by_source.setdefault(prepared.condition.source_entity_uuid, []).append(name)
         prepared.publication = ConditionPublication(
             prepared.condition, prepared.effect, prepared.condition.snapshot_state(),
             self.snapshot_entity_stats(), self.snapshot_world_tile(), self.snapshot_item_state(), {},

@@ -806,7 +806,7 @@ def test_eb_07_010_baseblock_add_condition_skips_canceled_no_effect() -> None:
     assert condition.applied is False
     assert "EngineBookNoEffect" not in tile.active_conditions
     assert condition.uuid not in tile.active_conditions_by_uuid
-    assert tile.active_conditions_by_source[source.uuid] == []
+    assert tile.active_conditions_by_source.get(source.uuid, []) == []
 
     tile.remove_condition("EngineBookNoEffect")
 
