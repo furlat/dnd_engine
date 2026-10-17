@@ -122,6 +122,7 @@ class HealingIncenseZone(AreaCondition):
 
 
 class HealingIncense(BaseAction):
+    creates = (HealingIncenseZone,)
     name: str = "Healing Incense Aura"
     description: str = "Bonus action: ten-turn ten-foot1d4 healing aura, once per long rest on this mace."
     target_type: TargetType = TargetType.SELF

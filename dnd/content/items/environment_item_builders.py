@@ -85,6 +85,7 @@ _LIQUID_SURFACES: dict[
 
 class LiquidBarrel(BaseItem):
     """One physical container composes its authored material on destruction."""
+    creates = tuple(_LIQUID_SURFACES.values())
 
     spill_profile: LiquidSpillProfile = LIQUID_BARREL_PROFILES["environment.blocker.oil_barrel"]
 

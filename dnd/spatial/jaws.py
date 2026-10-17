@@ -26,6 +26,8 @@ from dnd.types.abilities import SkillName
 from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from dnd.types.traps import TrapDamage, TrapPayload, TrapState
 from dnd.types.world import OccupancyLayer, SpatialChannel
+from dnd.actions import Move
+from dnd.conditions import Poisoned, Prone
 
 
 JAW_TRAP_CONTENT_REF = ContentRef(
@@ -44,6 +46,7 @@ class SlipFreeOfJaw(EscapeSpatialRestraintAction):
 
 
 class JawRestrained(SpatialRestraintSource):
+    creates = (*SpatialRestraintSource.creates, ForceJawOpen, SlipFreeOfJaw)
     name: str = "Jaw restraint"
     description: str = "Held by one closed jaw until escaped, opened or removed."
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, frozen=True)
@@ -55,6 +58,7 @@ class JawRestrained(SpatialRestraintSource):
 
 class JawTrap(SpatialCondition):
     """An armed jaw closes once; reset and removal release its exact source."""
+    creates = (JawRestrained, Move, Poisoned, Prone)
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Jaw trap"

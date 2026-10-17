@@ -5,10 +5,10 @@ from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, Spell
 """Equipment, armor, weapon, and shield models for entity combat gear."""
 
 from dataclasses import dataclass
-from typing import Callable, Iterable, Optional, List, Self, Literal, TypeVar, Union, Tuple
+from typing import Any, Callable, Dict, Iterable, Optional, List, Self, Literal, TypeVar, Union, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, ValueRead, value_score
 from dnd.core.creature_types import DamageType
 from dnd.core.base_object import BaseObject
 from dnd.core.modifiers import NumericalModifier
@@ -506,7 +506,8 @@ class Weapon(EquippableItem):
             "item_effects": effects,
         })
 
-    def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores,
+    def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores, read: ValueRead,
+                        context: Optional[Dict[str, Any]],
                         is_off_hand: bool = False,
                         off_hand_ability_bonus: Optional[ModifiableValue] = None,
                         override_ability: Optional[AbilityName] = None) -> Damage:
@@ -515,6 +516,8 @@ class Weapon(EquippableItem):
         Args:
             equipment_block: Equipment block providing global and typed bonuses.
             ability_block: Ability scores used to derive STR or DEX damage.
+            read: The attack's read: wielder and target.
+            context: The attack context the damage bonus is read in.
             is_off_hand: Whether to use the off-hand ability bonus path.
             off_hand_ability_bonus: Optional ability bonus value for off-hand attacks.
             override_ability: Optional ability to use instead of weapon-derived STR/DEX.
@@ -532,20 +535,20 @@ class Weapon(EquippableItem):
         override_ability = self.selected_attack_ability(ability_block, override_ability)
         if override_ability is not None and not is_off_hand:
             ability = ability_block.get_ability(override_ability)
-            bonuses.append(ability.get_combined_values())
+            bonuses.append(ability.combined_value(read))
         elif not is_off_hand:
             if WeaponProperty.RANGED in self.properties:
-                dex_bonus = ability_block.dexterity.get_combined_values()
+                dex_bonus = ability_block.dexterity.combined_value(read)
                 bonuses.append(dex_bonus)
             elif WeaponProperty.FINESSE in self.properties:
-                dex_bonus = ability_block.dexterity.get_combined_values()
-                strength_bonus = ability_block.strength.get_combined_values()
-                if dex_bonus.normalized_score > strength_bonus.normalized_score:
+                dex_bonus = ability_block.dexterity.combined_value(read)
+                strength_bonus = ability_block.strength.combined_value(read)
+                if value_score(dex_bonus, read, normalized=True) > value_score(strength_bonus, read, normalized=True):
                     bonuses.append(dex_bonus)
                 else:
                     bonuses.append(strength_bonus)
             else:
-                strength_bonus = ability_block.strength.get_combined_values()
+                strength_bonus = ability_block.strength.combined_value(read)
                 bonuses.append(strength_bonus)
         else:
             if off_hand_ability_bonus is not None:
@@ -559,19 +562,13 @@ class Weapon(EquippableItem):
             bonuses.append(melee_bonus)
 
         combined_bonuses = bonuses[0].combine_values(bonuses[1:])
-        return Damage(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid, damage_dice=self.attack_damage_die(equipment_block.source_entity_uuid), dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
+        return Damage(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=read.target_entity_uuid, context=context, damage_dice=self.attack_damage_die(equipment_block.source_entity_uuid), dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
 
-    def get_extra_damages(self) -> List[Damage]:
+    def get_extra_damages(self, target_entity_uuid: Optional[UUID]) -> List[Damage]:
         """Return extra damage payloads attached directly to this weapon."""
         damages = []
         for i in range(len(self.extra_damage_dices)):
-            damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.extra_damage_dices[i], dice_numbers=self.extra_damage_dices_numbers[i], damage_bonus=self.extra_damage_bonus[i], damage_type=self.extra_damage_type[i]))
-        return damages
-
-    def get_all_weapon_damages(self, equipment_block: 'Equipment', ability_block: AbilityScores) -> List[Damage]:
-        """Return primary plus extra weapon damage payloads."""
-        damages = [self.get_base_damage(equipment_block, ability_block)]
-        damages.extend(self.get_extra_damages())
+            damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target_entity_uuid, damage_dice=self.extra_damage_dices[i], dice_numbers=self.extra_damage_dices_numbers[i], damage_bonus=self.extra_damage_bonus[i], damage_type=self.extra_damage_type[i]))
         return damages
 
 _SLOT_ATTRIBUTE_BY_SLOT = {
@@ -1007,10 +1004,11 @@ class Equipment(BaseBlock):
         self,
         ability_block: AbilityScores,
         weapon_slot: WeaponSlot,
+        read: ValueRead,
         override_ability: Optional[AbilityName] = None,
         natural_weapon: Optional[NaturalWeaponSpec] = None,
     ) -> Tuple[ModifiableValue, List[ModifiableValue], List[ModifiableValue], Range]:
-        """Return weapon, equipment, ability, and range attack components."""
+        """Return weapon, equipment, ability, and range attack components for one attack read."""
         weapon = None if natural_weapon else self.get_weapon(weapon_slot)
         ability_bonuses: List[ModifiableValue] = []
         attack_bonuses = [self.attack_bonus]
@@ -1031,7 +1029,7 @@ class Equipment(BaseBlock):
             weapon,
             override_ability,
         )
-        ability_bonuses.append(ability.get_combined_values())
+        ability_bonuses.append(ability.combined_value(read))
         return weapon_bonus, attack_bonuses, ability_bonuses, weapon_range
 
     def get_weapon_attack_baseline(
@@ -1302,34 +1300,32 @@ class Equipment(BaseBlock):
         """Ranged slots are always ranged, melee slots are never ranged."""
         return weapon_slot in (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF)
 
-    def _get_main_unarmed_damage(self, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Damage:
-        """Combine unarmed, melee, equipment, and ability bonuses into one damage."""
+    def _get_main_unarmed_damage(self, ability_block: AbilityScores, read: ValueRead, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Damage:
+        """Combine unarmed, melee, equipment, and ability bonuses into one damage packet for an attack read."""
         unarmed_damage_bonus = self.unarmed_damage_bonus
         if override_ability is not None:
             ability = ability_block.get_ability(override_ability)
-            ability_bonus = ability.get_combined_values()
+            ability_bonus = ability.combined_value(read)
         else:
             ability = ability_block.strength
-            strength_bonus = ability.get_combined_values()
+            strength_bonus = ability.combined_value(read)
             ability_bonus = strength_bonus
             if WeaponProperty.FINESSE in self.unarmed_properties:
                 dexterity = ability_block.dexterity
-                dexterity_bonus = dexterity.get_combined_values()
-                if dexterity_bonus.normalized_score > strength_bonus.normalized_score:
+                dexterity_bonus = dexterity.combined_value(read)
+                if value_score(dexterity_bonus, read, normalized=True) > value_score(strength_bonus, read, normalized=True):
                     ability = dexterity
                     ability_bonus = dexterity_bonus
         if natural_weapon is not None and natural_weapon.fixed_damage_bonus is not None:
             ability_bonus = ModifiableValue.create(source_entity_uuid=self.source_entity_uuid,
                 value_name="Intrinsic damage bonus",base_value=natural_weapon.fixed_damage_bonus)
         combined_bonus = unarmed_damage_bonus.combine_values([self.damage_bonus,self.melee_damage_bonus, ability_bonus])
-        combined_bonus.set_context({
-            "attack_ability": ability.name,
-            "range_type": RangeType.REACH.value,
-        })
-        unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=natural_weapon.damage_dice if natural_weapon else self.unarmed_damage_dice, dice_numbers=natural_weapon.dice_numbers if natural_weapon else self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=natural_weapon.damage_type if natural_weapon else self.unarmed_damage_type)
+        unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=read.target_entity_uuid,
+            context={"attack_ability": ability.name, "range_type": RangeType.REACH.value},
+            damage_dice=natural_weapon.damage_dice if natural_weapon else self.unarmed_damage_dice, dice_numbers=natural_weapon.dice_numbers if natural_weapon else self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=natural_weapon.damage_type if natural_weapon else self.unarmed_damage_type)
         return unarmed_damage
 
-    def _get_weapon_base_damage(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None) -> Optional[Damage]:
+    def _get_weapon_base_damage(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, read: ValueRead, override_ability: Optional[AbilityName] = None) -> Optional[Damage]:
         """Return the primary damage payload for a weapon slot, if it holds a weapon."""
         weapon = self._get_weapon_by_slot(weapon_slot)
         if isinstance(weapon, Weapon):
@@ -1340,53 +1336,45 @@ class Equipment(BaseBlock):
             if is_off_hand:
                 off_hand_ability_bonus = self.off_hand_ranged_ability_bonus if is_ranged else self.off_hand_melee_ability_bonus
 
-            damage = weapon.get_base_damage(
+            ability = self._select_weapon_damage_ability(ability_block, weapon, override_ability)
+            return weapon.get_base_damage(
                 self,
                 ability_block,
+                read,
+                {"attack_ability": ability.name, "range_type": weapon.range.type.value},
                 is_off_hand=is_off_hand,
                 off_hand_ability_bonus=off_hand_ability_bonus,
                 override_ability=override_ability,
             )
-            if damage.damage_bonus is not None:
-                ability = self._select_weapon_damage_ability(
-                    ability_block,
-                    weapon,
-                    override_ability,
-                )
-                damage.damage_bonus.set_context({
-                    "attack_ability": ability.name,
-                    "range_type": weapon.range.type.value,
-                })
-            return damage
         return None
 
-    def _get_extra_weapon_damages(self, weapon_slot: WeaponSlot) -> List[Damage]:
+    def _get_extra_weapon_damages(self, weapon_slot: WeaponSlot, target_entity_uuid: Optional[UUID]) -> List[Damage]:
         """Return extra damage payloads attached to the weapon in the slot."""
         weapon = self._get_weapon_by_slot(weapon_slot)
         if isinstance(weapon, Weapon):
-            return weapon.get_extra_damages()
+            return weapon.get_extra_damages(target_entity_uuid)
         return []
 
-    def get_extra_attack_damage(self, weapon_slot: Optional[WeaponSlot] = None) -> List[Damage]:
+    def get_extra_attack_damage(self, target_entity_uuid: Optional[UUID], weapon_slot: Optional[WeaponSlot] = None) -> List[Damage]:
         """Return equipment-level extra damage, plus weapon extras for a slot."""
         damages: List[Damage] = []
         for dice, dice_numbers, bonus, damage_type in zip(self.extra_attack_damage_dices, self.extra_attack_damage_dices_numbers, self.extra_attack_damage_bonus, self.extra_attack_damage_type):
-            damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=dice, dice_numbers=dice_numbers, damage_bonus=bonus, damage_type=damage_type))
+            damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target_entity_uuid, damage_dice=dice, dice_numbers=dice_numbers, damage_bonus=bonus, damage_type=damage_type))
         if weapon_slot is not None:
-            return damages+self._get_extra_weapon_damages(weapon_slot)
+            return damages+self._get_extra_weapon_damages(weapon_slot, target_entity_uuid)
         else:
             return damages
 
-    def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> List[Damage]:
-        """Return all damage payloads for an attack from a weapon slot."""
+    def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, read: ValueRead, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> List[Damage]:
+        """Return all damage payloads for an attack read from a weapon slot."""
         if natural_weapon or self.is_unarmed(weapon_slot):
-            return [self._get_main_unarmed_damage(ability_block, override_ability=override_ability, natural_weapon=natural_weapon)]+self.get_extra_attack_damage()
+            return [self._get_main_unarmed_damage(ability_block, read, override_ability=override_ability, natural_weapon=natural_weapon)]+self.get_extra_attack_damage(read.target_entity_uuid)
         else:
             outs = []
-            base_damage = self._get_weapon_base_damage(weapon_slot, ability_block, override_ability=override_ability)
+            base_damage = self._get_weapon_base_damage(weapon_slot, ability_block, read, override_ability=override_ability)
             if base_damage is not None:
                 outs.append(base_damage)
-            outs.extend(self.get_extra_attack_damage(weapon_slot))
+            outs.extend(self.get_extra_attack_damage(read.target_entity_uuid, weapon_slot))
             return outs
 
     def get_main_damage_type(self, weapon_slot: WeaponSlot) -> DamageType:
@@ -1444,8 +1432,9 @@ class Equipment(BaseBlock):
     def resolve_armor_class_formula_candidate(
         self,
         ability_block: AbilityScores,
+        read: ValueRead,
     ) -> Optional[ArmorClassFormulaCandidate]:
-        """Select the highest applicable formula, with stable first-source ties."""
+        """Select the highest applicable formula in an armor-class read, with stable first-source ties."""
         candidates = [
             self._legacy_armor_class_formula_candidate(),
             *self.armor_class_formula_candidates.values(),
@@ -1461,16 +1450,15 @@ class Equipment(BaseBlock):
         def score(candidate: ArmorClassFormulaCandidate) -> int:
             total = candidate.base_ac
             total += sum(
-                ability_block.get_ability(
-                    ability_name
-                ).get_combined_values(use_register=False).normalized_score
+                value_score(ability_block.get_ability(ability_name).combined_value(read, use_register=False),
+                            read, normalized=True)
                 for ability_name in candidate.ability_names
             )
             if (
                 candidate.allows_shield
                 and isinstance(self.weapon_melee_off, Shield)
             ):
-                total += self.weapon_melee_off.ac_bonus.normalized_score
+                total += value_score(self.weapon_melee_off.ac_bonus, read, normalized=True)
             return total
 
         return max(applicable, key=score)
@@ -1703,7 +1691,6 @@ class Equipment(BaseBlock):
         common_fields = {
             "name": item.name,
             "source_entity_uuid": self.source_entity_uuid,
-            "target_entity_uuid": self.target_entity_uuid,
             "item_uuid": item.uuid,
             "slot": slot,
             "parent_event": parent_event_uuid,

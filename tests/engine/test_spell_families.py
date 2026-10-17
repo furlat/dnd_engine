@@ -36,7 +36,7 @@ from dnd.core.modifiers import (
     ResistanceModifier,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue
+from dnd.core.values import BaseValue, ValueRead, read_value
 from dnd.types.senses import OBSCUREMENT_SETS, OpticalObscurement
 from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import execute_by_index, setup_standard_actions
@@ -123,6 +123,12 @@ from tests.engine.support import (
     set_hp,
 )
 from dnd.types.cells import cell_in, value_at
+
+
+def attack_read(entity, weapon_slot, target_uuid, context):
+    """The entity's weapon attack bonus read against a target in an attack context."""
+    value, _ = entity.weapon_attack_value(ValueRead(entity.uuid, target_uuid), weapon_slot)
+    return read_value(value, ValueRead(entity.uuid, target_uuid, context))
 
 
 def reset_spell_family_state(width: int = 12, height: int = 8) -> None:
@@ -1035,11 +1041,9 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
         "range_type": RangeType.RANGE.value,
         "is_long_range": True,
     }
-    protected_ranged_attack = ally.attack_bonus(WeaponSlot.RANGED_MAIN, caster.uuid)
-    protected_ranged_attack.set_context(ranged_underwater_context)
+    protected_ranged_attack = attack_read(ally, WeaponSlot.RANGED_MAIN, caster.uuid, ranged_underwater_context)
     assert protected_ranged_attack.advantage == AdvantageStatus.NONE
     assert protected_ranged_attack.auto_hit == AutoHitStatus.NONE
-    protected_ranged_attack.clear_context()
 
     water_lane = [(8, 1), (9, 1), (10, 1)]
     grid = get_map()
@@ -1105,11 +1109,9 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert not ally.ignore_underwater_penalties
     assert ally.get_action_template("Freedom of Movement Escape") is None
 
-    unprotected_ranged_attack = ally.attack_bonus(WeaponSlot.RANGED_MAIN, caster.uuid)
-    unprotected_ranged_attack.set_context(ranged_underwater_context)
+    unprotected_ranged_attack = attack_read(ally, WeaponSlot.RANGED_MAIN, caster.uuid, ranged_underwater_context)
     assert unprotected_ranged_attack.advantage == AdvantageStatus.DISADVANTAGE
     assert unprotected_ranged_attack.auto_hit == AutoHitStatus.AUTOMISS
-    unprotected_ranged_attack.clear_context()
 
     ally.equipment.equip(
         build_authored_item("weapon.club", ally.uuid),
@@ -1121,16 +1123,12 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
         "range_type": RangeType.REACH.value,
         "is_long_range": False,
     }
-    unprotected_melee_attack = ally.attack_bonus(WeaponSlot.MELEE_MAIN, caster.uuid)
-    unprotected_melee_attack.set_context(melee_underwater_context)
+    unprotected_melee_attack = attack_read(ally, WeaponSlot.MELEE_MAIN, caster.uuid, melee_underwater_context)
     assert unprotected_melee_attack.advantage == AdvantageStatus.DISADVANTAGE
-    unprotected_melee_attack.clear_context()
 
     ally.swimming_speed = 30
-    swimming_melee_attack = ally.attack_bonus(WeaponSlot.MELEE_MAIN, caster.uuid)
-    swimming_melee_attack.set_context(melee_underwater_context)
+    swimming_melee_attack = attack_read(ally, WeaponSlot.MELEE_MAIN, caster.uuid, melee_underwater_context)
     assert swimming_melee_attack.advantage == AdvantageStatus.NONE
-    swimming_melee_attack.clear_context()
     ally.swimming_speed = 0
 
     unprotected_swim = Swim(source_entity_uuid=ally.uuid, end_position=water_lane[-1]).apply()
@@ -1498,7 +1496,7 @@ def test_eb_15_015_bless_and_bane_rewrite_save_d20_results() -> None:
     bless_event = assert_completed_spell(bless_event)
     assert "Bless" in ally.active_conditions
 
-    bless_bonus = ally.saving_throw_bonus(caster.uuid, "wisdom")
+    bless_bonus = ally.saving_throw_bonus(caster.uuid, "wisdom", None)
     with patch("random.randint", side_effect=[10, 3]):
         blessed_roll, blessed_event = ally.roll_d20_event(
             bless_bonus,
@@ -1523,7 +1521,7 @@ def test_eb_15_015_bless_and_bane_rewrite_save_d20_results() -> None:
     bane_event = assert_completed_spell(bane_event)
     assert "Bane" in enemy.active_conditions
 
-    bane_bonus = enemy.saving_throw_bonus(caster.uuid, "wisdom")
+    bane_bonus = enemy.saving_throw_bonus(caster.uuid, "wisdom", None)
     with patch("random.randint", side_effect=[12, 2]):
         baned_roll, baned_event = enemy.roll_d20_event(
             bane_bonus,
@@ -1688,7 +1686,7 @@ def test_eb_15_024_d20_mutation_handlers_are_roll_type_scoped() -> None:
     assert "Guidance" in caster.active_conditions
     guidance_attack_event.phase_to(EventPhase.COMPLETION)
 
-    guidance_save_bonus = caster.saving_throw_bonus(None, "wisdom")
+    guidance_save_bonus = caster.saving_throw_bonus(None, "wisdom", None)
     with patch("random.randint", side_effect=[14]):
         guidance_save_roll, guidance_save_event = caster.roll_d20_event(
             guidance_save_bonus,

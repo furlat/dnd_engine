@@ -81,12 +81,14 @@ from dnd.core.events import (
     StepMovementEvent,
     Trigger,
     EventQueue,
+    advantage_log_rows,
+    value_log_rows,
 )
 from dnd.core.base_actions import ActionEvent
 from dnd.core.dice import RollType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SkillCheckLogData, DiceRollDisplay, ModifierBreakdown
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SkillCheckLogData, DiceRollDisplay
 from dnd.creature_transforms import (
     apply_incapacitated_transform,
     remove_modifier_ownership,
@@ -434,6 +436,16 @@ def has_taken_damage_processor(event: Event, source_entity_uuid: UUID) -> Option
     return None
 
 
+class HasAttackedTracker(EventHandler):
+    """An entity's attack tracker: an attack it executes applies HasAttacked."""
+    creates = (HasAttacked,)
+
+
+class HasTakenDamageTracker(EventHandler):
+    """An entity's damage tracker: damage it takes applies HasTakenDamage."""
+    creates = (HasTakenDamage,)
+
+
 def create_has_attacked_handler(source_entity_uuid: UUID) -> EventHandler:
     """Create an attack tracker handler for an entity.
 
@@ -443,7 +455,7 @@ def create_has_attacked_handler(source_entity_uuid: UUID) -> EventHandler:
     Returns:
         Event handler that applies HasAttacked on attack execution.
     """
-    return EventHandler(
+    return HasAttackedTracker(
         name="HasAttacked Tracker",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
@@ -465,7 +477,7 @@ def create_has_taken_damage_handler(source_entity_uuid: UUID) -> EventHandler:
     Returns:
         Event handler that applies HasTakenDamage when the entity takes damage.
     """
-    return EventHandler(
+    return HasTakenDamageTracker(
         name="HasTakenDamage Tracker",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
@@ -2921,24 +2933,8 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
     else:
         verbose += " → {{red:loses invisibility!}}"
 
-    stealth_bonus_breakdown: List[ModifierBreakdown] = []
-    stealth_advantage_breakdown: List[ModifierBreakdown] = []
-    for mod in skill_bonus.get_breakdown():
-        stealth_bonus_breakdown.append(ModifierBreakdown(
-            name=mod.get('name', 'Unknown'),
-            value=mod.get('value', 0),
-            source=mod.get('source', 'self')
-        ))
-    for mod in skill_bonus.get_full_advantage_breakdown():
-        adv_val = mod.get('value', 'inactive')
-        if adv_val == 'advantage':
-            stealth_advantage_breakdown.append(ModifierBreakdown(
-                name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
-            ))
-        elif adv_val == 'disadvantage':
-            stealth_advantage_breakdown.append(ModifierBreakdown(
-                name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
-            ))
+    stealth_bonus_breakdown = value_log_rows(skill_bonus.breakdown)
+    stealth_advantage_breakdown = advantage_log_rows(skill_bonus.advantage_breakdown)
 
     check_event.combat_log = CombatLogEntry(
         entry_type=CombatLogEntryType.SKILL_CHECK,

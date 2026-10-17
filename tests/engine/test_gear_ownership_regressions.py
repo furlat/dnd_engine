@@ -103,7 +103,7 @@ def test_coating_is_owned_by_weapon_and_survives_transfer_and_expiry(monkeypatch
     weapon = equip(original, "weapon.circus.flaming_scimitar", WeaponSlot.MELEE_MAIN)
     coat(original, build_timed_fire_weapon_coat(original.uuid, rounds=2))
     assert "Flaming Coat" in weapon.active_conditions
-    assert len(weapon.get_extra_damages()) == 2
+    assert len(weapon.get_extra_damages(None)) == 2
     encounter_uuid = uuid4()
     original.on_turn_start(encounter_uuid, round_number=1)
     assert original.unequip_item(WeaponSlot.MELEE_MAIN) is weapon
@@ -114,7 +114,7 @@ def test_coating_is_owned_by_weapon_and_survives_transfer_and_expiry(monkeypatch
     assert "Flaming Coat" in weapon.active_conditions
     recipient.on_turn_start(encounter_uuid, round_number=2)
     assert "Flaming Coat" not in weapon.active_conditions
-    assert [d.damage_type for d in weapon.get_extra_damages()] == [DamageType.FIRE]
+    assert [d.damage_type for d in weapon.get_extra_damages(None)] == [DamageType.FIRE]
     target = actor(game, "Target", (3, 1))
     Entity.update_all_entities_senses()
     monkeypatch.setattr(dice_module.random, "randint", lambda low, high: high)
@@ -182,10 +182,10 @@ def test_separate_weapons_keep_independent_coatings():
     off = equip(owner, "weapon.shortsword", WeaponSlot.MELEE_OFF)
     coat(owner, build_authored_item("consumable.weapon_coat.fire", owner.uuid))
     coat(owner, build_authored_item("consumable.weapon_coat.fire", owner.uuid), "Coat Off Hand")
-    assert len(main.get_extra_damages()) == len(off.get_extra_damages()) == 1
+    assert len(main.get_extra_damages(None)) == len(off.get_extra_damages(None)) == 1
     assert main.remove_condition("Flaming Coat")
-    assert not main.get_extra_damages()
-    assert len(off.get_extra_damages()) == 1
+    assert not main.get_extra_damages(None)
+    assert len(off.get_extra_damages(None)) == 1
 
 
 def test_same_weapon_reapplication_replaces_only_the_previous_coat():
@@ -194,11 +194,11 @@ def test_same_weapon_reapplication_replaces_only_the_previous_coat():
     weapon = equip(owner, "weapon.circus.flaming_scimitar", WeaponSlot.MELEE_MAIN)
     coat(owner, build_timed_fire_weapon_coat(owner.uuid, rounds=1))
     coat(owner, build_authored_item("consumable.weapon_coat.fire", owner.uuid))
-    assert len(weapon.get_extra_damages()) == 2
+    assert len(weapon.get_extra_damages(None)) == 2
     owner.on_turn_start(uuid4(), round_number=1)
-    assert len(weapon.get_extra_damages()) == 2  # permanent replacement didn't inherit timed expiry
+    assert len(weapon.get_extra_damages(None)) == 2  # permanent replacement didn't inherit timed expiry
     assert weapon.remove_condition("Flaming Coat")
-    assert len(weapon.get_extra_damages()) == 1  # authored flame survives
+    assert len(weapon.get_extra_damages(None)) == 1  # authored flame survives
 
 
 def test_transferred_concentration_coat_keeps_original_sustainer():
@@ -213,10 +213,10 @@ def test_transferred_concentration_coat_keeps_original_sustainer():
     assert recipient.loot_item(weapon)
     assert recipient.equip_item(weapon.uuid, WeaponSlot.MELEE_MAIN)
     assert "Concentrating" not in recipient.active_conditions
-    assert len(weapon.get_extra_damages()) == 1
+    assert len(weapon.get_extra_damages(None)) == 1
     assert original.remove_condition("Concentrating")
     assert not weapon.active_conditions
-    assert not weapon.get_extra_damages()
+    assert not weapon.get_extra_damages(None)
 
 
 def test_weapon_retirement_cleans_coat_and_concentration():
@@ -226,7 +226,7 @@ def test_weapon_retirement_cleans_coat_and_concentration():
     coat(original, build_authored_item("consumable.weapon_coat.concentration_fire", original.uuid))
     weapon.retire()
     assert not weapon.active_conditions
-    assert not weapon.get_extra_damages()
+    assert not weapon.get_extra_damages(None)
     assert "Concentrating" not in original.active_conditions
 
 
@@ -243,9 +243,9 @@ def test_drop_and_transfer_do_not_consume_the_application_round():
     assert recipient.loot_item(weapon)
     assert recipient.equip_item(weapon.uuid, WeaponSlot.MELEE_MAIN)
     recipient.on_turn_start(interval, round_number=1)
-    assert len(weapon.get_extra_damages()) == 1
+    assert len(weapon.get_extra_damages(None)) == 1
     recipient.on_turn_start(interval, round_number=2)
-    assert not weapon.get_extra_damages()
+    assert not weapon.get_extra_damages(None)
 
 
 def test_vetoed_coat_replacement_leaves_no_provisional_damage():
@@ -271,10 +271,10 @@ def test_vetoed_coat_replacement_leaves_no_provisional_damage():
     result = execute_use_action(owner, replacement.uuid, "Coat Main Hand")
     assert result is not None and result.canceled
     assert weapon.active_conditions["Flaming Coat"].uuid == previous.uuid
-    assert len(weapon.get_extra_damages()) == 1
+    assert len(weapon.get_extra_damages(None)) == 1
     handler.enabled = False
     assert weapon.remove_condition("Flaming Coat")
-    assert not weapon.get_extra_damages()
+    assert not weapon.get_extra_damages(None)
 
 
 def test_floor_round_boundary_preserves_coat_duration_through_pickup():
@@ -296,11 +296,11 @@ def test_floor_round_boundary_preserves_coat_duration_through_pickup():
     encounter.next_turn()  # second turn in application round
     encounter.next_turn()  # floor tick at end of application round
     assert encounter.round_number == 2
-    assert len(weapon.get_extra_damages()) == 1
+    assert len(weapon.get_extra_damages(None)) == 1
     assert recipient.loot_item(weapon)
     assert recipient.equip_item(weapon.uuid, WeaponSlot.MELEE_MAIN)
     encounter.next_turn()  # recipient's round-2 tick
-    assert not weapon.get_extra_damages()
+    assert not weapon.get_extra_damages(None)
 
 
 @pytest.mark.parametrize("identity,protected", [
@@ -349,7 +349,7 @@ def test_rejected_concentration_preserves_previous_physical_coat(existing, phase
     result = execute_use_action(owner, replacement.uuid, "Coat Main Hand")
     assert result is not None and result.canceled
     assert weapon.active_conditions.get("Flaming Coat") is previous
-    assert len(weapon.get_extra_damages()) == int(existing)
+    assert len(weapon.get_extra_damages(None)) == int(existing)
     assert "Concentrating" not in owner.active_conditions
     assert replacement.charges == 0  # native execution already committed the item cost
 
@@ -377,7 +377,7 @@ def test_rejected_existing_concentration_removal_preserves_coated_weapon():
     assert result is not None and result.canceled
     assert weapon.active_conditions["Flaming Coat"] is previous
     assert owner.active_conditions["Concentrating"] is concentration
-    assert len(weapon.get_extra_damages()) == 1
+    assert len(weapon.get_extra_damages(None)) == 1
     assert replacement.charges == 0  # native execution already committed the item cost
 
 
@@ -399,7 +399,7 @@ def test_concentration_coat_replacement_removes_each_old_condition_once(slots):
     previous = weapon.active_conditions["Flaming Coat"]
     concentration = owner.active_conditions["Concentrating"]
     coat(owner, build_authored_item("consumable.weapon_coat.concentration_fire", owner.uuid))
-    assert len(weapon.get_extra_damages()) == 1
+    assert len(weapon.get_extra_damages(None)) == 1
     assert weapon.active_conditions["Flaming Coat"] is not previous
     for old in (previous, concentration):
         removals = [event for event in EventQueue.get_events_by_type(EventType.CONDITION_REMOVAL)
@@ -421,7 +421,7 @@ def test_coat_reapplication_preserves_a_pending_unused_concentration_slot():
         coat(owner, build_authored_item("consumable.weapon_coat.concentration_fire", owner.uuid))
         assert len(owner.active_conditions["Concentrating"].concentration_slots) == 1
     assert owner.remove_condition("Concentrating")
-    assert not weapon.get_extra_damages()
+    assert not weapon.get_extra_damages(None)
 
 
 def test_rejected_multislot_concentration_replacement_preserves_all_children():
@@ -456,7 +456,7 @@ def test_rejected_multislot_concentration_replacement_preserves_all_children():
     assert owner.active_conditions["Blinded"] is child
     assert owner.active_conditions["Concentrating"] is concentration
     assert len(concentration.concentration_slots) == 2
-    assert len(weapon.get_extra_damages()) == 1
+    assert len(weapon.get_extra_damages(None)) == 1
 
 
 @pytest.mark.parametrize("phase", [EventPhase.DECLARATION, EventPhase.EXECUTION, EventPhase.EFFECT])
@@ -483,5 +483,5 @@ def test_rejected_concentration_reapplication_preserves_original_coat(phase):
     assert result is not None and result.canceled
     assert weapon.active_conditions["Flaming Coat"] is previous
     assert owner.active_conditions["Concentrating"] is concentration
-    assert len(weapon.get_extra_damages()) == 1
+    assert len(weapon.get_extra_damages(None)) == 1
     assert len(concentration.concentration_slots) == 1

@@ -33,13 +33,18 @@ from dnd.core.life_types import LifeState, RemainsDisposition
 from dnd.core.values import ModifiableValue
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.entity import Entity
-from dnd.items.divine_rewards import build_devotees_mace
+from dnd.items.divine_rewards import build_devotees_mace, HealingIncense
 from dnd.items.consumables import (
     build_healing_potion,
     build_haste_potion,
     build_greater_invisibility_potion,
     build_true_seeing_potion,
+    _DrinkTrueSeeingPotionAction,
+    _DrinkHastePotionAction,
+    _DrinkHealingPotionAction,
+    _DrinkGreaterInvisibilityPotionAction,
 )
+from dnd.items.environment_interactables import LootAllAction, StorageChest
 
 
 INTERVENTION_ID = "class_feature.cleric.divine_intervention"
@@ -297,6 +302,7 @@ class OpulentRevival(BaseAction):
 
 
 class ArmThyServant(BaseAction):
+    creates = (HealingIncense,)
     name: str = "Divine Intervention: Arm Thy Servant"
     description: str = (
         "Once per character: create a permanent Devotee's Mace and equip it when legal."
@@ -342,6 +348,7 @@ class ArmThyServant(BaseAction):
 
 
 class GoldenGenerosity(BaseAction):
+    creates = (LootAllAction, _DrinkTrueSeeingPotionAction, _DrinkHastePotionAction, _DrinkHealingPotionAction, _DrinkGreaterInvisibilityPotionAction, StorageChest)
     name: str = "Divine Intervention: Golden Generosity"
     description: str = "Once per character: create a permanent chest holding four greater healing potions, Haste, Greater Invisibility and True Seeing."
     target_type: TargetType = TargetType.SELF

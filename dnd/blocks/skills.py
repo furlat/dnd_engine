@@ -82,16 +82,6 @@ class Skill(BaseBlock):
             Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
         get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
             Searches through attributes and returns all BaseBlock instances that are attributes of this class.
-        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
-            Set the target entity for all the values contained in this Block instance.
-        clear_target_entity() -> None: (Inherited from BaseBlock)
-            Clear the target entity for all the values contained in this Block instance.
-        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
-            Set the context for all the values contained in this Block instance.
-        clear_context() -> None: (Inherited from BaseBlock)
-            Clear the context for all the values contained in this Block instance.
-        clear() -> None: (Inherited from BaseBlock)
-            Clear the source, target, and context for all the values contained in this Block instance.
 
     Class Methods:
         create(cls, source_entity_uuid: UUID, name: skills, source_entity_name: Optional[str] = None,
@@ -303,16 +293,6 @@ class SkillSet(BaseBlock):
             Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
         get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
             Searches through attributes and returns all BaseBlock instances that are attributes of this class.
-        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
-            Set the target entity for all the values contained in this Block instance.
-        clear_target_entity() -> None: (Inherited from BaseBlock)
-            Clear the target entity for all the values contained in this Block instance.
-        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
-            Set the context for all the values contained in this Block instance.
-        clear_context() -> None: (Inherited from BaseBlock)
-            Clear the context for all the values contained in this Block instance.
-        clear() -> None: (Inherited from BaseBlock)
-            Clear the source, target, and context for all the values contained in this Block instance.
 
     Computed Fields:
         proficiencies (List[Skill]): A list of all skills in which the entity is proficient.

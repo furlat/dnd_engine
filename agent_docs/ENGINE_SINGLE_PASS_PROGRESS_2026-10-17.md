@@ -195,3 +195,10 @@ Hard rules:
     - Fireball 605 ms (native 441 with gen-2);
     - Spirit Guardians moves 533–781 ms (native 423–668);
     - AI decisions 113–189, with the acting decision at 757 ms (gen-2).
+- 2026-10-17: **Merged PW (71242cb61) and PV1a-2 items −1 and 0 (782fb01be, b70e21b31). Sweep r19: 0 new failures.**
+  - **PW.** Bodies and items are patches; `observed_changes` is off the player wire; the HUD is sent as patches; the combat log is flattened; versions are identified by occurrence index; player schema 12.
+    - Largest seat update: initialization 20.4 → 5.2 MB, Sleet drop 5.17 → 1.14 MB, Cloudkill drop 7.5 → 0.82 MB, Fireball 1.02 → 0.36 MB, end-turn ~98 → ~6 KB.
+    - Every cast and move is still over 100 KB (per-observer cell and contact lists → PV1b).
+    - Publication: casts much faster (Fireball 443 → 165 ms); drops and walks 10–20 % slower (PV1b investigates).
+  - **PV1a-2 item −1:** the cold identity-grant memo (cleared at every perception write); contacts in evidence order; `test_eb_09_008` now expects the evidence order (the old expectation was set iteration order).
+  - **PV1a-2 item 0:** the view split into sight and light stages by declared inputs, and passive perception read before the settlement's world (fixes a stale contact table under nested placement). Sight solves per move: Gust 90 → 1, Spirit Guardians 270 → 3. Move ms are not yet improved: contacts, fixtures and emit still run per observer.

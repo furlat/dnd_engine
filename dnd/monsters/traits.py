@@ -66,7 +66,7 @@ from dnd.core.modifiers import (
     ContextualAdvantageModifier,
     NumericalModifier,
 )
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, ValueRead, read_value, reading_with_value_row
 from dnd.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
 from dnd.core.condition_types import ConditionCategory, DurationType
@@ -536,6 +536,7 @@ class AttackReplacement(BaseModel):
 
 class MultiattackAction(BaseAction):
     """Monster stat-block action that composes existing weapon attacks."""
+    creates = (Attack,)
 
     name: str = Field(default="Multiattack", description="Action name.")
     description: str = Field(default="Make multiple stat-block weapon attacks.", description="Rules summary.")
@@ -775,7 +776,7 @@ class BonusDamageFeature(BaseCondition):
             return None
         damage_type = self.damage_type or event.damage_packets[0].damage.damage_type
         bonus = ModifiableValue.create(source_entity_uuid=owner.uuid, base_value=0, value_name=f"{self.name} Bonus")
-        dice = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=bonus, roll_type=RollType.DAMAGE, attack_outcome=event.attack_outcome)
+        dice = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=read_value(bonus, ValueRead(owner.uuid)), roll_type=RollType.DAMAGE, attack_outcome=event.attack_outcome)
         roll = dice.roll
         damage = Damage(
             damage_type=damage_type,
@@ -876,9 +877,13 @@ class SimpleMarkerCondition(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         return [], [], [], [], declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{self.name} applied")
 
+# BonusDamageFeature (defined above) creates SimpleMarkerCondition.
+BonusDamageFeature.creates = (*BonusDamageFeature.creates, SimpleMarkerCondition)
+
 
 class HitSaveRiderFeature(BaseCondition):
     """Feature that applies a save-based condition rider after an exact authored item hit."""
+    creates = (Prone,)
 
     name: str = Field(default="Hit Save Rider", description="Condition name.")
     description: str = Field(
@@ -1022,6 +1027,7 @@ class GhoulClawsParalysisFeature(HitSaveRiderFeature):
 
 class GhoulParalysisEffect(BaseCondition):
     """Ghoul paralysis effect with end-of-turn repeat save."""
+    creates = (Paralyzed,)
 
     name: str = Field(default="Ghoul Paralysis", description="Condition name.")
     description: str = Field(default="Paralyzed by ghoul claws; repeat CON save at end of turn.", description="Rules summary.")
@@ -1053,6 +1059,9 @@ class GhoulParalysisEffect(BaseCondition):
         if success and self.name in target.active_conditions:
             target.remove_condition(self.name, parent_event=event)
         return event
+
+# HitSaveRiderFeature (defined above) creates GhoulParalysisEffect.
+HitSaveRiderFeature.creates = (*HitSaveRiderFeature.creates, GhoulParalysisEffect)
 
 
 class UndeadFortitudeFeature(BaseCondition):
@@ -1142,16 +1151,15 @@ class ParryFeature(BaseCondition):
             return event
         if event.ac is None:
             return event
-        event.ac.self_static.add_value_modifier(
-            NumericalModifier(
-                name="Parry",
-                value=self.ac_bonus,
-                source_entity_uuid=defender.uuid,
-                target_entity_uuid=defender.uuid,
-            )
-        )
+        parried = reading_with_value_row(event.ac, NumericalModifier(
+            name="Parry",
+            value=self.ac_bonus,
+            source_entity_uuid=defender.uuid,
+            target_entity_uuid=defender.uuid,
+        ))
         defender.action_economy.consume("reactions", 1)
         return event.with_updates(
+            ac=parried,
             status_message=(
                 f"{defender.name} uses Parry for +{self.ac_bonus} AC"
             ),
@@ -1239,9 +1247,13 @@ class DivineEminenceActive(BonusDamageFeature):
         self.dice_numbers = 3 + max(0, self.slot_level - 1)
         self.damage_dice = 6
 
+# DivineEminenceAction (defined above) creates DivineEminenceActive.
+DivineEminenceAction.creates = (*DivineEminenceAction.creates, DivineEminenceActive)
+
 
 class LeadershipAction(BaseAction):
     """Knight leadership action that grants nearby allies attack/save d4."""
+    creates = (SimpleMarkerCondition,)
 
     name: str = Field(default="Leadership", description="Action name.")
     description: str = Field(default="For 1 minute, nearby allies add 1d4 to attack rolls and saves.", description="Rules summary.")
@@ -1380,13 +1392,16 @@ class LeadershipAura(AreaCondition):
         if roller.position not in self.affected_positions:
             return None
         roll = event.get_effective_roll()
-        d4 = Dice(count=1, value=4, bonus=ModifiableValue.create(source_entity_uuid=leader.uuid, base_value=0, value_name="Leadership"), roll_type=roll.roll_type).roll
+        d4 = Dice(count=1, value=4, bonus=read_value(ModifiableValue.create(source_entity_uuid=leader.uuid, base_value=0, value_name="Leadership"), ValueRead(leader.uuid)), roll_type=roll.roll_type).roll
         new_roll = roll.model_copy(update={"total": roll.total + d4.total})
         return event.replace_roll(
             new_roll,
             "Leadership",
             f"+{d4.total} (1d4)",
         )
+
+# LeadershipAction (defined above) creates LeadershipAura.
+LeadershipAction.creates = (*LeadershipAction.creates, LeadershipAura)
 
 
 class RampageFeature(BaseCondition):
@@ -1431,6 +1446,7 @@ class RampageFeature(BaseCondition):
 
 class RampageAvailable(BaseCondition):
     """Temporary condition that grants Rampage Bite."""
+    creates = (NaturalAttack,)
 
     name: str = Field(default="Rampage Available", description="Condition name.")
     description: str = Field(
@@ -1466,6 +1482,9 @@ class RampageAvailable(BaseCondition):
         if owner:
             owner.unregister_action("Rampage Bite")
         return super()._remove(event)
+
+# RampageFeature (defined above) creates RampageAvailable.
+RampageFeature.creates = (*RampageFeature.creates, RampageAvailable)
 
 
 def _has_adjacent_ally(source: Entity, target: Entity) -> bool:
@@ -1588,6 +1607,7 @@ class InnateFlight(BaseCondition):
 
 
 class InnateInvisibility(BaseAction):
+    creates = (Concentrating, InvisibilityEffect)
     name: str = "Innate Invisibility"
     target_type: TargetType = TargetType.SELF
     costs: list[Cost] = Field(default_factory=lambda: [Cost(name="Innate Invisibility", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)])
@@ -1672,6 +1692,7 @@ class LifeDrainReduction(BaseCondition):
 
 
 class WightLifeDrain(NaturalAttack):
+    creates = (*NaturalAttack.creates, LifeDrainReduction)
     name: str = "Life Drain"
     description: str = "Melee +4, 1d6+2 necrotic; DC 13 Constitution gates lost maximum HP."
     natural_damage_dice: Literal[4,6,8,10,12,20] = 6

@@ -231,7 +231,7 @@ def _recomputes_of_first_step(with_far: bool) -> int:
         steps[0]()  # the torchbearer's step: the far watcher's window is 30 cells away
     finally:
         reset_action_count_recorder(token)
-    return counts["sensory.full_recompute"]
+    return counts["sensory.observer_settled"]
 
 
 def test_a_change_recomputes_only_the_observers_whose_window_it_reaches() -> None:

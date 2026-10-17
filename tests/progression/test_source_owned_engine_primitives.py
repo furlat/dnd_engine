@@ -266,7 +266,6 @@ def test_hit_dice_remove_by_uuid_preserves_other_blocks_and_spend() -> None:
     target_uuid = uuid4()
     target_value = ModifiableValue.create(
         source_entity_uuid=target_uuid,
-        target_entity_uuid=owner_uuid,
     )
     borrowed_modifier = NumericalModifier(
         source_entity_uuid=target_uuid,
@@ -275,8 +274,6 @@ def test_hit_dice_remove_by_uuid_preserves_other_blocks_and_spend() -> None:
         value=3,
     )
     target_value.to_target_static.add_value_modifier(borrowed_modifier)
-    d10.hit_dice_value.set_target_entity(target_uuid)
-    d10.hit_dice_value.set_from_target(target_value)
     borrowed_channel_uuid = target_value.to_target_static.uuid
 
     assert health.remove_hit_dice_by_uuid(d10.uuid)

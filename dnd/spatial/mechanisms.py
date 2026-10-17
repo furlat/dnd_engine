@@ -23,6 +23,8 @@ from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from dnd.types.traps import TrapDamage, TrapPayload, TrapState
 from dnd.types.world import OccupancyLayer
+from dnd.actions import Move
+from dnd.conditions import Prone, Poisoned
 
 
 DART_LAUNCHER_CONTENT_REF = ContentRef(
@@ -66,6 +68,7 @@ class TrapSave(BaseModel):
 
 class FiniteTrap(SpatialCondition):
     """One pulse owner; darts, blade strokes and crushers differ through data."""
+    creates = (Move, Prone, Poisoned)
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Trap mechanism"

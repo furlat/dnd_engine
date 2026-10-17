@@ -3,6 +3,7 @@
 from typing import Any, cast
 from uuid import uuid4
 
+from dnd.core.values import ValueRead, read_value
 from dnd.controller import Controller
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import SpellProtectionRegistry
@@ -20,6 +21,11 @@ from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
+
+
+def reading(value, target_uuid=None):
+    """The value read by its owner against an optional target."""
+    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
 
 
 def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -> None:
@@ -128,8 +134,8 @@ def test_reset_engine_runtime_invalidates_nested_behavior_provider_scopes() -> N
 
 
 def test_retired_world_dice_cannot_be_looked_up_in_the_next_world():
-    die = Dice(count=1, value=20, bonus=ModifiableValue(
-        source_entity_uuid=uuid4(), base_value=0))
+    die = Dice(count=1, value=20, bonus=reading(ModifiableValue(
+        source_entity_uuid=uuid4(), base_value=0)))
     roll = die.roll
     assert Dice.get(die.uuid) is die and DiceRoll.get(roll.roll_uuid) is roll
     reset_engine_runtime()

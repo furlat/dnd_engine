@@ -4,7 +4,7 @@ from typing import AbstractSet, Dict, Hashable, Optional, Any, List, Self, Set, 
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
-from dnd.core.base_object import BaseObject, read_private_attribute
+from dnd.core.base_object import BaseObject, CreatesModels, build_creatable_models, read_private_attribute
 from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent
 from dnd.core.condition_types import (
     HazardFilter, InvoluntarySustainLoss, SustainLossPolicy,
@@ -49,7 +49,7 @@ from dnd.types.actor import ConditionState
 from dnd.types.summoning import TerminalOwnerRelease
 from contextvars import ContextVar
 
-ContextualConditionImmunity = Callable[['BaseBlock', Optional['BaseBlock'], Optional[dict]], bool]
+ContextualConditionImmunity = Callable[['BaseBlock', Optional[dict]], bool]
 
 
 @dataclass(frozen=True)
@@ -140,7 +140,7 @@ class BaseBlock(BaseModel):
     """UUID-addressable container for engine components.
 
     Blocks group child blocks, modifiable values, conditions, and local event
-    handlers behind a shared source/target/context identity. Subclasses such as
+    handlers behind a shared owner identity. Subclasses such as
     entities, items, tiles, equipment, and health blocks specialize the virtual
     spatial and gameplay hooks while retaining the same registry and cleanup
     contracts.
@@ -252,6 +252,8 @@ class BaseBlock(BaseModel):
         return {cond: [name for name, _ in imms] for cond, imms in self.contextual_condition_immunities.items()}
 
     _registry: ClassVar[Dict[UUID, 'BaseBlock']] = {}
+    # The model classes this block's content can create in play (see BaseObject.creates).
+    creates: ClassVar[tuple[type[CreatesModels], ...]] = ()
     _accepted_condition_removals: ClassVar[ContextVar[Optional[Dict[
         UUID, Tuple[Optional['BaseBlock'], BaseCondition, Event, bool]
     ]]]] = ContextVar("accepted_condition_removals", default=None)
@@ -373,7 +375,7 @@ class BaseBlock(BaseModel):
         return True
 
     def _set_values_and_blocks_source(self, block: 'BaseBlock') -> None:
-        """Propagate source, target, and context into a block tree.
+        """Propagate the owner identity into a block tree.
 
         Args:
             block: Block whose immediate values and child blocks should inherit
@@ -381,18 +383,10 @@ class BaseBlock(BaseModel):
         """
         for value in block.values.values():
             value.set_source_entity(block.source_entity_uuid, block.source_entity_name)
-            if block.context is not None:
-                value.set_context(block.context)
-            if block.target_entity_uuid is not None:
-                value.set_target_entity(block.target_entity_uuid, block.target_entity_name)
 
         for sub_block in block.blocks.values():
             sub_block.source_entity_uuid = block.source_entity_uuid
             sub_block.source_entity_name = block.source_entity_name
-            if block.context is not None:
-                sub_block.set_context(block.context)
-            if block.target_entity_uuid is not None:
-                sub_block.set_target_entity(block.target_entity_uuid, block.target_entity_name)
             self._set_values_and_blocks_source(sub_block)
 
     def _populate_blocks_and_values(self) -> None:
@@ -440,8 +434,9 @@ class BaseBlock(BaseModel):
 
 
     def model_post_init(self, __context: Any) -> None:
-        """Register this block in the block registry by UUID."""
+        """Build what this block can create and register it in the block registry by UUID."""
         super().model_post_init(__context)
+        build_creatable_models(type(self))
         self.__class__._registry[self.uuid] = self
 
     @classmethod
@@ -718,68 +713,6 @@ class BaseBlock(BaseModel):
                     return True
 
         return False
-
-    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str] = None) -> None:
-        """Set target identity on this block, direct values, and child blocks.
-
-        Args:
-            target_entity_uuid: UUID of the target entity.
-            target_entity_name: Optional display name for the target entity.
-
-        Raises:
-            ValueError: If `target_entity_uuid` is not a UUID.
-        """
-        if not isinstance(target_entity_uuid, UUID):
-            raise ValueError("target_entity_uuid must be a UUID")
-
-        self.target_entity_uuid = target_entity_uuid
-        self.target_entity_name = target_entity_name
-
-        for value in self.values.values():
-            value.set_target_entity(target_entity_uuid, target_entity_name)
-
-        for block in self.blocks.values():
-            block.set_target_entity(target_entity_uuid, target_entity_name)
-
-    def clear_target_entity(self) -> None:
-        """Clear target identity on this block, direct values, and children."""
-        for value in self.values.values():
-            value.clear_target_entity()
-
-        for block in self.blocks.values():
-            block.clear_target_entity()
-
-        self.target_entity_uuid = None
-        self.target_entity_name = None
-
-    def set_context(self, context: Dict[str, Any]) -> None:
-        """Set runtime context on this block, direct values, and children.
-
-        Args:
-            context: Context dictionary to propagate.
-        """
-        self.context = context
-
-        for value in self.values.values():
-            value.set_context(context)
-
-        for block in self.blocks.values():
-            block.set_context(context)
-
-    def clear_context(self) -> None:
-        """Clear runtime context on this block, direct values, and children."""
-        self.context = None
-
-        for value in self.values.values():
-            value.clear_context()
-
-        for block in self.blocks.values():
-            block.clear_context()
-
-    def clear(self) -> None:
-        """Clear target identity and context from this block tree."""
-        self.clear_target_entity()
-        self.clear_context()
 
     def remove_contained_item(self, item_uuid: UUID, *, parent_event: Event | None = None,
                               reason: ItemReleaseReason = ItemReleaseReason.TRANSFERRED) -> bool:

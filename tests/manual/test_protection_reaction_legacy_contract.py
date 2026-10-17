@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from dnd.core.values import has_static_advantage_row
 from dnd.actions import Attack, AttackEvent
 from dnd.actions_functional import setup_standard_actions
 from dnd.classes.fighter import FightingStyleProtection
@@ -77,10 +78,7 @@ def _attack(scene: ProtectionScene, target: Entity | None = None) -> AttackEvent
 def _has_protection_modifier(event: AttackEvent) -> bool:
     attack_bonus = event.attack_bonus
     assert attack_bonus is not None
-    return any(
-        modifier.name == "Protection"
-        for modifier in attack_bonus.self_static.advantage_modifiers.values()
-    )
+    return has_static_advantage_row(attack_bonus, "Protection")
 
 
 def test_protection_imposes_disadvantage_once_and_consumes_reaction() -> None:

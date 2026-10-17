@@ -42,7 +42,8 @@ from contextvars import ContextVar
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, StrictInt, field_serializer, model_validator
 from typing import AbstractSet, Union, List, Optional, Dict, Mapping, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
-from dnd.core.values import ModifiableValue
+from dnd.core.values import (AdvantageBreakdownRow, ModifiableValue, ValueBreakdownRow, ValueRead, ValueReading,
+    read_value)
 from dnd.types.actor import TemporaryHitPointsGrant, ConditionState
 from dnd.types.class_features import IndomitableReroll, RelentlessRageIntervention
 from dnd.types.summoning import SummonOrigin, SummonSelection, TerminalOwnerRelease
@@ -169,6 +170,18 @@ class OpenGroup:
     # Lineages of facts opened in the group that complete right after its
     # settle (a zone's own change): settled observers need no second pass.
     completes_after: Set[UUID] = field(default_factory=set)
+
+
+def value_log_rows(rows: Sequence[ValueBreakdownRow]) -> List[ModifierBreakdown]:
+    """Combat-log rows of a read's static numerical breakdown."""
+    return [ModifierBreakdown(name=row.name, value=row.value, source=row.source) for row in rows]
+
+
+def advantage_log_rows(rows: Sequence[AdvantageBreakdownRow]) -> List[ModifierBreakdown]:
+    """Combat-log rows of a read's applied advantage (+1) and disadvantage (-1) contributions."""
+    signs = {"advantage": 1, "disadvantage": -1}
+    return [ModifierBreakdown(name=row.name, value=signs[row.value], source=row.source)
+            for row in rows if row.value in signs]
 
 
 @runtime_checkable
@@ -2905,24 +2918,20 @@ class D20Event(Event):
     """Legacy event payload for a resolved d20 check."""
 
     name: str = Field(default="D20", description="Human-readable d20 event label.")
-    dc: Optional[Union[int, ModifiableValue]] = Field(
+    dc: Optional[int] = Field(
         default=None,
-        description="Difficulty class for the roll, either fixed or modifiable.",
+        description="Difficulty class for the roll.",
     )
-    bonus: Optional[Union[int, ModifiableValue]] = Field(
+    bonus: Optional[Union[int, ValueReading]] = Field(
         default=0,
-        description="Roll bonus, either fixed or represented by a modifiable value.",
+        description="Roll bonus: the evaluated bonus, or its total once detached for a seat.",
     )
     dice: Optional[Dice] = Field(default=None, description="Dice object used to create the roll.")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="Resolved dice roll.")
     result: Optional[bool] = Field(default=None, description="Whether the roll met or exceeded its DC.")
 
     def get_dc(self) -> Optional[int]:
-        """Return the current numeric difficulty class."""
-        if self.dc is None:
-            return None
-        if isinstance(self.dc, ModifiableValue):
-            return self.dc.normalized_score
+        """Return the numeric difficulty class."""
         return self.dc
 
 class SavingThrowEvent(D20Event):
@@ -2988,27 +2997,9 @@ class SavingThrowEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        bonus_breakdown: List[ModifierBreakdown] = []
-        if self.bonus and isinstance(self.bonus, ModifiableValue):
-            for mod in self.bonus.get_breakdown():
-                bonus_breakdown.append(ModifierBreakdown(
-                    name=mod.get('name', 'Unknown'),
-                    value=mod.get('value', 0),
-                    source=mod.get('source', 'self')
-                ))
-
-        advantage_breakdown: List[ModifierBreakdown] = []
-        if self.bonus and isinstance(self.bonus, ModifiableValue):
-            for mod in self.bonus.get_full_advantage_breakdown():
-                adv_val = mod.get('value', 'inactive')
-                if adv_val == 'advantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
-                    ))
-                elif adv_val == 'disadvantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
-                    ))
+        bonus_breakdown = value_log_rows(self.bonus.breakdown) if isinstance(self.bonus, ValueReading) else []
+        advantage_breakdown = (advantage_log_rows(self.bonus.advantage_breakdown)
+                               if isinstance(self.bonus, ValueReading) else [])
 
         success = self.result if self.result is not None else (roll.total >= dc if dc > 0 else None)
 
@@ -3106,27 +3097,9 @@ class SkillCheckEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        bonus_breakdown: List[ModifierBreakdown] = []
-        if self.bonus and isinstance(self.bonus, ModifiableValue):
-            for mod in self.bonus.get_breakdown():
-                bonus_breakdown.append(ModifierBreakdown(
-                    name=mod.get('name', 'Unknown'),
-                    value=mod.get('value', 0),
-                    source=mod.get('source', 'self')
-                ))
-
-        advantage_breakdown: List[ModifierBreakdown] = []
-        if self.bonus and isinstance(self.bonus, ModifiableValue):
-            for mod in self.bonus.get_full_advantage_breakdown():
-                adv_val = mod.get('value', 'inactive')
-                if adv_val == 'advantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
-                    ))
-                elif adv_val == 'disadvantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
-                    ))
+        bonus_breakdown = value_log_rows(self.bonus.breakdown) if isinstance(self.bonus, ValueReading) else []
+        advantage_breakdown = (advantage_log_rows(self.bonus.advantage_breakdown)
+                               if isinstance(self.bonus, ValueReading) else [])
 
         success = self.result if self.result is not None else (roll.total >= dc if dc is not None and dc > 0 else None)
 
@@ -4751,11 +4724,16 @@ class Damage(BaseObject):
                 self.damage_dice, attack_outcome, crit_extra_dice)
             shared = group.shared_dice.get(key)
             if shared is None:
-                shared = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus,
+                shared = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.read_bonus(),
                     roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
                 group.shared_dice[key] = shared
             return shared
-        return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
+        return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.read_bonus(), roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
+
+    def read_bonus(self) -> ValueReading:
+        """The flat bonus read in this packet's situation: its source, target and attack context."""
+        assert self.damage_bonus is not None, "Damage requires damage_bonus to be set"
+        return read_value(self.damage_bonus, ValueRead(self.source_entity_uuid, self.target_entity_uuid, self.context))
 
 
 class Healing(BaseObject):
@@ -4778,7 +4756,8 @@ class Healing(BaseObject):
         return Dice(
             count=self.dice_numbers,
             value=self.healing_dice,
-            bonus=self.healing_bonus,
+            bonus=read_value(self.healing_bonus,
+                             ValueRead(self.source_entity_uuid, self.target_entity_uuid, self.context)),
             roll_type=RollType.HEAL
         )
 
@@ -4955,7 +4934,7 @@ class D20RollResultEvent(DiceRollResultEvent):
         description="Replacement d20 roll after handlers modify the result.",
     )
     dc: Optional[int] = Field(default=None, description="Difficulty class or armor class, if known.")
-    bonus: Optional[ModifiableValue] = Field(default=None, description="Modifiers used for the d20 roll.")
+    bonus: Optional[ValueReading] = Field(default=None, description="Evaluated bonus used for the d20 roll.")
     result: Optional[bool] = Field(default=None, description="Success flag set after the outcome is evaluated.")
 
     @model_validator(mode="after")

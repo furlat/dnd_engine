@@ -444,7 +444,7 @@ def test_equal_and_invalid_tile_requests_allocate_nothing_and_emit_nothing() -> 
 
 
 def test_tile_replacement_releases_only_the_displaced_owned_graph() -> None:
-    """Detachment clears local values/modifiers and preserves imported/sibling owners."""
+    """Detachment clears local values/modifiers and preserves independent and sibling owners."""
     reset_engine_runtime()
     grid = get_map()
     previous = grid.set_tile(0, 0, fire_event=False)
@@ -454,9 +454,7 @@ def test_tile_replacement_releases_only_the_displaced_owned_graph() -> None:
         base_value=7,
         value_name="Imported owner",
     )
-    imported_owner.set_target_entity(previous.uuid)
-    previous.edit_movement_cost(MovementMode.WALKING).set_target_entity(imported_owner.source_entity_uuid)
-    previous.edit_movement_cost(MovementMode.WALKING).set_from_target(imported_owner)
+    previous.edit_movement_cost(MovementMode.WALKING)
     old_values, old_modifiers = _tile_graph_uuids(previous)
     sibling.edit_movement_cost(MovementMode.SWIMMING)
     sibling_values, sibling_modifiers = _tile_graph_uuids(sibling)

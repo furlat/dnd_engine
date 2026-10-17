@@ -68,6 +68,7 @@ class GasCloudSpec(BaseModel):
 
 class GasCloud(AreaCondition):
     """One lingering release; overlapping same-content cells are replaced."""
+    creates = (Poisoned,)
 
     name: str = "Poison gas"
     description: str = "A stationary poisonous cloud. Exposure requires a Constitution save."
@@ -99,7 +100,7 @@ class GasCloud(AreaCondition):
                 effect_tags=(SavingThrowEffectTag.POISON,)))
         _, _, saved = entity.saving_throw(request)
         if not saved or self.half_damage_on_success:
-            bonus = ModifiableValue.create(source_entity_uuid=self.uuid, target_entity_uuid=entity.uuid,
+            bonus = ModifiableValue.create(source_entity_uuid=self.uuid,
                 base_value=0, value_name="Gas damage")
             damage = Damage(name=self.name, source_entity_uuid=self.uuid, target_entity_uuid=entity.uuid,
                 damage_dice=self.damage.dice_sides, dice_numbers=self.damage.dice_count,
@@ -146,6 +147,7 @@ class GasCloud(AreaCondition):
 
 class GasVent(SpatialCondition):
     """A control-driven emitter; released clouds are independent world owners."""
+    creates = (GasCloud,)
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Gas vent"

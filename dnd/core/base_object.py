@@ -16,6 +16,47 @@ class ContributionOwner(Protocol):
     def allows_contribution_at(self, position: tuple[int, int] | None) -> bool: ...
 
 
+class CreatesModels(Protocol):
+    """A model class declaring the model classes its content can create in play."""
+
+    creates: ClassVar[tuple[type['CreatesModels'], ...]]
+    __pydantic_complete__: ClassVar[bool]
+
+    @classmethod
+    def model_rebuild(cls) -> bool | None: ...
+
+
+# Classes whose creatable closure is built. A built schema stays built for the
+# process, so creating another instance of one of them builds nothing.
+_CLOSURES_BUILT: set[type] = set()
+
+
+def build_creatable_models(model: type[CreatesModels]) -> None:
+    """Build every model class `model`'s content can create, transitively.
+
+    Conditions and actions defer their validation schema to first use
+    (`defer_build`). Creating an object (a character, creature, item, placed
+    object, action template or condition) builds the closure of its declared
+    `creates` here, once per class, so the products it makes later in a
+    gameplay operation are already built.
+    """
+    if model in _CLOSURES_BUILT:
+        return
+    pending = list(model.creates)
+    seen: set[type[CreatesModels]] = set()
+    while pending:
+        product = pending.pop()
+        if product in seen:
+            continue
+        seen.add(product)
+        if not product.__pydantic_complete__:
+            product.model_rebuild()
+        pending.extend(product.creates)
+    # Every product's own closure was walked here too.
+    _CLOSURES_BUILT.update(seen)
+    _CLOSURES_BUILT.add(model)
+
+
 def read_private_attribute(model: BaseModel, item: str) -> Any:
     """Pydantic's private-attribute read without its per-read descriptor probe.
 
@@ -39,6 +80,9 @@ class BaseObject(BaseModel):
     """
 
     _registry: ClassVar[Dict[UUID, ContributionOwner]] = {}
+    # The model classes this object's content can create in play, by its own
+    # rules or by the systems they trigger; a subclass extends its parent's.
+    creates: ClassVar[tuple[type[CreatesModels], ...]] = ()
     model_config = ConfigDict(arbitrary_types_allowed=True)
     __getattr__ = read_private_attribute
 
@@ -95,7 +139,8 @@ class BaseObject(BaseModel):
         return BaseObject._registry.get(uuid)
 
     def model_post_init(self, __context: Any) -> None:
-        """Register the object by UUID when registry participation is enabled."""
+        """Build what this object can create; register it by UUID when registry participation is enabled."""
+        build_creatable_models(type(self))
         if __context is not PASSIVE_EVENT_REPLAY and self.use_register:
             self.__class__._registry[self.uuid] = self
 
@@ -198,33 +243,6 @@ class BaseObject(BaseModel):
         if self.source_entity_uuid != source_id:
             raise ValueError("Source entity UUIDs do not match")
 
-    def validate_target_id(self, target_id: UUID) -> None:
-        """Validate that a UUID matches this object's target entity UUID.
-
-        Args:
-            target_id: Target UUID to validate.
-
-        Raises:
-            ValueError: If the UUIDs do not match.
-        """
-        if self.target_entity_uuid != target_id:
-            raise ValueError("Target entity UUIDs do not match")
-
-    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str] = None) -> None:
-        """Set the target entity identity for this object.
-
-        Args:
-            target_entity_uuid: UUID of the target entity.
-            target_entity_name: Optional display name of the target entity.
-        """
-        self.target_entity_uuid = target_entity_uuid
-        self.target_entity_name = target_entity_name
-
-    def clear_target_entity(self) -> None:
-        """Clear target entity identity from this object."""
-        self.target_entity_uuid = None
-        self.target_entity_name = None
-
     def set_context(self, context: Dict[str, Any]) -> None:
         """Set runtime context for this object.
 
@@ -233,6 +251,3 @@ class BaseObject(BaseModel):
         """
         self.context = context
 
-    def clear_context(self) -> None:
-        """Clear runtime context from this object."""
-        self.context = None

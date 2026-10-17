@@ -143,6 +143,7 @@ class CloseDoorAction(BaseAction):
 
 class DoorObject(UsableItem):
     """Door that surfaces exactly the action valid for its current state."""
+    creates = (OpenDoorAction, CloseDoorAction)
 
     name: str = Field(default="Door", description="Display name for the test door.")
     armor_class: int = Field(default=15, ge=0)
@@ -364,6 +365,7 @@ class ToggleLeverAction(BaseAction):
 
 class ControlLever(UsableItem):
     """A reusable handle with one private, explicitly typed item connection."""
+    creates = (ToggleLeverAction,)
 
     name: str = "Control Lever"
     is_pickable: bool = False
@@ -534,6 +536,7 @@ class LootItemAction(BaseAction):
 
 class StorageChest(UsableItem):
     """A fixed container with an independent lid and optional looting/breakage."""
+    creates = (OpenChestAction, CloseChestAction, LootItemAction)
 
     is_open: bool = False
     destruction_profile: Optional[ItemDestructionProfile] = Field(

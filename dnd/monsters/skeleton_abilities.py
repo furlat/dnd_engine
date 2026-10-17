@@ -163,6 +163,7 @@ class MarkTargetAction(BaseAction):
         spell_range: Range used by validation.
         costs: Runtime action-economy costs.
     """
+    creates = (Concentrating, MarkCooldown, Marked)
     name: str = Field(default="Mark Target", description="Action discovery and combat-log label.")
     description: str = Field(
         default="Mark an enemy (60ft). Attackers gain advantage, target can't hide. Concentration.",

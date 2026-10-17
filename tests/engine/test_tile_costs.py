@@ -69,38 +69,6 @@ def test_movement_edits_preserve_mode_caps_and_removable_identity(
     assert ModifiableValue.get(value.uuid) is retained
 
 
-def test_movement_promotion_preserves_current_and_later_context_and_target() -> None:
-    """A contextual modifier sees the same Tile metadata before and after promotion."""
-    reset_engine_runtime()
-    tile = Tile.create((0, 0))
-    target = uuid4()
-    tile.set_target_entity(target, "Walker")
-    tile.set_context({"terrain_effect": True})
-    value = tile.edit_movement_cost(MovementMode.WALKING)
-    bonus = NumericalModifier.create(source_entity_uuid=tile.uuid, value=3)
-    no_bonus = NumericalModifier.create(source_entity_uuid=tile.uuid, value=0)
-
-    def terrain_effect(
-        source_uuid: UUID, target_uuid: UUID | None, context: dict[str, Any] | None,
-    ) -> NumericalModifier:
-        applies = source_uuid == tile.uuid and target_uuid == target and context == {"terrain_effect": True}
-        return bonus if applies else no_bonus
-
-    value.self_contextual.add_value_modifier(ContextualNumericalModifier(
-        source_entity_uuid=tile.uuid, callable=terrain_effect,
-    ))
-
-    assert tile.get_movement_cost(MovementMode.WALKING) == 4
-    tile.clear_target_entity()
-    assert tile.get_movement_cost(MovementMode.WALKING) == 1
-    tile.set_target_entity(target, "Walker")
-    assert tile.get_movement_cost(MovementMode.WALKING) == 4
-    tile.clear_context()
-    assert tile.get_movement_cost(MovementMode.WALKING) == 1
-    tile.set_context({"terrain_effect": True})
-    assert tile.get_movement_cost(MovementMode.WALKING) == 4
-
-
 def test_terrain_authoring_compares_base_while_world_projection_reports_effective_cost() -> None:
     """Reapplying authored terrain must preserve an active cost modifier and its owner."""
     reset_engine_runtime()

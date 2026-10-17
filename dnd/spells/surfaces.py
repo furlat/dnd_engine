@@ -41,6 +41,7 @@ class AcidSurfacePenalty(BaseCondition):
 
 
 class AcidSurfaceMembership(SpatialConditionMembershipSource):
+    creates = (AcidSurfacePenalty,)
     name: str = "Acid Surface Membership"
     description: str = "One exact acid-patch lease for the shared AC penalty."
 
@@ -66,6 +67,7 @@ class AcidSurfaceMembership(SpatialConditionMembershipSource):
 @srd_condition_identity(content_id="spatial_effect.spell.acid_surface",display_name="Spell Acid Surface",
     description="Two-turn acid patch: nonstacking -2 Armor Class while inside.")
 class SpellAcidSurface(MembershipAreaCondition):
+    creates = (AcidSurfaceMembership,)
     name: str = "Spell Acid Surface"
     description: str = "Two-turn acid patch: nonstacking -2 Armor Class while inside."
     layer: SpatialEffectLayer = SpatialEffectLayer.GROUND_SURFACE
@@ -118,6 +120,7 @@ class SimpleToxinExposure(BaseCondition):
 @srd_condition_identity(content_id="spatial_effect.spell.simple_toxin",display_name="Simple Toxin Surface",
     description="Two-turn toxin patch: CON admission, then one delayed 1d4 poison tick.")
 class SimpleToxinSurface(AreaCondition):
+    creates = (SimpleToxinExposure,)
     name: str = "Simple Toxin Surface"
     description: str = "Two-turn toxin patch: CON admission, then one delayed 1d4 poison tick."
     layer: SpatialEffectLayer = SpatialEffectLayer.GROUND_SURFACE

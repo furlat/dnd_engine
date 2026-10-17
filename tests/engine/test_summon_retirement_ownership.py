@@ -104,7 +104,6 @@ def test_canonical_creature_retirement_releases_hit_dice_and_owned_bonus_lists_o
     for bonus in bonuses:
         removed.update(value_identities(bonus))
     retained = ModifiableValue.create(source_entity_uuid=entity.uuid, base_value=3, value_name='Independent')
-    bonuses[0].from_target_static = retained.to_target_static
     kept = value_identities(retained)
     sword = give(entity, 'weapon.circus.flaming_scimitar')
     assert sword.extra_damage_bonus

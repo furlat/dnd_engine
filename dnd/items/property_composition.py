@@ -47,7 +47,7 @@ def _unseen_strike(event: Event, source_entity_uuid: UUID, *, item_uuid: UUID,
         target_entity_uuid=event.target_entity_uuid, damage_dice=property.die,
         dice_numbers=property.count, damage_type=property.damage_type,
         damage_bonus=ModifiableValue.create(source_entity_uuid=source_entity_uuid,
-            target_entity_uuid=event.target_entity_uuid, base_value=0,
+            base_value=0,
             value_name=f"{property.name} Damage Bonus"))
     return event.append_damage_roll(damage, damage.get_dice(event.attack_outcome).roll,
         property.name, f"{property.count}d{property.die} {property.damage_type.value.lower()} (unseen attacker)")

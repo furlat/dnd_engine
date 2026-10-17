@@ -25,7 +25,7 @@ from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
-from dnd.core.values import BaseValue
+from dnd.core.values import BaseValue, ValueRead, read_value
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.monsters.srd_roster import (
@@ -201,17 +201,15 @@ def test_pack_tactics_sunlight_and_keen_senses_use_contextual_values() -> None:
     attack_bonus = kobold.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
     assert attack_bonus.advantage == AdvantageStatus.ADVANTAGE
 
-    lonely_attack_bonus = ally.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
-    lonely_attack_bonus.set_context({"sunlight": True})
-    assert lonely_attack_bonus.advantage == AdvantageStatus.NONE
+    def attack_in(entity, context):
+        value, _ = entity.weapon_attack_value(ValueRead(entity.uuid, target.uuid), WeaponSlot.MELEE_MAIN)
+        return read_value(value, ValueRead(entity.uuid, target.uuid, context))
 
-    kobold_sunlight_bonus = kobold.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
-    kobold_sunlight_bonus.set_context({"sunlight": True})
-    assert kobold_sunlight_bonus.advantage == AdvantageStatus.NONE
+    assert attack_in(ally, {"sunlight": True}).advantage == AdvantageStatus.NONE
+    assert attack_in(kobold, {"sunlight": True}).advantage == AdvantageStatus.NONE
 
     wolf = _materialize_srd_fixture("wolf", position=(5, 5), faction="monsters")
-    perception = wolf.skill_set.perception.skill_bonus.model_copy(deep=True)
-    perception.set_context({"sense": "hearing"})
+    perception = read_value(wolf.skill_set.perception.skill_bonus, ValueRead(wolf.uuid, context={"sense": "hearing"}))
     assert perception.advantage == AdvantageStatus.ADVANTAGE
 
 

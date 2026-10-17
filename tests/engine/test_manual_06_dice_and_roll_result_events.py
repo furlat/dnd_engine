@@ -3,6 +3,7 @@
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
+from dnd.core.values import ValueRead, read_value
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType
 from dnd.core.equipment_types import WeaponSlot
@@ -28,6 +29,11 @@ from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import determine_attack_outcome
 
 
+def reading(value, target_uuid=None):
+    """The value read by its owner against an optional target."""
+    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+
+
 def reset_dice_state() -> None:
     """Clear global state touched by primitive dice examples."""
     EventQueue.reset()
@@ -45,7 +51,6 @@ def test_plain_d20_and_advantage_selection() -> None:
 
     attack_bonus = ModifiableValue.create(
         source_entity_uuid=hero_id,
-        target_entity_uuid=goblin_id,
         value_name="Attack Bonus",
         base_value=3,
     )
@@ -53,7 +58,7 @@ def test_plain_d20_and_advantage_selection() -> None:
         normal_roll = Dice(
             count=1,
             value=20,
-            bonus=attack_bonus,
+            bonus=reading(attack_bonus, goblin_id),
             roll_type=RollType.ATTACK,
         ).roll
 
@@ -64,7 +69,6 @@ def test_plain_d20_and_advantage_selection() -> None:
 
     advantage_bonus = ModifiableValue.create(
         source_entity_uuid=hero_id,
-        target_entity_uuid=goblin_id,
         value_name="Attack Bonus With Advantage",
         base_value=3,
     )
@@ -81,7 +85,7 @@ def test_plain_d20_and_advantage_selection() -> None:
         advantage_roll = Dice(
             count=1,
             value=20,
-            bonus=advantage_bonus,
+            bonus=reading(advantage_bonus, goblin_id),
             roll_type=RollType.ATTACK,
         ).roll
 
@@ -97,7 +101,6 @@ def test_critical_damage_doubles_dice_and_adds_bonus_once() -> None:
     goblin_id = uuid4()
     damage_bonus = ModifiableValue.create(
         source_entity_uuid=hero_id,
-        target_entity_uuid=goblin_id,
         value_name="Damage Bonus",
         base_value=4,
     )
@@ -106,7 +109,7 @@ def test_critical_damage_doubles_dice_and_adds_bonus_once() -> None:
         critical_damage = Dice(
             count=2,
             value=6,
-            bonus=damage_bonus,
+            bonus=reading(damage_bonus, goblin_id),
             roll_type=RollType.DAMAGE,
             attack_outcome=AttackOutcome.CRIT,
             crit_extra_dice=1,
@@ -176,7 +179,6 @@ def test_d20_result_event_replaces_effective_roll() -> None:
     )
     check_bonus = ModifiableValue.create(
         source_entity_uuid=hero_id,
-        target_entity_uuid=goblin_id,
         value_name="Check Bonus",
         base_value=2,
     )
@@ -217,7 +219,7 @@ def test_d20_result_event_replaces_effective_roll() -> None:
         target_entity_uuid=goblin_id,
         roll_type=RollType.CHECK,
         original_roll=original_d20,
-        bonus=check_bonus,
+        bonus=reading(check_bonus, goblin_id),
         phase=EventPhase.DECLARATION,
     )
     roll_event = roll_event.phase_to(EventPhase.EFFECT)
@@ -297,7 +299,6 @@ def test_damage_result_event_replaces_effective_packet_roll_only() -> None:
                     dice_numbers=2,
                     damage_bonus=ModifiableValue.create(
                         source_entity_uuid=hero_id,
-                        target_entity_uuid=goblin_id,
                         value_name="Tutorial Damage Bonus",
                         base_value=3,
                     ),

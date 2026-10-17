@@ -1,6 +1,6 @@
 import logging
 
-from pydantic import Field, PrivateAttr, computed_field, model_validator
+from pydantic import Field, computed_field, model_validator
 from typing import List, Literal, Optional, Dict, Any, Callable, TypeVar, Union, Tuple, Self
 from uuid import UUID
 from enum import Enum
@@ -259,27 +259,6 @@ class ContextualModifier(BaseObject):
         default=None,
         description="Arguments used by strict `execute_callable()` rather than normal contextual aggregation."
     )
-    _latest_evaluation: Optional[Tuple[UUID, Optional[UUID], Optional[UUID], Optional[Any]]] = PrivateAttr(default=None)
-
-    def breakdown_result(
-        self,
-        source_entity_uuid: UUID,
-        target_entity_uuid: Optional[UUID],
-        event_lineage_uuid: Optional[UUID],
-    ) -> Optional[Any]:
-        """Return the latest evaluated result for breakdown display, never authoritative data.
-
-        Only the latest evaluation is kept (one slot, not one entry per
-        lineage); it answers when it was made for this source, target and
-        lineage. Evaluation always recomputes; equipment/condition changes
-        cannot leave a stale value driving a rules query.
-        """
-        latest = self._latest_evaluation
-        if (latest is None or latest[0] != source_entity_uuid or latest[1] != target_entity_uuid
-                or latest[2] != event_lineage_uuid):
-            return None
-        return latest[3]
-
     @classmethod
     def get(cls, uuid: UUID) -> Optional['ContextualModifier']:
         """Retrieve a contextual modifier by UUID.
@@ -343,7 +322,6 @@ class ContextualModifier(BaseObject):
         source_entity_uuid: UUID,
         target_entity_uuid: Optional[UUID] = None,
         context: Optional[Dict[str, Any]] = None,
-        event_lineage_uuid: Optional[UUID] = None,
     ) -> Optional[Union[
         NumericalModifier,
         AdvantageModifier,
@@ -359,8 +337,6 @@ class ContextualModifier(BaseObject):
             source_entity_uuid: Source UUID passed to the callable.
             target_entity_uuid: Optional target UUID passed to the callable.
             context: Optional context dictionary passed to the callable.
-            event_lineage_uuid: Optional event lineage UUID recorded with the
-                latest result for breakdown display.
 
         Returns:
             Callable result, or ``None`` when the rule does not apply or its
@@ -382,7 +358,6 @@ class ContextualModifier(BaseObject):
                 self.uuid,
             )
             result = None
-        self._latest_evaluation = (source_entity_uuid, target_entity_uuid, event_lineage_uuid, result)
         return result
 
     def execute_callable(self) -> Union[

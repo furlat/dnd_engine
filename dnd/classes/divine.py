@@ -32,6 +32,7 @@ class ClassFeatureLifetime(BaseCondition):
 
 
 class Turned(BaseCondition):
+    creates = (Dash, Dodge, Move)
     name: str = "Turned"
     description: str = "Turned for three recipient turns: retreat, Dash or blocked-path Dodge; no reactions; ends on damage."
     immunity_names: tuple[str, ...] = ("Turned",)

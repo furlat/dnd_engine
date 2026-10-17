@@ -50,7 +50,7 @@ def apply_trap_payload(entity: Entity, payload: TrapPayload, *, source_uuid: UUI
                        half_damage: bool = False, apply_condition: bool = True) -> None:
     """Apply authored consequences after the owning mechanism resolves avoidance."""
     for component in payload.damages:
-        bonus = ModifiableValue.create(source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid,
+        bonus = ModifiableValue.create(source_entity_uuid=source_uuid,
             base_value=0, value_name="Trap damage")
         damage = Damage(name=name, source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid,
             damage_dice=component.dice_sides, dice_numbers=component.dice_count,

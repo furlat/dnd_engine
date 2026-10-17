@@ -10,8 +10,8 @@ from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
-from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.modifiers import ContextualNumericalModifier, NumericalModifier
+from dnd.core.values import BaseValue, ModifiableValue, ValueRead, read_value
 
 
 class LeafBlock(BaseBlock):
@@ -135,56 +135,28 @@ def test_eb_05_001_blocks_discover_direct_and_deep_values() -> None:
     assert block.blocks_dict_name_uuid == {"Child Block": block.child.uuid}
 
 
-def test_eb_05_002_target_propagation_reaches_values_and_child_blocks() -> None:
-    """EB-05-002: block target propagation recurses through owned objects."""
+def test_eb_05_002_block_values_hold_no_read_state_and_a_read_carries_it() -> None:
+    """EB-05-002: a block's values carry no target or context; the read passes both to contextual rows."""
     reset_block_state()
     source_uuid = uuid4()
     target_uuid = uuid4()
     block = make_parent_block(source_uuid)
+    seen = []
 
-    block.set_target_entity(target_uuid, "Target")
+    def observe(source, target, context):
+        seen.append((source, target, context))
+        return None
 
-    assert block.target_entity_uuid == target_uuid
-    assert block.direct_value.target_entity_uuid == target_uuid
-    assert block.direct_value.self_static.target_entity_uuid == target_uuid
-    assert block.direct_value.to_target_contextual.target_entity_uuid == target_uuid
-    assert block.child.target_entity_uuid == target_uuid
-    assert block.child.leaf_value.target_entity_uuid == target_uuid
-
-    block.clear_target_entity()
-
-    assert block.target_entity_uuid is None
-    assert block.direct_value.target_entity_uuid is None
-    assert block.direct_value.from_target_static is None
-    assert block.child.target_entity_uuid is None
-    assert block.child.leaf_value.target_entity_uuid is None
-
-
-def test_eb_05_003_context_propagation_reaches_contextual_channels() -> None:
-    """EB-05-003: block context propagation reaches contextual value channels."""
-    reset_block_state()
-    source_uuid = uuid4()
-    block = make_parent_block(source_uuid)
+    block.child.leaf_value.self_contextual.add_value_modifier(
+        ContextualNumericalModifier(source_entity_uuid=source_uuid, callable=observe))
     context = {"range": "melee", "cover": "none"}
 
-    block.set_context(context)
+    read_value(block.child.leaf_value, ValueRead(source_uuid, target_uuid, context))
+    assert seen and all(row == (source_uuid, target_uuid, context) for row in seen)
 
-    assert block.context is context
-    assert block.direct_value.context is context
-    assert block.direct_value.self_contextual.context is context
-    assert block.direct_value.to_target_contextual.context is context
-    assert block.direct_value.self_static.context is None
-    assert block.child.context is context
-    assert block.child.leaf_value.context is context
-
-    block.clear_context()
-
-    assert block.context is None
-    assert block.direct_value.context is None
-    assert block.direct_value.self_contextual.context is None
-    assert block.direct_value.to_target_contextual.context is None
-    assert block.child.context is None
-    assert block.child.leaf_value.context is None
+    seen.clear()
+    assert block.child.leaf_value.normalized_score == 3
+    assert seen and all(row == (source_uuid, None, None) for row in seen)
 
 
 def test_eb_05_013_constructor_source_propagates_after_field_discovery() -> None:
@@ -217,12 +189,6 @@ def test_eb_05_013_constructor_source_propagates_after_field_discovery() -> None
     assert block.direct_value.source_entity_uuid == parent_source_uuid
     assert block.child.source_entity_uuid == parent_source_uuid
     assert block.child.leaf_value.source_entity_uuid == parent_source_uuid
-    assert block.direct_value.target_entity_uuid == target_uuid
-    assert block.child.target_entity_uuid == target_uuid
-    assert block.child.leaf_value.target_entity_uuid == target_uuid
-    assert block.direct_value.context == {"phase": "construction"}
-    assert block.child.context == {"phase": "construction"}
-    assert block.child.leaf_value.context == {"phase": "construction"}
 
 
 def test_eb_05_004_conditions_are_gated_by_allow_events_conditions() -> None:
@@ -441,7 +407,6 @@ def test_eb_05_012_condition_immunity_storage_is_gated_and_named() -> None:
 
     def bravery_check(
         block: BaseBlock,
-        target: Optional[BaseBlock],
         context: Optional[dict],
     ) -> bool:
         return context is not None and context.get("source") == "dragon"
@@ -462,7 +427,7 @@ def test_eb_05_012_condition_immunity_storage_is_gated_and_named() -> None:
         ("Bravery", bravery_check)
     ]
     assert active_block.contextual_immunity_names == {"Frightened": ["Bravery"]}
-    assert bravery_check(active_block, None, {"source": "dragon"}) is True
+    assert bravery_check(active_block, {"source": "dragon"}) is True
 
     try:
         active_block.add_condition_immunity("Charmed", immunity_check=bravery_check)
@@ -614,8 +579,7 @@ def test_eb_05_010_no_effect_condition_returns_cancel_without_indexing() -> None
 
 if __name__ == "__main__":
     test_eb_05_001_blocks_discover_direct_and_deep_values()
-    test_eb_05_002_target_propagation_reaches_values_and_child_blocks()
-    test_eb_05_003_context_propagation_reaches_contextual_channels()
+    test_eb_05_002_block_values_hold_no_read_state_and_a_read_carries_it()
     test_eb_05_013_constructor_source_propagates_after_field_discovery()
     test_eb_05_004_conditions_are_gated_by_allow_events_conditions()
     test_eb_05_005_condition_cleanup_removes_owned_modifiers()

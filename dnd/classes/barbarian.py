@@ -21,6 +21,7 @@ Level 20: Primal Champion
 
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.values import ValueRead, read_value
 from dnd.types.class_features import RelentlessRageIntervention
 from dnd.core.condition_types import DurationType
 from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
@@ -246,6 +247,7 @@ class RecklessAttack(BaseAction):
         costs: Reckless Attack has no action or resource costs.
         active_reckless_condition_uuid: Exact active root owned by this template.
     """
+    creates = (RecklessAttacking,)
     name: str = Field(default="Reckless Attack", description="Action name displayed for Reckless Attack.")
     description: str = Field(
         default="Attack recklessly - advantage on attacks, but exposed to counter-attacks",
@@ -339,6 +341,7 @@ class RecklessAttackFeature(BaseCondition):
         name: Feature condition name for Reckless Attack lookup and cleanup.
         description: Short rules-facing summary of the Reckless Attack feature.
     """
+    creates = (RecklessAttack,)
     name: str = Field(
         default="Reckless Attack Feature",
         description="Feature condition name for Reckless Attack lookup and cleanup.",
@@ -557,7 +560,6 @@ class FastMovement(BaseCondition):
 
 def mindless_rage_immunity_check(
     entity: 'BaseBlock',
-    target_entity: Optional['BaseBlock'],
     context: Optional[dict]
 ) -> bool:
     """
@@ -565,7 +567,7 @@ def mindless_rage_immunity_check(
 
     Returns True (immune) only if the entity is currently raging.
     """
-    _ = target_entity, context
+    _ = context
 
     if "Raging" in entity.active_conditions or "Frenzied" in entity.active_conditions:
         return True
@@ -772,7 +774,7 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
 
     con_save = entity.saving_throws.get_saving_throw("constitution")
     dice_roll = entity.roll_d20(
-        con_save.bonus,
+        read_value(con_save.bonus, ValueRead(entity.uuid)),
         RollType.SAVE,
         ability_name="constitution",
         parent_event=event.uuid,
@@ -1307,6 +1309,7 @@ class IntimidatingPresence(BaseAction):
         target_type: Intimidating Presence targets one visible entity within range.
         costs: Action cost rebuilt after model initialization.
     """
+    creates = (Frightened, IntimidatingPresenceImmunity)
     name: str = Field(
         default="Intimidating Presence",
         description="Action name displayed for the Berserker frighten action.",
@@ -1533,6 +1536,7 @@ class IntimidatingPresenceFeature(BaseCondition):
         name: Feature condition name for Intimidating Presence action registration.
         description: Short rules-facing summary of the Intimidating Presence feature.
     """
+    creates = (ExtendIntimidatingPresence, IntimidatingPresence)
     name: str = Field(
         default="Intimidating Presence Feature",
         description="Feature condition name for Intimidating Presence action registration.",

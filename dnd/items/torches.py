@@ -208,6 +208,7 @@ class ExtinguishTorchAction(BaseAction):
 
 class Torch(UsableItem):
     """A portable torch whose temporary light follows its carrier."""
+    creates = (IgniteTorchAction, ExtinguishTorchAction)
 
     name: str = Field(
         default="Torch",
@@ -494,6 +495,7 @@ class ExtinguishWallTorchAction(BaseAction):
 
 class WallTorch(UsableItem):
     """A fixed wall-mounted torch."""
+    creates = (IgniteWallTorchAction, ExtinguishWallTorchAction)
 
     name: str = Field(
         default="Wall Torch",
