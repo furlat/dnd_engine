@@ -679,6 +679,8 @@ class ObserverField:
     contact_rows: np.ndarray         # the published contacts as rows: kind, uuid halves, x, y, visual, senses
     contact_uuids: Tuple[UUID, ...]  # each contact row's target
     contact_changes: Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]  # entities, objects the last recompute touched
+    table: Optional["ContactTable"]  # the targets the published contacts were resolved against
+    passive: Optional[int]           # and the passive perception they were resolved with
     light_values: Dict[UUID, Tuple]  # each published emitter's descriptor inputs
     light_inputs: Optional[Tuple]    # what the published emitters were derived from (reused while equal)
 
@@ -759,6 +761,47 @@ class ContactTable:
     side_target: np.ndarray
     side_position_x: np.ndarray      # the boundary placement position (the contact position)
     side_position_y: np.ndarray
+    # A target's contact for an observer is a function of the observer's view and of the target's
+    # rows: its cells (or side) and its facts. Each row's inputs and target as one comparable value,
+    # so two tables are compared by value per target.
+    cell_input: np.ndarray
+    side_input: np.ndarray
+    cell_target_key: np.ndarray
+    side_target_key: np.ndarray
+    cell_order_keys: np.ndarray      # each cell row as (target, x, y, kind), sorted, for its evidence order
+    cell_order_index: np.ndarray     # the table row of each sorted key
+
+
+def _contact_table_value(blocks: Tuple[BaseBlock, ...], uuids: Tuple[UUID, ...], entity_index: Dict[UUID, int],
+                         stealth: np.ndarray, invisible: np.ndarray, cell_array: np.ndarray,
+                         side_array: np.ndarray) -> ContactTable:
+    halves = np.array([(identity.int >> 64, identity.int & UUID_LOW) for identity in uuids],
+                      dtype=np.uint64).reshape(-1, 2)
+    signed = halves.astype(np.int64)
+    # str(uuid) order is the order of the 128-bit value: compare the halves unsigned.
+    rank = np.empty(len(uuids), dtype=np.int64)
+    rank[np.lexsort((halves[:, 1], halves[:, 0]))] = np.arange(len(uuids))
+    cell_x, cell_y, cell_target, cell_kind = cell_array[:, 0], cell_array[:, 1], cell_array[:, 2], cell_array[:, 3]
+    side_target = side_array[:, 7]
+    cell_halves, side_halves = signed[cell_target], signed[side_target]
+    cell_class = (cell_kind != ROW_ENTITY).astype(np.int64)
+    cell_input = _row_values(np.column_stack((cell_x, cell_y, cell_kind, cell_halves, stealth[cell_target],
+                                              invisible[cell_target])).astype(np.int64).reshape(-1, 7))
+    side_input = _row_values(np.column_stack((side_array[:, :7], side_halves, side_array[:, 8:10],
+                                              stealth[side_target], invisible[side_target]))
+                             .astype(np.int64).reshape(-1, 13))
+    order_keys = _row_values(np.column_stack((cell_kind, cell_halves, cell_x, cell_y)).astype(np.int64).reshape(-1, 5))
+    order_index = np.argsort(order_keys, kind="stable")
+    return ContactTable(
+        blocks, uuids, entity_index, halves, rank, stealth, invisible,
+        cell_x, cell_y, cell_target, cell_kind,
+        side_array[:, 0], side_array[:, 1], side_array[:, 2], side_array[:, 3], side_array[:, 4] != 0,
+        side_array[:, 5] != 0, side_array[:, 6] != 0, side_target, side_array[:, 8], side_array[:, 9],
+        cell_input, side_input,
+        _row_values(np.column_stack((cell_class, cell_halves)).astype(np.int64).reshape(-1, 3)),
+        _row_values(np.column_stack((np.ones(side_target.size, dtype=np.int64), side_halves))
+                    .astype(np.int64).reshape(-1, 3)),
+        order_keys[order_index], order_index)
 
 
 @dataclass(frozen=True)
@@ -1210,8 +1253,9 @@ class SpatialSensesSystem:
         if diagnostic:
             record_action_timing("sensory.settlement.contact_table_ms", started)
         touched = {}
+        diffs: Dict[int, np.ndarray] = {}
         for view in views:
-            touched[view.owner.uuid] = self._publish(view, world, table, affected[view.owner.uuid], shared,
+            touched[view.owner.uuid] = self._publish(view, world, table, affected[view.owner.uuid], shared, diffs,
                                                      passives[view.owner.uuid])
         self._identity_grants.clear()
         return touched
@@ -1293,6 +1337,8 @@ class SpatialSensesSystem:
                               CellLayer(window[0], window[1], np.zeros((0, 0), dtype=bool)),
                               previous.contact_rows if previous is not None else NO_CONTACT_ROWS,
                               previous.contact_uuids if previous is not None else (), None,
+                              previous.table if previous is not None else None,
+                              previous.passive if previous is not None else None,
                               previous.light_values if previous is not None else {},
                               previous.light_inputs if previous is not None else None)
         return ObserverView(owner, senses, origin, modes, ordinary_sight, optical_radius if visual_access else 0,
@@ -1364,29 +1410,30 @@ class SpatialSensesSystem:
                         continue
                     sides.append((x, y, x + dx, y + dy, across_tile, WorldEdgeChannel.OPTICAL in channels,
                                   WorldEdgeChannel.PROPAGATION in channels, row, *placement.position))
-        cell_array = np.array(cells, dtype=np.int64).reshape(-1, 4)
-        side_array = np.array(sides, dtype=np.int64).reshape(-1, 10)
-        return ContactTable(
-            tuple(blocks), tuple(uuids), entity_index,
-            np.array([(identity.int >> 64, identity.int & UUID_LOW) for identity in uuids],
-                     dtype=np.uint64).reshape(-1, 2),
-            np.argsort(np.argsort(np.array([str(identity) for identity in uuids], dtype=object), kind="stable"),
-                       kind="stable").astype(np.int64),
-            np.array(stealth, dtype=np.int64), np.array(invisible, dtype=bool),
-            cell_array[:, 0], cell_array[:, 1], cell_array[:, 2], cell_array[:, 3],
-            side_array[:, 0], side_array[:, 1], side_array[:, 2], side_array[:, 3], side_array[:, 4] != 0,
-            side_array[:, 5] != 0, side_array[:, 6] != 0, side_array[:, 7], side_array[:, 8], side_array[:, 9])
+        return _contact_table_value(tuple(blocks), tuple(uuids), entity_index, np.array(stealth, dtype=np.int64),
+                                    np.array(invisible, dtype=bool), np.array(cells, dtype=np.int64).reshape(-1, 4),
+                                    np.array(sides, dtype=np.int64).reshape(-1, 10))
 
     def _publish(self, view: ObserverView, world: SettlementWorld, table: ContactTable,
-                 affected: Optional[Set[Position]], shared: SharedValues, passive: int,
-                 ) -> Dict[UUID, Optional[PerceivedSpatialEffect]]:
+                 affected: Optional[Set[Position]], shared: SharedValues, diffs: Dict[int, np.ndarray],
+                 passive: int) -> Dict[UUID, Optional[PerceivedSpatialEffect]]:
         """Contacts, hazards, volume sight and fixtures of one view; publish them on its Senses."""
         diagnostic = action_timing_enabled()
         started = time.perf_counter() if diagnostic else 0.0
         grid = get_map()
         owner, senses, origin = view.owner, view.senses, view.origin
         observer_uuid = owner.uuid
-        entities, objects, contact_rows, contact_uuids, contact_changes = self._contacts(view, table, passive, shared)
+        field = view.field
+        changed: Optional[np.ndarray] = None
+        if (view.lit_kept and affected is not None and field.table is not None and field.passive == passive):
+            # The view and passive perception held: only the targets whose rows differ between the
+            # two tables, or which stand on a cell the facts name, can change contact.
+            base = diffs.get(id(field.table))
+            if base is None:
+                base = diffs[id(field.table)] = _changed_targets(field.table, table)
+            changed = np.unique(np.concatenate((base, _targets_at(table, affected))))
+        entities, objects, contact_rows, contact_uuids, contact_changes = self._contacts(
+            view, table, passive, shared, changed)
         if diagnostic:
             record_action_timing("sensory.recompute.contacts_ms", started)
             started = time.perf_counter()
@@ -1459,50 +1506,65 @@ class SpatialSensesSystem:
         if diagnostic:
             record_action_timing("sensory.recompute.light_sources_ms", started)
             started = time.perf_counter()
-        field = view.field
         self.fields[observer_uuid] = ObserverField(
             field.origin, window, field.selection, field.optical_key, field.routes, field.felt_keys, field.felt_rows,
             field.sight_inputs, field.sight, field.light, field.optical, field.exists_frame, field.felt_frame,
             field.seen_frame, field.senses_frame, CellLayer(window[0], window[1], window_of(grants, origin, window)),
-            contact_rows, contact_uuids, contact_changes, light_values, light_inputs)
+            contact_rows, contact_uuids, contact_changes, table, passive, light_values, light_inputs)
         if diagnostic:
             record_action_timing("sensory.recompute.publish_ms", started)
         return effect_before
 
     def _contacts(self, view: ObserverView, table: ContactTable, passive: int, shared: SharedValues,
+                  changed: Optional[np.ndarray],
                   ) -> Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray, Tuple[UUID, ...],
                              Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]]:
-        """Entity and object contacts as rows over the settlement's table: the per-target rules
-        (hiding, invisibility, boundary evidence) are masks; Python runs per observable target and
-        per contact only when the observer's rows changed."""
+        """Entity and object contacts as rows over the settlement's table.
+
+        A target's contact is a function of the observer's view and of that target's rows (its
+        cells or side and its facts). With `changed` (the target keys whose inputs changed, the
+        view and passive perception having held), only those targets' rows are resolved again and
+        every other row is the published one; otherwise every row is resolved. The per-target rules
+        (hiding, invisibility, boundary evidence) are masks; Python runs per resolved target and
+        per changed contact."""
         grid = get_map()
         owner, senses, origin, modes = view.owner, view.senses, view.origin, view.modes
         observer_uuid = owner.uuid
         seen_frame, felt_frame, senses_frame = view.seen_frame, view.felt_frame, view.senses_frame
+        field = view.field
 
         def reveals(frame_rows: np.ndarray) -> np.ndarray:
             distance = FRAME_DISTANCE_FEET[frame_rows]
             return reach_mask(modes, SensesType.TRUESIGHT, distance) | reach_mask(modes, SensesType.SEE_INVISIBLE, distance)
 
+        # The rows resolved now: every row, or the changed targets' rows.
+        if changed is None:
+            cell_rows = np.arange(table.cell_target.size)
+            side_rows = np.arange(table.side_target.size)
+        else:
+            cell_rows = np.flatnonzero(np.isin(table.cell_target_key, changed))
+            side_rows = np.flatnonzero(np.isin(table.side_target_key, changed))
         # Cell rows: the cell's own evidence.
-        index = frame_index(table.cell_x, table.cell_y, origin)
-        cell_target = table.cell_target
+        cell_x, cell_y = table.cell_x[cell_rows], table.cell_y[cell_rows]
+        cell_kind, cell_target = table.cell_kind[cell_rows], table.cell_target[cell_rows]
+        index = frame_index(cell_x, cell_y, origin)
         cell_visual = seen_frame[index] & (reveals(index) | ~table.invisible[cell_target])
         cell_mask = np.where(cell_visual, senses_frame[index], 0) | felt_frame[index]
         cell_keep = (table.stealth[cell_target] < passive) & (cell_visual | (cell_mask != 0))
         own_index = table.entity_index.get(observer_uuid)
         if own_index is not None:
-            cell_keep &= ~((table.cell_kind == ROW_ENTITY) & (cell_target == own_index))
+            cell_keep &= ~((cell_kind == ROW_ENTITY) & (cell_target == own_index))
         # Side rows: a side is reached from its owner Tile, and from across unless the far Tile's
         # exit layer blocks the channel.
-        own = frame_index(table.side_x, table.side_y, origin)
-        across = frame_index(table.across_x, table.across_y, origin)
-        side_target = table.side_target
+        side_target = table.side_target[side_rows]
+        own = frame_index(table.side_x[side_rows], table.side_y[side_rows], origin)
+        across = frame_index(table.across_x[side_rows], table.across_y[side_rows], origin)
         own_optical = seen_frame[own]
         own_felt = felt_frame[own]
-        across_optical = seen_frame[across] & table.across_tile & table.across_optical
+        across_tile = table.across_tile[side_rows]
+        across_optical = seen_frame[across] & across_tile & table.across_optical[side_rows]
         across_felt = felt_frame[across]
-        across_propagation = (across_felt != 0) & table.across_tile & table.across_propagation
+        across_propagation = (across_felt != 0) & across_tile & table.across_propagation[side_rows]
         hidden = table.invisible[side_target]
         visual_own = own_optical & (reveals(own) | ~hidden)
         visual_across = across_optical & (reveals(across) | ~hidden)
@@ -1518,36 +1580,52 @@ class SpatialSensesSystem:
         if hidden_targets:
             cell_keep &= ~np.isin(cell_target, hidden_targets)
             side_keep &= ~np.isin(side_target, hidden_targets)
-        order = np.flatnonzero(cell_keep)
-        order = order[np.lexsort((table.cell_y[order], table.cell_x[order]))]
-        sides = np.flatnonzero(side_keep)
-        sides = sides[np.argsort(table.uuid_rank[side_target[sides]], kind="stable")]
+        halves = table.uuid_halves.astype(np.int64)
+        resolved_cells = np.column_stack((cell_kind, halves[cell_target], cell_x, cell_y, cell_visual,
+                                          cell_mask)).astype(np.int64).reshape(-1, 7)[cell_keep]
+        resolved_sides = np.column_stack((np.full(side_rows.size, ROW_SIDE), halves[side_target],
+                                          table.side_position_x[side_rows], table.side_position_y[side_rows],
+                                          side_visual, side_mask)).astype(np.int64).reshape(-1, 7)[side_keep]
+        resolved_cell_uuids = [table.uuids[target] for target in cell_target[cell_keep].tolist()]
+        resolved_side_uuids = [table.uuids[target] for target in side_target[side_keep].tolist()]
+        previous_rows = field.contact_rows
+        if changed is not None:
+            # The unchanged targets keep their published rows (known rows are resolved every time).
+            kept = ~np.isin(_target_keys(previous_rows), changed) & (previous_rows[:, 0] != ROW_KNOWN)
+            kept_kinds = previous_rows[:, 0]
+            kept_cells, kept_sides = kept & (kept_kinds <= ROW_OBJECT), kept & (kept_kinds == ROW_SIDE)
+            previous_uuids = field.contact_uuids
+            resolved_cells = np.concatenate((previous_rows[kept_cells], resolved_cells))
+            resolved_sides = np.concatenate((previous_rows[kept_sides], resolved_sides))
+            resolved_cell_uuids = [previous_uuids[i] for i in np.flatnonzero(kept_cells).tolist()] + resolved_cell_uuids
+            resolved_side_uuids = [previous_uuids[i] for i in np.flatnonzero(kept_sides).tolist()] + resolved_side_uuids
+        # Evidence order: cells x-major in the table's order within a cell, construction knowledge,
+        # sides by target.
+        lookup = _row_values(resolved_cells[:, [0, 1, 2, 3, 4]])
+        cell_order = table.cell_order_index[np.searchsorted(table.cell_order_keys, lookup)]
+        cells_sorted = np.lexsort((cell_order, resolved_cells[:, 4], resolved_cells[:, 3]))
+        unsigned = resolved_sides[:, 1:3].astype(np.uint64)
+        sides_sorted = np.lexsort((unsigned[:, 1], unsigned[:, 0]))
         # Explicit construction knowledge is not visual sight or truesight.
         # Only the declaring creator receives this otherwise invisible contact.
         known = [(identity, placement.position) for identity in grid.get_known_object_candidates(observer_uuid)
                  if (subject := BaseBlock.get(identity)) is not None
                  and (placement := grid.get_object_placement(identity)) is not None
                  and subject.is_object_known_to(observer_uuid)]
-        halves = table.uuid_halves.astype(np.int64)
         known_halves = np.array([(identity.int >> 64, identity.int & UUID_LOW) for identity, _ in known],
                                 dtype=np.uint64).reshape(-1, 2).astype(np.int64)
         # One row per piece of evidence, in the order contacts resolve: cells, construction knowledge, sides.
         rows = np.concatenate((
-            np.column_stack((table.cell_kind[order], halves[cell_target[order]], table.cell_x[order],
-                             table.cell_y[order], cell_visual[order], cell_mask[order])),
+            resolved_cells[cells_sorted],
             np.column_stack((np.full(len(known), ROW_KNOWN), known_halves,
                              np.array([position for _, position in known], dtype=np.int64).reshape(-1, 2),
-                             np.zeros((len(known), 2), dtype=np.int64))),
-            np.column_stack((np.full(sides.size, ROW_SIDE), halves[side_target[sides]],
-                             table.side_position_x[sides], table.side_position_y[sides], side_visual[sides],
-                             side_mask[sides])))).astype(np.int64).reshape(-1, 7)
-        uuids = table.uuids
-        row_uuids = (tuple(uuids[target] for target in cell_target[order].tolist())
+                             np.zeros((len(known), 2), dtype=np.int64))).astype(np.int64).reshape(-1, 7),
+            resolved_sides[sides_sorted])).reshape(-1, 7)
+        row_uuids = (tuple(resolved_cell_uuids[i] for i in cells_sorted.tolist())
                      + tuple(identity for identity, _ in known)
-                     + tuple(uuids[target] for target in side_target[sides].tolist()))
+                     + tuple(resolved_side_uuids[i] for i in sides_sorted.tolist()))
         # Only the targets whose rows changed are resolved again; every other contact is kept. A first
         # view starts from no contact, so every row is new.
-        previous_rows = view.field.contact_rows
         start_entities, start_objects = (senses.entities, senses.objects) if view.published else ({}, {})
         new_values, old_values = _row_values(rows), _row_values(previous_rows)
         new_changed, old_changed = ~np.isin(new_values, old_values), ~np.isin(old_values, new_values)
@@ -1557,7 +1635,7 @@ class SpatialSensesSystem:
         touched = np.unique(np.concatenate((new_keys[new_changed], _target_keys(previous_rows)[old_changed])))
         entity_touched: Set[UUID] = set()
         object_touched: Set[UUID] = set()
-        for kind, identity in ([(kind, view.field.contact_uuids[i]) for i, kind in zip(
+        for kind, identity in ([(kind, field.contact_uuids[i]) for i, kind in zip(
                 np.flatnonzero(old_changed).tolist(), previous_rows[old_changed, 0].tolist())]
                 + [(kind, row_uuids[i]) for i, kind in zip(np.flatnonzero(new_changed).tolist(),
                                                            rows[new_changed, 0].tolist())]):
@@ -1568,7 +1646,6 @@ class SpatialSensesSystem:
         for identity in object_touched:
             objects.pop(identity, None)
         selected = np.isin(new_keys, touched)
-        cell_count, known_count = order.size, len(known)
 
         def contact(position: Position, visual: bool, mask: int, previous: Optional[PerceivedContact],
                     ) -> PerceivedContact:
@@ -1582,16 +1659,18 @@ class SpatialSensesSystem:
                 value = shared[key] = PerceivedContact(position=position, visual=visual, special_senses=special)
             return value
 
-        cells = order[selected[:cell_count]]
-        for kind, target, x, y, visual, mask in zip(
-                table.cell_kind[cells].tolist(), cell_target[cells].tolist(), table.cell_x[cells].tolist(),
-                table.cell_y[cells].tolist(), cell_visual[cells].tolist(), cell_mask[cells].tolist()):
-            identity = uuids[target]
+        for (kind, _, _, x, y, visual, mask), identity in zip(rows[selected].tolist(),
+                                                               [row_uuids[i] for i in np.flatnonzero(selected).tolist()]):
+            visual = bool(visual)
             if kind == ROW_ENTITY:
                 entities[identity] = contact((x, y), visual, mask, start_entities.get(identity))
                 continue
+            if kind == ROW_KNOWN:
+                if identity not in objects:
+                    objects[identity] = contact((x, y), False, 0, start_objects.get(identity))
+                continue
             found = objects.get(identity)
-            if found is None:
+            if kind == ROW_SIDE or found is None:
                 objects[identity] = contact((x, y), visual, mask, start_objects.get(identity))
                 continue
             # A multi-cell object: the best evidence, the union of its senses in enum order.
@@ -1605,16 +1684,6 @@ class SpatialSensesSystem:
             if merged is None:
                 merged = shared[key] = PerceivedContact(position=chosen_position, visual=key[2], special_senses=key[3])
             objects[identity] = merged
-        for (identity, position), chosen in zip(known, selected[cell_count:cell_count + known_count].tolist()):
-            if chosen and identity not in objects:
-                objects[identity] = contact(position, False, 0, start_objects.get(identity))
-        side_rows = sides[selected[cell_count + known_count:]]
-        for target, x, y, visual, mask in zip(
-                side_target[side_rows].tolist(), table.side_position_x[side_rows].tolist(),
-                table.side_position_y[side_rows].tolist(), side_visual[side_rows].tolist(),
-                side_mask[side_rows].tolist()):
-            identity = uuids[target]
-            objects[identity] = contact((x, y), visual, mask, start_objects.get(identity))
         # Contacts are listed in evidence order (cells x-major, construction knowledge in placement
         # order, sides), each at its first row, whatever the history of the recomputes.
         kinds = rows[:, 0].tolist()
@@ -2068,6 +2137,29 @@ def _row_values(rows: np.ndarray) -> np.ndarray:
     """Each contact row as one comparable value (its bytes)."""
     rows = np.ascontiguousarray(rows)
     return rows.view(np.dtype((np.void, rows.dtype.itemsize * rows.shape[1]))).ravel()
+
+
+def _changed_targets(previous: ContactTable, current: ContactTable) -> np.ndarray:
+    """The target keys whose rows (cells or side, and facts) differ between two tables."""
+    if previous is current:
+        return np.zeros(0, dtype=current.cell_target_key.dtype)
+    return np.unique(np.concatenate((
+        current.cell_target_key[~np.isin(current.cell_input, previous.cell_input)],
+        previous.cell_target_key[~np.isin(previous.cell_input, current.cell_input)],
+        current.side_target_key[~np.isin(current.side_input, previous.side_input)],
+        previous.side_target_key[~np.isin(previous.side_input, current.side_input)])))
+
+
+def _targets_at(table: ContactTable, positions: Set[Position]) -> np.ndarray:
+    """The target keys with a cell row, or a side row by its owner or far cell, on these cells."""
+    if not positions:
+        return np.zeros(0, dtype=table.cell_target_key.dtype)
+    cells = _row_values(np.array(sorted(positions), dtype=np.int64).reshape(-1, 2))
+
+    def at(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        return np.isin(_row_values(np.column_stack((xs, ys)).astype(np.int64).reshape(-1, 2)), cells)
+    return np.concatenate((table.cell_target_key[at(table.cell_x, table.cell_y)],
+                           table.side_target_key[at(table.side_x, table.side_y) | at(table.across_x, table.across_y)]))
 
 
 def _target_keys(rows: np.ndarray) -> np.ndarray:
