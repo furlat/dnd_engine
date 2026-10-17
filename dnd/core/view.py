@@ -302,6 +302,20 @@ def reach_mask(modes: Mapping[SensesType, int], sense_type: SensesType, distance
 
 
 @dataclass(frozen=True)
+class RouteSight:
+    """One observer's wall-FOV routes judged without light: what range and obscurement let through.
+
+    Light is the only input of sight it leaves out, so a light change re-reads only `lit_view`.
+    """
+
+    rows: np.ndarray             # wall-FOV candidates holding a Tile, sorted
+    in_range: np.ndarray         # range bits per row
+    at_cell: np.ndarray          # OBSCUREMENT_BITS at each row's cell
+    before: np.ndarray           # OBSCUREMENT_BITS on the route before each row's cell
+    near: np.ndarray             # the route cell before each row's cell (OFF for the origin)
+
+
+@dataclass(frozen=True)
 class OpticalView:
     """One observer's optical cells in its frame: the visible ones and the first opaque surfaces."""
 
@@ -313,28 +327,32 @@ class OpticalView:
     surface_eligibility: np.ndarray
 
 
-def optical_view(routes: RouteRows, modes: Mapping[SensesType, int], ordinary_sight: bool,
-                 exists: np.ndarray, obscurement: np.ndarray, light: np.ndarray) -> OpticalView:
-    """Visible cells, effective light and eligibility of every wall-FOV route, as arrays.
-
-    `exists`, `obscurement` (OBSCUREMENT_BITS) and `light` (objective LightLevel) are
-    flat frames around the routes' origin. A hidden cell that itself carries
-    obscurement is a first opaque surface, judged on the route before it: its own
-    cloud does not hide its surface; under magical darkness the light comes from the
-    previous route cell.
-    """
+def route_sight(routes: RouteRows, modes: Mapping[SensesType, int], ordinary_sight: bool,
+                exists: np.ndarray, obscurement: np.ndarray) -> RouteSight:
+    """Range and obscurement of every wall-FOV route; `exists` and `obscurement` are flat frames."""
     keep = exists[routes.rows]
     rows = routes.rows[keep]
-    at_cell = obscurement[rows]
     before = routes_or(routes, obscurement)[keep] if obscurement.any() else np.zeros(rows.size, dtype=np.uint8)
-    in_range = range_bits(modes, ordinary_sight, FRAME_DISTANCE_FEET[rows])
+    return RouteSight(rows, range_bits(modes, ordinary_sight, FRAME_DISTANCE_FEET[rows]), obscurement[rows],
+                      before, routes.near[keep])
+
+
+def lit_view(sight: RouteSight, exists: np.ndarray, light: np.ndarray) -> OpticalView:
+    """Visible cells, effective light and eligibility of the routes under the objective light.
+
+    `light` is a flat frame (objective LightLevel) around the routes' origin. A hidden
+    cell that itself carries obscurement is a first opaque surface, judged on the route
+    before it: its own cloud does not hide its surface; under magical darkness the light
+    comes from the previous route cell.
+    """
+    rows, at_cell, before, in_range = sight.rows, sight.at_cell, sight.before, sight.in_range
     eligibility = in_range & SURVIVORS[before | at_cell]
     effective = LIGHT_TABLE[eligibility, light[rows]]
     visible = effective != UNSEEN
     surface = ~visible & (at_cell != 0)
     surface_rows = rows[surface]
     surface_eligibility = in_range[surface] & SURVIVORS[before[surface]]
-    near = routes.near[keep][surface]
+    near = sight.near[surface]
     surface_light = np.where(((at_cell[surface] & MAGICAL_DARKNESS_BIT) != 0) & (surface_rows != CENTER)
                              & exists[near], near, surface_rows)
     established = surface_eligibility != 0
