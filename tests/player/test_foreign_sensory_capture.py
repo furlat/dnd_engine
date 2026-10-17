@@ -13,7 +13,7 @@ from dnd.entity import Entity
 from dnd.items.torches import build_torch
 from dnd.player.application import capture_application_operation, initialize_audiences
 from dnd.player.audience import PlayerAudience
-from dnd.player.capture import Disposition, capture_interval, capture_lineages
+from dnd.player.capture import Disposition, capture_context, capture_interval, capture_lineages
 from dnd.player.capture import reduce_interval, reduce_lineage as reduce_native_lineage
 from dnd.player.event_record import decode_event, encode_event
 from dnd.player.content_composition import ui_content_manifest
@@ -227,13 +227,14 @@ def test_split_seat_application_lineages_equal_independent_full_capture(session)
         hud_by_seat=tuple((seat, snapshot_player_hud(session, audience=audience))
             for seat, audience in session.seats.items()))
     actual = capture_application_operation(runtimes, operation, catalog)
+    context = capture_context(next(iter(references.values())).capture, operation.roots)
     for seat, reference in references.items():
         known = reference.projection.remembered
         captured = capture_lineages(operation.roots, observer_uuid=known.observer_uuid,
             audience=session.seats[seat], known_actor_uuids=known.actors,
             known_entity_names={str(identity): actor.name for identity, actor in known.actors.items()},
             known_connector_uuids=frozenset(str(row.connector_uuid) for row in known.connectors),
-            known_content_ids=frozenset(row.ref.content_id for row in known.content), checkpoint=reference.capture)
+            known_content_ids=frozenset(row.ref.content_id for row in known.content), context=context)
         expected = tuple(packet for native in captured
             if (packet := project_lineage(reference.projection, native)) is not None)
         assert actual[seat].lineages == expected

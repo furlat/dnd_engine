@@ -1531,8 +1531,10 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
 class ProjectionState:
     """Private recorded aggregates and last-observed memory for one observer.
 
-    `remembered` is the audience's one fold: actors, world, senses, the last
-    published HUD and the admitted content its client holds.
+    `remembered` is the audience's one fold. Its actor identities and names,
+    world, connectors, last published HUD and admitted content equal its
+    client's; its actor values and senses are the projector's own (no
+    equipment/charge facts, no contacts from admitted observations).
     """
 
     world: PresentationTarget

@@ -16,7 +16,10 @@ from dnd.subjective_combat_log import project_combat_log
 
 @dataclass(slots=True)
 class AudienceRuntime:
-    """One seat's projection fold; what its client knows is read from `projection.remembered`."""
+    """One seat's projection fold; what its client knows is read from `projection.remembered`.
+
+    `capture` is the session's one recorded fold, the same value for every seat.
+    """
 
     projection: ProjectionState
     capture: CaptureCheckpoint
@@ -28,12 +31,15 @@ def initialize_audiences(session: Session, catalog: UIContentManifest
     runtimes = {}
     initializations = {}
     content_catalog = index_content_catalog(catalog)
+    end_cursor = EventQueue.event_cursor()
+    checkpoint = CaptureCheckpoint(EventQueue.generation_id(),
+        frozenset(observer for audience in session.seats.values() for observer in audience.observers))
+    context = capture_context(checkpoint, end_cursor=end_cursor)
     for seat, audience in session.seats.items():
-        checkpoint = CaptureCheckpoint(EventQueue.generation_id(), audience)
         startup = capture_interval(name="encounter startup", start_cursor=0,
-            end_cursor=EventQueue.event_cursor(), observer_uuid=audience.observers[0],
+            end_cursor=end_cursor, observer_uuid=audience.observers[0],
             audience=audience, battlefield_id=session.battlefield.definition.battlefield_id,
-            checkpoint=checkpoint)
+            context=context)
         projection, initial = begin_projection(startup)
         hud, _ = project_after_values(projection, snapshot_player_hud(session, audience=audience), ())
         initial = replace(initial, hud_snapshot=hud)
@@ -47,7 +53,10 @@ def initialize_audiences(session: Session, catalog: UIContentManifest
 def capture_application_operation(runtimes: dict[str, AudienceRuntime], operation: Operation,
                                   catalog: UIContentManifest) -> dict[str, PlayerUpdate]:
     """Freeze the common history once; only admitted values enter each result."""
-    context = capture_context()
+    checkpoint = next(iter(runtimes.values())).capture
+    if any(runtime.capture is not checkpoint for runtime in runtimes.values()):
+        raise ValueError("Every seat of a session shares its one capture fold")
+    context = capture_context(checkpoint, operation.roots)
     results = {}
     hud_by_seat = dict(operation.hud_by_seat)
     replacement_catalog = None
@@ -63,8 +72,7 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
                 audience=audience, known_actor_uuids=remembered.actors, context=context,
                 known_entity_names=names,
                 known_connector_uuids=frozenset(str(row.connector_uuid) for row in remembered.connectors),
-                known_content_ids=known_content, checkpoint=runtime.capture,
-                omit_foreign_sensory_payloads=True):
+                known_content_ids=known_content, omit_foreign_sensory_payloads=True):
             if any(disposition is not Disposition.NOT_DISCLOSED for _, disposition in native.dispositions):
                 raise ValueError(f"Unprojected committed state: {native.dispositions}")
             lineage = project_lineage(runtime.projection, native)

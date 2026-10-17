@@ -142,16 +142,45 @@ class ActorAdmission:
     observer_uuid: UUID | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class AdmissionEvidence:
+    """One version's seat-independent admission inputs, read at that version.
+
+    `observer` is the tracked observer of a completed sensory delta (else
+    None), `observed` its changed contacts plus itself and `acquired` the
+    contacts it did not hold before. `candidates` are the participants and
+    the fact owner. For each of these identities: its actor, the tracked
+    observers holding it as a contact, and its own last sensory position.
+    """
+
+    observer: UUID | None
+    observed: frozenset[UUID]
+    acquired: frozenset[UUID]
+    candidates: frozenset[UUID]
+    actors: Mapping[UUID, ActorState]
+    holders: Mapping[UUID, Mapping[UUID, PerceivedContact]]
+    positions: Mapping[UUID, tuple[int, int]]
+
+
 @dataclass(slots=True)
 class CaptureCheckpoint:
-    """Current recorded actor/contact fold, never an alternate event history."""
+    """The recorded actor/contact fold of the EventQueue, advanced once per version for every audience.
+
+    Contacts and positions are kept for every tracked observer (the union of
+    the audiences sharing it). `root_of` and `trees` place the lineages of
+    each still-open root; `pending` keeps the evidence of that root's folded
+    versions until it completes, so a root's capture never folds history again.
+    """
 
     generation: UUID
-    audience: PlayerAudience
+    observers: frozenset[UUID]
     cursor: int = 0
     actors: dict[UUID, ActorState] = field(default_factory=dict)
     contacts: dict[UUID, dict[UUID, PerceivedContact]] = field(default_factory=dict)
     positions: dict[UUID, tuple[int, int]] = field(default_factory=dict)
+    root_of: dict[UUID, UUID] = field(default_factory=dict)
+    trees: dict[UUID, list[UUID]] = field(default_factory=dict)
+    pending: dict[UUID, dict[UUID, AdmissionEvidence]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,9 +320,13 @@ def capture_interval(
     door_uuid: UUID | None = None,
     standing_torch_uuid: UUID | None = None,
     audience: PlayerAudience | None = None,
-    checkpoint: CaptureCheckpoint | None = None,
+    context: CaptureContext | None = None,
 ) -> IntervalEnvelope:
-    """Synchronously copy one exact already-committed EventQueue interval."""
+    """Synchronously copy one exact already-committed EventQueue interval.
+
+    `context` carries the shared fold's evidence for the interval; without it
+    this audience folds the history from its start.
+    """
     audience = resolve_audience(observer_uuid, audience)
     generation = EventQueue.generation_id()
     cursor = EventQueue.event_cursor()
@@ -352,8 +385,8 @@ def capture_interval(
         admitted=tuple(admitted),
         dispositions=tuple(dispositions),
         conditions=tuple(fact for _, event in admitted_original if (fact := _condition_fact(event)) is not None),
-        admissions=(_capture_actor_admissions(
-            tuple(admitted_original), audience, frozenset(), generation, checkpoint,
+        admissions=(_derive_admissions(tuple(admitted_original), audience, (context or capture_context(
+            CaptureCheckpoint(generation, frozenset(audience.observers)), end_cursor=end_cursor)).evidence, frozenset(),
         ) if admitted_original else ()),
     )
 
@@ -820,31 +853,15 @@ def _condition_fact(event: Event) -> ConditionFact | None:
     )
 
 
-def _capture_actor_admissions(
-    indexed: tuple[tuple[int, Event], ...],
-    audience: PlayerAudience, known_actor_uuids: Collection[UUID],
-    generation: UUID, checkpoint: CaptureCheckpoint | None = None,
-    newly_known_actor_uuids: Collection[UUID] = (),
-) -> tuple[ActorAdmission, ...]:
-    """Fold original evidence through each admission, resuming only forward reads."""
-    if checkpoint is None:
-        checkpoint = CaptureCheckpoint(generation, audience)
-    elif (checkpoint.generation != generation or checkpoint.audience != audience
-            or checkpoint.cursor > indexed[0][0]):
-        checkpoint.generation = generation
-        checkpoint.audience = audience
-        checkpoint.cursor = 0
-        checkpoint.actors.clear()
-        checkpoint.contacts.clear()
-        checkpoint.positions.clear()
+def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, AdmissionEvidence]:
+    """Fold versions up to `end` once for every audience; their evidence and that of roots completing here."""
+    if checkpoint.generation != EventQueue.generation_id():
+        raise ValueError("capture checkpoint belongs to another EventQueue generation")
     actors, contacts, positions = checkpoint.actors, checkpoint.contacts, checkpoint.positions
-    for identity in audience.observers:
-        contacts.setdefault(identity, {})
-    selected = {event.uuid for _, event in indexed}
-    admitted: set[UUID] = set()
-    result: list[ActorAdmission] = []
+    observers, root_of, trees, pending = checkpoint.observers, checkpoint.root_of, checkpoint.trees, checkpoint.pending
+    evidence: dict[UUID, AdmissionEvidence] = {}
     for index, event in EventQueue.iter_events_since(checkpoint.cursor):
-        if index > indexed[-1][0]:
+        if index >= end:
             break
         completed = event.phase is EventPhase.COMPLETION and not event.canceled
         if completed and isinstance(event, EntityCreatedEvent):
@@ -854,46 +871,39 @@ def _capture_actor_admissions(
                 and event.change_type in (SpatialChangeType.ENTITY_LEFT, SpatialChangeType.ENTITY_ENTERED)
                 and event.entity_uuid is not None and event.entity_uuid in actors):
             actors[event.entity_uuid] = apply_actor_fact(actors[event.entity_uuid], event)
-        sensory = completed and isinstance(event, SensoryUpdateEvent) and audience.observes(event.observer_uuid)
-        acquired: set[UUID] = set()
-        observed: set[UUID] = set()
-        if sensory:
-            assert isinstance(event, SensoryUpdateEvent)
-            member = contacts[event.observer_uuid]
-            acquired = set(event.entity_contacts_changed) - member.keys()
-            positions[event.observer_uuid] = event.observer_position
+        observer: UUID | None = None
+        observed: frozenset[UUID] = frozenset()
+        acquired: frozenset[UUID] = frozenset()
+        if completed and isinstance(event, SensoryUpdateEvent) and event.observer_uuid in observers:
+            observer = event.observer_uuid
+            member = contacts.setdefault(observer, {})
+            acquired = frozenset(event.entity_contacts_changed.keys() - member.keys())
+            positions[observer] = event.observer_position
             for identity in event.entity_contacts_removed:
                 member.pop(identity, None)
             member.update(event.entity_contacts_changed)
-            observed.update(event.entity_contacts_changed)
-            observed.add(event.observer_uuid)
-        if event.uuid in selected and not event.canceled:
-            candidates = set(_actor_participants(event)) | observed
+            observed = frozenset((*event.entity_contacts_changed, observer))
+        lineage = event.lineage_uuid
+        root = root_of.get(lineage)
+        if root is None:
+            root = lineage if event.parent_lineage is None else root_of.get(event.parent_lineage)
+            if root is not None:
+                root_of[lineage] = root
+                trees.setdefault(root, []).append(lineage)
+        if not event.canceled:
+            candidates = set(_actor_participants(event))
             owner = actor_fact_owner(event)
             if owner is not None:
                 candidates.add(owner)
-            for identity in sorted({identity for identity in candidates
-                    if identity not in known_actor_uuids and identity not in newly_known_actor_uuids
-                    and identity not in admitted} | acquired, key=str):
-                if identity not in actors:
-                    continue
-                witnesses = [member for member in audience.observers
-                    if member == identity or identity in contacts[member] and (
-                        sensory and isinstance(event, SensoryUpdateEvent) and member == event.observer_uuid
-                        and identity in observed
-                        or str(member) in event.identified_entity_observer_uuids.get(str(identity), set())
-                        and str(member) in event.located_entity_observer_uuids.get(str(identity), set()))]
-                if not witnesses:
-                    continue
-                witness = min(witnesses, key=lambda member: (
-                    member != identity, not (member == identity or contacts[member][identity].visual),
-                    member.int))
-                contact = contacts[witness].get(identity) if witness != identity else None
-                position = (positions.get(identity) if witness == identity
-                            else contact.position if contact is not None and contact.visual else None)
-                result.append(ActorAdmission(event.uuid,
-                    replace(actors[identity], last_visual_position=position), contact, witness))
-                admitted.add(identity)
+            identities = candidates | observed | acquired
+            row = AdmissionEvidence(observer, observed, acquired, frozenset(candidates),
+                {identity: actors[identity] for identity in identities if identity in actors},
+                {identity: {member: held[identity] for member, held in contacts.items() if identity in held}
+                 for identity in identities},
+                {identity: positions[identity] for identity in identities if identity in positions})
+            evidence[event.uuid] = row
+            if root is not None:
+                pending.setdefault(root, {})[event.uuid] = row
         if completed:
             if isinstance(event, ItemLocationStateEvent):
                 remove_previous_item_holdings(actors, event)
@@ -908,7 +918,53 @@ def _capture_actor_admissions(
                     member.pop(event.entity_uuid, None)
                 if event.entity_uuid in contacts:
                     contacts[event.entity_uuid].clear()
+        if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL):
+            # The root completes: its whole tree is captured now, never again.
+            for member in trees.pop(lineage, ()):
+                root_of.pop(member, None)
+            evidence.update(pending.pop(lineage, {}))
         checkpoint.cursor = index + 1
+    return evidence
+
+
+def _derive_admissions(
+    indexed: tuple[tuple[int, Event], ...], audience: PlayerAudience,
+    evidence: Mapping[UUID, AdmissionEvidence], known_actor_uuids: Collection[UUID],
+    newly_known_actor_uuids: Collection[UUID] = (),
+) -> tuple[ActorAdmission, ...]:
+    """One audience's admissions over these versions, read from their recorded evidence."""
+    admitted: set[UUID] = set()
+    result: list[ActorAdmission] = []
+    for index, event in indexed:
+        if event.canceled:
+            continue
+        row = evidence.get(event.uuid)
+        if row is None:
+            raise ValueError(f"Version {index} precedes the capture checkpoint and was not retained")
+        sensory = row.observer is not None and audience.observes(row.observer)
+        observed = row.observed if sensory else frozenset()
+        acquired = row.acquired if sensory else frozenset()
+        for identity in sorted({identity for identity in row.candidates | observed
+                if identity not in known_actor_uuids and identity not in newly_known_actor_uuids
+                and identity not in admitted} | acquired, key=str):
+            actor = row.actors.get(identity)
+            if actor is None:
+                continue
+            holders = row.holders[identity]
+            witnesses = [member for member in audience.observers
+                if member == identity or member in holders and (
+                    sensory and member == row.observer and identity in observed
+                    or str(member) in event.identified_entity_observer_uuids.get(str(identity), set())
+                    and str(member) in event.located_entity_observer_uuids.get(str(identity), set()))]
+            if not witnesses:
+                continue
+            witness = min(witnesses, key=lambda member: (
+                member != identity, not (member == identity or holders[member].visual), member.int))
+            contact = holders.get(witness) if witness != identity else None
+            position = (row.positions.get(identity) if witness == identity
+                        else contact.position if contact is not None and contact.visual else None)
+            result.append(ActorAdmission(event.uuid, replace(actor, last_visual_position=position), contact, witness))
+            admitted.add(identity)
     return tuple(result)
 
 
@@ -929,17 +985,19 @@ def capture_lineage(
 
 @dataclass(frozen=True, slots=True)
 class CaptureContext:
-    """A native generation/cursor boundary over the EventQueue's existing indexes.
+    """One operation's seat-independent capture over the EventQueue's existing indexes.
 
-    `bodies` holds each retained event's detached, seat-independent body for
-    this operation: every seat shares it and adds only its own combat log;
-    `graphs` holds each root's lineage graph the same way.
+    `graphs` holds each root's lineage graph, `evidence` each version's
+    admission evidence from the shared fold and `bodies` each retained event's
+    detached body: every seat shares them and adds only its own admissions and
+    combat log.
     """
 
     generation: UUID
     end_cursor: int
-    bodies: dict[tuple[UUID, bool, bool | None], Event] = field(default_factory=dict)
     graphs: dict[UUID, "LineageGraph"] = field(default_factory=dict)
+    evidence: dict[UUID, AdmissionEvidence] = field(default_factory=dict)
+    bodies: dict[tuple[UUID, bool, bool | None], Event] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -952,8 +1010,17 @@ class LineageGraph:
     objective_rows: tuple[ObjectiveRow, ...]
 
 
-def capture_context() -> CaptureContext:
-    return CaptureContext(EventQueue.generation_id(), EventQueue.event_cursor())
+def capture_context(checkpoint: CaptureCheckpoint, roots: tuple[Event, ...] = (), *,
+                    end_cursor: int | None = None) -> CaptureContext:
+    """Each root's graph, then one advance of the shared fold past their last version (or to `end_cursor`)."""
+    context = CaptureContext(EventQueue.generation_id(), EventQueue.event_cursor())
+    for root in roots:
+        if root.uuid not in context.graphs:
+            context.graphs[root.uuid] = _lineage_graph(root, context)
+    end = end_cursor if end_cursor is not None else max(
+        (graph.indexed[-1][0] + 1 for graph in context.graphs.values()), default=checkpoint.cursor)
+    context.evidence.update(advance_capture(checkpoint, end))
+    return context
 
 
 def _lineage_versions(context: CaptureContext, identity: UUID) -> tuple[tuple[int, Event], ...]:
@@ -966,12 +1033,15 @@ def capture_lineages(
     known_actor_uuids: Collection[UUID] = frozenset(), audience: PlayerAudience | None = None,
     context: CaptureContext | None = None, known_entity_names: Mapping[str, str] | None = None,
     known_connector_uuids: frozenset[str] = frozenset(), known_content_ids: frozenset[str] = frozenset(),
-    checkpoint: CaptureCheckpoint | None = None,
     omit_foreign_sensory_payloads: bool = False,
 ) -> tuple[CompletedLineage, ...]:
-    """Project each audience from the same original operation evidence."""
+    """Project each audience from the same original operation evidence.
+
+    Without a shared `context` this audience folds the history from its start.
+    """
     audience = resolve_audience(observer_uuid, audience)
-    context = context or capture_context()
+    if context is None:
+        context = capture_context(CaptureCheckpoint(EventQueue.generation_id(), frozenset(audience.observers)), roots)
     known: set[UUID] = set()
     names = ChainMap({}, known_entity_names or {})
     retained: list[CompletedLineage] = []
@@ -980,7 +1050,7 @@ def capture_lineages(
             known_actor_uuids=known_actor_uuids, newly_known_actor_uuids=known,
             context=context, known_entity_names=names,
             known_connector_uuids=known_connector_uuids, known_content_ids=known_content_ids,
-            checkpoint=checkpoint, omit_foreign_sensory_payloads=omit_foreign_sensory_payloads)
+            omit_foreign_sensory_payloads=omit_foreign_sensory_payloads)
         retained.append(lineage)
         known.update(admission.actor.uuid for admission in lineage.admissions)
         names.update((str(admission.actor.uuid), admission.actor.name) for admission in lineage.admissions)
@@ -1040,19 +1110,15 @@ def _capture_lineage(
     root: Event, *, observer_uuid: UUID, audience: PlayerAudience, known_actor_uuids: Collection[UUID],
     context: CaptureContext, known_entity_names: Mapping[str, str],
     known_connector_uuids: frozenset[str], known_content_ids: frozenset[str],
-    checkpoint: CaptureCheckpoint | None,
     newly_known_actor_uuids: Collection[UUID] = (),
     omit_foreign_sensory_payloads: bool = False,
 ) -> CompletedLineage:
     generation = context.generation
     if generation != EventQueue.generation_id():
         raise RuntimeError("EventQueue generation changed during lineage capture")
-    graph = context.graphs.get(root.uuid)
-    if graph is None:
-        graph = context.graphs[root.uuid] = _lineage_graph(root, context)
+    graph = context.graphs[root.uuid]
     nodes, indexed, conditions = graph.nodes, graph.indexed, graph.conditions
-    admissions = _capture_actor_admissions(indexed, audience, known_actor_uuids, generation, checkpoint,
-        newly_known_actor_uuids)
+    admissions = _derive_admissions(indexed, audience, context.evidence, known_actor_uuids, newly_known_actor_uuids)
     names = ChainMap({}, known_entity_names)
     retained_logs: dict[int, CombatLogEntry | None] = {}
     admissions_at: dict[UUID, list[ActorAdmission]] = {}
