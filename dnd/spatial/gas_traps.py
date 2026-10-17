@@ -68,6 +68,7 @@ class GasCloudSpec(BaseModel):
 
 class GasCloud(AreaCondition):
     """One lingering release; overlapping same-content cells are replaced."""
+    creates = (Poisoned,)
 
     name: str = "Poison gas"
     description: str = "A stationary poisonous cloud. Exposure requires a Constitution save."
@@ -146,6 +147,7 @@ class GasCloud(AreaCondition):
 
 class GasVent(SpatialCondition):
     """A control-driven emitter; released clouds are independent world owners."""
+    creates = (GasCloud,)
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Gas vent"

@@ -468,6 +468,7 @@ class Wet(BaseCondition):
 
 class WetSurfaceMembership(SpatialConditionMembershipSource):
     """Exact Wet lease contributed by one water-bearing condition."""
+    creates = (Wet,)
 
     def create_manifestation(self, target: Entity) -> Wet:
         return Wet(
@@ -524,6 +525,7 @@ class WetSurfaceMembership(SpatialConditionMembershipSource):
 
 class WetAreaCondition(MembershipAreaCondition):
     """Continuous Wet membership shared by water-bearing conditions."""
+    creates = (WetSurfaceMembership,)
 
     def _apply(self, execution_event: Event):
         modifiers, handlers, children, spatial, effect = super()._apply(execution_event)
@@ -596,6 +598,7 @@ class WetSurface(WetAreaCondition):
 
 class IceSurface(AreaCondition):
     """Frozen difficult ground with an authored Dexterity slip save."""
+    creates = (Prone,)
 
     name: str = Field(default="Ice Surface")
     has_visible_presence: bool = True
@@ -910,6 +913,7 @@ OIL_SURFACE_TRANSITIONS = (
 
 class OilSurface(AreaCondition):
     """Persistent slippery oil transformed directly by ignition."""
+    creates = (FireSurface,)
 
     name: str = Field(default="Oil Surface")
     has_visible_presence: bool = True
@@ -1009,6 +1013,7 @@ def build_environmental_replacement(
 
 class SpikeTrap(SpatialCondition):
     """One persistent spike mechanism, its footprint and authored payload."""
+    creates = (Poisoned,)
 
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
 

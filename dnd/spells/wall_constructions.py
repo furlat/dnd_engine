@@ -37,6 +37,7 @@ from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffec
 from dnd.types.summoning import TerminalOwnerRelease
 from dnd.types.world import MovementMode, WorldEdgeChannel
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
+from dnd.conditions import Prone
 
 
 class FrigidAirZone(WallFieldZone):
@@ -187,6 +188,7 @@ class WallSection(WorldItem):
 
 class SolidWallZone(AreaCondition):
     """Ownership links and exact shell crossings, without a filled-volume blocker."""
+    creates = (FrigidAirZone, Move, Prone)
 
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset({
         WorldEdgeChannel.MOVEMENT, WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION})
@@ -559,6 +561,7 @@ def stone_enclosure_escapes(caster: Entity, geometry: WallAssemblyPresentationGe
 
 class ConstructWall(SpellAction):
     """Concrete shared placement composer, configured by native spell data."""
+    creates = (*SpellAction.creates, WallOfIceZone, WallOfStoneZone, WallOfForceZone, Move)
 
     construction_material: Literal["ice", "stone", "force"]
     concentration: bool = True
@@ -926,6 +929,7 @@ def forcecage_displacements(caster: Entity, center: tuple[int,int],side_feet:int
 
 
 class Forcecage(SpellAction):
+    creates = (*SpellAction.creates, ForcecageZone)
     name: str = "Forcecage"
     description: str = "Independent invisible 20-foot barred cage or 10-foot sealed box for one hour."
     spell_level: int = 7

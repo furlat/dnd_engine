@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from pydantic import Field, model_validator
 
-from dnd.actions import resolve_paid_entry_retreats
+from dnd.actions import resolve_paid_entry_retreats, Move
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType, HazardFilter
@@ -46,6 +46,7 @@ class Portal(SpatialCondition):
     Content identity selects its appearance. State and ground contact select
     its behavior; neither the sprite nor a spell/caster is a gameplay owner.
     """
+    creates = (Move,)
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Portal"

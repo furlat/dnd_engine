@@ -128,6 +128,7 @@ class FieldFocus(BaseCondition):
 )
 class DeployFieldFocus(BaseAction):
     """Bonus action that applies Field Focus to the acting entity."""
+    creates = (FieldFocus,)
 
     name: str = Field(default="Deploy Field Focus", description="Action discovery label.")
     description: str = Field(default="Deploy a field kit for speed and defense.", description="Action summary.")

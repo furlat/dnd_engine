@@ -16,7 +16,7 @@ from typing import Any, ClassVar, Dict, Literal, Optional, List, Set, Tuple
 from uuid import UUID
 from dnd.core.base_block import PreparedConditionRemovals
 from dnd.core.creature_types import CreatureType
-from dnd.conditions import Concentrating, prepare_control_removals, Blinded
+from dnd.conditions import Concentrating, prepare_control_removals, Blinded, Prone
 from dnd.spells.spell_utils import condition_save
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import CreatureType
@@ -87,7 +87,16 @@ from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterru
 from dnd.entity import Entity, PreparedSpatialReturn
 from dnd.core.values import ModifiableValue, reading_with_value_row
 from dnd.spatial.ignition import apply_elemental_surface_contacts
-from dnd.actions import commit_forced_movement, SpellAction, SpellEvent, AttackEvent, ShoveEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
+from dnd.actions import (
+    commit_forced_movement,
+    SpellAction,
+    SpellEvent,
+    AttackEvent,
+    ShoveEvent,
+    entity_action_economy_cost_evaluator,
+    entity_action_economy_cost_applier,
+    Move,
+)
 from dnd.creature_transforms import (
     apply_incapacitated_transform,
     apply_unconscious_transform,
@@ -376,6 +385,7 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
 )
 class ShieldReactionHandler(EventHandler):
     """Direct player-toggleable Shield reaction behavior."""
+    creates = (ShieldBuff,)
 
 
 SHIELD_REACTION_DECLARATION = get_content_declaration(
@@ -538,6 +548,7 @@ class MageArmorCondition(BaseCondition):
 )
 class MageArmor(SpellAction):
     """Apply Mage Armor to an unarmored self or ally target."""
+    creates = (*SpellAction.creates, MageArmorCondition)
     name: str = Field(default="Mage Armor", description="Spell name.")
     description: str = Field(default="Target's AC becomes 13 + DEX modifier", description="Rules-facing spell summary.")
     spell_level: int = Field(default=1, description="Base spell level.")
@@ -659,6 +670,7 @@ class ProtectionFromEnergy(SpellAction):
 
     The selected type must be acid, cold, fire, lightning, or thunder.
     """
+    creates = (*SpellAction.creates, ProtectionFromEnergyEffect)
     name: str = Field(default="Protection from Energy", description="Spell name.")
     description: str = Field(default="Grant resistance to one energy type (acid/cold/fire/lightning/thunder)", description="Rules-facing spell summary.")
     spell_level: int = Field(default=3, description="Base spell level.")
@@ -797,6 +809,7 @@ class Stoneskin(SpellAction):
     Because magical weapon provenance is not modeled here, this implementation
     applies to all bludgeoning, piercing, and slashing damage.
     """
+    creates = (*SpellAction.creates, StoneskinEffect)
     name: str = Field(default="Stoneskin", description="Spell name.")
     description: str = Field(default="Grant resistance to B/P/S damage", description="Rules-facing spell summary.")
     spell_level: int = Field(default=4, description="Base spell level.")
@@ -1254,6 +1267,7 @@ class GlobeOfInvulnerability(SpellAction):
     Upcasting raises the maximum blocked base spell level by one per slot above
     sixth.
     """
+    creates = (*SpellAction.creates, GlobeZone)
     name: str = Field(default="Globe of Invulnerability", description="Spell name.")
     description: str = Field(default="10ft sphere blocks spells L5 or lower, concentration", description="Rules-facing spell summary.")
     spell_level: int = Field(default=6, description="Base spell level.")
@@ -1414,6 +1428,7 @@ class Banishment(SpellAction):
     Upcasting increases the multi-target count, while each individual target
     resolves a Charisma save through the action convolution path.
     """
+    creates = (*SpellAction.creates, BanishedCondition)
     name: str = Field(default="Banishment", description="Spell name.")
     description: str = Field(default="CHA save or banished (removed from play), concentration", description="Rules-facing spell summary.")
     spell_level: int = Field(default=4, description="Base spell level.")
@@ -1819,6 +1834,7 @@ def _protection_from_poison_save_advantage(
 
 class ProtectionFromPoison(SpellAction):
     """Protection from Poison - 2nd level Abjuration (NOT concentration)"""
+    creates = (*SpellAction.creates, ProtectionFromPoisonEffect)
     name: str = Field(default="Protection from Poison", description="Spell name.")
     description: str = Field(default="Touch: resist poison damage, immune to Poisoned", description="Rules-facing spell summary.")
     spell_level: int = Field(default=2, description="Base spell level.")
@@ -1975,6 +1991,7 @@ class DeathWardEffect(BaseCondition):
 
 class DeathWard(SpellAction):
     """Death Ward - 4th level Abjuration (NOT concentration)"""
+    creates = (*SpellAction.creates, DeathWardEffect)
     name: str = Field(default="Death Ward", description="Spell name.")
     description: str = Field(default="Touch: once, survive lethal damage at 1 HP", description="Rules-facing spell summary.")
     spell_level: int = Field(default=4, description="Base spell level.")
@@ -2247,6 +2264,7 @@ class FreedomOfMovementEffect(BaseCondition):
 
 class FreedomOfMovement(SpellAction):
     """Freedom of Movement - 4th level Abjuration (NOT concentration)"""
+    creates = (*SpellAction.creates, FreedomOfMovementEffect, FreedomOfMovementEscape)
     name: str = Field(default="Freedom of Movement", description="Spell name.")
     description: str = Field(default="Touch: ignores terrain, magical speed reduction, underwater penalties, and key movement-impairing conditions", description="Rules-facing spell summary.")
     spell_level: int = Field(default=4, description="Base spell level.")
@@ -2405,6 +2423,7 @@ class Resistance(SpellAction):
     The effect lasts for ten rounds, consumes concentration, and removes itself
     after modifying one save roll.
     """
+    creates = (*SpellAction.creates, ResistanceEffect)
     name: str = Field(default="Resistance", description="Spell name.")
     description: str = Field(default="Add 1d4 to one saving throw (one use)", description="Rules-facing spell summary.")
     spell_level: int = Field(default=0, description="Cantrip spell level.")
@@ -2502,6 +2521,7 @@ class ShieldOfFaithEffect(BaseCondition):
 
 class ShieldOfFaith(SpellAction):
     """Apply a concentration-linked +2 AC bonus as a bonus action."""
+    creates = (*SpellAction.creates, ShieldOfFaithEffect)
     name: str = Field(default="Shield of Faith", description="Spell name.")
     description: str = Field(default="+2 AC bonus (concentration)", description="Rules-facing spell summary.")
     spell_level: int = Field(default=1, description="Base spell level.")
@@ -2619,6 +2639,7 @@ class Aid(SpellAction):
     This implementation applies a max-HP condition to each target resolved by
     the multi-target action path.
     """
+    creates = (*SpellAction.creates, AidEffect)
     name: str = Field(default="Aid", description="Spell name.")
     description: str = Field(default="Increase max HP by 5 per level above 1st for 3 targets", description="Rules-facing spell summary.")
     spell_level: int = Field(default=2, description="Base spell level.")
@@ -2862,6 +2883,7 @@ class Sanctuary(SpellAction):
 
     Casting costs a bonus action and applies a ten-round `SanctuaryEffect`.
     """
+    creates = (*SpellAction.creates, SanctuaryEffect)
     name: str = Field(default="Sanctuary", description="Spell name.")
     description: str = Field(default="Ward: attackers must WIS save; breaks on offensive action", description="Rules-facing spell summary.")
     spell_level: int = Field(default=1, description="Base spell level.")
@@ -3022,6 +3044,7 @@ class BeaconOfHope(SpellAction):
 
     The implementation caps action discovery at six visible allies.
     """
+    creates = (*SpellAction.creates, BeaconOfHopeEffect)
     name: str = Field(default="Beacon of Hope", description="Spell name.")
     description: str = Field(default="Advantage on WIS saves; maximize healing received", description="Rules-facing spell summary.")
     spell_level: int = Field(default=3, description="Base spell level.")
@@ -3129,6 +3152,7 @@ class ProtectionFromEvilAndGoodEffect(BaseCondition):
 
 
 class ProtectionFromEvilAndGood(SpellAction):
+    creates = (*SpellAction.creates, ProtectionFromEvilAndGoodEffect)
     name: str = "Protection from Evil and Good"
     description: str = "Protection from aberrations, celestials, elementals, fey, fiends and undead."
     spell_level: int = 1
@@ -3188,6 +3212,7 @@ class PassWithoutTraceBonus(BaseCondition):
 
 
 class PassWithoutTraceMembership(SpatialConditionMembershipSource):
+    creates = (PassWithoutTraceBonus,)
     name: str = "Pass without Trace Membership"
     description: str = "One exact source lease for the shared Stealth bonus."
 
@@ -3214,6 +3239,7 @@ class PassWithoutTraceMembership(SpatialConditionMembershipSource):
     display_name="Pass without Trace Aura",
     description="Friendly creatures within 30 feet share a nonstacking Stealth bonus.")
 class PassWithoutTraceZone(MembershipAreaCondition):
+    creates = (PassWithoutTraceMembership,)
     name: str = "Pass without Trace Aura"
     description: str = "Friendly creatures within 30 feet share a nonstacking Stealth bonus."
     layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
@@ -3258,8 +3284,12 @@ class PassWithoutTraceZone(MembershipAreaCondition):
     def _apply_effect_exit_effect(self,entity: Entity,*,parent_event: Event) -> None:
         self.remove_membership(entity,parent_event=parent_event)
 
+# PassWithoutTraceEffect (defined above) creates PassWithoutTraceZone.
+PassWithoutTraceEffect.creates = (*PassWithoutTraceEffect.creates, PassWithoutTraceZone)
+
 
 class PassWithoutTrace(SpellAction):
+    creates = (*SpellAction.creates, PassWithoutTraceEffect)
     name: str = "Pass without Trace"
     description: str = "Friendly 30-foot moving aura: +10 Stealth until rest, concentration."
     spell_level: int = 2
@@ -3318,6 +3348,7 @@ class GlyphSleepEffect(BaseCondition):
 @srd_condition_identity(content_id="spatial_effect.spell.glyph_of_warding",display_name="Glyph of Warding",
     description="One hostile-triggered thirteen-foot glyph; payload affects all occupants once.")
 class GlyphOfWardingZone(AreaCondition):
+    creates = (GlyphSleepEffect, Move, Prone)
     name: str = "Glyph of Warding"
     description: str = "One hostile-triggered thirteen-foot glyph; payload affects all occupants once."
     layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
@@ -3401,6 +3432,7 @@ class GlyphOfWardingZone(AreaCondition):
 
 
 class GlyphOfWardingEffect(BaseCondition):
+    creates = (GlyphOfWardingZone,)
     name: str = "Glyph of Warding Sustain"
     description: str = "One owned glyph until trigger, recast or long rest; no concentration."
     child_removal_policy: Literal["none","any","last"] = "any"
@@ -3428,6 +3460,7 @@ class GlyphOfWardingEffect(BaseCondition):
         return [],[],[],[],event.phase_to(EventPhase.EFFECT)
 
 class GlyphOfWarding(SpellAction):
+    creates = (*SpellAction.creates, GlyphOfWardingEffect)
     name: str = "Glyph of Warding"
     description: str = "Thirteen-foot hostile-triggered glyph: elemental DEX half damage, Sleep or Detonation."
     spell_level: int = 3
@@ -3507,6 +3540,7 @@ class AuraOfLifeBenefit(BaseCondition):
 
 
 class AuraOfLifeMembership(SpatialConditionMembershipSource):
+    creates = (AuraOfLifeBenefit,)
     name: str = "Aura of Life Membership"
     description: str = "Exact membership in one friendly Aura of Life."
 
@@ -3518,6 +3552,7 @@ class AuraOfLifeMembership(SpatialConditionMembershipSource):
 @srd_condition_identity(content_id="spatial_effect.spell.aura_of_life", display_name="Aura of Life",
     description="Moving necrotic resistance and maximum HP protection.", srd_version="5.2")
 class AuraOfLifeZone(PassWithoutTraceZone):
+    creates = (*PassWithoutTraceZone.creates, AuraOfLifeMembership)
     name: str = "Aura of Life"
     description: str = "Moving necrotic resistance and maximum HP protection."
 
@@ -3526,6 +3561,7 @@ class AuraOfLifeZone(PassWithoutTraceZone):
 
 
 class AuraOfLifeOwner(BaseCondition):
+    creates = (AuraOfLifeZone,)
     name: str = "Aura of Life Owner"
     description: str = "Ten-minute concentrating owner of the moving aura."
     duration: Duration = Field(default_factory=lambda: Duration(duration=100, duration_type=DurationType.ROUNDS))
@@ -3544,6 +3580,7 @@ class AuraOfLifeOwner(BaseCondition):
 
 
 class AuraOfLife(SpellAction):
+    creates = (*SpellAction.creates, AuraOfLifeOwner)
     name: str = "Aura of Life"
     description: str = "Concentrating 30-foot friendly life protection and start-turn recovery."
     spell_level: int = 4
@@ -3565,6 +3602,7 @@ class HolyAuraBlindness(Blinded):
 
 
 class HolyAuraEffect(BaseCondition):
+    creates = (HolyAuraBlindness,)
     name: str = "Holy Aura"
     description: str = "Advantage on saves and incoming attack disadvantage; fiend/undead melee hitters risk blindness."
     spell_dc: int
@@ -3635,6 +3673,7 @@ class HolyAuraEffect(BaseCondition):
 
 
 class HolyAura(SpellAction):
+    creates = (*SpellAction.creates, HolyAuraEffect)
     name: str = "Holy Aura"
     description: str = "Fixed selected recipients within 30 feet gain a concentrating holy ward."
     spell_level: int = 8
@@ -3726,6 +3765,7 @@ class BreakEnchantment(BaseAction):
 
 
 class DispelEvilAndGoodEffect(ProtectionFromEvilAndGoodEffect):
+    creates = (BreakEnchantment,)
     granted_action_uuids: set[UUID] = Field(default_factory=set)
     name: str = "Dispel Evil and Good"
     description: str = "Six supernatural creature types attack with disadvantage; grants Break Enchantment."
@@ -3751,6 +3791,7 @@ class DispelEvilAndGoodEffect(ProtectionFromEvilAndGoodEffect):
 
 
 class DispelEvilAndGood(SpellAction):
+    creates = (*SpellAction.creates, DispelEvilAndGoodEffect)
     name: str = "Dispel Evil and Good"
     description: str = "Concentrating self ward and touch Break Enchantment; no dismissal or possession simulation."
     spell_level: int = 5
@@ -3808,6 +3849,7 @@ class AntilifeShellZone(AreaCondition):
 
 
 class AntilifeShell(SpellAction):
+    creates = (*SpellAction.creates, AntilifeShellZone)
     name: str = "Antilife Shell"
     description: str = "A concentrating moving shell hedges living creatures out for one hour."
     spell_level: int = 5

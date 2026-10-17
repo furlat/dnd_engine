@@ -237,6 +237,7 @@ class DirectionalDoor(UsableItem):
         is_open: Current door state.
         blocked_channels: Spatial channels blocked while closed.
     """
+    creates = (OpenDirectionalDoorAction, CloseDirectionalDoorAction)
 
     name: str = Field(default="Directional Door", description="Display name for the door object.")
     armor_class: int = Field(default=15, ge=0)

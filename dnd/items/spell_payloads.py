@@ -189,6 +189,7 @@ def payload_blast(
 
 
 class SpellPayloadItem(UsableItem):
+    creates = (IceSurface,)
     name: str = "Spell payload"
     description: str = (
         "Temporary sphere retaining its original caster, saving throw DC and power."

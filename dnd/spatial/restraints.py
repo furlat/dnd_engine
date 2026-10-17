@@ -130,6 +130,7 @@ class EscapeSpatialRestraintAction(BaseAction):
 
 class SpatialRestraintSource(SpatialConditionMembershipSource):
     """One source lease sharing the public Restrained mechanics."""
+    creates = (Restrained,)
 
     check_dc: int = Field(ge=0)
     restraint_manifestation_uuid: Optional[UUID] = Field(

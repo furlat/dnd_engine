@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr
 
 from dnd.actions import Attack, AttackEvent, SpellAction, SpellEvent, create_weapon_attack_declaration_event, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, grant_weapon_attack_batch, weapon_attack_error
-from dnd.conditions import ConcentrationActionMarker
+from dnd.conditions import ConcentrationActionMarker, ExtraAttacksGranted
 from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
 from dnd.core.base_block import BaseBlock, PreparedConditionApplication, PreparedConditionRemovals
 from dnd.core.action_types import RestrictedActionKind
@@ -188,6 +188,7 @@ class ReapplyQuarry(BaseAction):
 
 class AttackBackedSpell(SpellAction):
     """Three authored weapon-attempt spells with native, hit-only extra costs."""
+    creates = (*SpellAction.creates, ExtraAttacksGranted)
     restricted_action_kinds: ClassVar[frozenset[RestrictedActionKind]] = frozenset({RestrictedActionKind.WEAPON_ATTACK})
     ranged_allowed: ClassVar[bool] = True
     weapon_slot: Literal[WeaponSlot.MELEE_MAIN,WeaponSlot.RANGED_MAIN] = WeaponSlot.MELEE_MAIN

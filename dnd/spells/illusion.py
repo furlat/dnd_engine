@@ -117,6 +117,7 @@ class Blur(SpellAction):
 
     Duration: Concentration, up to 1 minute.
     """
+    creates = (*SpellAction.creates, BlurEffect)
     name: str = Field(default="Blur", description="Spell name.")
     description: str = Field(default="Concentration. Attackers have disadvantage against you.", description="Spell description.")
     spell_level: int = Field(default=2, description="Spell slot level.")
@@ -179,6 +180,7 @@ class FearEffect(BaseCondition):
     Target is Frightened of the caster and must Dash away on each turn.
     Repeat WIS save at end of each turn (only if can't see caster).
     """
+    creates = (Frightened,)
     name: str = Field(default="Fear", description="Condition name.")
     description: str = Field(default="Frightened of the caster, must Dash away", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
@@ -297,6 +299,7 @@ class Fear(SpellAction):
 
     Duration: Concentration, up to 1 minute.
     """
+    creates = (*SpellAction.creates, FearEffect)
     name: str = Field(default="Fear", description="Spell name.")
     description: str = Field(default="30ft cone, WIS save or Frightened + must Dash away", description="Spell description.")
     spell_level: int = Field(default=3, description="Spell slot level.")
@@ -407,6 +410,7 @@ class HypnoticPatternEffect(BaseCondition):
     Target is Charmed and Incapacitated (incapacitated + speed 0).
     Breaks when target takes damage or is shaken awake.
     """
+    creates = (Charmed,)
     name: str = Field(default="Hypnotic Pattern", description="Condition name.")
     description: str = Field(default="Charmed and incapacitated by swirling pattern", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
@@ -512,6 +516,7 @@ class HypnoticPattern(SpellAction):
 
     Duration: Concentration, up to 1 minute.
     """
+    creates = (*SpellAction.creates, HypnoticPatternEffect)
     name: str = Field(default="Hypnotic Pattern", description="Spell name.")
     description: str = Field(default="30ft cube, WIS save or Charmed + Incapacitated", description="Spell description.")
     spell_level: int = Field(default=3, description="Spell slot level.")
@@ -627,6 +632,7 @@ class ColorSprayEffect(BaseCondition):
 
     Target is Blinded for 1 round (until end of caster's next turn).
     """
+    creates = (Blinded,)
     name: str = Field(default="Color Spray", description="Condition name.")
     description: str = Field(default="Blinded by dazzling colors", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
@@ -668,6 +674,7 @@ class ColorSpray(SpellAction):
     Skip: creatures that cannot currently see, creatures immune to Blinded
     Upcast: +2d10 per slot level above 1st.
     """
+    creates = (*SpellAction.creates, ColorSprayEffect)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Color Spray", description="Spell name.")
     description: str = Field(default="Roll 6d10 HP pool. Affects creatures in order of lowest HP.", description="Spell description.")
@@ -833,6 +840,7 @@ class Invisibility(SpellAction):
     Duration: Concentration, up to 1 hour.
     Range: Touch (5ft).
     """
+    creates = (*SpellAction.creates, InvisibilityEffect)
     name: str = Field(default="Invisibility", description="Spell name.")
     description: str = Field(default="Concentration. Touch target becomes invisible until attacking or casting.", description="Spell description.")
     spell_level: int = Field(default=2, description="Spell slot level.")
@@ -910,6 +918,7 @@ class GreaterInvisibility(SpellAction):
     Duration: Concentration, up to 10 rounds.
     Range: Touch (5ft).
     """
+    creates = (*SpellAction.creates, GreaterInvisibilityEffect)
     name: str = Field(default="Greater Invisibility", description="Spell name.")
     description: str = Field(default="Concentration. Touch target becomes invisible, Stealth check to maintain on attack/cast.", description="Spell description.")
     spell_level: int = Field(default=4, description="Spell slot level.")
@@ -1127,6 +1136,7 @@ class MirrorImage(SpellAction):
 
     Duration: 10 turns. No concentration.
     """
+    creates = (*SpellAction.creates, MirrorImageEffect)
     name: str = Field(default="Mirror Image", description="Spell name.")
     description: str = Field(default="3 duplicates, +3 AC each, lost on evade", description="Spell description.")
     spell_level: int = Field(default=2, description="Spell slot level.")
@@ -1295,6 +1305,7 @@ class _SilenceDeafened(SpatialConditionMembershipSource):
 
     Uses a unique name so it doesn't conflict with regular Deafened.
     """
+    creates = (Deafened,)
     description: str = Field(default="Deafened by Silence spell", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
     def create_manifestation(self, target: Entity) -> BaseCondition:
@@ -1326,6 +1337,9 @@ class _SilenceDeafened(SpatialConditionMembershipSource):
             EventPhase.EFFECT, update={"condition": self},
         )
 
+# SilenceZone (defined above) creates _SilenceDeafened.
+SilenceZone.creates = (*SilenceZone.creates, _SilenceDeafened)
+
 
 class Silence(SpellAction):
     """Silence - 2nd level Illusion (Concentration)
@@ -1338,6 +1352,7 @@ class Silence(SpellAction):
 
     Duration: Concentration, up to 10 minutes (10 rounds).
     """
+    creates = (*SpellAction.creates, SilenceZone)
     name: str = Field(default="Silence", description="Spell name.")
     description: str = Field(default="20ft sphere: no sound, blocks verbal spells, deafens (concentration)", description="Spell description.")
     spell_level: int = Field(default=2, description="Spell slot level.")
@@ -1468,6 +1483,7 @@ class PhantasmalForceEffect(BaseCondition):
 
 
 class PhantasmalForce(SpellAction):
+    creates = (*SpellAction.creates, PhantasmalForceEffect)
     name: str = "Phantasmal Force"
     description: str = "INT save or recurring adaptive damage while concentrating for ten turns."
     spell_level: int = 2
@@ -1542,6 +1558,7 @@ class PhantasmalKillerEffect(DissonantFearEffect):
 
 
 class PhantasmalKiller(SpellAction):
+    creates = (*SpellAction.creates, PhantasmalKillerEffect)
     name: str = "Phantasmal Killer"
     description: str = "WIS save or immobilizing fear with repeated psychic damage."
     spell_level: int = 4
@@ -1615,6 +1632,7 @@ class WeirdEffect(Frightened):
 
 
 class Weird(SpellAction):
+    creates = (*SpellAction.creates, WeirdEffect)
     name: str = "Weird"
     description: str = "Initial WIS save; end-turn WIS recovery precedes 4d10 psychic damage on failure."
     spell_level: int = 9
