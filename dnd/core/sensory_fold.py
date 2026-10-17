@@ -8,7 +8,7 @@ with the array operations of `dnd.core.cells`.
 from dataclasses import dataclass, replace
 from uuid import UUID
 
-from dnd.core.cells import mask_difference, mask_union, update_values
+from dnd.core.cells import mask_union, update_cells
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES
 from dnd.types.senses import SenseMode, SensesSnapshot, SensoryDelta
 
@@ -50,7 +50,9 @@ def apply_current_senses(previous: SensesSnapshot | None, event: SensoryDelta,
             passive_perception=event.passive_perception,
             sense_modes_hash=hash(()), sense_modes=(), visual_access=event.visual_access)
     assert previous is not None
-    visible = mask_union(mask_difference(previous.visible, event.visible_cells_removed), event.visible_cells_added)
+    visible, light, hazards = update_cells(previous.visible, previous.effective_light_levels, previous.hazardous_cells,
+        event.visible_cells_removed, event.visible_cells_added, event.effective_light_levels_changed,
+        event.hazardous_cells_changed)
     for identity in event.entity_contacts_removed:
         previous.entities.pop(identity, None)
     previous.entities.update(event.entity_contacts_changed)
@@ -67,9 +69,7 @@ def apply_current_senses(previous: SensesSnapshot | None, event: SensoryDelta,
         previous.light_sources[identity] = source
         previous.light_source_removals.pop(identity, None)
     return replace(previous, visible=visible, seen=mask_union(previous.seen, event.seen_cells_added),
-        effective_light_levels=update_values(previous.effective_light_levels, visible,
-            event.effective_light_levels_changed),
-        hazardous_cells=update_values(previous.hazardous_cells, visible, event.hazardous_cells_changed),
+        effective_light_levels=light, hazardous_cells=hazards,
         position=event.observer_position if event.observer_position_changed else previous.position,
         paths_dirty=previous.paths_dirty or event.paths_dirty,
         passive_perception=(event.passive_perception if event.passive_perception_changed

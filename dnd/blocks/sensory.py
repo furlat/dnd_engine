@@ -37,7 +37,7 @@ from dnd.core.events import (
     SpatialEffectChangeEvent, DeathEvent, EventQueue, OpenGroup, SensoryUpdateEvent,
     SensoryUpdateReason,
 )
-from dnd.core.cells import pack_mask, pack_values
+from dnd.core.cells import pack_layers, pack_mask, pack_values
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues, no_cells
 from dnd.types.senses import (
     PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesType, VolumeSurfaceSight,
@@ -372,17 +372,16 @@ def published_senses(senses: Senses) -> PublishedSenses:
 def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
     """The observer's published perception as a `SensesSnapshot` of packed cell sets."""
     cells = senses.cells
-    visible = cells.visible.values.astype(bool)
+    visible_cells, (light, hazard) = pack_layers(cells.visible.x0, cells.visible.y0, cells.visible.values.astype(bool),
+        embed(cells.light, cells.visible.box, np.dtype(np.uint8)), embed(cells.hazard, cells.visible.box, np.dtype(np.uint8)))
     return SensesSnapshot(
         position=senses.position,
-        visible=pack_mask(cells.visible.x0, cells.visible.y0, visible),
+        visible=visible_cells,
         seen=pack_mask(senses.seen.x0, senses.seen.y0, senses.seen.values.astype(bool)),
         entities=dict(senses.entities),
         objects=dict(senses.objects),
-        effective_light_levels=pack_values(cells.visible.x0, cells.visible.y0, visible,
-            embed(cells.light, cells.visible.box, np.dtype(np.uint8))),
-        hazardous_cells=pack_values(cells.visible.x0, cells.visible.y0, visible,
-            embed(cells.hazard, cells.visible.box, np.dtype(np.uint8))),
+        effective_light_levels=light,
+        hazardous_cells=hazard,
         spatial_effects=dict(senses.spatial_effects),
         light_sources=dict(senses.light_sources),
         light_source_removals=dict(senses.light_source_removals),

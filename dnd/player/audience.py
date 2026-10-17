@@ -10,8 +10,7 @@ from uuid import UUID
 
 import numpy as np
 
-from dnd.core.cells import (Box, mask_array, mask_box, mask_positions, mask_union, pack_mask, pack_values, union_box,
-    values_array)
+from dnd.core.cells import Box, cell_layers, mask_box, mask_positions, mask_union, pack_layers, union_box
 from dnd.core.sensory_fold import apply_current_senses, copy_senses_snapshot, prepare_sensory_delta, reduce_senses_snapshot
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues, cell_in
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SensoryDelta, SensesSnapshot
@@ -289,49 +288,127 @@ def update_light_sources(
     return lights, removals
 
 
-def _compose_cells(perception: AudiencePerception, box: Box) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """The composed visible cells, light and hazard over a box.
+def _member_order(perception: AudiencePerception) -> tuple[UUID, ...]:
+    """Members by uuid: equal light goes to the earlier member."""
+    return tuple(sorted(perception.members, key=lambda value: value.int))
+
+
+def _stack(members: Iterable[SensesSnapshot], box: Box) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Each member's visible cells, light and hazard over a box, one layer per member."""
+    rows = [(seen, *layers) for seen, layers in (cell_layers(senses.visible, (senses.effective_light_levels,
+        senses.hazardous_cells), box) for senses in members)]
+    shape = (len(rows), box[2] - box[0] + 1, box[3] - box[1] + 1)
+    if not rows:
+        return np.zeros(shape, dtype=bool), np.zeros(shape, dtype=np.uint8), np.zeros(shape, dtype=np.uint8)
+    seen, lights, hazards = (np.stack(layer) for layer in zip(*rows))
+    return seen, lights, hazards
+
+
+def _ranked(seen: np.ndarray, lights: np.ndarray, hazards: np.ndarray
+            ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """The composed visible cells, light, hazard and owner (member index) of member layers in uuid order.
 
     Each visible cell shows one member's complete observation: the member
     seeing it in the brightest light, ties to the smaller observer uuid.
     """
-    members = [perception.members[identity] for identity in sorted(perception.members, key=lambda value: value.int)]
-    count = len(members)
-    shape = (box[2] - box[0] + 1, box[3] - box[1] + 1)
-    rank = np.full((count, *shape), -1, dtype=np.int64)
-    lights = np.zeros((count, *shape), dtype=np.uint8)
-    hazards = np.zeros((count, *shape), dtype=np.uint8)
-    for index, senses in enumerate(members):
-        _, lights[index] = values_array(senses.effective_light_levels, box)
-        _, hazards[index] = values_array(senses.hazardous_cells, box)
-        rank[index] = np.where(mask_array(senses.visible, box), lights[index].astype(np.int64) * count + count - 1 - index, -1)
+    count = seen.shape[0]
+    order = np.arange(count - 1, -1, -1, dtype=np.int32)[:, None, None]
+    rank = np.where(seen, lights.astype(np.int32) * count + order, -1)
     owner = rank.argmax(axis=0)[None]
-    visible = rank.max(axis=0) >= 0
+    visible = np.take_along_axis(rank, owner, axis=0)[0] >= 0
     return (visible, np.take_along_axis(lights, owner, axis=0)[0] * visible,
-            np.take_along_axis(hazards, owner, axis=0)[0] * visible)
+            np.take_along_axis(hazards, owner, axis=0)[0] * visible, owner[0].astype(np.uint8))
 
 
 def _composed_view_cells(perception: AudiencePerception) -> tuple[CellMask, CellValues, CellValues]:
     box = union_box(*(mask_box(senses.visible) for senses in perception.members.values()))
     if box is None:
         return EMPTY_CELLS, EMPTY_VALUES, EMPTY_VALUES
-    visible, light, hazard = _compose_cells(perception, box)
-    return (pack_mask(box[0], box[1], visible), pack_values(box[0], box[1], visible, light),
-            pack_values(box[0], box[1], visible, hazard))
+    visible, light, hazard, _ = _ranked(*_stack((perception.members[identity] for identity in _member_order(perception)), box))
+    cells, (light_values, hazard_values) = pack_layers(box[0], box[1], visible, light, hazard)
+    return cells, light_values, hazard_values
 
 
-def _splice_view_cells(view: SensesSnapshot, perception: AudiencePerception, box: Box
-                       ) -> tuple[CellMask, CellValues, CellValues]:
-    """The view's cells with the box recomposed: only cells there can have changed."""
-    outer = union_box(mask_box(view.visible), box)
-    assert outer is not None
-    visible = mask_array(view.visible, outer)
-    _, light = values_array(view.effective_light_levels, outer)
-    _, hazard = values_array(view.hazardous_cells, outer)
-    part = (slice(box[0] - outer[0], box[2] - outer[0] + 1), slice(box[1] - outer[1], box[3] - outer[1] + 1))
-    visible[part], light[part], hazard[part] = _compose_cells(perception, box)
-    return (pack_mask(outer[0], outer[1], visible), pack_values(outer[0], outer[1], visible, light),
-            pack_values(outer[0], outer[1], visible, hazard))
+def _cover(current: "AudienceComposition", box: Box) -> None:
+    """Grow the member layers' window to cover a box; cells outside every member's view are unseen."""
+    window = current.window
+    grown = union_box(window, box)
+    assert grown is not None
+    if grown == window:
+        return
+    count = len(current.order)
+    shape = (count, grown[2] - grown[0] + 1, grown[3] - grown[1] + 1)
+    seen, lights, hazards = np.zeros(shape, dtype=bool), np.zeros(shape, dtype=np.uint8), np.zeros(shape, dtype=np.uint8)
+    shown, shown_light, shown_hazard, shown_owner = (np.zeros(shape[1:], dtype=bool), np.zeros(shape[1:], dtype=np.uint8),
+                                                     np.zeros(shape[1:], dtype=np.uint8), np.zeros(shape[1:], dtype=np.uint8))
+    if window is not None:
+        part = (slice(window[0] - grown[0], window[2] - grown[0] + 1), slice(window[1] - grown[1], window[3] - grown[1] + 1))
+        seen[:, part[0], part[1]], lights[:, part[0], part[1]], hazards[:, part[0], part[1]] = (
+            current.seen, current.lights, current.hazards)
+        shown[part], shown_light[part], shown_hazard[part], shown_owner[part] = (
+            current.shown, current.shown_light, current.shown_hazard, current.shown_owner)
+    current.window, current.seen, current.lights, current.hazards = grown, seen, lights, hazards
+    current.shown, current.shown_light, current.shown_hazard, current.shown_owner = shown, shown_light, shown_hazard, shown_owner
+
+
+def _restack(current: "AudienceComposition") -> None:
+    """Every member's layer and the composed cells over the members' window, in uuid order."""
+    perception = current.perception
+    current.order = _member_order(perception)
+    members = [perception.members[identity] for identity in current.order]
+    current.window = union_box(*(mask_box(senses.visible) for senses in members))
+    if current.window is None:
+        return
+    current.seen, current.lights, current.hazards = _stack(members, current.window)
+    current.shown, current.shown_light, current.shown_hazard, current.shown_owner = _ranked(
+        current.seen, current.lights, current.hazards)
+
+
+def _fold_view_cells(current: "AudienceComposition", observer: UUID, before: SensesSnapshot | None,
+                     member: SensesSnapshot, box: Box | None, *, hazards_only: bool) -> None:
+    """Fold one member's changed cells into its layer and the composed view.
+
+    Only cells in `box` (around those where this member's observation
+    changed) can change in the view; they are recomposed from every member's
+    layer. A hazard never changes a cell's owner, so when only hazards moved
+    the member's new hazards show where it owns the cell. A new member
+    renumbers the layers, so its first observation restacks every member.
+    """
+    view = current.view
+    assert view is not None
+    if before is None or observer not in current.order:
+        _restack(current)
+    else:
+        if box is None:
+            return
+        _cover(current, box)
+        window = current.window
+        assert window is not None
+        index = current.order.index(observer)
+        part = (slice(box[0] - window[0], box[2] - window[0] + 1), slice(box[1] - window[1], box[3] - window[1] + 1))
+        current.seen[index][part], (current.lights[index][part], current.hazards[index][part]) = cell_layers(
+            member.visible, (member.effective_light_levels, member.hazardous_cells), box)
+        if hazards_only:
+            shown = current.shown_hazard[part]
+            composed_hazard = np.where(current.shown[part] & (current.shown_owner[part] == index),
+                                       current.hazards[index][part], shown)
+            if np.array_equal(shown, composed_hazard):
+                return
+            current.shown_hazard[part] = composed_hazard
+        else:
+            composed = _ranked(current.seen[:, part[0], part[1]], current.lights[:, part[0], part[1]],
+                               current.hazards[:, part[0], part[1]])
+            held = (current.shown[part], current.shown_light[part], current.shown_hazard[part], current.shown_owner[part])
+            if all(np.array_equal(old, new) for old, new in zip(held[:3], composed[:3])):
+                current.shown_owner[part] = composed[3]
+                return  # The view shows these cells as it did.
+            current.shown[part], current.shown_light[part], current.shown_hazard[part], current.shown_owner[part] = composed
+    window = current.window
+    if window is None:
+        current.view = replace(view, visible=EMPTY_CELLS, effective_light_levels=EMPTY_VALUES, hazardous_cells=EMPTY_VALUES)
+        return
+    cells, (light, hazard) = pack_layers(window[0], window[1], current.shown, current.shown_light, current.shown_hazard)
+    current.view = replace(view, visible=cells, effective_light_levels=light, hazardous_cells=hazard)
 
 
 def audience_view(perception: AudiencePerception, observer_uuid: UUID) -> SensesSnapshot | None:
@@ -359,6 +436,18 @@ class AudienceComposition:
 
     perception: AudiencePerception = field(default_factory=AudiencePerception)
     view: SensesSnapshot | None = None
+    # Every member's cells as layers over one window that only grows: members in
+    # uuid order; seen, light and hazard per cell (the composition's working arrays).
+    order: tuple[UUID, ...] = ()
+    window: Box | None = None
+    seen: np.ndarray = field(default_factory=lambda: np.zeros((0, 0, 0), dtype=bool))
+    lights: np.ndarray = field(default_factory=lambda: np.zeros((0, 0, 0), dtype=np.uint8))
+    hazards: np.ndarray = field(default_factory=lambda: np.zeros((0, 0, 0), dtype=np.uint8))
+    # The view's cells over the same window: their composition, kept as each fold changes it.
+    shown: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=bool))
+    shown_light: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=np.uint8))
+    shown_hazard: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=np.uint8))
+    shown_owner: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=np.uint8))
     entity_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     object_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     effect_members: dict[UUID, set[UUID]] = field(default_factory=dict)
@@ -392,6 +481,7 @@ def begin_audience_composition(perception: AudiencePerception, observer_uuid: UU
     """Acquire a detached fold once; ordinary observations never recopy history."""
     perception = copy_audience_perception(perception)
     current = AudienceComposition(perception=perception, view=audience_view(perception, observer_uuid))
+    _restack(current)
     for observer, senses in perception.members.items():
         for identity in senses.entities:
             _membership(current.entity_members, identity, observer, True)
@@ -459,9 +549,10 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
     before = perception.members.get(observer)
     prepared = prepare_sensory_delta(observer, before, event)
     added, removed = event.visible_cells_added, event.visible_cells_removed
-    # The cells this delta can change for its own observer, and so in the view.
+    # The box of the cells this delta can change for its own observer, and so in the view.
     cells = union_box(mask_box(added), mask_box(removed), mask_box(event.effective_light_levels_changed.cells),
-                      mask_box(event.hazardous_cells_changed.cells))
+        mask_box(event.hazardous_cells_changed.cells),
+        mask_box(before.visible) if event.initial and before is not None else None)
     contacts = (set(event.entity_contacts_changed) | event.entity_contacts_removed
                 | event.object_contacts_changed.keys() | event.object_contacts_removed)
     overrides = set(current.contact_overrides)
@@ -469,7 +560,6 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
     current.contact_overrides.clear()
     effects = set(event.spatial_effects_changed) | event.spatial_effects_removed
     if event.initial and before is not None:
-        cells = union_box(cells, mask_box(before.visible))
         contacts.update(before.entities)
         contacts.update(before.objects)
         effects.update(before.spatial_effects)
@@ -567,10 +657,9 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
     if current.view is None:
         current.view = replace(member, visible=EMPTY_CELLS, seen=EMPTY_CELLS, entities={}, objects={},
             effective_light_levels=EMPTY_VALUES, hazardous_cells=EMPTY_VALUES, spatial_effects={})
+    _fold_view_cells(current, observer, before, member, cells, hazards_only=not (event.initial or added.width
+        or removed.width or event.effective_light_levels_changed.cells.width))
     view = current.view
-    if cells is not None:
-        visible_cells, light, hazards = _splice_view_cells(view, perception, cells)
-        view = replace(view, visible=visible_cells, effective_light_levels=light, hazardous_cells=hazards)
     for identity in contacts:
         for objects, destination in ((False, view.entities), (True, view.objects)):
             key = objects, identity
