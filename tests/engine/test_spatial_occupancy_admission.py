@@ -1,12 +1,12 @@
 """Native location and effect operations respect authored occupancy layers."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
 
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import Event, EventPhase, EventQueue, EventType

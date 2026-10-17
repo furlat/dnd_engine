@@ -1,6 +1,5 @@
 """Engine semantic tests for grid, tiles, terrain, and pathfinding."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import UUID, uuid4
 
 import pytest
@@ -8,6 +7,7 @@ from pydantic import Field
 
 from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
 from dnd.blocks.base_item import BaseItem
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import AoEShape, Cone, Cylinder, Line, Sphere, objective_footprint
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_conditions import BaseCondition

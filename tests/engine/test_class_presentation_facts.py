@@ -1,6 +1,5 @@
 """Existing class commands publish outcomes without changing their costs or owners."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import uuid4
 
 import pytest
@@ -8,6 +7,7 @@ import pytest
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.classes.barbarian import RelentlessRage
 from dnd.classes.fighter import Indomitable, Survivor
 from dnd.classes.rage import Raging

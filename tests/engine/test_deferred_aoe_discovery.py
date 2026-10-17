@@ -4,7 +4,6 @@ Boundary: native discovery/selection/command. Small placed caster scenes exercis
 rich/deferred options, subjective previews and native execution without preview.
 """
 
-from dnd.blocks.sensory import capture_senses_snapshot
 import pytest
 
 from dnd.actions import SpellEvent
@@ -12,6 +11,7 @@ from dnd.actions_functional import (
     execute_available_action, get_available_actions, preview_available_selection,
     register_spell, setup_standard_actions,
 )
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import (
     Cone, Cube, Cylinder, Line, Sphere, snapshot_aoe_aiming_geometry,
 )

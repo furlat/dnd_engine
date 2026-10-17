@@ -1,8 +1,8 @@
 """Real cloud casts own a connected footprint independent of later door state."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 import pytest
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import Sphere
 from dnd.actions import SpellEvent
 from dnd.content.items.environment_item_builders import build_directional_door, build_directional_wall

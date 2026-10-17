@@ -1,12 +1,12 @@
 """Tutorial tests for perception, light, stealth, and invisibility."""
 
-from dnd.blocks.sensory import capture_senses_snapshot, spatial_senses_system
 from uuid import uuid4
 
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.blocks.sensory import capture_senses_snapshot, spatial_senses_system
 from dnd.conditions import Hidden, Invisible
 from dnd.actions_functional import execute_by_index
 from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType

@@ -1,12 +1,12 @@
 """Engine semantic tests for spell families and implemented spells."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from typing import Optional, cast
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
 from pydantic import Field
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import Sphere
 from dnd.types.world import MovementMode
 from dnd.actions import Attack, AttackEvent, SpellEvent, Swim

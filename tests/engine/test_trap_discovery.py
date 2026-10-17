@@ -1,8 +1,8 @@
 """A fixture's discovery and last observed state survive mechanical toggles."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import UUID
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.conditions import Blinded
 from dnd.core.events import Event, EventPhase, EventQueue, EventType, SensoryUpdateEvent
 from dnd.entity import Entity

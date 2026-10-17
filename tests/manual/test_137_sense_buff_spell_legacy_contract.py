@@ -1,10 +1,10 @@
 """Deterministic parity for the archived 16-case sense-buff spell matrix."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import UUID
 
 from dnd.actions import SpellEvent
 from dnd.actions_functional import execute_by_index, register_spell
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.conditions import Concentrating, Invisible
 from dnd.core.base_actions import AvailableActionsResult
 from dnd.core.base_block import LightLevel, SensesType

@@ -1,11 +1,11 @@
 """Native world/sensory after-values preserve AI knowledge after runtime reset."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import UUID, uuid4
 
 import pytest
 from pydantic import TypeAdapter
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import Sphere
 from dnd.actor_projection import condition_fact
 from dnd.ai.contracts.observation import ObservationTileFact

@@ -1,6 +1,5 @@
 """Misty Step discovery and one committed teleport retain the spell's lineage."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from collections.abc import Iterator
 from uuid import UUID, uuid4
 
@@ -9,6 +8,7 @@ import pytest
 from dnd.actions import AttackEvent, SpellEvent
 from dnd.actions_functional import execute_by_index, get_available_actions, register_spell, setup_standard_actions
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.equipment_types import WeaponSlot

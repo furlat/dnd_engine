@@ -1,9 +1,9 @@
 """Paid absence/teleport commands preserve identity, clocks and committed outcomes."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 import pytest
 
 from dnd.actions_functional import execute_available_action, get_available_actions, get_extra_position_options, register_spell
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.conditions import Concentrating, Poisoned
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType

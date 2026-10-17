@@ -7,13 +7,13 @@ This module maps all 58 logical cases to current selectors and restores the
 remaining behavior with deterministic state and event-lifecycle assertions.
 """
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from collections import Counter
 from dataclasses import dataclass
 from enum import StrEnum
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import Sphere
 from dnd.actions import Attack, Disengage, Dodge, Hide, Move
 from dnd.actions_functional import execute_use_action
@@ -455,10 +455,7 @@ def reset_stealth_world(
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
     Encounter.clear_registry()
-    grid = get_map()
-    grid.create_rectangle(0, 0, width, height)
-    for tile in grid._tiles.values():
-        tile.default_light = default_light
+    get_map().create_rectangle(0, 0, width, height, default_light=default_light)
 
 
 def target_is_discoverable(actor: Entity, target_uuid: UUID) -> bool:

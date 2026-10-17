@@ -1,10 +1,10 @@
 """Engine semantic tests for object identity and registries."""
 
-from dnd.blocks.sensory import spatial_senses_system
 from uuid import uuid4
 
 import pytest
 
+from dnd.blocks.sensory import spatial_senses_system
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_block import LightLevel
 from dnd.core.base_object import BaseObject

@@ -1,6 +1,5 @@
 """Decision-epoch coverage for the agent-side subjective runtime."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from collections import Counter
 from uuid import uuid4
 
@@ -16,6 +15,7 @@ from dnd.ai.runtime.decision_epoch import (
 from dnd.ai.contracts.semantics import ActionTag, MovementKind, OutcomeKind, TopologyOperation, TruthValue, evaluate_fact_expression
 from dnd.ai.contracts.control import AffordanceSet
 from dnd.actions_functional import execute_by_index, register_spell
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_object import BaseObject
 from dnd.core.base_actions import ActionAvailabilityStatus
 from dnd.core.base_actions import ActionCategory

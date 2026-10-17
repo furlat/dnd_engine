@@ -1,10 +1,10 @@
 """Real spills retain their source geometry independently of the broken item."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import UUID
 
 import pytest
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.events import EventPhase, ItemDestructionEvent, SpatialEffectInteractionEvent, WorldTileState
 from dnd.core.gridmap import get_map

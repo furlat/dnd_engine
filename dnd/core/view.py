@@ -198,6 +198,14 @@ def _frame_distance_feet() -> np.ndarray:
 FRAME_DISTANCE_FEET = _frame_distance_feet()
 
 
+def sense_radius_cells(range_feet: int, max_distance: int) -> int:
+    """Cells one sense reaches: an unlimited sense (0 ft) reaches `max_distance`.
+
+    Perception reaches at most R cells (400 ft): the frame every view is computed in.
+    """
+    return min(max_distance if range_feet == 0 else (range_feet + 4) // 5, R)
+
+
 def frame_box(origin: Position) -> Box:
     return origin[0] - R, origin[1] - R, origin[0] + R, origin[1] + R
 

@@ -1,6 +1,5 @@
 """One physical object has several supports, without duplicating its identity."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from collections.abc import Iterator
 from uuid import UUID, uuid4
 
@@ -10,6 +9,7 @@ from pydantic import ValidationError
 from dnd.actions import Attack, AttackEvent, PickUp
 from dnd.actions_functional import execute_use_action, get_available_actions, setup_standard_actions
 from dnd.blocks.base_item import BaseItem, WorldItem
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import build_directional_wall, build_storage_chest
 from dnd.core.base_block import BaseBlock, LightLevel

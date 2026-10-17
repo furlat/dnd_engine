@@ -1,6 +1,5 @@
 """Native commands cross one-way portals without stale movement or hidden costs."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from collections.abc import Iterator
 from uuid import uuid4
 
@@ -11,6 +10,7 @@ from dnd.actions_functional import execute_use_action, register_spell, setup_sta
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content.items.environment_item_builders import build_trap_lever
 from dnd.conditions import Paralyzed

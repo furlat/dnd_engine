@@ -1,6 +1,5 @@
 """Real destruction leaves independently owned materials with ground contact."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from collections.abc import Iterator
 from uuid import uuid4
 
@@ -12,6 +11,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.condition_types import ConditionTag
 from dnd.core.creature_types import DamageType

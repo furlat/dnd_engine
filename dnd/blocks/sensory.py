@@ -31,7 +31,7 @@ from dnd.core.values import ModifiableValue
 from dnd.core.view import (CENTER, FRAME_DISTANCE_FEET, LIGHT_LEVELS, MAGICAL_DARKNESS_BIT, NO_CELLS, OFF, PLAIN, R,
     SIDE, SPECIAL, SURVIVORS, Box, CellLayer, OpticalView, PerceivedCells, Position, RouteRows, boxes_intersect,
     cell_visible, embed, frame_box, frame_index, frame_of, frame_rows, layer_positions, optical_view, range_bits,
-    reach_mask, route_rows, rows_positions, union_box, visible_positions, window_of)
+    reach_mask, route_rows, rows_positions, sense_radius_cells, union_box, visible_positions, window_of)
 from dnd.core.events import (
     Event, EventType, EventPhase, SpatialChangeEvent,
     SpatialEffectChangeEvent, DeathEvent, EventQueue, OpenGroup, SensoryUpdateEvent,
@@ -1197,11 +1197,11 @@ class SpatialSensesSystem:
         modes = {mode.sense_type: mode.range_feet for mode in senses.get_sense_modes()}
         visual_access = senses.visual_access.normalized_score > 0
         ordinary_sight = owner.has_ordinary_visual_sight()
-        optical_radius = max_distance if ordinary_sight else 0
+        optical_radius = sense_radius_cells(0, max_distance) if ordinary_sight else 0
         for sense_type in (SensesType.DARKVISION, SensesType.DEVILS_SIGHT, SensesType.TRUESIGHT):
             sense_range = modes.get(sense_type)
             if sense_range is not None:
-                optical_radius = max(optical_radius, max_distance if sense_range == 0 else (sense_range + 4) // 5)
+                optical_radius = max(optical_radius, sense_radius_cells(sense_range, max_distance))
         previous = self.fields.get(observer_uuid)
         optical_key = (origin, optical_radius if visual_access else 0, world.optical_revision)
         if previous is not None and previous.optical_key == optical_key:
@@ -1221,7 +1221,7 @@ class SpatialSensesSystem:
             sense_range = modes.get(sense_type)
             if sense_range is None:
                 continue
-            radius = max_distance if sense_range == 0 else (sense_range + 4) // 5
+            radius = sense_radius_cells(sense_range, max_distance)
             reach = max(reach, radius)
             key = (sense_type, (origin, radius, world.propagation_revision))
             rows = previous_felt.get(key)
@@ -1231,9 +1231,6 @@ class SpatialSensesSystem:
             felt_keys.append(key)
             felt_rows.append(rows)
             felt_frame[rows] |= bit
-        # The route table covers the engine's perception reach: `frame_rows` rejects any reached cell
-        # beyond it, so no sight or felt cell, and no window, lies outside the frame.
-        reach = min(reach, R)
         seen_frame = np.zeros(OFF + 1, dtype=bool)
         seen_frame[optical.rows] = True
         senses_frame = np.zeros(OFF + 1, dtype=np.uint8)

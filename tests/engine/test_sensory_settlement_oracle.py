@@ -38,6 +38,9 @@ def assert_selection_matches_every_observer_recomputed() -> None:
     """The oracle: no registered observer's published perception moves under a full recompute."""
     observers = sorted(spatial_senses_system.senses_by_observer, key=str)
     settled = {identity: _published(identity) for identity in observers}
+    # Cold: no observer keeps routes, contact rows or light inputs from the settled pass, so a
+    # missed revision or touched set cannot hide behind a reused value.
+    spatial_senses_system.fields.clear()
     for identity in observers:
         spatial_senses_system.recompute_observer(identity)
     for identity in observers:

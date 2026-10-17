@@ -1,11 +1,11 @@
 """Wall commands retain physical placement and resolve the SRD damage lifecycle."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 import pytest
 
 from dnd.action_dispatch import dispatch_available_action
 from dnd.actions import SpellEvent
 from dnd.actions_functional import execute_by_index, execute_available_action, get_extra_position_options, register_spell
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.environment_item_builders import build_spell_device
 from dnd.content.items.world_prop_builders import build_world_prop
 from dnd.spells.abjuration import GlobeOfInvulnerability

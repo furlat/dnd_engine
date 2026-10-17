@@ -1,6 +1,5 @@
 """Canonical arbitrary-roster duel composition regressions."""
 
-from dnd.blocks.sensory import capture_senses_snapshot
 from __future__ import annotations
 
 import random
@@ -13,6 +12,7 @@ from dnd.core.content.encounters import (
     RosterControllerDefaults,
     RosterControllerKind,
 )
+from dnd.core.view import visible_count
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
@@ -103,7 +103,7 @@ def test_generic_duel_assembles_two_multi_actor_creature_rosters() -> None:
     current = assembled.encounter.get_current_entity()
     assert current is not None
     assert current.faction == "faction_2"
-    assert all(capture_senses_snapshot(actor.senses).visible for actor in (*first, *second))
+    assert all(visible_count(actor.senses.cells) for actor in (*first, *second))
 
     assert tuple(
         actor.content_ref.content_id
