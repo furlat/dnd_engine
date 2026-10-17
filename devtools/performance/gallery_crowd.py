@@ -18,6 +18,7 @@ publication → encoding. Choices cases measure the worker requests Choices
 
 import argparse
 import cProfile
+import gc
 from collections import Counter
 from functools import partial
 import json
@@ -296,12 +297,36 @@ class Measurement:
         self.phases = Counter()
         self.phase_calls = Counter()
         self.profiler = cProfile.Profile() if mode == 'profile' else None
+        self.collections = Counter()
+        self.collection_ms = Counter()
+        self.young_survivors = 0
+        self._collection_started = 0.0
+        self._young_before = 0
+
+    def _collection(self, phase, info):
+        """gc callback: count and time every collection inside the operation; a young pass's survivors are promoted."""
+        generation = info['generation']
+        if phase == 'start':
+            self._collection_started = perf_counter()
+            self._young_before = gc.get_count()[0]
+            return
+        self.collections[generation] += 1
+        self.collection_ms[generation] += (perf_counter() - self._collection_started) * 1000
+        if generation == 0:
+            self.young_survivors += max(self._young_before - info['collected'], 0)
 
     def _phase(self, name, started):
         self.phases[name] += (perf_counter() - started) * 1000
         self.phase_calls[name] += 1
 
     def run(self, operation):
+        gc.callbacks.append(self._collection)
+        try:
+            return self._run(operation)
+        finally:
+            gc.callbacks.remove(self._collection)
+
+    def _run(self, operation):
         if self.mode == 'ordinary':
             return operation()
         count_token = set_action_count_recorder(lambda name, value: self.counts.update({name: value}))
@@ -316,10 +341,15 @@ class Measurement:
             reset_action_timing_recorder(timing_token)
             reset_action_count_recorder(count_token)
 
+    def gc_report(self):
+        return {'gc': {'collections': {str(generation): count for generation, count in sorted(self.collections.items())},
+            'ms': {str(generation): round(elapsed, 3) for generation, elapsed in sorted(self.collection_ms.items())},
+            'young_survivors': self.young_survivors}}
+
     def report(self):
         if self.mode == 'ordinary':
-            return {}
-        result = {'timing_qualified': False, 'counts': dict(sorted(self.counts.items())),
+            return self.gc_report()
+        result = {**self.gc_report(), 'timing_qualified': False, 'counts': dict(sorted(self.counts.items())),
             'phases': [{'name': name, 'inclusive_ms': elapsed, 'calls': self.phase_calls[name]}
                 for name, elapsed in self.phases.most_common()]}
         if self.profiler is not None:
