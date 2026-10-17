@@ -1,4 +1,4 @@
-# Single-pass change propagation — analysis and plan (v3.13)
+# Single-pass change propagation — analysis and plan (v3.14)
 
 Date: 2026-10-16. Status: **APPROVED by the human 2026-10-17 (incl. D7c, Q7 EXECUTION convention, temp-HP record-only).** **v3.5 adds available-actions discovery (§14, PD1/PD2) per the human's 2026-10-17 decisions (model approved 2026-10-17).** **v3.6 folds in the §14 antislop/antiOOP reviews and the whole-world-scan redesign. v3.7 folds in the v3.6 re-reviews, the human's answers (D14 approved; Q-W1, Q-W3, Q-W4 decided) and the first P0a measurements; open items are in §14.10.** Implementation is at P0a.
 
@@ -694,6 +694,36 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 - **Navigation:** one path search over a cost grid with a predecessor array. `walkable`, `paths`, `path_costs`, `safe_*` and `collision_blocked` stop being per-cell dicts and sets.
 - **Gate:** the turn-start rows within the ceiling.
 
+**PH — heap: the GC alarm** (human: "reach the point where gc does not trigger or is not meaningfull").
+
+- **Measured (GC Sleet, HEAD 5c3b90e90; scratch `heap_attrib.py`, `heap_fields.py`):**
+  - Every Sleet run carries exactly one gen-2 collection of 264–303 ms over ~600K tracked objects.
+  - 587,332 tracked objects before the first op. Owners:
+    - entity / block registry 351K;
+    - player runtime 84K;
+    - event store 81K, growing 16–20K per op;
+    - unattributed 72K (item presentation states, visual items).
+  - Inside the registry:
+    - the `.values` of value-holding blocks ~183K: Health 53.6K, HitDice 32.4K, Ability, Skill and Equipment ~17K each, ActionEconomy 15K, Weapon 9K, …;
+    - `Senses.paths` 42K lists;
+    - `Senses._field` 35K;
+    - `Senses.objects` 13.8K;
+    - Tile containers ~25K, about 10 mostly empty containers per tile across 1,895 tiles.
+- **Why it matters.** A full collection runs when long-lived objects grow by 25 %. At 600K objects and +20–40K per op, it lands every few ops, and each pass over 600K objects costs ~280 ms, which alone breaks the ceiling.
+- **Work, each item removing objects rather than tuning the collector:**
+  1. Per-op retained growth → ~0:
+     - event versions hold no per-version sets or dicts of their own;
+     - shared frozen rows (`ObservedChangeRef`, `PerceivedContact`) are not copied (P7b);
+     - nothing else retains per-op containers.
+  2. Value layer as data: each block's `values` becomes compact records in a system-owned table. Modifiers live in system tables keyed by value, with no per-value dict / set / list graph. Reads stay exact.
+  3. Navigation as arrays (PT): `Senses.paths` becomes a predecessor array.
+  4. Perception (PV1a / PV1b): no per-observer field graph; audience per-cell sets become arrays.
+  5. Tiles: no empty per-tile containers. Absent means empty, and per-cell state lives in GridMap-owned maps.
+- **Gate:**
+  - 0 gen-2 collections inside any measured op on every GC row, with the default thresholds;
+  - tracked objects before the first op and retained per op reported at each re-time;
+  - retained per op ≤1K.
+
 **Measurement cases to add:** a reaction that pauses for a human seat (an opportunity attack, Counterspell), and a whole AI round (every native-AI combatant's turn in sequence).
 
 **Order.**
@@ -735,6 +765,7 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 | **PV2** | The rest of the wire (§6b); after P7 | §6b PV2 gate; every update ≤100 KB |
 | **PV3** | Bodies and items as patches (§6b); after P7 | §6b PV3 gate |
 | **P7b** | Stored versions frozen, capture by reference (§6b) | versions frozen at store; no deepcopy in capture; wire byte-identical |
+| **PH** | Heap (§6b): per-op retained growth ~0; value layer as data; tiles without empty containers (paths and perception via PT / PV1) | 0 gen-2 collections inside measured ops; retained per op ≤1K |
 | **PT** | Turn start (§6b): the AI knowledge system (one owner, advanced at batch dispatch, cold start); navigation as a cost grid with a predecessor array | turn-start rows within the ceiling; first-decision knowledge equality |
 | **PC** | *(other repo; human)* NDClientGodot SDK schema 9 → 11; grouped world boundaries | — |
 | **Exit** | Whole-action targets (§6a, D18): every operation of every GC case re-timed after each merged batch | every run of every row ≤100 ms and every seat update ≤100 KB; acceptable and goal tiers reported per row; a miss blocks the exit until the human decides |
@@ -941,6 +972,8 @@ worktree. The rest is static reading.
 | AI discovery | `ai/runtime/decision_epoch.py:148-157, 819-845, 948-971` |
 
 ## 12. Changes
+
+**v3.13 → v3.14:** PH heap phase, from the GC census (the GC alarm).
 
 **v3.12 → v3.13** (the v3.12 antislop and antiOOP reviews, all accepted):
 
