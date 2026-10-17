@@ -3,7 +3,7 @@
 from dataclasses import dataclass, replace
 import json
 from types import MappingProxyType
-from typing import Iterator, Mapping
+from typing import Collection, Iterator, Mapping
 from dnd.types.actor import SpatialDisposition
 from dnd.types.senses import copy_senses_snapshot
 from dnd.core.effect_types import ResolutionRef
@@ -15,7 +15,7 @@ from dnd.types.event_facts import EventType, SpatialChangeType
 from dnd.player.audience import (AudienceComposition, apply_current_audience, audience_view,
     begin_audience_composition, observe_audience, resolve_audience)
 from dnd.player.facts import (
-    AttackFact, ConditionChangeFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, LifeFact,
+    AttackFact, ConditionChangeFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact,
     PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SpatialFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact, FactionFact,
 )
@@ -77,6 +77,7 @@ STATE_PRESENTATION_KINDS = frozenset({
 def copy_target(target: PlayerState) -> PlayerState:
     senses = target.senses
     return replace(target, tiles=dict(target.tiles), objects=dict(target.objects), actors=dict(target.actors),
+        items=dict(target.items),
         spatial_commit_cursors=dict(target.spatial_commit_cursors),
         senses=None if senses is None else copy_senses_snapshot(senses),
         perception=replace(target.perception,
@@ -106,12 +107,19 @@ def observed_actor(previous: PlayerActor | None, observation: PlayerObservation)
     return replace(previous, **observation.changes)
 
 
+def apply_item_patches(target: PlayerState, patches: tuple[ItemPatch, ...]) -> None:
+    """Records replace, never mutate: a patch makes the item's new record."""
+    for patch in patches:
+        target.items[patch.item_uuid] = {**target.items.get(patch.item_uuid, {}), **patch.changes}
+
+
 def observe_body(target: PlayerState, observation: PlayerObservation) -> bool:
-    """Apply an observation's body patch; False if a terminal lifetime ignores it."""
+    """Apply an observation's body and item patches; False if a terminal lifetime ignores it."""
     previous = target.actors.get(observation.actor_uuid)
     if previous is not None and not previous.present:
         return False  # A later retained observation cannot resurrect a terminal lifetime.
     target.actors[observation.actor_uuid] = observed_actor(previous, observation)
+    apply_item_patches(target, observation.items)
     return True
 
 
@@ -155,9 +163,18 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
 def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int | None = None,
                       audience_composition: AudienceComposition | None = None) -> None:
     """Fold an already-disclosed committed fact into player memory: its senses and turn part, then its bodies' part."""
+    apply_sensed_fact(target, fact, target.actors, source_cursor=source_cursor,
+        audience_composition=audience_composition)
+    apply_body_fact(target, fact)
+
+
+def apply_sensed_fact(target: PlayerState, fact: PlayerFact, known: Collection[UUID], *,
+                      source_cursor: int | None = None,
+                      audience_composition: AudienceComposition | None = None) -> None:
+    """The senses and turn part of a committed fact; `known` are the actors the fold has bodies for."""
     match fact:
         case SpatialFact():
-            if fact.terminal_departure and fact.entity_uuid is not None and fact.entity_uuid in target.actors:
+            if fact.terminal_departure and fact.entity_uuid is not None and fact.entity_uuid in known:
                 if target.senses is not None:
                     target.senses.entities.pop(fact.entity_uuid, None)
                     if audience_composition is not None:
@@ -182,11 +199,10 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: i
                 target.round_number = fact.round_number
             if fact.event_type in (EventType.TURN_START, EventType.TURN_END, EventType.ENCOUNTER_END):
                 target.current_actor_uuid = fact.entity_uuid if fact.event_type is EventType.TURN_START else None
-    apply_body_fact(target, fact)
 
 
 def apply_body_fact(target: PlayerState, fact: PlayerFact) -> None:
-    """The bodies' part of a committed fact: it changes `target.actors` only."""
+    """The bodies' part of a committed fact: it changes `target.actors` and `target.items` only."""
     match fact:
         case FactionFact():
             actor = target.actors.get(fact.entity_uuid)
@@ -210,14 +226,14 @@ def apply_body_fact(target: PlayerState, fact: PlayerFact) -> None:
             actor = target.actors[fact.source_entity_uuid]
             if actor.controlled_items is None or not target.viewing_audience.controls(actor.uuid):
                 raise ValueError("item charges require the controlled actor's inventory")
-            items = tuple(item.model_copy(update={
-                "charges": fact.charges_after, "stack_count": fact.stack_count_after,
-            }) if item.item_uuid == fact.item_uuid else item for item in actor.controlled_items
-                if not (fact.item_destroyed and item.item_uuid == fact.item_uuid))
-            layers = tuple(layer for layer in actor.visual_loadout.layers
-                           if not (fact.item_destroyed and layer.item_uuid == fact.item_uuid))
-            target.actors[actor.uuid] = replace(actor, controlled_items=items,
-                visual_loadout=replace(actor.visual_loadout, layers=layers))
+            if fact.item_uuid in actor.controlled_items:
+                target.items[fact.item_uuid] = {**target.items[fact.item_uuid],
+                    "charges": fact.charges_after, "stack_count": fact.stack_count_after}
+            if fact.item_destroyed:
+                target.actors[actor.uuid] = replace(actor,
+                    controlled_items=tuple(identity for identity in actor.controlled_items if identity != fact.item_uuid),
+                    visual_loadout=replace(actor.visual_loadout, layers=tuple(layer for layer in actor.visual_loadout.layers
+                        if layer.item_uuid != fact.item_uuid)))
         case SensoryFact():
             if fact.observer_position_changed and fact.observer_uuid in target.actors:
                 target.actors[fact.observer_uuid] = replace(target.actors[fact.observer_uuid], last_visual_position=fact.observer_position)
@@ -251,8 +267,8 @@ def apply_body_fact(target: PlayerState, fact: PlayerFact) -> None:
         case EquipmentFact():
             actor = target.actors.get(fact.source_entity_uuid)
             if actor is not None:
-                target.actors[actor.uuid] = replace(actor, visual_loadout=fact.visual_loadout,
-                    armor_class=fact.armor_class, controlled_items=fact.controlled_items)
+                target.actors[actor.uuid] = replace(actor, **fact.changes)
+                apply_item_patches(target, fact.items)
         case ConditionChangeFact():
             actor = target.actors[fact.target_entity_uuid]
             condition = fact.condition
@@ -275,10 +291,9 @@ def apply_body_fact(target: PlayerState, fact: PlayerFact) -> None:
                     else actor.resolved_size))
 
 
-def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
-                               version_cursors: Mapping[UUID, int],
-                               audience_composition: AudienceComposition | None = None) -> bool:
-    """Fold a committed fact without letting an outer move undo nested arrival; False if superseded."""
+def commit_current(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
+                   version_cursors: Mapping[UUID, int]) -> bool:
+    """Record a spatial transition's commit; False if a nested commit supersedes it (it is then not folded)."""
     if (isinstance(fact, SpatialFact) and fact.entity_uuid is not None
             and fact.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT)):
         if fact.commit_event_uuid is None or fact.commit_event_uuid not in version_cursors:
@@ -289,8 +304,15 @@ def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source
         if committed_at < target.spatial_commit_cursors.get(fact.entity_uuid, -1) < source_cursor:
             return False
         target.spatial_commit_cursors[fact.entity_uuid] = committed_at
-    apply_player_fact(target, fact, source_cursor=source_cursor, audience_composition=audience_composition)
     return True
+
+
+def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
+                               version_cursors: Mapping[UUID, int],
+                               audience_composition: AudienceComposition | None = None) -> None:
+    """Fold a committed fact without letting an outer move undo nested arrival."""
+    if commit_current(target, fact, source_cursor=source_cursor, version_cursors=version_cursors):
+        apply_player_fact(target, fact, source_cursor=source_cursor, audience_composition=audience_composition)
 
 
 def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],

@@ -25,7 +25,7 @@ from dnd.core.effect_types import ObjectSectionVolume, ObservedChangeRef, Applic
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.types.event_facts import EventPhase, EventType, LandingKind, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState, WorldTileChanges
 from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot, ItemResourceChange, ItemEffectPresentationState,
-    ItemIntegrity, ItemPresentationKind, ItemPresentationState, ItemRemnantState)
+    ItemIntegrity, ItemPresentationKind, ItemRarity, ItemRemnantState)
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState
@@ -100,20 +100,98 @@ class CombatLogAppend:
     entry: CombatLogEntry
 
 
+class ItemFields(TypedDict, total=False):
+    """An item instance's disclosed fields (`ItemPresentationState` without its identity).
+
+    As a record it holds what the seat knows of the item: the look of an item
+    equipped on an observed body (`ITEM_LOOK_FIELDS`), every field for an item
+    of a controlled inventory. As a patch, present fields replace the known ones.
+    """
+
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
+    item_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")]
+    name: str
+    description: str | None
+    item_kind: ItemPresentationKind
+    rarity: ItemRarity
+    weight: float
+    value: int
+    tags: tuple[str, ...]
+    is_pickable: bool
+    is_equippable: bool
+    is_usable: bool
+    is_targetable: bool
+    door_mechanism: DoorMechanism | None
+    door_swing: DoorSwing | None
+    remnant_state: ItemRemnantState | None
+    integrity: ItemIntegrity
+    destruction_outcome: str | None
+    stack_id: str | None
+    visual_item_name: str
+    visual_variant_id: str | None
+    item_effects: tuple[ItemEffectPresentationState, ...]
+    equipped_visual_policy: EquippedVisualPolicy
+    damage_dice: str | None
+    damage_type: str | None
+    weapon_properties: tuple[str, ...]
+    armor_type: str | None
+    armor_ac: int | None
+    shield_ac_bonus: int | None
+    charges: Annotated[int, Field(ge=-1)] | None
+    max_charges: Annotated[int, Field(ge=-1)] | None
+    stack_count: Annotated[int, Field(ge=0)]
+    max_stack: Annotated[int, Field(ge=1)]
+    is_consumable: bool
+    map_char: str
+    include_in_senses_objects: bool
+    include_in_adjacent_senses_objects: bool
+    include_in_available_object_actions: bool
+    current_hit_points: Annotated[int, Field(ge=0)] | None
+    maximum_hit_points: Annotated[int, Field(ge=0)] | None
+    concentration_capacity: Annotated[int, Field(ge=0)]
+    concentration_slots: tuple[ItemConcentrationSlot, ...]
+    boundary_structure: BoundaryStructure | None
+    construction_owner_uuid: UUID | None
+    construction_geometry: AoEPresentationGeometry | None
+    construction_suppressions: tuple[SpellSuppression, ...]
+    known_to_creator: bool
+    supported_by_uuid: UUID | None
+    contact_passage: ContactPassage
+    surface_residues: tuple[ObjectResidueState, ...]
+    linked_spatial_condition_uuid: UUID | None
+    is_open: bool | None
+    is_engaged: bool | None
+    blocks_movement: bool
+    blocks_optics: bool
+    blocks_propagation: bool
+    is_lit: bool | None
+    very_bright_radius_feet: Annotated[int, Field(ge=0)] | None
+    bright_radius_feet: Annotated[int, Field(ge=0)] | None
+    dim_radius_feet: Annotated[int, Field(ge=0)] | None
+
+
+# What any viewer of an equipped item sees of it; `is_lit` travels in its layer.
+ITEM_LOOK_FIELDS = ("item_id", "item_kind", "visual_item_name", "visual_variant_id", "equipped_visual_policy",
+    "item_effects", "very_bright_radius_feet", "bright_radius_feet", "dim_radius_feet")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ItemPatch:
+    """One item's fields new to the seat: its whole disclosed record the first time, then what changed."""
+
+    item_uuid: UUID
+    changes: ItemFields
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class VisualItem:
+    """One equipped layer; the item's look is in the seat's record of `item_uuid`."""
+
     slot: str
     item_uuid: UUID
     item_id: str
-    item_kind: ItemPresentationKind
-    visual_item_name: str
-    visual_variant_id: str | None
-    equipped_visual_policy: EquippedVisualPolicy
-    item_effects: tuple[ItemEffectPresentationState, ...] = ()
     is_lit: bool | None = None
-    very_bright_radius_feet: Annotated[int, Field(ge=0)] | None = None
-    bright_radius_feet: Annotated[int, Field(ge=0)] | None = None
-    dim_radius_feet: Annotated[int, Field(ge=0)] | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -137,7 +215,8 @@ class PlayerActor:
     armor_class: int
     conditions: tuple[ConditionFact, ...] = ()
     last_visual_position: tuple[int, int] | None = None
-    controlled_items: tuple[ItemPresentationState, ...] | None = None
+    # A controlled actor's inventory, in order; its records are in `PlayerState.items`.
+    controlled_items: tuple[UUID, ...] | None = None
     occupancy_layer: OccupancyLayer | None = None
     temporary_hp_grant: TemporaryHitPointsGrant | None = None
     resolved_size: Size | None = None
@@ -169,7 +248,7 @@ class ActorChanges(TypedDict, total=False):
     armor_class: int
     conditions: tuple[ConditionFact, ...]
     last_visual_position: tuple[int, int] | None
-    controlled_items: tuple[ItemPresentationState, ...] | None
+    controlled_items: tuple[UUID, ...] | None
     occupancy_layer: OccupancyLayer | None
     temporary_hp_grant: TemporaryHitPointsGrant | None
     resolved_size: Size | None
@@ -183,12 +262,14 @@ class ActorChanges(TypedDict, total=False):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerObservation:
-    """One actor's observed body at an event, as a patch against what the seat holds."""
+    """One actor's observed body at an event, as a patch against what the seat holds,
+    with the patches of the items that body discloses."""
 
     event_uuid: UUID
     actor_uuid: UUID
     changes: ActorChanges
     contact: PerceivedContact | None
+    items: tuple[ItemPatch, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -427,11 +508,12 @@ class DeathSaveFact:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class EquipmentFact:
+    """A holder's equipment change: its body patch (loadout, armor class, inventory) and its items' patches."""
+
     kind: Literal["equipment"] = "equipment"
     source_entity_uuid: UUID
-    visual_loadout: VisualLoadout
-    armor_class: int
-    controlled_items: tuple[ItemPresentationState, ...] | None = None
+    changes: ActorChanges
+    items: tuple[ItemPatch, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -807,6 +889,8 @@ class PlayerState:
     # Keep spatial commit order across separately timed presentation groups.
     spatial_commit_cursors: dict[UUID, int] = field(default_factory=dict)
     actors: dict[UUID, PlayerActor] = field(default_factory=dict)
+    # Every item instance the seat has seen, by uuid: its look or, once controlled, its whole record.
+    items: dict[UUID, ItemFields] = field(default_factory=dict)
     current_actor_uuid: UUID | None = None
     round_number: int = 0
     hud_snapshot: PlayerHUDSnapshot | None = None

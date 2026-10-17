@@ -78,7 +78,7 @@ def state_summary(state: PlayerState) -> dict[str, Any]:
                             "behavior_id": row.behavior_id, "name": row.name} for row in actor.conditions],
             "last_visual_position": actor.last_visual_position,
             "controlled_items": (None if actor.controlled_items is None
-                                 else [str(item.item_uuid) for item in actor.controlled_items]),
+                                 else [str(identity) for identity in actor.controlled_items]),
         } for identity, actor in state.actors.items()},
         "objects": {str(identity): {
             "item_id": obj.item.item_id, "position": obj.placement.position,
@@ -132,7 +132,7 @@ def group_trace(group: BoundChoreography) -> dict[str, Any]:
             for cue in group.spatial_responses],
         "state_times_ms": [at for at, _ in group.states],
         "observations": [{"at_ms": at, "event_uuid": str(observation.event_uuid),
-                          "actor_uuid": str(observation.actor.uuid)} for at, observation in group.observations],
+                          "actor_uuid": str(observation.actor_uuid)} for at, observation in group.observations],
         "shoves": [SHOVE.dump_python(cue, mode="json", exclude={"data"}, warnings="error") for cue in group.shoves],
         "forced_movement": [{**FORCED.dump_python(cue, mode="json", exclude={"data"}, warnings="error"),
                              "context": cue.data.forced_movement_context.model_dump(mode="json"),

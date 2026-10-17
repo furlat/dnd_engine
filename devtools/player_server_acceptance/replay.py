@@ -18,7 +18,7 @@ from typing import Any
 from dnd_player import transport as sdk
 from pydantic import TypeAdapter
 
-from dnd.player.facts import PlayerState
+from dnd.player.facts import ITEM_LOOK_FIELDS, PlayerState
 from dnd.player.reduction import reduce_initialization, reduce_operation
 from server.protocol import InitializationResponse, PlayerOperation
 
@@ -80,8 +80,8 @@ def check_group(group: dict, controlled: set[str], events: dict[str, int], linea
                 require(events.get(change['source_event_uuid']) == change['source_index'], 'Sensory occurrence reference is not closed')
         if fact['kind'] == 'spatial' and fact['commit_event_uuid'] is not None:
             require(fact['commit_event_uuid'] in events, 'Spatial commit occurrence is not disclosed')
-        if fact['kind'] == 'equipment' and fact['controlled_items'] is not None:
-            require(fact['source_entity_uuid'] in controlled, 'Foreign equipment exposes private inventory')
+        if fact['kind'] == 'equipment':
+            check_body(fact['source_entity_uuid'], fact['changes'], fact['items'], controlled)
         if fact['kind'] == 'damage' and fact['stage'] == 'applied':
             counts['applied_damage'] += 1
         if fact['kind'] == 'turn' and fact['event_type'] == 'encounter_end':
@@ -92,12 +92,18 @@ def check_group(group: dict, controlled: set[str], events: dict[str, int], linea
                 counts['nonfirst_spell_applications'] += 1
     for observation in group['observations']:
         require(observation['event_uuid'] in events, 'Observation references an undisclosed occurrence')
-        actor = observation['actor']
-        if actor['controlled_items'] is not None:
-            require(actor['uuid'] in controlled, 'Foreign observation exposes private inventory')
+        check_body(observation['actor_uuid'], observation['changes'], observation['items'], controlled)
     for update in group['world_updates']:
         require(update['event_uuid'] in events, 'World update references an undisclosed occurrence')
     check_hud(group.get('hud_snapshot'), controlled)
+
+
+def check_body(actor_uuid: str, changes: dict, items: list, controlled: set[str]) -> None:
+    """A foreign body discloses no inventory, and only the look of its equipped items."""
+    if actor_uuid in controlled:
+        return
+    require(changes.get('controlled_items') is None, 'Foreign body patch exposes private inventory')
+    require(all(set(row['changes']) <= set(ITEM_LOOK_FIELDS) for row in items), 'Foreign item patch exposes private fields')
 
 
 def replay_stream(directory: Path) -> dict[str, Any]:

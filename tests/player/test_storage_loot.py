@@ -88,7 +88,7 @@ def test_one_all_close_reopen_survive_cold_serialization(cache_world):
             state = reduce_lineage(state, packet)
             observed = state.objects[chest.uuid].contained_items
             assert (None if observed is None else {row.item_uuid for row in observed}) == contents
-            assert {row.item_uuid for row in state.actors[actor.uuid].controlled_items} == holdings
+            assert set(state.actors[actor.uuid].controlled_items) == holdings
             expected_contents.append(contents)
             expected_holdings.append(holdings)
 
@@ -125,7 +125,7 @@ def test_one_all_close_reopen_survive_cold_serialization(cache_world):
     for state, contents, holdings in zip(states, expected_contents, expected_holdings, strict=True):
         observed = state.objects[chest_uuid].contained_items
         assert (None if observed is None else {row.item_uuid for row in observed}) == contents
-        assert {row.item_uuid for row in state.actors[actor_uuid].controlled_items} == holdings
+        assert set(state.actors[actor_uuid].controlled_items) == holdings
 
 
 @pytest.mark.parametrize("interference", ("closed", "transferred", "other_holder", "full"))
@@ -182,7 +182,7 @@ def test_full_stack_merge_removes_source_child_in_cold_view(cache_world):
     assert incoming.uuid not in actor.inventory.items
     assert held.stack_count == 5
     assert state.objects[chest.uuid].contained_items == ()
-    assert next(row for row in state.actors[actor.uuid].controlled_items if row.item_uuid == held.uuid).stack_count == 5
+    assert held.uuid in state.actors[actor.uuid].controlled_items and state.items[held.uuid]["stack_count"] == 5
 
 
 def test_losing_sight_clears_contents_and_does_not_discover_private_items(cache_world):
@@ -218,7 +218,7 @@ def test_partial_loot_all_keeps_exact_remaining_contents_visible(cache_world):
         assert packet is not None
         state = reduce_lineage(state, packet)
     remaining = {row.item_uuid for row in state.objects[chest.uuid].contained_items}
-    holdings = {row.item_uuid for row in state.actors[actor.uuid].controlled_items}
+    holdings = set(state.actors[actor.uuid].controlled_items)
     assert len(remaining) == 4 and len(holdings) == 1
     assert not remaining & holdings and remaining | holdings == original
 
