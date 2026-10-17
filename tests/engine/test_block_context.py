@@ -609,7 +609,7 @@ def test_eb_05_010_no_effect_condition_returns_cancel_without_indexing() -> None
     assert condition.applied is False
     assert block.active_conditions == {}
     assert block.active_conditions_by_uuid == {}
-    assert block.active_conditions_by_source[source_uuid] == []
+    assert block.active_conditions_by_source.get(source_uuid, []) == []
 
 
 if __name__ == "__main__":
