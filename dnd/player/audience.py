@@ -293,6 +293,9 @@ class AudienceComposition:
     cell_members: dict[tuple[int, int], set[UUID]] = field(default_factory=dict)
     # The member whose observation the view shows for each cell (tile_observers' choice).
     cell_owners: dict[tuple[int, int], UUID] = field(default_factory=dict)
+    # A cell's members in ascending rank from its last full ranking, kept while no
+    # member's value there changed; departed members are skipped as they surface.
+    cell_order: dict[tuple[int, int], list[UUID]] = field(default_factory=dict)
     entity_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     object_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     effect_members: dict[UUID, set[UUID]] = field(default_factory=dict)
@@ -521,10 +524,14 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
         owners = current.cell_members.get(position)
         if not owners:
             current.cell_owners.pop(position, None)
+            current.cell_order.pop(position, None)
             view.visible.discard(position)
             view.effective_light_levels.pop(position, None)
             view.hazardous_cells.pop(position, None)
             continue
+        if observer in owners:
+            # This member's value here changed: a kept ranking no longer holds.
+            current.cell_order.pop(position, None)
 
         def rank(identity: UUID) -> tuple[int, int]:
             return (perception.members[identity].effective_light_levels.get(position, LightLevel.DARKNESS).value,
@@ -537,7 +544,12 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
                 continue
             owner = observer
         else:
-            owner = max(owners, key=rank)
+            order = current.cell_order.get(position)
+            if order is None:
+                order = current.cell_order[position] = sorted(owners, key=rank)
+            while order[-1] not in owners:
+                order.pop()
+            owner = order[-1]
         current.cell_owners[position] = owner
         source = perception.members[owner]
         view.visible.add(position)
