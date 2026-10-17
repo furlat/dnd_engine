@@ -14,7 +14,6 @@ from dnd.actions_functional import (get_available_actions, get_extra_position_op
     preview_available_selection, secondary_candidates)
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.ai.runtime.decision_epoch import clear_epoch_value_caches
-from dnd.ai.runtime.subjective_projection import clear_subjective_projection_fact_cache
 from dnd.content.characters.premades import (
     FIGHTER_PREMADE_ID, SORCERER_PREMADE_ID, create_premade_character,
 )
@@ -618,4 +617,3 @@ def close_session(session: Session) -> None:
         controller.close()
     session.game.close()
     clear_epoch_value_caches()
-    clear_subjective_projection_fact_cache()

@@ -100,8 +100,12 @@ from dnd.types.character_progression import (
 from dnd.types.character_receipts import CharacterGrantReceipt
 from dnd.core.gridmap import (
     ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN,
+    CellBox,
     PreparedObjectPlacement,
+    cells_box,
     get_map,
+    path_read_box,
+    union_box,
 )
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.geometry import supercover_line
@@ -583,6 +587,8 @@ class Entity(BaseBlock):
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
 
     _fast_move_target_cache_revision: Optional[Tuple[int, int]] = PrivateAttr(default=None)
+    # The cells the last navigation materialization read and their traversal stamp then.
+    _navigation_traversal: Optional[Tuple[CellBox, int]] = PrivateAttr(default=None)
     _fast_move_target_cache: Dict[
         Tuple[Any, ...],
         Tuple[AvailableTarget, ...],
@@ -1745,7 +1751,7 @@ class Entity(BaseBlock):
             return None
         previous = self.faction
         self.faction = faction
-        get_map().invalidate_occupancy_paths({self.position})
+        get_map().invalidate_traversal_rules(self.uuid, self.position if self.is_deployed else None)
         changed = EventQueue.publish_committed_phase(EntityFactionChangedEvent(
             source_entity_uuid=self.uuid, target_entity_uuid=self.uuid,
             entity_uuid=self.uuid, previous_faction=previous, faction_after=faction,
@@ -1904,7 +1910,11 @@ class Entity(BaseBlock):
         sizes = tuple(Size)
         durable = next(iter(self.structural_size_sources.values()), self.structural_base_size)
         index = sizes.index(durable) + sum(self.temporary_size_steps.values())
-        self.size = sizes[max(0, min(len(sizes) - 1, index))]
+        size = sizes[max(0, min(len(sizes) - 1, index))]
+        if size is not self.size:
+            self.size = size
+            # Size is a creature traversal rule (`can_traverse_creature_space`).
+            get_map().invalidate_traversal_rules(self.uuid, self.position if self.is_deployed else None)
 
     def add_temporary_size_step(self, owner_uuid: UUID, step: int) -> None:
         self.temporary_size_steps[owner_uuid] = step
@@ -1924,7 +1934,7 @@ class Entity(BaseBlock):
             source_id,
         )
         if capability is OriginCapability.HALFLING_NIMBLENESS:
-            get_map().invalidate_occupancy_paths({self.position})
+            get_map().invalidate_traversal_rules(self.uuid, self.position if self.is_deployed else None)
             self.senses._paths_dirty = True
 
     def remove_origin_capability_source(
@@ -1940,7 +1950,7 @@ class Entity(BaseBlock):
         if not sources:
             del self.origin_capability_sources[capability]
         if capability is OriginCapability.HALFLING_NIMBLENESS:
-            get_map().invalidate_occupancy_paths({self.position})
+            get_map().invalidate_traversal_rules(self.uuid, self.position if self.is_deployed else None)
             self.senses._paths_dirty = True
         return True
 
@@ -5336,6 +5346,11 @@ class Entity(BaseBlock):
                     return True
         return False
 
+    def _navigation_traversal_current(self) -> bool:
+        """Whether no traversal write touched a cell the last navigation materialization read."""
+        recorded = self._navigation_traversal
+        return recorded is not None and get_map().traversal_stamp(recorded[0]) == recorded[1]
+
     def materialize_navigation_after_movement(self, movement_mode: MovementMode) -> None:
         """Refresh navigation, omitting unused routes after ordinary exhaustion."""
         remaining_distance = max(
@@ -5462,6 +5477,10 @@ class Entity(BaseBlock):
     def _materialize_navigation_distance(self, effective_path_distance: int) -> None:
         """Materialize the requested path domain, including an origin-only domain."""
         grid = get_map()
+        # Paths read traversal within their search box; the walkable map reads every visible cell.
+        read_box = union_box(path_read_box(self.position, effective_path_distance),
+                             cells_box(self.senses.visible))
+        self._navigation_traversal = (read_box, grid.traversal_stamp(read_box))
         distances, paths = grid.compute_paths(
             self.position,
             effective_path_distance,
@@ -6529,7 +6548,6 @@ class Entity(BaseBlock):
             tuple(object_facts),
             tuple(sorted(self.senses.collision_blocked)),
             self.senses.path_revision,
-            get_map().movement_revision,
         )
         if context == self._position_preview_cache_context:
             return
@@ -6861,7 +6879,12 @@ class Entity(BaseBlock):
         """Build legal movement targets from already-computed subjective paths."""
         movement_blocked = remaining_movement <= 0
         grid = get_map()
-        cache_revision = (self.senses.path_revision, grid.movement_revision)
+        # Targets read step costs and hazards only on these paths' cells, so
+        # only movement writes there (or new paths) can change them.
+        read_box = cells_box(step for paths in (paths_by_position, self.senses.safe_paths)
+                             for path in paths.values() for step in path)
+        cache_revision = (self.senses.path_revision,
+                          grid.traversal_stamp(read_box) if read_box is not None else 0)
         if cache_revision != self._fast_move_target_cache_revision:
             self._fast_move_target_cache_revision = cache_revision
             self._fast_move_target_cache.clear()
@@ -7769,7 +7792,8 @@ class Entity(BaseBlock):
             required_path_distance = max(required_path_distance, 20)
         paths_need_refresh = (
             required_path_distance > 0
-            and not self.senses.has_clean_paths_for_distance(required_path_distance)
+            and not (self.senses.has_clean_paths_for_distance(required_path_distance)
+                     and self._navigation_traversal_current())
         )
         if paths_need_refresh:
             started = time.perf_counter() if timing else 0.0
