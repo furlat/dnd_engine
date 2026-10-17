@@ -11,7 +11,8 @@ entities, items and conditions by identity, so a change in how many identities v
     PYTHONHASHSEED=0 PYTHONPATH=<tree> python devtools/performance/gallery_transcript.py record <tree> <out.json> \
         --case fireball --mode ordinary --name <stem>
 
-compare: report whether two recordings are equal after uuid (first appearance) and timestamp
+compare: report whether two recordings are equal after uuid (first appearance, in the engine's own order:
+dicts keep their insertion order, so identities the engine keys by never sort by their raw values) and timestamp
 normalization, after projecting both onto a named representation. Published seat updates are compared
 byte for byte after uuid normalization. The engine on PYTHONPATH is imported but not run.
 
@@ -127,7 +128,7 @@ def record(tree: Path, out: Path) -> None:
     try:
         gallery.entry()
     finally:
-        out.write_text(json.dumps(operations, sort_keys=True, default=str))
+        out.write_text(json.dumps(operations, default=str))
         print(f"TRANSCRIPT {out} operations={len(operations)} versions={[op['versions'] for op in operations]}",
               file=sys.stderr)
 
@@ -221,7 +222,7 @@ def compare(base_path: Path, new_path: Path, representation: str | None) -> int:
             body = _project_value_read(body)
         elif representation == 'value-record':
             body = _project_value_record(body)
-        loaded.append((json.loads(_normalized(json.dumps(body, sort_keys=True))),
+        loaded.append((json.loads(_normalized(json.dumps(body))),
                        [[{seat: _normalized(update) for seat, update in seats.items()} for seats in op]
                         for op in published]))
     (base, base_published), (new, new_published) = loaded
