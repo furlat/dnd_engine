@@ -28,6 +28,7 @@ from dnd.core.events import (
     Event, EventPhase, EventType, ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, LifeStateChangeEvent,
     RoundEvent, SensoryUpdateEvent, SpatialChangeEvent, SpatialChangeType, SpatialEffectChangeEvent, SpatialEffectInteractionEvent,
     MovementTrajectory, StepMovementEvent, TakeDamageEvent, TemporaryHitPointsChangedEvent, TurnEvent, WorldInitializedEvent, SavingThrowEvent,
+    WorldObjectState,
 )
 from dnd.core.life_types import RemainsDisposition
 from dnd.core.item_types import ItemConcentrationSlot, ItemEffectPresentationState, ItemIntegrity, ItemLocation, ItemPresentationState, ItemRemnantState
@@ -837,6 +838,30 @@ def _observed_object(world: PresentationTarget, remembered: PlayerState, identit
         contained_items=contained_items)
 
 
+def _observed_plain_or_object(world: PresentationTarget, remembered: PlayerState, identity: UUID,
+                              index: "WorldProjectionIndex") -> PlayerObject:
+    """`_observed_object`, reusing a plain placed object's value while its inputs are unchanged.
+
+    Without side faces, residues, suppressions or a remnant (and no remembered
+    residues), the observation depends only on the recorded value and whether
+    its contact is visual.
+    """
+    obj = world.objects[identity]
+    item = obj.item
+    previous = remembered.objects.get(identity)
+    if (obj.placement.boundary_direction is not None or item.surface_residues or item.construction_suppressions
+            or item.remnant_state is not None or (previous is not None and previous.item.surface_residues)):
+        return _observed_object(world, remembered, identity, index.observed)
+    contact = world.senses.objects.get(identity) if world.senses is not None else None
+    visual = contact is not None and contact.visual
+    cached = index.observed_values.get(identity)
+    if cached is not None and cached[0] is obj and cached[1] == visual:
+        return cached[2]
+    value = _observed_object(world, remembered, identity, index.observed)
+    index.observed_values[identity] = (obj, visual, value)
+    return value
+
+
 @dataclass(slots=True)
 class WorldProjectionIndex:
     """Audience memberships over current contacts and last-observed placements."""
@@ -846,6 +871,9 @@ class WorldProjectionIndex:
     remembered_order: dict[UUID, int] = field(default_factory=dict)
     next_order: int = 0
     knowledge_removed: set[UUID] = field(default_factory=set)
+    # A plain placed object's last observation with its two inputs: the frozen
+    # recorded value (replaced on every change) and whether the contact is visual.
+    observed_values: dict[UUID, tuple[WorldObjectState, bool, PlayerObject]] = field(default_factory=dict)
 
 
 def _remember_object(index: WorldProjectionIndex, before: PlayerObject | None,
@@ -935,7 +963,7 @@ def _world_update(world: PresentationTarget, remembered: PlayerState, event_uuid
         if identity in world.objects and _object_observed(world, identity)}
     index.observed.difference_update(identities)
     index.observed.update(observed_ids)
-    observed = {identity: _observed_object(world, remembered, identity, index.observed)
+    observed = {identity: _observed_plain_or_object(world, remembered, identity, index)
                 for identity in observed_ids}
     removed = tuple(sorted((identity for identity in identities
         if identity in remembered.objects and identity not in observed
