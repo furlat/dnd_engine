@@ -222,3 +222,9 @@ Hard rules:
   - Moves are still slower than baseline (PV1a-2: one settlement per step, approved).
   - Publication is now 130–280 ms on casts (PV1b).
   - Nothing is under the 100 ms ceiling yet.
+- 2026-10-17: **PS merged.**
+  - Schema builds happen at creation: ~250 `creates` declarations, AST-checked, 0 in-op builds across 31 cases.
+  - Tiles have no private default factories (battlefield build 658 → 538 ms).
+  - Assembly deploys as one group: Start ~8.5 → ~5.2 s, seat initialization 4.3 → 1.6 s.
+  - The birth fact is built once less.
+  - **Finding:** the seat merge (`audience.py:_contacts`) ranks a multi-observer seat's contact by observation cursor, so the merged contact's `special_senses` depends on event history order, not on state. Grouped deploys flip it for two torches in turn_undead. Proposed next-phase fix: a state-based merge (union of the seat's observers' senses).
