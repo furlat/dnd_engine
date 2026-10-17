@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from dnd.actions import PreparedSpellConcentration, SpellAction, SpellEvent
 from dnd.ai.runtime.controller import NativeAIController
+from dnd.ai.runtime.knowledge_system import AIKnowledgeSystem
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.content_system.installed_creature_materialization import materialize_installed_creature
 from dnd.core.base_block import BaseBlock, ConditionRemovalReceipt, PreparedInitialConditions, PreparedConditionApplication
@@ -51,10 +52,11 @@ class PreparedSummon:
 class SummoningSystem:
     """One explicit game/encounter owner; creatures themselves remain ordinary data."""
 
-    def __init__(self, game: Game, encounter: Encounter) -> None:
+    def __init__(self, game: Game, encounter: Encounter, ai_knowledge: AIKnowledgeSystem) -> None:
         self.uuid = uuid4()
         self.game = game
         self.encounter = encounter
+        self.ai_knowledge = ai_knowledge
         self.memberships: dict[UUID, SummonMembership] = {}
         self._committed_casts: set[UUID] = set()
         self._closed = False
@@ -211,7 +213,8 @@ class SummoningSystem:
             if control is not None:
                 existence.sub_conditions.append(control.uuid)
             controller = NativeAIController.create(source_entity_uuid=entity.uuid,
-                game_id=str(self.uuid), assignment_id=str(entity.uuid), controlled_entity_uuids=(entity.uuid,))
+                game_id=str(self.uuid), assignment_id=str(entity.uuid), controlled_entity_uuids=(entity.uuid,),
+                knowledge=self.ai_knowledge)
             deployment = self.game.prepare_deployment(entity, selection.target_position, parent_event=event)
             join = self.encounter.prepare_combatant_join(entity, controller, after_uuid=caster.uuid)
             if rules.sustain is not SummonSustain.NONE:
@@ -487,7 +490,7 @@ class SummoningSystem:
                     raise ValueError("Controlled survivor requires its summoner in the new encounter")
                 controller = NativeAIController.create(source_entity_uuid=member.entity.uuid,
                     game_id=str(self.uuid), assignment_id=str(member.entity.uuid),
-                    controlled_entity_uuids=(member.entity.uuid,))
+                    controlled_entity_uuids=(member.entity.uuid,), knowledge=self.ai_knowledge)
                 try:
                     join = encounter.prepare_combatant_join(member.entity, controller, after_uuid=anchor)
                 except BaseException:
@@ -554,6 +557,6 @@ class SummoningSystem:
         self._committed_casts.clear()
 
 
-def bind_summoning(game: Game, encounter: Encounter) -> SummoningSystem:
-    """Bind only after native world, content and encounter composition."""
-    return SummoningSystem(game, encounter)
+def bind_summoning(game: Game, encounter: Encounter, ai_knowledge: AIKnowledgeSystem) -> SummoningSystem:
+    """Bind only after native world, content and encounter composition; summons' assignments open in `ai_knowledge`."""
+    return SummoningSystem(game, encounter, ai_knowledge)

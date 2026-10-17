@@ -27,6 +27,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.summoning import ConjureAnimals, ConjureFey, ConjureFiend, SpiritualWeapon, FlamingSphere, ConjureElemental, PlanarAlly, SummonDragon
+from dnd.ai.runtime.knowledge_system import bind_ai_knowledge
 from dnd.summoning.system import bind_summoning
 
 
@@ -52,7 +53,7 @@ def battle():
     encounter.start_encounter()
     encounter.start_turn()
     Entity.update_all_entities_senses()
-    system = bind_summoning(game, encounter)
+    system = bind_summoning(game, encounter, bind_ai_knowledge())
     yield game, encounter, system, *actors
     system.close()
     reset_engine_runtime(grid_size=(20,20))
@@ -158,7 +159,7 @@ def test_duration_skips_birth_interval_then_deduplicates_and_expires(battle):
 def test_duplicate_binding_rejected(battle):
     game, encounter, _, _, _ = battle
     with pytest.raises(ValueError, match="already bound"):
-        bind_summoning(game, encounter)
+        bind_summoning(game, encounter, bind_ai_knowledge())
 
 
 def test_native_dismissal_discovery_execution_and_fey_lost_authority(battle):
@@ -381,7 +382,7 @@ def test_close_twice_removes_authority_and_allows_a_fresh_explicit_binding(battl
     system.close()
     assert member.entity.uuid not in game.entities and Entity.get(member.entity.uuid) is None
     assert not member.entity.has_runtime_agency()
-    replacement = bind_summoning(game, encounter)
+    replacement = bind_summoning(game, encounter, bind_ai_knowledge())
     replacement.close()
 
 

@@ -7,6 +7,7 @@ from dnd.actions import SpellEvent
 from dnd.ai.contracts.control import DecisionEpochReason
 from dnd.ai.contracts.decision import ExecuteIntent
 from dnd.ai.runtime.execution import AIDecisionValidationError, ValidatedExecuteDecision, validate_policy_intent
+from dnd.ai.runtime.knowledge_system import bind_ai_knowledge, open_assignment_knowledge
 from dnd.ai.runtime.state_projection import SubjectiveAIStateProjector
 from dnd.controller import TurnContext
 from dnd.actions_functional import execute_available_action, get_available_actions, register_spell
@@ -141,7 +142,10 @@ def test_secondary_uses_primary_contact_across_caster_diagonal(scene):
 
 def test_ai_receives_and_validates_the_same_primary_dependent_branches(scene):
     caster, (primary, secondary, distant, _) = scene
-    projector = SubjectiveAIStateProjector(assignment_id="chain-selection", controlled_entity_uuids=(caster.uuid,))
+    knowledge = bind_ai_knowledge()
+    open_assignment_knowledge(knowledge, caster.uuid, (caster.uuid,))
+    projector = SubjectiveAIStateProjector(assignment_id="chain-selection", controlled_entity_uuids=(caster.uuid,),
+        knowledge=knowledge, knowledge_key=caster.uuid)
     context = TurnContext(source_entity_uuid=caster.uuid, entity_uuid=caster.uuid)
     state = projector.project_decision(caster, context, reason=DecisionEpochReason.SNAPSHOT)
     row = next(row for row in state.epoch_build.epoch.affordances.all_rows

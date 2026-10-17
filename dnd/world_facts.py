@@ -183,6 +183,8 @@ def world_event_positions(
             identity = event.object_uuid
             if event.old_position is not None:
                 positions.add(event.old_position)
+            # Every tile a TILES_CHANGED fact writes (residue fields) is a changed cell.
+            positions.update(row.position for row in event.tile_states)
             for placement in (event.placement, event.previous_placement):
                 if placement is not None:
                     positions.update(placement.positions)

@@ -19,6 +19,7 @@ from dnd.ai.runtime.movement_revalidation import (
     movement_revalidation_cause,
 )
 from dnd.ai.runtime.state_projection import SubjectiveAIStateProjector
+from dnd.ai.runtime.knowledge_system import bind_ai_knowledge, open_assignment_knowledge
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.controller import TurnContext
 from dnd.core.action_execution import (
@@ -53,9 +54,13 @@ def hero_world() -> Iterator[tuple[Entity, SubjectiveWorldState]]:
         setup_standard_actions(hero)
         hero.compose_entity()
         game.deploy_entity(hero, (1, 1))
+        knowledge = bind_ai_knowledge()
+        open_assignment_knowledge(knowledge, hero.uuid, (hero.uuid,))
         projector = SubjectiveAIStateProjector(
             assignment_id="movement-revalidation",
             controlled_entity_uuids=(hero.uuid,),
+            knowledge=knowledge,
+            knowledge_key=hero.uuid,
         )
         yield hero, projector.project_world(hero, TurnContext(
             source_entity_uuid=hero.uuid,

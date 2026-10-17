@@ -31,6 +31,7 @@ from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.summoning import ConjureAnimals, ConjureFey, ConjureFiend
+from dnd.ai.runtime.knowledge_system import bind_ai_knowledge
 from dnd.summoning.system import bind_summoning
 from dnd.summoning.forms import selected_form
 from dnd.types.summoning import SummonFamily, SummonSelection
@@ -102,7 +103,7 @@ def summoning_history(
         with fixed_dice_faces(10, 10, 10):
             encounter.start_encounter()
         encounter.start_turn()
-        system = bind_summoning(game, encounter)
+        system = bind_summoning(game, encounter, bind_ai_knowledge())
         Entity.update_all_entities_senses()
 
         def turn(actor: Entity, *, fresh: bool = False) -> None:
