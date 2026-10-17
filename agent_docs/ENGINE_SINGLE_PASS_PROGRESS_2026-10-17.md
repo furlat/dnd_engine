@@ -158,3 +158,14 @@ Hard rules:
   - perception radius capped once at 80 cells (400 ft);
   - entity-anchored optics blockers now raise (the construction invariant P5 flagged);
   - the mover's contact change rides the zone fact.
+- 2026-10-17: **Merged PT's AI knowledge system (AIK).**
+  - One system owns every assignment's knowledge, advanced at batch dispatch (in the op); reads advance their own assignment.
+  - The cold fold runs at assignment start. The whole-history pull and the lazy branch are deleted.
+  - Exact against base (every field at all 10 reads); decisions and wire identical.
+  - **Residue fix:** TILES_CHANGED signals every tile it writes, so seats now receive the blood / oil rows they missed (choices_caster Command: amber 368,208 → 407,733 B).
+  - **First AI Advance: 346 → 185 ms.**
+  - Fold cost in the op per 26-observer AI side (owned by PV1b): Sleet cast 68–84 ms, drop 59–62, Fireball 40–55, caster step ~2.
+  - Open:
+    - batch-callback errors are logged by `_dispatch_event_batch`, not surfaced (existing passive-observer behaviour);
+    - a rebind re-folds full history;
+    - the summon-cast cold fold (30–39 ms) grows with history.
