@@ -5366,11 +5366,15 @@ class Entity(BaseBlock):
                 for a, b, c in zip(path, path[1:], path[2:])
             )
 
+        edge_costs: Dict[Tuple[Tuple[int, int], Tuple[int, int]], float] = {}
+
         def integer_cost(path):
             total = 0
             for source, target in zip(path, path[1:]):
-                cost = grid.movement_edge_cost_units(source, target, MovementMode.WALKING,
-                    ignore_difficult_terrain=self.ignore_difficult_terrain)
+                cost = edge_costs.get((source, target))
+                if cost is None:
+                    cost = edge_costs[(source, target)] = grid.movement_edge_cost_units(source, target,
+                        MovementMode.WALKING, ignore_difficult_terrain=self.ignore_difficult_terrain)
                 # Declaration and individual paid steps round fractional costs
                 # differently. Leave that existing boundary untouched.
                 if cost <= 0 or cost != int(cost):
@@ -5378,13 +5382,37 @@ class Entity(BaseBlock):
                 total += int(cost) * 5
             return total
 
+        # The world is fixed for this call: each cell's hazard, each step's
+        # leaving reactors and each transition are resolved once.
+        hazardous: Dict[Tuple[int, int], bool] = {}
+        leaving: Dict[Tuple[Tuple[int, int], Tuple[int, int]], frozenset] = {}
+        transitions: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool] = {}
+
+        def is_hazardous(step):
+            value = hazardous.get(step)
+            if value is None:
+                value = hazardous[step] = grid.is_position_hazardous_for(*step, self.uuid)
+            return value
+
+        def reactors_leaving(source, target):
+            value = leaving.get((source, target))
+            if value is None:
+                value = leaving[(source, target)] = frozenset(reactor.uuid for reactor, domain in threat_domains
+                    if source in domain and target not in domain)
+            return value
+
         def risk(path):
-            hazards = {step for step in path[1:]
-                if grid.is_position_hazardous_for(*step, self.uuid)}
-            reactors = {reactor.uuid for reactor, domain in threat_domains
-                if any(source in domain and target not in domain
-                       for source, target in zip(path, path[1:]))}
+            hazards = {step for step in path[1:] if is_hazardous(step)}
+            reactors = set().union(*(reactors_leaving(source, target) for source, target in zip(path, path[1:])))
             return hazards, reactors
+
+        def can_step(source, target):
+            value = transitions.get((source, target))
+            if value is None:
+                value = transitions[(source, target)] = grid.can_transition(source, target, self.uuid,
+                    MovementMode.WALKING, walk_in_danger, True, self.senses.collision_blocked,
+                    directional_collision_blocked=self.senses.directional_collision_blocked)
+            return value
 
         for position, original in paths.items():
             dx, dy = position[0] - self.position[0], position[1] - self.position[1]
@@ -5417,11 +5445,7 @@ class Entity(BaseBlock):
                 if any(step not in self.senses.seen and step not in self.senses.visible
                        for step in candidate[1:]):
                     continue
-                if not all(grid.can_transition(source, target, self.uuid,
-                    MovementMode.WALKING, walk_in_danger, True,
-                    self.senses.collision_blocked,
-                    directional_collision_blocked=self.senses.directional_collision_blocked)
-                    for source, target in zip(candidate, candidate[1:])):
+                if not all(can_step(source, target) for source, target in zip(candidate, candidate[1:])):
                     continue
                 if integer_cost(candidate) != original_cost:
                     continue
