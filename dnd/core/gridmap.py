@@ -65,6 +65,7 @@ from dnd.types.world import (
 )
 from dnd.types.senses import OpticalObscurement, PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect
 from dnd.types.spell_suppression import SpellSuppression
+from dnd.types.residues import ResidueFieldState
 from dnd.types.spatial_effects import (
     SpatialEffectLayer,
     SpatialEffectOccupancyPolicy,
@@ -234,6 +235,7 @@ class GridMap:
         self._declared_source_by_object: Dict[UUID, Tuple[UUID, int]] = {}
         self._next_object_placement_order = 0
         self._spatial_conditions: Dict[UUID, SpatialConditionOwner] = {}
+        self._residue_fields: Dict[str, ResidueFieldState] = {}  # one per material (plan §5.9)
         self._global_crossing_owners: Set[UUID] = set()
         self._local_crossing_owners: DefaultDict[CrossingChannel, Set[UUID]] = defaultdict(set)
         self._missing_support_frontier: DefaultDict[Tuple[int, int], Set[Tuple[int, int]]] = defaultdict(set)
@@ -1639,6 +1641,16 @@ class GridMap:
             senses_hint=SensesUpdateHint(),
         ))
 
+    def residue_field(self, residue_id: str) -> Optional[ResidueFieldState]:
+        """This map's one field for a material, if any of it was deposited."""
+        return self._residue_fields.get(residue_id)
+
+    def install_residue_field(self, field: ResidueFieldState) -> None:
+        """Own a material's field for the lifetime of this map's tiles."""
+        if field.residue_id in self._residue_fields:
+            raise ValueError(f"Residue field {field.residue_id} already exists")
+        self._residue_fields[field.residue_id] = field
+
     def publish_tiles_state_changed(
         self, positions: Collection[Tuple[int, int]], *, source_entity_uuid: UUID,
         parent_event: Optional[UUID] = None,
@@ -1822,7 +1834,8 @@ class GridMap:
         for condition in self.get_spatial_conditions():
             if condition.hazard_filter is not None:
                 return True
-        return False
+        # A hazardous material's field carries its one entry handler.
+        return any(field.entry_handler_uuid is not None for field in self._residue_fields.values())
 
     def is_walkable_for(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None,
                         mode: MovementMode = MovementMode.WALKING,
@@ -6310,6 +6323,7 @@ class GridMap:
         self._declared_source_by_object.clear()
         self._next_object_placement_order = 0
         self._spatial_conditions.clear()
+        self._residue_fields.clear()
         self._global_crossing_owners.clear()
         self._local_crossing_owners.clear()
         self._missing_support_frontier.clear()

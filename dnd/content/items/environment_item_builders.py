@@ -39,7 +39,7 @@ from dnd.items.environment_interactables import (
 )
 from dnd.items.spell_items import SpellGrantingItem
 from dnd.items.torches import StandingTorch, WallTorch
-from dnd.residues import BLOOD_RESIDUE, DREAD_RESIDUE, POISON_RESIDUE, ResidueProfile, deposit_residue
+from dnd.residues import BLOOD_RESIDUE, DREAD_RESIDUE, POISON_RESIDUE, ResidueProfile, deposit_residues
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spatial.environmental_conditions import OilSurface, WetSurface
 from dnd.spatial.ignition import resolve_interaction
@@ -104,11 +104,9 @@ class LiquidBarrel(BaseItem):
         )
         material = self.spill_profile.material
         if isinstance(material, ResidueProfile):
-            for position in sorted(positions):
-                tile = get_map().get_tile(*position)
-                if tile is not None:
-                    deposit_residue(tile, material, parent_event=parent_event,
-                        amount=self.spill_profile.amount, deposit_source=deposit_source)
+            deposit_residues(material, {position: () for position in sorted(positions)},
+                source_entity_uuid=self.uuid, parent_event=parent_event,
+                amount=self.spill_profile.amount, deposit_source=deposit_source)
             return
 
         surface = _LIQUID_SURFACES[material](

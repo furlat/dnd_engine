@@ -1006,14 +1006,9 @@ class Disengaging(BaseCondition):
 
 
 def ground_has_residue(position: Tuple[int, int], residue_id: str) -> bool:
-    """Read current material from its existing tile-owned condition."""
+    """Read the material on this tile from the tile's residue after-values (plan §5.9)."""
     tile = get_map().get_tile(*position)
-    return tile is not None and any(
-        condition.affects_occupancy_layer(OccupancyLayer.GROUND)
-        and (residue := condition.snapshot_tile_residue()) is not None
-        and residue.residue_id == residue_id
-        for condition in tile.active_conditions.values()
-    )
+    return tile is not None and tile.residue_state(residue_id) is not None
 
 
 def same_residue_ground(start: Tuple[int, int], end: Tuple[int, int], residue_id: str) -> bool:

@@ -3,7 +3,7 @@
 import pytest
 from dataclasses import replace
 from dnd.blocks.sensory import capture_senses_snapshot
-from dnd.residues import ASHEN_RESIDUE, POISON_RESIDUE, deposit_residue
+from dnd.residues import ASHEN_RESIDUE, POISON_RESIDUE, deposit_residue, remove_tile_residue
 
 from dnd.actions import SpellEvent
 from dnd.core.aoe import Sphere, objective_footprint
@@ -48,7 +48,7 @@ def test_fireball_spreads_around_open_doorway_within_original_radius(opening, ex
     assert all((x - 5) ** 2 + (y - 8) ** 2 <= 16 for x, y in reached)
     assert ((7, 10) in reached) == opening
     assert {position for position, tile in get_map().get_all_tiles().items()
-            if "Ashen" in tile.active_conditions} == reached
+            if tile.residue_state(ASHEN_RESIDUE.residue_id) is not None} == reached
     preview = caster.preview_aoe_target(spell, AvailableTarget(index=0, position=(5, 8)))
     assert set(preview.affected_positions or ()) == {position for position in reached
         if caster.senses.visible.get(position)}
@@ -95,7 +95,7 @@ def test_globe_suppresses_damage_and_area_with_provider_attribution(spell_kind):
                and event.suppressions[0].provider_uuid == zone.uuid for event in events)
     for position in zone.affected_positions:
         tile = get_map().get_tile(*position)
-        assert tile is not None and "Ashen" not in tile.active_conditions
+        assert tile is not None and tile.residue_state(ASHEN_RESIDUE.residue_id) is None
 
 
 @pytest.mark.parametrize('layout,count', [('l-wall', 26), ('corridor', 23)])
@@ -113,7 +113,7 @@ def test_connected_reference_l_wall_and_corridor(layout, count):
     assert isinstance(result, SpellEvent) and not result.canceled
     assert result.resolved_area_positions is not None
     assert len(result.resolved_area_positions) == count
-    assert {p for p, tile in get_map().get_all_tiles().items() if 'Ashen' in tile.active_conditions} == set(result.resolved_area_positions)
+    assert {p for p, tile in get_map().get_all_tiles().items() if tile.residue_state(ASHEN_RESIDUE.residue_id) is not None} == set(result.resolved_area_positions)
 
 
 @pytest.mark.parametrize('protected', [False, True])
@@ -153,7 +153,7 @@ def test_surface_membership_preserves_sight_and_updates_hazards_immediately():
     assert after_poison.hazardous_cells[cell.position]
     observer.update_entity_senses(max_distance=120)
     assert replace(after_poison, paths_dirty=False) == replace(capture_senses_snapshot(observer.senses), paths_dirty=False)
-    assert cell.remove_condition(POISON_RESIDUE.name)
+    assert remove_tile_residue(cell, POISON_RESIDUE.residue_id)
     after_removal = capture_senses_snapshot(observer.senses)
     assert not after_removal.hazardous_cells[cell.position]
     observer.update_entity_senses(max_distance=120)

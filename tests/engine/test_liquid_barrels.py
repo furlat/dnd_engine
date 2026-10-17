@@ -18,7 +18,7 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     DamageAppliedEvent, Event, EventPhase, EventQueue, ItemDestructionEvent,
-    SavingThrowEvent, SpatialEffectChangeEvent, SpatialEffectInteractionEvent,
+    SavingThrowEvent, SpatialChangeEvent, SpatialChangeType, SpatialEffectChangeEvent, SpatialEffectInteractionEvent,
 )
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemIntegrity
@@ -120,7 +120,8 @@ def test_attack_spills_once_under_destruction_and_material_survives_wreck_retire
     assert destruction.resulting_state is not None and destruction.resulting_state.item_uuid == barrel.uuid
     assert get_map().is_walkable_for(1, 1)
     effects = [event for event in completed(cursor)
-               if isinstance(event, (SpatialEffectChangeEvent, ConditionApplicationEvent))]
+               if isinstance(event, (SpatialEffectChangeEvent, ConditionApplicationEvent))
+               or isinstance(event, SpatialChangeEvent) and event.change_type is SpatialChangeType.TILES_CHANGED]
     assert effects
     for effect in effects:
         ancestor = effect

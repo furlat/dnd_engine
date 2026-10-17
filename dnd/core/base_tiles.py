@@ -12,7 +12,8 @@ from dnd.core.values import BaseValue, ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.types.materials import Material, TileSurface
-from dnd.types.world import CardinalDirection
+from dnd.types.residues import TileResidueState
+from dnd.types.world import CardinalDirection, OccupancyLayer
 from dnd.types.spatial_effects import SpatialEffectLayer
 
 def validate_elevation_surface_tuple(
@@ -127,6 +128,10 @@ class Tile(BaseBlock):
     )
     _light: TileLight = PrivateAttr(default_factory=TileLight)
     _center_object_bands: Dict[int, TileObjectBand] = PrivateAttr(default={})
+    # Residue after-values per material, written by that material's map field (plan §5.9).
+    _residues: Dict[str, TileResidueState] = PrivateAttr(default_factory=dict)
+    _residue_names: Dict[str, str] = PrivateAttr(default_factory=dict)
+    _hazardous_residues: Set[str] = PrivateAttr(default_factory=set)
     _boundary_object_bands: Dict[
         CardinalDirection,
         Dict[int, TileObjectBand],
@@ -365,12 +370,35 @@ class Tile(BaseBlock):
             elevation_steps=self.height, surface_kind=self.elevation_surface_kind,
             slope_axis=self.slope_axis, default_light=self.default_light,
             resolved_light=self.resolved_light_level,
-            condition_names=tuple(self.active_conditions),
-            residues=tuple(
-                residue for condition in self.active_conditions.values()
-                if (residue := condition.snapshot_tile_residue()) is not None
-            ),
+            condition_names=(*self.active_conditions, *(self._residue_names[key] for key in sorted(self._residues))),
+            residues=self.residue_states(),
         )
+
+    def residue_states(self) -> Tuple[TileResidueState, ...]:
+        """This tile's residue after-values, one per material."""
+        return tuple(self._residues[key] for key in sorted(self._residues))
+
+    def residue_state(self, residue_id: str) -> Optional[TileResidueState]:
+        return self._residues.get(residue_id)
+
+    def record_residue(self, state: TileResidueState, *, name: str, hazardous: bool) -> None:
+        """Store one material's after-value; only its map field writes it."""
+        self._residues[state.residue_id] = state
+        self._residue_names[state.residue_id] = name
+        if hazardous:
+            self._hazardous_residues.add(state.residue_id)
+
+    def forget_residue(self, residue_id: str) -> Optional[TileResidueState]:
+        """Drop one material's after-value; only its map field removes it."""
+        self._residue_names.pop(residue_id, None)
+        self._hazardous_residues.discard(residue_id)
+        return self._residues.pop(residue_id, None)
+
+    def is_hazardous_for(self, entity_uuid: Optional[UUID] = None, *,
+                         occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:
+        """Hazard conditions, plus a hazardous material lying on the ground here."""
+        return (super().is_hazardous_for(entity_uuid, occupancy_layer=occupancy_layer)
+                or (occupancy_layer is OccupancyLayer.GROUND and bool(self._hazardous_residues)))
 
     def snapshot_world_tile(self) -> WorldTileState:
         """Supply the resulting Tile facts to its existing condition publisher."""

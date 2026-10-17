@@ -8,7 +8,7 @@ from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.player.event_record import decode_event, encode_event
-from dnd.residues import BLOOD_RESIDUE, CORROSIVE_RESIDUE, deposit_residue
+from dnd.residues import BLOOD_RESIDUE, CORROSIVE_RESIDUE, deposit_residue, remove_tile_residue
 from dnd.spells.conjuration import FogCloudZone
 from dnd.types.senses import reduce_senses_snapshot
 from tests.engine.test_senses_light_stealth import create_skeleton, reset_senses_state
@@ -53,7 +53,7 @@ def test_native_residue_updates_preserve_contacts_light_and_clean_hazard_entries
     observer.materialize_navigation(max_distance=5)
     before_removal = capture_senses_snapshot(observer.senses)
     cursor = EventQueue.event_cursor()
-    assert tile.remove_condition_by_uuid(residue.condition_uuid)
+    assert remove_tile_residue(tile, residue.residue_id)
     updates = sensory_since(observer.uuid, cursor)
     assert bool(updates) is hazardous
     replayed = before_removal
@@ -143,7 +143,7 @@ def test_stationary_observer_hazards_follow_moving_light_and_hidden_removal():
             assert old_cell not in observer.senses.hazardous_cells
             assert observer.senses.hazardous_cells[new_cell]
             cursor = EventQueue.event_cursor()
-            assert old_tile.remove_condition_by_uuid(old_residue.condition_uuid)
+            assert remove_tile_residue(old_tile, old_residue.residue_id)
             assert sensory_since(observer.uuid, cursor) == ()
         else:
             assert not observer.senses.hazardous_cells[old_cell]

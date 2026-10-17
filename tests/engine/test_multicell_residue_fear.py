@@ -10,7 +10,7 @@ from dnd.core.events import EventQueue, SavingThrowEvent, StepMovementEvent
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.game import Game
-from dnd.residues import DREAD_RESIDUE, deposit_residue
+from dnd.residues import DREAD_RESIDUE, deposit_residue, remove_tile_residue
 from dnd.spells.conjuration import MistyStep
 from tests.engine.test_residue_fear import actor, completed, game as game, walk
 
@@ -105,9 +105,9 @@ def test_removing_old_entry_cell_keeps_fear_but_removing_current_material_releas
     former = get_map().get_tile(3, 1)
     current = get_map().get_tile(2, 1)
     assert former is not None and current is not None
-    assert former.remove_condition(DREAD_RESIDUE.name)
+    assert remove_tile_residue(former, DREAD_RESIDUE.residue_id)
     assert traveler.active_conditions["Frightened"].uuid == fear_uuid
-    assert current.remove_condition(DREAD_RESIDUE.name)
+    assert remove_tile_residue(current, DREAD_RESIDUE.residue_id)
     assert "Frightened" not in traveler.active_conditions
 
 

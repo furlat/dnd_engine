@@ -48,7 +48,7 @@ def ashen_tiles() -> dict[tuple[int, int], tuple]:
     return {position: tuple(row for row in tile.to_world_tile_state().residues
                             if row.residue_id == ASHEN_RESIDUE.residue_id)
             for position, tile in get_map().get_all_tiles().items()
-            if "Ashen" in tile.active_conditions}
+            if tile.residue_state(ASHEN_RESIDUE.residue_id) is not None}
 
 
 def test_empty_visible_area_records_footprint_and_causal_tile_conditions(caster: Entity) -> None:

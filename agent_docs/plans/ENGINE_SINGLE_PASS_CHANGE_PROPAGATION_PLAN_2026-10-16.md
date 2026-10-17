@@ -427,6 +427,23 @@ Thunderwave EVO:1606-1607.
 - Bug G goes to PD1b.
 - `requires_paths` / `_paths_dirty` deletion goes to P5.
 
+### 5.9 Residue field per material (D15, 2026-10-17)
+
+Measured: a body response or Fireball's ash deposits tile by tile; each new tile is a full condition lineage
+(application 4 versions + membership commit 2) and each accumulation its own tile fact. Stubbing body responses:
+Circle of Death 1.15 s → 0.58 s, 1,298 → 542 versions; Fireball 739 → 624 ms.
+
+- **Data on tiles.** Each `Tile` holds its residue after-values per material (`TileResidueState`, the existing wire
+  type; `condition_uuid` is the per-cell identity `uuid5(field, cell)`, stable across deposits). `to_world_tile_state`
+  reads them; nothing reads residues from tile conditions.
+- **One field per material per map** (`ResidueField`, owned by the map, keyed by `residue_id`): deposits, one
+  `SpatialHandler` over its hazardous cells (entry damage / fear, unchanged rules), traversal invalidation for new
+  hazardous cells, connected-ground queries for fear (`same_residue_ground` reads tile data).
+- **One deposit = one call = one fact**: `deposit_residues(cells → ellipses, profile, …)` updates every cell and
+  publishes one tiles fact (inert rows; `commit_tile_mechanics` when new hazardous cells appear). Body responses,
+  Fireball ash and spilled containers call it once per deposit. No residue condition lineages.
+- Object-face residues (`ObjectResidueCondition`) are unchanged.
+
 ## 6. Predicted counts (GC)
 
 | Unit | Meaning |

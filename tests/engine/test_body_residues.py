@@ -24,7 +24,7 @@ from dnd.game import Game
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.monsters.demon_variants import CORROSIVE_DEMON_RECIPE, DREAD_DEMON_RECIPE
 from dnd.monsters.srd_roster import SRD_CREATURE_RECIPES_BY_ID
-from dnd.residues import BLOOD_RESIDUE, BONE_RESIDUE, CORROSIVE_RESIDUE, deposit_residue
+from dnd.residues import BLOOD_RESIDUE, BONE_RESIDUE, CORROSIVE_RESIDUE, deposit_residue, remove_tile_residue
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spatial.environmental_conditions import materialize_spike_trap_condition
 from dnd.types.world import CardinalDirection, OccupancyLayer
@@ -148,9 +148,9 @@ def test_repeated_and_lethal_wounds_leave_one_tile_owned_residue(world: Game) ->
     assert current.condition_uuid == first[0].condition_uuid and current.amount == 2
     assert current.contributions[0].ellipses == first[0].contributions[0].ellipses
     assert current.contributions[0].amount == 2
-    condition = tile.active_conditions_by_uuid[first[0].condition_uuid]
-    assert condition.source_entity_uuid == tile.uuid
-    assert condition.target_entity_uuid == tile.uuid
+    # One field per material owns every cell it lies on (plan §5.9); the cell keeps its stable identity.
+    field = get_map().residue_field(current.residue_id)
+    assert field is not None and tile.position in field.cells
     assert not creature.is_encounter_alive
 
 
@@ -271,7 +271,7 @@ def test_deposition_is_inert_until_entry_and_removal_restores_safe_route(world: 
     _, unsafe_paths = grid.compute_paths(creature.position, requesting_entity_uuid=creature.uuid,
                                           walk_in_danger=False)
     assert tile.position not in unsafe_paths
-    assert tile.remove_condition_by_uuid(residue.condition_uuid)
+    assert remove_tile_residue(tile, residue.residue_id)
     _, safe_paths = grid.compute_paths(creature.position, requesting_entity_uuid=creature.uuid,
                                       walk_in_danger=False)
     assert tile.position in safe_paths
@@ -323,13 +323,13 @@ def test_inert_residue_changes_tile_facts_without_rebuilding_routes(world: Game)
     cursor = EventQueue.event_cursor()
     state = deposit_residue(tile, BLOOD_RESIDUE)
     assert state is not None
-    assert tile.remove_condition_by_uuid(state.condition_uuid)
+    assert remove_tile_residue(tile, state.residue_id)
     assert get_map().movement_revision == revision
     changes = [event for _, event in EventQueue.iter_events_since(cursor)
                if event.phase is EventPhase.COMPLETION]
+    # The deposit and the removal are one inert tile fact each (plan §5.9).
     assert [event.event_type for event in changes] == [
-        EventType.CONDITION_MEMBERSHIP_COMMITTED, EventType.CONDITION_APPLICATION,
-        EventType.CONDITION_MEMBERSHIP_COMMITTED, EventType.CONDITION_REMOVAL,
+        EventType.SPATIAL_TILE_CHANGED, EventType.SPATIAL_TILE_CHANGED,
     ]
 
 

@@ -7,7 +7,7 @@ from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType
 from dnd.core.gridmap import get_map
-from dnd.residues import DREAD_RESIDUE, deposit_residue
+from dnd.residues import DREAD_RESIDUE, deposit_residue, remove_tile_residue
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventQueue, EventPhase, EventType, SavingThrowEvent, TakeDamageEvent, EventHandler, Trigger
 from dnd.core.life_types import LifeState
@@ -640,7 +640,7 @@ def test_residue_fear_ending_does_not_remove_a_borrowing_eyebite_cast():
     assert target.position == (6, 2)
     fear_uuid = target.active_conditions["Frightened"].uuid
     cast_eyebite(caster, target, "panicked")
-    assert tile.remove_condition(DREAD_RESIDUE.name)
+    assert remove_tile_residue(tile, DREAD_RESIDUE.residue_id)
     assert target.active_conditions["Frightened"].uuid == fear_uuid
     assert any(condition.get_display_name() == "Eyebite Panicked" for condition in target.active_conditions.values())
     assert target.attack_bonus().advantage is AdvantageStatus.DISADVANTAGE
