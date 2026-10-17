@@ -374,8 +374,12 @@ class Senses(BaseBlock):
         if reach <= 0:
             return []
         grid = get_map()
-        candidates = (self.visible.items() if candidate_positions is None else
-                      ((position, self.visible.get(position, False)) for position in candidate_positions))
+        if candidate_positions is None:
+            # Only cells within the reach square can be within reach (feet = floor(euclid) * 5).
+            cells = reach // 5
+            x, y = self.position
+            candidate_positions = [(x + dx, y + dy) for dx in range(-cells, cells + 1) for dy in range(-cells, cells + 1)]
+        candidates = ((position, self.visible.get(position, False)) for position in candidate_positions)
         return [position for position, visible in candidates
                 if visible and position != self.position
                 and self.get_feet_distance(position) <= reach
