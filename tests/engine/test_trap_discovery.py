@@ -7,12 +7,13 @@ from dnd.conditions import Blinded
 from dnd.core.events import Event, EventPhase, EventQueue, EventType, SensoryUpdateEvent
 from dnd.entity import Entity
 from dnd.spatial.environmental_conditions import materialize_spike_trap_condition
-from dnd.types.senses import reduce_senses_snapshot
 from dnd.types.traps import TrapState
 from dnd.player.event_record import decode_event, encode_event
 from tests.engine.test_senses_light_stealth import (
     PerceptionModifierCondition, create_skeleton, reset_senses_state,
 )
+from dnd.types.cells import cell_in, value_at
+from dnd.core.sensory_fold import reduce_senses_snapshot
 
 
 def cause(actor: Entity) -> Event:
@@ -47,12 +48,12 @@ def test_detected_inert_trap_remains_known_after_perception_drops() -> None:
     scout.remove_condition_by_uuid(bonus.uuid)
     assert scout.get_passive_perception() <= 15
     assert scout.senses.spatial_effects[trap.uuid] == known
-    assert capture_senses_snapshot(scout.senses).hazardous_cells[(3, 0)]
+    assert value_at(capture_senses_snapshot(scout.senses).hazardous_cells, (3, 0)) == 1
     assert trap.set_trap_state(TrapState.DEACTIVATED, parent_event=cause(scout))
     inert = scout.senses.spatial_effects[trap.uuid]
     assert inert.trap_state is TrapState.DEACTIVATED
     assert inert.description != known.description
-    assert not capture_senses_snapshot(scout.senses).hazardous_cells[(3, 0)]
+    assert value_at(capture_senses_snapshot(scout.senses).hazardous_cells, (3, 0)) == 0
     assert trap.uuid not in witness.senses.spatial_effects
 
     trap.set_trap_state(TrapState.ACTIVATED, parent_event=cause(scout))
@@ -68,7 +69,7 @@ def test_unseen_toggle_keeps_remembered_description_until_sight_returns() -> Non
     remembered = observer.senses.spatial_effects[trap.uuid]
     blindness = Blinded(source_entity_uuid=observer.uuid, target_entity_uuid=observer.uuid)
     observer.add_condition(blindness)
-    assert (3, 0) not in capture_senses_snapshot(observer.senses).visible
+    assert not cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
     trap.set_trap_state(TrapState.DEACTIVATED, parent_event=cause(observer))
     assert observer.senses.spatial_effects[trap.uuid] == remembered
     assert recorded_senses(observer.uuid).spatial_effects[trap.uuid] == remembered

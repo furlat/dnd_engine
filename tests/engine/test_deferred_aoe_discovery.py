@@ -30,6 +30,7 @@ from dnd.spells.evocation import BurningHands, Fireball, IceStorm
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor, force_save_result, reset_spell_regression_arena,
 )
+from dnd.core.cells import mask_positions
 
 
 @pytest.fixture
@@ -108,7 +109,7 @@ def test_selected_subjective_preview_matches_rich_cells_and_recipients(scene, sp
     assert preview.affected_entity_names == tuple(expected.affected_entity_names)
     assert {enemy.uuid, ally.uuid} <= set(preview.affected_entity_uuids)
     assert hidden.uuid not in preview.affected_entity_uuids
-    assert set(preview.affected_positions) <= {p for p, visible in ((position, True) for position in capture_senses_snapshot(caster.senses).visible) if visible}
+    assert set(preview.affected_positions) <= {p for p, visible in ((position, True) for position in mask_positions(capture_senses_snapshot(caster.senses).visible)) if visible}
     assert preview.geometry is not None
     assert selected.affected_positions is None
     assert (selected.index, selected.position, selected.distance) == (

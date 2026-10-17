@@ -30,6 +30,7 @@ from dnd.spatial.portals import PORTAL_CONTENT_REF, PORTAL_HATCH_CONTENT_REF, ma
 from dnd.spells.evocation import GustOfWind, Thunderwave
 from dnd.types.traps import TrapState
 from dnd.types.world import OccupancyLayer
+from dnd.types.cells import cell_in
 
 
 @pytest.fixture
@@ -171,7 +172,7 @@ def test_exit_need_not_be_visible_and_keeps_its_own_height(game):
     get_map().set_tile_elevation((7, 2), height=3, surface_kind=ElevationSurfaceKind.ORDINARY, slope_axis=None)
     materialize_portal({(1, 1)}, (7, 2))
     Entity.update_all_entities_senses()
-    assert (7, 2) not in capture_senses_snapshot(traveler.senses).visible
+    assert not cell_in(capture_senses_snapshot(traveler.senses).visible, (7, 2))
     result = Move(source_entity_uuid=traveler.uuid, end_position=(1, 1),
                   path=[(0, 1), (1, 1)], prefer_safe=False).apply()
     assert result is not None and not result.canceled

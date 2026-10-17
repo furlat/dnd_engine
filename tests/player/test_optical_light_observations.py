@@ -26,6 +26,8 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.types.senses import PerceivedLightSource, SenseMode, SensesType
 from dnd.types.world import CardinalDirection, LightLevel
+from dnd.core.cells import mask_positions
+from dnd.types.cells import value_at
 
 
 @pytest.fixture
@@ -74,7 +76,7 @@ def roots_since(cursor):
 
 
 def assert_objective(state):
-    for position in state.senses.visible:
+    for position in mask_positions(state.senses.visible):
         assert state.tiles[position].resolved_light == get_map().get_tile(*position).resolved_light_level
 
 
@@ -87,7 +89,7 @@ def test_live_carried_torch_private_identity_and_current_tiles_survive_cold_repl
     assert_objective(state)
     assert state.tiles[(5, 5)].resolved_light is LightLevel.DARKNESS
     # Darkvision's effective value is explicitly NOT the objective tile value.
-    assert state.senses.effective_light_levels[(5, 5)] is LightLevel.DIM_LIGHT
+    assert value_at(state.senses.effective_light_levels, (5, 5)) == LightLevel.DIM_LIGHT
     natives, packets, retained = [], [], []
     for lit in (True, False, True):
         before = state
@@ -172,7 +174,7 @@ def test_unseen_offscreen_emitter_exposes_optics_without_actor_or_inventory_iden
     assert source.affected_tiles == {} and source.anchor_entity_uuid is None
     assert source.anchor_item_uuid is None
     assert any(source.source_uuid in tile_light_contributions(get_map().get_tile(*position))[0]
-        for position in state.senses.visible)
+        for position in mask_positions(state.senses.visible))
 
 
 def test_observer_movement_keeps_stationary_descriptor_until_no_contribution_is_visible(room):
@@ -191,8 +193,6 @@ def test_observer_movement_keeps_stationary_descriptor_until_no_contribution_is_
         assert updates
         assert all(not event.light_sources_changed and not event.light_sources_removed
             for event in updates)
-        assert all(not event.objective_light_levels_changed and not event.ambient_light_levels_changed
-            for event in updates)
         state, _, _ = advance(projection, state, roots_since(cursor), witness)
         assert state.senses.visible != previous_visible
         assert state.senses.light_sources == {source_id: source}
@@ -202,7 +202,7 @@ def test_observer_movement_keeps_stationary_descriptor_until_no_contribution_is_
     assert not state.senses.light_sources
     assert source_id in state.senses.light_source_removals
     assert all(source_id not in tile_light_contributions(get_map().get_tile(*position))[0]
-        for position in state.senses.visible)
+        for position in mask_positions(state.senses.visible))
 
 
 @pytest.mark.parametrize('footprint', [{}, {'5,5': LightLevel.BRIGHT_LIGHT}],
@@ -246,7 +246,7 @@ def test_constant_max_source_movement_extinction_and_rediscovery_are_not_light_r
         assert any(event.event_type is EventType.SPATIAL_LIGHT_SOURCES_CHANGED for event in events)
         state, _, _ = advance(projection, state, (root,), witness)
         assert all(grid.get_tile(*position).resolved_light_level is LightLevel.VERY_BRIGHT
-            for position in state.senses.visible)
+            for position in mask_positions(state.senses.visible))
         assert all(source.affected_tiles == {} for source in state.senses.light_sources.values())
         sources.append(dict(state.senses.light_sources))
     assert sources[0] and not sources[1]
@@ -360,4 +360,3 @@ def test_legacy_sensory_records_without_optical_fields_remain_replayable():
     audience = PlayerAudience((observer,), (observer,))
     view = audience_view(observe_audience(AudiencePerception(), audience, event, 0), observer)
     assert view.light_sources == {} and view.light_source_removals == {}
-    assert event.objective_light_levels_changed == {} and event.ambient_light_levels_changed == {}

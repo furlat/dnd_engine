@@ -10,11 +10,11 @@ from pydantic import ValidationError
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventPhase, EventQueue, SensoryUpdateEvent
-from dnd.types.senses import reduce_senses_snapshot
 from dnd.player.event_record import decode_event, encode_event
 from tests.engine.test_senses_light_stealth import (
     create_skeleton, reset_senses_state,
 )
+from dnd.core.sensory_fold import reduce_senses_snapshot
 
 
 def sensory_since(observer_uuid: UUID, cursor: int = 0) -> tuple[SensoryUpdateEvent, ...]:

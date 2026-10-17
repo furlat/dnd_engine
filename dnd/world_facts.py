@@ -155,9 +155,6 @@ def world_event_positions(
     match event:
         case WorldInitializedEvent():
             return {row.position for row in event.tiles} | set(world.tiles)
-        case SensoryUpdateEvent():
-            positions.update(tuple(map(int, key.split(",", maxsplit=1)))
-                for key in event.objective_light_levels_changed.keys() | event.ambient_light_levels_changed.keys())
         case WorldModifiedEvent():
             if event.tile_position is not None:
                 positions.add(event.tile_position)
@@ -211,8 +208,7 @@ def world_event_footprints(
 ) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
     """Separate Tile after-values from object/incident-support observation inputs."""
     if isinstance(event, SensoryUpdateEvent):
-        return {tuple(map(int, key.split(",", maxsplit=1)))
-                for key in event.objective_light_levels_changed.keys() | event.ambient_light_levels_changed.keys()}, set()
+        return set(), set()
     if (isinstance(event, SpatialChangeEvent)
             and event.change_type is SpatialChangeType.LIGHT_CHANGED
             and (condition is None or condition.resulting_tile is None and condition.resulting_item is None)):
@@ -255,18 +251,6 @@ def apply_world_fact(
             for obj in event.objects:
                 _put_object(world, obj.item.item_uuid, obj)
             world.connectors = {row.connector_uuid: row for row in event.connectors}
-        case SensoryUpdateEvent():
-            for key in event.objective_light_levels_changed.keys() | event.ambient_light_levels_changed.keys():
-                x, y = key.split(",", maxsplit=1)
-                position = int(x), int(y)
-                if (previous := world.tiles.get(position)) is not None:
-                    values = {}
-                    if key in event.objective_light_levels_changed:
-                        values["resolved_light"] = LightLevel(event.objective_light_levels_changed[key])
-                    if key in event.ambient_light_levels_changed:
-                        values["default_light"] = LightLevel(event.ambient_light_levels_changed[key])
-                    world.tiles[position] = previous.model_copy(update=values)
-            return bool(event.objective_light_levels_changed or event.ambient_light_levels_changed)
         case WorldModifiedEvent():
             if event.tile_position is not None:
                 if isinstance(event.after, WorldTileState):

@@ -21,6 +21,7 @@ from dnd.types.world import CardinalDirection
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor, force_save_result, reset_spell_regression_arena,
 )
+from dnd.types.cells import cell_in, value_at
 
 
 @pytest.fixture(autouse=True)
@@ -51,7 +52,7 @@ def test_fireball_spreads_around_open_doorway_within_original_radius(opening, ex
             if tile.residue_state(ASHEN_RESIDUE.residue_id) is not None} == reached
     preview = caster.preview_aoe_target(spell, AvailableTarget(index=0, position=(5, 8)))
     assert set(preview.affected_positions or ()) == {position for position in reached
-        if (position in capture_senses_snapshot(caster.senses).visible or None)}
+        if (cell_in(capture_senses_snapshot(caster.senses).visible, position) or None)}
 
 
 def test_connected_spread_contacts_solid_cell_but_does_not_cross_it():
@@ -150,11 +151,11 @@ def test_surface_membership_preserves_sight_and_updates_hazards_immediately():
     assert before.visible == after_ash.visible and before.entities == after_ash.entities
     deposit_residue(cell, POISON_RESIDUE)
     after_poison = capture_senses_snapshot(observer.senses)
-    assert after_poison.hazardous_cells[cell.position]
+    assert value_at(after_poison.hazardous_cells, cell.position) == 1
     observer.update_entity_senses(max_distance=120)
     assert replace(after_poison, paths_dirty=False) == replace(capture_senses_snapshot(observer.senses), paths_dirty=False)
     assert remove_tile_residue(cell, POISON_RESIDUE.residue_id)
     after_removal = capture_senses_snapshot(observer.senses)
-    assert not after_removal.hazardous_cells[cell.position]
+    assert value_at(after_removal.hazardous_cells, cell.position) == 0
     observer.update_entity_senses(max_distance=120)
     assert replace(after_removal, paths_dirty=False) == replace(capture_senses_snapshot(observer.senses), paths_dirty=False)

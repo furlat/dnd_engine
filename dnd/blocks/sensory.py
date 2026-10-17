@@ -37,6 +37,8 @@ from dnd.core.events import (
     SpatialEffectChangeEvent, DeathEvent, EventQueue, OpenGroup, SensoryUpdateEvent,
     SensoryUpdateReason,
 )
+from dnd.core.cells import pack_mask, pack_values
+from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues, no_cells
 from dnd.types.senses import (
     PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesType, VolumeSurfaceSight,
     SensesSnapshot as SensesSnapshot,
@@ -368,20 +370,19 @@ def published_senses(senses: Senses) -> PublishedSenses:
 
 
 def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
-    """The observer's published perception in the set/dict form of `SensesSnapshot`."""
+    """The observer's published perception as a `SensesSnapshot` of packed cell sets."""
     cells = senses.cells
-    positions = visible_positions(cells)
-    xs, ys = np.nonzero(cells.visible.values)
-    light = cells.light.values[xs, ys].tolist()
-    hazard = cells.hazard.values[xs, ys].tolist()
+    visible = cells.visible.values.astype(bool)
     return SensesSnapshot(
         position=senses.position,
-        visible=set(positions),
-        seen=set(layer_positions(senses.seen)),
+        visible=pack_mask(cells.visible.x0, cells.visible.y0, visible),
+        seen=pack_mask(senses.seen.x0, senses.seen.y0, senses.seen.values.astype(bool)),
         entities=dict(senses.entities),
         objects=dict(senses.objects),
-        effective_light_levels={position: LIGHT_LEVELS[level] for position, level in zip(positions, light)},
-        hazardous_cells=dict(zip(positions, hazard)),
+        effective_light_levels=pack_values(cells.visible.x0, cells.visible.y0, visible,
+            embed(cells.light, cells.visible.box, np.dtype(np.uint8))),
+        hazardous_cells=pack_values(cells.visible.x0, cells.visible.y0, visible,
+            embed(cells.hazard, cells.visible.box, np.dtype(np.uint8))),
         spatial_effects=dict(senses.spatial_effects),
         light_sources=dict(senses.light_sources),
         light_source_removals=dict(senses.light_source_removals),
@@ -398,26 +399,26 @@ def _mask_positions(x0: int, y0: int, mask: np.ndarray) -> List[Position]:
     return list(zip((xs + x0).tolist(), (ys + y0).tolist()))
 
 
-def _seen_added(before: CellLayer, after: CellLayer, initial: bool) -> List[Position]:
+def _seen_added(before: CellLayer, after: CellLayer, initial: bool) -> CellMask:
     if initial or not before.values.size:
-        return layer_positions(after)
+        return pack_mask(after.x0, after.y0, after.values.astype(bool))
     if not after.values.size:
-        return []
+        return EMPTY_CELLS
     box = union_box(before.box, after.box)
-    return _mask_positions(box[0], box[1], embed(after, box, np.dtype(bool)) & ~embed(before, box, np.dtype(bool)))
+    return pack_mask(box[0], box[1], embed(after, box, np.dtype(bool)) & ~embed(before, box, np.dtype(bool)))
 
 
 def _cell_delta(before: PublishedSenses, after: PublishedSenses, initial: bool,
-                ) -> Tuple[List[Position], List[Position], List[Position], Dict[str, int], Dict[str, bool]]:
+                ) -> Tuple[CellMask, CellMask, CellMask, CellValues, CellValues]:
     """Visible cells added and removed, seen cells added, and changed light / hazard after-values.
 
     Each is one mask difference over the union of the two windows, so the cost
-    follows the changed cells.
+    follows the changed cells; each is packed straight from the arrays.
     """
     seen_added = _seen_added(before.seen, after.seen, initial)
     b, a = before.cells, after.cells
     if not a.visible.values.size and not b.visible.values.size:
-        return [], [], seen_added, {}, {}
+        return EMPTY_CELLS, EMPTY_CELLS, seen_added, EMPTY_VALUES, EMPTY_VALUES
     box = (a.visible.box if not b.visible.values.size else b.visible.box if not a.visible.values.size
            else union_box(b.visible.box, a.visible.box))
     after_visible = embed(a.visible, box, np.dtype(bool))
@@ -431,14 +432,9 @@ def _cell_delta(before: PublishedSenses, after: PublishedSenses, initial: bool,
         added, removed = after_visible & ~before_visible, before_visible & ~after_visible
         light_changed = after_visible & (~before_visible | (embed(b.light, box, np.dtype(np.uint8)) != after_light))
         hazard_changed = after_visible & (~before_visible | (embed(b.hazard, box, np.dtype(bool)) != after_hazard))
-    lx, ly = np.nonzero(light_changed)
-    hx, hy = np.nonzero(hazard_changed)
-    light = {f"{x},{y}": level for x, y, level in zip((lx + box[0]).tolist(), (ly + box[1]).tolist(),
-                                                     after_light[lx, ly].tolist())}
-    hazards = {f"{x},{y}": hazardous for x, y, hazardous in zip((hx + box[0]).tolist(), (hy + box[1]).tolist(),
-                                                               after_hazard[hx, hy].tolist())}
-    return (_mask_positions(box[0], box[1], added), _mask_positions(box[0], box[1], removed), seen_added,
-            light, hazards)
+    return (pack_mask(box[0], box[1], added), pack_mask(box[0], box[1], removed), seen_added,
+            pack_values(box[0], box[1], light_changed, after_light),
+            pack_values(box[0], box[1], hazard_changed, after_hazard.astype(np.uint8)))
 
 
 def _contact_delta(before: Dict[UUID, PerceivedContact], after: Dict[UUID, PerceivedContact], initial: bool,
@@ -526,10 +522,10 @@ def emit_sensory_update_delta(
         or (perception_capability_changed and after.paths_dirty)
     )
 
+    cells_changed = not (no_cells(visible_added) and no_cells(visible_removed) and no_cells(seen_added))
+    light_moved, hazards_moved = not no_cells(light_changed.cells), not no_cells(hazards_changed.cells)
     has_delta = any((
-        visible_added,
-        visible_removed,
-        seen_added,
+        cells_changed,
         entity_changed,
         entity_removed,
         object_changed,
@@ -539,8 +535,8 @@ def emit_sensory_update_delta(
         sense_modes_changed,
         visual_access_changed,
         position_changed,
-        light_changed,
-        hazards_changed,
+        light_moved,
+        hazards_moved,
         effects_changed,
         effects_removed,
         sources_changed,
@@ -561,9 +557,9 @@ def emit_sensory_update_delta(
     if cause_event is not None and source_index is not None:
         fields: tuple[tuple[ObservedField, tuple[UUID, ...]], ...] = (
             ("position", (owner_uuid,) if position_changed else ()),
-            ("visibility", (owner_uuid,) if visible_added or visible_removed or seen_added else ()),
-            ("light", (owner_uuid,) if light_changed else ()),
-            ("hazards", (owner_uuid,) if hazards_changed else ()),
+            ("visibility", (owner_uuid,) if cells_changed else ()),
+            ("light", (owner_uuid,) if light_moved else ()),
+            ("hazards", (owner_uuid,) if hazards_moved else ()),
             ("senses", (owner_uuid,) if passive_changed or sense_modes_changed or visual_access_changed else ()),
             ("paths", (owner_uuid,) if paths_refresh_needed else ()),
             ("entity_contact", (*entity_changed, *sorted(entity_removed, key=str))),

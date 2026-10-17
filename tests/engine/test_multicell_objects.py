@@ -28,6 +28,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.world import CardinalDirection
 from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementKind, WorldPlacementSpec
 from dnd.world_facts import WorldFacts, apply_world_fact, world_event_positions
+from dnd.types.cells import cell_in
 
 
 @pytest.fixture
@@ -191,7 +192,7 @@ def test_far_end_attack_and_same_identity_destruction_update_only_real_supports(
     item.place_on_grid((2, 3))
     tile_ids = tuple(support.tile_uuid for support in placement(item).covered_supports)
     attacker.update_entity_senses(max_distance=1)
-    assert (2, 3) not in capture_senses_snapshot(attacker.senses).visible
+    assert not cell_in(capture_senses_snapshot(attacker.senses).visible, (2, 3))
     assert attacker.senses.objects[item.uuid].position == (3, 3)
     assert object_choices(attacker, item)
     assert all(choice.position == (3, 3) for choice in object_choices(attacker, item))

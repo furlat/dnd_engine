@@ -19,6 +19,7 @@ from dnd.player.reduction import reduce_initialization, reduce_lineage, reduce_o
 from dnd.types.event_facts import SpatialChangeType
 from dnd.types.senses import PerceivedContact
 from tests.player.test_recorded_boundary import world
+from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES
 
 
 @pytest.mark.parametrize('together', [False, True])
@@ -47,13 +48,13 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
     template = next(node.fact for node in initial.nodes
         if isinstance(node.fact, SensoryFact) and node.fact.observer_uuid == owner.uuid)
     sensory = replace(template, initial=False, observer_position_changed=False,
-        effective_light_levels_changed={}, cause_occurrence=None,
-        visible_cells_added=(), visible_cells_removed=(), seen_cells_added=(),
+        effective_light_levels_changed=EMPTY_VALUES, cause_occurrence=None,
+        visible_cells_added=EMPTY_CELLS, visible_cells_removed=EMPTY_CELLS, seen_cells_added=EMPTY_CELLS,
         entity_contacts_changed={}, entity_contacts_removed=frozenset(),
         object_contacts_changed={}, object_contacts_removed=frozenset(),
         sense_modes_changed=False, sense_modes=None, passive_perception_changed=False,
         passive_perception=None, visual_access_changed=False, visual_access=None,
-        hazardous_cells_changed={}, spatial_effect_sightings={}, spatial_effect_content={},
+        hazardous_cells_changed=EMPTY_VALUES, spatial_effect_sightings={}, spatial_effect_content={},
             spatial_effects_removed=frozenset())
     lineages = []
     for index, step in enumerate(steps, start=before.reducer_cursor):

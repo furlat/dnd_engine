@@ -73,6 +73,8 @@ from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.creature_types import DamageType
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode
+from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues
+from dnd.core.cells import mask_positions, mask_union
 from dnd.types.traps import TrapState
 from dnd.types.residues import BodyReleaseResult
 from dnd.types.spatial_effects import (
@@ -3298,21 +3300,15 @@ class SensoryUpdateEvent(Event):
         default=False,
         description="Whether this update changed the observer's grid position.",
     )
-    effective_light_levels_changed: Dict[str, int] = Field(
-        default_factory=dict,
-        description=(
-            "Changed backend-resolved subjective light after-values, keyed as 'x,y'."
-        ),
+    effective_light_levels_changed: CellValues = Field(
+        default=EMPTY_VALUES,
+        description="Changed backend-resolved subjective light after-values (LightLevel per cell).",
     )
-    ambient_light_levels_changed: Dict[str, int] = Field(default_factory=dict,
-        description="Recorded current native tile baseline illumination for visible cells.")
-    objective_light_levels_changed: Dict[str, int] = Field(default_factory=dict,
-        description="Recorded current objective levels for visible cells, before sense-mode conversion.")
     light_sources_changed: Dict[UUID, PerceivedLightSource] = Field(default_factory=dict)
     light_sources_removed: Dict[UUID, int] = Field(default_factory=dict)
-    hazardous_cells_changed: Dict[str, bool] = Field(
-        default_factory=dict,
-        description="Native resolved hazard after-values for visible cells, keyed as 'x,y'.",
+    hazardous_cells_changed: CellValues = Field(
+        default=EMPTY_VALUES,
+        description="Native resolved hazard after-values for visible cells (1 hazardous, 0 not).",
     )
     spatial_effects_changed: Dict[UUID, PerceivedSpatialEffect] = Field(
         default_factory=dict,
@@ -3330,16 +3326,16 @@ class SensoryUpdateEvent(Event):
         default=SensoryUpdateReason.UNKNOWN,
         description="Reason category used by clients to interpret the delta.",
     )
-    visible_cells_added: List[Tuple[int, int]] = Field(
-        default_factory=list,
+    visible_cells_added: CellMask = Field(
+        default=EMPTY_CELLS,
         description="Cells newly visible to the observer.",
     )
-    visible_cells_removed: List[Tuple[int, int]] = Field(
-        default_factory=list,
+    visible_cells_removed: CellMask = Field(
+        default=EMPTY_CELLS,
         description="Cells no longer visible to the observer.",
     )
-    seen_cells_added: List[Tuple[int, int]] = Field(
-        default_factory=list,
+    seen_cells_added: CellMask = Field(
+        default=EMPTY_CELLS,
         description="Cells newly added to the observer's explored area.",
     )
     entity_contacts_changed: Dict[UUID, PerceivedContact] = Field(
@@ -3408,17 +3404,10 @@ class SensoryUpdateEvent(Event):
         """Reject runtime owners and callables from sensory after-values."""
         pending: List[Any] = [
             self.observer_position,
-            self.effective_light_levels_changed,
-            self.objective_light_levels_changed,
-            self.ambient_light_levels_changed,
             self.light_sources_changed,
             self.light_sources_removed,
-            self.hazardous_cells_changed,
             self.spatial_effects_changed,
             self.spatial_effects_removed,
-            self.visible_cells_added,
-            self.visible_cells_removed,
-            self.seen_cells_added,
             self.entity_contacts_changed,
             self.entity_contacts_removed,
             self.object_contacts_changed,
@@ -3444,12 +3433,8 @@ class SensoryUpdateEvent(Event):
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         """Return every grid cell referenced by this sensory delta."""
-        positions: Set[Tuple[int, int]] = set(self.visible_cells_added)
-        for key in self.hazardous_cells_changed:
-            x, y = key.split(",", maxsplit=1)
-            positions.add((int(x), int(y)))
-        positions.update(self.visible_cells_removed)
-        positions.update(self.seen_cells_added)
+        positions: Set[Tuple[int, int]] = set(mask_positions(mask_union(self.visible_cells_added,
+            self.hazardous_cells_changed.cells, self.visible_cells_removed, self.seen_cells_added)))
         positions.update(
             contact.position for contact in self.entity_contacts_changed.values()
         )

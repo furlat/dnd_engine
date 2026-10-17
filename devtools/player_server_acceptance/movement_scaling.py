@@ -33,6 +33,7 @@ from devtools.player_server_acceptance.movement_scaling_fixture import (
     END, LEVELS, MOVER, SIZES, START, configuration, mutate_remote, prepare)
 from dnd.blocks.sensory import SpatialSensesSystem, spatial_senses_system
 from dnd.core.view import visible_count
+from dnd.core.cells import mask_count, mask_positions, values_items
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, DiceRoll
@@ -69,8 +70,8 @@ def census(runtime):
         'seats': len(runtime.audiences),
         'audiences': {seat: {'remembered_tiles': len(owner.projection.remembered.tiles),
             'remembered_objects': len(owner.projection.remembered.objects),
-            'seen': len(owner.projection.remembered.senses.seen) if owner.projection.remembered.senses else 0,
-            'visible': len(owner.projection.remembered.senses.visible) if owner.projection.remembered.senses else 0,
+            'seen': mask_count(owner.projection.remembered.senses.seen) if owner.projection.remembered.senses else 0,
+            'visible': mask_count(owner.projection.remembered.senses.visible) if owner.projection.remembered.senses else 0,
             'fields': {runtime.session.game.entities[identity].name: {
                 'optical_route_cells': int(field.routes.rows.size) if field is not None else 0,
                 'visible_cells': visible_count(senses.cells)}
@@ -372,20 +373,20 @@ def local_result(state):
     return {'actors': sorted((actor.name, actor.last_visual_position, actor.normal_hp,
             actor.life_state.value, actor.present)
             for actor in state.actors.values() if local(actor.last_visual_position)),
-        'visible': sorted(position for position in senses.visible if local(position)) if senses else [],
-        'light': sorted((position, int(value)) for position, value in senses.effective_light_levels.items()
-            if local(position)) if senses else [],
+        'visible': [position for position in mask_positions(senses.visible) if local(position)] if senses else [],
+        'light': [(position, value) for position, value in values_items(senses.effective_light_levels)
+            if local(position)] if senses else [],
         'objects': sorted((value.item.name, tuple(value.placement.positions))
             for value in state.objects.values() if any(local(position) for position in value.placement.positions)),
-        'local_seen': sorted(position for position in senses.seen if local(position)) if senses else [],
+        'local_seen': [position for position in mask_positions(senses.seen) if local(position)] if senses else [],
         'entity_contacts': sorted((state.actors[identity].name, contact.position, contact.visual,
             tuple(mode.value for mode in contact.special_senses)) for identity, contact in senses.entities.items()
             if local(contact.position)) if senses else [],
         'object_contacts': sorted((state.objects[identity].item.name, contact.position, contact.visual,
             tuple(mode.value for mode in contact.special_senses)) for identity, contact in senses.objects.items()
             if local(contact.position) and identity in state.objects) if senses else [],
-        'hazards': sorted((position, hazardous) for position, hazardous in senses.hazardous_cells.items()
-            if local(position)) if senses else [],
+        'hazards': [(position, bool(hazardous)) for position, hazardous in values_items(senses.hazardous_cells)
+            if local(position)] if senses else [],
         'spatial_effects': [effect.model_dump(mode='json', exclude={'condition_uuid', 'source_entity_uuid'})
             for effect in senses.spatial_effects.values()
             if any(local(position) for position in effect.positions)] if senses else []}
@@ -594,10 +595,10 @@ async def record(args, settings, url):
             while json.loads((args.output / 'census.json').read_text())['events'] < initial['events'] + args.amount:
                 await command()
         if args.axis == 'memory':
-            initial_seen = len(states[mover_seat].senses.seen)
+            initial_seen = mask_count(states[mover_seat].senses.seen)
             await move_to((7, 6))
             destination_y = 12
-            while len(states[mover_seat].senses.seen) < initial_seen + args.amount:
+            while mask_count(states[mover_seat].senses.seen) < initial_seen + args.amount:
                 destination_y += 6
                 if destination_y >= 1500:
                     raise RuntimeError('Authored exploration corridor exhausted before the requested memory count')

@@ -29,6 +29,7 @@ from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy,
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
 from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState
+from dnd.types.cells import EMPTY_VALUES, CellMask, CellValues
 from dnd.types.senses import (PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesSnapshot,
     VolumeSurfaceSight)
 from dnd.core.condition_types import ConditionDurationSummary
@@ -757,11 +758,11 @@ class SensoryFact:
     initial: bool
     observer_position: tuple[int, int]
     observer_position_changed: bool
-    effective_light_levels_changed: dict[str, int]
+    effective_light_levels_changed: CellValues
     cause_occurrence: int | None
-    visible_cells_added: tuple[tuple[int, int], ...]
-    visible_cells_removed: tuple[tuple[int, int], ...]
-    seen_cells_added: tuple[tuple[int, int], ...]
+    visible_cells_added: CellMask
+    visible_cells_removed: CellMask
+    seen_cells_added: CellMask
     entity_contacts_changed: dict[UUID, PerceivedContact]
     entity_contacts_removed: frozenset[UUID]
     object_contacts_changed: dict[UUID, PerceivedContact]
@@ -773,7 +774,7 @@ class SensoryFact:
     visual_access_changed: bool
     visual_access: int | None
     paths_dirty: bool
-    hazardous_cells_changed: dict[str, bool] = field(default_factory=dict)
+    hazardous_cells_changed: CellValues = EMPTY_VALUES
     spatial_effect_sightings: dict[UUID, SpatialEffectSighting] = field(default_factory=dict)
     # The content of each sighted effect the seat does not hold yet; a folded fact holds every sighting's content.
     spatial_effect_content: dict[UUID, SpatialEffectContent] = field(default_factory=dict)

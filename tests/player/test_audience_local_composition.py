@@ -12,8 +12,10 @@ from dnd.player.audience import (
     AudienceComposition, AudiencePerception, PlayerAudience, apply_current_audience,
     audience_view, begin_audience_composition, observe_audience,
 )
+from dnd.types.cells import value_at
 from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect
 from dnd.types.world import LightLevel
+from tests.sensory_cells import cells, packed_cells
 
 
 FIRST, SECOND, SUBJECT, EFFECT = (UUID(int=value) for value in (1, 2, 3, 4))
@@ -21,6 +23,7 @@ AUDIENCE = PlayerAudience((FIRST, SECOND), (FIRST, SECOND))
 
 
 def delta(observer, *, initial=False, **values):
+    values = packed_cells(values)
     if initial:
         values = dict(observer_position=(0, 0), observer_position_changed=True,
             sense_modes_changed=True, sense_modes=[], passive_perception_changed=True,
@@ -59,18 +62,18 @@ def test_shared_light_contact_ties_and_member_reset_keep_other_evidence():
     distant = PerceivedContact(position=(4, 0), visual=False)
     current = check([
         (0, delta(FIRST, initial=True, visible_cells_added=[(0, 0)], seen_cells_added=[(0, 0), (9, 0)],
-            effective_light_levels_changed={'0,0': LightLevel.DIM_LIGHT.value},
-            hazardous_cells_changed={'0,0': False}, entity_contacts_changed={SUBJECT: visual})),
+            effective_light_levels_changed={(0, 0): LightLevel.DIM_LIGHT.value},
+            hazardous_cells_changed={(0, 0): False}, entity_contacts_changed={SUBJECT: visual})),
         (1, delta(SECOND, initial=True, visible_cells_added=[(0, 0)], seen_cells_added=[(0, 0)],
-            effective_light_levels_changed={'0,0': LightLevel.BRIGHT_LIGHT.value},
-            hazardous_cells_changed={'0,0': True}, entity_contacts_changed={SUBJECT: distant})),
-        (2, delta(FIRST, effective_light_levels_changed={'0,0': LightLevel.BRIGHT_LIGHT.value})),
+            effective_light_levels_changed={(0, 0): LightLevel.BRIGHT_LIGHT.value},
+            hazardous_cells_changed={(0, 0): True}, entity_contacts_changed={SUBJECT: distant})),
+        (2, delta(FIRST, effective_light_levels_changed={(0, 0): LightLevel.BRIGHT_LIGHT.value})),
         (3, delta(FIRST, initial=True, visible_cells_added=[(2, 0)], seen_cells_added=[(2, 0)])),
     ])
-    assert current.view.seen == {(0, 0), (2, 0)}
-    assert current.view.hazardous_cells[(0, 0)]
+    assert cells(current.view.seen) == {(0, 0), (2, 0)}
+    assert value_at(current.view.hazardous_cells, (0, 0)) == 1
     assert current.view.entities[SUBJECT] == distant
-    assert current.view.visible == {(0, 0), (2, 0)}
+    assert cells(current.view.visible) == {(0, 0), (2, 0)}
 
 
 def test_owner_handover_matches_the_cold_composition():
@@ -78,16 +81,16 @@ def test_owner_handover_matches_the_cold_composition():
     dim, bright = LightLevel.DIM_LIGHT.value, LightLevel.BRIGHT_LIGHT.value
     current = check([
         (0, delta(FIRST, initial=True, visible_cells_added=[(0, 0), (1, 0)],
-            effective_light_levels_changed={'0,0': dim, '1,0': dim})),
+            effective_light_levels_changed={(0, 0): dim, (1, 0): dim})),
         (1, delta(SECOND, initial=True, visible_cells_added=[(0, 0), (1, 0)],
-            effective_light_levels_changed={'0,0': bright, '1,0': bright})),
-        (2, delta(FIRST, effective_light_levels_changed={'0,0': LightLevel.DARKNESS.value})),
+            effective_light_levels_changed={(0, 0): bright, (1, 0): bright})),
+        (2, delta(FIRST, effective_light_levels_changed={(0, 0): LightLevel.DARKNESS.value})),
         (3, delta(SECOND, visible_cells_removed=[(0, 0)])),
         (4, delta(FIRST, visible_cells_removed=[(1, 0)])),
         (5, delta(SECOND, initial=True, visible_cells_added=[(0, 0)],
-            effective_light_levels_changed={'0,0': dim})),
+            effective_light_levels_changed={(0, 0): dim})),
     ])
-    assert current.view.visible == {(0, 0)}
+    assert cells(current.view.visible) == {(0, 0)}
 
 
 def test_empty_delta_renews_absence_against_older_positive_evidence():
@@ -131,9 +134,9 @@ def test_owned_acquisition_detaches_history_and_rejected_delta_does_not_mutate()
     current = begin_audience_composition(public, FIRST)
     before = deepcopy(current)
     with pytest.raises(ValueError):
-        apply_current_audience(current, AUDIENCE, FIRST,
-            delta(FIRST, visible_cells_added=[(2, 0)], effective_light_levels_changed={'bad': 0}), 1)
+        # A delta for a member without its initial state is rejected by the shared reducer.
+        apply_current_audience(current, AUDIENCE, FIRST, delta(SECOND, visible_cells_added=[(2, 0)]), 1)
     assert current == before
     apply_current_audience(current, AUDIENCE, FIRST, delta(FIRST, seen_cells_added=[(2, 0)]), 2)
     assert public == retained
-    assert current.view.seen == {(0, 0), (2, 0)}
+    assert cells(current.view.seen) == {(0, 0), (2, 0)}
