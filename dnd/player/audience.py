@@ -4,7 +4,7 @@ This module never queries native owners. The display view is composed from
 complete recorded observations; it grants no actor additional senses or actions.
 """
 
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field, replace
 from uuid import UUID
 
@@ -116,42 +116,64 @@ def _effect_signature(value: PerceivedSpatialEffect) -> tuple:
         value.presence_mode, value.area_propagation, value.deposit_source)
 
 
-def _join_effect(first: PerceivedSpatialEffect, second: PerceivedSpatialEffect) -> PerceivedSpatialEffect | None:
-    """Union compatible, already validated typed observations of one owner."""
-    if (first.owner_revision is None or first.owner_revision != second.owner_revision
-            or _effect_signature(first) != _effect_signature(second)):
-        return None
-    optional = {}
-    for key, old, new in (
-        ('anchor_position', first.anchor_position, second.anchor_position),
-        ('anchor_elevation_steps', first.anchor_elevation_steps, second.anchor_elevation_steps),
-        ('anchor_entity_uuid', first.anchor_entity_uuid, second.anchor_entity_uuid),
-        ('anchor_item_uuid', first.anchor_item_uuid, second.anchor_item_uuid),
-        ('sustainer_item_uuid', first.sustainer_item_uuid, second.sustainer_item_uuid),
-        ('concentration_slot_uuid', first.concentration_slot_uuid, second.concentration_slot_uuid),
-        ('area_geometry', first.area_geometry, second.area_geometry),
-    ):
-        if old is not None and new is not None and old != new:
-            return None
-        optional[key] = old if old is not None else new
-    protections = {row.provider_uuid: row for row in first.suppressions}
-    for row in second.suppressions:
-        prior = protections.get(row.provider_uuid)
-        if prior is not None and (
-                prior.provider_content_ref, prior.area_geometry, prior.anchor_elevation_steps
-                ) != (row.provider_content_ref, row.area_geometry, row.anchor_elevation_steps):
-            return None
-        protections[row.provider_uuid] = row.model_copy(update={
-            'positions': tuple(sorted(set(row.positions) | (set(prior.positions) if prior else set())))})
-    upper = {(row.position, row.lower_height_planes): row
-             for row in (*first.upper_volume_surfaces, *second.upper_volume_surfaces)}
-    sections = tuple(dict.fromkeys((*first.construction_sections, *second.construction_sections)))
+_JOINED_OPTIONAL = ('anchor_position', 'anchor_elevation_steps', 'anchor_entity_uuid', 'anchor_item_uuid',
+                    'sustainer_item_uuid', 'concentration_slot_uuid', 'area_geometry')
+
+
+def _join_effects(first: PerceivedSpatialEffect, rows: Iterable[PerceivedSpatialEffect]) -> PerceivedSpatialEffect:
+    """Union compatible, already validated typed observations of one owner, left to right.
+
+    A row whose revision, signature, anchors or protections conflict with the
+    union so far is skipped whole; the union is built once at the end.
+    """
+    if first.owner_revision is None:
+        return first
+    signature = _effect_signature(first)
+    optional = {key: getattr(first, key) for key in _JOINED_OPTIONAL}
+    positions = set(first.positions)
+    volume = set(first.visible_volume_positions)
+    upper = {(row.position, row.lower_height_planes): row for row in first.upper_volume_surfaces}
+    sections = dict.fromkeys(first.construction_sections)
+    # provider -> (the row whose attributes the protection carries, its united positions or None if untouched)
+    protections: dict = {row.provider_uuid: (row, None) for row in first.suppressions}
+    joined = False
+    for second in rows:
+        if second.owner_revision != first.owner_revision or _effect_signature(second) != signature:
+            continue
+        values = {}
+        for key in _JOINED_OPTIONAL:
+            old, new = optional[key], getattr(second, key)
+            if old is not None and new is not None and old != new:
+                break
+            values[key] = old if old is not None else new
+        else:
+            staged = {}
+            for row in second.suppressions:
+                prior, united = staged.get(row.provider_uuid) or protections.get(row.provider_uuid, (None, None))
+                if prior is not None and (
+                        prior.provider_content_ref, prior.area_geometry, prior.anchor_elevation_steps
+                        ) != (row.provider_content_ref, row.area_geometry, row.anchor_elevation_steps):
+                    break
+                previous = united if united is not None else set(prior.positions) if prior is not None else set()
+                staged[row.provider_uuid] = (row, previous | set(row.positions))
+            else:
+                joined = True
+                optional = values
+                protections.update(staged)
+                positions.update(second.positions)
+                volume.update(second.visible_volume_positions)
+                upper.update(((row.position, row.lower_height_planes), row) for row in second.upper_volume_surfaces)
+                sections.update(dict.fromkeys(second.construction_sections))
+    if not joined:
+        return first
+    suppressions = tuple(row if united is None else row.model_copy(update={'positions': tuple(sorted(united))})
+        for row, united in (protections[key] for key in sorted(protections, key=str)))
     return first.model_copy(update={**optional,
-        'positions': tuple(sorted(set(first.positions) | set(second.positions))),
-        'visible_volume_positions': tuple(sorted(set(first.visible_volume_positions) | set(second.visible_volume_positions))),
+        'positions': tuple(sorted(positions)),
+        'visible_volume_positions': tuple(sorted(volume)),
         'upper_volume_surfaces': tuple(upper[key] for key in sorted(upper)),
-        'suppressions': tuple(protections[key] for key in sorted(protections, key=str)),
-        'construction_sections': sections})
+        'suppressions': suppressions,
+        'construction_sections': tuple(sections)})
 
 
 def _effects(perception: AudiencePerception) -> dict[UUID, PerceivedSpatialEffect]:
@@ -164,11 +186,8 @@ def _effects(perception: AudiencePerception) -> dict[UUID, PerceivedSpatialEffec
                 selected[identity] = rank, observed
     result = {}
     for identity, (_, newest) in selected.items():
-        merged = newest
-        for observer in sorted(perception.members, key=lambda value: value.int):
-            row = perception.members[observer].spatial_effects.get(identity)
-            if row is not None:
-                merged = _join_effect(merged, row) or merged
+        merged = _join_effects(newest, (row for observer in sorted(perception.members, key=lambda value: value.int)
+            if (row := perception.members[observer].spatial_effects.get(identity)) is not None))
         positions = {position for position in merged.positions
                      if (identity, position) not in perception.effect_absences}
         if positions or merged.visible_volume_positions or merged.upper_volume_surfaces:
@@ -188,20 +207,28 @@ def light_sources(perception: AudiencePerception) -> tuple[dict[UUID, PerceivedL
             revisions[identity] = max(revisions.get(identity, -1), revision)
         for identity, source in senses.light_sources.items():
             revisions[identity] = max(revisions.get(identity, -1), source.revision)
-    result: dict[UUID, PerceivedLightSource] = {}
+    rows: dict[UUID, list[PerceivedLightSource]] = {}
     for observer in sorted(perception.members, key=lambda value: value.int):
         for identity, source in perception.members[observer].light_sources.items():
-            if source.revision != revisions[identity]:
-                continue
-            previous = result.get(identity)
-            if previous is None:
-                result[identity] = source
-            else:
-                result[identity] = previous.model_copy(update={
-                    "affected_tiles": {**previous.affected_tiles, **source.affected_tiles},
-                    "anchor_entity_uuid": previous.anchor_entity_uuid or source.anchor_entity_uuid,
-                    "anchor_item_uuid": previous.anchor_item_uuid or source.anchor_item_uuid})
+            if source.revision == revisions[identity]:
+                rows.setdefault(identity, []).append(source)
+    result = {identity: _merged_light(members) for identity, members in rows.items()}
     return result, {identity: revision for identity, revision in revisions.items() if identity not in result}
+
+
+def _merged_light(rows: list[PerceivedLightSource]) -> PerceivedLightSource:
+    """The first member's row with every member's footprint (later rows win) and first anchors."""
+    first = rows[0]
+    if len(rows) == 1:
+        return first
+    tiles: dict = {}
+    for row in rows:
+        tiles.update(row.affected_tiles)
+    entity = next((row.anchor_entity_uuid for row in rows if row.anchor_entity_uuid), None)
+    item = next((row.anchor_item_uuid for row in rows if row.anchor_item_uuid), None)
+    if tiles == first.affected_tiles and entity == first.anchor_entity_uuid and item == first.anchor_item_uuid:
+        return first
+    return first.model_copy(update={"affected_tiles": tiles, "anchor_entity_uuid": entity, "anchor_item_uuid": item})
 
 
 def update_light_sources(
@@ -226,17 +253,11 @@ def update_light_sources(
             source = senses.light_sources.get(identity)
             if source is not None:
                 revision = max(revision, source.revision)
-        merged: PerceivedLightSource | None = None
-        for observer in observers:
-            source = perception.members[observer].light_sources.get(identity)
-            if source is None or source.revision != revision:
-                continue
-            merged = source if merged is None else merged.model_copy(update={
-                "affected_tiles": {**merged.affected_tiles, **source.affected_tiles},
-                "anchor_entity_uuid": merged.anchor_entity_uuid or source.anchor_entity_uuid,
-                "anchor_item_uuid": merged.anchor_item_uuid or source.anchor_item_uuid})
-        if merged is not None:
-            lights[identity] = merged
+        rows = [source for observer in observers
+                if (source := perception.members[observer].light_sources.get(identity)) is not None
+                and source.revision == revision]
+        if rows:
+            lights[identity] = _merged_light(rows)
             removals.pop(identity, None)
         else:
             lights.pop(identity, None)
@@ -380,9 +401,8 @@ def _current_effect(current: AudienceComposition, identity: UUID) -> PerceivedSp
         perception.members[observer].spatial_effects[identity].owner_revision
             if perception.members[observer].spatial_effects[identity].owner_revision is not None else -1,
         perception.effect_cursors.get((observer, identity), -1), -observer.int))
-    merged = perception.members[owner].spatial_effects[identity]
-    for observer in sorted(owners, key=lambda value: value.int):
-        merged = _join_effect(merged, perception.members[observer].spatial_effects[identity]) or merged
+    merged = _join_effects(perception.members[owner].spatial_effects[identity],
+        (perception.members[observer].spatial_effects[identity] for observer in sorted(owners, key=lambda value: value.int)))
     positions = {position for position in merged.positions if (identity, position) not in perception.effect_absences}
     if positions or merged.visible_volume_positions or merged.upper_volume_surfaces:
         return merged.model_copy(update={'positions': tuple(sorted(positions))})
