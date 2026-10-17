@@ -16923,7 +16923,17 @@
             "type": "boolean"
           },
           "effective_light_levels_changed": {
-            "$ref": "#/components/schemas/CellValues"
+            "$ref": "#/components/schemas/CellValues",
+            "default": {
+              "cells": {
+                "bits": "",
+                "height": 0,
+                "width": 0,
+                "x0": 0,
+                "y0": 0
+              },
+              "values": ""
+            }
           },
           "cause_occurrence": {
             "anyOf": [
@@ -16939,13 +16949,34 @@
             "title": "Cause Occurrence"
           },
           "visible_cells_added": {
-            "$ref": "#/components/schemas/CellMask"
+            "$ref": "#/components/schemas/CellMask",
+            "default": {
+              "x0": 0,
+              "y0": 0,
+              "width": 0,
+              "height": 0,
+              "bits": ""
+            }
           },
           "visible_cells_removed": {
-            "$ref": "#/components/schemas/CellMask"
+            "$ref": "#/components/schemas/CellMask",
+            "default": {
+              "x0": 0,
+              "y0": 0,
+              "width": 0,
+              "height": 0,
+              "bits": ""
+            }
           },
           "seen_cells_added": {
-            "$ref": "#/components/schemas/CellMask"
+            "$ref": "#/components/schemas/CellMask",
+            "default": {
+              "x0": 0,
+              "y0": 0,
+              "width": 0,
+              "height": 0,
+              "bits": ""
+            }
           },
           "entity_contacts_changed": {
             "additionalProperties": {
@@ -17112,11 +17143,7 @@
           "initial",
           "observer_position",
           "observer_position_changed",
-          "effective_light_levels_changed",
           "cause_occurrence",
-          "visible_cells_added",
-          "visible_cells_removed",
-          "seen_cells_added",
           "entity_contacts_changed",
           "entity_contacts_removed",
           "object_contacts_changed",

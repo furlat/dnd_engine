@@ -3365,11 +3365,11 @@ class SensoryFact(TypedDict):
     initial: bool
     observer_position: list[ObserverPositionItem]
     observer_position_changed: bool
-    effective_light_levels_changed: CellValues
+    effective_light_levels_changed: NotRequired[CellValues]
     cause_occurrence: int | None
-    visible_cells_added: CellMask
-    visible_cells_removed: CellMask
-    seen_cells_added: CellMask
+    visible_cells_added: NotRequired[CellMask]
+    visible_cells_removed: NotRequired[CellMask]
+    seen_cells_added: NotRequired[CellMask]
     entity_contacts_changed: dict[str, PerceivedContact]
     entity_contacts_removed: list[str]
     object_contacts_changed: dict[str, PerceivedContact]

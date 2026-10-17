@@ -7,7 +7,9 @@ and an empty set has width and height 0. The array operations on them live in
 `dnd.core.cells`.
 """
 
-from pydantic import ConfigDict
+from typing import Annotated
+
+from pydantic import ConfigDict, Field
 from pydantic.dataclasses import dataclass
 
 # Bytes are base64url on the wire. A pydantic dataclass keeps that in every dump,
@@ -66,4 +68,13 @@ def no_cells(mask: CellMask) -> bool:
     return mask.width == 0
 
 
-__all__ = ["CellMask", "CellValues", "EMPTY_CELLS", "EMPTY_VALUES", "cell_in", "value_at", "no_cells"]
+def no_values(values: CellValues) -> bool:
+    return values.cells.width == 0
+
+
+# A changed-cells field: the empty value is its default and is left out of a dump.
+CellMaskField = Annotated[CellMask, Field(exclude_if=no_cells)]
+CellValuesField = Annotated[CellValues, Field(exclude_if=no_values)]
+
+
+__all__ = ["CellMask", "CellValues", "EMPTY_CELLS", "EMPTY_VALUES", "CellMaskField", "CellValuesField", "cell_in", "value_at", "no_cells", "no_values"]

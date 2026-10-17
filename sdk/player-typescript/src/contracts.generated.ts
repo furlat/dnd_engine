@@ -4502,11 +4502,11 @@ export interface SensoryFact {
   initial: Initial;
   observer_position: ObserverPosition;
   observer_position_changed: ObserverPositionChanged;
-  effective_light_levels_changed: CellValues;
+  effective_light_levels_changed?: CellValues;
   cause_occurrence: CauseOccurrence;
-  visible_cells_added: CellMask;
-  visible_cells_removed: CellMask;
-  seen_cells_added: CellMask;
+  visible_cells_added?: CellMask1;
+  visible_cells_removed?: CellMask2;
+  seen_cells_added?: CellMask3;
   entity_contacts_changed: EntityContactsChanged;
   entity_contacts_removed: EntityContactsRemoved;
   object_contacts_changed: ObjectContactsChanged;
@@ -4537,6 +4537,39 @@ export interface CellValues {
  * least significant bit first within each byte.
  */
 export interface CellMask {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask1 {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask2 {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask3 {
   x0: X0;
   y0: Y0;
   width: Width1;

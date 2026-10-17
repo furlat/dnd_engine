@@ -19,8 +19,9 @@ empty set has width and height 0. Per-cell values are a `CellValues`
 `{cells, values}`: one byte per cell of `cells`, in that bit order. The sensory
 cell fields (`visible_cells_added` / `_removed`, `seen_cells_added`,
 `effective_light_levels_changed`, `hazardous_cells_changed`, a light level or
-0 / 1) use these forms; the native sensory event no longer carries objective or
-ambient light maps.
+0 / 1) use these forms. An empty one is left out of the update: its default is the
+empty value. The native sensory event no longer carries objective or ambient
+light maps.
 
 ## Patches and occurrence identities (schema 12)
 

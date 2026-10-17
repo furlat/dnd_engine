@@ -4752,7 +4752,7 @@
     "owners": [
       {
         "file": "dnd/types/cells.py",
-        "line": 23
+        "line": 25
       }
     ],
     "required": true,
@@ -4769,7 +4769,7 @@
     "owners": [
       {
         "file": "dnd/types/cells.py",
-        "line": 24
+        "line": 26
       }
     ],
     "required": true,
@@ -4786,7 +4786,7 @@
     "owners": [
       {
         "file": "dnd/types/cells.py",
-        "line": 25
+        "line": 27
       }
     ],
     "required": true,
@@ -4803,7 +4803,7 @@
     "owners": [
       {
         "file": "dnd/types/cells.py",
-        "line": 26
+        "line": 28
       }
     ],
     "required": true,
@@ -4820,7 +4820,7 @@
     "owners": [
       {
         "file": "dnd/types/cells.py",
-        "line": 27
+        "line": 29
       }
     ],
     "required": true,
@@ -4836,7 +4836,7 @@
     "owners": [
       {
         "file": "dnd/types/cells.py",
-        "line": 34
+        "line": 36
       }
     ],
     "required": true,
@@ -4850,7 +4850,7 @@
     "owners": [
       {
         "file": "dnd/types/cells.py",
-        "line": 35
+        "line": 37
       }
     ],
     "required": true,
@@ -27109,9 +27109,19 @@
         "line": 761
       }
     ],
-    "required": true,
+    "required": false,
     "schema": {
-      "$ref": "#/$defs/CellValues"
+      "$ref": "#/$defs/CellValues",
+      "default": {
+        "cells": {
+          "bits": "",
+          "height": 0,
+          "width": 0,
+          "x0": 0,
+          "y0": 0
+        },
+        "values": ""
+      }
     }
   },
   {
@@ -27147,9 +27157,16 @@
         "line": 763
       }
     ],
-    "required": true,
+    "required": false,
     "schema": {
-      "$ref": "#/$defs/CellMask"
+      "$ref": "#/$defs/CellMask",
+      "default": {
+        "x0": 0,
+        "y0": 0,
+        "width": 0,
+        "height": 0,
+        "bits": ""
+      }
     }
   },
   {
@@ -27161,9 +27178,16 @@
         "line": 764
       }
     ],
-    "required": true,
+    "required": false,
     "schema": {
-      "$ref": "#/$defs/CellMask"
+      "$ref": "#/$defs/CellMask",
+      "default": {
+        "x0": 0,
+        "y0": 0,
+        "width": 0,
+        "height": 0,
+        "bits": ""
+      }
     }
   },
   {
@@ -27175,9 +27199,16 @@
         "line": 765
       }
     ],
-    "required": true,
+    "required": false,
     "schema": {
-      "$ref": "#/$defs/CellMask"
+      "$ref": "#/$defs/CellMask",
+      "default": {
+        "x0": 0,
+        "y0": 0,
+        "width": 0,
+        "height": 0,
+        "bits": ""
+      }
     }
   },
   {
