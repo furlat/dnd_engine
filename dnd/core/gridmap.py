@@ -641,6 +641,21 @@ class GridMap:
                 if min_x <= position[0] <= max_x and min_y <= position[1] <= max_y
                 for direction, identities in sides.items() if identities]
 
+    def contact_cells_at(self, positions: Iterable[Tuple[int, int]],
+                         ) -> List[Tuple[Tuple[int, int], Tuple[Tuple[UUID, ...], Tuple[UUID, ...]]]]:
+        """Those of these cells that are occupied, with their str-ordered entities and center objects."""
+        cells = self._contact_candidate_cells
+        return [(position, row) for position in positions
+                if (row := cells.get(self._spatial_chunk(position), {}).get(position)) is not None]
+
+    def boundary_sides_at(self, positions: Iterable[Tuple[int, int]],
+                          ) -> List[Tuple[Tuple[int, int], CardinalDirection, Tuple[UUID, ...]]]:
+        """The occupied boundary sides owned by these cells, with their str-ordered objects."""
+        boundaries = self._boundary_candidate_cells
+        return [(position, direction, identities) for position in positions
+                for direction, identities in boundaries.get(self._spatial_chunk(position), {}).get(position, {}).items()
+                if identities]
+
     def boundary_side_objects(self, position: Tuple[int, int], direction: CardinalDirection) -> Tuple[UUID, ...]:
         """The str-ordered objects on one owner Tile's side."""
         sides = self._boundary_candidate_cells.get(self._spatial_chunk(position), {}).get(position)
