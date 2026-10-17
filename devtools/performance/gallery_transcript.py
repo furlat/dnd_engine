@@ -16,10 +16,11 @@ byte for byte after uuid normalization. The engine on PYTHONPATH is imported but
     PYTHONPATH=<tree> python devtools/performance/gallery_transcript.py compare <base.json> <new.json> \
         [--representation value-read]
 
-The `value-read` representation (value read context as data, PR 2026-10-17) drops the d20, attack and
-contest bonus fields that became evaluated readings, drops the per-value target, context and imported
-channels from value dumps, moves a damage bonus's context onto its damage packet, and drops the target of
-damage and healing rolls (now the packet's target, formerly the bonus value's own target).
+The `value-read` representation (value read context as data, PR 2026-10-17) projects the d20, attack and
+contest bonus fields that became evaluated readings onto their normalized score, advantage, critical and
+auto-hit states, drops the per-value target, context and imported channels from value dumps, moves a
+damage bonus's context onto its damage packet, and drops the target of damage and healing rolls (now the
+packet's target, formerly the bonus value's own target).
 """
 
 import argparse
@@ -44,6 +45,7 @@ from dnd.encounter import Encounter  # noqa: E402
 UUID_PATTERN = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
 TIME_PATTERN = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}')
 READING_FIELDS = ('bonus', 'attack_bonus', 'ac', 'shover_athletics', 'target_ac')
+READING_PROJECTION = ('normalized_score', 'advantage', 'critical', 'auto_hit')
 VALUE_STATE_FIELDS = ('from_target_static', 'from_target_contextual', 'target_entity_uuid', 'target_entity_name',
                       'context')
 CHANNEL_STATE_FIELDS = ('target_entity_uuid', 'target_entity_name', 'context')
@@ -131,6 +133,7 @@ def _project_value_read(value):
         if is_packet_roll and key == 'target_entity_uuid':
             continue
         if key in READING_FIELDS and isinstance(item, dict):
+            projected[key] = {field: item.get(field) for field in READING_PROJECTION}
             continue
         if is_value and key in VALUE_STATE_FIELDS:
             continue

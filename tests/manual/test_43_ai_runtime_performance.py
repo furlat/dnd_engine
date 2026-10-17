@@ -668,11 +668,12 @@ def test_fireball_uses_resolved_save_roll_bonus_without_second_bonus_rebuild(
         self: Entity,
         target_entity_uuid: UUID | None,
         ability_name: Any,
+        context: Any,
     ) -> Any:
         nonlocal saving_throw_bonus_calls
         if self.uuid in target_uuids and target_entity_uuid == mage.uuid and ability_name == "dexterity":
             saving_throw_bonus_calls += 1
-        return original(self, target_entity_uuid, ability_name)
+        return original(self, target_entity_uuid, ability_name, context)
 
     monkeypatch.setattr(Entity, "saving_throw_bonus", count_saving_throw_bonus)
 

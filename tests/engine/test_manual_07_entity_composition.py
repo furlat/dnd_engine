@@ -128,7 +128,7 @@ def test_entity_methods_compose_abilities_skills_saves_and_passives() -> None:
 
     assert hero.skill_bonus(None, "athletics").normalized_score == 10
     assert hero.skill_bonus(None, "perception").normalized_score == 6
-    assert hero.saving_throw_bonus(None, "dexterity").normalized_score == 6
+    assert hero.saving_throw_bonus(None, "dexterity", None).normalized_score == 6
     assert hero.passive_skill("athletics") == 20
     assert hero.get_passive_perception() == 16
 

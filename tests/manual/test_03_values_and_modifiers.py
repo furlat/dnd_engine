@@ -429,7 +429,7 @@ def test_opposed_read_prints_the_opponent_outgoing_modifiers(capsys) -> None:
     assert advantage_before_import == AdvantageStatus.NONE
 
     opposed = read_value(hero_attack, ValueRead(hero_id, blinded_goblin_id,
-                                                opponent=outgoing_of([goblin_defense])))
+                                                opponent=outgoing_of([goblin_defense], None)))
     score_during_import = opposed.score
     advantage_during_import = opposed.advantage
     assert score_during_import == 7

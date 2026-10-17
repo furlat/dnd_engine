@@ -3133,7 +3133,7 @@ class Entity(BaseBlock):
         self,
         target_entity_uuid: Optional[UUID],
         components: Callable[['Entity', ValueRead], Tuple[ModifiableValue, ...]],
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[Dict[str, Any]],
     ) -> ValueReading:
         """Read one composed d20 bonus against a target whose matching components export modifiers.
 
@@ -3146,13 +3146,13 @@ class Entity(BaseBlock):
         opponent = None
         if (target_entity is not None and target_entity.uuid != self.uuid
                 and get_map().get_tile_by_uuid(target_entity.uuid) is None):
-            opponent = outgoing_of(components(target_entity, ValueRead(target_entity.uuid, self.uuid)))
+            opponent = outgoing_of(components(target_entity, ValueRead(target_entity.uuid, self.uuid)), None)
         read = ValueRead(self.uuid, target_entity_uuid, context, opponent)
         bonuses = components(self, ValueRead(self.uuid, target_entity_uuid))
         return read_value(bonuses[0].combine_values(list(bonuses[1:])), read)
 
     def saving_throw_bonus(self, target_entity_uuid: Optional[UUID], ability_name: AbilityName,
-                           context: Optional[Dict[str, Any]] = None) -> ValueReading:
+                           context: Optional[Dict[str, Any]]) -> ValueReading:
         """Read the complete saving throw bonus for an ability against an opposing entity.
 
         Args:
@@ -3177,7 +3177,7 @@ class Entity(BaseBlock):
                 Entity.get(target_entity_uuid), Entity):
             raise ValueError(f"Target entity {target_entity_uuid} not found")
         return self._opposed_reading(target_entity_uuid,
-            lambda entity, read: entity._get_bonuses_for_ability_check(ability_name, read))
+            lambda entity, read: entity._get_bonuses_for_ability_check(ability_name, read), None)
 
     def skill_bonus(self, target_entity_uuid: Optional[UUID], skill_name: SkillName) -> ValueReading:
         """Read the complete skill bonus against an optional opposing entity.
@@ -3194,7 +3194,7 @@ class Entity(BaseBlock):
                 Entity.get(target_entity_uuid), Entity):
             raise ValueError(f"Target entity {target_entity_uuid} not found")
         return self._opposed_reading(target_entity_uuid,
-            lambda entity, read: entity._get_bonuses_for_skill(skill_name, read))
+            lambda entity, read: entity._get_bonuses_for_skill(skill_name, read), None)
 
     def passive_skill(self, skill_name: SkillName) -> int:
         """Calculate passive skill score for a skill.

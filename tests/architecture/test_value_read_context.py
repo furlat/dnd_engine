@@ -34,10 +34,15 @@ REMOVED_NAMES = {
     "get_advantage_breakdown",
 }
 
-# Value and block modules may not define target or context setters on their models.
-STATE_SETTERS = {"set_target_entity", "set_context", "clear_context", "clear"}
-VALUE_AND_BLOCK_MODULES = ("dnd/core/values.py", "dnd/core/base_block.py", "dnd/core/base_tiles.py")
+# Values, blocks and entities may not define target or context setters on their models.
+STATE_SETTERS = {"set_target_entity", "clear_target_entity", "set_context", "clear_context"}
+VALUE_AND_BLOCK_MODULES = ("dnd/core/values.py", "dnd/core/base_block.py", "dnd/core/base_tiles.py", "dnd/entity.py")
 VALUE_AND_BLOCK_PACKAGES = ("dnd/blocks/",)
+
+# Records that keep a read keep its evaluated result; only damage and healing packets carry a value,
+# which they read in their own situation (source, target, attack context).
+READ_RECORD_MODULES = ("dnd/core/events.py", "dnd/core/dice.py", "dnd/actions.py")
+PACKET_VALUE_FIELDS = {("Damage", "damage_bonus"), ("Healing", "healing_bonus")}
 
 
 def _names(tree: ast.AST) -> set[str]:
@@ -73,8 +78,25 @@ def test_values_and_blocks_define_no_read_state_setters() -> None:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.ClassDef):
                 definers.extend(f"{relative}:{item.lineno} {node.name}.{item.name}" for item in node.body
-                                if isinstance(item, ast.FunctionDef) and item.name in STATE_SETTERS)
+                                if isinstance(item, ast.FunctionDef) and (item.name in STATE_SETTERS
+                                    or (node.name == "BaseBlock" and item.name == "clear")))
     assert definers == []
+
+
+def test_read_records_hold_evaluated_readings_not_values() -> None:
+    """Dice, d20 events and attack records keep the ValueReading of their read, never a live ModifiableValue."""
+    fields = []
+    for relative in READ_RECORD_MODULES:
+        tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for item in node.body:
+                if (isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
+                        and "ModifiableValue" in ast.unparse(item.annotation)
+                        and (node.name, item.target.id) not in PACKET_VALUE_FIELDS):
+                    fields.append(f"{relative}:{item.lineno} {node.name}.{item.target.id}")
+    assert fields == []
 
 
 def test_values_declare_no_target_or_context_fields() -> None:

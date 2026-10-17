@@ -86,7 +86,7 @@ def test_item_duration_survival_updates_owned_equipment_without_reapplying(world
     effect = next(effect for effect in item.item_effects if effect.effect_uuid == condition.uuid)
     assert condition.duration.duration == 2
     assert effect.duration is not None and effect.duration.remaining_rounds == 2
-    assert len(weapon.get_extra_damages()) == 1
+    assert len(weapon.get_extra_damages(None)) == 1
     owner.on_turn_start(encounter_uuid, round_number=1)
     assert condition.duration.duration == 2
 

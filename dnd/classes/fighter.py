@@ -1310,7 +1310,7 @@ def indomitable_processor(
         return None
 
     ability_name = event.ability_name
-    save_bonus = entity.saving_throw_bonus(event.source_entity_uuid, ability_name)
+    save_bonus = entity.saving_throw_bonus(event.source_entity_uuid, ability_name, None)
     new_roll = entity.roll_d20(
         save_bonus,
         RollType.SAVE,

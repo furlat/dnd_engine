@@ -186,9 +186,9 @@ def test_eb_06_002_abilities_skills_saves_and_passives_compose() -> None:
 
     athletics = entity.skill_bonus(None, "athletics")
     perception = entity.skill_bonus(None, "perception")
-    dex_save = entity.saving_throw_bonus(None, "dexterity")
+    dex_save = entity.saving_throw_bonus(None, "dexterity", None)
     self_targeted_athletics = entity.skill_bonus(entity.uuid, "athletics")
-    self_targeted_dex_save = entity.saving_throw_bonus(entity.uuid, "dexterity")
+    self_targeted_dex_save = entity.saving_throw_bonus(entity.uuid, "dexterity", None)
 
     assert athletics.normalized_score == 10
     assert entity.passive_skill("athletics") == 20

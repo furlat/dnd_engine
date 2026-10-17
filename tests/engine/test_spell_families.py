@@ -1494,7 +1494,7 @@ def test_eb_15_015_bless_and_bane_rewrite_save_d20_results() -> None:
     bless_event = assert_completed_spell(bless_event)
     assert "Bless" in ally.active_conditions
 
-    bless_bonus = ally.saving_throw_bonus(caster.uuid, "wisdom")
+    bless_bonus = ally.saving_throw_bonus(caster.uuid, "wisdom", None)
     with patch("random.randint", side_effect=[10, 3]):
         blessed_roll, blessed_event = ally.roll_d20_event(
             bless_bonus,
@@ -1519,7 +1519,7 @@ def test_eb_15_015_bless_and_bane_rewrite_save_d20_results() -> None:
     bane_event = assert_completed_spell(bane_event)
     assert "Bane" in enemy.active_conditions
 
-    bane_bonus = enemy.saving_throw_bonus(caster.uuid, "wisdom")
+    bane_bonus = enemy.saving_throw_bonus(caster.uuid, "wisdom", None)
     with patch("random.randint", side_effect=[12, 2]):
         baned_roll, baned_event = enemy.roll_d20_event(
             bane_bonus,
@@ -1684,7 +1684,7 @@ def test_eb_15_024_d20_mutation_handlers_are_roll_type_scoped() -> None:
     assert "Guidance" in caster.active_conditions
     guidance_attack_event.phase_to(EventPhase.COMPLETION)
 
-    guidance_save_bonus = caster.saving_throw_bonus(None, "wisdom")
+    guidance_save_bonus = caster.saving_throw_bonus(None, "wisdom", None)
     with patch("random.randint", side_effect=[14]):
         guidance_save_roll, guidance_save_event = caster.roll_d20_event(
             guidance_save_bonus,

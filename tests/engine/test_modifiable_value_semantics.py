@@ -235,7 +235,7 @@ def test_eb_02_004_to_target_channels_apply_only_in_an_opposed_read() -> None:
     assert read_value(attacker_attack, ValueRead(attacker_uuid, defender_uuid)).advantage == AdvantageStatus.NONE
 
     opposed = read_value(attacker_attack, ValueRead(attacker_uuid, defender_uuid,
-                                                    opponent=outgoing_of([defender_ac])))
+                                                    opponent=outgoing_of([defender_ac], None)))
     assert opposed.advantage == AdvantageStatus.DISADVANTAGE
     assert [row.source for row in opposed.advantage_breakdown] == ["from_target"]
     assert attacker_attack.advantage == AdvantageStatus.NONE
@@ -365,7 +365,7 @@ def test_eb_02_006_contextual_outgoing_channels_read_in_the_opponent_context() -
     opposed = ValueRead(attacker_uuid, defender_uuid, {"focused": True},
                         outgoing_of([defender_ac], context={"dim_light": True}))
     assert read_value(attacker_attack, opposed).score == 6
-    unlit = ValueRead(attacker_uuid, defender_uuid, {"focused": True}, outgoing_of([defender_ac]))
+    unlit = ValueRead(attacker_uuid, defender_uuid, {"focused": True}, outgoing_of([defender_ac], None))
     assert read_value(attacker_attack, unlit).score == 8
     assert read_value(attacker_attack, own).score == 13
 
@@ -610,7 +610,7 @@ def test_eb_02_010_opponent_outgoing_rows_are_read_live() -> None:
     )
     defender_ac.to_target_static.add_value_modifier(cover_penalty)
 
-    opposed = ValueRead(attacker_uuid, defender_uuid, opponent=outgoing_of([defender_ac]))
+    opposed = ValueRead(attacker_uuid, defender_uuid, opponent=outgoing_of([defender_ac], None))
     assert value_score(attacker_attack, opposed, normalized=False) == 8
 
     cover_penalty.value = -5
@@ -721,7 +721,7 @@ def test_exact_factors_apply_after_all_channels_before_bounds_and_survive_compos
     speed.self_static.add_factor(haste)
     external.to_target_static.add_factor(slow)
     combined = speed.combine_values([bonus])
-    read = ValueRead(owner, target, opponent=outgoing_of([external]))
+    read = ValueRead(owner, target, opponent=outgoing_of([external], None))
     assert value_score(combined, read, normalized=True) == 50
     external.remove_modifier(slow.uuid)
     assert value_score(combined, read, normalized=True) == 100

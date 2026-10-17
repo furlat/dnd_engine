@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from fractions import Fraction
 from math import prod
 
@@ -798,12 +797,15 @@ def _contextual_constraint_values(
     return [result.value for result in results if isinstance(result, NumericalModifier)]
 
 
-def _contextual_advantage_sum(
-    modifiers: Dict[UUID, ContextualAdvantageModifier], source: UUID,
-    target: Optional[UUID], context: Optional[Dict[str, Any]],
-) -> int:
-    results = [modifier.evaluate(source, target, context) for modifier in modifiers.values()]
-    return sum(result.numerical_value for result in results if isinstance(result, AdvantageModifier))
+def _contextual_advantage_results(modifiers: Dict[UUID, ContextualAdvantageModifier], source: UUID,
+                                  target: Optional[UUID], context: Optional[Dict[str, Any]],
+                                  ) -> list[tuple[ContextualAdvantageModifier, Any]]:
+    """Each contextual advantage row with its result in one read situation."""
+    return [(modifier, modifier.evaluate(source, target, context)) for modifier in modifiers.values()]
+
+
+def _advantage_total(results: list[tuple[ContextualAdvantageModifier, Any]]) -> int:
+    return sum(result.numerical_value for _, result in results if isinstance(result, AdvantageModifier))
 
 
 def _advantage_status(total: int) -> AdvantageStatus:
@@ -932,7 +934,8 @@ class ContextualValue(BaseValue):
 
     def advantage_sum_in(self, target: Optional[UUID], context: Optional[Dict[str, Any]]) -> int:
         """Signed advantage total in one read situation."""
-        return _contextual_advantage_sum(self.advantage_modifiers, self.source_entity_uuid, target, context)
+        return _advantage_total(_contextual_advantage_results(self.advantage_modifiers, self.source_entity_uuid,
+                                                              target, context))
 
     def critical_in(self, target: Optional[UUID], context: Optional[Dict[str, Any]]) -> CriticalStatus:
         """Critical override in one read situation; NOCRIT takes precedence."""
@@ -950,49 +953,18 @@ class ContextualValue(BaseValue):
     @property
     def min(self) -> Optional[int]:
         """Return the lowest active contextual minimum constraint read with no target or context."""
-        if not self.min_constraints:
-            return None
-        return min(_contextual_constraint_values(self.min_constraints, self.source_entity_uuid, None, None), default=None)
+        return self.bounds_in(None, None)[0]
 
     @computed_field
     @property
     def max(self) -> Optional[int]:
         """Return the highest active contextual maximum constraint read with no target or context."""
-        if not self.max_constraints:
-            return None
-        return max(_contextual_constraint_values(self.max_constraints, self.source_entity_uuid, None, None), default=None)
-
-    def score_bounds(self, excluded: frozenset[UUID] = frozenset()) -> tuple[int | None, int | None]:
-        # Exclusion names static contributions; contextual constraints retain their contract.
-        return self.min, self.max
-
-    def arithmetic_factor(self, excluded: frozenset[UUID] = frozenset()) -> Fraction:
-        return Fraction(1)
-
-    def additive_score(self, normalized: bool = False, excluded: frozenset[UUID] = frozenset()) -> int:
-        raw, scaled = self.numbers_in(None, None)
-        return scaled if normalized else raw
-
-    def bounded_score(self, normalized: bool = False,
-                      excluded: frozenset[UUID] = frozenset()) -> tuple[int, int | None, int | None]:
-        """Channel score with the bounds that clamped it; each callable is evaluated once.
-
-        Exclusion names static contributions, so contextual rows are all read.
-
-        Args:
-            normalized: Whether to read each evaluated modifier's normalized value.
-            excluded: Static contribution UUIDs; not consulted by contextual channels.
-
-        Returns:
-            Score after constraints, lowest evaluated minimum, highest evaluated maximum.
-        """
-        total = self.additive_score(normalized)
-        minimum, maximum = self.score_bounds()
-        return int(_clamped(total, minimum, maximum)), minimum, maximum
+        return self.bounds_in(None, None)[1]
 
     def _score(self, normalized: bool = False) -> int:
-        """Calculate the contextual score after modifiers and constraints."""
-        return self.bounded_score(normalized)[0]
+        """The channel score read with no target or context: its rows clamped by its own bounds."""
+        raw, scaled = self.numbers_in(None, None)
+        return int(_clamped(scaled if normalized else raw, *self.bounds_in(None, None)))
 
     @computed_field
     @property
@@ -1412,19 +1384,7 @@ class ContextualValue(BaseValue):
         """
         self.score_normalizer = normalizer
 
-    @model_validator(mode='after')
-    def apply_global_normalizer(self) -> Self:
-        """Apply the value normalizer to contextual numerical callables.
-
-        Returns:
-            This value after normalizer propagation.
-        """
-        if self.global_normalizer and self.score_normalizer is not None:
-            self._set_normalizer_recursive(self.score_normalizer)
-        return self
-
-@dataclass(frozen=True, slots=True)
-class OpponentOutgoing:
+class OpponentOutgoing(NamedTuple):
     """The opponent's outgoing channels in an opposed read and the context their rows are read in."""
 
     static: StaticValue
@@ -1432,8 +1392,7 @@ class OpponentOutgoing:
     context: Optional[Dict[str, Any]] = None
 
 
-@dataclass(frozen=True, slots=True)
-class ValueRead:
+class ValueRead(NamedTuple):
     """One read of a value: its owner, the target, the situation and the opponent's outgoing channels.
 
     The owner's contextual rows are read with (target, context). The opponent's
@@ -1446,7 +1405,7 @@ class ValueRead:
     opponent: Optional[OpponentOutgoing] = None
 
 
-def outgoing_of(values: Sequence['ModifiableValue'], context: Optional[Dict[str, Any]] = None) -> OpponentOutgoing:
+def outgoing_of(values: Sequence['ModifiableValue'], context: Optional[Dict[str, Any]]) -> OpponentOutgoing:
     """The opponent side of an opposed read: its components' outgoing channels, merged in order."""
     first, rest = values[0], values[1:]
     if not rest:
@@ -1547,28 +1506,56 @@ class _ChannelNumbers(NamedTuple):
     normalized: int
     minimum: Optional[int]
     maximum: Optional[int]
-    factor: Fraction
+    factor: Optional[Fraction]
     factor_keyed: bool
 
 
 def _score_of(channels: Sequence[_ChannelNumbers], normalized: bool) -> int:
-    return _combined_score([channel.normalized if normalized else channel.raw for channel in channels],
-                           [(channel.minimum, channel.maximum) for channel in channels],
-                           prod((channel.factor for channel in channels), start=Fraction(1)),
-                           any(channel.factor_keyed for channel in channels))
+    """Sum the channels, multiply once when any factor row exists, then bound.
 
-
-def _combined_score(numbers: Sequence[int], bounds: Sequence[tuple[Optional[int], Optional[int]]],
-                    factor: Fraction, factor_keyed: bool) -> int:
-    """Sum the channels, multiply once when any factor row exists, then bound."""
-    if factor_keyed:
-        total: int | Fraction = sum(numbers) * factor
-    else:
-        # Without factors each channel is clamped by the same bounds the aggregate then reads.
-        total = sum(int(_clamped(number, low, high)) for number, (low, high) in zip(numbers, bounds))
-    minimum = min((low for low, _ in bounds if low is not None), default=None)
-    maximum = max((high for _, high in bounds if high is not None), default=None)
+    Without factors each channel is clamped by its own bounds before the sum, and
+    the sum by the lowest minimum and highest maximum of all channels.
+    """
+    keyed = False
+    total = 0
+    minimum: Optional[int] = None
+    maximum: Optional[int] = None
+    for channel in channels:
+        low, high = channel.minimum, channel.maximum
+        if low is not None and (minimum is None or low < minimum):
+            minimum = low
+        if high is not None and (maximum is None or high > maximum):
+            maximum = high
+        keyed = keyed or channel.factor_keyed
+    if keyed:
+        factor = Fraction(1)
+        for channel in channels:
+            total += channel.normalized if normalized else channel.raw
+            if channel.factor is not None:
+                factor *= channel.factor
+        return int(_clamped(total * factor, minimum, maximum))
+    for channel in channels:
+        number = channel.normalized if normalized else channel.raw
+        if channel.minimum is not None or channel.maximum is not None:
+            number = int(_clamped(number, channel.minimum, channel.maximum))
+        total += number
     return int(_clamped(total, minimum, maximum))
+
+
+def _static_buckets(channel: StaticValue) -> Dict[str, Dict[UUID, Any]]:
+    return {"factor_modifiers": dict(channel.factor_modifiers), "min_constraints": dict(channel.min_constraints),
+            "max_constraints": dict(channel.max_constraints), "advantage_modifiers": dict(channel.advantage_modifiers),
+            "critical_modifiers": dict(channel.critical_modifiers), "auto_hit_modifiers": dict(channel.auto_hit_modifiers),
+            "size_modifiers": dict(channel.size_modifiers), "damage_type_modifiers": dict(channel.damage_type_modifiers),
+            "resistance_modifiers": dict(channel.resistance_modifiers)}
+
+
+def _contextual_buckets(channel: ContextualValue) -> Dict[str, Dict[UUID, Any]]:
+    return {"value_modifiers": dict(channel.value_modifiers), "min_constraints": dict(channel.min_constraints),
+            "max_constraints": dict(channel.max_constraints), "advantage_modifiers": dict(channel.advantage_modifiers),
+            "critical_modifiers": dict(channel.critical_modifiers), "auto_hit_modifiers": dict(channel.auto_hit_modifiers),
+            "size_modifiers": dict(channel.size_modifiers), "damage_type_modifiers": dict(channel.damage_type_modifiers),
+            "resistance_modifiers": dict(channel.resistance_modifiers)}
 
 
 def _value_rows(channel: StaticValue, source: str) -> List[ValueBreakdownRow]:
@@ -1597,8 +1584,8 @@ def _contextual_advantage(channel: ContextualValue, target: Optional[UUID], cont
     """Signed advantage total and display rows of one contextual channel; each callable is evaluated once."""
     total = 0
     rows = []
-    for modifier in channel.advantage_modifiers.values():
-        result = modifier.evaluate(channel.source_entity_uuid, target, context)
+    for modifier, result in _contextual_advantage_results(channel.advantage_modifiers, channel.source_entity_uuid,
+                                                          target, context):
         if isinstance(result, AdvantageModifier):
             total += result.numerical_value
             rows.append(AdvantageBreakdownRow(name=modifier.name or "Unknown", value=result.value.value.lower(),
@@ -1641,8 +1628,8 @@ class ValueReading(BaseModel):
         default=(), description="Static advantage rows, then contextual rows with whether they applied.")
 
     def _total(self, normalized: bool) -> int:
-        if self.fixed_score is not None:
-            return self.fixed_normalized_score if normalized and self.fixed_normalized_score is not None else self.fixed_score
+        if self.fixed_score is not None and self.fixed_normalized_score is not None:
+            return self.fixed_normalized_score if normalized else self.fixed_score
         return _score_of([_ChannelNumbers(channel.raw, channel.normalized, channel.minimum, channel.maximum,
                                           Fraction(channel.factor_numerator, channel.factor_denominator),
                                           channel.factor_keyed) for channel in self.channels], normalized)
@@ -1670,7 +1657,7 @@ class ModifiableValue(BaseValue):
     """A value composed of the owner's channels and the channels it exports to opponents.
 
     A read takes a `ValueRead`. Properties read with no target, no context and
-    no opponent; `read` evaluates the value once in a situation.
+    no opponent; `read_value` evaluates the value once in a situation.
     """
 
     fixed_scores: Dict[UUID, NumericalModifier] = Field(default_factory=dict)
@@ -1988,20 +1975,26 @@ class ModifiableValue(BaseValue):
     def renormalized(self, normalizer: Callable[[int], int]) -> 'ModifiableValue':
         """This value with its numerical rows scaled by `normalizer` (a proficiency rule), sharing every other row.
 
-        The returned value is unregistered and keeps this value's identity, like the
-        copy it replaces; only the scaled numerical rows are new objects.
+        The returned value is unregistered and keeps this value's identity. Its row
+        buckets are fresh dicts holding the same row objects, except the scaled
+        numerical rows, which are copies with the new normalizer.
         """
         def static(channel: StaticValue) -> StaticValue:
-            return channel.model_copy(update={"score_normalizer": normalizer, "value_modifiers": {
-                key: modifier.model_copy(update={"score_normalizer": normalizer})
-                for key, modifier in channel.value_modifiers.items()}})
+            return channel.model_copy(update={**_static_buckets(channel), "score_normalizer": normalizer,
+                "value_modifiers": {key: modifier.model_copy(update={"score_normalizer": normalizer})
+                                    for key, modifier in channel.value_modifiers.items()}})
+
+        def contextual(channel: ContextualValue) -> ContextualValue:
+            return channel.model_copy(update={**_contextual_buckets(channel), "score_normalizer": normalizer})
 
         return self.model_copy(update={
             "score_normalizer": normalizer,
+            "fixed_scores": dict(self.fixed_scores),
+            "generated_from": list(self.generated_from),
             "self_static": static(self.self_static),
             "to_target_static": static(self.to_target_static),
-            "self_contextual": self.self_contextual.model_copy(update={"score_normalizer": normalizer}),
-            "to_target_contextual": self.to_target_contextual.model_copy(update={"score_normalizer": normalizer}),
+            "self_contextual": contextual(self.self_contextual),
+            "to_target_contextual": contextual(self.to_target_contextual),
         })
 
     def get_breakdown(self) -> List[ValueBreakdownRow]:
@@ -2092,74 +2085,26 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def outgoing_advantage_sum(self) -> int:
-        """Return the signed advantage total exported to targeters.
-
-        Returns:
-            Positive values mean exported advantage, negative values mean
-            exported disadvantage.
-        """
-        sums = []
-        for source in [self.to_target_static, self.to_target_contextual]:
-            if source is not None:
-                sum_val = source.advantage_sum
-                sums.append(sum_val)
-        return sum(sums)
+        """Return the signed advantage total exported to targeters, read with no target or context."""
+        return self.to_target_static.advantage_sum + self.to_target_contextual.advantage_sum
 
     @computed_field
     @property
     def outgoing_advantage(self) -> AdvantageStatus:
-        """Return the advantage state exported to targeters.
-
-        Returns:
-            Advantage, disadvantage, or none after signed aggregation.
-        """
-        total_sum = self.outgoing_advantage_sum
-        if total_sum > 0:
-            return AdvantageStatus.ADVANTAGE
-        elif total_sum < 0:
-            return AdvantageStatus.DISADVANTAGE
-        else:
-            return AdvantageStatus.NONE
+        """Return the advantage state exported to targeters."""
+        return _advantage_status(self.outgoing_advantage_sum)
 
     @computed_field
     @property
     def outgoing_critical(self) -> CriticalStatus:
-        """Return the critical-hit override exported to targeters.
-
-        Returns:
-            `NOCRIT`, `AUTOCRIT`, or `NONE`, with `NOCRIT` taking precedence.
-        """
-        critical_modifiers = []
-        for source in [self.to_target_static, self.to_target_contextual]:
-            if source is not None:
-                critical_modifiers.append(source.critical)
-
-        if CriticalStatus.NOCRIT in critical_modifiers:
-            return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in critical_modifiers:
-            return CriticalStatus.AUTOCRIT
-        else:
-            return CriticalStatus.NONE
+        """Return the critical-hit override exported to targeters; NOCRIT takes precedence."""
+        return _critical_status([self.to_target_static.critical, self.to_target_contextual.critical])
 
     @computed_field
     @property
     def outgoing_auto_hit(self) -> AutoHitStatus:
-        """Return the hit override exported to targeters.
-
-        Returns:
-            `AUTOMISS`, `AUTOHIT`, or `NONE`, with `AUTOMISS` taking precedence.
-        """
-        auto_hit_modifiers = []
-        for source in [self.to_target_static, self.to_target_contextual]:
-            if source is not None:
-                auto_hit_modifiers.append(source.auto_hit)
-
-        if AutoHitStatus.AUTOMISS in auto_hit_modifiers:
-            return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in auto_hit_modifiers:
-            return AutoHitStatus.AUTOHIT
-        else:
-            return AutoHitStatus.NONE
+        """Return the hit override exported to targeters; AUTOMISS takes precedence."""
+        return _auto_hit_status([self.to_target_static.auto_hit, self.to_target_contextual.auto_hit])
 
 
 def _fixed_score(value: 'ModifiableValue', excluded: frozenset[UUID]) -> Optional[int]:
@@ -2170,25 +2115,31 @@ def _fixed_score(value: 'ModifiableValue', excluded: frozenset[UUID]) -> Optiona
     return min(fixed) if fixed else None
 
 
-def _channel_numbers(value: 'ModifiableValue', read: ValueRead, excluded: frozenset[UUID]) -> List[_ChannelNumbers]:
-    """Each channel's totals in this read, in score order; every contextual callable is evaluated once."""
+def _static_numbers(channel: StaticValue, excluded: frozenset[UUID], sides: tuple[bool, bool]) -> _ChannelNumbers:
+    """A static channel's totals (raw and/or normalized, as `sides` asks), bounds and factor."""
+    factors = channel.factor_modifiers
+    return _ChannelNumbers(channel.additive_score(False, excluded) if sides[0] else 0,
+                           channel.additive_score(True, excluded) if sides[1] else 0,
+                           *channel.score_bounds(excluded),
+                           channel.arithmetic_factor(excluded) if factors else None,
+                           any(key not in excluded for key in factors) if factors else False)
+
+
+def _contextual_channel_numbers(channel: ContextualValue, target: Optional[UUID],
+                                context: Optional[Dict[str, Any]]) -> _ChannelNumbers:
+    """A contextual channel's totals and bounds in one read situation; each callable is evaluated once."""
+    return _ChannelNumbers(*channel.numbers_in(target, context), *channel.bounds_in(target, context), None, False)
+
+
+def _channel_numbers(value: 'ModifiableValue', read: ValueRead, excluded: frozenset[UUID],
+                     sides: tuple[bool, bool]) -> List[_ChannelNumbers]:
+    """Each channel's totals in this read, in score order (owner static, owner contextual, opponent)."""
     opponent = read.opponent
-
-    def static(channel: StaticValue) -> _ChannelNumbers:
-        return _ChannelNumbers(channel.additive_score(False, excluded), channel.additive_score(True, excluded),
-                               *channel.score_bounds(excluded), channel.arithmetic_factor(excluded),
-                               any(key not in excluded for key in channel.factor_modifiers))
-
-    def contextual(channel: ContextualValue, target: Optional[UUID],
-                   context: Optional[Dict[str, Any]]) -> _ChannelNumbers:
-        return _ChannelNumbers(*channel.numbers_in(target, context), *channel.bounds_in(target, context),
-                               Fraction(1), False)
-
-    channels = [static(value.self_static),
-                contextual(value.self_contextual, read.target_entity_uuid, read.context)]
+    channels = [_static_numbers(value.self_static, excluded, sides),
+                _contextual_channel_numbers(value.self_contextual, read.target_entity_uuid, read.context)]
     if opponent is not None:
-        channels.append(contextual(opponent.contextual, read.source_entity_uuid, opponent.context))
-        channels.append(static(opponent.static))
+        channels.append(_contextual_channel_numbers(opponent.contextual, read.source_entity_uuid, opponent.context))
+        channels.append(_static_numbers(opponent.static, excluded, sides))
     return channels
 
 
@@ -2198,7 +2149,7 @@ def value_score(value: 'ModifiableValue', read: ValueRead, *, normalized: bool,
     fixed = _fixed_score(value, excluded)
     if fixed is not None:
         return value.score_normalizer(fixed) if normalized else fixed
-    return _score_of(_channel_numbers(value, read, excluded), normalized)
+    return _score_of(_channel_numbers(value, read, excluded, (not normalized, normalized)), normalized)
 
 
 def _value_advantage_sum(value: 'ModifiableValue', read: ValueRead) -> int:
@@ -2298,9 +2249,11 @@ def read_value(value: 'ModifiableValue', read: ValueRead) -> ValueReading:
         name=value.name, source_entity_uuid=value.source_entity_uuid, target_entity_uuid=read.target_entity_uuid,
         fixed_score=fixed, fixed_normalized_score=value.score_normalizer(fixed) if fixed is not None else None,
         channels=tuple(ValueChannelReading(raw=channel.raw, normalized=channel.normalized, minimum=channel.minimum,
-            maximum=channel.maximum, factor_numerator=channel.factor.numerator,
-            factor_denominator=channel.factor.denominator, factor_keyed=channel.factor_keyed)
-            for channel in _channel_numbers(value, read, frozenset())),
+            maximum=channel.maximum,
+            factor_numerator=channel.factor.numerator if channel.factor is not None else 1,
+            factor_denominator=channel.factor.denominator if channel.factor is not None else 1,
+            factor_keyed=channel.factor_keyed)
+            for channel in _channel_numbers(value, read, frozenset(), (True, True))),
         advantage_sum=advantage_sum,
         critical=_value_critical(value, read), auto_hit=_value_auto_hit(value, read),
         breakdown=tuple(breakdown), advantage_breakdown=tuple(static_rows + contextual_rows))
@@ -2475,7 +2428,7 @@ def composed_passive_score(
         result = sum(modifier.numerical_value for modifier in advantages.values() if modifier.contributions_active())
         if own_context is not None:
             _, _, _, contextual_advantages, source = own_context
-            result += _contextual_advantage_sum(contextual_advantages, source, None, None)
+            result += _advantage_total(_contextual_advantage_results(contextual_advantages, source, None, None))
         return result
 
     if advantage_sum() > 0:

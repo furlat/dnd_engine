@@ -65,26 +65,26 @@ def test_protection_aura_moves_and_removal_preserves_other_spells(game):
     ally = combatant(game, "Ally", (3, 2))
     foe = combatant(game, "Foe", (5, 2), "foes")
     Entity.update_all_entities_senses()
-    before = foe.saving_throw_bonus(None, "wisdom").normalized_score
+    before = foe.saving_throw_bonus(None, "wisdom", None).normalized_score
     assert (
-        ally.saving_throw_bonus(None, "wisdom").normalized_score
+        ally.saving_throw_bonus(None, "wisdom", None).normalized_score
         == ally.ability_scores.wisdom.modifier + 1
     )
-    assert foe.saving_throw_bonus(None, "wisdom").normalized_score == before
+    assert foe.saving_throw_bonus(None, "wisdom", None).normalized_score == before
     Entity.commit_position_transfers(((actor, (14, 6), None),))
     assert (
-        ally.saving_throw_bonus(None, "wisdom").normalized_score
+        ally.saving_throw_bonus(None, "wisdom", None).normalized_score
         == ally.ability_scores.wisdom.modifier
     )
     Entity.commit_position_transfers(((actor, (2, 2), None),))
     assert (
-        ally.saving_throw_bonus(None, "wisdom").normalized_score
+        ally.saving_throw_bonus(None, "wisdom", None).normalized_score
         == ally.ability_scores.wisdom.modifier + 1
     )
     removed = remove_last_class_level(actor)
     assert removed is not None and paladin_level_count(actor) == 5
     assert (
-        ally.saving_throw_bonus(None, "wisdom").normalized_score
+        ally.saving_throw_bonus(None, "wisdom", None).normalized_score
         == ally.ability_scores.wisdom.modifier
     )
     assert not any(

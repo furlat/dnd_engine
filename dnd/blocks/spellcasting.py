@@ -621,7 +621,7 @@ class SpellcastingBlock(BaseBlock):
         del self.learned_reaction_spell_handlers[spell_id]
         return True
 
-    def get_extra_spell_damage(self, target_entity_uuid: Optional[UUID] = None) -> List[Damage]:
+    def get_extra_spell_damage(self, target_entity_uuid: Optional[UUID]) -> List[Damage]:
         """Return extra damage payloads that apply to spell damage against a target."""
         damages: List[Damage] = []
         for i in range(len(self.extra_spell_damage_dices)):

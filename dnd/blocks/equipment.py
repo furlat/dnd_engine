@@ -5,7 +5,7 @@ from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, Spell
 """Equipment, armor, weapon, and shield models for entity combat gear."""
 
 from dataclasses import dataclass
-from typing import Callable, Iterable, Optional, List, Self, Literal, TypeVar, Union, Tuple
+from typing import Any, Callable, Dict, Iterable, Optional, List, Self, Literal, TypeVar, Union, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from dnd.core.values import ModifiableValue, ValueRead, value_score
@@ -507,6 +507,7 @@ class Weapon(EquippableItem):
         })
 
     def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores, read: ValueRead,
+                        context: Optional[Dict[str, Any]],
                         is_off_hand: bool = False,
                         off_hand_ability_bonus: Optional[ModifiableValue] = None,
                         override_ability: Optional[AbilityName] = None) -> Damage:
@@ -516,6 +517,7 @@ class Weapon(EquippableItem):
             equipment_block: Equipment block providing global and typed bonuses.
             ability_block: Ability scores used to derive STR or DEX damage.
             read: The attack's read: wielder and target.
+            context: The attack context the damage bonus is read in.
             is_off_hand: Whether to use the off-hand ability bonus path.
             off_hand_ability_bonus: Optional ability bonus value for off-hand attacks.
             override_ability: Optional ability to use instead of weapon-derived STR/DEX.
@@ -560,9 +562,9 @@ class Weapon(EquippableItem):
             bonuses.append(melee_bonus)
 
         combined_bonuses = bonuses[0].combine_values(bonuses[1:])
-        return Damage(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=read.target_entity_uuid, damage_dice=self.attack_damage_die(equipment_block.source_entity_uuid), dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
+        return Damage(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=read.target_entity_uuid, context=context, damage_dice=self.attack_damage_die(equipment_block.source_entity_uuid), dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
 
-    def get_extra_damages(self, target_entity_uuid: Optional[UUID] = None) -> List[Damage]:
+    def get_extra_damages(self, target_entity_uuid: Optional[UUID]) -> List[Damage]:
         """Return extra damage payloads attached directly to this weapon."""
         damages = []
         for i in range(len(self.extra_damage_dices)):
@@ -1334,25 +1336,16 @@ class Equipment(BaseBlock):
             if is_off_hand:
                 off_hand_ability_bonus = self.off_hand_ranged_ability_bonus if is_ranged else self.off_hand_melee_ability_bonus
 
-            damage = weapon.get_base_damage(
+            ability = self._select_weapon_damage_ability(ability_block, weapon, override_ability)
+            return weapon.get_base_damage(
                 self,
                 ability_block,
                 read,
+                {"attack_ability": ability.name, "range_type": weapon.range.type.value},
                 is_off_hand=is_off_hand,
                 off_hand_ability_bonus=off_hand_ability_bonus,
                 override_ability=override_ability,
             )
-            if damage.damage_bonus is not None:
-                ability = self._select_weapon_damage_ability(
-                    ability_block,
-                    weapon,
-                    override_ability,
-                )
-                damage.context = {
-                    "attack_ability": ability.name,
-                    "range_type": weapon.range.type.value,
-                }
-            return damage
         return None
 
     def _get_extra_weapon_damages(self, weapon_slot: WeaponSlot, target_entity_uuid: Optional[UUID]) -> List[Damage]:
@@ -1698,7 +1691,6 @@ class Equipment(BaseBlock):
         common_fields = {
             "name": item.name,
             "source_entity_uuid": self.source_entity_uuid,
-            "target_entity_uuid": self.target_entity_uuid,
             "item_uuid": item.uuid,
             "slot": slot,
             "parent_event": parent_event_uuid,

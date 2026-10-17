@@ -341,6 +341,7 @@ class _AcidFlaskSpell(SpellAction):
         save_bonus = target.saving_throw_bonus(
             caster.uuid,
             "dexterity",
+            None,
         ).normalized_score
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,

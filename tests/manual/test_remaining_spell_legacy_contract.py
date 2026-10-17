@@ -904,7 +904,7 @@ def test_blur_and_blindness_deafness_execute_distinct_lifecycles() -> None:
         ValueRead(attacker.uuid, blur_caster.uuid), WeaponSlot.MELEE_MAIN)
     target_ac = blur_caster.armor_class_value(ValueRead(blur_caster.uuid, attacker.uuid))
     attack_bonus = read_value(attack_value, ValueRead(attacker.uuid, blur_caster.uuid, attack_context,
-                                                      outgoing_of([target_ac])))
+                                                      outgoing_of([target_ac], None)))
     assert attack_bonus.advantage is AdvantageStatus.DISADVANTAGE
 
     blur_caster.remove_condition("Concentrating")

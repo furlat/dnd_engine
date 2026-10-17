@@ -142,7 +142,7 @@ class BaseBlock(BaseModel):
     """UUID-addressable container for engine components.
 
     Blocks group child blocks, modifiable values, conditions, and local event
-    handlers behind a shared source/target/context identity. Subclasses such as
+    handlers behind a shared owner identity. Subclasses such as
     entities, items, tiles, equipment, and health blocks specialize the virtual
     spatial and gameplay hooks while retaining the same registry and cleanup
     contracts.

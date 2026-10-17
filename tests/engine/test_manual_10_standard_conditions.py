@@ -48,7 +48,7 @@ def situated(value, target_uuid):
 def outgoing_read(value, reader_uuid):
     """What a value's outgoing rows give a reader: an empty reader value read against the owner."""
     probe = ModifiableValue.create(source_entity_uuid=reader_uuid, use_register=False)
-    return read_value(probe, ValueRead(reader_uuid, value.source_entity_uuid, opponent=outgoing_of([value])))
+    return read_value(probe, ValueRead(reader_uuid, value.source_entity_uuid, opponent=outgoing_of([value], None)))
 
 
 def reset_standard_condition_state() -> None:

@@ -171,7 +171,7 @@ def situated(value, target_uuid):
 def outgoing_read(value, reader_uuid):
     """What a value's outgoing rows give a reader: an empty reader value read against the owner."""
     probe = ModifiableValue.create(source_entity_uuid=reader_uuid, use_register=False)
-    return read_value(probe, ValueRead(reader_uuid, value.source_entity_uuid, opponent=outgoing_of([value])))
+    return read_value(probe, ValueRead(reader_uuid, value.source_entity_uuid, opponent=outgoing_of([value], None)))
 
 
 def test_combat_condition_manifest_accounts_for_all_18_cases() -> None:
@@ -236,7 +236,7 @@ def test_condition_modifiers_compose_and_clean_up_by_independent_owner() -> None
     attack_value, attack_context = attacker.weapon_attack_value(ValueRead(attacker.uuid, target.uuid))
     armor_class = target.armor_class_value(ValueRead(target.uuid, attacker.uuid))
     attack_bonus = read_value(attack_value, ValueRead(attacker.uuid, target.uuid, attack_context,
-                                                      outgoing_of([armor_class])))
+                                                      outgoing_of([armor_class], None)))
     assert attack_bonus.advantage is AdvantageStatus.NONE
 
     apply_to_target(Restrained, attacker, target)
