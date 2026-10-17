@@ -93,21 +93,6 @@ def assignment_turn_key(
     return (str(entity.uuid), context.turn_execution_id or (context.round_number, context.turn_index))
 
 
-def require_controlled_entities(
-    controlled_entity_uuids: tuple[UUID, ...],
-) -> list[Entity]:
-    """Resolve every controlled entity or fail before assignment execution."""
-    entities = [
-        entity
-        for entity_uuid in controlled_entity_uuids
-        for entity in [Entity.get(entity_uuid)]
-        if entity is not None
-    ]
-    if len(entities) != len(controlled_entity_uuids):
-        raise ValueError("AI assignment has missing controlled entities")
-    return entities
-
-
 def validate_assignment_ownership(
     controlled_entity_uuids: tuple[UUID, ...],
     entities: list[Entity],
@@ -125,6 +110,5 @@ __all__ = [
     "DEFAULT_MAXIMUM_CONSECUTIVE_CANCELED_ACTIONS",
     "DEFAULT_MAXIMUM_DECISIONS_PER_TURN",
     "assignment_turn_key",
-    "require_controlled_entities",
     "validate_assignment_ownership",
 ]

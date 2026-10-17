@@ -111,7 +111,7 @@ class NativeAIController(Controller):
         self.start(entities)
 
     def on_encounter_end(self, entities: list[Entity]) -> None:
-        """Tear down assignment-local policy, memory, and projection state."""
+        """Close the assignment: its policy memory and projection end, and its knowledge leaves the AI knowledge system."""
         del entities
         self.close()
 

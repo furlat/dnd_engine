@@ -1,4 +1,4 @@
-"""Assignment-owned recorded knowledge and exact native decision authority."""
+"""Project one assignment's knowledge, owned by the AI knowledge system, with exact native decision authority."""
 
 from __future__ import annotations
 

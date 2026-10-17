@@ -47,21 +47,24 @@ def bind_ai_knowledge() -> AIKnowledgeSystem:
 
 
 def unbind_ai_knowledge(system: AIKnowledgeSystem) -> None:
-    """Detach the system and drop what it still holds."""
+    """Detach the system once every assignment it holds has closed."""
+    if system.knowledge:
+        raise RuntimeError("AI knowledge system still holds open assignments")
     EventQueue.remove_on_event_batch_callback(system)
-    system.knowledge.clear()
 
 
 def open_assignment_knowledge(system: AIKnowledgeSystem, key: UUID, controlled_entity_uuids: tuple[UUID, ...]) -> None:
     """Create one assignment's knowledge by the cold fold of the recorded history."""
     _require_generation(system)
+    if key in system.knowledge:
+        raise ValueError("AI assignment knowledge is already open")
     knowledge = AIKnowledge(controlled_entity_uuids)
     _advance(knowledge)
     system.knowledge[key] = knowledge
 
 
 def close_assignment_knowledge(system: AIKnowledgeSystem, key: UUID) -> None:
-    """Drop one assignment's knowledge; closing twice is a no-op."""
+    """Drop one assignment's knowledge; an assignment closed before it started has none."""
     system.knowledge.pop(key, None)
 
 
