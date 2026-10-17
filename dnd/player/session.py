@@ -14,7 +14,6 @@ from dnd.actions_functional import (get_available_actions, get_extra_position_op
     preview_available_selection, secondary_candidates, selection_admission_error)
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.ai.runtime.decision_epoch import clear_epoch_value_caches
-from dnd.ai.runtime.subjective_projection import clear_subjective_projection_fact_cache
 from dnd.content.characters.premades import (
     FIGHTER_PREMADE_ID, SORCERER_PREMADE_ID, create_premade_character,
 )
@@ -25,14 +24,14 @@ from dnd.content.characters.builds import CharacterBuild, create_character, reso
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.controller import HumanController
-from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, AvailableSelectionPreview, TargetType
+from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, TargetType
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.blocks.equipment import EquippableItem
 from dnd.player.facts import PlayerCharacterSheet, PlayerHUDSnapshot, PlayerResource, CombatLogAppend
 from dnd.player.audience import PlayerAudience, SeatAssignment
 from dnd.player.commands import CommandRejected
-from dnd.player.choices import PlayerChoices
-from dnd.player.choice_projection import capture_choices
+from dnd.player.choices import PlayerChoices, PlayerSelectionPreview
+from dnd.player.choice_projection import project_choices, project_selection_preview
 from dnd.subjective_combat_log import project_combat_log
 from dnd.core.combat_log import CombatLogEntry
 from typing import Callable
@@ -65,8 +64,13 @@ class DiscoveryCache:
     force_attack: bool = False
     original: AvailableActionsResult | None = None
     compact: PlayerChoices | None = None
+    # The compact choices' wire encoding, made at most once per discovery.
+    compact_json: bytes | None = None
     rich_complete: bool = False
-    previews: OrderedDict[tuple[int, tuple[int, ...], tuple[tuple[int, int], ...], bool, bool], tuple[AvailableSelectionPreview, int]] = field(default_factory=OrderedDict)
+    # Projected previews of this discovery, by (row, target indices, positions,
+    # prefer_safe, include_aoe_effects, cast_at_level); frozen and never copied.
+    previews: OrderedDict[tuple[int, tuple[int, ...], tuple[tuple[int, int], ...], bool, bool, int | None],
+                          PlayerSelectionPreview] = field(default_factory=OrderedDict)
 
 
 @dataclass(slots=True)
@@ -354,10 +358,12 @@ def _player_choices_for_transport(session: Session, actor_uuid: UUID, *, force_a
         row.discovery_index = index
         row.discovery_runtime = EventQueue.generation_id()
         row.discovery_actor_uuid = actor.uuid
-    retained, compact = capture_choices(original, actor.position)
+    # Discovery rows are fresh per call and their targets are never mutated
+    # afterwards, so the native result itself is retained (plan PD2).
+    compact = project_choices(original, actor.position)
     cache.generation = generation
     cache.seat_generations[seat_id] = generation
-    cache.original, cache.compact = retained, compact
+    cache.original, cache.compact, cache.compact_json = original, compact, None
     cache.rich_complete = False
     cache.cursor = EventQueue.event_cursor()
     cache.discovery_revision = cache.revision
@@ -365,6 +371,16 @@ def _player_choices_for_transport(session: Session, actor_uuid: UUID, *, force_a
     cache.force_attack = force_attack
     cache.previews.clear()
     return compact
+
+
+def encoded_player_choices(session: Session, choices: PlayerChoices) -> bytes:
+    """The wire encoding of these retained compact choices, encoded once per discovery (plan PD2)."""
+    cache = session.discovery
+    if cache.compact is not choices:
+        raise ValueError("These choices are not the retained discovery")
+    if cache.compact_json is None:
+        cache.compact_json = choices.model_dump_json().encode()
+    return cache.compact_json
 
 
 def discover_player_actions(session: Session, actor_uuid: UUID, *, force_attack: bool = False,
@@ -413,37 +429,37 @@ def preview_player_selection(session: Session, actor_uuid: UUID, action: Availab
                              selected: tuple[AvailableTarget, ...] = (),
                              positions: tuple[tuple[int, int], ...] = (), *,
                              prefer_safe: bool = True, include_aoe_effects: bool = True,
-                             cast_at_level: int | None = None) -> AvailableSelectionPreview:
+                             cast_at_level: int | None = None) -> PlayerSelectionPreview:
+    """The projected preview of one ordered selection, cached per discovery as its frozen projection."""
     actor = _current_player(session, actor_uuid)
     original = _retained_row(session, action)
     key = (original.discovery_index,
            tuple(target.index for target in selected), positions, prefer_safe, include_aoe_effects, cast_at_level)
     cache = session.discovery.previews
-    if key not in cache:
-        primary = next((target for target in original.valid_targets if selected and target.index == selected[0].index),
-                       selected[0] if selected and is_free_aim(original, selected[0]) else None)
-        # The row's targets, then anything else the actor perceives, by the same
-        # numbering preview offers them (secondaries are picked on demand, plan §14.4).
-        pool = secondary_candidates(actor, original, actor.action_scan(subjective=True))
-        by_index = {target.index: target for target in pool}
-        if any(chosen.index not in by_index for chosen in selected[1:]):
-            raise CommandRejected("This allocation is not admitted")
-        retained = (() if primary is None else (primary, *tuple(
-            by_index[chosen.index] for chosen in selected[1:])))
-        if selected and primary is None:
-            raise CommandRejected("This target is not admitted")
-        if positions and original.position_selection is None:
-            raise CommandRejected("This action does not select additional positions")
-        value = preview_available_selection(actor, original, retained, positions, prefer_safe=prefer_safe,
-            include_aoe_effects=include_aoe_effects, cast_at_level=cast_at_level)
-        size = len(value.model_dump_json().encode())
-        if size > 8 * 1024 * 1024:
-            return value.model_copy(deep=True)
-        while cache and (len(cache) >= 128 or sum(row[1] for row in cache.values()) + size > 8 * 1024 * 1024):
-            cache.popitem(last=False)
-        cache[key] = (value.model_copy(deep=True), size)
-    cache.move_to_end(key)
-    return cache[key][0].model_copy(deep=True)
+    projected = cache.get(key)
+    if projected is not None:
+        cache.move_to_end(key)
+        return projected
+    primary = next((target for target in original.valid_targets if selected and target.index == selected[0].index),
+                   selected[0] if selected and is_free_aim(original, selected[0]) else None)
+    # The row's targets, then anything else the actor perceives, by the same
+    # numbering preview offers them (secondaries are picked on demand, plan §14.4).
+    pool = secondary_candidates(actor, original, actor.action_scan(subjective=True))
+    by_index = {target.index: target for target in pool}
+    if any(chosen.index not in by_index for chosen in selected[1:]):
+        raise CommandRejected("This allocation is not admitted")
+    retained = (() if primary is None else (primary, *tuple(
+        by_index[chosen.index] for chosen in selected[1:])))
+    if selected and primary is None:
+        raise CommandRejected("This target is not admitted")
+    if positions and original.position_selection is None:
+        raise CommandRejected("This action does not select additional positions")
+    projected = project_selection_preview(preview_available_selection(actor, original, retained, positions,
+        prefer_safe=prefer_safe, include_aoe_effects=include_aoe_effects, cast_at_level=cast_at_level))
+    if len(cache) >= 128:
+        cache.popitem(last=False)
+    cache[key] = projected
+    return projected
 
 
 def _operation(session: Session, start_cursor: int, boundary: AdvanceResult | None = None) -> Operation:
@@ -620,4 +636,3 @@ def close_session(session: Session) -> None:
         controller.close()
     session.game.close()
     clear_epoch_value_caches()
-    clear_subjective_projection_fact_cache()

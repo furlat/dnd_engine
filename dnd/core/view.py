@@ -388,3 +388,12 @@ def known_positions(cells: PerceivedCells, seen: CellLayer) -> Set[Position]:
     known = set(layer_positions(seen))
     known.update(visible_positions(cells))
     return known
+
+
+def visible_box(cells: PerceivedCells) -> Optional[Box]:
+    """The bounding box of the visible cells, None when none is visible."""
+    xs, ys = np.nonzero(cells.visible.values)
+    if not xs.size:
+        return None
+    x0, y0 = cells.visible.x0, cells.visible.y0
+    return int(xs.min()) + x0, int(ys.min()) + y0, int(xs.max()) + x0, int(ys.max()) + y0

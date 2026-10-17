@@ -5,7 +5,7 @@ import pytest
 from dnd.actions_functional import get_available_actions, preview_available_selection, register_spell
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.entity import Entity
-from dnd.player.choice_projection import capture_choices, project_selection_preview
+from dnd.player.choice_projection import project_choices, project_selection_preview
 from dnd.player.choices import PlayerChoices, PlayerSelectionPreview
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import ChainLightning, MagicMissile
@@ -32,9 +32,8 @@ def discover(scene, spell, behavior):
     register_spell(caster, spell)
     Entity.update_all_entities_senses(max_distance=300)
     native = get_available_actions(caster, include_aoe_preview=False)
-    retained, projected = capture_choices(native, caster.position)
-    compact = PlayerChoices.model_validate_json(projected.model_dump_json())
-    native_row = next(row for row in retained.all_actions if row.behavior_id == behavior)
+    compact = PlayerChoices.model_validate_json(project_choices(native, caster.position).model_dump_json())
+    native_row = next(row for row in native.all_actions if row.behavior_id == behavior)
     compact_row = next(row for row in (*compact.entity_actions, *compact.position_actions)
         if row.template_name == native_row.template_name)
     assert [native_value(compact, binding) for binding in compact.target_sets[compact_row.target_set]] == [

@@ -306,7 +306,7 @@ def main():
         increment('world_update.input_object_positions', len(object_positions))
         increment('world_update.input_object_ids', len(identities))
 
-    def audience_count(composition, audience, observer_uuid, event, cursor, *, prepared=None):
+    def audience_count(composition, audience, observer_uuid, event, cursor):
         increment('audience.current.visible_added', len(event.visible_cells_added))
         increment('audience.current.visible_removed', len(event.visible_cells_removed))
         increment('audience.current.seen_added', len(event.seen_cells_added))
@@ -326,9 +326,6 @@ def main():
         (capture, '_copy_snapshot', 'capture.copy_snapshot', capture._copy_snapshot, snapshot_count),
         (reduction, 'copy_target', 'reduction.copy_target', reduction.copy_target, target_count),
         (reduction, 'reduce_nodes', 'reduction.nodes', reduction.reduce_nodes, None),
-        (application, 'reduce_operation', 'application.reduce_operation', application.reduce_operation, None),
-        (application, 'prepare_current_operation', 'application.prepare_current', application.prepare_current_operation, None),
-        (application, 'apply_current_operation', 'application.apply_current', application.apply_current_operation, None),
         (application, 'capture_lineages', 'capture.lineages', application.capture_lineages, None),
         (application, 'project_lineage', 'projection.lineage', application.project_lineage, None),
         (application, 'admitted_content', 'application.content', application.admitted_content, None),

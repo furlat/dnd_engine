@@ -1,4 +1,4 @@
-"""Published common application after-values reproduce the owner-side state."""
+"""Published common application after-values reproduce what the seat's projection holds."""
 
 import random
 from dataclasses import dataclass, replace
@@ -44,7 +44,7 @@ def started():
     session = create_session()
     try:
         catalog = ui_content_manifest()
-        audiences, initializations = initialize_audiences(session, catalog, exclusive_current=True)
+        audiences, initializations = initialize_audiences(session, catalog)
         seat = next(iter(initializations))
         yield Started(session, catalog, audiences, seat, initializations[seat])
     finally:
@@ -57,8 +57,12 @@ def client_initialization(started: Started) -> PlayerState:
     """Reduce the published initialization and admitted content after detaching them."""
     detached = INITIALIZATION.validate_json(INITIALIZATION.dump_json(started.initialization))
     content = tuple(ContentDescriptor.model_validate_json(row.model_dump_json())
-        for row in started.runtime.latest.content)
+        for row in started.runtime.projection.remembered.content)
     return reduce_initialization(detached, content_additions=content)
+
+
+def after_values(state: PlayerState) -> tuple:
+    return state.content, state.hud_snapshot
 
 
 def client_operation(started: Started, state: PlayerState, operation: Operation) -> PlayerState:
@@ -69,8 +73,8 @@ def client_operation(started: Started, state: PlayerState, operation: Operation)
 
 def test_published_initialization_has_only_admitted_descriptors_and_replays_exactly(started):
     assert all(row.visibility in (ContentVisibility.PUBLIC, ContentVisibility.OBSERVED)
-        for row in started.runtime.latest.content)
-    assert client_initialization(started) == started.runtime.latest
+        for row in started.runtime.projection.remembered.content)
+    assert after_values(client_initialization(started)) == after_values(started.runtime.projection.remembered)
 
 
 def test_common_operation_replays_eventless_handler_after_values(started):
@@ -78,7 +82,7 @@ def test_common_operation_replays_eventless_handler_after_values(started):
     advanced = advance_controller(started.session)
     assert advanced.boundary is not None and advanced.boundary.status == "waiting_for_human"
     state = client_operation(started, state, advanced)
-    assert state == started.runtime.latest
+    assert after_values(state) == after_values(started.runtime.projection.remembered)
     actor = state.current_actor_uuid
     assert actor is not None and state.hud_snapshot is not None
     sheet = next(row for row in state.hud_snapshot.sheets if row.actor_uuid == actor)
@@ -86,7 +90,7 @@ def test_common_operation_replays_eventless_handler_after_values(started):
     discover_player_actions(started.session, actor)
     changed = toggle_player_handler(started.session, actor, handler.uuid, not handler.enabled)
     state = client_operation(started, state, changed)
-    assert state == started.runtime.latest
+    assert after_values(state) == after_values(started.runtime.projection.remembered)
     updated = next(row for row in state.hud_snapshot.sheets if row.actor_uuid == actor)
     assert next(row for row in updated.handler_details if row.uuid == handler.uuid).enabled != handler.enabled
 

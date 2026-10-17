@@ -1,4 +1,4 @@
-# Single-pass change propagation — analysis and plan (v3.11)
+# Single-pass change propagation — analysis and plan (v3.13)
 
 Date: 2026-10-16. Status: **APPROVED by the human 2026-10-17 (incl. D7c, Q7 EXECUTION convention, temp-HP record-only).** **v3.5 adds available-actions discovery (§14, PD1/PD2) per the human's 2026-10-17 decisions (model approved 2026-10-17).** **v3.6 folds in the §14 antislop/antiOOP reviews and the whole-world-scan redesign. v3.7 folds in the v3.6 re-reviews, the human's answers (D14 approved; Q-W1, Q-W3, Q-W4 decided) and the first P0a measurements; open items are in §14.10.** Implementation is at P0a.
 
@@ -643,6 +643,12 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 - Object and entity contact changes are packed uuid deltas. The client derives nothing.
 - **Multi-observer seats** (human: "handle the per seat scenario per observer but of course when shared we should optimize"): each changed cell, body and item is sent once per seat, and each observer gets a bit list over the seat's shared cells. A one-observer seat is plain per-observer.
 - No retained client-side state for cells out of view (human: "a bad idea to keep 2 states"). Cells coming back into view carry their light and hazard values, packed.
+- **Combat log** (Fireball: 160,291 B in both seats' updates of 1,024,279 B and 358,941 B):
+  - `sub_entries` is deleted (110 nested copies: 104 repeat another top-level event log). The client composes the tree from the node lineage the update already carries, and `target_entry_indices` indexes `children_lineages`. Flattened, the log is 41,504 B.
+  - `root` is an index into `events`; the root event (44 KB) is sent twice today.
+  - The rendered strings stay server-side (12.6 KB after flattening): no SDK renderer.
+  - One data-only projection per seat replaces the three `project_combat_log` calls (`capture.py` ×2, `application.py` / `session.py`).
+- **Version identity:** every wire reference to a version (`lineage_uuid`, `parent_event`, `source_event_uuid`, `commit_event_uuid`, `cause_event_uuid`) uses the seat's public occurrence index (`ProjectionState.public_versions`, already `source_index`), across updates. The uuid strings are dropped in the same change: 377 rows in blue's Fireball update, 72 % of them intermediate versions.
 - **Gate:** every update ≤100 KB on every row.
 
 **PV3 — bodies and items as patches.**
@@ -653,12 +659,38 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 - **Items:** the client can't know items in advance (human). A seat receives an item's full record the first time it sees that `item_uuid`, then only patches. `EquipmentFact` becomes an item patch. The `PlayerActor` / `VisualItem` types change, not just the encoder.
 - **Gate:** no body bytes for unchanged re-acquisitions; the D16-C replica test passes.
 
+**P7b — stored versions frozen, capture by reference.**
+
+- The capture deep-copies every retained event (`capture.py:_retained_event` / `_detach_retained_event`; ~16 % of the sampled Fireball op, `smp_fb2`).
+- The copy exists because stored versions are mutated after storing:
+  - `_store_event` appends children into stored versions (`events.py:2333-2339`, `add_child_event`);
+  - `phase_to` mutates the previous version's `combat_log` in place;
+  - `conditions.py:2942` sets `combat_log` on a stored EFFECT version;
+  - `post` is a shallow `model_copy`, so versions share containers;
+  - events hold live objects (condition, values, costs).
+- **Work:**
+  - child links are read from the queue's lineage index;
+  - combat logs are built by copy-update before `post`;
+  - no shared mutable containers;
+  - live objects are replaced by values where capture reads them;
+  - then capture holds stored versions by reference.
+- **Gate:** versions frozen at store; no `deepcopy` in capture; the wire is byte-identical.
+
 **PT — turn start** (human: "of course bro it is unacepptable").
 
 - First AI Advance, sampled under load:
   - AI knowledge catch-up ~48 %, folding every event since the AI's last turn: P7's AI item, plus PV1, since its indexes become arrays;
   - AI discovery ~33 %, mostly object-contact checks that build a pydantic object per contact, plus object HP reads: PD1b / PD2;
   - turn-start navigation ~11 %.
+- **AI knowledge system (the catch-up's one owner).** `AIKnowledge` starts at cursor 0 and folds the whole history on the assignment's first decision: ~193 ms of the 398 ms sampled first Advance (`smp_ai`, loaded).
+  - One AI-knowledge system owns the `AIKnowledge` values, keyed by assignment, and advances them at the EventQueue batch dispatch.
+  - A new assignment starts from the same cold composition the seats use. Assignments are created at session setup, in the summon cast, on rebind, and lazily in `_ensure_assignment`.
+  - Deleted: the lazy creation branch (unreachable) and the whole-history catch-up.
+  - **Integrator decisions (AIK, 2026-10-17):**
+    - One function, "advance this assignment's knowledge to the current cursor", called at batch dispatch for every assignment and by each decision or guard read for its own assignment. A read folds only the current batch's pending versions. The movement guard has to learn before a move completes (`tests/ai/test_event_knowledge.py`), so the pull can't be deleted outright.
+    - A cold start from live state would be a second, inexact path. The objective part (world, actors, pending conditions, open events) is the same for every assignment: it is one shared fold per session, advanced once per batch. Each assignment folds only its observers' sensory facts, from the observers' birth. Creation is folded from the record at the explicit creation site.
+    - Knowledge is keyed by the assignment object: opened at creation, dropped at close, cleared on generation reset.
+  - **Gate:** at the first decision, `AIKnowledge` equals today's full replay on the GC cases, or the memory differences are listed for sign-off; the summon-cast row is measured.
 - **Navigation:** one path search over a cost grid with a predecessor array. `walkable`, `paths`, `path_costs`, `safe_*` and `collision_blocked` stop being per-cell dicts and sets.
 - **Gate:** the turn-start rows within the ceiling.
 
@@ -666,10 +698,11 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 
 **Order.**
 
-1. Spike.
-2. PV1, alongside P7.
-3. PV2 and PV3 after P7, because they share the projection code.
-4. PT after PV1, because navigation shares the grids.
+1. Spike (done).
+2. PV1a, alongside PW (PV2's non-cell items and PV3).
+3. PV1b after PV1a; PV2's cell packing with PV1b.
+4. P7b after PW, because both edit `capture.py`.
+5. The AI knowledge system after P7 (done); navigation after PV1, because it shares the grids.
 
 ## 7. Phases (execution order) and gates
 
@@ -701,7 +734,8 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 | **PV1** | Perception as arrays end to end (§6b): owned world grids, one pure view function, one settlement path, packed cell sets through snapshot, event and wire; P4a's obscurement and light items folded in; spike first | §6b PV1 gate |
 | **PV2** | The rest of the wire (§6b); after P7 | §6b PV2 gate; every update ≤100 KB |
 | **PV3** | Bodies and items as patches (§6b); after P7 | §6b PV3 gate |
-| **PT** | Turn start (§6b): navigation as a cost grid with a predecessor array | turn-start rows within the ceiling |
+| **P7b** | Stored versions frozen, capture by reference (§6b) | versions frozen at store; no deepcopy in capture; wire byte-identical |
+| **PT** | Turn start (§6b): the AI knowledge system (one owner, advanced at batch dispatch, cold start); navigation as a cost grid with a predecessor array | turn-start rows within the ceiling; first-decision knowledge equality |
 | **PC** | *(other repo; human)* NDClientGodot SDK schema 9 → 11; grouped world boundaries | — |
 | **Exit** | Whole-action targets (§6a, D18): every operation of every GC case re-timed after each merged batch | every run of every row ≤100 ms and every seat update ≤100 KB; acceptable and goal tiers reported per row; a miss blocks the exit until the human decides |
 
@@ -907,6 +941,19 @@ worktree. The rest is static reading.
 | AI discovery | `ai/runtime/decision_epoch.py:148-157, 819-845, 948-971` |
 
 ## 12. Changes
+
+**v3.12 → v3.13** (the v3.12 antislop and antiOOP reviews, all accepted):
+
+- The combat log is flattened and `root` is an index; no SDK renderer.
+- One version identity, the seat's occurrence index.
+- P7b freezes stored versions first.
+- The AI catch-up has one owner, the AI knowledge system, with a cold start.
+
+**v3.11 → v3.12** (Fireball payload and publication sample):
+
+- PV2 adds the combat log (no repeated child entries; `data` only, rendered by the SDK) and the version rows (indexes).
+- P7b: capture by reference.
+- PT: the AI catch-up folded at assignment creation.
 
 **v3.10 → v3.11** (v3.9 antislop review):
 

@@ -393,14 +393,28 @@ class SpatialCondition(BaseCondition):
         if self._activation_positions is None:
             raise RuntimeError("Spatial condition has no prepared footprint")
         self._commit_displaced_footprints()
-        get_map().set_spatial_condition_positions(
-            condition=self,
-            crossing_channels=self.crossing_channels,
-            layer=self.layer,
-            occupancy_policy=self.occupancy_policy,
-            positions=set(self._activation_positions),
-        )
-        self.affected_positions = set(self._activation_positions)
+        self._commit_footprint(set(self._activation_positions))
+
+    def _commit_footprint(self, positions: Set[Tuple[int, int]]) -> None:
+        """Own the new footprint, then commit its Tile membership.
+
+        The map invalidates (and re-lights) at the membership commit, and this
+        condition's per-cell answers read ``affected_positions``, so the field
+        is written first: nothing the commit recomputes may see the old one.
+        """
+        previous = self.affected_positions
+        self.affected_positions = set(positions)
+        try:
+            get_map().set_spatial_condition_positions(
+                condition=self,
+                crossing_channels=self.crossing_channels,
+                layer=self.layer,
+                occupancy_policy=self.occupancy_policy,
+                positions=set(positions),
+            )
+        except BaseException:
+            self.affected_positions = previous
+            raise
 
     def _commit_displaced_footprints(self) -> None:
         """Shrink the Tile membership of every incumbent this footprint displaces."""
@@ -654,14 +668,7 @@ class SpatialCondition(BaseCondition):
         if begun is None:
             return None
         _, normalized, change_effect = begun
-        get_map().set_spatial_condition_positions(
-            condition=self,
-            crossing_channels=self.crossing_channels,
-            layer=self.layer,
-            occupancy_policy=self.occupancy_policy,
-            positions=normalized,
-        )
-        self.affected_positions = normalized
+        self._commit_footprint(normalized)
         self.observation_revision += 1
         for handler_uuid in self.spatial_handler_uuids:
             EventQueue.update_spatial_handler_positions(
@@ -1529,7 +1536,6 @@ class AreaCondition(SpatialCondition):
         if begun is None:
             return None
         previous, normalized, change_effect = begun
-        grid = get_map()
         removed = previous - normalized
         added = normalized - previous
         if SpatialEffectTriggerKind.EFFECT_LEAVES_OCCUPANT in self.trigger_kinds:
@@ -1544,14 +1550,7 @@ class AreaCondition(SpatialCondition):
                         parent_event=change_effect,
                     )
         self._remove_terrain_positions(removed, parent_event=change_effect)
-        grid.set_spatial_condition_positions(
-            condition=self,
-            crossing_channels=self.crossing_channels,
-            layer=self.layer,
-            occupancy_policy=self.occupancy_policy,
-            positions=normalized,
-        )
-        self.affected_positions = normalized
+        self._commit_footprint(normalized)
         self.observation_revision += 1
         for handler_uuid in self.spatial_handler_uuids:
             EventQueue.update_spatial_handler_positions(handler_uuid, normalized)

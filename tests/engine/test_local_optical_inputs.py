@@ -109,10 +109,12 @@ def test_subscriber_revisions_follow_local_geometry_light_and_occupancy():
     grid.set_tile(-1, 0)
     assert grid.observer_spatial_revisions(near).optical > after_move.optical
     assert grid.observer_spatial_revisions(far) == remote_initial
-    # A presence change has unknown coverage (attached contributions), so it
-    # reaches subscribers far from the anchor.
+    # A presence change reaches beyond its anchor only through conditions
+    # anchored to it; this mover has none, so only its own cell's subscribers see it.
+    before_suspension = grid.observer_spatial_revisions(near)
     mover.suspend_spatial_presence()
-    assert grid.observer_spatial_revisions(far).optical > remote_initial.optical
+    assert grid.observer_spatial_revisions(far) == remote_initial
+    assert grid.observer_spatial_revisions(near).occupancy > before_suspension.occupancy
     grid.unsubscribe_entity(near)
     grid.subscribe_to_cells(near, {(0, 0)})
     assert grid.observer_spatial_revisions(near) == ObserverRevisions()

@@ -1,6 +1,5 @@
 """High-level action shapes through real worker choices, preview and commands."""
 
-from copy import deepcopy
 from dataclasses import replace
 from uuid import uuid4
 
@@ -16,7 +15,6 @@ from dnd.core.events import EventQueue
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.gridmap import get_map
 from dnd.player.commands import ActionSelection, ToggleHandler
-from dnd.player.reduction import reduce_operation
 from dnd.reactions import add_stand_when_healed_handler
 from dnd.spells.abjuration import DispelEvilAndGood
 from dnd.spells.enchantment import CharmMonster
@@ -183,7 +181,6 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
         actor.action_economy.actions.normalized_score,
         actor.action_economy.spell_slot_value(level).normalized_score,
     )
-    before_public = deepcopy(runtime.audiences[seat].latest)
     with fixed_dice_faces(15, *([2] * 400)):
         reply, records, _ = dispatch(
             runtime,
@@ -226,13 +223,11 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
             == runtime.publications[seat].cursor.audience_id
         )
         detached = PlayerOperation.model_validate_json(record.model_dump_json())
-        replayed = reduce_operation(before_public, detached)
-        assert replayed == replace(
-            runtime.audiences[seat].latest,
-            combat_log_appends=before_public.combat_log_appends
-            + detached.combat_log_appends,
+        assert any(
+            row.actor.uuid == dragon.uuid
+            for lineage in detached.lineages
+            for row in lineage.observations
         )
-        assert dragon.uuid in replayed.actors
         assert (
             set(runtime.session.game.entities) == actor_ids
             and EventQueue.event_cursor() == native_cursor

@@ -138,7 +138,7 @@ def index_content_catalog(catalog: UIContentManifest) -> ContentCatalog:
         {ref.identity_key: ref.content_id for ref, _ in catalog.content})
 
 
-def observed_content_additions(catalog: ContentCatalog, retained: set[str],
+def observed_content_additions(catalog: ContentCatalog, retained: frozenset[str],
                                lineages: tuple[PlayerLineage, ...]) -> tuple[ContentDescriptor, ...]:
     """Resolve only newly witnessed identities; startup admits public content."""
     known = _lineage_content(lineages)
