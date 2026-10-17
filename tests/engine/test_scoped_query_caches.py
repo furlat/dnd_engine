@@ -26,12 +26,14 @@ ALL_CHANNELS = (WorldEdgeChannel.MOVEMENT, WorldEdgeChannel.OPTICAL, WorldEdgeCh
 
 @dataclass(frozen=True)
 class WorldState:
-    """What differs between steps: placed pillars, wall tiles, an open or shut door, the walker's cell."""
+    """What differs between steps: pillars, wall tiles, a door, the walker's cell, a bystander's allegiance."""
 
     pillars: FrozenSet[Cell] = frozenset()
     walls: FrozenSet[Cell] = frozenset()
     door: bool = False
     walker: Cell = (8, 8)
+    # The walker passes an ally's cell but not an enemy's.
+    bystander: str = "heroes"
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,7 @@ def build_world(case: CacheCase, state: WorldState) -> Tuple[Entity, Callable[[W
                         blocked_channels=(WorldEdgeChannel.OPTICAL,)).place_on_grid(
                             (0, 15), boundary_direction=CardinalDirection.SOUTH)
     walker = create_skeleton(name="Walker", position=state.walker, faction="heroes")
+    bystander = create_skeleton(name="Bystander", position=(4, 3), faction=state.bystander)
     for position in state.pillars:
         pillar(position)
     for position in state.walls:
@@ -106,6 +109,8 @@ def build_world(case: CacheCase, state: WorldState) -> Tuple[Entity, Callable[[W
             grid.remove_object(doors.pop().uuid)
         if target.walker != before.walker:
             Entity.update_entity_position(walker, target.walker)
+        if target.bystander != before.bystander:
+            bystander.set_faction(target.bystander)
         current[0] = target
 
     return walker, write
@@ -135,6 +140,8 @@ STATES = (
     WorldState(pillars=frozenset({NEAR, EDGE}), walls=frozenset({(10, 8)}), door=True, walker=(14, 8)),
     WorldState(pillars=frozenset({EDGE, FAR}), walls=frozenset({(10, 8)}), door=True, walker=(14, 8)),
     WorldState(pillars=frozenset({EDGE, FAR}), walls=frozenset({(10, 8)}), walker=(14, 8)),
+    WorldState(pillars=frozenset({FAR}), walker=(14, 8)),
+    WorldState(pillars=frozenset({FAR}), walker=(14, 8), bystander="monsters"),
     WorldState(pillars=frozenset({FAR}), walker=(14, 8)),
 )
 

@@ -6,7 +6,7 @@ from bisect import bisect_left, bisect_right
 from heapq import heappop, heappush
 from dnd.core.condition_types import ConditionDurationSummary
 
-from typing import Literal, AbstractSet, Collection, Any, Dict, Iterable, List, Optional, Sequence, Tuple, Set, DefaultDict, Protocol, cast
+from typing import Literal, AbstractSet, Collection, Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Set, DefaultDict, Protocol, Union, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
@@ -152,13 +152,36 @@ def box_reads_any(box: Optional[CellBox], changed: CellBox, positions: Collectio
     return any(min_x <= x <= max_x and min_y <= y <= max_y for x, y in positions)
 
 
-def drop_reading_entries(cache: Dict[Any, Tuple[Any, ...]], positions: Collection[Tuple[int, int]],
-                         counter: str) -> None:
-    """Drop the cache entries (value[0] is their read box) that read a changed cell."""
+class SightEntry(NamedTuple):
+    """One kept sight answer and the cells its solve can read."""
+
+    box: Optional[CellBox]
+    distance: Optional[float]
+    positions: Tuple[Tuple[int, int], ...]
+
+
+class PropagationEntry(NamedTuple):
+    """One kept line-of-effect answer and the cells its solve can read."""
+
+    box: Optional[CellBox]
+    positions: Tuple[Tuple[int, int], ...]
+
+
+class PathEntry(NamedTuple):
+    """One kept path search and the cells it can read."""
+
+    box: Optional[CellBox]
+    distances: Dict[Tuple[int, int], int]
+    paths: Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]]
+
+
+def drop_reading_entries(cache: Union[Dict[Any, SightEntry], Dict[Any, PropagationEntry], Dict[Any, PathEntry]],
+                         positions: Collection[Tuple[int, int]], counter: str) -> None:
+    """Drop the cache entries whose read box holds a changed cell."""
     changed = cells_box(positions)
     if changed is None:
         return
-    stale = [key for key, value in cache.items() if box_reads_any(value[0], changed, positions)]
+    stale = [key for key, entry in cache.items() if box_reads_any(entry.box, changed, positions)]
     for key in stale:
         del cache[key]
     if stale:
@@ -397,13 +420,9 @@ class GridMap:
         # cell (`_bump_spatial_revisions`, `invalidate_occupancy_paths`).
         # Per-cell and per-edge caches drop the changed cells' own entries.
         self._optics_blocking: Dict[Tuple[int, int], bool] = {}
-        self._fov_cache: OrderedDict[
-            Tuple[Tuple[int, int], Tuple[bool, bool]],
-            Tuple[Optional[CellBox], Optional[float], Tuple[Tuple[int, int], ...]],
-        ] = OrderedDict()
+        self._fov_cache: OrderedDict[Tuple[Tuple[int, int], Tuple[bool, bool]], SightEntry] = OrderedDict()
         self._propagation_fov_cache: OrderedDict[
-            Tuple[Tuple[int, int], Optional[float], bool],
-            Tuple[Optional[CellBox], Tuple[Tuple[int, int], ...]],
+            Tuple[Tuple[int, int], Optional[float], bool], PropagationEntry,
         ] = OrderedDict()
         # Placed boundaries blocking each structural channel, kept at every placement write.
         self._directional_blocking_owners: Dict[WorldEdgeChannel, Set[UUID]] = {
@@ -424,15 +443,7 @@ class GridMap:
         self._pending_light_positions: Set[Tuple[int, int]] = set()
         self._pending_light_sources: Set[Tuple[int, int]] = set()
         self._pending_light_parent: Optional[UUID] = None
-        self._path_cache: OrderedDict[
-            Tuple[Any, ...],
-            Tuple[
-                Optional[CellBox],
-                Optional[UUID],
-                Dict[Tuple[int, int], int],
-                Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]],
-            ],
-        ] = OrderedDict()
+        self._path_cache: OrderedDict[Tuple[Any, ...], PathEntry] = OrderedDict()
         EventQueue.add_on_event_callback(
             self._on_perceivability_changed,
             event_types={EventType.SPATIAL_PERCEIVABILITY_CHANGED},
@@ -776,17 +787,16 @@ class GridMap:
         drop_reading_entries(self._path_cache, positions, "cache.drop.path")
         self._bump_observer_revisions(frozenset({SpatialChannel.OCCUPANCY}), positions)
 
-    def invalidate_traversal_rules(self, entity_uuid: UUID, position: Optional[Tuple[int, int]]) -> None:
-        """A creature's own traversal rules changed (allegiance, size, origin traversal).
+    def invalidate_allegiance(self, position: Optional[Tuple[int, int]]) -> None:
+        """One creature changed faction.
 
-        Paths it requested read those rules wherever they start, and every other
-        requester reads them at the creature's cell.
+        Its own searches key its faction; other searches read it at its cell
+        and through every hazard it is the source of (enemy-only zones, tile and
+        object conditions), which can lie anywhere, so every kept search goes.
         """
-        stale = [key for key, entry in self._path_cache.items() if entry[1] == entity_uuid]
-        for key in stale:
-            del self._path_cache[key]
-        if stale:
-            record_action_count("cache.drop.path", len(stale))
+        if self._path_cache:
+            record_action_count("cache.drop.path", len(self._path_cache))
+            self._path_cache.clear()
         if position is not None:
             self.invalidate_occupancy_paths({position})
 
@@ -851,22 +861,28 @@ class GridMap:
             SpatialChannel.ILLUMINATION, SpatialChannel.PROPAGATION,
         }), positions)
 
-    def _path_requester_perception_signature(
+    def _path_requester_signature(
         self,
         requester_uuid: Optional[UUID],
         subjective: bool,
     ) -> Tuple[Any, ...]:
-        """Return subjective observer state that can change path blockers."""
-        if requester_uuid is None or not subjective:
+        """Every requester input a path search reads, so a kept search never outlives one.
+
+        The requester's own traversal rules (allegiance, hazard perception, size
+        and origin traversal, crossing rules) and, for a subjective search, the
+        blockers and crossings it perceives.
+        """
+        requester = BaseBlock.get(requester_uuid) if requester_uuid is not None else None
+        if requester is None:
             return ()
-        requester = BaseBlock.get(requester_uuid)
-        if requester is None or requester.get_senses() is None:
-            return ()
-        senses = requester.get_senses()
-        assert senses is not None
+        senses = requester.get_senses() if subjective else None
+        if senses is None:
+            return requester.traversal_rule_inputs()
         return (
+            requester.traversal_rule_inputs(),
             tuple(sorted(senses.entities, key=str)),
             tuple(sorted(senses.objects, key=str)),
+            tuple(sorted(senses.spatial_effects, key=str)),
         )
 
     @staticmethod
@@ -5138,7 +5154,7 @@ class GridMap:
         cache_key = (origin, (directional, not self._global_crossing_owners))
         cached = self._fov_cache.get(cache_key)
         if cached is not None:
-            _, cached_distance, positions = cached
+            cached_distance, positions = cached.distance, cached.positions
             if cached_distance is None or (max_distance is not None and cached_distance >= max_distance):
                 self._fov_cache.move_to_end(cache_key)
                 if max_distance == cached_distance:
@@ -5167,7 +5183,8 @@ class GridMap:
             )
         else:
             compute_fov(origin, self.is_blocking_optics, mark_visible, max_distance)
-        self._fov_cache[cache_key] = (sight_read_box(origin, max_distance), max_distance, tuple(visible_positions))
+        self._fov_cache[cache_key] = SightEntry(sight_read_box(origin, max_distance), max_distance,
+                                                tuple(visible_positions))
         self._fov_cache.move_to_end(cache_key)
         if len(self._fov_cache) > FOV_CACHE_ORIGINS:
             self._fov_cache.popitem(last=False)
@@ -5215,7 +5232,7 @@ class GridMap:
             walk_in_danger,
             subjective,
             ignore_difficult_terrain,
-            self._path_requester_perception_signature(requesting_entity_uuid, subjective),
+            self._path_requester_signature(requesting_entity_uuid, subjective),
             tuple(sorted(collision_blocked or ())),
             tuple(sorted(directional_collision_blocked or ())),
             self._min_x,
@@ -5229,10 +5246,9 @@ class GridMap:
             self._path_cache.move_to_end(cache_key)
             if timing:
                 record_action_timing("grid.compute_paths.cache_hit_ms", cache_started)
-            _, _, cached_distances, cached_paths = cached
             return (
-                dict(cached_distances),
-                {position: list(path) for position, path in cached_paths.items()},
+                dict(cached.distances),
+                {position: list(path) for position, path in cached.paths.items()},
             )
         if timing:
             record_action_timing("grid.compute_paths.cache_miss_ms", cache_started)
@@ -5365,9 +5381,8 @@ class GridMap:
             or max_distance == 0
         ):
             sentinel_result = ({start: 0}, {start: [start]})
-            self._path_cache[cache_key] = (
+            self._path_cache[cache_key] = PathEntry(
                 path_read_box(start, max_distance),
-                requesting_entity_uuid,
                 dict(sentinel_result[0]),
                 {
                     position: tuple(path)
@@ -5413,9 +5428,8 @@ class GridMap:
             record_action_elapsed("grid.compute_paths.tile_cost_ms", tile_cost_elapsed)
             record_action_elapsed("grid.compute_paths.can_enter_ms", can_enter_elapsed)
         distances, paths = result
-        self._path_cache[cache_key] = (
+        self._path_cache[cache_key] = PathEntry(
             path_read_box(start, max_distance),
-            requesting_entity_uuid,
             dict(distances),
             {position: tuple(path) for position, path in paths.items()},
         )
@@ -6503,7 +6517,7 @@ class GridMap:
         if cached is not None:
             self._propagation_fov_cache.move_to_end(cache_key)
             record_action_timing("grid.compute_propagation_fov.cache_hit_ms", cache_started)
-            return list(cached[1])
+            return list(cached.positions)
         record_action_timing("grid.compute_propagation_fov.cache_miss_ms", cache_started)
         visible_positions = self._compute_directional_fov(origin, max_distance, WorldEdgeChannel.PROPAGATION)
         visible_positions = [
@@ -6511,7 +6525,8 @@ class GridMap:
             if position in self._tiles
         ]
 
-        self._propagation_fov_cache[cache_key] = (sight_read_box(origin, max_distance), tuple(visible_positions))
+        self._propagation_fov_cache[cache_key] = PropagationEntry(sight_read_box(origin, max_distance),
+                                                                  tuple(visible_positions))
         self._propagation_fov_cache.move_to_end(cache_key)
         if len(self._propagation_fov_cache) > FOV_CACHE_ORIGINS:
             self._propagation_fov_cache.popitem(last=False)

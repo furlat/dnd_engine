@@ -1,7 +1,7 @@
 from dnd.core.effect_types import EventResolutionRef, EffectOrigin
 from dnd.core.damage import DamageResolution
 from dnd.core.attack_types import NaturalWeaponSpec
-from typing import cast, Callable, AbstractSet, DefaultDict, Dict, FrozenSet, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
+from typing import cast, Callable, AbstractSet, DefaultDict, Dict, FrozenSet, Hashable, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from collections import defaultdict
@@ -1751,7 +1751,7 @@ class Entity(BaseBlock):
             return None
         previous = self.faction
         self.faction = faction
-        get_map().invalidate_traversal_rules(self.uuid, self.position if self.is_deployed else None)
+        get_map().invalidate_allegiance(self.position if self.is_deployed else None)
         changed = EventQueue.publish_committed_phase(EntityFactionChangedEvent(
             source_entity_uuid=self.uuid, target_entity_uuid=self.uuid,
             entity_uuid=self.uuid, previous_faction=previous, faction_after=faction,
@@ -1913,8 +1913,10 @@ class Entity(BaseBlock):
         size = sizes[max(0, min(len(sizes) - 1, index))]
         if size is not self.size:
             self.size = size
-            # Size is a creature traversal rule (`can_traverse_creature_space`).
-            get_map().invalidate_traversal_rules(self.uuid, self.position if self.is_deployed else None)
+            # Requesters with origin traversal compare sizes at this creature's cell
+            # (`can_traverse_creature_space`); its own searches key its size.
+            if self.is_deployed:
+                get_map().invalidate_occupancy_paths({self.position})
 
     def add_temporary_size_step(self, owner_uuid: UUID, step: int) -> None:
         self.temporary_size_steps[owner_uuid] = step
@@ -1934,7 +1936,7 @@ class Entity(BaseBlock):
             source_id,
         )
         if capability is OriginCapability.HALFLING_NIMBLENESS:
-            get_map().invalidate_traversal_rules(self.uuid, self.position if self.is_deployed else None)
+            get_map().invalidate_occupancy_paths({self.position})
             self.senses._paths_dirty = True
 
     def remove_origin_capability_source(
@@ -1950,7 +1952,7 @@ class Entity(BaseBlock):
         if not sources:
             del self.origin_capability_sources[capability]
         if capability is OriginCapability.HALFLING_NIMBLENESS:
-            get_map().invalidate_traversal_rules(self.uuid, self.position if self.is_deployed else None)
+            get_map().invalidate_occupancy_paths({self.position})
             self.senses._paths_dirty = True
         return True
 
@@ -1960,6 +1962,16 @@ class Entity(BaseBlock):
     ) -> bool:
         """Return whether any durable source grants this origin capability."""
         return bool(self.origin_capability_sources.get(capability))
+
+    def traversal_rule_inputs(self) -> Tuple[Hashable, ...]:
+        """Every value of this creature that path rules read when it requests a path.
+
+        Allegiance and size decide which creatures it may pass
+        (`can_traverse_creature_space`), passive perception which concealed
+        hazards it knows, and type and body form which crossings stop it.
+        """
+        return (self.faction, self.get_passive_perception(), self.size, self.creature_type, self.gaseous_body,
+                self.has_origin_capability(OriginCapability.HALFLING_NIMBLENESS))
 
     def can_traverse_creature_space(self, occupant: "Entity") -> bool:
         """Return whether allegiance or an origin rule permits crossing a cell.
