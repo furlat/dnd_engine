@@ -13,6 +13,7 @@ from enum import StrEnum
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
+from dnd.core.aoe import Sphere
 from dnd.actions import Attack, Disengage, Dodge, Hide, Move
 from dnd.actions_functional import execute_use_action
 from dnd.blocks.base_item import BaseItem, UsableItem
@@ -1094,7 +1095,7 @@ def test_magical_darkness_controls_attack_discovery_by_sense_mode() -> None:
     darkness = DarknessZone(
         source_entity_uuid=attacker.uuid,
         position=target.position,
-        zone_radius_feet=0,
+        area=Sphere(radius_feet=0, propagation="connected"),
     )
     assert darkness.activate(parent_event=None) is not None
 

@@ -4,6 +4,7 @@ This module never queries native owners. The display view is composed from
 complete recorded observations; it grants no actor additional senses or actions.
 """
 
+from collections.abc import Collection
 from dataclasses import dataclass, field, replace
 from uuid import UUID
 
@@ -196,6 +197,49 @@ def light_sources(perception: AudiencePerception) -> tuple[dict[UUID, PerceivedL
                     "anchor_entity_uuid": previous.anchor_entity_uuid or source.anchor_entity_uuid,
                     "anchor_item_uuid": previous.anchor_item_uuid or source.anchor_item_uuid})
     return result, {identity: revision for identity, revision in revisions.items() if identity not in result}
+
+
+def update_light_sources(
+    perception: AudiencePerception,
+    identities: Collection[UUID],
+    lights: dict[UUID, PerceivedLightSource],
+    removals: dict[UUID, int],
+) -> tuple[dict[UUID, PerceivedLightSource], dict[UUID, int]]:
+    """Recompose only the named sources; every other source keeps its composed row.
+
+    A source's composed row depends only on the members' rows for that source,
+    so this equals `light_sources(perception)` restricted to `identities`.
+    """
+    lights, removals = dict(lights), dict(removals)
+    observers = sorted(perception.members, key=lambda value: value.int)
+    for identity in identities:
+        revision = -1
+        for observer in observers:
+            senses = perception.members[observer]
+            if identity in senses.light_source_removals:
+                revision = max(revision, senses.light_source_removals[identity])
+            source = senses.light_sources.get(identity)
+            if source is not None:
+                revision = max(revision, source.revision)
+        merged: PerceivedLightSource | None = None
+        for observer in observers:
+            source = perception.members[observer].light_sources.get(identity)
+            if source is None or source.revision != revision:
+                continue
+            merged = source if merged is None else merged.model_copy(update={
+                "affected_tiles": {**merged.affected_tiles, **source.affected_tiles},
+                "anchor_entity_uuid": merged.anchor_entity_uuid or source.anchor_entity_uuid,
+                "anchor_item_uuid": merged.anchor_item_uuid or source.anchor_item_uuid})
+        if merged is not None:
+            lights[identity] = merged
+            removals.pop(identity, None)
+        else:
+            lights.pop(identity, None)
+            if revision >= 0:
+                removals[identity] = revision
+            else:
+                removals.pop(identity, None)
+    return lights, removals
 
 
 def tile_observers(perception: AudiencePerception) -> dict[tuple[int, int], UUID]:
@@ -487,9 +531,15 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
     else:
         view.seen.update(event.seen_cells_added)
     anchor = perception.members.get(observer_uuid) or next(iter(perception.members.values()))
-    lights, removals = ((light_sources(perception))
-        if event.initial or event.light_sources_changed or event.light_sources_removed
-        else (view.light_sources, view.light_source_removals))
+    # Only the sources this delta names can change their composed row.
+    if event.initial:
+        lights, removals = light_sources(perception)
+    elif event.light_sources_changed or event.light_sources_removed:
+        lights, removals = update_light_sources(perception,
+            set(event.light_sources_changed) | set(event.light_sources_removed),
+            view.light_sources, view.light_source_removals)
+    else:
+        lights, removals = view.light_sources, view.light_source_removals
     current.view = replace(view, light_sources=lights, light_source_removals=removals,
         position=anchor.position, passive_perception=anchor.passive_perception,
         sense_modes_hash=anchor.sense_modes_hash, sense_modes=anchor.sense_modes,

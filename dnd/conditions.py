@@ -66,6 +66,7 @@ from dnd.core.ground import ground_neighbors
 from dnd.types.world import OccupancyLayer
 from uuid import UUID
 from functools import partial
+from dnd.types.event_facts import HandlerGroupDispatch
 from dnd.core.events import (
     DamageAppliedEvent,
     DeathEvent,
@@ -2286,13 +2287,9 @@ class Concentrating(BaseCondition):
                     sustaining_condition_uuid=self.uuid,
                     parent_event_uuid=event.uuid,
                 ))
-                return event.with_updates(
-                    concentration_broken=True,
-                    status_message=(
-                        f"{entity.name} lost concentration on {spell_name} "
-                        f"(failed DC {dc} CON save)"
-                    ),
-                )
+                # The release's own removal facts carry the loss; an after-group
+                # handler never rewrites the settled damage fact.
+                return None
 
             return None
 
@@ -2300,6 +2297,7 @@ class Concentrating(BaseCondition):
             handler = EventHandler(
                 name=f"Concentration Check ({self.spell_name})",
                 source_entity_uuid=self.target_entity_uuid,
+                group_dispatch=HandlerGroupDispatch.AFTER_GROUP,
                 trigger_conditions=[
                     Trigger(event_type=EventType.DAMAGE_APPLIED, event_phase=EventPhase.EFFECT,
                             event_target_entity_uuid=self.target_entity_uuid),
@@ -2829,7 +2827,13 @@ class GreaterInvisibilityEffect(BaseCondition):
                 raise
 
             parent = declaration_event.get_parent_event()
-            self.creation_lineage_uuid = parent.lineage_uuid if parent else declaration_event.lineage_uuid
+            # A per-target application belongs to its root cast: the cast that
+            # grants invisibility never tests it (bug F).
+            if (isinstance(parent, ActionEvent) and parent.application is not None
+                    and parent.parent_lineage is not None):
+                self.creation_lineage_uuid = parent.parent_lineage
+            else:
+                self.creation_lineage_uuid = parent.lineage_uuid if parent else declaration_event.lineage_uuid
 
             handler = EventHandler(
                 name="Greater Invisibility: Stealth Check",
@@ -2855,6 +2859,9 @@ class GreaterInvisibilityEffect(BaseCondition):
 def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     """Roll a stealth check to maintain Greater Invisibility."""
     if not event.is_last:
+        return None
+    # One check per action at its root; per-target applications are not new actions (bug F).
+    if isinstance(event, ActionEvent) and event.application is not None:
         return None
 
     if event.event_type == EventType.BASE_ACTION:

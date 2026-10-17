@@ -149,6 +149,30 @@ class SpatialChangeType(str, Enum):
 
 
 
+class GroupEntryKind(str, Enum):
+    """Where one simultaneous group was opened (plan §5.2)."""
+
+    AREA_APPLICATION = "area_application"
+    ZONE_INSTALL = "zone_install"
+    ZONE_MOVE = "zone_move"
+    ZONE_REMOVE = "zone_remove"
+    REACTION = "reaction"
+    WALL_FORMATION = "wall_formation"
+    CAST_LOOP = "cast_loop"
+    NESTED_BATCH = "nested_batch"
+    ROUND_STEP = "round_step"
+    TRAP_FIRE = "trap_fire"
+    PORTAL_TRANSFER = "portal_transfer"
+    MATERIAL_INTERACTION = "material_interaction"
+
+
+class HandlerGroupDispatch(str, Enum):
+    """When a handler runs relative to an open simultaneous group (plan §5.3)."""
+
+    INLINE = "inline"
+    AFTER_GROUP = "after_group"
+
+
 class EventPhase(str, Enum):
     """Lifecycle phase for one logical event lineage.
 

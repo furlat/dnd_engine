@@ -2,6 +2,7 @@
 from uuid import UUID
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.actions import Move, Dash, Disengage, SpellAction, SpellEvent, entity_action_economy_cost_evaluator
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import BaseItem
@@ -85,8 +86,7 @@ class FlamingSphereZone(AreaCondition):
     anchor_uuid: UUID = Field(default=PydanticUndefined,validate_default=True)
     layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
     occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 5
+    area: AoEShape = Sphere(radius_feet=5)
     spell_dc: int
     dice_count: int = 2
     hazard_filter: HazardFilter = HazardFilter.ENEMIES
@@ -107,7 +107,7 @@ class FlamingSphereZone(AreaCondition):
                     event=event,origin=self.effect_origin,context=self.saving_throw_context(effect_id="spell.flaming_sphere.aura"))
             return None
         return EventHandler(name="Flaming Sphere end-turn aura",source_entity_uuid=self.source_entity_uuid,
-            trigger_conditions=[Trigger(event_type=EventType.TURN_END,event_phase=EventPhase.EFFECT)],event_processor=expose)
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END,event_phase=EventPhase.EXECUTION)],event_processor=expose)
 
 
 class FlamingSphereAura(BaseCondition):

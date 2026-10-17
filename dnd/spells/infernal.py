@@ -25,6 +25,7 @@ from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.dice import AttackOutcome
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.spell_damage import roll_spell_damage
+from dnd.types.event_facts import HandlerGroupDispatch
 from dnd.core.events import (
     EventQueue,
     Event,
@@ -260,6 +261,7 @@ def create_hellish_rebuke_reaction_handler(
         uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Hellish Rebuke",
         semantic_key="reaction.spell.hellish_rebuke",
+        group_dispatch=HandlerGroupDispatch.AFTER_GROUP,
         content_kind=RuntimeBehaviorKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[

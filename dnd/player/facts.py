@@ -30,7 +30,7 @@ from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposi
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesSnapshot
-from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectChangeOperation, SpatialEffectInteractionOperation
+from dnd.types.spatial_effects import AreaPropagation, SpatialDamageSource, SpatialEffectChangeOperation, SpatialEffectInteractionOperation
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.traps import TrapState
 from dnd.types.physical_access import ContactPassage
@@ -205,7 +205,7 @@ class SpellFact:
     # None means no recorded result; () is a resolved result with no granted cells.
     resolved_area_positions: tuple[tuple[int, int], ...] | None = None
     suppressions: tuple[SpellSuppression, ...] = ()
-    area_propagation: Literal["line_of_effect", "connected"] = "line_of_effect"
+    area_propagation: AreaPropagation = "line_of_effect"
     target_kind: Literal["creature", "object"] = "creature"
     target_position: tuple[int, int] | None = None
     target_base_height_steps: int | None = None

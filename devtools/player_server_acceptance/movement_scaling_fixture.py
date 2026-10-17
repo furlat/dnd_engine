@@ -6,6 +6,7 @@ from uuid import uuid4
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import build_directional_wall
 from dnd.content_system.creature_materialization import materialize_creature
+from dnd.core.aoe import Cube, Sphere
 from dnd.core.base_block import LightLevel
 from dnd.core.content.encounters import (AuthoredCreatureRosterSource, EncounterDeploymentSpec,
     EncounterDeploymentZone, EncounterRecipe, EncounterRosterMember, EncounterRosterRecipe,
@@ -16,7 +17,7 @@ from dnd.core.gridmap import get_map
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.player.audience import SeatAssignment
 from dnd.reactions import add_opportunity_attack_handler
-from dnd.spells.conjuration import FogCloudZone, GreaseZone
+from dnd.spells.conjuration import FOG_CLOUD_AREA, FogCloudZone, GreaseZone
 from dnd.types.world import CardinalDirection
 from server.config import SeatCredential, ServerConfig
 
@@ -123,7 +124,8 @@ def prepare(session, axis: str, amount: int):
             else:
                 zone_type = FogCloudZone if axis == 'optical_conditions' else GreaseZone
                 zone = zone_type(source_entity_uuid=source.uuid, position=position,
-                    zone_radius_feet=0 if axis == 'optical_conditions' else 5)
+                    area=(Sphere(radius_feet=0, propagation=FOG_CLOUD_AREA.propagation) if axis == 'optical_conditions'
+                          else Cube(size_feet=5, centered=True)))
                 zone.activate(parent_event=None)
     if axis in ('observers', 'affected_observers', 'reaction_handlers'):
         for index in range(amount):

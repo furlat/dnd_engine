@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.conditions import Poisoned
-from dnd.core.aoe import Sphere
+from dnd.core.aoe import AoEShape, Sphere, objective_footprint
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType, HazardFilter
@@ -76,7 +76,7 @@ class GasCloud(AreaCondition):
     hazard_filter: HazardFilter = HazardFilter.ALL
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = GAS_EXPOSURES
     first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = GAS_EXPOSURES
-    zone_radius_feet: int = 10
+    area: AoEShape = Sphere(radius_feet=10)
     duration: Duration = Field(default_factory=lambda: Duration(duration=3, duration_type=DurationType.ROUNDS))
     save_dc: int = Field(default=12, ge=0)
     damage: TrapDamage = DEFAULT_GAS_DAMAGE
@@ -117,7 +117,7 @@ class GasCloud(AreaCondition):
     def _apply_appearance_effect(self, entity: Entity, *, parent_event: Event) -> None:
         self._expose(entity, parent_event=parent_event)
 
-    def _exposure_handler(self, event_type: EventType) -> EventHandler:
+    def _exposure_handler(self, event_type: EventType, phase: EventPhase) -> EventHandler:
         def expose(event: Event, _source_entity_uuid: UUID) -> None:
             if not isinstance(event, (SpatialChangeEvent, TurnEvent)) or event.entity_uuid is None:
                 return
@@ -126,14 +126,14 @@ class GasCloud(AreaCondition):
                 self._expose(entity, parent_event=event)
 
         return EventHandler(name="Poison gas exposure", source_entity_uuid=self.uuid,
-            trigger_conditions=[Trigger(event_type=event_type, event_phase=EventPhase.EFFECT)],
+            trigger_conditions=[Trigger(event_type=event_type, event_phase=phase)],
             event_processor=expose)
 
     def _create_zone_entry_handler(self) -> EventHandler:
-        return self._exposure_handler(EventType.SPATIAL_ENTITY_ENTERED)
+        return self._exposure_handler(EventType.SPATIAL_ENTITY_ENTERED, EventPhase.EFFECT)
 
     def _create_zone_turn_start_handler(self) -> EventHandler:
-        return self._exposure_handler(EventType.TURN_START)
+        return self._exposure_handler(EventType.TURN_START, EventPhase.EXECUTION)
 
     def _apply(self, execution_event: Event):
         modifiers, handlers, children, spatial_handlers, effect = super()._apply(execution_event)
@@ -202,16 +202,15 @@ class GasVent(SpatialCondition):
         event = event.phase_to(EventPhase.EXECUTION)
         if event.canceled:
             return event
-        shape = Sphere(source_entity_uuid=self.uuid, target=self.position, radius_feet=self.gas.radius_feet)
-        shape.compute_objective(self.position)
-        positions = {cell for cell in shape.affected_positions if get_map().has_tile(*cell)
-                     and not get_map().is_blocking_propagation(*cell)}
+        shape = Sphere(radius_feet=self.gas.radius_feet)
+        positions = {cell for cell in objective_footprint(shape, self.position, self.position)
+                     if not get_map().is_blocking_propagation(*cell)}
         event = event.phase_to(EventPhase.EFFECT, affected_positions=tuple(sorted(positions)))
         if event.canceled:
             return event
         identity = uuid4()
         cloud = GasCloud(uuid=identity, source_entity_uuid=identity, position=self.position,
-            affected_positions=positions, zone_radius_feet=self.gas.radius_feet,
+            affected_positions=positions, area=shape,
             duration=Duration(duration=self.gas.duration_rounds, duration_type=DurationType.ROUNDS),
             save_dc=self.gas.save_dc, damage=self.gas.damage,
             half_damage_on_success=self.gas.half_damage_on_success,

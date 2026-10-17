@@ -5,7 +5,6 @@ rich/deferred options, subjective previews and native execution without preview.
 """
 
 import pytest
-from uuid import uuid4
 
 from dnd.actions import SpellEvent
 from dnd.actions_functional import (
@@ -225,17 +224,15 @@ def test_native_object_choices_identify_the_item_as_an_object(scene):
 
 
 @pytest.mark.parametrize("shape,mode", [
-    (Sphere(source_entity_uuid=uuid4(), target=(6, 4)), "aim"),
-    (Cylinder(source_entity_uuid=uuid4(), target=(6, 4)), "aim"),
-    (Cube(source_entity_uuid=uuid4(), target=(6, 4), centered=True), "aim"),
-    (Cone(source_entity_uuid=uuid4(), target=(6, 4)), "fixed"),
-    (Line(source_entity_uuid=uuid4(), target=(6, 4)), "fixed"),
-    (Cube(source_entity_uuid=uuid4(), target=(6, 4), centered=False), "fixed"),
-    (Sphere(source_entity_uuid=uuid4(), target=(6, 4), origin_override=(3, 4), propagation="connected"), "fixed"),
+    (Sphere(), "aim"),
+    (Sphere(propagation="connected"), "aim"),
+    (Cylinder(), "aim"),
+    (Cube(centered=True), "aim"),
+    (Cone(), "fixed"),
+    (Line(), "fixed"),
+    (Cube(centered=False), "fixed"),
 ])
 def test_native_aiming_descriptor_preserves_shape_origin_and_propagation(shape, mode):
     descriptor = snapshot_aoe_aiming_geometry(shape, (2, 4))
-    assert descriptor is not None
-    assert descriptor.reference_target == shape.target and descriptor.origin_mode == mode
-    assert descriptor.propagation == shape.propagation
-    assert shape.computed_origin is None and not shape.affected_positions
+    assert descriptor.origin_mode == mode and descriptor.propagation == shape.propagation
+    assert descriptor.geometry == shape.presentation_geometry(descriptor.reference_target, (2, 4))

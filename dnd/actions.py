@@ -24,6 +24,7 @@ from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, TakeDamageEvent, DamageAppliedEvent, SkillCheckEvent, SpatialChangeEvent, MovementTrajectory
 from dnd.types.abilities import AbilityName
 from dnd.types.spell_suppression import SpellSuppression
+from dnd.types.spatial_effects import AreaPropagation
 from dnd.spells.content_metadata import get_spell_catalog_metadata
 from dnd.types.summoning import SummonApplication
 from dnd.core.elevation import support_distance_feet
@@ -76,14 +77,6 @@ from dnd.core.traversal_connectors import (
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.geometry import grid_distance_feet, position_in_sector
-from dnd.core.aoe import (
-    Sphere,
-    Cone,
-    Line,
-    Cube,
-    Cylinder,
-    snapshot_aoe_presentation_geometry,
-)
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.naming import normalize_spell_id
 from dnd.core.base_block import BaseBlock, MovementMode, PreparedConditionApplication
@@ -4287,7 +4280,7 @@ class SpellEvent(ActionEvent):
         default=None, description="Immutable spell emission position, including a placed device's origin.",
     )
     suppressions: tuple[SpellSuppression, ...] = ()
-    area_propagation: Literal["line_of_effect", "connected"] = "line_of_effect"
+    area_propagation: AreaPropagation = "line_of_effect"
     source_position: Optional[Tuple[int, int]] = Field(
         default=None,
         description="Caster position captured when the spell was declared.",
@@ -5217,6 +5210,10 @@ class SpellAction(BaseAction):
         current = owner.active_conditions_by_uuid.get(self.cast_concentrating_uuid) if self.cast_concentrating_uuid else None
         if isinstance(current, Concentrating):
             return PreparedSpellConcentration(owner, current, None, parent_event)
+        if self.cast_concentrating_uuid is not None:
+            # This cast's concentration already ended mid-batch: later targets
+            # are not re-sustained by a new one (bug J).
+            return parent_event.cancel(status_message="The cast's concentration has ended")
         condition = self._new_concentration(owner, parent_event)
         application = owner.prepare_condition_application(condition, parent_event=parent_event)
         if not isinstance(application, PreparedConditionApplication):
@@ -5329,21 +5326,6 @@ class SpellAction(BaseAction):
             if empty_slot_uuids:
                 conc._sync_spell_name()
             conc.publish_owner_state(effect_event)
-
-    def _get_aoe_radius_ft(self) -> Optional[int]:
-        """Extract AoE size in feet from aoe_shape for VFX metadata."""
-        shape = self.aoe_shape
-        if shape is None:
-            return None
-        if isinstance(shape, (Sphere, Cylinder)):
-            return shape.radius_feet
-        if isinstance(shape, Cone):
-            return shape.length_feet
-        if isinstance(shape, Line):
-            return shape.length_feet
-        if isinstance(shape, Cube):
-            return shape.size_feet
-        return None
 
     def _get_range_type(self) -> Optional[str]:
         """Map spell range type to VFX delivery string."""
@@ -5642,17 +5624,13 @@ class SpellAction(BaseAction):
             area_propagation=self.aoe_shape.propagation if self.aoe_shape is not None else "line_of_effect",
             source_position=source_entity.position if source_entity else None,
             area_geometry=(
-                snapshot_aoe_presentation_geometry(
-                    self.aoe_shape,
-                    source_entity.position,
-                    target_override=self.end_position,
-                )
-                if self.aoe_shape is not None and source_entity is not None
+                self.aoe_shape.presentation_geometry(self.end_position, source_entity.position)
+                if self.aoe_shape is not None and self.end_position is not None and source_entity is not None
                 else None
             ),
             aoe_position=self.end_position if self.effective_target_type == TargetType.POSITION_AOE else None,
-            aoe_shape_type=self.aoe_shape.name.lower() if self.aoe_shape and self.aoe_shape.name else None,
-            aoe_radius_ft=self._get_aoe_radius_ft(),
+            aoe_shape_type=self.aoe_shape.kind if self.aoe_shape is not None else None,
+            aoe_radius_ft=self.aoe_shape.extent_feet() if self.aoe_shape is not None else None,
             range_type=self._get_range_type(),
             range_ft=self.effective_range,
             projectile_type=self.projectile_type,

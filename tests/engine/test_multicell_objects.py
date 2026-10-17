@@ -82,7 +82,7 @@ def test_one_identity_reindexes_rotation_move_and_removal(arena: Game) -> None:
     assert original.positions == ((2, 3), (3, 3))
     assert all(grid.get_center_objects_at(point) == {item.uuid} for point in original.positions)
     assert all(not grid.is_walkable_for(*point) for point in original.positions)
-    assert set(original.positions) <= grid.get_barrier_positions()
+    assert all(grid.is_blocking_propagation(*point) for point in original.positions)
     assert len(grid.iter_object_placements()) == 1
     with pytest.raises(ValueError, match="world objects"):
         grid.validate_tile_detachment((3, 3))

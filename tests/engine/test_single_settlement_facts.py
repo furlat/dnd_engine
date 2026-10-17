@@ -50,11 +50,6 @@ def test_terrain_install_and_removal_each_publish_one_tile_fact() -> None:
     """Difficult terrain over six cells is one committed tile fact, not six."""
     reset_senses_state(width=8, height=3)
     observer = create_skeleton(name="Observer", position=(0, 1), darkvision=False)
-    # PD1a removes this: today the first spatial condition on the map flips the
-    # propagation solver, which GridMap must report as a propagation change.
-    AreaCondition(name="Unrelated", source_entity_uuid=observer.uuid, content_ref=_content_ref("unrelated"),
-        position=(7, 2), affected_positions={(7, 2)}, layer=SpatialEffectLayer.FIELD,
-        occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING).activate(parent_event=_cause(observer.uuid))
     cells = {(x, 1) for x in range(3, 7)} | {(3, 0), (4, 0)}
     zone = AreaCondition(name="Test mud", source_entity_uuid=observer.uuid, content_ref=_content_ref("mud"),
         position=(3, 1), affected_positions=set(cells), layer=SpatialEffectLayer.GROUND_SURFACE,

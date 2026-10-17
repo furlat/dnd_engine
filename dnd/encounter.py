@@ -23,6 +23,7 @@ import logging
 
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, RollType
+from dnd.types.event_facts import GroupEntryKind
 from dnd.core.events import (
     Event, EventPhase, EventQueue,
     EncounterStartEvent, EncounterEndEvent,
@@ -704,7 +705,9 @@ class Encounter(BaseObject):
         )
         event = event.phase_to(EventPhase.EXECUTION)
         event = event.phase_to(EventPhase.EFFECT)
-        self._environment_step(parent_event=event)
+        # Every world-owned tick of the round is one instant: observers settle once.
+        with EventQueue.group(GroupEntryKind.ROUND_STEP, root=event, shares_damage_rolls=True):
+            self._environment_step(parent_event=event)
         event = event.phase_to(EventPhase.COMPLETION)
         return event
 

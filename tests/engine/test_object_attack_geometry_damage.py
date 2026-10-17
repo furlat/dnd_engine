@@ -9,7 +9,7 @@ from dnd.blocks.base_item import BaseItem, WorldItem
 from dnd.content.items.environment_item_builders import build_authored_door, build_directional_wall
 from dnd.content.items.window_builders import place_window
 from dnd.content.items.world_prop_builders import build_world_prop
-from dnd.core.aoe import Sphere
+from dnd.core.aoe import Sphere, objective_footprint
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.events import Damage, EventPhase, EventQueue, ItemDestructionEvent, TakeDamageEvent
@@ -150,18 +150,18 @@ def test_area_contact_finds_unreached_side_door_and_requeries_after_real_break(a
     beyond = prop()
     beyond.place_on_grid((4, 2))
     origin = (1, 2)
-    area = Sphere(source_entity_uuid=door.uuid, target=origin, radius_feet=15, propagation="connected")
-    area.compute_objective(origin)
+    area = Sphere(radius_feet=15, propagation="connected")
+    reached = objective_footprint(area, origin, origin)
     geometry = circle_positions(origin, 3, include_center=True)
-    before = grid.area_object_contacts(area.affected_positions, geometric_positions=geometry, origin=origin)
-    assert (3, 2) not in area.affected_positions
+    before = grid.area_object_contacts(set(reached), geometric_positions=geometry, origin=origin)
+    assert (3, 2) not in reached
     assert before[door.uuid] == (2, 2)
     assert beyond.uuid not in before
     door.receive_damage(4, DamageType.FIRE, door.uuid)
-    area.compute_objective(origin)
-    after = grid.area_object_contacts(area.affected_positions, geometric_positions=geometry, origin=origin)
+    reached = objective_footprint(area, origin, origin)
+    after = grid.area_object_contacts(set(reached), geometric_positions=geometry, origin=origin)
     assert after[beyond.uuid] == (4, 2)
-    assert (5, 2) not in area.affected_positions  # No radius restart at the breach.
+    assert (5, 2) not in reached  # No radius restart at the breach.
 
 
 def test_authored_native_object_defenses_follow_material_and_assembly(arena):

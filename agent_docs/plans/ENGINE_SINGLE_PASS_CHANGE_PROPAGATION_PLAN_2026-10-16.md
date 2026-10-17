@@ -360,6 +360,67 @@ Geometry readers of `senses.position` switch to objective positions:
 `barbarian.py:1095/1255/1378/1521`, `transmutation.py:807`, `conjuration.py:606`,
 Thunderwave EVO:1606-1607.
 
+### 5.8 P3 implementation record (2026-10-17)
+
+**Mechanism.**
+- `EventQueue.group(kind, root, *, shares_damage_rolls)`, holding `OpenGroup` (root uuid, entry kinds, deferred dispatches, shared dice). Entries join an open group.
+- At the outermost close, each pre-completion system's `settle_group(root)` runs:
+  - the reducer absorbs GridMap's one pending light fact, then gives each recorded observer one pass;
+  - the summoning system resolves its recorded departures.
+- Settled deltas and the light fact attach to the still-open root, because lineage capture cannot adopt children of completed facts.
+- Then phase B replays the `AFTER_GROUP` dispatches in arrival order, each in a fresh REACTION group.
+
+**Entries.**
+- Convolution branch (AREA_APPLICATION).
+- Zone install, move and removal: the zone's own change and the application complete after the settle.
+- Round step.
+- Moonbeam cast exposure.
+- Wall formation (escapes, displacement, sections, appearance damage), Ice Knife burst, Glyph payload, `payload_blast` (one roll per blast).
+- Nested batches: `_apply_target_batch` itself (Turn Undead, Preserve Life); inside an area it joins the area's group.
+- Plate pulses (`activate_link`, the one dispatch to mechanisms), multi-target trap fire, portal occupant transfer.
+- Material interactions: `resolve_interaction` (`dnd/spatial/ignition.py`) runs every declared interaction's EXECUTION/EFFECT in one group; all 8 emitters use it.
+
+**Phase B work** is a list of callables in arrival order: deferred `AFTER_GROUP` dispatches and `EventQueue.after_group(run)` (a payload ended inside an area detonates after it). A nested entry that asks for shared rolls inside a non-sharing group shares only for its own duration (a phase-B blast still rolls once).
+
+**Group settlers.** Owners holding work for a group register a settler on it (GridMap's pending light fact). They run after the pre-completion systems, so the light fact is published even when no sensory reducer is attached (no observers yet).
+
+**Shared staged loop** (§5.6): `resolve_staged_area` in `dnd/spatial/area_reach.py`, used by Fireball and `payload_blast`. Each stage continues only when one of its own propagation barriers is `DESTROYED`; `BaseItem.destruction_lineage_uuid` (recorded at the accepted breakage) feeds `prerequisite_destruction_lineages`. No event scan, no `propagation_revision`.
+
+**Shared roll.** `Damage.get_dice` returns one `Dice` per (source, packet, outcome) inside a sharing group: area effects, zone install/move, cast loops, round step, and multi-target effects without attack rolls.
+
+**Root vs per-application handlers:**
+
+| Handler | Placement | Reason |
+| --- | --- | --- |
+| Counterspell | root only (E) | one interruption per cast |
+| Greater Invisibility check | root only (F); creation lineage = root cast | one check per action |
+| Hidden / InvisibilityEffect reveal | per application, idempotent | the first application removes it; the rest no-op |
+| Sanctuary self-break, MetamagicAutoRemove | per application, idempotent | caster bookkeeping consumed once |
+| Vicious Mockery | per application | consumed by the first ray (authored) |
+| Sculpt Spells, Globe, Forcecage, Wet, Divine Health, Resilient Sphere | per application | admission filters must see each target |
+| Silence | root | casting under Silence is blocked once |
+
+**Outcome changes for sign-off:**
+- reactions, concentration saves, aura refresh, summon departures and anchored zone moves now resolve after every target's effect;
+- one roll per area or simultaneous multi-target effect (Chain Lightning and Magic Missile included; attack-roll effects excluded);
+- a cast's concentration that ends mid-batch stops re-sustaining later targets (J);
+- the Sleep/Color Spray pool refunds vetoed candidates;
+- separate arrival / turn-start / turn-end fences;
+- Moonbeam cast exposure counts against the fence;
+- the Spirit Guardians slow only follows an admitted trigger;
+- Thunderwave and 9 other readers use objective positions;
+- the concentration check no longer rewrites the damage event's status message (the loss is carried by the release facts);
+- a staged area reaches further only through its own destroyed barriers, not any propagation change elsewhere on the map;
+- a payload ended inside an area (holder or caster killed by a Fireball) detonates after that area resolved;
+- **PB3 (Q7) consequence:** zone turn triggers at EXECUTION run before the turn's duration advance, so Stinking Cloud's Nauseated ends at the creature's turn end ("spends its action that turn") instead of a 1-round duration that would expire in the same turn start;
+- **C/Q2 consequence:** the gas trap test "appearance, entry and turn start share one exposure per turn" fails: the trap declares `{APPEAR, ENTER, TURN_START}` as fenced, the same shape as Cloudkill and Black Tentacles, which Q2 names as separate triggers. The test is left failing for the human.
+
+**Deferred.**
+- Per-target state off `self.target_entity_uuid` goes to PD1b: every `_apply` reads it, and PD1b's selection carries the targets. P3 keeps the save/restore in `_apply_target_application`, so a phase-B replay sees the root target, never the last one; pools are per-cast (D).
+- L12 (Guardian of Faith presentation centre) needs a protocol decision: `SpherePresentationGeometry.center` is a cell, and a Large footprint's centre is a half cell (float centre or a footprint geometry kind). Human.
+- Bug G goes to PD1b.
+- `requires_paths` / `_paths_dirty` deletion goes to P5.
+
 ## 6. Predicted counts (GC)
 
 | Unit | Meaning |
@@ -416,8 +477,8 @@ refreshes and C versions remain per terrain install until P2.
 | **P0b** | **Split 2026-10-17 so P1 isn't blocked on measurement: P0b-1 (now) = ordinary + counts for the P1/P2 gate rows (Fireball, Sleet cast/drop, Ice Storm, both Choices rows); P0b-2 (before P3) = the remaining GC, routine and production-arm rows.** Baselines: the saved production fixture (reconcile §2 and the cost-only arm), then every GC row, routine row and discovery row (§1); counts **and** ordinary complete-operation timings | each "Now" within ±15 % or the model corrected and the human told |
 | **P1** | **Step 1 done 2026-10-17:** the reducer no longer treats `requires_paths` (movement topology) as a full recompute; support changes still force one through the observer optical revision. Sleet cast FR 5,931 → 90 (264 s → 7.8 s counts mode), drop 5,901 → 60 (31.7 s → 1.5 s); hazard-only residue 5,842 as stated. **Step 2 running:** `SpatialChannel` / `WorldEdgeChannel` everywhere, named `ObserverRevisions`, `SpatialCondition.spatial_channels()` bumped by GridMap at membership commits. **Moved to P2:** `invalidate_spatial_caches` private + AST ban; the remaining outside writers (terrain modifiers, residues, item blocking, walls, entity size/flight) are re-routed there anyway. Channel enum; writer-derived channels; tile mechanics without `requires_paths`; area conditions bump only their channels; `invalidate_spatial_caches` private; AST architecture test banning `_`-prefixed access on values bound from `get_map()` (31 current sites migrate) | Sleet cast FR 6,060 → ~60 (+ C·V hazard-only, stated); ordinary timings for Sleet cast/drop, Ice Storm, Fireball |
 | **P2** | Single reducer entry (remove AC:972, 1510; D8); duration as a state fact; §5.5 facts with EFFECT dispatch and 4 reader migrations; light per cause | predicted versions/passes + ordinary timings |
-| **PD1a** | **One footprint (§14.3a):** `objective_footprint(shape, aim, caster_pos, source_pos)` in `dnd/core/aoe.py` (11 callers); AoEShape a frozen value without result fields; one propagation primitive; `AreaPropagation` value for cylinders; spell protection untouched at its 5 sites (Globe out of scope); zones take their area from `AreaCondition.area` (76 + 13 declarations); the listed geometry paths, `filter_propagation_positions`, its cache and the dead caches deleted (U1, U2, U4) | (a) per AoE spell × aim (no Globe), discovery hit set == execution affected set, U1/U2 written failing-first; mechanism/corner outcome changes listed; footprints 7,938 measured → ≤580 computed / ≈230 distinct |
-| **P3** | §5.2–§5.4 mechanism; handler dispatch enum + phase B + non-handler splits; root/per-application table; isolation; single damage roll (sites in §9.2); shared staged loop; objective positions (§5.7); SEN:1848 illumination-gap gate reworked (deferral guarantees a gap > 1). Includes **PB2** group-related bugs: Counterspell/Greater Invisibility per target, twinned validation, pool refunds, fence, parent cancellation, sort-key `getattr`. | every §6 "After P3" row; changed outcomes listed for sign-off |
+| **PD1a** | **Done 2026-10-17; footprint gate carried to PD1b** (6,364 computed: per-cell aims are still enumerated until PD1b's aim-per-creature rows). Solver: the native ray everywhere. Wire: cylinders report `"ignore_barriers"` (client must accept). **One footprint (§14.3a):** `objective_footprint(shape, aim, caster_pos, source_pos)` in `dnd/core/aoe.py` (11 callers); AoEShape a frozen value without result fields; one propagation primitive; `AreaPropagation` value for cylinders; spell protection untouched at its 5 sites (Globe out of scope); zones take their area from `AreaCondition.area` (76 + 13 declarations); the listed geometry paths, `filter_propagation_positions`, its cache and the dead caches deleted (U1, U2, U4) | (a) per AoE spell × aim (no Globe), discovery hit set == execution affected set, U1/U2 written failing-first; mechanism/corner outcome changes listed; footprints 7,938 measured → ≤580 computed / ≈230 distinct |
+| **P3** | §5.2–§5.4 mechanism; handler dispatch enum + phase B + non-handler splits; root/per-application table; isolation (pools per cast in P3; `self.target_entity_uuid` moves to PD1b's selection, see §5.8); single damage roll (sites in §9.2); shared staged loop; objective positions (§5.7); SEN:1848 illumination-gap gate reworked (deferral guarantees a gap > 1). Includes **PB2** group-related bugs: Counterspell/Greater Invisibility per target, twinned validation, pool refunds, fence, parent cancellation, sort-key `getattr`. | every §6 "After P3" row; changed outcomes listed for sign-off |
 | **PB3** | Rules deviations confirmed unintended (D6) | failing-first case each |
 | **Re-measure** | — | top residual terms with counts and timings |
 | **PD1b** | **Rows, legality, selection, switched together (§14.2–§14.5):** the actor scan; `_admission_error` + `rule_error(scan, selection)` replacing 232 `_validate` + 4 discovery-only overrides (Q-W5); `Entity.perform` as the only `apply` entry; spells listed once with castable levels; aim points with hit sets; relocation destinations from the scan; region descriptors; env use via rings; objects from perception; Cleansing Touch and connectors bounded; one `ActionSelection` (§14.4b) through every consumer; the per-cell, variant, name/index paths deleted; bug G fixed by construction; profile hooks on the scan (Q-W6) | (b) discovery and Command agree on every GC row × target × level; (c) player, AI and server lanes green; remaining `_validate` overrides = the named handler-admission list; eventful validations 148,567 measured → 0; emitted targets 209,734 → ≤580 aims + ≈435 creature + ≈350 zone + R; LOS enumeration 378.7 s → 0; ordinary Choices timing reported (§14.6) |
@@ -927,6 +988,50 @@ These sites move together:
 Test fallout is 94 test files calling `get_available_actions` and 35 using `execute_by_index`, adapted or deleted under the same rule as P0a. The client protocol change is in PC.
 
 **Region descriptors** are a projection of the existing `position_discovery: PositionDiscoveryContract` (BA:151-199, 1009), `position_selection` (`action_types.py:64`), `get_range` and `aoe_shape`. There is no per-spell descriptor class.
+
+### 14.11 PD1b execution design (2026-10-17)
+
+**Core API.** One coordinator lands this first, as a single commit with the base implementations and no overrides converted yet.
+
+- **Leaf `dnd/types/discovery.py`** (frozen dataclasses, no Entity/Senses import):
+  - `CreatureFacts`: uuid, position, creature type, life state, condition names, `blocks_external_contact`, faction, size.
+  - `ScanRecord`: facts, `visual`, `Relationship`, where `Relationship` is a StrEnum of SELF / ALLY / ENEMY.
+  - `ObjectRecord`.
+  - `ActorScan`: actor uuid and position, the visible mask, `creatures: Mapping[UUID, ScanRecord]`, `objects`, reachable costs, reach cells, threat domains, slot capacity, restricted and free-cast grants, source-item charges, `active_encounter_uuid`.
+  - A pure `relationship(src_uuid, src_faction, tgt_uuid, tgt_faction)`.
+- **`dnd/core/action_types.py`:** frozen `ActionSelection` with these fields:
+  - `template_uuid`;
+  - `cast_at_level`;
+  - `cost_source: CostSource` (SLOT / FREE_CAST(id) / RESTRICTED(id));
+  - `source_item_uuid`;
+  - `facets`;
+  - `target_uuids`;
+  - `positions`;
+  - `controller_uuid`.
+- **`BaseAction`:**
+  - `_admission_error(scan, selection)` holds the base checks and is not overridable; an AST test bans overriding it.
+  - `rule_error(scan, selection) -> str | None` is the one additive per-action rule (base None).
+  - `facet_domain(scan, level, target_record)` and `with_selection(selection) -> BaseAction`.
+  - `apply(scan, selection, parent_event=None)`; base `_validate` calls `_admission_error`.
+- **`Entity`:** `action_scan(...)`, `creature_facts()`, and `perform(action, selection, parent_event=None)` as the only `apply` entry, with an AST test.
+
+**Fan-out.** Five sub-agents run on disjoint file groups. Each converts the files' `_validate`, discovery-only and hook overrides into `rule_error`, plus profile hooks without an actor parameter, variants to `facet_domain`, and `apply()` callers to `Entity.perform`. Each runs its files' suites.
+
+| Group | Files | Override sites |
+| --- | --- | --- |
+| 1 | evocation | 90 |
+| 2 | transmutation, illusion, divination | 65 |
+| 3 | enchantment, necromancy | 68 |
+| 4 | conjuration, abjuration, summoning | 73 |
+| 5 | actions, classes, items, monsters, walls, spell_payloads, traits | ~100 |
+
+**Then the coordinator:**
+- the discovery rows rewrite (`entity.py` collectors: one row per action with levels, aim points with hit sets, region descriptors, rings, relocation destinations, perception objects);
+- the deletions in §14.4;
+- the consumers: session, worker, AI, capture, SDK;
+- test migration (94 + 35 files);
+- gates (b) and (c).
+
 
 ### 14.5 Consumers
 

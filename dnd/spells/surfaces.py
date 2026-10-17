@@ -1,5 +1,6 @@
 """Small authored acid/toxin surfaces composed from native area memberships."""
 from typing import Tuple, TypedDict
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.core.effect_types import EffectOrigin
 from uuid import UUID
 
@@ -69,8 +70,7 @@ class SpellAcidSurface(MembershipAreaCondition):
     description: str = "Two-turn acid patch: nonstacking -2 Armor Class while inside."
     layer: SpatialEffectLayer = SpatialEffectLayer.GROUND_SURFACE
     occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 7
+    area: AoEShape = Sphere(radius_feet=7)
     has_visible_presence: bool = True
     duration: Duration = Field(default_factory=lambda:Duration(duration=2,duration_type=DurationType.ROUNDS))
     tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
@@ -122,8 +122,7 @@ class SimpleToxinSurface(AreaCondition):
     description: str = "Two-turn toxin patch: CON admission, then one delayed 1d4 poison tick."
     layer: SpatialEffectLayer = SpatialEffectLayer.GROUND_SURFACE
     occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 7
+    area: AoEShape = Sphere(radius_feet=7)
     has_visible_presence: bool = True
     spell_dc: int
     duration: Duration = Field(default_factory=lambda:Duration(duration=2,duration_type=DurationType.ROUNDS))
@@ -164,7 +163,7 @@ class SimpleToxinSurface(AreaCondition):
 class SurfaceParameters(TypedDict):
     source_entity_uuid: UUID
     position: Tuple[int,int]
-    zone_radius_feet: int
+    area: AoEShape
     duration: Duration
 
 
@@ -173,7 +172,7 @@ def place_spell_surface(element: str,*,source_uuid: UUID,position: Tuple[int,int
     """Choose one authored patch; elemental transitions stay with native surfaces."""
     if element=="thunder":
         return None
-    kwargs: SurfaceParameters={"source_entity_uuid":source_uuid,"position":position,"zone_radius_feet":7,
+    kwargs: SurfaceParameters={"source_entity_uuid":source_uuid,"position":position,"area":Sphere(radius_feet=7),
         "duration":Duration(duration=2,duration_type=DurationType.ROUNDS)}
     if element=="acid":
         surface=SpellAcidSurface(**kwargs,effect_origin=origin,content_ref=get_content_declaration(SpellAcidSurface).ref)

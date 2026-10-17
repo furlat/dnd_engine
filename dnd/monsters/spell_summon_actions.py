@@ -25,7 +25,7 @@ from dnd.conditions import (
     Restrained,
     Stunned,
 )
-from dnd.core.aoe import Cone, Sphere
+from dnd.core.aoe import AoEShape, Cone, Sphere, objective_footprint
 from dnd.core.attack_types import DamageDieValue
 from dnd.core.base_actions import (
     ActionCategory,
@@ -127,27 +127,27 @@ from dnd.types.spatial_effects import (
 
 
 class ElementalSphere(Sphere):
-    def _get_max_radius_tiles(self):
+    def max_radius_tiles(self):
         return (self.radius_feet + 4) // 5
 
-    def _get_positions_in_shape(self, origin):
+    def positions_from(self, origin, aim):
         return {
             point
-            for point in circle_positions(origin, self._get_max_radius_tiles())
+            for point in circle_positions(origin, self.max_radius_tiles())
             if 25 * ((point[0] - origin[0]) ** 2 + (point[1] - origin[1]) ** 2)
             <= self.radius_feet**2
         }
 
 
 class ElementalCone(Cone):
-    def _get_max_radius_tiles(self):
+    def max_radius_tiles(self):
         return (self.length_feet + 4) // 5
 
-    def _get_positions_in_shape(self, origin):
+    def positions_from(self, origin, aim):
         return {
             point
             for point in cone_positions(
-                origin, self.target, self._get_max_radius_tiles(), self.angle_degrees
+                origin, aim, self.max_radius_tiles(), self.angle_degrees
             )
             if 25 * ((point[0] - origin[0]) ** 2 + (point[1] - origin[1]) ** 2)
             <= self.length_feet**2
@@ -472,8 +472,7 @@ class ElementalMud(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = (
         SpatialEffectOccupancyPolicy.OVERLAPPING
     )
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 3
+    area: AoEShape = Sphere(radius_feet=3)
     adds_difficult_terrain: bool = True
     duration: Duration = Field(
         default_factory=lambda: Duration(duration=2, duration_type=DurationType.ROUNDS)
@@ -494,13 +493,9 @@ def technique_cells(actor: Entity, origin: tuple[int, int], cells):
 def technique_area(action: BaseAction):
     targets, cells = action._resolve_area_targets()
     actor = Entity.get(action.source_entity_uuid)
-    if actor is None:
+    if actor is None or action.aoe_shape is None or action.end_position is None:
         return [], ()
-    origin = (
-        actor.position if isinstance(action.aoe_shape, Cone) else action.end_position
-    )
-    if origin is None:
-        return [], ()
+    origin = action.aoe_shape.get_origin(action.end_position, actor.position)
     allowed = technique_cells(actor, origin, cells or ())
     return [
         identity
@@ -540,14 +535,10 @@ class NativeSaveBurst(BaseAction):
         if self.aoe_shape is None:
             self.aoe_shape = (
                 ElementalCone(
-                    source_entity_uuid=self.source_entity_uuid,
-                    target=self.end_position or (0, 0),
                     length_feet=self.cone_feet,
                 )
                 if self.cone_feet
                 else ElementalSphere(
-                    source_entity_uuid=self.source_entity_uuid,
-                    target=self.end_position or (0, 0),
                     radius_feet=self.radius_feet,
                 )
             )
@@ -708,11 +699,10 @@ def patch(
     turns: int,
     event: Event,
 ):
-    shape = ElementalSphere(source_entity_uuid=actor, target=center, radius_feet=radius)
-    shape.compute_objective(center)
+    shape = ElementalSphere(radius_feet=radius)
     source = Entity.get(actor)
     cells = (
-        technique_cells(source, center, shape.affected_positions)
+        technique_cells(source, center, objective_footprint(shape, center, center))
         if source is not None
         else set()
     )
@@ -1025,8 +1015,6 @@ class ElementalContactBurst(BaseAction):
     def model_post_init(self, context):
         super().model_post_init(context)
         self.aoe_shape = ElementalSphere(
-            source_entity_uuid=self.source_entity_uuid,
-            target=self.end_position or (0, 0),
             radius_feet=self.radius_feet,
         )
 
@@ -1592,7 +1580,7 @@ class RagingVortexZone(SilenceZone):
             name="Vortex start contact",
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[
-                Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EFFECT)
+                Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EXECUTION)
             ],
             event_processor=lambda event, source: None,
         )
@@ -1700,8 +1688,7 @@ class SweetplumGalesZone(MembershipAreaCondition):
         "Independent three-turn enemy restraint field with STR15 entry/start saves."
     )
     name: str = "Sweetplum Gales"
-    zone_radius_feet: int = 10
-    zone_shape: str = "sphere"
+    area: AoEShape = Sphere(radius_feet=10)
     layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
     occupancy_policy: SpatialEffectOccupancyPolicy = (
         SpatialEffectOccupancyPolicy.OVERLAPPING
@@ -1746,7 +1733,7 @@ class SweetplumGalesZone(MembershipAreaCondition):
             name="Gales recovery",
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[
-                Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EFFECT)
+                Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EXECUTION)
             ],
             event_processor=lambda event, source: None,
         )

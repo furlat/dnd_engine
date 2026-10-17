@@ -1583,6 +1583,7 @@ type SpatialChangeType = Literal[
     'entity_entered',
     'entity_left',
     'tile_changed',
+    'tiles_changed',
     'tile_created',
     'tile_removed',
     'object_placed',
@@ -2723,7 +2724,7 @@ class AoEAimingGeometry(TypedDict):
     )
     reference_target: list[ReferenceTargetItem]
     origin_mode: Literal['aim', 'fixed']
-    propagation: Literal['line_of_effect', 'connected']
+    propagation: Literal['line_of_effect', 'connected', 'ignore_barriers']
 
 
 class AttackFact(TypedDict):
@@ -3202,7 +3203,9 @@ class PerceivedSpatialEffect(TypedDict):
         | None
     ]
     construction_sections: NotRequired[list[WallAssemblyPresentationGeometry]]
-    area_propagation: NotRequired[Literal['line_of_effect', 'connected'] | None]
+    area_propagation: NotRequired[
+        Literal['line_of_effect', 'connected', 'ignore_barriers'] | None
+    ]
     deposit_source: NotRequired[MaterialDepositSource | None]
     visible_volume_positions: NotRequired[list[list[VisibleVolumePosition]]]
     upper_volume_surfaces: NotRequired[list[VolumeSurfaceSight]]
@@ -3272,7 +3275,9 @@ class SpellFact(TypedDict):
     ]
     resolved_area_positions: NotRequired[list[list[ResolvedAreaPosition]] | None]
     suppressions: NotRequired[list[SpellSuppression]]
-    area_propagation: NotRequired[Literal['line_of_effect', 'connected']]
+    area_propagation: NotRequired[
+        Literal['line_of_effect', 'connected', 'ignore_barriers']
+    ]
     target_kind: NotRequired[Literal['creature', 'object']]
     target_position: NotRequired[list[TargetPositionItem] | None]
     target_base_height_steps: NotRequired[int | None]

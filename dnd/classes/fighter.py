@@ -14,6 +14,7 @@ Level 18: Champion - Survivor (DEFERRED)
 """
 
 from typing import Any, ClassVar, Dict
+from dnd.core.geometry import grid_distance_feet
 from dnd.core.action_types import RestrictedActionKind
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.class_features import IndomitableReroll
@@ -457,7 +458,7 @@ def protection_processor(
     target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
     if not target:
         return None
-    distance = protector.senses.get_feet_distance(target.senses.position)
+    distance = grid_distance_feet(protector.position, target.position)
     if distance > 5:
         return None
 

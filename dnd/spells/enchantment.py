@@ -6,7 +6,7 @@ Contains: HoldPerson, HoldPersonEffect, CharmPerson, TestBless, Sleep,
 from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll, resolve_saved_spell_damage
 from dnd.spells.spell_utils import validate_spell_recipients, spell_condition_profile
 
-from typing import Any, Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, FrozenSet, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 from dnd.core.base_block import BaseBlock, PreparedConditionRemovals
 from dnd.blocks.skills import all_skills, SKILL_TO_ABILITY
@@ -53,7 +53,8 @@ from dnd.core.modifiers import (
     AdvantageStatus,
 )
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
-from dnd.core.aoe import AoEShape, Sphere
+from dnd.core.aoe import AoEShape, Sphere, objective_footprint
+from dnd.core.gridmap import get_map
 
 from dnd.entity import Entity
 from dnd.actions import Move, SpellAction, SpellEvent
@@ -989,8 +990,6 @@ class Sleep(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Sphere(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 radius_feet=20
             )
 
@@ -1023,19 +1022,56 @@ class Sleep(SpellAction):
         """Select targets by current HP and cache the selection."""
         if self._selected_hp_pool_targets is not None:
             return list(self._selected_hp_pool_targets)
+        candidates = self._hp_pool_candidates()
+        self._ensure_hp_pool()
+        targets: List[UUID] = []
+        remaining = self.hp_pool_remaining if self.hp_pool_remaining > 0 else self.hp_pool_rolled
+        for hp, uid in candidates:
+            if hp <= remaining:
+                targets.append(uid)
+                remaining -= hp
 
-        if not (self.aoe_shape and self.end_position):
+        self.hp_pool_remaining = remaining
+        self._selected_hp_pool_targets = targets
+        return list(targets)
+
+    def _ensure_hp_pool(self) -> None:
+        if self.hp_pool_rolled == 0:
+            dice_count, dice_value = self.get_hp_pool_dice()
+            total = sum(roll_die_face(dice_value) for _ in range(dice_count))
+            self.hp_pool_rolled = total
+            self.hp_pool_remaining = total
+
+    def _apply_target_applications(self, execution_event: SpellEvent, effect_event: SpellEvent,
+                                   target_uuids: List[UUID]) -> SpellEvent:
+        """Spend the pool only on admitted applications; a vetoed creature costs nothing (Q3)."""
+        del target_uuids
+        self._ensure_hp_pool()
+        remaining = self.hp_pool_rolled
+        applied: List[UUID] = []
+        for hp, uid in self._hp_pool_candidates():
+            if hp > remaining:
+                continue
+            result = self._apply_target_application(execution_event, uid, parent_event=effect_event,
+                application_index=len(applied))
+            if result is None:
+                continue
+            remaining -= hp
+            applied.append(uid)
+        self.hp_pool_remaining = remaining
+        self._selected_hp_pool_targets = applied
+        return effect_event.with_updates(total_targets=len(applied), total_damage=0, aoe_position=self.end_position,
+            status_message=f"{self.name} affected {len(applied)} targets")
+
+    def _hp_pool_candidates(self) -> List[Tuple[int, UUID]]:
+        """Eligible creatures in the area, lowest current HP first."""
+        area = self._sleep_area()
+        if area is None:
             return []
-
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return []
-
-        self.aoe_shape.target = self.end_position
-        self.aoe_shape.compute_objective(caster.position)
+        grid = get_map()
 
         candidates: List[Tuple[int, UUID]] = []
-        for uid in self.aoe_shape.affected_entity_uuids:
+        for uid in {identity for cell in area for identity in grid.get_entities_at(cell)}:
             if not self.include_self and uid == self.source_entity_uuid:
                 continue
 
@@ -1063,30 +1099,20 @@ class Sleep(SpellAction):
             candidates.append((entity.get_hp(), uid))
 
         candidates.sort(key=lambda x: (x[0], str(x[1])))
+        return candidates
 
-        if self.hp_pool_rolled == 0:
-            dice_count, dice_value = self.get_hp_pool_dice()
-            roll_results = [roll_die_face(dice_value) for _ in range(dice_count)]
-            total = sum(roll_results)
-            self.hp_pool_rolled = total
-            self.hp_pool_remaining = total
-
-        targets: List[UUID] = []
-        remaining = self.hp_pool_remaining if self.hp_pool_remaining > 0 else self.hp_pool_rolled
-        for hp, uid in candidates:
-            if hp <= remaining:
-                targets.append(uid)
-                remaining -= hp
-
-        self.hp_pool_remaining = remaining
-        self._selected_hp_pool_targets = targets
-        return list(targets)
+    def _sleep_area(self) -> Optional[FrozenSet[Tuple[int, int]]]:
+        """Return the objective area the HP pool chooses its targets from."""
+        caster = Entity.get(self.source_entity_uuid)
+        if self.aoe_shape is None or self.end_position is None or caster is None:
+            return None
+        return objective_footprint(self.aoe_shape, self.end_position, caster.position)
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         """Record the same area used by the HP-pool selection for replay."""
         targets = self.get_all_targets()
-        positions = tuple(sorted(self.aoe_shape.affected_positions)) if self.aoe_shape is not None else None
-        return targets, positions
+        area = self._sleep_area()
+        return targets, tuple(sorted(area)) if area is not None else None
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate the area origin has line of sight and range."""
@@ -2490,7 +2516,7 @@ class CalmEmotions(SpellAction):
     def model_post_init(self,context: Any) -> None:
         super().model_post_init(context)
         if self.aoe_shape is None:
-            self.aoe_shape=Sphere(source_entity_uuid=self.source_entity_uuid,target=self.end_position or (0,0),radius_feet=20)
+            self.aoe_shape=Sphere(radius_feet=20)
 
     def _resolve_execution_targets(self):
         return self._resolve_area_targets() if self.effective_target_type is TargetType.POSITION_AOE else super()._resolve_execution_targets()

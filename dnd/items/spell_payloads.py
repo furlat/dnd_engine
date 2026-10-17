@@ -4,6 +4,7 @@ This module sits below spell roots so temporary-item actions never import a
 spell school. Payload power and source are retained data, independent of holder.
 """
 
+from collections.abc import Mapping
 from typing import Literal
 from uuid import UUID
 
@@ -18,7 +19,7 @@ from dnd.actions import (
 )
 from dnd.blocks.base_item import BaseItem, PreparedItemRetirement, UsableItem
 from dnd.core.action_types import ActionVariantFacet
-from dnd.core.aoe import Sphere
+from dnd.core.aoe import Sphere, objective_footprint
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock, PreparedConditionApplication
 from dnd.core.base_conditions import BaseCondition, Duration, SpellProtectionRegistry
@@ -26,11 +27,13 @@ from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome
 from dnd.core.effect_types import EffectOrigin
+from dnd.types.event_facts import GroupEntryKind, HandlerGroupDispatch
 from dnd.core.events import (
     Damage,
     Event,
     EventHandler,
     EventPhase,
+    EventQueue,
     EventType,
     Range,
     RangeType,
@@ -44,6 +47,7 @@ from dnd.core.values import ModifiableValue
 from dnd.core.spell_damage import roll_spell_damage
 from dnd.core.effect_applications import admit_effect_application
 from dnd.entity import Entity
+from dnd.spatial.area_reach import ReachStage, resolve_staged_area
 from dnd.spatial.environmental_conditions import IceSurface
 from dnd.spatial.ignition import apply_elemental_surface_contacts
 from dnd.spells.content_metadata import srd_action_identity
@@ -69,30 +73,24 @@ def payload_blast(
     )
     level = 6 if kind == "freezing" else 7
     emitted = origin.model_copy(update={"source_position": center, "area_application":True,"harmful":True}) if origin else None
-    visited: set[UUID] = set()
-    displayed: set[tuple[int, int]] = set()
-    # A destroyed ordinary barrier may expose another connected region. Reuse
-    # the map's propagation revision and visit each recipient once per blast.
-    while True:
-        revision = get_map().propagation_revision
-        shape = Sphere(
-            source_entity_uuid=source_uuid,
-            target=center,
-            radius_feet=20,
-            propagation="line_of_effect" if kind == "freezing" else "connected",
-        )
-        shape.compute_objective(center)
-        cells = set(
-            shape.affected_positions
-        ) - SpellProtectionRegistry.get_excluded_positions(center, level)
+    shape = Sphere(radius_feet=20, propagation="line_of_effect" if kind == "freezing" else "connected")
+    excluded = SpellProtectionRegistry.get_excluded_positions(center, level)
+
+    def footprint() -> set[tuple[int, int]]:
+        cells = set(objective_footprint(shape, center, center)) - excluded
         if kind == "freezing":
-            cells = {
-                cell
-                for cell in cells
-                if get_map().can_reach_between(
-                    center, cell, PhysicalAccess.PROJECTILE, source_uuid
-                )
-            }
+            cells = {cell for cell in cells
+                     if get_map().can_reach_between(center, cell, PhysicalAccess.PROJECTILE, source_uuid)}
+        return cells
+
+    def recipients(reached: frozenset[tuple[int, int]], contacts: Mapping[UUID, tuple[int, int]]) -> list[UUID]:
+        identities = {identity for cell in reached for identity in get_map().get_entities_at(cell)}
+        if kind == "delayed_fire":
+            identities.update(identity for identity in contacts
+                if isinstance(item := BaseBlock.get(identity), BaseItem) and item.is_breakable())
+        return sorted(identities, key=str)
+
+    def resolve(stage: ReachStage) -> bool:
         effect = SpellEvent(
             name="Freezing Sphere explosion"
             if kind == "freezing"
@@ -106,33 +104,13 @@ def payload_blast(
             cast_at_level=level,
             event_type=EventType.BASE_ACTION,
             target_type=TargetType.POSITION_AOE,
-            resolved_area_positions=tuple(sorted(cells)),
+            resolved_area_positions=tuple(sorted(stage.reached)),
             parent_event=parent.uuid,
             phase=EventPhase.EFFECT,
         )
         if effect.canceled:
-            return
-        cells = set(effect.resolved_area_positions or ())
-        identities = {
-            identity for cell in cells for identity in get_map().get_entities_at(cell)
-        }
-        contacts = (
-            get_map().area_object_contacts(
-                cells,
-                geometric_positions=shape.geometric_positions(center),
-                origin=center,
-            )
-            if kind == "delayed_fire"
-            else {}
-        )
-        identities.update(
-            identity
-            for identity in contacts
-            if isinstance(item := BaseBlock.get(identity), BaseItem)
-            and item.is_breakable()
-        )
-        for identity in sorted(identities - visited, key=str):
-            visited.add(identity)
+            return False
+        for identity in stage.recipients:
             target = BaseBlock.get(identity)
             if target is None:
                 continue
@@ -188,17 +166,19 @@ def payload_blast(
                     damage_rolls=[roll],
                     parent_event=effect,
                 )
-        newly_reached = cells - displayed
-        displayed.update(cells)
-        apply_elemental_surface_contacts(effect, newly_reached, damage_type)
+        apply_elemental_surface_contacts(effect, stage.newly_reached, damage_type)
         effect.phase_to(EventPhase.COMPLETION)
-        if kind == "freezing" or get_map().propagation_revision == revision:
-            break
+        return True
+
+    # Every creature in the blast takes it at once, from one damage roll.
+    with EventQueue.group(GroupEntryKind.AREA_APPLICATION, root=parent, shares_damage_rolls=True):
+        displayed = resolve_staged_area(footprint, recipients, resolve,
+            geometric_positions=shape.geometric_positions(center, center), origin=center)
     if kind == "freezing" and displayed:
         ice = IceSurface(
             source_entity_uuid=source_uuid,
             position=center,
-            affected_positions=displayed,
+            affected_positions=set(displayed),
             slip_save_dc=dc,
             duration=Duration(duration=10, duration_type=DurationType.ROUNDS),
             effect_origin=emitted,
@@ -274,7 +254,9 @@ class SpellPayloadItem(UsableItem):
                 and self.detonation_requested
                 and not self.defer_detonation
             ):
-                self.explode(prepared.parent_event or self._destruction_parent)
+                # A bead broken inside a simultaneous area detonates after it (plan §5.6).
+                parent = prepared.parent_event or self._destruction_parent
+                EventQueue.after_group(lambda: self.explode(parent))
 
     def explode(self, parent: Event | None):
         if self.discharged:
@@ -614,6 +596,7 @@ class SpellPayloadLifetime(BaseCondition):
             EventHandler(
                 name="Payload caster ending",
                 source_entity_uuid=caster.uuid,
+                group_dispatch=HandlerGroupDispatch.AFTER_GROUP,
                 runs_while_owner_inactive=True,
                 trigger_conditions=[
                     Trigger(

@@ -4,10 +4,10 @@ import pytest
 from dataclasses import replace
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.residues import ASHEN_RESIDUE, POISON_RESIDUE, deposit_residue
-from uuid import uuid4
 
 from dnd.actions import SpellEvent
-from dnd.core.aoe import Sphere
+from dnd.core.aoe import Sphere, objective_footprint
+from dnd.core.base_actions import AvailableTarget
 from dnd.content.items.environment_item_builders import build_directional_wall
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue
@@ -49,17 +49,16 @@ def test_fireball_spreads_around_open_doorway_within_original_radius(opening, ex
     assert ((7, 10) in reached) == opening
     assert {position for position, tile in get_map().get_all_tiles().items()
             if "Ashen" in tile.active_conditions} == reached
-    assert spell.aoe_shape is not None
-    preview = spell.aoe_shape.compute_subjective(caster.position, caster.senses)
-    assert preview.affected_positions == reached.intersection(caster.senses.visible)
+    preview = caster.preview_aoe_target(spell, AvailableTarget(index=0, position=(5, 8)))
+    assert set(preview.affected_positions or ()) == {position for position in reached
+        if caster.senses.visible.get(position)}
 
 
 def test_connected_spread_contacts_solid_cell_but_does_not_cross_it():
     reset_spell_regression_arena(9, 1)
     get_map().set_tile(4, 0, blocks_propagation=True)
-    shape = Sphere(source_entity_uuid=uuid4(), target=(2, 0), radius_feet=20, propagation="connected")
-    shape.compute_objective((2, 0))
-    assert shape.affected_positions == {(x, 0) for x in range(5)}
+    shape = Sphere(radius_feet=20, propagation="connected")
+    assert objective_footprint(shape, (2, 0), (2, 0)) == {(x, 0) for x in range(5)}
 
 
 @pytest.mark.parametrize("spell_kind", ["fireball", "ice_knife"])

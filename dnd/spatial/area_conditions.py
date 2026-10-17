@@ -1,6 +1,6 @@
 """Independent spatial conditions and reusable area mechanics."""
 
-from typing import Callable, ClassVar, Dict, List, Optional, Set, Tuple
+from typing import Callable, ClassVar, Dict, FrozenSet, List, Optional, Set, Tuple
 from uuid import UUID
 from dataclasses import dataclass, field
 
@@ -12,6 +12,8 @@ from dnd.core.condition_types import DurationType, HazardFilter
 from dnd.core.item_types import ItemIntegrity
 from dnd.core.content.identities import ContentRef
 from dnd.core.effect_types import EffectOriginKind
+from dnd.types.event_facts import GroupEntryKind
+from dnd.types.event_facts import HandlerGroupDispatch
 from dnd.core.events import (
     EffectApplicationEvent,
     Event,
@@ -25,7 +27,7 @@ from dnd.core.events import (
     TurnEvent,
 )
 from dnd.core.gridmap import CrossingChannel, get_map
-from dnd.core.aoe import AoEShape, Cone, Cube, Cylinder, Line, Sphere, snapshot_aoe_presentation_geometry
+from dnd.core.aoe import AoEShape, Sphere, objective_footprint
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
@@ -34,7 +36,6 @@ from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.traps import TrapState
 from dnd.types.world import OccupancyLayer, SpatialChannel, WorldEdgeChannel, edge_revision_channels
 from dnd.types.spatial_effects import (
-    AreaPropagation,
     SpatialEffectAnchorKind,
     SpatialEffectBlockingPolicy,
     SpatialEffectChangeOperation,
@@ -301,8 +302,7 @@ class SpatialCondition(BaseCondition):
         )
         self._commit_activation_footprint(change_effect)
         event_handler_uuids: list[UUID] = []
-        anchor_handler = self._create_anchor_handler()
-        if anchor_handler is not None:
+        for anchor_handler in self._create_anchor_handlers():
             EventQueue.add_event_handler(anchor_handler)
             event_handler_uuids.append(anchor_handler.uuid)
         return (
@@ -488,13 +488,15 @@ class SpatialCondition(BaseCondition):
             )
         self._displaced_footprints.clear()
 
-    def _create_anchor_handler(self) -> Optional[EventHandler]:
-        """Create one direct movement binding for an attached condition."""
+    def _create_anchor_handlers(self) -> List[EventHandler]:
+        """Bind an attached condition to its anchor: losing it ends the condition
+        at once; following its moves waits for the simultaneous group (phase B).
+        """
         if self.anchor_kind not in {
             SpatialEffectAnchorKind.ENTITY,
             SpatialEffectAnchorKind.WORLD_OBJECT,
         }:
-            return None
+            return []
         assert self.anchor_uuid is not None
         condition_uuid = self.uuid
         anchor_uuid = self.anchor_uuid
@@ -512,53 +514,49 @@ class SpatialCondition(BaseCondition):
             )
         )
 
-        def move_with_anchor(
-            event: Event,
-            _source_entity_uuid: UUID,
-        ) -> Optional[Event]:
+        def anchor_change(event: Event) -> Tuple[Optional[SpatialCondition], bool, Optional[Tuple[int, int]]]:
+            """Return the condition, whether its anchor is lost, and where it moved."""
             condition = BaseCondition.get(condition_uuid)
-            if not isinstance(condition, SpatialCondition):
-                return None
-            if not isinstance(event, SpatialChangeEvent):
-                return None
+            if not isinstance(condition, SpatialCondition) or not isinstance(event, SpatialChangeEvent):
+                return None, False, None
             if anchor_kind is SpatialEffectAnchorKind.ENTITY:
                 if event.entity_uuid != anchor_uuid:
-                    return None
+                    return None, False, None
                 if event.event_type is EventType.SPATIAL_ENTITY_ENTERED:
-                    condition.relocate_anchor(event.position, parent_event=event)
-                elif event.old_position is None:
-                    anchor = Entity.get(anchor_uuid)
-                    if anchor is None or not anchor.is_spatially_suspended:
-                        condition.deactivate(parent_event=event)
-                return None
+                    return condition, False, event.position
+                anchor = Entity.get(anchor_uuid)
+                lost = event.old_position is None and (anchor is None or not anchor.is_spatially_suspended)
+                return condition, lost, None
             if event.object_uuid != anchor_uuid:
-                return None
-            anchor = BaseBlock.get(anchor_uuid)
+                return None, False, None
             if (event.event_type is EventType.SPATIAL_OBJECT_REMOVED
                     or event.object_state is not None
                     and event.object_state.integrity is ItemIntegrity.DESTROYED
                     and condition.requires_intact_item):
+                return condition, True, None
+            return condition, False, event.placement.position if event.placement is not None else None
+
+        def end_with_anchor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            condition, lost, _ = anchor_change(event)
+            if condition is not None and lost:
                 condition.deactivate(parent_event=event)
-            elif event.placement is not None:
-                condition.relocate_anchor(
-                    event.placement.position,
-                    parent_event=event,
-                )
             return None
 
-        return EventHandler(
-            name=f"{self.name} Anchor Movement",
-            runs_while_owner_inactive=True,
-            source_entity_uuid=self.source_entity_uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=event_type,
-                    event_phase=EventPhase.EFFECT,
-                )
-                for event_type in event_types
-            ],
-            event_processor=move_with_anchor,
-        )
+        def move_with_anchor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            condition, lost, position = anchor_change(event)
+            if condition is not None and not lost and position is not None:
+                condition.relocate_anchor(position, parent_event=event)
+            return None
+
+        triggers = [Trigger(event_type=event_type, event_phase=EventPhase.EFFECT) for event_type in event_types]
+        return [
+            EventHandler(name=f"{self.name} Anchor Loss", runs_while_owner_inactive=True,
+                source_entity_uuid=self.source_entity_uuid, trigger_conditions=list(triggers),
+                event_processor=end_with_anchor),
+            EventHandler(name=f"{self.name} Anchor Movement", group_dispatch=HandlerGroupDispatch.AFTER_GROUP,
+                runs_while_owner_inactive=True, source_entity_uuid=self.source_entity_uuid,
+                trigger_conditions=list(triggers), event_processor=move_with_anchor),
+        ]
 
     def relocate_anchor(
         self,
@@ -615,19 +613,22 @@ class SpatialCondition(BaseCondition):
             self.discard_from_runtime_owner()
             return parent_event
         self._activation_positions = set(admitted)
-        try:
-            effect = self.apply(parent_event=parent_event)
-        except BaseException:
-            self.discard_from_runtime_owner()
-            raise
-        if effect is None or effect.canceled or not self.applied:
-            self.discard_from_runtime_owner()
-            return effect
-        if not isinstance(effect, SpatialEffectChangeEvent):
-            raise RuntimeError(
-                "Spatial condition application did not return its change effect",
-            )
-        self._finalize_displacements(parent_event=effect)
+        # The install's terrain, light and displacements are one simultaneous
+        # group; its own change completes after observers settled (plan §5.2-5.4).
+        with EventQueue.group(GroupEntryKind.ZONE_INSTALL, root=parent_event, shares_damage_rolls=True):
+            try:
+                effect = self.apply(parent_event=parent_event)
+            except BaseException:
+                self.discard_from_runtime_owner()
+                raise
+            if effect is None or effect.canceled or not self.applied:
+                self.discard_from_runtime_owner()
+                return effect
+            if not isinstance(effect, SpatialEffectChangeEvent):
+                raise RuntimeError(
+                    "Spatial condition application did not return its change effect",
+                )
+            self._finalize_displacements(parent_event=effect)
         self._complete_change(effect)
         application_effect = (
             EventQueue.get_event_by_uuid(effect.parent_event)
@@ -707,10 +708,11 @@ class SpatialCondition(BaseCondition):
         parent_event: Event,
     ) -> bool:
         """Replace the footprint and close its change after all mechanics."""
-        change_effect = self._change_footprint(
-            positions,
-            parent_event=parent_event,
-        )
+        with EventQueue.group(GroupEntryKind.ZONE_MOVE, root=parent_event, shares_damage_rolls=True):
+            change_effect = self._change_footprint(
+                positions,
+                parent_event=parent_event,
+            )
         if change_effect is None:
             return False
         self._complete_change(change_effect)
@@ -875,11 +877,14 @@ class SpatialCondition(BaseCondition):
         publication.published = True
         errors: list[BaseException] = []
         grid = get_map()
-        for change in (*publication.tile_changes, *publication.light_changes):
-            try:
-                grid.publish_committed_spatial_event(change)
-            except BaseException as error:
-                errors.append(error)
+        # The released cells and lights are one instant; the removal's own
+        # change completes after observers settled (plan §5.4).
+        with EventQueue.group(GroupEntryKind.ZONE_REMOVE, root=publication.condition_effect):
+            for change in (*publication.tile_changes, *publication.light_changes):
+                try:
+                    grid.publish_committed_spatial_event(change)
+                except BaseException as error:
+                    errors.append(error)
         try:
             self._complete_change(publication.effect)
         except BaseException as error:
@@ -1030,20 +1035,19 @@ class SpatialCondition(BaseCondition):
 class AreaCondition(SpatialCondition):
     """Shared geometry and cell mechanics owned by one spatial condition."""
 
-    zone_shape: str = Field(default="sphere")
-    area_propagation: AreaPropagation = "line_of_effect"
-    zone_radius_feet: int = Field(default=20, ge=0)
-    zone_width_feet: int = Field(default=5, ge=5)
-    zone_direction: Optional[Tuple[int, int]] = None
+    area: AoEShape = Field(default=Sphere(radius_feet=20), description="The zone's area, aimed from its anchor.")
+    area_aim_offset: Tuple[int, int] = Field(default=(0, 0),
+        description="Aim relative to the anchor; the direction of a source-centered area.")
     adds_difficult_terrain: bool = False
     sets_light_level: Optional[LightLevel] = None
     light_is_cap: bool = False
+    dims_light: bool = Field(default=False, description="Lowers its cells' light one level, never stacking.")
 
     _terrain_modifiers: Dict[Tuple[int, int], Tuple[UUID, UUID]] = PrivateAttr(
         default_factory=dict,
     )
     _light_positions: Set[Tuple[int, int]] = PrivateAttr(default_factory=set)
-    _last_trigger_turn_by_target: Dict[UUID, UUID] = PrivateAttr(
+    _last_trigger_turn_by_target: Dict[Tuple[UUID, SpatialEffectTriggerKind], UUID] = PrivateAttr(
         default_factory=dict,
     )
 
@@ -1065,69 +1069,28 @@ class AreaCondition(SpatialCondition):
             previous = observer.senses.spatial_effects.get(self.uuid) if observer is not None else None
             if previous is not None:
                 return observed.model_copy(update={"area_geometry": previous.area_geometry,
-                    "area_propagation": self.area_propagation,
+                    "area_propagation": self.area.propagation,
                     "anchor_elevation_steps": previous.anchor_elevation_steps})
-        geometry = (snapshot_aoe_presentation_geometry(self._area_shape(anchor), anchor)
+        geometry = (self.area.presentation_geometry(self.area_aim(anchor), anchor)
                     if anchor is not None else None)
         support = get_map().get_tile(*anchor) if anchor is not None else None
         return observed.model_copy(update={"area_geometry": geometry,
-            "area_propagation": self.area_propagation,
+            "area_propagation": self.area.propagation,
             "anchor_elevation_steps": support.height if support is not None else None})
 
-    def _area_shape(self, anchor: Tuple[int, int]) -> AoEShape:
-        """Build the same native geometry for execution and retained registration."""
-        if self.zone_shape in {"cone", "line"}:
-            if self.zone_direction is None:
-                raise ValueError(
-                    f"{self.zone_shape} area conditions require a direction",
-                )
-            target = (
-                anchor[0] + self.zone_direction[0],
-                anchor[1] + self.zone_direction[1],
-            )
-            shape = (
-                Cone(
-                    source_entity_uuid=self.source_entity_uuid,
-                    target=target,
-                    length_feet=self.zone_radius_feet,
-                )
-                if self.zone_shape == "cone"
-                else Line(
-                    source_entity_uuid=self.source_entity_uuid,
-                    target=target,
-                    length_feet=self.zone_radius_feet,
-                    width_feet=self.zone_width_feet,
-                )
-            )
-        elif self.zone_shape == "cube":
-            shape = Cube(
-                source_entity_uuid=self.source_entity_uuid,
-                target=anchor,
-                size_feet=self.zone_radius_feet,
-                centered=True,
-            )
-        elif self.zone_shape == "cylinder":
-            shape = Cylinder(
-                source_entity_uuid=self.source_entity_uuid,
-                target=anchor,
-                radius_feet=self.zone_radius_feet,
-            )
-        elif self.zone_shape == "sphere":
-            shape = Sphere(
-                source_entity_uuid=self.source_entity_uuid,
-                target=anchor,
-                radius_feet=self.zone_radius_feet,
-            )
-        else:
-            raise ValueError(f"Unsupported area shape: {self.zone_shape}")
-        shape.propagation = self.area_propagation
-        return shape
+    def area_aim(self, anchor: Tuple[int, int]) -> Tuple[int, int]:
+        """Return the zone's aim when its area is anchored at ``anchor``."""
+        if self.area_aim_offset == (0, 0) and not self.area.emanates_from_aim():
+            raise ValueError("cone/line area conditions require a direction")
+        return (anchor[0] + self.area_aim_offset[0], anchor[1] + self.area_aim_offset[1])
+
+    def area_footprint(self, anchor: Tuple[int, int]) -> FrozenSet[Tuple[int, int]]:
+        """Return the objective footprint of the zone's area anchored at ``anchor``."""
+        return objective_footprint(self.area, self.area_aim(anchor), anchor)
 
     def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
         """Compute the objective authored geometry around the anchor."""
-        shape = self._area_shape(self.position)
-        shape.compute_objective(self.position)
-        return set(shape.affected_positions)
+        return set(self.area_footprint(self.position))
 
     def resolve_condition_footprint(self) -> Set[Tuple[int, int]]:
         """Resolve authored geometry, map bounds, and spell protection."""
@@ -1274,9 +1237,14 @@ class AreaCondition(SpatialCondition):
         turn_execution_id = event.turn_execution_id
         if turn_execution_id is None:
             return True
-        if self._last_trigger_turn_by_target.get(target_entity_uuid) == turn_execution_id:
+        # Arrival, start of turn and end of turn are separate SRD triggers, so
+        # each has its own first-per-turn fence (bug C, human Q2).
+        fence_kind = (kind if kind in (SpatialEffectTriggerKind.TURN_START, SpatialEffectTriggerKind.TURN_END)
+            else SpatialEffectTriggerKind.ENTER)
+        fence = (target_entity_uuid, fence_kind)
+        if self._last_trigger_turn_by_target.get(fence) == turn_execution_id:
             return False
-        self._last_trigger_turn_by_target[target_entity_uuid] = turn_execution_id
+        self._last_trigger_turn_by_target[fence] = turn_execution_id
         return True
 
     def admits_application(self, target_entity_uuid: UUID, event: Event) -> bool:
@@ -1375,8 +1343,13 @@ class AreaCondition(SpatialCondition):
         *,
         parent_event: Optional[Event],
     ) -> List[Tuple[UUID, UUID]]:
-        """Apply one owned walking-cost modifier per admitted position."""
-        if not self.adds_difficult_terrain and self.minimum_walking_cost==1:
+        """Apply one owned walking-cost floor per admitted position.
+
+        Difficult terrain is a floor of 2, never a +1: overlapping zones and
+        naturally difficult ground don't stack (SRD; bug I).
+        """
+        minimum_cost = max(self.minimum_walking_cost, 2 if self.adds_difficult_terrain else 1)
+        if minimum_cost == 1:
             return []
         grid = get_map()
         owned: List[Tuple[UUID, UUID]] = []
@@ -1388,18 +1361,17 @@ class AreaCondition(SpatialCondition):
             if tile is None:
                 continue
             before = tile.get_movement_cost(MovementMode.WALKING)
-            if self.minimum_walking_cost>1 and before<=0:
+            if before <= 0:
                 continue
             modifier = NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid,
                 name=f"{self.name} Difficult Terrain",
-                value=self.minimum_walking_cost if self.minimum_walking_cost>1 else 1,
+                value=minimum_cost,
             )
             modifier.contribution_owner_uuid = self.uuid
             modifier.contribution_position = position
             value = tile.edit_movement_cost(MovementMode.WALKING)
-            modifier_uuid = (value.self_static.add_min_constraint(modifier)
-                if self.minimum_walking_cost>1 else value.self_static.add_value_modifier(modifier))
+            modifier_uuid = value.self_static.add_min_constraint(modifier)
             row = (value.uuid, modifier_uuid)
             self._terrain_modifiers[position] = row
             owned.append(row)
@@ -1461,16 +1433,15 @@ class AreaCondition(SpatialCondition):
         parent_event: Optional[Event],
     ) -> None:
         """Apply one source-owned objective light contribution."""
-        if self.sets_light_level is None:
+        if self.sets_light_level is None and not self.dims_light:
             return
         positions = {position for position in positions if self.allows_contribution_at(position)}
-        get_map().apply_light_modifier(
-            self.uuid,
-            set(positions),
-            self.sets_light_level,
-            cap=self.light_is_cap,
-            parent_event=(parent_event.uuid if parent_event is not None else None),
-        )
+        parent_uuid = parent_event.uuid if parent_event is not None else None
+        if self.sets_light_level is not None:
+            get_map().apply_light_modifier(self.uuid, set(positions), self.sets_light_level,
+                cap=self.light_is_cap, parent_event=parent_uuid)
+        if self.dims_light:
+            get_map().apply_light_dimmer(self.uuid, set(positions), parent_event=parent_uuid)
         self._light_positions.update(positions)
 
     def _remove_light_positions(

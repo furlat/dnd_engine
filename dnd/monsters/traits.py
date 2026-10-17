@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import cast
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.conditions import Concentrating, InvisibilityEffect
 from dnd.core.base_conditions import ConditionStateChangedEvent
 from dnd.core.condition_types import ConditionTag
@@ -1313,8 +1314,7 @@ class LeadershipAura(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
     )
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=30)
+    area: AoEShape = Sphere(radius_feet=30)
 
     def _apply(self, execution_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Event]:
         leader = Entity.get(self.source_entity_uuid)

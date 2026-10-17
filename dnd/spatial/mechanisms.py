@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from dnd.core.aoe import line_of_effect_reach
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType
@@ -17,6 +18,7 @@ from dnd.entity import Entity
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spatial.trap_payloads import apply_trap_payload, retreat_after_saved_entry
 from dnd.types.abilities import AbilityName
+from dnd.types.event_facts import GroupEntryKind
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from dnd.types.traps import TrapDamage, TrapPayload, TrapState
@@ -156,8 +158,8 @@ class FiniteTrap(SpatialCondition):
         candidate = {(self.position[0] + forward * dx - right * dy,
                       self.position[1] + forward * dy + right * dx)
                      for forward, right in self.geometry.offsets}
-        area_positions = tuple(sorted(position for position in grid.filter_propagation_positions(self.position, candidate)
-                                 if not grid.is_blocking_propagation(*position)))
+        reached = line_of_effect_reach(self.position, candidate)
+        area_positions = tuple(sorted(position for position in reached if not grid.is_blocking_propagation(*position)))
         occupants = {entity.uuid: entity for position in area_positions for entity in self._occupants(position)}
         return area_positions, tuple(occupants[identity] for identity in sorted(occupants, key=str))
 
@@ -204,10 +206,11 @@ class FiniteTrap(SpatialCondition):
         if not self.is_active_spatial_condition() or self.trap_state is not TrapState.READY:
             return event.cancel(status_message="Mechanism is no longer ready")
         self._set_mode(TrapState.ACTIVATED, parent_event=event)
-        for target in targets:
-            if not self.is_active_spatial_condition() or self.trap_state is not TrapState.ACTIVATED:
-                break
-            self._apply_payload(target, parent_event=event)
+        with EventQueue.group(GroupEntryKind.TRAP_FIRE, root=event, shares_damage_rolls=True):
+            for target in targets:
+                if not self.is_active_spatial_condition() or self.trap_state is not TrapState.ACTIVATED:
+                    break
+                self._apply_payload(target, parent_event=event)
         if self.rearm_after_activation and self.trap_state is TrapState.ACTIVATED:
             self._set_mode(TrapState.READY, parent_event=event)
         return event.phase_to(EventPhase.COMPLETION, committed=True)

@@ -19,6 +19,7 @@ Level 18: Indomitable Might
 Level 20: Primal Champion
 """
 
+from dnd.core.geometry import grid_distance_feet
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.class_features import RelentlessRageIntervention
 from dnd.core.condition_types import DurationType
@@ -27,6 +28,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost
 )
+from dnd.types.event_facts import HandlerGroupDispatch
 from dnd.core.events import (
     Event, EventPhase, EventType,
     Trigger, EventHandler,
@@ -1092,7 +1094,7 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
     if not attacker:
         return None
 
-    distance = entity.senses.get_feet_distance(attacker.senses.position)
+    distance = grid_distance_feet(entity.position, attacker.position)
     if distance > 5:
         return None
 
@@ -1138,6 +1140,7 @@ def create_retaliation_handler(
         uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Retaliation",
         semantic_key="feature.barbarian.retaliation",
+        group_dispatch=HandlerGroupDispatch.AFTER_GROUP,
         content_kind=RuntimeBehaviorKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
@@ -1252,7 +1255,7 @@ def intimidating_presence_end_check_processor(
     if not frightened or frightened.source_entity_uuid != barbarian_uuid:
         return None
 
-    distance = creature.senses.get_feet_distance(barbarian.senses.position)
+    distance = grid_distance_feet(creature.position, barbarian.position)
     should_end = distance > 60
 
     if not should_end:
@@ -1375,7 +1378,7 @@ class IntimidatingPresence(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        distance = entity.senses.get_feet_distance(target.senses.position)
+        distance = grid_distance_feet(entity.position, target.position)
         if distance > 30:
             return declaration_event.cancel(status_message="Target beyond 30ft")
 
@@ -1518,7 +1521,7 @@ class ExtendIntimidatingPresence(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        distance = entity.senses.get_feet_distance(target.senses.position)
+        distance = grid_distance_feet(entity.position, target.position)
         if distance > 30:
             return declaration_event.cancel(status_message="Target beyond 30ft")
 

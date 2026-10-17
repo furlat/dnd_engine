@@ -2,7 +2,7 @@
 import math
 from functools import lru_cache
 from bisect import bisect_left, bisect_right
-from typing import Set, Tuple, List, Optional
+from typing import Literal, Set, Tuple, List, Optional
 
 
 def grid_distance_cells(
@@ -131,13 +131,6 @@ def supercover_line(
     apply their own diagonal policy while checking the crossed tile directions.
     """
     return list(_supercover_line_cached(start, end))
-
-
-def supercover_line_offsets(
-    delta: Tuple[int, int],
-) -> Tuple[Tuple[int, int], ...]:
-    """Return immutable offsets for a supercover ray delta."""
-    return _supercover_line_relative_cached(delta[0], delta[1])
 
 
 @lru_cache(maxsize=8192)
@@ -359,6 +352,15 @@ def _cone_relative_tiles(length: int) -> Tuple[Tuple[int, int, float], ...]:
     )
 
 
+def cube_axis(origin: Tuple[int, int], aim: Tuple[int, int]) -> Tuple[Literal["x", "y"], int]:
+    """Return the axis and sign an extended cube grows along toward ``aim``."""
+    dx = aim[0] - origin[0]
+    dy = aim[1] - origin[1]
+    if abs(dx) >= abs(dy):
+        return "x", 1 if dx >= 0 else -1
+    return "y", 1 if dy >= 0 else -1
+
+
 def rectangle_positions(
     origin: Tuple[int, int],
     size: int,
@@ -384,18 +386,8 @@ def rectangle_positions(
             for dx, dy in _centered_rectangle_offsets(size)
         }
     else:
-        if direction is None:
-            direction = (ox + 1, oy)
-
-        dx = direction[0] - ox
-        dy = direction[1] - oy
-
-        if abs(dx) >= abs(dy):
-            dir_x = 1 if dx >= 0 else -1
-            offsets = _directional_rectangle_offsets(size, "x", dir_x)
-        else:
-            dir_y = 1 if dy >= 0 else -1
-            offsets = _directional_rectangle_offsets(size, "y", dir_y)
+        axis, sign = cube_axis(origin, direction if direction is not None else (ox + 1, oy))
+        offsets = _directional_rectangle_offsets(size, axis, sign)
         return {
             (ox + rel_x, oy + rel_y)
             for rel_x, rel_y in offsets

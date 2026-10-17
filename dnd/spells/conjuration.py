@@ -81,9 +81,8 @@ from dnd.core.modifiers import (
 )
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag, SavingThrowContext
 from dnd.core.events import SavingThrowEvent
-from dnd.core.aoe import AoEShape, Cylinder
+from dnd.core.aoe import AoEShape, Cube, Cylinder
 from dnd.core.base_block import BaseBlock, LightLevel
-from dnd.core.presentation_geometry import CubePresentationGeometry
 from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.entity import Entity
 from dnd.types.world import OccupancyLayer, SpatialChannel
@@ -91,6 +90,7 @@ from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
 from dnd.actions import AttackEvent, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
+from dnd.spatial.ignition import resolve_interaction
 from dnd.spatial.environmental_conditions import (
     BURNING_WEB_RECIPE,
     build_environmental_replacement,
@@ -106,7 +106,6 @@ from dnd.spatial.memberships import (
 )
 from dnd.spatial.transitions import bind_spatial_interactions
 from dnd.types.spatial_effects import (
-    AreaPropagation,
     SpatialDamageSource,
     SpatialEffectChangeOperation,
     SpatialEffectAnchorKind,
@@ -204,8 +203,7 @@ class CallLightningStrike(SpellAction):
             if target is not None:
                 self.end_position = target.position
         if self.aoe_shape is None:
-            self.aoe_shape = Sphere(source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0), radius_feet=7)
+            self.aoe_shape = Sphere(radius_feet=7)
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         return self._resolve_area_targets()
@@ -248,8 +246,7 @@ class CallLightning(SpellAction):
             if target is not None:
                 self.end_position = target.position
         if self.aoe_shape is None:
-            self.aoe_shape = Sphere(source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0), radius_feet=7)
+            self.aoe_shape = Sphere(radius_feet=7)
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         return self._resolve_area_targets()
@@ -603,7 +600,7 @@ class MistyStep(SpellAction):
         if not target_pos:
             return execution_event.cancel(status_message="No destination")
 
-        start_pos = caster.senses.position
+        start_pos = caster.position
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -681,8 +678,7 @@ class GreaseZone(AreaCondition):
             SpatialEffectTriggerKind.TURN_END,
         }),
     )
-    zone_shape: str = Field(default="cube", description="Area shape used by grease zone to compute affected grid positions.")
-    zone_radius_feet: int = Field(default=10, description="Zone radius in feet used by grease zone.")
+    area: AoEShape = Cube(size_feet=10, centered=True)
     adds_difficult_terrain: bool = Field(default=True, description="Whether grease zone makes affected tiles difficult terrain.")
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
@@ -966,9 +962,9 @@ class WebZone(RestrainingAreaCondition):
             SpatialEffectTriggerKind.TURN_START,
         }),
     )
-    zone_shape: str = Field(default="cube")
-    zone_radius_feet: int = Field(default=20)
+    area: AoEShape = Cube(size_feet=20, centered=True)
     adds_difficult_terrain: bool = Field(default=True)
+    dims_light: bool = Field(default=True, description="The webs lower light one level (human Q5).")
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
     spell_dc: int = Field(default=10, description="Spell save DC used by web zone saving throws.")
     anchored_or_layered: bool = Field(
@@ -1081,7 +1077,7 @@ class WebZone(RestrainingAreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -1274,9 +1270,7 @@ class Web(SpellAction):
         return effect_event.post(
             status_message=f"Web active: 20ft cube at {target_pos}",
             aoe_position=zone.position,
-            area_geometry=CubePresentationGeometry(
-                origin=zone.position, size_feet=zone.zone_radius_feet, centered=True,
-            ),
+            area_geometry=zone.area.presentation_geometry(zone.area_aim(zone.position), zone.position),
             resolved_area_positions=tuple(sorted(zone.affected_positions)),
         )
 
@@ -1334,8 +1328,7 @@ class EntangleZone(RestrainingAreaCondition):
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({SpatialEffectTriggerKind.APPEAR}),
     )
-    zone_shape: str = Field(default="cube")
-    zone_radius_feet: int = Field(default=20)
+    area: AoEShape = Cube(size_feet=20, centered=True)
     adds_difficult_terrain: bool = Field(default=True)
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
     spell_dc: int = Field(default=10, ge=0)
@@ -1554,8 +1547,7 @@ class BlackTentaclesZone(RestrainingAreaCondition):
             SpatialEffectTriggerKind.TURN_START,
         }),
     )
-    zone_shape: str = Field(default="cube")
-    zone_radius_feet: int = Field(default=20)
+    area: AoEShape = Cube(size_feet=20, centered=True)
     adds_difficult_terrain: bool = Field(default=True)
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
     spell_dc: int = Field(default=10, ge=0)
@@ -1667,7 +1659,7 @@ class BlackTentaclesZone(RestrainingAreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT,
+                event_phase=EventPhase.EXECUTION,
             )],
             event_processor=processor,
         )
@@ -1841,9 +1833,7 @@ class CloudkillZone(AreaCondition):
             SpatialEffectTriggerKind.TURN_START,
         }),
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by cloudkill zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by cloudkill zone.")
+    area: AoEShape = Sphere(radius_feet=20, propagation="connected")
     adds_difficult_terrain: bool = Field(default=False, description="Whether cloudkill zone makes affected tiles difficult terrain.")
 
     optical_obscurement: Optional[OpticalObscurement] = Field(
@@ -1970,7 +1960,7 @@ class CloudkillZone(AreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -2261,8 +2251,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
         SpatialEffectTriggerKind.ENTER, SpatialEffectTriggerKind.TURN_START})
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=100))
     excluded_entity_uuids: frozenset[UUID] = frozenset()
-    zone_shape: str = Field(default="sphere", description="Area shape used by spirit guardians zone to compute affected grid positions.")
-    zone_radius_feet: int = Field(default=15, description="Zone radius in feet used by spirit guardians zone.")
+    area: AoEShape = Sphere(radius_feet=15)
     adds_difficult_terrain: bool = Field(default=False, description="Whether spirit guardians zone makes affected tiles difficult terrain.")
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for spirit guardians zone hazards.")
@@ -2363,10 +2352,13 @@ class SpiritGuardiansZone(MembershipAreaCondition):
         entity = Entity.get(target_entity_uuid)
         if entity is None or not self.membership_applies_to(entity):
             return False
-        if (kind in self.membership_trigger_kinds and not entity.ignore_magical_speed_reduction
+        # Admit first: a rejected trigger never leases the slow (bug N); the
+        # continuous slow is maintained by the zone's own entry/exit effects.
+        admitted = AreaCondition._admit_trigger(self, kind, target_entity_uuid, event)
+        if (admitted and kind in self.membership_trigger_kinds and not entity.ignore_magical_speed_reduction
                 and self._occupancy_admits_trigger(kind, target_entity_uuid, event)):
             self.apply_membership(entity, parent_event=event)
-        return AreaCondition._admit_trigger(self, kind, target_entity_uuid, event)
+        return admitted
 
     def _create_zone_entry_handler(self) -> EventHandler:
         """Creature entry damages independently of continuously maintained slow."""
@@ -2418,7 +2410,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -2595,6 +2587,9 @@ FOG_CLOUD_ZONE_TRANSITIONS = (
 )
 
 
+FOG_CLOUD_AREA = Sphere(radius_feet=20, propagation="connected")
+
+
 class FogCloudZone(AreaCondition):
     """Zone control condition for Fog Cloud spell.
 
@@ -2614,9 +2609,7 @@ class FogCloudZone(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by fog cloud zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by fog cloud zone.")
+    area: AoEShape = FOG_CLOUD_AREA
 
     optical_obscurement: Optional[OpticalObscurement] = Field(
         default=OpticalObscurement.HEAVY,
@@ -2746,7 +2739,7 @@ class FogCloud(SpellAction):
             source_entity_uuid=caster.uuid,
             position=target_pos,
             faction=caster.faction,
-            zone_radius_feet=radius,
+            area=Sphere(radius_feet=radius, propagation=FOG_CLOUD_AREA.propagation),
             effect_origin=execution_event.to_effect_origin(),
         )
         zone_completion = zone.activate(parent_event=effect_event)
@@ -2797,9 +2790,7 @@ class DarknessZone(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by darkness zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=15, description="Zone radius in feet used by darkness zone.")
+    area: AoEShape = Sphere(radius_feet=15, propagation="connected")
 
     sets_light_level: Optional[LightLevel] = Field(default=LightLevel.DARKNESS, description="Darkness caps objective illumination in affected cells.")
     light_is_cap: bool = Field(default=True, description="Darkness caps rather than adds objective illumination.")
@@ -2980,6 +2971,9 @@ DAYLIGHT_ZONE_CONTENT_REF = ContentRef(
 )
 
 
+DAYLIGHT_AREA = Sphere(radius_feet=60)
+
+
 class DaylightZone(AreaCondition):
     """Zone control condition for Daylight spell.
 
@@ -2997,8 +2991,7 @@ class DaylightZone(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by daylight zone to compute affected grid positions.")
-    zone_radius_feet: int = Field(default=60, description="Zone radius in feet used by daylight zone.")
+    area: AoEShape = DAYLIGHT_AREA
 
     sets_light_level: Optional[LightLevel] = Field(default=LightLevel.VERY_BRIGHT, description="Light level applied to affected tiles by daylight zone.")
     light_is_obscurement: bool = Field(default=False, description="Whether daylight zone blocks sight through its light level.")
@@ -3026,6 +3019,9 @@ def _remove_overlapping_darkness_zones(
             continue
         if condition.affected_positions.isdisjoint(daylight_zone.affected_positions):
             continue
+        level = condition.effect_origin.effective_spell_level if condition.effect_origin is not None else None
+        if level is not None and level > 3:
+            continue  # Only darkness from a spell of 3rd level or lower is dispelled (SRD; bug L9).
         condition.deactivate(parent_event=parent_event)
         removed += 1
     return removed
@@ -3081,7 +3077,7 @@ class Daylight(SpellAction):
                     anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
                     scope=ActionWorldEffectScope.REGION,
                     shape=ActionWorldEffectShape.SPHERE,
-                    radius_feet=60,
+                    radius_feet=DAYLIGHT_AREA.radius_feet,
                 ),
                 InformationEffectProfile(
                     operation=ActionInformationOperation.REVEAL_REGION,
@@ -3089,7 +3085,7 @@ class Daylight(SpellAction):
                     anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
                     scope=ActionWorldEffectScope.REGION,
                     shape=ActionWorldEffectShape.SPHERE,
-                    radius_feet=60,
+                    radius_feet=DAYLIGHT_AREA.radius_feet,
                 ),
             ),
             topology_effects=(TopologyEffectProfile(
@@ -3098,7 +3094,7 @@ class Daylight(SpellAction):
                 anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
                 scope=ActionWorldEffectScope.MAGICAL_DARKNESS,
                 shape=ActionWorldEffectShape.SPHERE,
-                radius_feet=60,
+                radius_feet=DAYLIGHT_AREA.radius_feet,
                 affects_vision=True,
             ),),
         )
@@ -3164,7 +3160,8 @@ class Daylight(SpellAction):
         concentration.add_linked_condition(zone.uuid, zone.uuid)
 
         return effect_event.with_updates(
-            status_message=f"Daylight active: 60ft sphere at {target_pos}; dispelled {removed_darkness} darkness zone(s)"
+            status_message=(f"Daylight active: {DAYLIGHT_AREA.radius_feet}ft sphere at {target_pos}; "
+                f"dispelled {removed_darkness} darkness zone(s)")
         )
 
 
@@ -3207,9 +3204,7 @@ class InsectPlagueZone(AreaCondition):
             SpatialEffectTriggerKind.TURN_END,
         }),
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by insect plague zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by insect plague zone.")
+    area: AoEShape = Sphere(radius_feet=20, propagation="connected")
     adds_difficult_terrain: bool = Field(default=True, description="Whether insect plague zone makes affected tiles difficult terrain.")
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for insect plague zone hazards.")
@@ -3313,7 +3308,7 @@ class InsectPlagueZone(AreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_END,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -3449,9 +3444,7 @@ class IncendiaryCloudZone(AreaCondition):
             SpatialEffectTriggerKind.TURN_END,
         }),
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by incendiary cloud zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by incendiary cloud zone.")
+    area: AoEShape = Sphere(radius_feet=20, propagation="connected")
     adds_difficult_terrain: bool = Field(default=False, description="Whether incendiary cloud zone makes affected tiles difficult terrain.")
     optical_obscurement: Optional[OpticalObscurement] = Field(
         default=OpticalObscurement.HEAVY,
@@ -3565,7 +3558,7 @@ class IncendiaryCloudZone(AreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_END,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -3700,7 +3693,7 @@ class NauseatedCondition(BaseCondition):
     """Entity is nauseated and spends its action retching.
 
     Applied by Stinking Cloud when CON save fails at turn start.
-    Duration: 1 round (auto-expires via advance_duration).
+    Duration: the rest of that turn; it ends at the creature's turn end.
     """
     name: str = Field(default="Nauseated", description="Display name for the nauseated condition condition.")
     description: str = Field(default="Nauseated - spends action retching", description="Rules-facing summary for the nauseated condition condition.")
@@ -3723,14 +3716,22 @@ class NauseatedCondition(BaseCondition):
         )
         outs.append((target.action_economy.actions.uuid, actions_uuid))
 
-        self.duration.duration_type = DurationType.ROUNDS
-        self.duration.duration = 1
+        # "Spends its action that turn": zone turn triggers run at EXECUTION,
+        # before the turn's duration advance, so the turn end owns the expiry.
+        def retching_over(boundary: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            target.remove_condition_by_uuid(self.uuid, parent_event=boundary)
+            return None
+
+        turn_end = EventHandler(name="Nauseated turn end", source_entity_uuid=target_uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target_uuid)], event_processor=retching_over)
+        target.add_event_handler(turn_end)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             status_message=f"{target.name} is nauseated"
         )
-        return outs, [], [], [], effect_event
+        return outs, [turn_end.uuid], [], [], effect_event
 
 
 STINKING_CLOUD_ZONE_CONTENT_REF = ContentRef(
@@ -3781,9 +3782,7 @@ class StinkingCloudZone(AreaCondition):
             SpatialEffectTriggerKind.TURN_START,
         }),
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by stinking cloud zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by stinking cloud zone.")
+    area: AoEShape = Sphere(radius_feet=20, propagation="connected")
     adds_difficult_terrain: bool = Field(default=False, description="Whether stinking cloud zone makes affected tiles difficult terrain.")
 
     optical_obscurement: Optional[OpticalObscurement] = Field(
@@ -3843,7 +3842,7 @@ class StinkingCloudZone(AreaCondition):
             source_entity_uuid=source_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -3989,8 +3988,7 @@ class SleetStormZone(AreaCondition):
     first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({SpatialEffectTriggerKind.ENTER}),
     )
-    zone_shape: str = Field(default="cylinder", description="Area shape used by sleet storm zone to compute affected grid positions.")
-    zone_radius_feet: int = Field(default=40, description="Zone radius in feet used by sleet storm zone.")
+    area: AoEShape = Cylinder(radius_feet=40, height_feet=20)
     adds_difficult_terrain: bool = Field(default=True, description="Whether sleet storm zone makes affected tiles difficult terrain.")
 
     optical_obscurement: Optional[OpticalObscurement] = Field(
@@ -4002,10 +4000,6 @@ class SleetStormZone(AreaCondition):
 
     spell_dc: int = Field(default=10, description="Spell save DC used by sleet storm zone saving throws.")
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
-
-    def _area_shape(self, anchor: Tuple[int, int]) -> AoEShape:
-        return Cylinder(source_entity_uuid=self.source_entity_uuid, target=anchor,
-                        radius_feet=40, height_feet=20)
 
     def _save(self, target: Entity, ability: Literal["dexterity", "constitution"], event: Event) -> bool:
         request = SavingThrowEvent(source_entity_uuid=self.source_entity_uuid,
@@ -4103,13 +4097,7 @@ class SleetStormZone(AreaCondition):
             parent_event=parent_event.uuid if parent_event is not None else None,
             phase=EventPhase.DECLARATION,
         )
-        interaction = interaction.phase_to(EventPhase.EXECUTION)
-        if interaction.canceled:
-            return
-        interaction = interaction.phase_to(EventPhase.EFFECT)
-        if interaction.canceled:
-            return
-        interaction.phase_to(EventPhase.COMPLETION)
+        resolve_interaction(interaction)
 
     def _create_exposed_flame_handler(self) -> EventHandler:
         """Create a handler that douses flames ignited inside the storm."""
@@ -4525,8 +4513,7 @@ class GuardianOfFaithZone(AreaCondition):
     first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({SpatialEffectTriggerKind.ENTER}),
     )
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=10)
+    area: AoEShape = Sphere(radius_feet=10)
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ENEMIES)
     spell_dc: int = Field(default=0, ge=0)
     damage_budget: int = Field(default=60, ge=1)

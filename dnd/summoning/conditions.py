@@ -10,6 +10,7 @@ from dnd.core.condition_types import (
     ConditionCategory, ConditionTag, DurationType,
     InvoluntarySustainLoss, SustainLossPolicy,
 )
+from dnd.types.event_facts import HandlerGroupDispatch
 from dnd.core.events import EventHandler, EventType, EventPhase, Trigger
 from dnd.core.base_block import BaseBlock
 from dnd.types.summoning import SummonDepartureCause, SummonOrigin, TerminalOwnerRelease
@@ -82,7 +83,7 @@ class IndependentSummonOwner(SpiritualWeaponOwner):
         def ending(boundary,_):
             owner.remove_condition_by_uuid(self.uuid,parent_event=boundary)
             return None
-        handler=EventHandler(name="Independent summon caster death",source_entity_uuid=self.source_entity_uuid,
+        handler=EventHandler(name="Independent summon caster death",source_entity_uuid=self.source_entity_uuid,group_dispatch=HandlerGroupDispatch.AFTER_GROUP,
             runs_while_owner_inactive=True,trigger_conditions=[
                 Trigger(event_type=EventType.DEATH,event_phase=EventPhase.EFFECT,event_target_entity_uuid=owner.uuid),
                 Trigger(event_type=EventType.INSTANT_DEATH,event_phase=EventPhase.EFFECT,event_target_entity_uuid=owner.uuid)],event_processor=ending)

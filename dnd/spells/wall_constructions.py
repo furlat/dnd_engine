@@ -28,6 +28,7 @@ from dnd.core.wall_geometry import wall_crosses_path, wall_path_contact, wall_sh
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spells.wall_fields import WallDamageSpec, WallFieldZone, apply_wall_damage, wall_condition_ref, wall_support_error
+from dnd.types.event_facts import GroupEntryKind
 from dnd.types.materials import Material
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
@@ -649,69 +650,72 @@ class ConstructWall(SpellAction):
         effect = execution_event.phase_to(EventPhase.EFFECT)
         if effect.canceled:
             return effect
-        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-        if self.construction_material == "stone":
-            stone_enclosure_escapes(caster, geometry, dc, effect, displacements)
-            displacements = displacement_plan(caster, geometry, side=self.displacement_side)
-            if displacements is None:
-                return effect.cancel(status_message="No supported formation displacement remains")
-        formation_contacts = {identity: entity.position for identity in displacements
-                              if (entity := Entity.get(identity)) is not None}
-        zone_type = {"ice": WallOfIceZone, "stone": WallOfStoneZone, "force": WallOfForceZone}[self.construction_material]
-        zone = zone_type(source_entity_uuid=caster.uuid, position=self.end_position,
-            geometry=geometry, spell_dc=dc,
-            residual_dice_count=5 + max(0, self.cast_at_level - 6), effect_origin=execution_event.to_effect_origin())
-        pending = []
-        grid = get_map()
-        try:
-            for section in sections:
-                positions = wall_shell_cells(section)
-                anchor = min(positions)
-                offsets = tuple(sorted((p[0] - anchor[0], p[1] - anchor[1]) for p in positions))
-                hp = (120 if self.wall_form == "dome" else 30) if self.construction_material == "ice" else (180 if self.stone_panel_width_feet == 10 else 90)
-                item = WallSection(source_entity_uuid=caster.uuid, wall_owner_uuid=zone.uuid,
-                    item_id=f"spell_construction.{self.construction_material}.section", name=f"{self.name} section",
-                    geometry=section, magical_force=self.construction_material == "force",
-                    armor_class=12 if self.construction_material == "ice" else 15,
-                    health=None if self.construction_material == "force" else BaseItem.create_item_health(caster.uuid, hp),
-                    is_invisible=self.construction_material == "force",
-                    world_placement_spec=WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=False,
-                        vertical_extent_steps=ceil(section.height_feet / 5), footprint_offsets=offsets))
-                pending.append((item, anchor))
-                if item.health is not None and self.construction_material == "ice":
-                    item.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
-                        source_entity_uuid=caster.uuid, target_entity_uuid=item.uuid, name="Ice fire vulnerability",
-                        damage_type=DamageType.FIRE, value=ResistanceStatus.VULNERABILITY))
-                grid.validate_object_placement(item.uuid, anchor)
-            # All native placements are preflighted before displacement or commit.
-            zone._pending_sections = tuple(pending)
-            zone._formation_displacements = dict(displacements)
+        # Escapes, displacement, sections and appearance damage are one formation
+        # instant; observers settle once when it closes (plan §5.2).
+        with EventQueue.group(GroupEntryKind.WALL_FORMATION, root=effect, shares_damage_rolls=True):
+            dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+            if self.construction_material == "stone":
+                stone_enclosure_escapes(caster, geometry, dc, effect, displacements)
+                displacements = displacement_plan(caster, geometry, side=self.displacement_side)
+                if displacements is None:
+                    return effect.cancel(status_message="No supported formation displacement remains")
+            formation_contacts = {identity: entity.position for identity in displacements
+                                  if (entity := Entity.get(identity)) is not None}
+            zone_type = {"ice": WallOfIceZone, "stone": WallOfStoneZone, "force": WallOfForceZone}[self.construction_material]
+            zone = zone_type(source_entity_uuid=caster.uuid, position=self.end_position,
+                geometry=geometry, spell_dc=dc,
+                residual_dice_count=5 + max(0, self.cast_at_level - 6), effect_origin=execution_event.to_effect_origin())
+            pending = []
+            grid = get_map()
             try:
-                activated = zone.activate(parent_event=effect)
-            except ValueError as error:
-                return effect.cancel(status_message=str(error))
-            if activated is None or activated.canceled or not zone.applied:
-                return effect.cancel(status_message="Wall construction was canceled")
-            self.ensure_concentration(effect).add_linked_condition(zone.uuid, zone.uuid)
-            if self.construction_material == "ice":
-                spec = WallDamageSpec(dice_count=10 + 2 * max(0, self.cast_at_level - 6), die=6,
-                    damage_type=DamageType.COLD, save_ability="dexterity", effect_id="wall_of_ice.appearance")
-                for identity in displacements:
-                    entity = Entity.get(identity)
-                    if entity is not None:
-                        apply_wall_damage(zone, entity, spec, zone.spell_dc, effect, geometry.base_height_steps,
-                                          contact_position=formation_contacts[identity])
-            return effect
-        finally:
-            if not zone.sections:
-                if zone.applied:
-                    zone.deactivate(parent_event=effect)
-                for item, _ in pending:
-                    item.retire(effect)
-                remaining = {item.uuid: item.geometry for item, _ in pending if BaseBlock.get(item.uuid) is not None}
-                zone.sections = remaining
-                if not remaining and not zone.applied:
-                    zone.discard_from_runtime_owner()
+                for section in sections:
+                    positions = wall_shell_cells(section)
+                    anchor = min(positions)
+                    offsets = tuple(sorted((p[0] - anchor[0], p[1] - anchor[1]) for p in positions))
+                    hp = (120 if self.wall_form == "dome" else 30) if self.construction_material == "ice" else (180 if self.stone_panel_width_feet == 10 else 90)
+                    item = WallSection(source_entity_uuid=caster.uuid, wall_owner_uuid=zone.uuid,
+                        item_id=f"spell_construction.{self.construction_material}.section", name=f"{self.name} section",
+                        geometry=section, magical_force=self.construction_material == "force",
+                        armor_class=12 if self.construction_material == "ice" else 15,
+                        health=None if self.construction_material == "force" else BaseItem.create_item_health(caster.uuid, hp),
+                        is_invisible=self.construction_material == "force",
+                        world_placement_spec=WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=False,
+                            vertical_extent_steps=ceil(section.height_feet / 5), footprint_offsets=offsets))
+                    pending.append((item, anchor))
+                    if item.health is not None and self.construction_material == "ice":
+                        item.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+                            source_entity_uuid=caster.uuid, target_entity_uuid=item.uuid, name="Ice fire vulnerability",
+                            damage_type=DamageType.FIRE, value=ResistanceStatus.VULNERABILITY))
+                    grid.validate_object_placement(item.uuid, anchor)
+                # All native placements are preflighted before displacement or commit.
+                zone._pending_sections = tuple(pending)
+                zone._formation_displacements = dict(displacements)
+                try:
+                    activated = zone.activate(parent_event=effect)
+                except ValueError as error:
+                    return effect.cancel(status_message=str(error))
+                if activated is None or activated.canceled or not zone.applied:
+                    return effect.cancel(status_message="Wall construction was canceled")
+                self.ensure_concentration(effect).add_linked_condition(zone.uuid, zone.uuid)
+                if self.construction_material == "ice":
+                    spec = WallDamageSpec(dice_count=10 + 2 * max(0, self.cast_at_level - 6), die=6,
+                        damage_type=DamageType.COLD, save_ability="dexterity", effect_id="wall_of_ice.appearance")
+                    for identity in displacements:
+                        entity = Entity.get(identity)
+                        if entity is not None:
+                            apply_wall_damage(zone, entity, spec, zone.spell_dc, effect, geometry.base_height_steps,
+                                              contact_position=formation_contacts[identity])
+                return effect
+            finally:
+                if not zone.sections:
+                    if zone.applied:
+                        zone.deactivate(parent_event=effect)
+                    for item, _ in pending:
+                        item.retire(effect)
+                    remaining = {item.uuid: item.geometry for item, _ in pending if BaseBlock.get(item.uuid) is not None}
+                    zone.sections = remaining
+                    if not remaining and not zone.applied:
+                        zone.discard_from_runtime_owner()
 
     def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
         facets = (ActionVariantFacet(key="form", value=self.wall_form, label=self.wall_form.title()),

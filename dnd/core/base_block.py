@@ -2170,3 +2170,15 @@ class BaseBlock(BaseModel):
         self._remove_static_condition_immunity(condition_name)
         self._remove_contextual_condition_immunity(condition_name)
         return
+
+
+def resolution_order_key(block: "BaseBlock") -> Tuple[bool, int, int, str, str]:
+    """Replay-stable order for simultaneous resolution (plan §5.3).
+
+    Objective position first (unplaced blocks last), then name, then uuid as the
+    exact-tie breaker. Carried and unplaced items no longer sort at (0, 0).
+    """
+    position = block.get_position()
+    if position is None:
+        return (True, 0, 0, block.name or "", str(block.uuid))
+    return (False, position[0], position[1], block.name or "", str(block.uuid))

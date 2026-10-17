@@ -1,11 +1,11 @@
 """Authoritative observer-local perception and navigation state."""
 
-from typing import AbstractSet, DefaultDict, Dict, Iterable, List, Optional, Self, Set, Tuple, TypeVar, cast
+from typing import AbstractSet, DefaultDict, Dict, Iterable, List, Optional, Self, Sequence, Set, Tuple, TypeVar, cast
 from uuid import UUID
 from pydantic import Field, PrivateAttr
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from collections import defaultdict
 import time
 
@@ -14,6 +14,7 @@ from dnd.action_timing import action_timing_enabled, record_action_count, record
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
+from dnd.core.base_tiles import Tile
 from dnd.core.gridmap import BoundarySnapshot, OpticalSnapshot, SpatialConditionOwner, boundary_snapshot_covers, get_map
 from dnd.core.geometry import grid_distance_feet, supercover_line
 from dnd.core.presentation_geometry import SpherePresentationGeometry
@@ -638,6 +639,15 @@ class ObserverFootprint:
     object_uuids: frozenset[UUID]
 
 
+@dataclass
+class _GroupSettlement:
+    """Facts recorded for one observer while a simultaneous group is open."""
+
+    events: List[Event] = field(default_factory=list)
+    full: bool = False
+    max_distance: Optional[int] = None
+
+
 class SpatialSensesSystem:
     """Single reducer for observer-local visual cells and typed contacts."""
 
@@ -673,6 +683,9 @@ class SpatialSensesSystem:
         ] = defaultdict(set)
         self.observers_by_entity: DefaultDict[UUID, Set[UUID]] = defaultdict(set)
         self.observers_by_object: DefaultDict[UUID, Set[UUID]] = defaultdict(set)
+        self._pending: Dict[UUID, _GroupSettlement] = {}
+        self._settling = False
+        self._absorbing_light = False
 
     def attach(self) -> None:
         """Attach the reducer to the existing pre-completion event boundary."""
@@ -690,6 +703,69 @@ class SpatialSensesSystem:
         self.observers_by_known_position.clear()
         self.observers_by_entity.clear()
         self.observers_by_object.clear()
+        self._pending.clear()
+        self._settling = False
+        self._absorbing_light = False
+
+    def _recording(self) -> bool:
+        """Whether facts are recorded for the open group instead of settled now.
+
+        A settling group no longer records: facts other systems publish while
+        settling reduce normally. The group's own pending light is absorbed so
+        it merges into the observers' single pass.
+        """
+        group = EventQueue.open_group()
+        return (group is not None and not self._settling
+                and (self._absorbing_light or not group.settling))
+
+    def settle_group(self, root_uuid: Optional[UUID]) -> None:
+        """Publish the group's pending light, then settle every recorded observer once."""
+        self._absorbing_light = True
+        try:
+            get_map().settle_pending_lights(parent_event=root_uuid)
+        finally:
+            self._absorbing_light = False
+        pending, self._pending = self._pending, {}
+        if not pending:
+            return
+        root = EventQueue.get_event_by_uuid(root_uuid) if root_uuid is not None else None
+        sensory_events: List[SensoryUpdateEvent] = []
+        self._settling = True
+        try:
+            for observer_uuid in sorted(pending, key=str):
+                senses = self.senses_by_observer.get(observer_uuid)
+                if senses is None or BaseBlock.get(observer_uuid) is None:
+                    continue
+                settlement = pending[observer_uuid]
+                if settlement.max_distance is not None:
+                    senses._perception_max_distance = settlement.max_distance
+                if not settlement.events:
+                    before = capture_senses_snapshot(senses)
+                    self.recompute_observer(observer_uuid)
+                    self.publish_observer_refresh(observer_uuid, before)
+                    continue
+                light_event = self._settled_light_only(observer_uuid, senses, settlement)
+                sensory_event = (self._update_light(observer_uuid, senses, light_event) if light_event is not None
+                    else self._reduce_observer(observer_uuid, senses, settlement.events,
+                        force_full=settlement.full, cause=root))
+                if sensory_event is not None:
+                    sensory_events.append(sensory_event)
+        finally:
+            self._settling = False
+        if sensory_events:
+            EventQueue.register_completion_sequence(sensory_events)
+            self.published_observers.update(event.observer_uuid for event in sensory_events)
+
+    def _settled_light_only(self, observer_uuid: UUID, senses: Senses,
+                            settlement: _GroupSettlement) -> Optional[SpatialChangeEvent]:
+        """The group's light fact when it is all this observer recorded and light alone can settle it."""
+        events = settlement.events
+        if (settlement.full or len(events) != 1 or observer_uuid not in self.published_observers
+                or not isinstance(events[0], SpatialChangeEvent)
+                or events[0].event_type is not EventType.SPATIAL_LIGHT_CHANGED):
+            return None
+        event = events[0]
+        return event if self._can_update_light(observer_uuid, senses, event, covers_group=True) else None
 
     def register_observer(self, observer_uuid: UUID, senses: Senses) -> None:
         """Register an observer without independently materializing its world view."""
@@ -718,6 +794,14 @@ class SpatialSensesSystem:
         senses = self.senses_by_observer.get(observer_uuid)
         owner = BaseBlock.get(observer_uuid)
         if senses is None or owner is None:
+            return set()
+        if self._recording():
+            # Inside a simultaneous group perception reads see pre-group
+            # perception; the observer settles once when the group closes.
+            settlement = self._pending.setdefault(observer_uuid, _GroupSettlement())
+            settlement.full = True
+            if max_distance is not None:
+                settlement.max_distance = max_distance
             return set()
         record_action_count("sensory.full_recompute", 1)
         # Temporary movement investigation; removed with diagnostic tooling.
@@ -1635,6 +1719,10 @@ class SpatialSensesSystem:
     def __call__(self, event: Event) -> None:
         """Reduce indexed observers before the causal event completes."""
         record_action_count("sensory.reducer_call", 1)
+        if self._recording():
+            for observer_uuid in self.candidate_observer_uuids(event):
+                self._pending.setdefault(observer_uuid, _GroupSettlement()).events.append(event)
+            return
         sensory_events: List[SensoryUpdateEvent] = []
         deferred: Set[UUID] = set()
         if event.event_type in (EventType.SPATIAL_LIGHT_CHANGED, EventType.SPATIAL_LIGHT_SOURCES_CHANGED):
@@ -1643,10 +1731,6 @@ class SpatialSensesSystem:
                 # The geometry parent observes after every affected emitter has
                 # settled. Its observers must not see partial source recomputes.
                 deferred = self.candidate_observer_uuids(parent)
-        residue_tile = (get_map().get_tile_by_uuid(event.target_entity_uuid)
-            if isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent))
-            and event.target_entity_uuid is not None
-            and event.condition.snapshot_tile_residue() is not None else None)
         for observer_uuid in sorted(self.candidate_observer_uuids(event), key=str):
             if observer_uuid in deferred:
                 continue
@@ -1689,149 +1773,189 @@ class SpatialSensesSystem:
                     if sensory_event is not None:
                         sensory_events.append(sensory_event)
                     continue
-            initial = observer_uuid not in self.published_observers
-            effect_before: Dict[UUID, Optional[PerceivedSpatialEffect]] = {}
-            hazard_before: Optional[Dict[Tuple[int, int], Optional[bool]]] = None
-            newly_seen: Set[Tuple[int, int]] = set()
-            hazard_positions = {residue_tile.position} if residue_tile is not None else None
-            if isinstance(event, SpatialChangeEvent):
-                hazard_positions = (event.senses_hint.light_changed_positions
-                    if event.event_type is EventType.SPATIAL_LIGHT_CHANGED and event.senses_hint is not None
-                    and event.senses_hint.light_changed_positions is not None else self._candidate_positions(event))
-            elif isinstance(event, SpatialEffectChangeEvent):
-                hazard_positions = event.get_affected_positions()
-            elif isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent)) and event.resulting_tile is not None:
-                hazard_positions = {event.resulting_tile.position}
-            owner_refresh = (
-                event.event_type is EventType.TURN_START
-                or (
-                    event.event_type in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL)
-                    and event.target_entity_uuid == observer_uuid
-                )
-                or (
-                    isinstance(event, SpatialChangeEvent)
-                    and event.event_type is EventType.SPATIAL_ENTITY_ENTERED
-                    and event.entity_uuid == observer_uuid
-                )
-            )
-            # Movement topology (costs, support) never needs a full observer
-            # recompute: paths are lazy and marked dirty below, and any change
-            # that moves sight geometry bumps the observer's optical revision,
-            # which `_field_is_current` rejects.
-            tile_refresh = (
-                isinstance(event, SpatialChangeEvent)
-                and event.event_type is EventType.SPATIAL_TILE_CHANGED
-                and event.senses_hint is not None
-                and not event.senses_hint.requires_fov
-            )
-            # A spatial condition's membership change bumps exactly the channels
-            # its data changes, so a still-current field only needs the hazards
-            # and effect observations of the changed cells refreshed, plus the
-            # contacts of the objects there: a condition can gate their
-            # observability (trap hardware).
-            effect_refresh = isinstance(event, SpatialEffectChangeEvent)
-            gated_objects: Set[UUID] = set()
-            field = senses._field
-            only_refresh_hazards = (
-                (owner_refresh or residue_tile is not None or tile_refresh or effect_refresh)
-                and observer_uuid in self.published_observers
-                and field is not None
-                and field.revisions.occupancy == get_map().observer_spatial_revisions(observer_uuid).occupancy
-                and self._field_is_current(observer_uuid, senses)
-            )
-            if only_refresh_hazards:
-                record_action_count("sensory.hazard_only", 1)
-                if effect_refresh:
-                    gated_objects = {identity for position in hazard_positions or ()
-                                     for identity in get_map().get_objects_at(position)}
-                before = _capture_senses_transition(senses, set(), positions=set(),
-                    entities=set(), objects=gated_objects, effects=set())
-                for identity in gated_objects:
-                    contact = self._object_contact(observer_uuid, senses, identity)
-                    if contact is None:
-                        senses.objects.pop(identity, None)
-                    else:
-                        senses.objects[identity] = contact
-                if gated_objects:
-                    self.refresh_observer(observer_uuid)
-                # A child light completion can already have refreshed the moving
-                # observer at this committed position. Reuse only a fully current
-                # field; the parent still publishes its own delta/path boundary.
-                # Inert tile after-values and residue membership do not change contacts
-                # when field and occupancy revisions still match. Refresh their
-                # hazards without resolving every visible cell again.
-                # Support elevation, traversal and other spatial changes retain
-                # their full refresh (including upper-volume sight planes).
-                hazard_before = {}
-                effect_before = self._refresh_hazards(observer_uuid, senses, hazard_positions,
-                    hazard_before=hazard_before, visibility_changed_positions=set())
-                before = replace(before, hazardous_cells={position: value
-                    for position, value in hazard_before.items() if value is not None})
-            else:
-                before = _capture_senses_transition(senses, set(), effects=set())
-                newly_seen = self.recompute_observer(observer_uuid, hazard_positions=hazard_positions,
-                    effect_before=effect_before,
-                    light_event=event if isinstance(event, SpatialChangeEvent)
-                        and event.event_type is EventType.SPATIAL_LIGHT_CHANGED else None)
-            before = replace(before, spatial_effects={identity: value for identity, value in effect_before.items()
-                if value is not None})
-            if not only_refresh_hazards:
-                self._refresh_light_sources(observer_uuid, senses)
-            after = _capture_senses_transition(senses, senses.seen if initial else newly_seen,
-                positions=set() if only_refresh_hazards else None,
-                entities=set() if only_refresh_hazards else None,
-                objects=gated_objects if only_refresh_hazards else None,
-                effects=None if initial else set(effect_before))
-            if hazard_before is not None:
-                after = replace(after, hazardous_cells={position: senses.hazardous_cells[position]
-                    for position in hazard_before if position in senses.hazardous_cells})
-            projection_changed = any((
-                before.position != after.position,
-                before.visible != after.visible,
-                before.seen != after.seen,
-                before.entities != after.entities,
-                before.objects != after.objects,
-                before.passive_perception != after.passive_perception,
-                before.hazardous_cells != after.hazardous_cells,
-                before.spatial_effects != after.spatial_effects,
-            ))
-            visible_topology_changed = False
-            if isinstance(event, SpatialChangeEvent):
-                hint = event.senses_hint
-                visible_topology_changed = bool(
-                    hint is not None
-                    and hint.requires_paths
-                    and any(senses.visible.get(position, False)
-                            for position in self._candidate_positions(event))
-                )
-                visible_topology_changed = visible_topology_changed or bool(
-                    event.object_uuid is not None
-                    and event.object_uuid in senses.objects
-                    and hint is not None
-                    and hint.requires_paths
-                )
-            elif isinstance(event, SpatialEffectChangeEvent):
-                visible_topology_changed = bool(
-                    any(senses.visible.get(position, False)
-                        for position in event.get_affected_positions())
-                )
-            if projection_changed or visible_topology_changed:
-                senses._paths_dirty = True
-                after = replace(after, paths_dirty=True)
-            sensory_event = emit_sensory_update_delta(
-                observer_uuid,
-                event,
-                before,
-                after,
-                self._reason_for(event, observer_uuid),
-                register_event=False,
-                initial=initial,
-            )
+            sensory_event = self._reduce_observer(observer_uuid, senses, (event,))
             if sensory_event is not None:
                 sensory_events.append(sensory_event)
         if sensory_events:
             EventQueue.register_completion_sequence(sensory_events)
             self.published_observers.update(event.observer_uuid for event in sensory_events)
+
+    def _reduce_observer(
+        self,
+        observer_uuid: UUID,
+        senses: Senses,
+        events: Sequence[Event],
+        *,
+        force_full: bool = False,
+        cause: Optional[Event] = None,
+    ) -> Optional[SensoryUpdateEvent]:
+        """Settle one observer for one fact, or for every fact of a closed group.
+
+        The hazard-only path applies only when every fact is a hazard-refresh
+        kind and the observer's field is still current; otherwise one full
+        recompute covers the union of the facts (plan §5.3-5.4).
+        """
+        initial = observer_uuid not in self.published_observers
+        effect_before: Dict[UUID, Optional[PerceivedSpatialEffect]] = {}
+        hazard_before: Optional[Dict[Tuple[int, int], Optional[bool]]] = None
+        newly_seen: Set[Tuple[int, int]] = set()
+        hazard_positions: Optional[Set[Tuple[int, int]]] = set()
+        for event in events:
+            event_positions = self._hazard_positions_for(event)
+            hazard_positions = (None if hazard_positions is None or event_positions is None
+                else hazard_positions | event_positions)
+        # Hazard-refresh kinds: the observer's own refresh, residue membership,
+        # movement topology (paths are lazy; sight-moving support changes bump
+        # the optical revision, which `_field_is_current` rejects), and spatial
+        # condition membership (it bumps exactly its data's channels; the
+        # contacts of objects on its cells are refreshed too, since a condition
+        # can gate their observability, e.g. trap hardware).
+        cheap_kinds = all(self._is_owner_refresh(event, observer_uuid) or self._residue_tile(event) is not None
+            or self._is_tile_refresh(event) or isinstance(event, SpatialEffectChangeEvent) for event in events)
+        gated_objects: Set[UUID] = set()
+        field = senses._field
+        only_refresh_hazards = (
+            not force_full
+            and cheap_kinds
+            and observer_uuid in self.published_observers
+            and field is not None
+            and field.revisions.occupancy == get_map().observer_spatial_revisions(observer_uuid).occupancy
+            and self._field_is_current(observer_uuid, senses)
+        )
+        if only_refresh_hazards:
+            record_action_count("sensory.hazard_only", 1)
+            if any(isinstance(event, SpatialEffectChangeEvent) for event in events):
+                gated_objects = {identity for event in events if isinstance(event, SpatialEffectChangeEvent)
+                                 for position in event.get_affected_positions()
+                                 for identity in get_map().get_objects_at(position)}
+            before = _capture_senses_transition(senses, set(), positions=set(),
+                entities=set(), objects=gated_objects, effects=set())
+            for identity in gated_objects:
+                contact = self._object_contact(observer_uuid, senses, identity)
+                if contact is None:
+                    senses.objects.pop(identity, None)
+                else:
+                    senses.objects[identity] = contact
+            if gated_objects:
+                self.refresh_observer(observer_uuid)
+            # A child light completion can already have refreshed the moving
+            # observer at this committed position. Reuse only a fully current
+            # field; the parent still publishes its own delta/path boundary.
+            # Inert tile after-values and residue membership do not change contacts
+            # when field and occupancy revisions still match. Refresh their
+            # hazards without resolving every visible cell again.
+            # Support elevation, traversal and other spatial changes retain
+            # their full refresh (including upper-volume sight planes).
+            hazard_before = {}
+            effect_before = self._refresh_hazards(observer_uuid, senses, hazard_positions,
+                hazard_before=hazard_before, visibility_changed_positions=set())
+            before = replace(before, hazardous_cells={position: value
+                for position, value in hazard_before.items() if value is not None})
+        else:
+            before = _capture_senses_transition(senses, set(), effects=set())
+            newly_seen = self.recompute_observer(observer_uuid, hazard_positions=hazard_positions,
+                effect_before=effect_before,
+                light_event=self._single_light_event(events))
+        before = replace(before, spatial_effects={identity: value for identity, value in effect_before.items()
+            if value is not None})
+        if not only_refresh_hazards:
+            self._refresh_light_sources(observer_uuid, senses)
+        after = _capture_senses_transition(senses, senses.seen if initial else newly_seen,
+            positions=set() if only_refresh_hazards else None,
+            entities=set() if only_refresh_hazards else None,
+            objects=gated_objects if only_refresh_hazards else None,
+            effects=None if initial else set(effect_before))
+        if hazard_before is not None:
+            after = replace(after, hazardous_cells={position: senses.hazardous_cells[position]
+                for position in hazard_before if position in senses.hazardous_cells})
+        projection_changed = any((
+            before.position != after.position,
+            before.visible != after.visible,
+            before.seen != after.seen,
+            before.entities != after.entities,
+            before.objects != after.objects,
+            before.passive_perception != after.passive_perception,
+            before.hazardous_cells != after.hazardous_cells,
+            before.spatial_effects != after.spatial_effects,
+        ))
+        visible_topology_changed = any(self._changes_visible_topology(event, senses) for event in events)
+        if projection_changed or visible_topology_changed:
+            senses._paths_dirty = True
+            after = replace(after, paths_dirty=True)
+        # A group's settlement attaches to its still-open root: a completed
+        # fact can no longer adopt children (lineage capture follows them).
+        return emit_sensory_update_delta(
+            observer_uuid,
+            cause if cause is not None else events[-1],
+            before,
+            after,
+            self._reason_for(events[-1], observer_uuid),
+            register_event=False,
+            initial=initial,
+        )
+
+    @staticmethod
+    def _residue_tile(event: Event) -> Optional[Tile]:
+        """The Tile whose residue membership this condition fact changed, if any."""
+        if (isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent))
+                and event.target_entity_uuid is not None
+                and event.condition.snapshot_tile_residue() is not None):
+            return get_map().get_tile_by_uuid(event.target_entity_uuid)
+        return None
+
+    def _hazard_positions_for(self, event: Event) -> Optional[Set[Tuple[int, int]]]:
+        """Cells whose hazards a fact can change; None means every visible cell."""
+        residue_tile = self._residue_tile(event)
+        if residue_tile is not None:
+            return {residue_tile.position}
+        if isinstance(event, SpatialChangeEvent):
+            if (event.event_type is EventType.SPATIAL_LIGHT_CHANGED and event.senses_hint is not None
+                    and event.senses_hint.light_changed_positions is not None):
+                return set(event.senses_hint.light_changed_positions)
+            return self._candidate_positions(event)
+        if isinstance(event, SpatialEffectChangeEvent):
+            return event.get_affected_positions()
+        if isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent)) and event.resulting_tile is not None:
+            return {event.resulting_tile.position}
+        return None
+
+    @staticmethod
+    def _is_owner_refresh(event: Event, observer_uuid: UUID) -> bool:
+        return (
+            event.event_type is EventType.TURN_START
+            or (event.event_type in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL)
+                and event.target_entity_uuid == observer_uuid)
+            or (isinstance(event, SpatialChangeEvent)
+                and event.event_type is EventType.SPATIAL_ENTITY_ENTERED
+                and event.entity_uuid == observer_uuid)
+        )
+
+    @staticmethod
+    def _is_tile_refresh(event: Event) -> bool:
+        # Movement topology (costs, support) never needs a full observer
+        # recompute: paths are lazy and marked dirty, and any change that moves
+        # sight geometry bumps the observer's optical revision.
+        return (isinstance(event, SpatialChangeEvent)
+            and event.event_type is EventType.SPATIAL_TILE_CHANGED
+            and event.senses_hint is not None
+            and not event.senses_hint.requires_fov)
+
+    @staticmethod
+    def _single_light_event(events: Sequence[Event]) -> Optional[SpatialChangeEvent]:
+        lights = [event for event in events if isinstance(event, SpatialChangeEvent)
+            and event.event_type is EventType.SPATIAL_LIGHT_CHANGED]
+        return lights[0] if len(lights) == 1 else None
+
+    def _changes_visible_topology(self, event: Event, senses: Senses) -> bool:
+        if isinstance(event, SpatialChangeEvent):
+            hint = event.senses_hint
+            if hint is None or not hint.requires_paths:
+                return False
+            return (any(senses.visible.get(position, False) for position in self._candidate_positions(event))
+                or (event.object_uuid is not None and event.object_uuid in senses.objects))
+        if isinstance(event, SpatialEffectChangeEvent):
+            return any(senses.visible.get(position, False) for position in event.get_affected_positions())
+        return False
 
     @staticmethod
     def _refresh_light_sources(observer_uuid: UUID, senses: Senses) -> None:
@@ -1865,13 +1989,17 @@ class SpatialSensesSystem:
             and field.modes == {mode.sense_type: mode.range_feet for mode in senses.get_sense_modes()}
         )
 
-    def _can_update_light(self, observer_uuid: UUID, senses: Senses, event: SpatialChangeEvent) -> bool:
+    def _can_update_light(self, observer_uuid: UUID, senses: Senses, event: SpatialChangeEvent, *,
+                          covers_group: bool = False) -> bool:
         field = senses._field
         if field is None or not self._field_is_current(observer_uuid, senses, illumination=False):
             return False
         revisions = get_map().observer_spatial_revisions(observer_uuid)
-        if revisions.illumination - field.revisions.illumination not in (0, 1):
-            return False  # Buffered changes require a complete current solve.
+        # A group's settled light fact carries every illumination change of the
+        # group, so any gap is covered by it; otherwise a gap means buffered
+        # changes that require a complete current solve.
+        if not covers_group and revisions.illumination - field.revisions.illumination not in (0, 1):
+            return False
         if revisions.occupancy == field.revisions.occupancy:
             return True
         parent = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event is not None else None

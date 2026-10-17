@@ -15,7 +15,8 @@ from dnd.actions import AttackEvent
 from dnd.core.elevation import support_distance_feet
 from dnd.types.actor import ConditionState
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
-from typing import Any, ClassVar, Literal, Optional, List, Set, Tuple
+from collections.abc import Mapping
+from typing import Any, ClassVar, FrozenSet, Literal, Optional, List, Set, Tuple
 from uuid import UUID
 
 from dnd.types.physical_access import PhysicalAccess
@@ -25,6 +26,7 @@ from dnd.spells.wall_fields import BladeBarrierZone, WallDamageSpec, field_geome
 from dnd.core.action_types import PositionPathSelection, EntityDestinationSelection
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.effect_types import EffectOrigin
+from dnd.types.event_facts import HandlerGroupDispatch, GroupEntryKind
 from dnd.core.events import ActionApplicationCommittedEvent, StandOfferEvent, HealEvent
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.modifiers import ArithmeticFactor
@@ -38,6 +40,7 @@ from dnd.core.action_types import ActionVariantFacet
 from dnd.core.base_actions import (
     ActionCategory,
     AvailableTarget,
+    lowest_hp_first,
     ActionEvent,
     ActionInformationOperation,
     ActionOutcomeProfile,
@@ -73,7 +76,8 @@ from typing import cast as type_cast
 from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.item_types import ItemEffectPresentationState, ItemIntegrity
 from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, SpatialEffectInteractionEvent
-from dnd.spatial.ignition import ignite_surface_contacts, apply_elemental_surface_contacts
+from dnd.spatial.area_reach import ReachStage, resolve_staged_area
+from dnd.spatial.ignition import ignite_surface_contacts, apply_elemental_surface_contacts, resolve_interaction
 from dnd.types.world import OccupancyLayer
 from dnd.types.abilities import AbilityName
 from dnd.core.creature_types import CreatureType, DamageType
@@ -82,15 +86,13 @@ from dnd.core.modifiers import (
     AdvantageStatus,
     NumericalModifier,
 )
-from dnd.core.aoe import AoEShape, Sphere, Cone, Line, Cube, Cylinder
+from dnd.core.aoe import AoEShape, Sphere, Cone, Line, Cube, Cylinder, objective_footprint
 from dnd.core.gridmap import get_map
-from dnd.core.presentation_geometry import LinePresentationGeometry
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.blocks.equipment import Weapon as WeaponItem, Shield as ShieldItem
 from dnd.blocks.base_item import BaseItem
-from dnd.core.events import AreaReachEvent, ItemDestructionEvent
+from dnd.core.events import AreaReachEvent
 from dnd.types.spell_suppression import SpellSuppression
-from dnd.types.world import WorldEdgeChannel
 
 from dnd.entity import Entity
 from dnd.actions import (
@@ -910,8 +912,6 @@ class Fireball(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Sphere(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 radius_feet=20,
                 propagation="connected",
             )
@@ -943,52 +943,25 @@ class Fireball(SpellAction):
         source_position = execution_event.effect_source_position or execution_event.source_position
         if source_position is None:
             return effect_event.cancel(status_message="Fireball has no recorded source position")
-        shape = self.aoe_shape.model_copy(deep=True, update={"target": self.end_position})
-        origin = shape.get_origin(source_position)
-        envelope = shape.geometric_positions(source_position)
+        shape, aim = self.aoe_shape, self.end_position
+        origin = shape.get_origin(aim, source_position)
+        envelope = shape.geometric_positions(aim, source_position)
         grid = get_map()
-        visited: Set[UUID] = set()
-        displayed_positions: Set[Tuple[int, int]] = set()
         suppressions: dict[UUID, Set[Tuple[int, int]]] = {}
         total_damage = 0
         application_index = 0
-        stage_index = 0
         previous_stage: UUID | None = None
-        prerequisites: Tuple[UUID, ...] = ()
+        interrupted: Optional[ActionEvent] = None
 
-        while True:
-            history = EventQueue.get_event_history(effect_event.uuid)
-            if history and history[-1].canceled:
-                return type_cast(ActionEvent, history[-1])
-            shape.compute_objective(source_position)
-            reached = shape.affected_positions & envelope
-            contacts = grid.area_object_contacts(reached, geometric_positions=envelope, origin=origin)
-            creatures = self._filter_targets_by_faction(caster, list(shape.affected_entity_uuids))
+        def recipients(reached: FrozenSet[Tuple[int, int]], contacts: Mapping[UUID, Tuple[int, int]]) -> List[UUID]:
+            creatures = self._filter_targets_by_faction(caster,
+                list({identity for cell in reached for identity in grid.get_entities_at(cell)}))
             candidates = {identity for identity in creatures
                 if (self.include_self or identity != caster.uuid)
                 and (self.include_dead or ((block := BaseBlock.get(identity)) is not None and block.is_active))}
             candidates.update(identity for identity in contacts
                 if isinstance(item := BaseBlock.get(identity), BaseItem)
                 and item.is_targetable and item.is_breakable())
-            candidates.difference_update(visited)
-            excluded = SpellProtectionRegistry.get_excluded_positions(source_position, self.spell_level)
-            allowed = reached - excluded
-            newly_reached = allowed - displayed_positions
-            for suppression in SpellProtectionRegistry.get_suppressions(source_position, self.spell_level, reached):
-                suppressions.setdefault(suppression.provider_uuid, set()).update(suppression.positions)
-            if stage_index and not newly_reached and not candidates:
-                break
-            stage = AreaReachEvent(source_entity_uuid=caster.uuid,
-                source_entity_name=caster.name, parent_event=effect_event.uuid,
-                stage_index=stage_index, newly_reached_positions=tuple(sorted(newly_reached)),
-                previous_reach_lineage_uuid=previous_stage,
-                prerequisite_destruction_lineages=prerequisites)
-            stage = stage.phase_to(EventPhase.EXECUTION)
-            if not stage.canceled:
-                stage = stage.phase_to(EventPhase.EFFECT)
-            if stage.canceled:
-                return effect_event.cancel(status_message="Fireball area expansion interrupted")
-            displayed_positions.update(newly_reached)
 
             def target_order(identity: UUID) -> tuple[int, Tuple[int, int], str, str]:
                 block = BaseBlock.get(identity)
@@ -1000,45 +973,54 @@ class Fireball(SpellAction):
                     parent = owner.supported_by_uuid if isinstance(owner, BaseItem) else None
                 return (depth, contacts.get(identity, block.position if block else origin),
                         block.name or "" if block else "", str(identity))
+            return sorted(candidates, key=target_order)
 
-            barriers = set()
-            for identity in contacts:
-                block = BaseBlock.get(identity)
-                if block is None:
-                    continue
-                structure = block.get_boundary_structure()
-                if block.blocks_propagation() or (structure is not None
-                        and WorldEdgeChannel.PROPAGATION in structure.blocked_channels):
-                    barriers.add(identity)
-            cursor = EventQueue.event_cursor()
-            revision = grid.propagation_revision
-            for identity in sorted(candidates, key=target_order):
-                visited.add(identity)
+        def resolve(stage: ReachStage) -> bool:
+            nonlocal total_damage, application_index, previous_stage, interrupted
+            history = EventQueue.get_event_history(effect_event.uuid)
+            if history and history[-1].canceled:
+                interrupted = type_cast(ActionEvent, history[-1])
+                return False
+            for suppression in SpellProtectionRegistry.get_suppressions(source_position, self.spell_level, set(stage.reached)):
+                suppressions.setdefault(suppression.provider_uuid, set()).update(suppression.positions)
+            reach = AreaReachEvent(source_entity_uuid=caster.uuid,
+                source_entity_name=caster.name, parent_event=effect_event.uuid,
+                stage_index=stage.index, newly_reached_positions=tuple(sorted(stage.newly_reached)),
+                previous_reach_lineage_uuid=previous_stage,
+                prerequisite_destruction_lineages=stage.prerequisite_destruction_lineages)
+            reach = reach.phase_to(EventPhase.EXECUTION)
+            if not reach.canceled:
+                reach = reach.phase_to(EventPhase.EFFECT)
+            if reach.canceled:
+                interrupted = effect_event.cancel(status_message="Fireball area expansion interrupted")
+                return False
+            for identity in stage.recipients:
                 recipient = BaseBlock.get(identity)
                 if recipient is None or (isinstance(recipient, BaseItem) and not recipient.is_breakable()):
                     continue  # The parent may already have destroyed its insert.
                 placement = grid.get_object_placement(identity)
                 application = execution_event.with_updates(
                     target_kind="object" if isinstance(recipient, BaseItem) else "creature",
-                    target_position=contacts.get(identity, recipient.position),
+                    target_position=stage.contacts.get(identity, recipient.position),
                     target_base_height_steps=placement.base_height_steps if placement else None,
                 )
                 total_damage += self._apply_target_batch(application, [identity],
-                    parent_event=stage, application_index_offset=application_index)
+                    parent_event=reach, application_index_offset=application_index)
                 application_index += 1
                 history = EventQueue.get_event_history(effect_event.uuid)
                 if history and history[-1].canceled:
-                    stage.cancel(status_message="Parent cast interrupted")
-                    return type_cast(ActionEvent, history[-1])
-            ignite_surface_contacts(stage, newly_reached)
-            stage = stage.phase_to(EventPhase.COMPLETION)
-            previous_stage = stage.lineage_uuid
-            prerequisites = tuple(event.lineage_uuid for _, event in EventQueue.iter_events_since(cursor)
-                if isinstance(event, ItemDestructionEvent) and event.phase is EventPhase.COMPLETION
-                and event.target_entity_uuid in barriers)
-            if grid.propagation_revision == revision:
-                break
-            stage_index += 1
+                    reach.cancel(status_message="Parent cast interrupted")
+                    interrupted = type_cast(ActionEvent, history[-1])
+                    return False
+            ignite_surface_contacts(reach, stage.newly_reached)
+            previous_stage = reach.phase_to(EventPhase.COMPLETION).lineage_uuid
+            return True
+
+        displayed_positions = resolve_staged_area(lambda: objective_footprint(shape, aim, source_position),
+            recipients, resolve, geometric_positions=envelope, origin=origin,
+            excluded=SpellProtectionRegistry.get_excluded_positions(source_position, self.spell_level))
+        if interrupted is not None:
+            return interrupted
 
         return effect_event.with_updates(total_targets=application_index, total_damage=total_damage,
             resolved_area_positions=tuple(sorted(displayed_positions)),
@@ -1184,8 +1166,6 @@ class BurningHands(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cone(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0),
                 length_feet=15
             )
 
@@ -1329,8 +1309,6 @@ class LightningBolt(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Line(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0),
                 length_feet=100,
                 width_feet=5
             )
@@ -1470,8 +1448,6 @@ class Thunderwave(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cube(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0),
                 size_feet=15,
                 centered=False
             )
@@ -1603,8 +1579,8 @@ class Thunderwave(SpellAction):
         push_applied = False
         push_distance_actual = 0
         if not success:
-            start_pos = target.senses.position
-            push_dir = self._get_push_direction(caster.senses.position, start_pos)
+            start_pos = target.position
+            push_dir = self._get_push_direction(caster.position, start_pos)
             end_pos, push_distance_actual, was_blocked, blocked_by = self._calculate_push_destination(
                 start_pos, push_dir, self.push_distance_feet, target.uuid
             )
@@ -1674,8 +1650,6 @@ class Shatter(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Sphere(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 radius_feet=10
             )
 
@@ -1826,8 +1800,6 @@ class CircleOfDeath(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Sphere(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 radius_feet=60
             )
 
@@ -1960,8 +1932,6 @@ class ConeOfCold(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cone(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0),
                 length_feet=60
             )
 
@@ -2186,8 +2156,6 @@ class Sunburst(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Sphere(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 radius_feet=60
             )
 
@@ -2936,9 +2904,7 @@ class GustOfWindZone(AreaCondition):
             SpatialEffectTriggerKind.TURN_START,
         }),
     )
-    zone_shape: str = Field(default="line", description="Domain value for zone_shape on gust of wind zone.")
-    zone_radius_feet: int = Field(default=60, description="Zone radius in feet used by gust of wind zone.")
-    zone_width_feet: int = Field(default=10)
+    area: AoEShape = Line(length_feet=60, width_feet=10)
     adds_difficult_terrain: bool = Field(default=True, description="Whether gust of wind zone makes affected tiles difficult terrain.")
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.NON_SOURCE)
@@ -2956,33 +2922,13 @@ class GustOfWindZone(AreaCondition):
         previous = observer.senses.spatial_effects.get(self.uuid) if observer is not None else None
         origin_known = (self.position in positions or
                         (previous is not None and previous.anchor_position == self.position))
-        geometry = (LinePresentationGeometry(
-            origin=self.position, direction=self.zone_direction,
-            length_feet=self.zone_radius_feet, width_feet=self.zone_width_feet,
-        ) if origin_known and self.zone_direction is not None else None)
+        geometry = (self.area.presentation_geometry(self.area_aim(self.position), self.position)
+            if origin_known else None)
         return PerceivedSpatialEffect(
             content_ref=self.content_ref, name=self.name, description=self.description,
             positions=tuple(sorted(positions)),
             anchor_position=self.position if origin_known else None, area_geometry=geometry,
         )
-
-    def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
-        """Compute line from caster in the chosen direction."""
-        if not self.zone_direction:
-            return {self.position}
-        dx, dy = self.zone_direction
-        length_tiles = self.zone_radius_feet // 5
-        target = (self.position[0] + dx * length_tiles,
-                  self.position[1] + dy * length_tiles)
-
-        line = Line(
-            source_entity_uuid=self.source_entity_uuid,
-            target=target,
-            length_feet=self.zone_radius_feet,
-            width_feet=self.zone_width_feet
-        )
-        line.compute_objective(caster_pos=self.position)
-        return set(line.affected_positions)
 
     def _create_zone_entry_handler(self) -> EventHandler:
         source_uuid = self.source_entity_uuid
@@ -3049,7 +2995,7 @@ class GustOfWindZone(AreaCondition):
             source_entity_uuid=source_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -3067,13 +3013,7 @@ class GustOfWindZone(AreaCondition):
             phase=EventPhase.DECLARATION,
             use_register=False,
         ))
-        interaction = interaction.phase_to(EventPhase.EXECUTION)
-        if interaction.canceled:
-            return
-        interaction = interaction.phase_to(EventPhase.EFFECT)
-        if interaction.canceled:
-            return
-        interaction.phase_to(EventPhase.COMPLETION)
+        resolve_interaction(interaction)
 
     def _create_wind_exposure_turn_handler(self) -> EventHandler:
         """Create a caster-turn handler that re-emits the persistent wind."""
@@ -3193,8 +3133,6 @@ class GustOfWind(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Line(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0),
                 length_feet=60,
                 width_feet=10
             )
@@ -3240,7 +3178,7 @@ class GustOfWind(SpellAction):
     def _setup_zone(self, parent_event: SpellEvent) -> None:
         """Set up the persistent zone condition after initial push."""
         caster = Entity.get(self.source_entity_uuid)
-        if not caster:
+        if not caster or self.aoe_shape is None:
             return
 
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
@@ -3255,7 +3193,8 @@ class GustOfWind(SpellAction):
             position=caster.position,
             anchor_uuid=caster.uuid,
             faction=caster.faction,
-            zone_direction=direction,
+            area=self.aoe_shape,
+            area_aim_offset=direction,
             spell_dc=dc,
             effect_origin=parent_event.to_effect_origin(),
         )
@@ -3291,8 +3230,7 @@ class IceStormTerrain(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
     )
-    zone_shape: str = Field(default="sphere", description="Domain value for zone_shape on ice storm terrain.")
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by ice storm terrain.")
+    area: AoEShape = Sphere(radius_feet=20)
     adds_difficult_terrain: bool = Field(default=True, description="Whether ice storm terrain makes affected tiles difficult terrain.")
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for ice storm terrain hazards.")
@@ -3345,8 +3283,6 @@ class IceStorm(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cylinder(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 radius_feet=20,
                 height_feet=40
             )
@@ -3593,8 +3529,7 @@ class SunbeamStrike(SpellAction):
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         if self.aoe_shape is None:
-            self.aoe_shape = Line(source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0), length_feet=60, width_feet=5)
+            self.aoe_shape = Line(length_feet=60, width_feet=5)
 
     def _create_declaration_event(self, parent_event: Event | None = None,
                                   use_register: bool = True) -> Optional[Event]:
@@ -3643,8 +3578,7 @@ class Sunbeam(SpellAction):
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         if self.aoe_shape is None:
-            self.aoe_shape = Line(source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0), length_feet=60, width_feet=5)
+            self.aoe_shape = Line(length_feet=60, width_feet=5)
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         return self._resolve_area_targets()
@@ -3915,8 +3849,6 @@ class PrismaticSpray(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cone(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0),
                 length_feet=60
             )
 
@@ -4188,8 +4120,6 @@ class FlameStrike(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cylinder(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 radius_feet=10,
                 height_feet=40
             )
@@ -4861,15 +4791,12 @@ class MassCureWounds(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Sphere(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 radius_feet=30
             )
 
     def get_all_targets(self) -> List[UUID]:
-        """Override to cap at 6 targets from AoE."""
-        targets = super().get_all_targets()
-        return targets[:self.max_targets]
+        """Up to six creatures in the sphere, lowest current HP first (plan Q4)."""
+        return lowest_hp_first(super().get_all_targets(), self.max_targets)
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -5358,7 +5285,7 @@ class FireShieldEffect(BaseCondition):
                 effect_id="spell.fire_shield.retaliation")
             return None
 
-        handler = EventHandler(name="Fire Shield retaliation", source_entity_uuid=target.uuid,
+        handler = EventHandler(name="Fire Shield retaliation", source_entity_uuid=target.uuid, group_dispatch=HandlerGroupDispatch.AFTER_GROUP,
             trigger_conditions=[Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EFFECT,
                 event_target_entity_uuid=target.uuid),
                 Trigger(event_type=EventType.CAST_SPELL, event_phase=EventPhase.EFFECT,
@@ -5595,7 +5522,7 @@ class FaerieFire(SpellAction):
     def model_post_init(self,context: Any) -> None:
         super().model_post_init(context)
         if self.aoe_shape is None:
-            self.aoe_shape=Sphere(source_entity_uuid=self.source_entity_uuid,target=self.end_position or (0,0),radius_feet=20)
+            self.aoe_shape=Sphere(radius_feet=20)
 
     def _resolve_execution_targets(self):
         return self._resolve_area_targets() if self.effective_target_type is TargetType.POSITION_AOE else super()._resolve_execution_targets()
@@ -5837,8 +5764,7 @@ class MoonbeamZone(AreaCondition):
     layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
     occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
     anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.INDEPENDENT_MOVABLE
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 3
+    area: AoEShape = Sphere(radius_feet=3)
     has_visible_presence: bool = True
     spell_dc: int
     dice_count: int = 2
@@ -5848,6 +5774,11 @@ class MoonbeamZone(AreaCondition):
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.APPEAR,
         SpatialEffectTriggerKind.ENTER,SpatialEffectTriggerKind.EFFECT_ENTERS_OCCUPANT,SpatialEffectTriggerKind.TURN_START})
     first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = trigger_kinds
+
+    def _admit_trigger(self,kind: SpatialEffectTriggerKind,target_entity_uuid: UUID,event: Event) -> bool:
+        # Activation exposes nobody: the cast's own loop is the exposure, and
+        # it must find each occupant's fence unspent (bug L8).
+        return not self.initial_exposure_pending and super()._admit_trigger(kind,target_entity_uuid,event)
 
     def expose(self,target: Entity,event: Event) -> None:
         if self.initial_exposure_pending or not self.applied:
@@ -5888,7 +5819,7 @@ class MoonbeamZone(AreaCondition):
                 self.expose(target,event)
             return None
         return EventHandler(name="Moonbeam turn start",source_entity_uuid=self.source_entity_uuid,
-            trigger_conditions=[Trigger(event_type=EventType.TURN_START,event_phase=EventPhase.EFFECT)],event_processor=start)
+            trigger_conditions=[Trigger(event_type=EventType.TURN_START,event_phase=EventPhase.EXECUTION)],event_processor=start)
 
 
 class MoonbeamEffect(ConcentrationActionMarker):
@@ -5996,9 +5927,13 @@ class Moonbeam(SpellAction):
             zone=BaseCondition.get(marker.zone_uuid) if marker.zone_uuid else None
             if isinstance(zone,MoonbeamZone) and zone.applied:
                 zone.initial_exposure_pending=False
-                for target in zone._occupants_at(set(zone.affected_positions)):
-                    if zone.applied and zone.allows_contribution_at(target.position) and zone.admits_application(target.uuid,admitted):
-                        zone.expose(target,admitted)
+                # The cast's exposure is one instant and counts against each
+                # target's first-per-turn fence (bug L8).
+                with EventQueue.group(GroupEntryKind.CAST_LOOP,root=admitted,shares_damage_rolls=True):
+                    for target in zone._occupants_at(set(zone.affected_positions)):
+                        if (zone.applied and zone.allows_contribution_at(target.position)
+                                and zone._admit_trigger(SpatialEffectTriggerKind.APPEAR,target.uuid,admitted)):
+                            zone.expose(target,admitted)
         else:
             action.remove_from_register()
         return admitted
@@ -6278,7 +6213,7 @@ class VitriolicSphere(SpellAction):
 
     def model_post_init(self, context: object) -> None:
         super().model_post_init(context)
-        self.aoe_shape = Sphere(source_entity_uuid=self.source_entity_uuid, target=self.end_position or (0,0), radius_feet=20)
+        self.aoe_shape = Sphere(radius_feet=20)
 
     def position_placement_error(self, *, subjective=False):
         return spell_position_error(self)
@@ -6737,7 +6672,7 @@ class FreezingSphere(SpellAction):
     def model_post_init(self,context:object):
         super().model_post_init(context)
         if self.delivery=="portable":self.target_type=TargetType.ENTITY
-        if self.aoe_shape is None:self.aoe_shape=Sphere(source_entity_uuid=self.source_entity_uuid,target=self.end_position or (0,0),radius_feet=20)
+        if self.aoe_shape is None:self.aoe_shape=Sphere(radius_feet=20)
 
     def get_range(self):
         return Range(type=RangeType.REACH,normal=5) if self.delivery=="portable" else super().get_range()

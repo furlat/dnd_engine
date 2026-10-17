@@ -3,6 +3,7 @@
 from uuid import UUID, uuid4
 from pydantic import Field
 
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.actions import (
     entity_action_economy_cost_applier,
     entity_action_economy_cost_evaluator,
@@ -48,8 +49,7 @@ class HealingIncenseZone(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = (
         SpatialEffectOccupancyPolicy.OVERLAPPING
     )
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 10
+    area: AoEShape = Sphere(radius_feet=10)
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset(
         {SpatialEffectTriggerKind.TURN_START}
     )
@@ -112,7 +112,7 @@ class HealingIncenseZone(AreaCondition):
             name="Healing Incense start-turn healing",
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[
-                Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EFFECT)
+                Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EXECUTION)
             ],
             event_processor=heal,
         )

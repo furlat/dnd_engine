@@ -108,7 +108,7 @@ def test_oblique_gust_initial_and_persistent_footprints_share_the_selected_direc
         result = GustOfWind(source_entity_uuid=caster.uuid, end_position=(15, 9)).apply()
     assert isinstance(result, SpellEvent) and not result.canceled and result.total_targets == 1
     zone = next(zone for zone in get_map().get_spatial_conditions() if isinstance(zone, GustOfWindZone))
-    assert zone.zone_direction == (10, 4)
+    assert zone.area_aim_offset == (10, 4)
     assert target.position in zone.affected_positions
     assert set(result.resolved_area_positions or ()) == zone.affected_positions
     observation = caster.senses.spatial_effects[zone.uuid]

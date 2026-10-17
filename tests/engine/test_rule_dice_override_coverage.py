@@ -10,6 +10,7 @@ from dnd.blocks.health import HealthConfig
 from dnd.classes.fighter import GreatWeaponFighting
 from dnd.conditions import Blinded, Unconscious
 from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.core.aoe import objective_footprint
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome, Dice, RollType, fixed_dice_faces, roll_die_face
 from dnd.core.equipment_types import WeaponSlot
@@ -142,13 +143,14 @@ def test_hp_pools_use_fixed_base_and_upcast_faces_and_cache_selection(game, spel
     Entity.update_all_entities_senses()
     spell = spell_type(source_entity_uuid=caster.uuid, end_position=(5, 5), cast_at_level=level, alt_skip_slot=True)
     assert spell.get_hp_pool_dice() == (count, sides)
-    spell.aoe_shape.compute_objective(caster.position)
     with fixed_dice_faces(*([2] * count), 7):
         selected = spell.get_all_targets()
         repeated = spell.get_all_targets()
         following = ordinary_roll(caster)
     assert selected == repeated == [first.uuid]
-    assert {first.uuid, later.uuid, immune.uuid, sightless.uuid} <= set(spell.aoe_shape.affected_entity_uuids)
+    assert spell.aoe_shape is not None
+    area = objective_footprint(spell.aoe_shape, (5, 5), caster.position)
+    assert {first.position, later.position, immune.position, sightless.position} <= area
     assert later.uuid not in selected and immune.uuid not in selected and sightless.uuid not in selected
     assert spell.hp_pool_rolled == total and spell.hp_pool_remaining == 0
     assert following.results == [7]

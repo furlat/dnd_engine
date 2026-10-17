@@ -36,14 +36,13 @@ from dnd.core.condition_types import (
 )
 from dnd.core.creature_types import DamageType
 from dnd.core.events import Damage, DamageAppliedEvent, EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event, EventQueue
-from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier
+from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier, ResistanceModifier, ResistanceStatus
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.dice import AttackOutcome, roll_die_face
 from dnd.core.aoe import AoEShape, Cone, Cube, Sphere
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
-from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.actor import ConditionState
 from dnd.conditions import Frightened, Charmed, Blinded, Deafened, InvisibilityEffect, GreaterInvisibilityEffect, apply_shared_sensory_condition
@@ -324,8 +323,6 @@ class Fear(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cone(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0),
                 length_feet=30
             )
 
@@ -549,8 +546,6 @@ class HypnoticPattern(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cube(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 size_feet=30,
                 centered=True
             )
@@ -578,8 +573,10 @@ class HypnoticPattern(SpellAction):
         )
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
-        """Retain the exact execution area already used for native target resolution."""
-        return self._resolve_area_targets()
+        """Only creatures in the area that see the pattern are affected (SRD; bug L1)."""
+        targets, area = self._resolve_area_targets()
+        return [identity for identity in targets
+                if (entity := Entity.get(identity)) is not None and entity.can_see_visual_effects()], area
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
@@ -724,8 +721,6 @@ class ColorSpray(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cone(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0),
                 length_feet=15
             )
 
@@ -743,42 +738,8 @@ class ColorSpray(SpellAction):
         """
         if self._selected_hp_pool_targets is not None:
             return list(self._selected_hp_pool_targets)
-
-        if not (self.aoe_shape and self.end_position):
-            return []
-
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return []
-
-        candidate_uuids, _ = self._resolve_area_targets()
-
-        candidates: List[Tuple[int, UUID]] = []
-        for uid in candidate_uuids:
-            if uid == self.source_entity_uuid:
-                continue
-
-            entity = Entity.get(uid)
-            if not entity or not entity.has_hp:
-                continue
-
-            if not entity.can_see_visual_effects():
-                continue
-
-            if entity.check_condition_immunity("Blinded"):
-                continue
-
-            candidates.append((entity.get_hp(), uid))
-
-        candidates.sort(key=lambda x: (x[0], str(x[1])))
-
-        if self.hp_pool_rolled == 0:
-            dice_count, dice_value = self.get_hp_pool_dice()
-            roll_results = [roll_die_face(dice_value) for _ in range(dice_count)]
-            total = sum(roll_results)
-            self.hp_pool_rolled = total
-            self.hp_pool_remaining = total
-
+        candidates = self._hp_pool_candidates()
+        self._ensure_hp_pool()
         targets: List[UUID] = []
         remaining = self.hp_pool_remaining if self.hp_pool_remaining > 0 else self.hp_pool_rolled
         for hp, uid in candidates:
@@ -789,6 +750,57 @@ class ColorSpray(SpellAction):
         self.hp_pool_remaining = remaining
         self._selected_hp_pool_targets = targets
         return list(targets)
+
+    def _hp_pool_candidates(self) -> List[Tuple[int, UUID]]:
+        """Eligible creatures in the cone, lowest current HP first."""
+        if not (self.aoe_shape and self.end_position):
+            return []
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return []
+        candidate_uuids, _ = self._resolve_area_targets()
+        candidates: List[Tuple[int, UUID]] = []
+        for uid in candidate_uuids:
+            if uid == self.source_entity_uuid:
+                continue
+            entity = Entity.get(uid)
+            if not entity or not entity.has_hp:
+                continue
+            if not entity.can_see_visual_effects():
+                continue
+            if entity.check_condition_immunity("Blinded"):
+                continue
+            candidates.append((entity.get_hp(), uid))
+        candidates.sort(key=lambda x: (x[0], str(x[1])))
+        return candidates
+
+    def _ensure_hp_pool(self) -> None:
+        if self.hp_pool_rolled == 0:
+            dice_count, dice_value = self.get_hp_pool_dice()
+            total = sum(roll_die_face(dice_value) for _ in range(dice_count))
+            self.hp_pool_rolled = total
+            self.hp_pool_remaining = total
+
+    def _apply_target_applications(self, execution_event: SpellEvent, effect_event: SpellEvent,
+                                   target_uuids: List[UUID]) -> SpellEvent:
+        """Spend the pool only on admitted applications; a vetoed creature costs nothing (Q3)."""
+        del target_uuids
+        self._ensure_hp_pool()
+        remaining = self.hp_pool_rolled
+        applied: List[UUID] = []
+        for hp, uid in self._hp_pool_candidates():
+            if hp > remaining:
+                continue
+            result = self._apply_target_application(execution_event, uid, parent_event=effect_event,
+                application_index=len(applied))
+            if result is None:
+                continue
+            remaining -= hp
+            applied.append(uid)
+        self.hp_pool_remaining = remaining
+        self._selected_hp_pool_targets = applied
+        return effect_event.with_updates(total_targets=len(applied), total_damage=0, aoe_position=self.end_position,
+            status_message=f"{self.name} affected {len(applied)} targets")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cone direction. Self-range means no LOS check to target position."""
@@ -1278,8 +1290,7 @@ class SilenceZone(MembershipAreaCondition):
         SpatialEffectTriggerKind.APPEAR,
         SpatialEffectTriggerKind.ENTER,
     })
-    zone_shape: str = Field(default="sphere", description="Zone shape key.")
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet.")
+    area: AoEShape = Sphere(radius_feet=20)
 
     hazard_filter: Optional[HazardFilter] = Field(default=None, description="Silence is not treated as a pathfinding hazard.")
 
@@ -1299,7 +1310,7 @@ class SilenceZone(MembershipAreaCondition):
         return PerceivedSpatialEffect(
             content_ref=self.content_ref, name=self.name, description=self.description,
             positions=tuple(sorted(positions)), anchor_position=anchor,
-            area_geometry=(SpherePresentationGeometry(center=anchor, radius_feet=self.zone_radius_feet)
+            area_geometry=(self.area.presentation_geometry(self.area_aim(anchor), anchor)
                            if anchor is not None else None),
         )
 
@@ -1330,6 +1341,10 @@ class SilenceZone(MembershipAreaCondition):
                 return None
 
             if caster.position not in zone_positions:
+                return None
+
+            # A cast-level rule: per-target applications are not new casts.
+            if isinstance(event, SpellEvent) and event.application is not None:
                 return None
 
             if isinstance(event, SpellEvent) and event.verbal:
@@ -1374,7 +1389,12 @@ class _SilenceDeafened(SpatialConditionMembershipSource):
             return [], [], [], [], execution_event.cancel(
                 status_message="Silence deafness was rejected",
             )
-        return [], [], list(self.sub_conditions), [], execution_event.phase_to(
+        # A creature inside the sphere is immune to thunder damage (SRD; bug L2).
+        immunity = ResistanceModifier(name="Silence thunder immunity", value=ResistanceStatus.IMMUNITY,
+            damage_type=DamageType.THUNDER, source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target.uuid)
+        immunity_uuid = target.health.damage_reduction.self_static.add_resistance_modifier(immunity)
+        return [(target.health.damage_reduction.uuid, immunity_uuid)], [], list(self.sub_conditions), [], execution_event.phase_to(
             EventPhase.EFFECT, update={"condition": self},
         )
 
@@ -1468,9 +1488,7 @@ class Silence(SpellAction):
         return effect_event.with_updates(
             status_message=f"Silence zone covers a 20ft radius at {position}",
             aoe_position=zone.position,
-            area_geometry=SpherePresentationGeometry(
-                center=zone.position, radius_feet=zone.zone_radius_feet,
-            ),
+            area_geometry=zone.area.presentation_geometry(zone.area_aim(zone.position), zone.position),
             resolved_area_positions=tuple(sorted(zone.affected_positions)),
         )
 
@@ -1695,7 +1713,7 @@ class Weird(SpellAction):
 
     def model_post_init(self, context: object) -> None:
         super().model_post_init(context)
-        self.aoe_shape = Sphere(source_entity_uuid=self.source_entity_uuid, target=self.end_position or (0,0), radius_feet=30)
+        self.aoe_shape = Sphere(radius_feet=30)
 
     def position_placement_error(self, *, subjective=False):
         return spell_position_error(self)

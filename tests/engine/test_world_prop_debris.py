@@ -160,7 +160,8 @@ def test_wreck_disposal_removes_only_its_owned_terrain_and_preserves_actual_move
     bed = build_world_prop("environment.furniture.bed")
     bed.place_on_grid((3, 3))
     bed.receive_damage(18, DamageType.BLUDGEONING, bed.uuid)
-    assert (walking_cost((3, 3)), walking_cost((4, 3))) == (2, 3)
+    # Wreck and oil are both difficult terrain, which never stacks (human decision I).
+    assert (walking_cost((3, 3)), walking_cost((4, 3))) == (2, 2)
     actor = Entity.create(uuid4(), "Walker", config=EntityConfig(position=(3, 2)))
     setup_standard_actions(actor)
     actor.compose_entity()

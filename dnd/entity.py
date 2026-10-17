@@ -1,7 +1,7 @@
 from dnd.core.effect_types import EventResolutionRef, EffectOrigin
 from dnd.core.damage import DamageResolution
 from dnd.core.attack_types import NaturalWeaponSpec
-from typing import cast, Callable, AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
+from typing import cast, Callable, AbstractSet, DefaultDict, Dict, FrozenSet, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from collections import defaultdict
@@ -104,6 +104,7 @@ from dnd.core.gridmap import (
 )
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.geometry import supercover_line
+from dnd.core.aoe import AoEShape, FootprintIdentity, footprint_identity, objective_footprint
 from dnd.core.combat_log import EmptyLogData
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.creature_transforms import (
@@ -580,22 +581,12 @@ class Entity(BaseBlock):
     )
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
 
-    _aoe_footprint_cache_context: Optional[Tuple[Any, ...]] = PrivateAttr(default=None)
-    _aoe_footprint_cache: Dict[
-        Tuple[Any, ...],
-        frozenset[Tuple[int, int]],
-    ] = PrivateAttr(default_factory=dict)
     _aoe_preview_cache_context: Optional[Tuple[Any, ...]] = PrivateAttr(default=None)
     _aoe_preview_cache: Dict[
         Tuple[Any, ...],
         Tuple[AvailableTarget, ...],
     ] = PrivateAttr(default_factory=dict)
     _aoe_contact_alive: Dict[UUID, bool] = PrivateAttr(default_factory=dict)
-    _aoe_origin_fov_cache_revision: Optional[int] = PrivateAttr(default=None)
-    _aoe_origin_fov_cache: Dict[
-        Tuple[Tuple[int, int], int],
-        Set[Tuple[int, int]],
-    ] = PrivateAttr(default_factory=dict)
     _fast_move_target_cache_revision: Optional[Tuple[int, int]] = PrivateAttr(default=None)
     _fast_move_target_cache: Dict[
         Tuple[Any, ...],
@@ -5934,67 +5925,55 @@ class Entity(BaseBlock):
                 or item.is_targetable and item.is_breakable())})
         return result
 
+    def _aoe_footprint(
+        self,
+        shape: AoEShape,
+        aim: Tuple[int, int],
+        footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
+    ) -> FrozenSet[Tuple[int, int]]:
+        """Return one objective footprint, computed once per footprint identity per call."""
+        identity = footprint_identity(shape, aim, self.position)
+        footprint = footprints.get(identity)
+        if footprint is None:
+            record_action_count("discovery.footprint", 1)
+            footprint = objective_footprint(shape, aim, self.position)
+            footprints[identity] = footprint
+        return footprint
+
     def _compute_aoe_at_position(
         self,
-        shape: Any,
-        shape_definition_key: Tuple[Any, ...],
-        pos: Tuple[int, int],
         template: BaseAction,
+        shape: AoEShape,
+        pos: Tuple[int, int],
         include_dead: bool,
         caster_visible_positions: AbstractSet[Tuple[int, int]],
-        fov_cache: dict,
-        barrier_positions: Set[Tuple[int, int]],
+        footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
         idx: int,
     ) -> Optional[AvailableTarget]:
-        """Compute AoE preview metadata for a candidate position.
+        """Compute the subjective AoE hit set of one candidate aim.
+
+        The objective footprint is the one execution resolves; the caster
+        sees its visible cells and the perceived occupants there.
 
         Args:
-            shape: Reusable preview shape to aim at the candidate position.
-            shape_definition_key: Precomputed immutable identity for the shape.
-            pos: Candidate target position.
             template: Action template being discovered.
+            shape: The template's area shape.
+            pos: Candidate aim.
             include_dead: Whether zero-HP entities stay targetable.
             caster_visible_positions: Visibility snapshot shared by this query.
-            fov_cache: Shared field-of-view cache for AoE computation.
-            barrier_positions: Positions that block AoE projection.
+            footprints: Call-local footprint table, keyed by footprint identity.
             idx: Discovery index to assign if the position is valid.
 
         Returns:
             Available target with AoE metadata, or `None` if filtered out.
         """
         record_action_count("discovery.aoe_aim", 1)
-        shape.target = pos
-        footprint_key = (
-            shape_definition_key,
-            shape.footprint_target_key(self.position),
-        )
-        cache_started = time.perf_counter() if action_timing_enabled() else 0.0
-        cached_footprint = self._aoe_footprint_cache.get(footprint_key)
-        if cached_footprint is None:
-            cached_footprint = frozenset(
-                self._compute_aoe_propagation_footprint(
-                    shape,
-                    fov_cache,
-                    barrier_positions,
-                )
-            )
-            self._aoe_footprint_cache[footprint_key] = cached_footprint
-            if cache_started:
-                record_action_timing("available_actions.aoe_footprint_cache_miss_ms", cache_started)
-        else:
-            if cache_started:
-                record_action_timing("available_actions.aoe_footprint_cache_hit_ms", cache_started)
-        shape.set_subjective_footprint(
-            self.position,
-            self.senses,
-            set(cached_footprint.intersection(caster_visible_positions)),
-            caster_uuid=self.uuid,
-        )
-
-        affected_uuids = sorted(
-            shape.affected_entity_uuids,
-            key=target_resolution_sort_key,
-        )
+        positions = self._aoe_footprint(shape, pos, footprints) & caster_visible_positions
+        occupants = {entity_uuid for entity_uuid, contact in self.senses.entities.items()
+            if contact.position in positions}
+        if self.position in positions:
+            occupants.add(self.uuid)
+        affected_uuids = sorted(occupants, key=target_resolution_sort_key)
 
         if not template.include_self:
             affected_uuids = [uid for uid in affected_uuids if uid != self.uuid]
@@ -6037,36 +6016,7 @@ class Entity(BaseBlock):
             affected_entity_uuids=affected_uuids,
             affected_entity_names=affected_names,
             affected_count=len(affected_uuids),
-            affected_positions=list(shape.affected_positions)
-        )
-
-    def _compute_aoe_propagation_footprint(
-        self,
-        shape: Any,
-        fov_cache: dict,
-        barrier_positions: Set[Tuple[int, int]],
-    ) -> Set[Tuple[int, int]]:
-        """Return shape geometry plus propagation before subjective visibility.
-
-        The result is safe to cache inside authoritative engine state because
-        it contains no target facts. Each discovery pass still intersects it
-        with the actor's current visible cells before resolving entity UUIDs.
-        """
-        record_action_count("discovery.footprint", 1)
-        computed_origin = shape.get_origin(self.position)
-        shape.computed_origin = computed_origin
-        geometric = shape._get_positions_in_shape(computed_origin)
-        if shape.propagation == "connected":
-            return shape._connected_positions(computed_origin, geometric)
-        if computed_origin == self.position:
-            return set(geometric)
-        if geometric.isdisjoint(barrier_positions):
-            return set(geometric)
-        grid = get_map()
-        return grid.filter_propagation_positions(
-            computed_origin,
-            set(geometric),
-            shape._get_max_radius_tiles(),
+            affected_positions=sorted(positions),
         )
 
     def _aoe_discovery_cache_key(
@@ -6074,7 +6024,6 @@ class Entity(BaseBlock):
         template: BaseAction,
         valid_positions: List[Tuple[int, int]],
         include_dead: bool,
-        shape_definition_key: Tuple[Any, ...],
         include_aoe_preview: bool = True,
     ) -> Tuple[Any, ...]:
         """Build a per-query cache key for AoE preview discovery.
@@ -6083,14 +6032,13 @@ class Entity(BaseBlock):
             template: AoE action template or generated spell variant.
             valid_positions: Candidate centers accepted by range and visibility.
             include_dead: Whether dead entities are included by the query.
-            shape_definition_key: Precomputed immutable identity for the shape.
 
         Returns:
             Hashable key for the geometry and target filters that affect
             subjective AoE preview rows.
         """
         return (
-            shape_definition_key,
+            template.aoe_shape,
             template.get_target_origin(),
             tuple(valid_positions),
             template.valid_target_filter,
@@ -6109,16 +6057,9 @@ class Entity(BaseBlock):
         shape = template.aoe_shape
         if shape is None or target.position is None:
             raise ValueError("Area preview requires a shape and selected aim")
-        grid = get_map()
-        if self._aoe_origin_fov_cache_revision != grid.propagation_revision:
-            self._aoe_origin_fov_cache_revision = grid.propagation_revision
-            self._aoe_origin_fov_cache.clear()
         visible_positions = self._prepare_aoe_caches()
-        result = self._compute_aoe_at_position(
-            shape.model_copy(), self._aoe_shape_definition_key(shape),
-            target.position, template, include_dead, visible_positions,
-            self._aoe_origin_fov_cache, grid.get_barrier_positions(), target.index,
-        )
+        result = self._compute_aoe_at_position(template, shape, target.position, include_dead,
+            visible_positions, {}, target.index)
         if result is None:
             raise ValueError("The selected aim has no admitted recipients")
         return target.model_copy(deep=True, update={
@@ -6128,40 +6069,18 @@ class Entity(BaseBlock):
             "affected_positions": result.affected_positions,
         })
 
-    @staticmethod
-    def _aoe_shape_definition_key(shape: Any) -> Tuple[Any, ...]:
-        """Return every stable shape-definition field used by preview caches."""
-        return (
-            type(shape),
-            shape.model_dump_json(
-                exclude={
-                    "target",
-                    "computed_origin",
-                    "affected_positions",
-                    "affected_entity_uuids",
-                },
-                fallback=repr,
-            ),
-        )
-
     def _compact_aoe_candidate_positions(
         self,
-        shape_template: Any,
+        shape: AoEShape,
         valid_positions: Sequence[Tuple[int, int]],
     ) -> List[Tuple[int, int]]:
         """Collapse target cells that resolve to the same AoE footprint."""
         if len(valid_positions) < 2:
             return list(valid_positions)
 
-        original_target = shape_template.target
         positions_by_footprint: Dict[Tuple[object, ...], Tuple[int, int]] = {}
-        try:
-            for position in sorted(valid_positions):
-                shape_template.target = position
-                footprint_key = shape_template.footprint_target_key(self.position)
-                positions_by_footprint.setdefault(footprint_key, position)
-        finally:
-            shape_template.target = original_target
+        for position in sorted(valid_positions):
+            positions_by_footprint.setdefault(shape.footprint_target_key(position, self.position), position)
         return list(positions_by_footprint.values())
 
     def _prepare_aoe_caches(
@@ -6180,13 +6099,10 @@ class Entity(BaseBlock):
             )
         )
         visible_positions = tuple(sorted(visible_position_set))
-        footprint_context = (
+        topology_context = (
             self.position,
             grid.propagation_revision,
         )
-        if footprint_context != self._aoe_footprint_cache_context:
-            self._aoe_footprint_cache_context = footprint_context
-            self._aoe_footprint_cache.clear()
 
         contact_facts: List[Tuple[Any, ...]] = []
         contact_alive: Dict[UUID, bool] = {
@@ -6214,7 +6130,7 @@ class Entity(BaseBlock):
         self._aoe_contact_alive = contact_alive
         contact_facts.sort(key=lambda fact: fact[0])
         preview_context = (
-            footprint_context,
+            topology_context,
             visible_positions,
             self.name,
             self.faction,
@@ -7308,8 +7224,7 @@ class Entity(BaseBlock):
     def _collect_aoe_actions(
         self,
         include_dead: bool,
-        fov_cache: dict,
-        barrier_positions: Optional[Set[Tuple[int, int]]],
+        footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
         discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
@@ -7317,10 +7232,11 @@ class Entity(BaseBlock):
     ) -> List[AvailableActionInfo]:
         """Collect position-AoE actions with preview metadata.
 
+        Footprints go through the call-local footprint table.
+
         Args:
             include_dead: Whether zero-HP entities stay targetable.
-            fov_cache: Shared field-of-view cache for AoE computation.
-            barrier_positions: Positions that block AoE projection.
+            footprints: Call-local footprint table, keyed by footprint identity.
 
         Returns:
             Available AoE action metadata.
@@ -7342,8 +7258,8 @@ class Entity(BaseBlock):
                 if template.effective_target_type != TargetType.POSITION_AOE:
                     continue
 
-                shape_template = template.aoe_shape
-                if shape_template is None:
+                shape = template.aoe_shape
+                if shape is None:
                     continue
 
                 can_afford = template.check_target_independent_costs()
@@ -7382,7 +7298,7 @@ class Entity(BaseBlock):
                         include_dead,
                     )
                     if prefilter_positions:
-                        radius = shape_template._get_max_radius_tiles()
+                        radius = shape.max_radius_tiles()
                         nearby_key = (tuple(sorted(prefilter_positions)), radius)
                         candidates = self._aoe_nearby_candidates_cache.get(nearby_key)
                         if candidates is None:
@@ -7410,15 +7326,13 @@ class Entity(BaseBlock):
                         continue
 
                 valid_pos_list = self._compact_aoe_candidate_positions(
-                    shape_template,
+                    shape,
                     valid_pos_list,
                 )
-                shape_definition_key = self._aoe_shape_definition_key(shape_template)
                 cache_key = self._aoe_discovery_cache_key(
                     template,
                     valid_pos_list,
                     include_dead,
-                    shape_definition_key,
                     include_aoe_preview,
                 )
                 if cache_key in self._aoe_preview_cache:
@@ -7431,19 +7345,14 @@ class Entity(BaseBlock):
                     self._aoe_preview_cache[cache_key] = tuple(valid_positions)
                 else:
                     valid_positions = []
-                    if barrier_positions is None:
-                        barrier_positions = grid.get_barrier_positions()
-                    preview_shape = shape_template.model_copy()
                     for pos in valid_pos_list:
                         target = self._compute_aoe_at_position(
-                            preview_shape,
-                            shape_definition_key,
-                            pos,
                             template,
+                            shape,
+                            pos,
                             include_dead,
                             visible_position_set,
-                            fov_cache,
-                            barrier_positions,
+                            footprints,
                             len(valid_positions),
                         )
                         if target is not None:
@@ -7575,8 +7484,7 @@ class Entity(BaseBlock):
         result: AvailableActionsResult,
         potential_targets: Dict[UUID, Tuple[int, int]],
         include_dead: bool,
-        fov_cache: dict,
-        barrier_positions: Optional[Set[Tuple[int, int]]],
+        footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
         include_aoe_preview: bool = True,
@@ -7587,8 +7495,7 @@ class Entity(BaseBlock):
             result: Discovery result mutated in place.
             potential_targets: Outer discovery target pool keyed by UUID.
             include_dead: Whether zero-HP entities stay targetable.
-            fov_cache: Shared field-of-view cache for AoE computation.
-            barrier_positions: Positions that block AoE projection.
+            footprints: Call-local footprint table, keyed by footprint identity.
         """
         grid = get_map()
         visible_position_set = self._prepare_aoe_caches(caster_visible_positions)
@@ -7766,7 +7673,7 @@ class Entity(BaseBlock):
                         include_dead,
                     )
                     if prefilter_positions:
-                        radius = use_shape_template._get_max_radius_tiles()
+                        radius = use_shape_template.max_radius_tiles()
                         nearby_key = (tuple(sorted(prefilter_positions)), radius)
                         candidates = self._aoe_nearby_candidates_cache.get(nearby_key)
                         if candidates is None:
@@ -7798,14 +7705,10 @@ class Entity(BaseBlock):
                     use_shape_template,
                     valid_pos_list,
                 )
-                use_shape_definition_key = self._aoe_shape_definition_key(
-                    use_shape_template
-                )
                 cache_key = self._aoe_discovery_cache_key(
                     use_template,
                     valid_pos_list,
                     include_dead,
-                    use_shape_definition_key,
                     include_aoe_preview,
                 )
                 if cache_key in self._aoe_preview_cache:
@@ -7848,18 +7751,15 @@ class Entity(BaseBlock):
                         distance=use_template.get_target_distance(position),
                     ) for index, position in enumerate(valid_pos_list)]
                 else:
-                    if barrier_positions is None:
-                        barrier_positions = grid.get_barrier_positions()
-                    use_preview_shape = use_shape_template.model_copy()
                     for pos in valid_pos_list:
                         target = self._compute_aoe_at_position(
-                            use_preview_shape,
-                            use_shape_definition_key,
-                            pos,
                             use_template,
+                            use_shape_template,
+                            pos,
                             include_dead,
                             visible_position_set,
-                            fov_cache, barrier_positions, use_idx
+                            footprints,
+                            use_idx,
                         )
                         if target is not None:
                             use_valid_positions.append(target)
@@ -8104,12 +8004,8 @@ class Entity(BaseBlock):
             record_action_timing("available_actions.skip_dirty_senses_no_movement_ms", time.perf_counter())
 
         started = time.perf_counter() if timing else 0.0
-        grid = get_map()
-        if self._aoe_origin_fov_cache_revision != grid.propagation_revision:
-            self._aoe_origin_fov_cache_revision = grid.propagation_revision
-            self._aoe_origin_fov_cache.clear()
-        fov_cache: dict = self._aoe_origin_fov_cache
-        barrier_positions = grid.get_barrier_positions() if include_aoe_preview else None
+        # One footprint per identity for this call only; dropped on return.
+        footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]] = {}
         caster_visible_positions = frozenset(
             position
             for position, visible in self.senses.visible.items()
@@ -8143,8 +8039,7 @@ class Entity(BaseBlock):
         result.position_actions.extend(
             self._collect_aoe_actions(
                 include_dead,
-                fov_cache,
-                barrier_positions,
+                footprints,
                 discovery_variants,
                 caster_visible_positions,
                 legal_only,
@@ -8164,8 +8059,7 @@ class Entity(BaseBlock):
             result,
             potential_targets,
             include_dead,
-            fov_cache,
-            barrier_positions,
+            footprints,
             caster_visible_positions,
             legal_only,
             include_aoe_preview,

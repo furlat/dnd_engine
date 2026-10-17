@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 
+from dnd.core.aoe import Sphere
 from dnd.blocks.base_item import BaseItem, WorldItem
 from dnd.core.base_block import LightLevel
 from dnd.core.base_tiles import resolve_tile_light_level
@@ -51,9 +52,9 @@ def test_optical_snapshot_preserves_native_owner_exclusion_and_detachment():
     reset_senses_state(width=9, height=3)
     grid = get_map()
     source = uuid4()
-    fog = FogCloudZone(source_entity_uuid=source, position=(1, 1), zone_radius_feet=0)
+    fog = FogCloudZone(source_entity_uuid=source, position=(1, 1), area=Sphere(radius_feet=0, propagation="connected"))
     fog.activate(parent_event=None)
-    remote = FogCloudZone(source_entity_uuid=source, position=(8, 1), zone_radius_feet=0)
+    remote = FogCloudZone(source_entity_uuid=source, position=(8, 1), area=Sphere(radius_feet=0, propagation="connected"))
     remote.activate(parent_event=None)
     grid.apply_optical_obscurement(fog.uuid, {(1, 1)}, OpticalObscurement.MAGICAL_DARKNESS)
     snapshot = grid.capture_optical_obscurements((0, 0), 2)
@@ -121,7 +122,7 @@ def test_area_move_and_footprint_change_commit_optics_before_light_children():
     reset_senses_state(width=6, height=1)
     grid = get_map()
     source, observer = uuid4(), uuid4()
-    darkness = DarknessZone(source_entity_uuid=source, position=(1, 0), zone_radius_feet=0)
+    darkness = DarknessZone(source_entity_uuid=source, position=(1, 0), area=Sphere(radius_feet=0, propagation="connected"))
     darkness.activate(parent_event=None)
     grid.subscribe_to_cells(observer, {(1, 0), (3, 0)})
     initial = grid.observer_spatial_revisions(observer).optical
@@ -206,8 +207,8 @@ def test_optical_candidates_follow_overlap_relocation_and_negative_chunks():
     grid = get_map()
     for position in ((-17, 0), (-16, 0), (16, 0)):
         grid.set_tile(*position)
-    first = FogCloudZone(source_entity_uuid=uuid4(), position=(-17, 0), zone_radius_feet=0)
-    second = DarknessZone(source_entity_uuid=uuid4(), position=(-17, 0), zone_radius_feet=0)
+    first = FogCloudZone(source_entity_uuid=uuid4(), position=(-17, 0), area=Sphere(radius_feet=0, propagation="connected"))
+    second = DarknessZone(source_entity_uuid=uuid4(), position=(-17, 0), area=Sphere(radius_feet=0, propagation="connected"))
     first.activate(parent_event=None)
     second.activate(parent_event=None)
     first.move_zone((-16, 0), parent_event=cause(first.source_entity_uuid))
@@ -391,11 +392,12 @@ def test_zero_band_boundary_lifecycle_preserves_native_visibility_choice(channel
     origin, radius, witness = (1, 3), 5, (3, 2)
     query = grid.compute_fov if channel is WorldEdgeChannel.OPTICAL else grid.compute_propagation_fov
     before = set(query(origin, radius))
-    assert witness in before
     expected = {position for position in grid.get_all_tiles()
         if sum((a-b)**2 for a, b in zip(position, origin)) <= radius**2
         and grid.raycast_clear(origin, position, channel)}
     assert witness not in expected
+    # Sight shadowcasts until a boundary exists; propagation is always the native ray.
+    assert (witness in before) is (channel is WorldEdgeChannel.OPTICAL)
 
     boundary = zero_band_boundary()
     boundary.place_on_grid((6, 6), boundary_direction=CardinalDirection.NORTH)

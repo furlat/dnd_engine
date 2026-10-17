@@ -22,6 +22,7 @@ from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, Wal
 from dnd.core.wall_geometry import wall_path_contact, wall_shell_cells
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
+from dnd.spatial.ignition import resolve_interaction
 from dnd.types.abilities import AbilityName
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
@@ -126,7 +127,7 @@ class WallFieldZone(AreaCondition):
                     event, self.geometry.base_height_steps)
             return None
         return EventHandler(name=f"{self.name} turn end", source_entity_uuid=self.source_entity_uuid,
-            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT)],
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EXECUTION)],
             event_processor=process)
 
 
@@ -170,10 +171,7 @@ class WindWallZone(WallFieldZone):
             source_entity_uuid=self.source_entity_uuid, operation=SpatialEffectInteractionOperation.DISPERSE,
             positions=tuple(sorted(cell for cell in self.affected_positions if self.allows_contribution_at(cell))), intensity=SpatialEffectInteractionIntensity.STRONG,
             parent_event=parent_event.uuid, phase=EventPhase.DECLARATION, use_register=False))
-        for phase in (EventPhase.EXECUTION, EventPhase.EFFECT, EventPhase.COMPLETION):
-            if interaction.canceled:
-                break
-            interaction = interaction.phase_to(phase)
+        resolve_interaction(interaction)
 
     def _apply(self, execution_event: Event):
         modifiers, handlers, children, spatial_handlers, effect = super()._apply(execution_event)
@@ -410,4 +408,4 @@ class BladeBarrierZone(WallFieldZone):
                 apply_wall_damage(self, entity, self.contact_damage, self.spell_dc, event, self.geometry.base_height_steps)
             return None
         return EventHandler(name="Blade Barrier start-turn contact", source_entity_uuid=self.source_entity_uuid,
-            trigger_conditions=[Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EFFECT)], event_processor=process)
+            trigger_conditions=[Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EXECUTION)], event_processor=process)

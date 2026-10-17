@@ -377,7 +377,7 @@ class FireSurface(AreaCondition):
             trigger_conditions=[
                 Trigger(
                     event_type=EventType.TURN_START,
-                    event_phase=EventPhase.EFFECT,
+                    event_phase=EventPhase.EXECUTION,
                 ),
             ],
             event_processor=damage_occupant,
@@ -824,7 +824,7 @@ class ElectrifiedWater(WetAreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT,
+                event_phase=EventPhase.EXECUTION,
             )],
             event_processor=damage,
         )

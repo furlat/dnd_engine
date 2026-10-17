@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import Field
 
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.actions import Move
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.sensory import spatial_senses_system
@@ -71,8 +72,7 @@ class MagicalDarknessCellZone(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
     )
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=0)
+    area: AoEShape = Sphere(radius_feet=0)
     sets_light_level: LightLevel = Field(default=LightLevel.DARKNESS)
     light_is_cap: bool = Field(default=True)
     optical_obscurement: OpticalObscurement = Field(
@@ -1537,7 +1537,7 @@ def test_eb_12_028c_visual_senses_obey_conditional_obscurement(
     darkness = DarknessZone(
         source_entity_uuid=observer.uuid,
         position=(3, 0),
-        zone_radius_feet=0,
+        area=Sphere(radius_feet=0, propagation="connected"),
     )
     darkness.activate(parent_event=None)
     assert (target.uuid in observer.senses.entities) is crosses_magical_darkness
@@ -1550,7 +1550,7 @@ def test_eb_12_028c_visual_senses_obey_conditional_obscurement(
     fog = FogCloudZone(
         source_entity_uuid=observer.uuid,
         position=(3, 0),
-        zone_radius_feet=0,
+        area=Sphere(radius_feet=0, propagation="connected"),
     )
     fog.activate(parent_event=None)
     assert target.uuid not in observer.senses.entities

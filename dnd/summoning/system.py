@@ -59,6 +59,7 @@ class SummoningSystem:
         self._committed_casts: set[UUID] = set()
         self._closed = False
         self._retirements: dict[UUID, PreparedRetirement] = {}
+        self._group_events: list[Event] = []
         self._preparing_retirement: set[UUID] = set()
         self._condition_members: dict[UUID, SummonMembership] = {}
         self._system_name = f"summoning:{id(game)}"
@@ -400,6 +401,15 @@ class SummoningSystem:
             member.entity.revoke_runtime_agency()
 
     def __call__(self, event: Event) -> None:
+        group = EventQueue.open_group()
+        if group is not None and not group.settling:
+            # A summon defeated inside a simultaneous group departs after it
+            # (plan §5.1 phase B): later targets still resolve against it.
+            self._group_events.append(event)
+            return
+        self._resolve(event)
+
+    def _resolve(self, event: Event) -> None:
         if isinstance(event, ConditionRemovalEvent):
             member = self._condition_members.get(event.condition.uuid)
             if member is not None and event.condition.uuid == member.existence.uuid and not member.existence.applied:
@@ -516,6 +526,13 @@ class SummoningSystem:
             self.reset()
         if errors:
             raise BaseExceptionGroup("Summon close failed", errors)
+
+    def settle_group(self, root_uuid: UUID | None) -> None:
+        """Resolve departures recorded while the group was open, in arrival order."""
+        del root_uuid
+        events, self._group_events = self._group_events, []
+        for event in events:
+            self._resolve(event)
 
     def reset(self) -> None:
         """Drop this binding silently when the existing runtime generation resets."""

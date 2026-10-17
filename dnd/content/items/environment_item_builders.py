@@ -42,6 +42,7 @@ from dnd.items.torches import StandingTorch, WallTorch
 from dnd.residues import BLOOD_RESIDUE, DREAD_RESIDUE, POISON_RESIDUE, ResidueProfile, deposit_residue
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spatial.environmental_conditions import OilSurface, WetSurface
+from dnd.spatial.ignition import resolve_interaction
 from dnd.core.ground import ground_footprint
 from dnd.spells.conjuration import GreaseZone
 from dnd.spells.evocation import Fireball
@@ -150,12 +151,7 @@ class LiquidBarrel(BaseItem):
             parent_event=parent_event.uuid,
             phase=EventPhase.DECLARATION,
         )
-        interaction = interaction.phase_to(EventPhase.EXECUTION)
-        if interaction.canceled:
-            return
-        interaction = interaction.phase_to(EventPhase.EFFECT)
-        if not interaction.canceled:
-            interaction.phase_to(EventPhase.COMPLETION)
+        resolve_interaction(interaction)
 
 
 # Preserve the old public constructor name without a second behavior class.

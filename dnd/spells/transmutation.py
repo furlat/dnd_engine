@@ -28,6 +28,7 @@ from dnd.core.action_types import EntityDestinationSelection
 from dnd.core.base_actions import (
     ActionCategory,
     ActionEvent,
+    lowest_hp_first,
     ActionTargetEffectBranchProfile,
     ActionTargetEffectProfile,
     ActionInformationOperation,
@@ -89,7 +90,7 @@ from dnd.conditions import Dashing, ConcentrationActionMarker, Prone
 from dnd.creature_transforms import apply_incapacitated_transform, remove_modifier_ownership
 from dnd.actions import AttackEvent, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, commit_forced_movement, resolve_fall_damage
 from dnd.spatial.area_conditions import AreaCondition
-from dnd.spatial.ignition import apply_elemental_surface_contacts
+from dnd.spatial.ignition import apply_elemental_surface_contacts, resolve_interaction
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.spatial_effect_definitions import SpatialEffectTransitionDefinition
 from dnd.spatial.transitions import bind_spatial_interactions
@@ -147,8 +148,7 @@ class SpikeGrowthZone(AreaCondition):
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({SpatialEffectTriggerKind.ENTER}),
     )
-    zone_shape: str = Field(default="sphere", description="Zone shape key.")
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet.")
+    area: AoEShape = Sphere(radius_feet=20)
     adds_difficult_terrain: bool = Field(default=True, description="Whether the zone marks terrain as difficult.")
     hazard_filter: Optional[HazardFilter] = Field(
         default=HazardFilter.NON_SOURCE,
@@ -490,16 +490,19 @@ class Slow(SpellAction):
     aoe_shape: Optional[AoEShape] = Field(default=None, description="Cube area used by Slow.")
     include_self: bool = Field(default=False, description="Whether the caster can be included in the AoE.")
     valid_target_filter: str = Field(default="all", description="Target filter key for available action discovery.")
+    max_targets: int = Field(default=6, description="Maximum number of creatures Slow affects.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cube(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 size_feet=40,
                 centered=True
             )
+
+    def get_all_targets(self) -> List[UUID]:
+        """Up to six creatures in the cube, lowest current HP first (plan Q4)."""
+        return lowest_hp_first(super().get_all_targets(), self.max_targets)
 
     def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
         """Declare Slow's failed-save action-economy debuff branch."""
@@ -804,7 +807,7 @@ class Haste(SpellAction):
         if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message=f"{target.name} not visible")
 
-        distance = self.get_target_distance(target.senses.position)
+        distance = self.get_target_distance(target.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Out of range ({distance}ft)"
@@ -2340,8 +2343,7 @@ class PlantGrowthZone(AreaCondition):
     description: str = "Ten-turn vegetation imposes a strongest walking cost of four and burns away partially."
     layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
     occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 20
+    area: AoEShape = Sphere(radius_feet=20)
     minimum_walking_cost: int = 4
     has_visible_presence: bool = True
     duration: Duration = Field(default_factory=lambda:Duration(duration=10,duration_type=DurationType.ROUNDS))
@@ -2413,8 +2415,7 @@ class CreateOrDestroyWater(SpellAction):
     def model_post_init(self,context: object) -> None:
         super().model_post_init(context)
         if self.aoe_shape is None:
-            self.aoe_shape=Sphere(source_entity_uuid=self.source_entity_uuid,target=self.end_position or (0,0),
-                radius_feet=13+7*self.get_upcast_bonus())
+            self.aoe_shape=Sphere(radius_feet=13+7*self.get_upcast_bonus())
 
     def get_variant_facets(self):
         return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.mode,label=self.mode.title()))
@@ -2425,7 +2426,7 @@ class CreateOrDestroyWater(SpellAction):
             if not isinstance(variant,CreateOrDestroyWater):
                 raise ValueError("Water spell variants require the authored spell")
             for mode in ("create","destroy"):
-                shape=Sphere(source_entity_uuid=self.source_entity_uuid,target=self.end_position or (0,0),radius_feet=13+7*variant.get_upcast_bonus())
+                shape=Sphere(radius_feet=13+7*variant.get_upcast_bonus())
                 result.append(variant.model_copy(update={"uuid":uuid4(),"mode":mode,"aoe_shape":shape}))
         return result
 
@@ -2455,20 +2456,15 @@ class CreateOrDestroyWater(SpellAction):
         if not positions or self.end_position is None:
             return
         if self.mode=="create":
-            interaction=SpatialEffectInteractionEvent(source_entity_uuid=self.source_entity_uuid,
-                positions=tuple(sorted(positions)),operation=SpatialEffectInteractionOperation.DOUSE,parent_event=event.uuid)
-            interaction.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
+            resolve_interaction(SpatialEffectInteractionEvent(source_entity_uuid=self.source_entity_uuid,
+                positions=tuple(sorted(positions)),operation=SpatialEffectInteractionOperation.DOUSE,parent_event=event.uuid))
             surface=WetSurface(source_entity_uuid=self.source_entity_uuid,position=self.end_position,
                 affected_positions=positions)
             surface.activate(parent_event=event)
         else:
-            interaction = EventQueue.publish_declaration(SpatialEffectInteractionEvent(
+            resolve_interaction(EventQueue.publish_declaration(SpatialEffectInteractionEvent(
                 source_entity_uuid=self.source_entity_uuid, positions=tuple(sorted(positions)),
-                operation=SpatialEffectInteractionOperation.DRY, parent_event=event.uuid, use_register=False))
-            for phase in (EventPhase.EXECUTION, EventPhase.EFFECT, EventPhase.COMPLETION):
-                if interaction.canceled:
-                    break
-                interaction = interaction.phase_to(phase)
+                operation=SpatialEffectInteractionOperation.DRY, parent_event=event.uuid, use_register=False)))
 
 
 class DragonsBreathEffect(ConcentrationActionMarker):
@@ -2508,7 +2504,7 @@ class ExhaleDragonsBreath(SpellAction):
     def model_post_init(self,context: object) -> None:
         super().model_post_init(context)
         if self.aoe_shape is None:
-            self.aoe_shape=Cone(source_entity_uuid=self.source_entity_uuid,target=self.end_position or (1,0),length_feet=15)
+            self.aoe_shape=Cone(length_feet=15)
 
     def _create_declaration_event(self,parent_event: Event | None=None,use_register: bool=True):
         event=super()._create_declaration_event(parent_event,use_register)

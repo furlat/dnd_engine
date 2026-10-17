@@ -1,7 +1,7 @@
 """Tile primitives for terrain, lighting, elevation, and object bands."""
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Dict, FrozenSet, Optional, Set, Tuple
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, StrictInt, model_validator
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
@@ -58,6 +58,8 @@ class TileLight:
 
     illuminations: Dict[UUID, LightLevel] = field(default_factory=dict)
     caps: Dict[UUID, LightLevel] = field(default_factory=dict)
+    # Sources lowering the lit level one step; any number count once.
+    dimmers: Set[UUID] = field(default_factory=set)
     default: Optional[LightLevel] = None
     resolved: LightLevel = LightLevel.BRIGHT_LIGHT
 
@@ -405,12 +407,22 @@ class Tile(BaseBlock):
         light.default = self.default_light
         return light.resolved != old
 
+    def _add_illumination_dimmer(self, source_uuid: UUID) -> bool:
+        """Install one GridMap-owned one-step reduction of objective illumination."""
+        old = self.resolved_light_level
+        light = self._light
+        light.dimmers.add(source_uuid)
+        light.resolved = _resolve_light_contributions(light, self.default_light)
+        light.default = self.default_light
+        return light.resolved != old
+
     def _remove_light_modifier(self, source_uuid: UUID) -> bool:
-        """Remove one GridMap-owned illumination contribution or cap."""
+        """Remove one GridMap-owned illumination contribution, cap or dimmer."""
         old = self.resolved_light_level
         light = self._light
         light.illuminations.pop(source_uuid, None)
         light.caps.pop(source_uuid, None)
+        light.dimmers.discard(source_uuid)
         light.resolved = _resolve_light_contributions(light, self.default_light)
         light.default = self.default_light
         return light.resolved != old
@@ -614,6 +626,8 @@ def _resolve_light_contributions(light: TileLight, default_light: LightLevel) ->
     for level in light.illuminations.values():
         if level.value > brightest.value:
             brightest = level
+    if light.dimmers and brightest.value > LightLevel.DARKNESS.value:
+        brightest = LightLevel(brightest.value - 1)
     if not light.caps:
         return brightest
     darkest = min(light.caps.values(), key=lambda level: level.value)
@@ -626,6 +640,11 @@ def tile_light_contributions(
     """Return detached GridMap-owned illumination and cap contributions."""
     light = tile._light
     return dict(light.illuminations), dict(light.caps)
+
+
+def tile_light_dimmers(tile: Tile) -> FrozenSet[UUID]:
+    """Return the sources lowering this tile's light one level."""
+    return frozenset(tile._light.dimmers)
 
 
 def validate_tile_owned_movement_graph(tile: Tile) -> None:

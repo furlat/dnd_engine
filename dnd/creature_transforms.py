@@ -219,7 +219,7 @@ def close_range_auto_critical(
     attacker = _transform_target(target_entity_uuid)
     if source is None or attacker is None:
         return None
-    if grid_distance_feet(source.position,(context or {}).get("attack_origin_position",attacker.senses.position)) > 5:
+    if grid_distance_feet(source.position,(context or {}).get("attack_origin_position",attacker.position)) > 5:
         return None
     return CriticalModifier(
         name="Close Range Auto-Critical",
@@ -243,7 +243,7 @@ def prone_distance_advantage(
         return None
     status = (
         AdvantageStatus.ADVANTAGE
-        if grid_distance_feet(source.position,(context or {}).get("attack_origin_position",attacker.senses.position)) <= 5
+        if grid_distance_feet(source.position,(context or {}).get("attack_origin_position",attacker.position)) <= 5
         else AdvantageStatus.DISADVANTAGE
     )
     return AdvantageModifier(

@@ -2,6 +2,7 @@
 
 import pytest
 
+from dnd.core.aoe import Sphere
 from dnd.actions import SpellEvent
 from dnd.content.items.environment_item_builders import build_directional_door, build_directional_wall
 from dnd.core.events import EventQueue, SpatialEffectChangeEvent, TakeDamageEvent
@@ -55,7 +56,7 @@ def test_cast_cloud_spreads_around_opening_within_native_radius(spell_type, open
     caster, _, zone = cast_beside_door(spell_type, opened=opened)
     reached = zone.affected_positions
     assert ((7, 10) in reached) is opened
-    assert all((x-5)**2 + (y-8)**2 <= (zone.zone_radius_feet / 5)**2 for x, y in reached)
+    assert all((x-5)**2 + (y-8)**2 <= zone.area.max_radius_tiles()**2 for x, y in reached)
     if not opened:
         assert all(x <= 6 for x, _ in reached)
     observation = caster.senses.spatial_effects[zone.uuid]
@@ -65,7 +66,7 @@ def test_cast_cloud_spreads_around_opening_within_native_radius(spell_type, open
 
 def test_fog_cloud_retains_slot_scaled_radius():
     _, _, zone = cast_beside_door(FogCloud, opened=True, level=2)
-    assert zone.zone_radius_feet == 40
+    assert zone.area == Sphere(radius_feet=40, propagation="connected")
     assert (11, 10) in zone.affected_positions
     assert all((x-5)**2 + (y-8)**2 <= 64 for x, y in zone.affected_positions)
 

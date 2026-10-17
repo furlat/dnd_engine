@@ -301,8 +301,6 @@ class _AcidFlaskSpell(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cube(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 size_feet=10,
                 centered=True,
             )

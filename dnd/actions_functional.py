@@ -35,7 +35,6 @@ from dnd.conditions import (
 from dnd.blocks.base_item import UsableItem
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
-from dnd.core.aoe import snapshot_aoe_presentation_geometry
 
 STANDARD_ENTITY_HANDLER_NAMES = {
     "HasAttacked Tracker",
@@ -680,11 +679,7 @@ def preview_available_selection(
                     affected_entity_uuids=tuple(affected_entity_uuids[index] for index in included)
                     affected_entity_names=tuple(affected_entity_names[index] for index in included if index<len(affected_entity_names))
                 if template.aoe_shape is not None and primary.position is not None:
-                    try:
-                        geometry = snapshot_aoe_presentation_geometry(template.aoe_shape,
-                            entity.position, target_override=primary.position)
-                    except (TypeError, ValueError):
-                        geometry = None
+                    geometry = template.aoe_shape.presentation_geometry(primary.position, entity.position)
         return AvailableSelectionPreview(can_confirm=reason is None, reason=reason,
             selected_route=(_selected_movement_route(entity, primary, prefer_safe=prefer_safe)
                 if isinstance(template, Move) else None),

@@ -16,6 +16,7 @@ from dnd.core.events import (
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import SpatialCondition
+from dnd.types.event_facts import GroupEntryKind
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import (
     SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy,
@@ -113,10 +114,12 @@ class Portal(SpatialCondition):
     def _transfer_occupants(self, *, parent_event: Event) -> None:
         occupants = {identity for position in self.affected_positions
                      for identity in get_map().get_entities_at(position)}
-        for identity in sorted(occupants, key=str):
-            entity = Entity.get(identity)
-            if isinstance(entity, Entity):
-                self.transfer(entity, parent_event=parent_event)
+        # Everyone standing on an opening portal crosses at once.
+        with EventQueue.group(GroupEntryKind.PORTAL_TRANSFER, root=parent_event):
+            for identity in sorted(occupants, key=str):
+                entity = Entity.get(identity)
+                if isinstance(entity, Entity):
+                    self.transfer(entity, parent_event=parent_event)
 
     def transfer(self, entity: Entity, *, parent_event: Event) -> PortalTransferEvent | None:
         """Commit one free crossing, then resolve the exit's ordinary consequences."""

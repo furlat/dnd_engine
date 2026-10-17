@@ -19,6 +19,7 @@ from dnd.spatial.gas_traps import GasVent
 from dnd.spatial.jaws import JawTrap
 from dnd.spatial.portals import Portal
 from dnd.types.controls import ActivationLink, ControlLink
+from dnd.types.event_facts import GroupEntryKind
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from dnd.types.traps import TrapState
@@ -143,10 +144,12 @@ def materialize_pressure_plate(positions: set[tuple[int, int]], link: ControlLin
 def activate_link(link: ActivationLink, *, parent_event: Event) -> None:
     """Dispatch a private exact connection to its existing native mechanism."""
     mechanism = get_map().get_spatial_condition(link.target_condition_uuid)
-    if isinstance(mechanism, (FiniteTrap, JawTrap, GasVent)):
-        mechanism.fire(parent_event=parent_event)
-    elif isinstance(mechanism, (SpikeTrap, Portal)) and mechanism.trap_state is TrapState.READY:
-        mechanism.set_trap_state(TrapState.ACTIVATED, parent_event=parent_event)
+    # A plate's pulse and everything its mechanism does are one instant.
+    with EventQueue.group(GroupEntryKind.TRAP_FIRE, root=parent_event):
+        if isinstance(mechanism, (FiniteTrap, JawTrap, GasVent)):
+            mechanism.fire(parent_event=parent_event)
+        elif isinstance(mechanism, (SpikeTrap, Portal)) and mechanism.trap_state is TrapState.READY:
+            mechanism.set_trap_state(TrapState.ACTIVATED, parent_event=parent_event)
 
 
 TRIPWIRE_CONTENT_REF = PRESSURE_PLATE_CONTENT_REF.model_copy(update={

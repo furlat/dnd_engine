@@ -5,9 +5,9 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import Field
 
-import dnd.core.gridmap as gridmap_module
+from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
 from dnd.blocks.base_item import BaseItem
-from dnd.core.aoe import Cone, Cylinder, Line, Sphere
+from dnd.core.aoe import AoEShape, Cone, Cylinder, Line, Sphere, objective_footprint
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory, HazardFilter
@@ -103,8 +103,7 @@ class EntryCleanupZone(AreaCondition):
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({SpatialEffectTriggerKind.ENTER}),
     )
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=5)
+    area: AoEShape = Sphere(radius_feet=5)
     adds_difficult_terrain: bool = Field(default=True)
     hazard_filter: HazardFilter = Field(default=HazardFilter.ALL)
 
@@ -518,27 +517,30 @@ def test_eb_11_022_fov_cache_invalidates_when_vision_blockers_change() -> None:
     assert (1, 1) in second_fov
 
 
-def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers() -> None:
     """EB-11-023: AoE propagation caches follow physical blocker revisions."""
     reset_grid_state(width=6, height=3)
     grid = get_map()
-    original_compute_fov = gridmap_module.compute_fov
-    compute_calls = 0
+    computed: list[str] = []
 
-    def track_compute_fov(*args, **kwargs):
-        nonlocal compute_calls
-        compute_calls += 1
-        return original_compute_fov(*args, **kwargs)
+    def record(phase: str, _started: float) -> None:
+        if phase == "grid.compute_propagation_fov.cache_miss_ms":
+            computed.append(phase)
 
-    monkeypatch.setattr(gridmap_module, "compute_fov", track_compute_fov)
+    token = set_action_timing_recorder(record)
+    try:
+        check_propagation_cache(grid, computed)
+    finally:
+        reset_action_timing_recorder(token)
+
+
+def check_propagation_cache(grid, computed: list[str]) -> None:
     first_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
     first_revision = grid.propagation_revision
     first_fov.append((99, 99))
     second_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
 
-    assert compute_calls == 1
+    assert len(computed) == 1
     assert (99, 99) not in second_fov
     assert (5, 1) in second_fov
 
@@ -553,7 +555,7 @@ def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers(
     third_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
 
     assert grid.propagation_revision > first_revision
-    assert compute_calls == 2
+    assert len(computed) == 2
     assert (5, 1) not in third_fov
 
 
@@ -716,15 +718,11 @@ def test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed() -> None:
     assert supercover_line((0, 0), (3, 2))[0] == (0, 0)
     assert supercover_line((0, 0), (3, 2))[-1] == (3, 2)
 
-    sphere = Sphere(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
-    sphere.compute_objective(caster.position)
-    cylinder = Cylinder(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
-    cylinder.compute_objective(caster.position)
+    sphere = objective_footprint(Sphere(radius_feet=15), (1, 1), caster.position)
+    cylinder = objective_footprint(Cylinder(radius_feet=15), (1, 1), caster.position)
 
-    assert target.uuid not in sphere.affected_entity_uuids
-    assert (3, 1) not in sphere.affected_positions
-    assert target.uuid in cylinder.affected_entity_uuids
-    assert (3, 1) in cylinder.affected_positions
+    assert (3, 1) not in sphere and target.uuid in grid.get_entities_at((3, 1))
+    assert (3, 1) in cylinder
 
 
 def test_eb_11_018_area_condition_cone_and_line_use_directional_geometry() -> None:
@@ -732,10 +730,8 @@ def test_eb_11_018_area_condition_cone_and_line_use_directional_geometry() -> No
     reset_grid_state(width=10, height=5)
     source_uuid = uuid4()
 
-    direct_cone = Cone(source_entity_uuid=source_uuid, target=(8, 2), length_feet=30)
-    direct_cone.compute_objective(caster_pos=(2, 2))
-    direct_line = Line(source_entity_uuid=source_uuid, target=(8, 2), length_feet=30, width_feet=5)
-    direct_line.compute_objective(caster_pos=(2, 2))
+    direct_cone = objective_footprint(Cone(length_feet=30), (8, 2), (2, 2))
+    direct_line = objective_footprint(Line(length_feet=30, width_feet=5), (8, 2), (2, 2))
 
     generic_cone_zone = AreaCondition(
         source_entity_uuid=source_uuid,
@@ -743,9 +739,8 @@ def test_eb_11_018_area_condition_cone_and_line_use_directional_geometry() -> No
         position=(2, 2),
         layer=SpatialEffectLayer.FIELD,
         occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
-        zone_shape="cone",
-        zone_radius_feet=30,
-        zone_direction=(1, 0),
+        area=Cone(length_feet=30),
+        area_aim_offset=(1, 0),
     )
     generic_line_zone = AreaCondition(
         source_entity_uuid=source_uuid,
@@ -753,66 +748,19 @@ def test_eb_11_018_area_condition_cone_and_line_use_directional_geometry() -> No
         position=(2, 2),
         layer=SpatialEffectLayer.FIELD,
         occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
-        zone_shape="line",
-        zone_radius_feet=30,
-        zone_direction=(1, 0),
+        area=Line(length_feet=30, width_feet=5),
+        area_aim_offset=(1, 0),
     )
 
-    assert (3, 2) in direct_cone.affected_positions
-    assert (5, 2) in direct_cone.affected_positions
-    assert (1, 2) not in direct_cone.affected_positions
-    assert (2, 2) in direct_line.affected_positions
-    assert (8, 2) in direct_line.affected_positions
-    assert (2, 3) not in direct_line.affected_positions
+    assert (3, 2) in direct_cone
+    assert (5, 2) in direct_cone
+    assert (1, 2) not in direct_cone
+    assert (2, 2) in direct_line
+    assert (8, 2) in direct_line
+    assert (2, 3) not in direct_line
 
-    assert generic_cone_zone._compute_affected_positions() == direct_cone.affected_positions
-    assert generic_line_zone._compute_affected_positions() == direct_line.affected_positions
-
-
-def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> None:
-    """EB-11-019: cylinder subjective previews use the same full footprint as targeting."""
-    reset_grid_state(width=5, height=3)
-    grid = get_map()
-    grid.set_tile(
-        2,
-        1,
-        walking_cost=0,
-        flying_cost=0,
-        blocks_optics=True,
-        blocks_propagation=True,
-        name="Wall",
-    )
-    caster = create_skeleton(name="Caster", position=(0, 1), faction="heroes")
-    target = create_skeleton(name="Behind Wall", position=(3, 1), faction="monsters")
-    Entity.update_all_entities_senses(max_distance=20)
-
-    subjective = Cylinder(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
-    subjective.compute_subjective(
-        caster.position,
-        caster.senses,
-        barrier_positions=grid.get_barrier_positions(),
-        caster_uuid=caster.uuid,
-    )
-
-    targeting = Cylinder(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
-    targeting.compute_for_targeting(
-        caster.position,
-        caster.senses,
-        barrier_positions=grid.get_barrier_positions(),
-        caster_uuid=caster.uuid,
-    )
-
-    objective = Cylinder(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
-    objective.compute_objective(caster.position)
-
-    assert (3, 1) in subjective.affected_positions
-    assert (3, 1) in targeting.affected_positions
-    assert (3, 1) in objective.affected_positions
-    assert subjective.affected_positions == targeting.affected_positions
-    assert subjective.affected_positions == objective.affected_positions
-    assert target.uuid not in subjective.affected_entity_uuids
-    assert target.uuid not in targeting.affected_entity_uuids
-    assert target.uuid in objective.affected_entity_uuids
+    assert generic_cone_zone._compute_affected_positions() == direct_cone
+    assert generic_line_zone._compute_affected_positions() == direct_line
 
 
 def test_eb_11_020_area_removal_cleans_handlers_terrain_and_tile_references() -> None:
@@ -967,7 +915,6 @@ if __name__ == "__main__":
         test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths,
         test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed,
         test_eb_11_018_zone_control_cone_and_line_use_directional_geometry,
-        test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint,
         test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers,
         test_eb_11_010_walkability_is_cost_driven_not_the_legacy_flag,
         test_eb_11_011_replacing_object_position_removes_old_grid_membership,

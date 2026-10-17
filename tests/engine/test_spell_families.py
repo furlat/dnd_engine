@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from pydantic import Field
 
+from dnd.core.aoe import Sphere
 from dnd.types.world import MovementMode
 from dnd.actions import Attack, AttackEvent, SpellEvent, Swim
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
@@ -2293,7 +2294,7 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     assert fog_center_tile is not None
     assert fog_edge_tile is not None
     assert fog_outside_tile is not None
-    assert fog_zone.zone_radius_feet == 40
+    assert fog_zone.area == Sphere(radius_feet=40, propagation="connected")
     assert (24, 16) in fog_zone.affected_positions
     assert fog_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert fog_edge_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
@@ -2572,7 +2573,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     )
     storm_center_tile = get_map().get_tile(10, 10)
     assert storm_center_tile is not None
-    assert storm_zone.zone_shape == "cylinder"
+    assert storm_zone.area.kind == "cylinder"
     assert concentrating_target.position in storm_zone.affected_positions
     assert "Prone" not in concentrating_target.active_conditions
     assert storm_center_tile.get_movement_cost(MovementMode.WALKING) == 2
@@ -2721,7 +2722,7 @@ def test_eb_15_044_stinking_cloud_wind_dispersal_uses_srd_rounds() -> None:
         position=wind_caster.position,
         anchor_uuid=wind_caster.uuid,
         faction=wind_caster.faction,
-        zone_direction=(1, 0),
+        area_aim_offset=(1, 0),
         spell_dc=wind_caster.spell_save_dc(),
     )
     gust_zone.activate(parent_event=cloud_event)
@@ -2921,11 +2922,11 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
     web_zone = web_zones[0]
     web_center_tile = get_map().get_tile(5, 5)
     assert web_center_tile is not None
-    assert web_zone.zone_shape == "cube"
+    assert web_zone.area.kind == "cube"
     assert web_zone.adds_difficult_terrain
     assert web_zone.optical_obscurement is None
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
-    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT  # Web lowers light one level (human Q5)
     assert get_map().get_optical_obscurements_at((5, 5)) == set()
     assert any(
         isinstance(condition, WebRestrained)
@@ -3079,7 +3080,7 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
     } == {"Web Turn Start Save", "Web Unanchored Collapse"}
     assert "Concentrating" in caster.active_conditions
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
-    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT  # Web lowers light one level (human Q5)
     assert get_map().get_optical_obscurements_at((5, 5)) == set()
 
     turn_start = caster.on_turn_start(round_number=2, turn_index=0)
@@ -3176,7 +3177,7 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert (5, 5) in web_zone.affected_positions
     assert (6, 5) in web_zone.affected_positions
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
-    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT  # Web lowers light one level (human Q5)
     assert get_map().get_optical_obscurements_at((5, 5)) == set()
     assert web_zone in get_map().get_spatial_conditions_at((5, 5))
     assert any(
@@ -3225,7 +3226,7 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert get_map().get_optical_obscurements_at((5, 5)) == set()
     assert web_zone not in get_map().get_spatial_conditions_at((5, 5))
     assert adjacent_web_tile.get_movement_cost(MovementMode.WALKING) == 2
-    assert adjacent_web_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert adjacent_web_tile.resolved_light_level == LightLevel.DIM_LIGHT  # still webbed (human Q5)
     assert get_map().get_optical_obscurements_at((6, 5)) == set()
     assert not any(
         isinstance(condition, WebRestrained)

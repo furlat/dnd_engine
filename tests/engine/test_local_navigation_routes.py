@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 
+from dnd.core.aoe import Sphere
 from dnd.core.base_block import MovementMode
 from dnd.actions import Move
 from dnd.blocks.base_item import BaseItem
@@ -72,7 +73,7 @@ def test_local_fractional_expenditure_keeps_existing_distance_and_path_values():
         grid = get_map()
         grid.create_rectangle(-2, 0, 5, 1)
         zone = EntryCleanupZone(source_entity_uuid=uuid4(), position=(-1, 0),
-            zone_radius_feet=0, adds_difficult_terrain=False,
+            area=Sphere(radius_feet=0), adds_difficult_terrain=False,
             movement_expenditure_extra=0.5)
         assert zone.activate(parent_event=None) is not None
         assert grid.movement_cell_cost_units((-1, 0), MovementMode.WALKING) == 1.5
@@ -153,7 +154,7 @@ def test_fractional_walking_route_is_not_reselected_for_fewer_turns():
                 source_entity_uuid=actor.uuid, blocks_movement=True, is_pickable=False)
             item.place_on_grid(position)
         zone = EntryCleanupZone(source_entity_uuid=actor.uuid, position=(3, 3),
-            zone_radius_feet=30, adds_difficult_terrain=False,
+            area=Sphere(radius_feet=30), adds_difficult_terrain=False,
             movement_expenditure_extra=0.01, hazard_filter=HazardFilter.NON_SOURCE)
         assert zone.activate(parent_event=None) is not None
         actor.update_entity_senses(max_distance=8)

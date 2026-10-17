@@ -34,9 +34,10 @@ __all__ = [
     "DeathSaveEvent", "InstantDeathEvent", "DeathEvent",
 ]
 
-from dnd.types.event_facts import (LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
+from dnd.types.event_facts import (GroupEntryKind, HandlerGroupDispatch, LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
 
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from contextvars import ContextVar
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, StrictInt, field_serializer, model_validator
@@ -135,7 +136,34 @@ class PreCompletionSystem(Protocol):
 
     def __call__(self, event: 'Event') -> None: ...
 
+    def settle_group(self, root_uuid: Optional[UUID]) -> None:
+        """Settle work this system recorded while a simultaneous group was open."""
+        ...
+
     def reset(self) -> None: ...
+
+
+@dataclass
+class OpenGroup:
+    """One open simultaneous group (plan §5.2): its root, entry kinds and phase-B work.
+
+    Pending work stays with its owners (GridMap's pending lights, the sensory
+    reducer's recorded facts); the group carries only what identifies it.
+    """
+
+    root_uuid: Optional[UUID]
+    kinds: List[GroupEntryKind]
+    # Phase B, in arrival order: deferred handler dispatches and other work
+    # that acts on the group's settled result.
+    deferred: List[Callable[[], None]] = field(default_factory=list)
+    settling: bool = False
+    # Damage dealt to several targets at the same time is rolled once (PHB;
+    # human D6a): the group shares one Dice per (source, packet, outcome).
+    shares_damage_rolls: bool = False
+    shared_dice: Dict[Tuple[Any, ...], 'Dice'] = field(default_factory=dict)
+    # Owners holding work for this group (GridMap's light fact) flush it after
+    # the systems settle, whether or not a system absorbed it.
+    settlers: List[Callable[[Optional[UUID]], None]] = field(default_factory=list)
 
 
 @runtime_checkable
@@ -1080,6 +1108,14 @@ class BaseHandler(BaseObject):
     )
     application_preview_filter: Callable[[EffectOrigin, UUID, UUID], bool] | None = Field(default=None,exclude=True,repr=False,
         description="Pure recipient admission predicate shared with selection preview; never emits events or mutates state.")
+    group_dispatch: HandlerGroupDispatch = Field(
+        default=HandlerGroupDispatch.INLINE,
+        description=(
+            "AFTER_GROUP handlers act on others or start new actions: inside an open "
+            "simultaneous group they run after it settles, in arrival order, and may "
+            "not rewrite the stored fact (plan §5.3)."
+        ),
+    )
     validation_only: bool = Field(
         default=False,
         description=(
@@ -1294,6 +1330,10 @@ class EventQueue:
         "event_queue_preflight_depth",
         default=0,
     )
+    _open_group: ContextVar[Optional[OpenGroup]] = ContextVar(
+        "event_queue_open_group",
+        default=None,
+    )
     _pre_completion_callbacks: List[Callable[['Event'], None]] = []
     _pre_completion_systems: Dict[str, PreCompletionSystem] = {}
     _pre_completion_systems_by_event_type: Dict[
@@ -1457,6 +1497,29 @@ class EventQueue:
     @classmethod
     def _invoke_handler(cls, handler: BaseHandler, event: Event) -> Optional[Event]:
         """Invoke one matched handler and publish passive effect evidence."""
+        group = cls._open_group.get()
+        if (group is not None and not group.settling
+                and handler.group_dispatch is HandlerGroupDispatch.AFTER_GROUP):
+            stored = event.model_copy(deep=True)
+            group.deferred.append(lambda: cls._replay_handler(handler.uuid, stored))
+            return None
+        return cls._run_handler(handler, event)
+
+    @classmethod
+    def _replay_handler(cls, handler_uuid: UUID, stored: Event) -> None:
+        """Run one deferred handler against its stored fact, if it still exists."""
+        handler = cls._event_handlers.get(handler_uuid) or cls._spatial_handlers.get(handler_uuid)
+        if handler is None:
+            return
+        result = cls._run_handler(handler, stored)
+        if result is not None and result != stored:
+            raise RuntimeError(
+                f"After-group handler {handler.name!r} rewrote a settled fact; split its rewrite inline"
+            )
+
+    @classmethod
+    def _run_handler(cls, handler: BaseHandler, event: Event) -> Optional[Event]:
+        """Run one handler now and publish passive effect evidence."""
         before_cursor = cls.event_cursor()
         before_event_index = len(cls._all_events)
         with runtime_behavior_provider(handler.behavior_binding):
@@ -1643,6 +1706,68 @@ class EventQueue:
         """
         if callback in cls._on_event_batch_callbacks:
             cls._on_event_batch_callbacks.remove(callback)
+
+    @classmethod
+    def open_group(cls) -> Optional[OpenGroup]:
+        """Return the simultaneous group open in this context, if any."""
+        return cls._open_group.get()
+
+    @classmethod
+    @contextmanager
+    def group(cls, kind: GroupEntryKind, root: Optional['Event'] = None, *,
+              shares_damage_rolls: bool = False) -> Iterator[OpenGroup]:
+        """Open (or join) one simultaneous group; the outermost close settles it once.
+
+        Objective writes inside stay immediate. Systems record their observer
+        work and settle it when the outermost entry closes, before the root
+        completes (plan §5.3-5.4).
+        """
+        current = cls._open_group.get()
+        if current is not None:
+            current.kinds.append(kind)
+            # A nested area shares its own roll inside a group that doesn't.
+            widened = shares_damage_rolls and not current.shares_damage_rolls
+            current.shares_damage_rolls = current.shares_damage_rolls or shares_damage_rolls
+            try:
+                yield current
+            finally:
+                current.kinds.pop()
+                if widened:
+                    current.shares_damage_rolls = False
+                    current.shared_dice.clear()
+            return
+        group = OpenGroup(root_uuid=root.uuid if root is not None else None, kinds=[kind],
+            shares_damage_rolls=shares_damage_rolls)
+        token = cls._open_group.set(group)
+        try:
+            yield group
+        finally:
+            group.settling = True
+            try:
+                for system in tuple(cls._pre_completion_systems.values()):
+                    system.settle_group(group.root_uuid)
+                for settle in group.settlers:
+                    settle(group.root_uuid)
+            finally:
+                cls._open_group.reset(token)
+        cls._replay_deferred(group)
+
+    @classmethod
+    def _replay_deferred(cls, group: OpenGroup) -> None:
+        """Phase B: deferred work in arrival order, each as its own group (plan §5.1)."""
+        root = cls.get_event_by_uuid(group.root_uuid) if group.root_uuid is not None else None
+        for run in group.deferred:
+            with cls.group(GroupEntryKind.REACTION, root=root):
+                run()
+
+    @classmethod
+    def after_group(cls, run: Callable[[], None]) -> None:
+        """Run ``run`` in phase B of the open group, or now when none is open."""
+        group = cls._open_group.get()
+        if group is not None and not group.settling:
+            group.deferred.append(run)
+        else:
+            run()
 
     @classmethod
     def is_event_batch_active(cls) -> bool:
@@ -2710,6 +2835,7 @@ class EventQueue:
         cls._event_batch_depth.set(0)
         cls._pending_event_batch.set(None)
         cls._preflight_depth.set(0)
+        cls._open_group.set(None)
         cls._pre_completion_callbacks.clear()
         for system in tuple(cls._pre_completion_systems.values()):
             system.reset()
@@ -4662,6 +4788,16 @@ class Damage(BaseObject):
             Dice configured for a damage roll.
         """
         assert self.damage_bonus is not None, "Damage requires damage_bonus to be set"
+        group = EventQueue.open_group()
+        if group is not None and group.shares_damage_rolls and not group.settling:
+            key = (self.source_entity_uuid, self.name, self.damage_type, self.dice_numbers,
+                self.damage_dice, attack_outcome, crit_extra_dice)
+            shared = group.shared_dice.get(key)
+            if shared is None:
+                shared = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus,
+                    roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
+                group.shared_dice[key] = shared
+            return shared
         return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
 
 

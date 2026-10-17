@@ -268,6 +268,7 @@ class BaseItem(BaseBlock):
     supported_by_uuid: Optional[UUID] = Field(default=None, frozen=True,
         description="Physical parent of an attached world item; independent of inventory ownership.")
     _destruction_in_progress: bool = PrivateAttr(default=False)
+    _destruction_lineage_uuid: Optional[UUID] = PrivateAttr(default=None)
     perception_condition_uuid: UUID | None = Field(default=None, exclude=True,
         description="Exact existing spatial discovery owner of this physical hardware.")
     remnant_state: ItemRemnantState | None = None
@@ -735,6 +736,7 @@ class BaseItem(BaseBlock):
                     if isinstance(parent_event, TakeDamageEvent) else (),
                 use_register=False,
             ))
+            self._destruction_lineage_uuid = event.lineage_uuid
             for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
                 event = EventQueue.publish_committed_phase(
                     event.model_copy(update={"use_register": False}).phase_to(phase))
@@ -742,6 +744,11 @@ class BaseItem(BaseBlock):
             event.phase_to(EventPhase.COMPLETION, resulting_state=self.to_item_presentation_state())
         finally:
             self._destruction_in_progress = False
+
+    @property
+    def destruction_lineage_uuid(self) -> Optional[UUID]:
+        """The lineage of this item's accepted breakage, once it broke."""
+        return self._destruction_lineage_uuid
 
     def _apply_destruction(self, parent_event: ItemDestructionEvent) -> None:
         """Commit the transition and cascade its ordinary native consequences."""

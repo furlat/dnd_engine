@@ -7,7 +7,10 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 
-AreaPropagation = Literal["line_of_effect", "connected"]
+# line_of_effect: reached along an unblocked native propagation ray;
+# connected: flows around corners through the shared topology;
+# ignore_barriers: the whole envelope, as an area falling from above.
+AreaPropagation = Literal["line_of_effect", "connected", "ignore_barriers"]
 
 
 class SpatialDamageSource(BaseModel):

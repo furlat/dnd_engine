@@ -54,6 +54,7 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.effect_types import EffectOriginKind
 from dnd.core.action_types import ActionVariantFacet
+from dnd.types.event_facts import GroupEntryKind, HandlerGroupDispatch
 from dnd.core.events import Damage, Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, ForcedMovementEvent, PortalTransferEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
 from dnd.types.character_progression import OriginCapability
 from dnd.types.actor import ConditionState, PendingSpatialReturn, SpatialDisposition
@@ -71,7 +72,7 @@ from dnd.core.modifiers import (
 )
 from dnd.core.geometry import bresenham_line
 from dnd.core.elevation import support_distance_feet
-from dnd.core.aoe import Sphere
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.spatial.restraints import SpatialRestraintSource
 from dnd.core.positioning import PositionPublicationError
@@ -940,6 +941,11 @@ def counterspell_reaction_processor(
     if event.event_type != EventType.CAST_SPELL:
         return None
 
+    # Counterspell interrupts the cast once, at its root execution; per-target
+    # applications of the same spell are not new casts (bug E).
+    if isinstance(event, SpellEvent) and event.application is not None:
+        return None
+
     if event.source_entity_uuid == source_entity_uuid:
         return None
 
@@ -1118,21 +1124,10 @@ class GlobeZone(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
     )
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=10, description="Zone radius in feet.")
+    area: AoEShape = Sphere(radius_feet=10)
     max_blocked_level: int = Field(default=5, description="Highest base spell level blocked by the globe.")
 
     model_config = {"arbitrary_types_allowed": True}
-
-    def _compute_positions(self) -> set:
-        """Compute positions in the 10ft radius sphere around center."""
-        shape = Sphere(
-            source_entity_uuid=self.source_entity_uuid,
-            target=self.position,
-            radius_feet=self.zone_radius_feet
-        )
-        shape.compute_objective(self.position)
-        return set(shape.affected_positions)
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Event]:
         modifiers, handler_uuids, children, spatial_handlers, effect = super()._apply(
@@ -3335,8 +3330,7 @@ class PassWithoutTraceZone(MembershipAreaCondition):
     layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
     occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
     anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.ENTITY
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 30
+    area: AoEShape = Sphere(radius_feet=30)
     duration: Duration = Field(default_factory=lambda: Duration(duration=None,duration_type=DurationType.PERMANENT))
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     membership_trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.APPEAR,
@@ -3438,8 +3432,7 @@ class GlyphOfWardingZone(AreaCondition):
     description: str = "One hostile-triggered thirteen-foot glyph; payload affects all occupants once."
     layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
     occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 13
+    area: AoEShape = Sphere(radius_feet=13)
     has_visible_presence: bool = True
     spell_dc: int
     dice_count: int = 5
@@ -3466,41 +3459,43 @@ class GlyphOfWardingZone(AreaCondition):
         caster=Entity.get(self.source_entity_uuid)
         if caster is None:
             return
-        for target in targets:
-            request=caster.create_saving_throw_request(target.uuid,"dexterity",self.spell_dc,
-                parent_event=event.uuid,saving_throw_context=context)
-            saved=target.saving_throw(request)[2]
-            if self.payload=="sleep":
-                if not saved:
-                    target.add_condition(GlyphSleepEffect(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
-                        effect_origin=self.effect_origin),parent_event=event)
-            elif self.payload=="detonation":
-                if not saved:
-                    delta=(target.position[0]-self.position[0],target.position[1]-self.position[1])
-                    direction=(1 if delta[0]>0 else -1 if delta[0]<0 else 0,1 if delta[1]>0 else -1 if delta[1]<0 else 0)
-                    if direction==(0,0):
-                        direction=(1,0)
-                    start=target.position
-                    end=(start[0]+4*direction[0],start[1]+4*direction[1])
-                    movement=ForcedMovementEvent(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
-                        start_position=start,end_position=end,direction=direction,intended_distance=20,actual_distance=20,
-                        cause="glyph_of_warding",effect_origin=self.effect_origin,parent_event=event.uuid)
-                    movement=movement.phase_to(EventPhase.EXECUTION)
-                    if not movement.canceled:
-                        movement=movement.phase_to(EventPhase.EFFECT)
+        # The glyph's payload reaches everyone in its area at once.
+        with EventQueue.group(GroupEntryKind.CAST_LOOP,root=event,shares_damage_rolls=True):
+            for target in targets:
+                request=caster.create_saving_throw_request(target.uuid,"dexterity",self.spell_dc,
+                    parent_event=event.uuid,saving_throw_context=context)
+                saved=target.saving_throw(request)[2]
+                if self.payload=="sleep":
+                    if not saved:
+                        target.add_condition(GlyphSleepEffect(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
+                            effect_origin=self.effect_origin),parent_event=event)
+                elif self.payload=="detonation":
+                    if not saved:
+                        delta=(target.position[0]-self.position[0],target.position[1]-self.position[1])
+                        direction=(1 if delta[0]>0 else -1 if delta[0]<0 else 0,1 if delta[1]>0 else -1 if delta[1]<0 else 0)
+                        if direction==(0,0):
+                            direction=(1,0)
+                        start=target.position
+                        end=(start[0]+4*direction[0],start[1]+4*direction[1])
+                        movement=ForcedMovementEvent(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
+                            start_position=start,end_position=end,direction=direction,intended_distance=20,actual_distance=20,
+                            cause="glyph_of_warding",effect_origin=self.effect_origin,parent_event=event.uuid)
+                        movement=movement.phase_to(EventPhase.EXECUTION)
                         if not movement.canceled:
-                            commit_forced_movement(target,movement,parent_event=event)
-            else:
-                damage_type=DamageType[self.payload.upper()]
-                damage=Damage(name="Glyph of Warding",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
-                    damage_dice=8,dice_numbers=self.dice_count,damage_type=damage_type,effect_origin=self.effect_origin,
-                    damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
-                roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
-                target.receive_damage(roll.total//2 if saved else roll.total,damage_type,caster.uuid,parent_event=event.uuid,
-                    damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,independent_resolution=True,
-                    source_condition_uuid=self.uuid)
-        if self.payload not in ("sleep","detonation"):
-            apply_elemental_surface_contacts(event,positions,DamageType[self.payload.upper()])
+                            movement=movement.phase_to(EventPhase.EFFECT)
+                            if not movement.canceled:
+                                commit_forced_movement(target,movement,parent_event=event)
+                else:
+                    damage_type=DamageType[self.payload.upper()]
+                    damage=Damage(name="Glyph of Warding",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
+                        damage_dice=8,dice_numbers=self.dice_count,damage_type=damage_type,effect_origin=self.effect_origin,
+                        damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
+                    roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
+                    target.receive_damage(roll.total//2 if saved else roll.total,damage_type,caster.uuid,parent_event=event.uuid,
+                        damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,independent_resolution=True,
+                        source_condition_uuid=self.uuid)
+            if self.payload not in ("sleep","detonation"):
+                apply_elemental_surface_contacts(event,positions,DamageType[self.payload.upper()])
 
     def _apply_appearance_effect(self,entity: Entity,*,parent_event: Event) -> None:
         self.trigger(entity,parent_event)
@@ -3731,7 +3726,7 @@ class HolyAuraEffect(BaseCondition):
                 result = attacker.add_condition(child, parent_event=boundary)
                 if result is not None and not result.canceled: parent.add_linked_condition(attacker.uuid, child.uuid)
             return None
-        handler = EventHandler(name="Holy Aura melee-hit blindness", source_entity_uuid=target.uuid,
+        handler = EventHandler(name="Holy Aura melee-hit blindness", source_entity_uuid=target.uuid, group_dispatch=HandlerGroupDispatch.AFTER_GROUP,
             trigger_conditions=[Trigger(event_type=kind, event_phase=EventPhase.EFFECT,
                 event_target_entity_uuid=target.uuid) for kind in (EventType.ATTACK, EventType.CAST_SPELL)], event_processor=hit)
         target.add_event_handler(handler)
@@ -3886,8 +3881,7 @@ class AntilifeShellZone(AreaCondition):
     layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
     occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
     anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.ENTITY
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 10
+    area: AoEShape = Sphere(radius_feet=10)
     duration: Duration = Field(default_factory=lambda: Duration(duration=600, duration_type=DurationType.ROUNDS))
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset({WorldEdgeChannel.MOVEMENT})
@@ -3907,9 +3901,7 @@ class AntilifeShellZone(AreaCondition):
         old = set(self.affected_positions)
         swept=[]
         for center in bresenham_line(self.position,position)[1:]:
-            shape=self._area_shape(center)
-            shape.compute_objective(center)
-            swept.append(set(shape.affected_positions))
+            swept.append(set(self.area_footprint(center)))
         if self.contributions_active() and any(entity.uuid != self.anchor_uuid
                 and entity.is_deployed and entity.health.life_state is not LifeState.DEAD
                 and entity.creature_type not in {CreatureType.CONSTRUCT, CreatureType.UNDEAD}

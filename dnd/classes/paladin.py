@@ -6,7 +6,9 @@ Contains: Divine Smite (per-level handlers that add radiant damage on melee hit)
 from typing import Optional, List
 from uuid import UUID
 
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.core.base_actions import spell_slot_cost_type
+from dnd.types.event_facts import HandlerGroupDispatch
 from dnd.core.events import (
     Event,
     EventPhase,
@@ -888,8 +890,7 @@ class PaladinAuraZone(MembershipAreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = (
         SpatialEffectOccupancyPolicy.OVERLAPPING
     )
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 10
+    area: AoEShape = Sphere(radius_feet=10)
     membership_tags: frozenset[ConditionTag] = frozenset()
     duration: Duration = Field(
         default_factory=lambda: Duration(duration_type=DurationType.PERMANENT)
@@ -1000,6 +1001,7 @@ class PaladinAuraRoot(BaseCondition):
         handler = EventHandler(
             name="Paladin aura deployment",
             source_entity_uuid=actor.uuid,
+            group_dispatch=HandlerGroupDispatch.AFTER_GROUP,
             trigger_conditions=[
                 Trigger(
                     event_type=EventType.SPATIAL_ENTITY_ENTERED,
@@ -1060,7 +1062,7 @@ class PaladinAuraRoot(BaseCondition):
             anchor_uuid=actor.uuid,
             faction=actor.faction,
             aura_kind=self.aura_kind,
-            zone_radius_feet=30 if paladin_level(actor) >= 18 else 10,
+            area=Sphere(radius_feet=30 if paladin_level(actor) >= 18 else 10),
         )
         self.zone_uuid = zone.uuid
         result = zone.activate(parent_event=event)
@@ -1078,9 +1080,9 @@ class PaladinAuraRoot(BaseCondition):
             self._place_zone(actor, event)
             zone = BaseCondition.get(self.zone_uuid)
             if isinstance(zone, PaladinAuraZone):
-                radius = 30 if paladin_level(actor) >= 18 else 10
-                if zone.zone_radius_feet != radius:
-                    zone.zone_radius_feet = radius
+                area = Sphere(radius_feet=30 if paladin_level(actor) >= 18 else 10)
+                if zone.area != area:
+                    zone.area = area
                     zone.relocate_anchor(actor.position, parent_event=event)
                 recipient_uuids = {
                     recipient.uuid

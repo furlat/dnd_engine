@@ -20,11 +20,12 @@ from dnd.core.action_types import (
     RestrictedActionKind,
 )
 from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRef, EventResolutionRef, EffectPropagationLink, EffectOrigin, EffectOriginKind
+from dnd.types.event_facts import GroupEntryKind
 from dnd.core.events import ActionApplicationCommittedEvent, ActionCostsCommittedEvent, Event, EventType, EventPhase, EventProcessor, Range, EventQueue
 from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
 from dnd.types.world import MovementMode
 from dnd.types.class_features import FontConversion
-from dnd.core.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock, resolution_order_key
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
 from dnd.core.content.identities import ContentRef, validate_namespaced_id
 from dnd.core.content.runtime import (
@@ -32,7 +33,7 @@ from dnd.core.content.runtime import (
     active_runtime_behavior_binding,
     runtime_behavior_provider,
 )
-from dnd.core.aoe import AoEShape
+from dnd.core.aoe import AoEShape, objective_footprint
 from dnd.core.traversal_connectors import ConnectorTraversalDiscovery
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.geometry import bresenham_line, grid_distance_feet
@@ -117,16 +118,20 @@ def target_resolution_sort_key(target_uuid: UUID) -> tuple[bool, int, int, str, 
         Position and name ordering with UUID only as a final exact-tie fallback.
     """
     target = BaseBlock.get(target_uuid)
-    position = getattr(target, "position", None)
-    has_position = (
-        isinstance(position, tuple)
-        and len(position) == 2
-        and isinstance(position[0], int)
-        and isinstance(position[1], int)
-    )
-    x, y = cast(Tuple[int, int], position) if has_position else (0, 0)
-    target_name = target.name or "" if target is not None else ""
-    return (not has_position, x, y, target_name, str(target_uuid))
+    if target is None:
+        return (True, 0, 0, "", str(target_uuid))
+    return resolution_order_key(target)
+
+
+def lowest_hp_first(target_uuids: Sequence[UUID], limit: int) -> List[UUID]:
+    """Keep at most `limit` targets, lowest current HP first (plan Q4).
+
+    The fixed resolution order breaks HP ties and orders the kept targets.
+    """
+    def hp_key(target_uuid: UUID) -> tuple[int, tuple[bool, int, int, str, str]]:
+        block = BaseBlock.get(target_uuid)
+        return (block.get_hp() if block is not None else 0, target_resolution_sort_key(target_uuid))
+    return sorted(sorted(target_uuids, key=hp_key)[:limit], key=target_resolution_sort_key)
 
 
 class ActionCategory(str, Enum):
@@ -1656,15 +1661,16 @@ class BaseAction(BaseObject):
         source_block = BaseBlock.get(self.source_entity_uuid)
         if source_block is None:
             return [], None
-        shape = self.aoe_shape.model_copy(update={'target': self.end_position})
-        shape.compute_objective(source_block.position)
-        targets = sorted(shape.affected_entity_uuids, key=target_resolution_sort_key)
+        footprint = objective_footprint(self.aoe_shape, self.end_position, source_block.position)
+        grid = get_map()
+        targets = sorted({identity for cell in footprint for identity in grid.get_entities_at(cell)},
+            key=target_resolution_sort_key)
         if not self.include_self:
             targets = [uid for uid in targets if uid != self.source_entity_uuid]
         targets = self._filter_targets_by_faction(source_block, targets)
         if not self.include_dead:
             targets = [uid for uid in targets if (block := BaseBlock.get(uid)) and block.is_active]
-        return targets, tuple(sorted(shape.affected_positions))
+        return targets, tuple(sorted(footprint))
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         """Preserve authored target selection unless the action also records its area."""
@@ -2194,45 +2200,62 @@ class BaseAction(BaseObject):
         self, execution_event: ActionEvent, target_uuids: List[UUID], *,
         parent_event: Event, application_index_offset: int = 0,
     ) -> int:
-        """Apply one ordered batch with the existing child-action lifecycle."""
-        original_target = self.target_entity_uuid
+        """Apply one ordered batch with the existing child-action lifecycle.
+
+        The batch is one instant: inside an area it joins the area's group, and
+        a nested batch (Turn Undead, Preserve Life) opens its own.
+        """
         total_damage = 0
-        try:
+        with EventQueue.group(GroupEntryKind.NESTED_BATCH, root=parent_event,
+                              shares_damage_rolls=not self.performs_attack):
             for application_index, target_uuid in enumerate(target_uuids, application_index_offset):
-                self.target_entity_uuid = target_uuid
-                target_block = BaseBlock.get(target_uuid)
-                membership = ApplicationMembership(lineage_uuid=execution_event.lineage_uuid,
-                    application_id=uuid5(execution_event.lineage_uuid, f"target-application:{application_index}"),
-                    index=application_index)
-                per_target_event = execution_event.model_copy(update={
-                    'uuid': uuid4(), 'lineage_uuid': uuid4(),
-                    'parent_event': parent_event.uuid,
-                    'parent_lineage': parent_event.lineage_uuid,
-                    'target_entity_uuid': target_uuid,
-                    'target_entity_name': target_block.name if target_block else None,
-                    'children_events': [], 'lineage_children_events': [], 'children_lineages': [],
-                    'application': membership,
-                    'propagation': self.get_application_propagation(target_uuid, membership),
-                    'resolution_ref': ApplicationResolutionRef(lineage_uuid=membership.lineage_uuid,
-                        application_id=membership.application_id),
-                })
-                per_target_event = cast(ActionEvent, EventQueue.register(per_target_event))
-                if per_target_event.canceled:
-                    continue
-                result_event = (per_target_event.phase_to(EventPhase.EFFECT)
-                                if per_target_event.application_intercepted_by is not None else self._apply(per_target_event))
-                if result_event is None or result_event.canceled:
-                    continue
-                result_event = cast(ActionEvent, result_event)
-                if result_event.phase is not EventPhase.EFFECT:
-                    raise ValueError(f"Action {self.name} target application must end at effect phase")
-                self._publish_application_commit(result_event)
-                total_damage += result_event.total_damage or 0
-                result_event.phase_to(EventPhase.COMPLETION,
-                    status_message=result_event.status_message or f"{self.name} target application completed")
+                result_event = self._apply_target_application(execution_event, target_uuid,
+                    parent_event=parent_event, application_index=application_index)
+                if result_event is not None:
+                    total_damage += result_event.total_damage or 0
+        return total_damage
+
+    def _apply_target_application(
+        self, execution_event: ActionEvent, target_uuid: UUID, *,
+        parent_event: Event, application_index: int,
+    ) -> Optional[ActionEvent]:
+        """Resolve one target's application; None when it was vetoed or canceled."""
+        original_target = self.target_entity_uuid
+        try:
+            self.target_entity_uuid = target_uuid
+            target_block = BaseBlock.get(target_uuid)
+
+            membership = ApplicationMembership(lineage_uuid=execution_event.lineage_uuid,
+                application_id=uuid5(execution_event.lineage_uuid, f"target-application:{application_index}"),
+                index=application_index)
+            per_target_event = execution_event.model_copy(update={
+                'uuid': uuid4(), 'lineage_uuid': uuid4(),
+                'parent_event': parent_event.uuid,
+                'parent_lineage': parent_event.lineage_uuid,
+                'target_entity_uuid': target_uuid,
+                'target_entity_name': target_block.name if target_block else None,
+                'children_events': [], 'lineage_children_events': [], 'children_lineages': [],
+                'application': membership,
+                'propagation': self.get_application_propagation(target_uuid, membership),
+                'resolution_ref': ApplicationResolutionRef(lineage_uuid=membership.lineage_uuid,
+                    application_id=membership.application_id),
+            })
+            per_target_event = cast(ActionEvent, EventQueue.register(per_target_event))
+            if per_target_event.canceled:
+                return None
+            result_event = (per_target_event.phase_to(EventPhase.EFFECT)
+                            if per_target_event.application_intercepted_by is not None else self._apply(per_target_event))
+            if result_event is None or result_event.canceled:
+                return None
+            result_event = cast(ActionEvent, result_event)
+            if result_event.phase is not EventPhase.EFFECT:
+                raise ValueError(f"Action {self.name} target application must end at effect phase")
+            self._publish_application_commit(result_event)
+            result_event.phase_to(EventPhase.COMPLETION,
+                status_message=result_event.status_message or f"{self.name} target application completed")
+            return result_event
         finally:
             self.target_entity_uuid = original_target
-        return total_damage
 
     def get_authored_spell_id(self) -> str | None:
         """Ordinary actions have no spell identity."""
@@ -2513,37 +2536,44 @@ class BaseAction(BaseObject):
             if execution_event.canceled:
                 return execution_event
             if self.effective_target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
-                started = start_phase()
-                all_target_uuids, resolved_area_positions = self._resolve_execution_targets()
-                record_phase("resolve_convolution_targets", started)
-                started = start_phase()
-                effect_event = execution_event.phase_to(
-                    EventPhase.EFFECT,
-                    total_targets=len(all_target_uuids),
-                    total_damage=0,
-                    aoe_position=self.end_position,
-                    resolved_area_positions=resolved_area_positions,
-                    status_message=(
-                        f"Applying {self.name} to {len(all_target_uuids)} targets"
-                    ),
-                )
-                record_phase("convolution_effect_event", started)
-                if effect_event.canceled:
-                    record_total()
-                    return effect_event
-
-                targets_started = start_phase()
-                effect_event = self._apply_target_applications(
-                    execution_event, effect_event, all_target_uuids)
-                record_phase("convolution_apply_targets", targets_started)
-                if effect_event.canceled:
-                    record_total()
-                    return effect_event
-
-                if self.effective_target_type == TargetType.POSITION_AOE:
+                # Every target's effect is one simultaneous group: observers settle
+                # once when it closes, before the root completes (plan §5.1-5.4).
+                # One shared damage roll for area effects and for multi-target
+                # effects without attack rolls (PHB "same time"; human D6a).
+                with EventQueue.group(GroupEntryKind.AREA_APPLICATION, root=execution_event,
+                        shares_damage_rolls=(self.effective_target_type is TargetType.POSITION_AOE
+                                             or not self.performs_attack)):
                     started = start_phase()
-                    self._finalize_aoe(effect_event)
-                    record_phase("finalize_aoe", started)
+                    all_target_uuids, resolved_area_positions = self._resolve_execution_targets()
+                    record_phase("resolve_convolution_targets", started)
+                    started = start_phase()
+                    effect_event = execution_event.phase_to(
+                        EventPhase.EFFECT,
+                        total_targets=len(all_target_uuids),
+                        total_damage=0,
+                        aoe_position=self.end_position,
+                        resolved_area_positions=resolved_area_positions,
+                        status_message=(
+                            f"Applying {self.name} to {len(all_target_uuids)} targets"
+                        ),
+                    )
+                    record_phase("convolution_effect_event", started)
+                    if effect_event.canceled:
+                        record_total()
+                        return effect_event
+
+                    targets_started = start_phase()
+                    effect_event = self._apply_target_applications(
+                        execution_event, effect_event, all_target_uuids)
+                    record_phase("convolution_apply_targets", targets_started)
+                    if effect_event.canceled:
+                        record_total()
+                        return effect_event
+
+                    if self.effective_target_type == TargetType.POSITION_AOE:
+                        started = start_phase()
+                        self._finalize_aoe(effect_event)
+                        record_phase("finalize_aoe", started)
             else:
                 started = start_phase()
                 effect_event = (execution_event.phase_to(EventPhase.EFFECT)

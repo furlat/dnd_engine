@@ -638,15 +638,11 @@ def apply_origin(
                 character_level=character_level,
                 aoe_shape=(
                     Line(
-                        source_entity_uuid=entity.uuid,
-                        target=(1, 0),
                         length_feet=30,
                         width_feet=5,
                     )
                     if ancestry.geometry == "line"
                     else Cone(
-                        source_entity_uuid=entity.uuid,
-                        target=(1, 0),
                         length_feet=15,
                     )
                 ),

@@ -176,7 +176,7 @@ class WallOfFireZone(AreaCondition):
             return None
         return EventHandler(
             name="Wall of Fire turn-end exposure", source_entity_uuid=self.source_entity_uuid,
-            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT)],
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EXECUTION)],
             event_processor=process,
         )
 

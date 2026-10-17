@@ -14,6 +14,7 @@ from uuid import UUID
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
 
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.condition_types import ConditionCategory, DurationType
@@ -655,8 +656,7 @@ class DraconicPresenceAura(AreaCondition):
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({SpatialEffectTriggerKind.TURN_START}),
     )
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=60)
+    area: AoEShape = Sphere(radius_feet=60)
     has_visible_presence: bool = True
 
     def get_spatial_observation(self, positions: set[Tuple[int, int]], *,
@@ -776,7 +776,7 @@ class DraconicPresenceAura(AreaCondition):
                 Trigger(
                     name="Turn starts in Draconic Presence",
                     event_type=EventType.TURN_START,
-                    event_phase=EventPhase.EFFECT,
+                    event_phase=EventPhase.EXECUTION,
                 ),
             ],
             event_processor=self._on_hostile_turn_start,

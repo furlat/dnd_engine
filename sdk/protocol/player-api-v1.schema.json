@@ -1048,7 +1048,8 @@
         "propagation": {
           "enum": [
             "line_of_effect",
-            "connected"
+            "connected",
+            "ignore_barriers"
           ],
           "title": "Propagation",
           "type": "string"
@@ -11478,7 +11479,8 @@
             {
               "enum": [
                 "line_of_effect",
-                "connected"
+                "connected",
+                "ignore_barriers"
               ],
               "type": "string"
             },
@@ -15680,6 +15682,7 @@
         "entity_entered",
         "entity_left",
         "tile_changed",
+        "tiles_changed",
         "tile_created",
         "tile_removed",
         "object_placed",
@@ -16447,7 +16450,8 @@
           "default": "line_of_effect",
           "enum": [
             "line_of_effect",
-            "connected"
+            "connected",
+            "ignore_barriers"
           ],
           "title": "Area Propagation",
           "type": "string"

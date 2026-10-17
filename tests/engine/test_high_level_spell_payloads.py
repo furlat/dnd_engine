@@ -8,7 +8,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventHandler, EventPhase, EventQueue, EventType, Trigger
+from dnd.core.events import DamageAppliedEvent, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.items.spell_payloads import (
@@ -17,7 +17,7 @@ from dnd.items.spell_payloads import (
     ThrowSpellPayload,
     TouchDelayedFireball,
 )
-from dnd.spells.evocation import DelayedBlastFireball, FreezingSphere
+from dnd.spells.evocation import DelayedBlastFireball, Fireball, FreezingSphere
 from dnd.spells.wall_constructions import WallOfForce
 from tests.engine.test_high_level_spell_controls import (
     cast,
@@ -25,6 +25,7 @@ from tests.engine.test_high_level_spell_controls import (
     game,
     high_actor,
 )
+from tests.engine.support import set_hp
 from tests.manual.spell_regression_support import force_save_result
 
 
@@ -294,3 +295,24 @@ def test_portable_gameplay_ending_explodes_once_at_holder_position(game, ending)
     hp = victim.get_hp()
     caster.on_turn_end()
     assert victim.get_hp() == hp
+
+
+def test_payload_ended_inside_a_fireball_detonates_after_the_fireball_resolved(game):
+    """A payload ended inside a simultaneous area blasts in phase B (plan §5.6)."""
+    caster = high_actor(game)
+    holder = high_actor(game, "Holder", (3, 2))
+    victim = high_actor(game, "Victim", (8, 2), "foes")
+    enemy = high_actor(game, "Enemy", (12, 6), "foes")
+    force_save_result(victim, "constitution", succeeds=False)
+    cast(FreezingSphere, caster, holder, delivery="portable")
+    item = payload(holder)
+    holder.move((8, 3))
+    set_hp(caster, 1)
+    cursor = EventQueue.event_cursor()
+    with fixed_dice_faces(*([2] * 400)):
+        cast(Fireball, enemy, end_position=(5, 2))
+    assert BaseBlock.get(item.uuid) is None
+    damage = [(index, event.source_entity_uuid) for index, event in EventQueue.iter_events_since(cursor)
+              if isinstance(event, DamageAppliedEvent) and event.phase is EventPhase.COMPLETION
+              and event.target_entity_uuid == victim.uuid]
+    assert [source for _, source in damage] == [enemy.uuid, caster.uuid]
