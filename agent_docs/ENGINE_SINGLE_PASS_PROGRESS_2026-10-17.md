@@ -174,3 +174,14 @@ Hard rules:
   - A CREATED assignment raises at decision instead of auto-starting.
   - `open` and `unbind` are strict.
   - Edge left open: a summon committed while `has_runtime_agency()` is false is never started, and would raise if it got a turn. Not reached by any test.
+- 2026-10-17: **Regression found after the PV1a merge (fixed in PV1a-2, item 0).** Move rows got slower:
+
+  | Row (native) | Before PV1a | After PV1a |
+  | --- | --- | --- |
+  | Gust of Wind move | 51–63 ms | ~152 ms |
+  | Spirit Guardians move | 123–166 ms | 409–433 ms (first move 649 ms) |
+
+  - Cause: the one settlement path fully recomputes ~30 observers' views on every occupancy change, though occupancy only feeds contacts.
+  - Fix: stage dependency inside the one path. The view is f(walls, obscurement, light, position, senses) and contacts are g(view, occupancy, target facts); a settlement recomputes only the stages whose inputs changed.
+  - PV1a's report did not include move rows; integration timing should have caught this before the merge.
+  - Also: the gen-2 pause (~260 ms) now lands inside Sleet's event construction in all 3 base runs.
