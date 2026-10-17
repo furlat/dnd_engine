@@ -602,12 +602,36 @@ Human, 2026-10-17:
 
 | Grid | Owner and writer | Deleted |
 | --- | --- | --- |
-| Obscurement: per-owner footprint masks, with combined bits derived in the same write | GridMap, written only at the AreaCondition membership commit; `excluded_owner_uuid` reads the per-owner layer | `_optical_obscurement_by_position` push dict, the `condition.get_optical_obscurement_at` pull branch, `_obscurement_index`, `_optics_blocking` |
+| Obscurement: per-owner footprint masks, with combined bits derived in the same write | GridMap, written only at the AreaCondition membership commit; `excluded_owner_uuid` reads the per-owner layer | `_optical_obscurement_by_position` push dict, the `condition.get_optical_obscurement_at` pull branch, `_obscurement_index`. `_optics_blocking` stays: it is the objective physical-opacity cache, read only by wall / transition / directional geometry (PV1a). |
 | Resolved light level | written where `_resolve_light_contributions` runs; `Tile.resolved_light_level` reads it | the per-tile resolved copy |
 | Hazards | the owners' footprints already held by GridMap; per observer, each owner's `is_hazardous_for` is called once and its footprint OR-ed | per-cell hazard dicts |
 | Occupancy | unchanged authority (tile membership); contacts iterate the occupants in the window and index the visible mask | — (no occupant grid) |
 
 P4a's obscurement and light items fold into PV1, so that storage migrates once. P4b is closed: measured, not adopted.
+
+**PV1a done (2359fb559, merged 859a48752).**
+
+- Sleet cast native 692 → 111 ms, drop 317 → 93, Darkness 586 → 83, Daylight 323 → 90, Cloudkill 290 / 261 → 79 / 67, Fireball 188 → 173.
+- Per observer ~1.6 ms (old recompute 7.9 ms).
+- Equality against the base recordings on 7 cases, with ordering-only and the accepted walk-attribution differences.
+- Deleted:
+  - the scoped, hazard-only, emitter-log and reverse-index paths;
+  - `apply_sensory_update`, GridMap subscriptions and `ObserverRevisions`;
+  - the light epoch / change log and the per-tile resolved-light cache;
+  - the push obscurement API and `_obscurement_index`;
+  - boundary snapshots.
+- Not met: the per-observer budget (0.33 ms) and area independence (emit scales with changed cells).
+- Open:
+  - `Tile.resolved_light_level` is still computed from contributions (reading the GridMap grid from Tile would invert the DAG);
+  - the `_identity_grants` invalidation rule (keyed by `perception_revision`) is to be stated here;
+  - ~179 test uses read `capture_senses_snapshot` set forms (PV1b).
+
+**PV1a-2 (next):**
+
+- all observers of a settlement batched as 2-D arrays;
+- the sphere-volume (~170 µs per observer) and spatial-effect (~200 µs per observer) loops vectorized;
+- emit independent of the changed area;
+- zone install (terrain written per tile, condition application models, item dousing; ~50–75 ms loaded, previously unowned).
 
 **PV1 is split so that it doesn't collide with P7.**
 
