@@ -207,7 +207,8 @@ def test_passive_keeps_separate_channel_clamps_and_loose_global_bounds(actor, fa
     check_passive(actor, expected)
 
 
-def test_passive_retains_stateful_contextual_constraint_evaluation(actor):
+def test_passive_reads_each_contextual_constraint_once_per_read(actor):
+    """One read evaluates a contextual bound once; that answer clamps the channel and the aggregate."""
     skill = actor.skill_set.get_skill("perception").skill_bonus
     contextual = number(actor, 20)
     answers = iter((number(actor, 10), None, number(actor, 6)))
@@ -215,9 +216,11 @@ def test_passive_retains_stateful_contextual_constraint_evaluation(actor):
         source_entity_uuid=actor.uuid, callable=lambda *_: contextual))
     skill.self_contextual.add_max_constraint(ContextualNumericalModifier(
         source_entity_uuid=actor.uuid, callable=lambda *_: next(answers)))
-    assert 10 + actor.skill_bonus(None, "perception").normalized_score == 16
+    assert 10 + actor.skill_bonus(None, "perception").normalized_score == 20
+    assert next(answers) is None
     answers = iter((number(actor, 10), None, number(actor, 6)))
-    assert actor.passive_skill("perception") == 16
+    assert actor.passive_skill("perception") == 20
+    assert next(answers) is None
 
 
 def test_passive_proficiency_advantage_keeps_original_contextual_cache_detached(actor):
