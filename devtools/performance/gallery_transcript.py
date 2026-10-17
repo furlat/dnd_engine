@@ -39,7 +39,9 @@ uuid.uuid4 = lambda: uuid.UUID(int=_IDENTITIES.getrandbits(128), version=4)
 random.seed(4242)
 random.randint = random.Random(17).randint
 
-from dnd.core.events import EventQueue  # noqa: E402  (after the deterministic patches above)
+from pydantic import TypeAdapter  # noqa: E402
+from dnd.core.content.runtime import EffectiveHandlerPresentation  # noqa: E402  (after the deterministic patches above)
+from dnd.core.events import EventQueue  # noqa: E402
 from dnd.encounter import Encounter  # noqa: E402
 
 UUID_PATTERN = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
@@ -50,6 +52,8 @@ VALUE_STATE_FIELDS = ('from_target_static', 'from_target_contextual', 'target_en
                       'context')
 CHANNEL_STATE_FIELDS = ('target_entity_uuid', 'target_entity_name', 'context')
 CHANNELS = ('self_static', 'to_target_static', 'self_contextual', 'to_target_contextual')
+# Handler presentations are frozen dataclasses, not models: one adapter dumps them.
+PRESENTATIONS = TypeAdapter(tuple[EffectiveHandlerPresentation, ...])
 
 
 def record(tree: Path, out: Path) -> None:
@@ -59,13 +63,17 @@ def record(tree: Path, out: Path) -> None:
     spec.loader.exec_module(gallery)
 
     def dump_event(event):
+        # Child links live in the queue's lineage index (P7b), not in the frozen stored version.
+        children, lineage_children = EventQueue.child_links(event)
+        fields = event.model_dump(mode='json', exclude={'combat_log'})
+        fields.update(children_events=[str(identity) for identity in children],
+                      lineage_children_events=[str(identity) for identity in lineage_children])
         row = {'cls': type(event).__name__,
-               'fields': event.model_dump(mode='json', exclude={'combat_log'}),
+               'fields': fields,
                'identified': {str(k): sorted(map(str, v)) for k, v in event.identified_entity_observer_uuids.items()},
                'located': {str(k): sorted(map(str, v)) for k, v in event.located_entity_observer_uuids.items()},
                'located_pos': {str(k): sorted(map(str, v)) for k, v in event.located_position_observer_uuids.items()},
-               'presentations': [presentation.model_dump(mode='json')
-                                 for presentation in event.effective_handler_presentations]}
+               'presentations': PRESENTATIONS.dump_python(event.effective_handler_presentations, mode='json')}
         if event.combat_log is not None:
             row['log'] = event.combat_log.model_dump(mode='json')
         return row

@@ -13,10 +13,12 @@ from dnd.entity import Entity
 from dnd.items.environment import DirectionalWall
 from dnd.player.event_record import decode_event, encode_event
 from dnd.spells.conjuration import FogCloudZone
-from dnd.types.senses import SenseMode, SensesType, reduce_senses_snapshot
+from dnd.types.senses import SenseMode, SensesType
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from tests.engine.test_senses_light_stealth import create_skeleton, reset_senses_state
 from tests.engine.test_sensory_initial_replay import sensory_since
+from dnd.types.cells import cell_in
+from dnd.core.sensory_fold import reduce_senses_snapshot
 
 
 @pytest.mark.parametrize("obscured", [False, True])
@@ -33,7 +35,7 @@ def test_moving_torch_observations_equal_public_full_refresh(obscured):
     mover.update_entity_senses(max_distance=3)
     replayed = capture_senses_snapshot(mover.senses)
     assert target.uuid not in replayed.entities
-    assert target.position not in replayed.visible
+    assert not cell_in(replayed.visible, target.position)
 
     for destinations, expected_contact in ((((3, 1), (4, 1)), True), (((3, 1), (2, 1)), False)):
         cursor = EventQueue.event_cursor()
@@ -46,7 +48,7 @@ def test_moving_torch_observations_equal_public_full_refresh(obscured):
         current = capture_senses_snapshot(mover.senses)
         assert replayed == current
         assert (target.uuid in current.entities) is expected_contact
-        assert (target.position in current.visible) is expected_contact
+        assert cell_in(current.visible, target.position) is expected_contact
 
         # Explicit public refresh resolves the complete native field. It may
         # materialize navigation, but must not correct the committed perception.

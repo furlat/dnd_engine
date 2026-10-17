@@ -595,8 +595,10 @@ def test_eb_04_011_late_children_do_not_recompute_completed_parent_lineages() ->
 
     assert late_child_completion.parent_lineage == parent.lineage_uuid
     assert late_child_completion.get_parent_event() is parent_completion
-    assert late_child.uuid in parent_completion.children_events
-    assert late_child.uuid in parent_completion.lineage_children_events
+    # The completed parent version is frozen; its late child is linked through the queue.
+    children, lineage_children = EventQueue.child_links(parent_completion)
+    assert late_child.uuid in children
+    assert late_child.uuid in lineage_children
     assert parent_completion.children_lineages == [early_child.lineage_uuid]
     assert parent_completion.get_children_events() == [early_child_completion]
 

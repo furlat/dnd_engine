@@ -2936,7 +2936,7 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
     stealth_bonus_breakdown = value_log_rows(skill_bonus.breakdown)
     stealth_advantage_breakdown = advantage_log_rows(skill_bonus.advantage_breakdown)
 
-    check_event.combat_log = CombatLogEntry(
+    check_log = CombatLogEntry(
         entry_type=CombatLogEntryType.SKILL_CHECK,
         source_name=entity_name,
         source_uuid=str(entity.uuid),
@@ -2956,7 +2956,8 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
         )
     )
 
-    check_event.phase_to(EventPhase.COMPLETION)
+    # The stored EFFECT version is frozen: its completion carries the check's log.
+    check_event.phase_to(EventPhase.COMPLETION, combat_log=check_log)
     return None
 
 

@@ -46,8 +46,11 @@ from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.subjective_combat_log import project_combat_log
-from dnd.types.senses import PerceivedContact, SenseMode, SensesSnapshot, SensesType, reduce_senses_snapshot
+from dnd.types.senses import PerceivedContact, SenseMode, SensesSnapshot, SensesType
 from dnd.types.world import LightLevel
+from dnd.core.cells import values_items
+from tests.sensory_cells import cells, packed_cells
+from dnd.core.sensory_fold import reduce_senses_snapshot
 
 
 CONTROLLED_UUID = "00000000-0000-0000-0000-000000000001"
@@ -350,9 +353,8 @@ def test_sensory_updates_replay_independently_for_two_observers(
         observer_position_changed=True,
         cause_event_uuid=uuid4(),
         update_reason=SensoryUpdateReason.SELF_MOVEMENT,
-        visible_cells_added=[(1, 1), (2, 1)],
-        seen_cells_added=[(1, 1), (2, 1)],
-        effective_light_levels_changed={"1,1": LightLevel.DIM_LIGHT.value},
+        **packed_cells({"visible_cells_added": [(1, 1), (2, 1)], "seen_cells_added": [(1, 1), (2, 1)],
+            "effective_light_levels_changed": {(1, 1): LightLevel.DIM_LIGHT, (2, 1): LightLevel.BRIGHT_LIGHT}}),
         entity_contacts_changed={
             first_contact_uuid: PerceivedContact(
                 position=(2, 1),
@@ -377,8 +379,7 @@ def test_sensory_updates_replay_independently_for_two_observers(
         observer_position_changed=True,
         cause_event_uuid=uuid4(),
         update_reason=SensoryUpdateReason.SELF_MOVEMENT,
-        visible_cells_added=[(6, 7)],
-        seen_cells_added=[(6, 7)],
+        **packed_cells({"visible_cells_added": [(6, 7)], "seen_cells_added": [(6, 7)]}),
         entity_contacts_changed={
             second_contact_uuid: PerceivedContact(
                 position=(6, 6),
@@ -397,22 +398,22 @@ def test_sensory_updates_replay_independently_for_two_observers(
     second_after = _replay(second_uuid, capture_senses_snapshot(second), second_event)
 
     assert first_after.position == (1, 1)
-    assert first_after.visible == {(1, 1), (2, 1)}
-    assert first_after.seen == {(1, 1), (2, 1)}
+    assert cells(first_after.visible) == {(1, 1), (2, 1)}
+    assert cells(first_after.seen) == {(1, 1), (2, 1)}
     assert set(first_after.entities) == {first_contact_uuid}
-    assert first_after.effective_light_levels == {(1, 1): LightLevel.DIM_LIGHT}
+    assert values_items(first_after.effective_light_levels) == [((1, 1), LightLevel.DIM_LIGHT), ((2, 1), LightLevel.BRIGHT_LIGHT)]
     assert first_after.sense_modes == (
         SenseMode(sense_type=SensesType.DARKVISION, range_feet=60),
     )
     assert first_after.passive_perception == 14
     assert first_after.paths_dirty is True
     assert second_after.position == (6, 7)
-    assert second_after.visible == {(6, 7)}
-    assert second_after.seen == {(6, 7)}
+    assert cells(second_after.visible) == {(6, 7)}
+    assert cells(second_after.seen) == {(6, 7)}
     assert set(second_after.entities) == {second_contact_uuid}
     assert first_contact_uuid not in second_after.entities
     assert second_contact_uuid not in first_after.entities
-    assert first_after.visible | second_after.visible == {
+    assert cells(first_after.visible) | cells(second_after.visible) == {
         (1, 1),
         (2, 1),
         (6, 7),
@@ -781,8 +782,8 @@ def test_cold_world_creation_logs_and_two_senses_replay_match_live_values() -> N
         tuple(replayed_senses[actor.uuid] for actor in actors),
     )
     assert replayed == expected
-    assert replayed_senses[actors[0].uuid].visible | replayed_senses[actors[1].uuid].visible == (
-        set(capture_senses_snapshot(actors[0].senses).visible) | set(capture_senses_snapshot(actors[1].senses).visible)
+    assert cells(replayed_senses[actors[0].uuid].visible) | cells(replayed_senses[actors[1].uuid].visible) == (
+        cells(capture_senses_snapshot(actors[0].senses).visible) | cells(capture_senses_snapshot(actors[1].senses).visible)
     )
 
 

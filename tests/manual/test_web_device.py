@@ -15,11 +15,12 @@ from dnd.core.presentation_geometry import CubePresentationGeometry
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import Web, WebZone
-from dnd.types.senses import reduce_senses_snapshot
 from dnd.types.world import MovementMode
 from tests.manual.test_131_inventory_use_actions_legacy_contract import (
     create_caster, create_target, force_save, item_action, reset_item_arena,
 )
+from dnd.core.cells import mask_positions
+from dnd.core.sensory_fold import reduce_senses_snapshot
 
 
 def test_device_web_creates_one_zone_at_emitter_range_and_concentration_removes_it() -> None:
@@ -112,11 +113,11 @@ def test_web_observation_retains_only_seen_cells_and_replays_leave_reacquire_rem
     zone = next(zone for zone in get_map().get_spatial_conditions() if isinstance(zone, WebZone))
     observed = observer.senses.spatial_effects[zone.uuid]
     assert observed.trap_state is None
-    assert set(observed.positions) == zone.affected_positions.intersection(capture_senses_snapshot(observer.senses).visible)
+    assert set(observed.positions) == zone.affected_positions.intersection(mask_positions(capture_senses_snapshot(observer.senses).visible))
     assert set(observed.positions) < zone.affected_positions
     checkpoint()
     Entity.update_entity_position(observer, (30, 13))
-    assert not zone.affected_positions.intersection(capture_senses_snapshot(observer.senses).visible)
+    assert not zone.affected_positions.intersection(mask_positions(capture_senses_snapshot(observer.senses).visible))
     assert observer.senses.spatial_effects[zone.uuid] == observed
     checkpoint()
     if remove_while_hidden:

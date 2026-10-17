@@ -5,6 +5,8 @@ explicitly exposes the whole authored map; it is never served to a player seat.
 """
 import argparse
 import json
+from dnd.core.cells import mask_from_positions, values_from_items
+from dnd.types.cells import EMPTY_CELLS
 from pathlib import Path
 from uuid import uuid4
 
@@ -34,8 +36,9 @@ def main() -> None:
     observer, generation = uuid4(), uuid4()
     positions = tuple(t.position for t in tiles)
     sensory = SensoryFact(observer_uuid=observer, initial=True, observer_position=positions[0],
-        observer_position_changed=True, effective_light_levels_changed={f"{x},{y}": 3 for x, y in positions},
-        cause_occurrence=None, visible_cells_added=positions, visible_cells_removed=(), seen_cells_added=positions,
+        observer_position_changed=True, effective_light_levels_changed=values_from_items({position: 3 for position in positions}),
+        cause_occurrence=None, visible_cells_added=mask_from_positions(positions), visible_cells_removed=EMPTY_CELLS,
+        seen_cells_added=mask_from_positions(positions),
         entity_contacts_changed={}, entity_contacts_removed=frozenset(),
         object_contacts_changed={o.item.item_uuid: PerceivedContact(position=o.placement.position, visual=True) for o in objects},
         object_contacts_removed=frozenset(), sense_modes_changed=True, sense_modes=(),

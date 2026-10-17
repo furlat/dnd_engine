@@ -26,6 +26,9 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.world import LightLevel
 from tests.player.test_recorded_boundary import world
 from tests.player.test_emitted_update_replica import session
+from dnd.core.cells import mask_from_positions
+from dnd.types.cells import cell_in, no_cells
+from tests.sensory_cells import packed_cells
 
 
 @pytest.mark.parametrize('members', [(0,), (1,), (0, 1)])
@@ -82,7 +85,7 @@ def test_each_audience_gets_identical_light_facts_and_cold_replay(world, members
         expected_light = (LightLevel.DIM_LIGHT
             if light is LightLevel.DARKNESS and len(members) == 1 else light)
         assert state.tiles[(5, 6)].resolved_light is expected_light
-        assert ((5, 6) in state.senses.visible) is (light is not LightLevel.DARKNESS)
+        assert cell_in(state.senses.visible, (5, 6)) is (light is not LightLevel.DARKNESS)
     assert (omitted > 0) is (len(members) == 1)
     saved = RecordedSequence(initialization=initial, lineages=tuple(captured)).model_dump_json()
     original = RecordedSequence(initialization=initial, lineages=tuple(complete)).model_dump_json()
@@ -109,7 +112,7 @@ def test_foreign_sensory_with_additional_evidence_keeps_its_full_capture(world, 
         battlefield_id=built.definition.battlefield_id)
     event = SensoryUpdateEvent(source_entity_uuid=foreign.uuid, observer_uuid=foreign.uuid,
         use_register=False, phase=EventPhase.COMPLETION,
-        visible_cells_added=[(5, 6)], effective_light_levels_changed={'5,6': 3})
+        **packed_cells(dict(visible_cells_added=[(5, 6)], effective_light_levels_changed={(5, 6): 3})))
     if guard == 'context':
         event.context = {'annotation': ['retained source']}
     elif guard == 'log':
@@ -134,7 +137,7 @@ def test_foreign_sensory_with_additional_evidence_keeps_its_full_capture(world, 
         omit_foreign_sensory_payloads=True)
     assert admitted == full
     assert not admitted[0].dispositions
-    assert encode_event(admitted[0].root)['visible_cells_added'] == [[5, 6]]
+    assert decode_event(encode_event(admitted[0].root)).visible_cells_added == mask_from_positions([(5, 6)])
     full_projection, _ = begin_projection(initial)
     admitted_projection, _ = begin_projection(initial)
     expected = project_lineage(full_projection, full[0])
@@ -161,7 +164,7 @@ def test_exact_referenced_foreign_sensory_version_remains_complete(world):
         from_position=(5, 5), to_position=(5, 6))
     source = SensoryUpdateEvent(source_entity_uuid=foreign.uuid, observer_uuid=foreign.uuid,
         phase=EventPhase.COMPLETION, parent_event=root.uuid, cause_event_uuid=root.uuid,
-        visible_cells_added=[(5, 6)], effective_light_levels_changed={'5,6': 3})
+        **packed_cells(dict(visible_cells_added=[(5, 6)], effective_light_levels_changed={(5, 6): 3})))
     SensoryUpdateEvent(source_entity_uuid=owner.uuid, observer_uuid=owner.uuid,
         phase=EventPhase.COMPLETION, parent_event=root.uuid, cause_event_uuid=root.uuid,
         observed_changes=(ObservedChangeRef(source_event_uuid=source.uuid,
@@ -174,7 +177,7 @@ def test_exact_referenced_foreign_sensory_version_remains_complete(world):
     assert admitted == full
     assert not admitted[0].dispositions
     retained = next(event for event in admitted[0].events if event.uuid == source.uuid)
-    assert encode_event(retained)['visible_cells_added'] == [[5, 6]]
+    assert decode_event(encode_event(retained)).visible_cells_added == mask_from_positions([(5, 6)])
 
 
 def test_invisible_torch_user_keeps_witness_light_children_without_disclosing_action(world):
@@ -207,7 +210,7 @@ def test_invisible_torch_user_keeps_witness_light_children_without_disclosing_ac
                 state = reduce_lineage(state, actual)
         assert not any(isinstance(node.fact, ActionFact)
             for packet in packets for node in packet.events)
-        assert any(isinstance(node.fact, SensoryFact) and node.fact.effective_light_levels_changed
+        assert any(isinstance(node.fact, SensoryFact) and not no_cells(node.fact.effective_light_levels_changed.cells)
             for packet in packets for node in packet.events)
 
 

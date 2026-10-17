@@ -8,6 +8,7 @@ from dnd.ai.contracts.observation import (
     SpatialDomainKnowledge,
 )
 from dnd.core.world_edges import WorldEdgeStructuralContribution, world_edge_contribution_allows
+from dnd.types.cells import value_at
 from dnd.types.senses import SensesSnapshot
 from dnd.types.world import MovementMode, WorldEdgeChannel
 from dnd.world_facts import CARDINAL_DELTAS, OPPOSITE_DIRECTION, WorldFacts
@@ -80,7 +81,8 @@ def project_tile(
         key=f"{position[0]},{position[1]}", position=position,
         knowledge_state=KnowledgeState.VISIBLE, observer_uuids=observers,
         name=tile.name, walkable=tile.walking_cost > 0, walking_cost=tile.walking_cost,
-        is_hazardous=senses.hazardous_cells.get(position) if senses is not None else None,
+        is_hazardous=(bool(hazard) if (hazard := value_at(senses.hazardous_cells, position)) is not None else None)
+            if senses is not None else None,
         conditions=list(tile.condition_names), light_level=tile.resolved_light.value,
         directional_blocks_movement=directional[WorldEdgeChannel.MOVEMENT],
         directional_blocks_vision=directional[WorldEdgeChannel.OPTICAL],

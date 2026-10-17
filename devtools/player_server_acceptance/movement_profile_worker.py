@@ -10,6 +10,7 @@ from contextlib import ExitStack, contextmanager
 import cProfile
 import gc
 import json
+from dnd.core.cells import mask_count
 from pathlib import Path
 import pstats
 from time import perf_counter, perf_counter_ns, process_time_ns
@@ -127,11 +128,11 @@ def main():
 
     def snapshot_count(snapshot):
         if snapshot is not None:
-            for label, value in (('seen', snapshot.seen), ('visible', snapshot.visible),
-                    ('entities', snapshot.entities), ('objects', snapshot.objects),
-                    ('light', snapshot.effective_light_levels), ('hazards', snapshot.hazardous_cells),
-                    ('effects', snapshot.spatial_effects)):
-                increment('snapshot.input_entries.'+label, len(value))
+            for label, value in (('seen', mask_count(snapshot.seen)), ('visible', mask_count(snapshot.visible)),
+                    ('entities', len(snapshot.entities)), ('objects', len(snapshot.objects)),
+                    ('light', mask_count(snapshot.effective_light_levels.cells)),
+                    ('hazards', mask_count(snapshot.hazardous_cells.cells)), ('effects', len(snapshot.spatial_effects))):
+                increment('snapshot.input_entries.'+label, value)
 
     def target_count(target):
         increment('target_copy.tiles', len(target.tiles))
@@ -301,21 +302,21 @@ def main():
     def world_count(world, remembered, event_uuid, positions, object_positions, identities, index):
         increment('world_update.world_objects_available', len(world.objects))
         increment('world_update.remembered_objects_available', len(remembered.objects))
-        increment('world_update.visible_tiles_available', len(world.senses.visible) if world.senses else 0)
+        increment('world_update.visible_tiles_available', mask_count(world.senses.visible) if world.senses else 0)
         increment('world_update.input_positions', len(positions))
         increment('world_update.input_object_positions', len(object_positions))
         increment('world_update.input_object_ids', len(identities))
 
     def audience_count(composition, audience, observer_uuid, event, cursor):
-        increment('audience.current.visible_added', len(event.visible_cells_added))
-        increment('audience.current.visible_removed', len(event.visible_cells_removed))
-        increment('audience.current.seen_added', len(event.seen_cells_added))
+        increment('audience.current.visible_added', mask_count(event.visible_cells_added))
+        increment('audience.current.visible_removed', mask_count(event.visible_cells_removed))
+        increment('audience.current.seen_added', mask_count(event.seen_cells_added))
         increment('audience.current.entity_changed', len(event.entity_contacts_changed))
         increment('audience.current.object_changed', len(event.object_contacts_changed))
         increment('audience.current.effect_changed', len(event.spatial_effects_changed))
         increment('audience.current.visible_effect_candidates',
             len(composition.visible_effects.get(event.observer_uuid, ())))
-        increment('audience.current.retained_seen_available', len(composition.view.seen) if composition.view else 0)
+        increment('audience.current.retained_seen_available', mask_count(composition.view.seen) if composition.view else 0)
 
     modules = (
         (worker, 'execute_player_action', 'action.execute', worker.execute_player_action, None),

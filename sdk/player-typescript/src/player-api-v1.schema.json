@@ -2681,6 +2681,70 @@
       "title": "CardinalDirection",
       "type": "string"
     },
+    "CellMask": {
+      "description": "A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,\nleast significant bit first within each byte.",
+      "properties": {
+        "x0": {
+          "title": "X0",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "y0": {
+          "title": "Y0",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "width": {
+          "title": "Width",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "height": {
+          "title": "Height",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "bits": {
+          "format": "base64url",
+          "title": "Bits",
+          "type": "string"
+        }
+      },
+      "required": [
+        "x0",
+        "y0",
+        "width",
+        "height",
+        "bits"
+      ],
+      "title": "CellMask",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "CellValues": {
+      "description": "One byte per cell of `cells`, in its cell order (x, then y).",
+      "properties": {
+        "cells": {
+          "$ref": "#/$defs/CellMask"
+        },
+        "values": {
+          "format": "base64url",
+          "title": "Values",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cells",
+        "values"
+      ],
+      "title": "CellValues",
+      "type": "object",
+      "additionalProperties": false
+    },
     "CharacterClass": {
       "enum": [
         "class.barbarian",
@@ -14288,8 +14352,8 @@
           "maximum": 9007199254740991
         },
         "player_schema_version": {
-          "const": 12,
-          "default": 12,
+          "const": 13,
+          "default": 13,
           "title": "Player Schema Version",
           "type": "integer",
           "minimum": -9007199254740991,
@@ -15117,13 +15181,17 @@
           "type": "boolean"
         },
         "effective_light_levels_changed": {
-          "additionalProperties": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "title": "Effective Light Levels Changed",
-          "type": "object"
+          "$ref": "#/$defs/CellValues",
+          "default": {
+            "cells": {
+              "bits": "",
+              "height": 0,
+              "width": 0,
+              "x0": 0,
+              "y0": 0
+            },
+            "values": ""
+          }
         },
         "cause_occurrence": {
           "anyOf": [
@@ -15139,67 +15207,34 @@
           "title": "Cause Occurrence"
         },
         "visible_cells_added": {
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "type": "array"
-          },
-          "title": "Visible Cells Added",
-          "type": "array"
+          "$ref": "#/$defs/CellMask",
+          "default": {
+            "x0": 0,
+            "y0": 0,
+            "width": 0,
+            "height": 0,
+            "bits": ""
+          }
         },
         "visible_cells_removed": {
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "type": "array"
-          },
-          "title": "Visible Cells Removed",
-          "type": "array"
+          "$ref": "#/$defs/CellMask",
+          "default": {
+            "x0": 0,
+            "y0": 0,
+            "width": 0,
+            "height": 0,
+            "bits": ""
+          }
         },
         "seen_cells_added": {
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "type": "array"
-          },
-          "title": "Seen Cells Added",
-          "type": "array"
+          "$ref": "#/$defs/CellMask",
+          "default": {
+            "x0": 0,
+            "y0": 0,
+            "width": 0,
+            "height": 0,
+            "bits": ""
+          }
         },
         "entity_contacts_changed": {
           "additionalProperties": {
@@ -15296,11 +15331,17 @@
           "type": "boolean"
         },
         "hazardous_cells_changed": {
-          "additionalProperties": {
-            "type": "boolean"
-          },
-          "title": "Hazardous Cells Changed",
-          "type": "object"
+          "$ref": "#/$defs/CellValues",
+          "default": {
+            "cells": {
+              "bits": "",
+              "height": 0,
+              "width": 0,
+              "x0": 0,
+              "y0": 0
+            },
+            "values": ""
+          }
         },
         "spatial_effect_sightings": {
           "additionalProperties": {
@@ -15360,11 +15401,7 @@
         "initial",
         "observer_position",
         "observer_position_changed",
-        "effective_light_levels_changed",
         "cause_occurrence",
-        "visible_cells_added",
-        "visible_cells_removed",
-        "seen_cells_added",
         "entity_contacts_changed",
         "entity_contacts_removed",
         "object_contacts_changed",

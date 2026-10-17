@@ -78,7 +78,10 @@ def test_condition_remaining_duration_is_recorded_under_turn_and_private_to_owne
         duration=Duration(duration=3, duration_type=DurationType.ROUNDS))
     applied = owner.add_condition(condition, check_save_throw=False)
     assert applied is not None
-    applied.identified_entity_observer_uuids[str(owner.uuid)] = {str(witness.uuid)}
+    # Grant the witness identity at completion; grant mappings are shared frozen values, so the
+    # version gets a new mapping rather than an edited one.
+    applied.identified_entity_observer_uuids = {**applied.identified_entity_observer_uuids,
+        str(owner.uuid): frozenset({str(witness.uuid)})}
     roots = (applied, owner.on_turn_start(round_number=1))
     assert condition.duration.duration == 2
     for actor in (owner, witness):

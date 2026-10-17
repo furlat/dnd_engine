@@ -20,6 +20,7 @@ from dnd.player.event_record import RecordedEvent, encode_event
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
+from dnd.types.cells import cell_in
 from dnd.types.world import LightLevel
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
@@ -249,7 +250,7 @@ def test_shared_light_tile_after_values_precede_parent_completion_and_survive_co
         # observer still grants this cell. Darkness is remembered at that prefix
         # before the second child's visibility removal closes the shared grant.
         assert state.tiles[position].resolved_light is light
-        assert (position in state.senses.visible) is (light is not LightLevel.DARKNESS)
+        assert cell_in(state.senses.visible, position) is (light is not LightLevel.DARKNESS)
         assert state.tiles[neighbor] == unchanged
 
     saved = RecordedSequence(initialization=initial, lineages=tuple(lineages)).model_dump_json()

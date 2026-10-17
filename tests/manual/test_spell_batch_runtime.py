@@ -18,10 +18,12 @@ from dnd.spells.conjuration import PoisonSpray, Web
 from dnd.spells.evocation import (
     BurningHands, GustOfWind, GustOfWindZone, SacredFlame, ShockingGrasp, Thunderwave,
 )
-from dnd.types.senses import reduce_senses_snapshot
+
 from tests.manual.test_131_inventory_use_actions_legacy_contract import (
     create_caster, create_target, force_save, reset_item_arena,
 )
+from dnd.core.cells import mask_positions
+from dnd.core.sensory_fold import reduce_senses_snapshot
 
 
 @pytest.mark.parametrize("spell_type, identity", (
@@ -190,7 +192,7 @@ def test_gust_observation_origin_disclosure_and_removal_replay_without_native_wo
     if not remove_while_hidden:
         assert caster.remove_condition("Concentrating")
     retained = observer.senses.spatial_effects.get(zone.uuid)
-    assert retained is None or set(retained.positions).isdisjoint(capture_senses_snapshot(observer.senses).visible)
+    assert retained is None or set(retained.positions).isdisjoint(mask_positions(capture_senses_snapshot(observer.senses).visible))
     checkpoint()
     # Previously observed but still hidden cells retain their last known state.
     # Seeing the complete former area establishes that every part is gone.
