@@ -231,23 +231,13 @@ def run_worker(args):
         return result
 
     original_candidates = EventQueue._event_trigger_candidates
-    original_spatial = EventQueue._get_handlers_for_spatial_event
     original_observers = SpatialSensesSystem.candidate_observer_uuids
     original_optics = GridMap.capture_optical_obscurements
 
-    def candidates(cls, event, *, include_simple=True):
+    def candidates(cls, event, *, include_simple):
         result = original_candidates(event, include_simple=include_simple)
         if profile is not None:
             work_counts['handler_index_candidates_visited'] += len(result)
-        return result
-
-    def spatial(cls, event, position):
-        if profile is not None:
-            work_counts['spatial_handler_index_entries'] += len(
-                cls._spatial_handlers_by_position[(event.event_type, event.phase)].get(position, ()))
-        result = original_spatial(event, position)
-        if profile is not None:
-            work_counts['spatial_handlers_admitted_before_position_dedup'] += len(result)
         return result
 
     def observers(owner, event):
@@ -334,7 +324,6 @@ def run_worker(args):
             patches.enter_context(patch.object(Encounter, 'advance_one_controller_action_boundary', advance_boundary))
         if args.diagnostic:
             patches.enter_context(patch.object(EventQueue, '_event_trigger_candidates', classmethod(candidates)))
-            patches.enter_context(patch.object(EventQueue, '_get_handlers_for_spatial_event', classmethod(spatial)))
             patches.enter_context(patch.object(SpatialSensesSystem, 'candidate_observer_uuids', observers))
             patches.enter_context(patch.object(GridMap, 'capture_optical_obscurements', optics))
         if args.gc_timing:

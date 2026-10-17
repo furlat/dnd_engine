@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from contextvars import ContextVar
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, StrictInt, field_serializer, model_validator
-from typing import Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
+from typing import AbstractSet, Union, List, Optional, Dict, Mapping, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
 from dnd.core.values import ModifiableValue
 from dnd.types.actor import TemporaryHitPointsGrant, ConditionState
 from dnd.types.class_features import IndomitableReroll, RelentlessRageIntervention
@@ -1068,9 +1068,10 @@ class Trigger(BaseModel):
         """Return True when the trigger has no source or target filters."""
         return self.event_source_entity_uuid is None and self.event_target_entity_uuid is None
 
-    def get_simple_trigger(self) -> 'Trigger':
-        """Return a trigger that keeps only event type and phase."""
-        return Trigger(event_type=self.event_type, event_phase=self.event_phase)
+    def index_key(self) -> Tuple[EventType, EventPhase, Optional[UUID], Optional[UUID]]:
+        """Return the queue index key: type, phase and the optional source/target filters."""
+        return (self.event_type, self.event_phase,
+                self.event_source_entity_uuid, self.event_target_entity_uuid)
 
 class BaseHandler(BaseObject):
     """Shared callable wrapper for event and spatial handlers.
@@ -1296,8 +1297,12 @@ class EventQueue:
     _event_handlers: Dict[UUID, 'EventHandler'] = {}
     _event_handler_order: Dict[UUID, int] = {}
     _next_event_handler_order: int = 0
-    _event_handlers_by_trigger: Dict[Trigger, List['EventHandler']] = defaultdict(list)
-    _event_handlers_by_simple_trigger: Dict[Trigger, List['EventHandler']] = defaultdict(list)
+    # Keyed by `Trigger.index_key()` and by (type, phase) for simple triggers.
+    _event_handlers_by_trigger: Dict[
+        Tuple[EventType, EventPhase, Optional[UUID], Optional[UUID]],
+        List['EventHandler'],
+    ] = defaultdict(list)
+    _event_handlers_by_simple_trigger: Dict[Tuple[EventType, EventPhase], List['EventHandler']] = defaultdict(list)
     _event_handlers_by_source_entity_uuid: Dict[UUID, List['EventHandler']] = defaultdict(list)
 
     _spatial_handlers: Dict[UUID, 'SpatialHandler'] = {}
@@ -1349,7 +1354,7 @@ class EventQueue:
     _combat_log_callback: Optional[Callable[['Event'], None]] = None
     _perceiver_computer: Optional[Callable[['Event'], Set[str]]] = None
     _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
-    _identified_entity_observer_computer: Optional[Callable[['Event'], Dict[str, Set[str]]]] = None
+    _identified_entity_observer_computer: Optional[Callable[['Event'], Mapping[str, AbstractSet[str]]]] = None
 
     @classmethod
     def begin_turn_execution(cls, execution_id: Optional[UUID] = None) -> UUID:
@@ -1406,7 +1411,7 @@ class EventQueue:
     @classmethod
     def set_identified_entity_observer_computer(
         cls,
-        func: Optional[Callable[['Event'], Dict[str, Set[str]]]],
+        func: Optional[Callable[['Event'], Mapping[str, AbstractSet[str]]]],
     ) -> None:
         """Register the event-time participant identity provider.
 
@@ -1417,7 +1422,8 @@ class EventQueue:
 
         Args:
             func: Callback returning participant UUID keys and the observer
-                UUIDs that currently identify each participant.
+                UUIDs that currently identify each participant. The sets are
+                read only; each stored version receives its own copies.
         """
         cls._identified_entity_observer_computer = func
 
@@ -1963,9 +1969,12 @@ class EventQueue:
         if stored_event is not None:
             raise ValueError(f"Event UUID collision for {event.uuid}")
         cls._store_event(event)
+        # Completion versions are facts: no handler runs on them.
+        if event.phase == EventPhase.COMPLETION:
+            return event
 
         handlers = cls._get_handlers_for_event(event)
-        if not handlers or event.phase == EventPhase.COMPLETION:
+        if not handlers:
             return event
 
         current_event = event
@@ -2280,13 +2289,15 @@ class EventQueue:
             entity_uuid: set(observer_uuids)
             for entity_uuid, observer_uuids in event.identified_entity_observer_uuids.items()
         }
-        located = {
-            entity_uuid: set(observer_uuids)
-            for entity_uuid, observer_uuids in event.located_entity_observer_uuids.items()
-        }
         if timing:
             record_action_timing("event_queue.store.copy_identified_ms", started)
-        if cls._identified_entity_observer_computer is not None:
+        if cls._identified_entity_observer_computer is None:
+            located = {
+                entity_uuid: set(observer_uuids)
+                for entity_uuid, observer_uuids in event.located_entity_observer_uuids.items()
+            }
+        else:
+            # Location grants are this version's own; identity accumulates.
             started = time.perf_counter() if timing else 0.0
             captured = cls._identified_entity_observer_computer(event)
             located = {
@@ -2388,81 +2399,40 @@ class EventQueue:
         events use trigger indexes and trigger predicates.
         """
         positions = event.spatial_dispatch_positions()
-        if positions:
-            handlers: List['BaseHandler'] = []
-            seen: Set[UUID] = set()
-            for position in positions:
-                for handler in cls._get_handlers_for_spatial_event(
-                    event,
-                    position,
-                ):
-                    if handler.uuid in seen:
-                        continue
-                    handlers.append(handler)
-                    seen.add(handler.uuid)
-            return handlers
-
-        return cls._get_handlers_for_non_spatial_event(event)
-
-    @classmethod
-    def _get_handlers_for_spatial_event(
-        cls,
-        event: Event,
-        position: Tuple[int, int]
-    ) -> List['BaseHandler']:
-        """Return handlers for one spatial event at one grid position.
-
-        Position-indexed spatial handlers are discovered in O(1). Trigger-based
-        event handlers are still included for global spatial reactions such as
-        opportunity attacks.
-
-        Args:
-            event: Spatial event version being dispatched.
-            position: Grid position used for the spatial lookup.
-
-        Returns:
-            De-duplicated handlers in queue dispatch order.
-        """
-        event_key = (event.event_type, event.phase)
+        if not positions:
+            return cls._global_handlers_for_event(event, positioned=False)
+        # Position-indexed handlers of each cell in order; the global
+        # (simple and trigger-matched) handlers follow the first cell's,
+        # since they do not depend on the cell.
+        by_position = cls._spatial_handlers_by_position.get((event.event_type, event.phase), {})
         handlers: List['BaseHandler'] = []
         seen: Set[UUID] = set()
-
-        pos_handlers = cls._spatial_handlers_by_position[event_key].get(position, [])
-        for h in pos_handlers:
-            if h.uuid not in seen:
-                handlers.append(h)
-                seen.add(h.uuid)
-
-        simple_trigger = Trigger(event_type=event.event_type, event_phase=event.phase)
-        for h in cls._event_handlers_by_simple_trigger.get(simple_trigger, []):
-            if h.uuid not in seen:
-                handlers.append(h)
-                seen.add(h.uuid)
-
-        for handler in cls._event_trigger_candidates(event, include_simple=False):
-            if handler.uuid in seen:
-                continue
-            if handler.uuid in cls._handler_positions:
-                continue
-            for trigger in handler.trigger_conditions:
-                if trigger(event):
+        for index, position in enumerate(positions):
+            cell_handlers = by_position.get(position, ())
+            if index == 0:
+                cell_handlers = [*cell_handlers, *cls._global_handlers_for_event(event, positioned=True)]
+            for handler in cell_handlers:
+                if handler.uuid not in seen:
                     handlers.append(handler)
                     seen.add(handler.uuid)
-                    break
-
         return handlers
 
     @classmethod
-    def _get_handlers_for_non_spatial_event(cls, event: Event) -> List['BaseHandler']:
-        """Return trigger-indexed handlers for a non-spatial event."""
-        simple_trigger = Trigger(event_type=event.event_type, event_phase=event.phase)
-        simple_handlers = cls._event_handlers_by_simple_trigger.get(simple_trigger, [])
+    def _global_handlers_for_event(cls, event: Event, *, positioned: bool) -> List['BaseHandler']:
+        """Return the simple-trigger handlers, then the trigger-matched ones in queue order.
+
+        A positioned event reaches position-indexed handlers through its cells
+        only, so their trigger registrations are skipped here.
+        """
+        simple_handlers = cls._event_handlers_by_simple_trigger.get((event.event_type, event.phase), ())
 
         handler_set: Set[UUID] = {h.uuid for h in simple_handlers}
         matching_handlers: List['BaseHandler'] = list(simple_handlers)
 
-        for handler in cls._event_trigger_candidates(event):
+        for handler in cls._event_trigger_candidates(event, include_simple=not positioned):
             if handler.uuid in handler_set:
+                continue
+            if positioned and handler.uuid in cls._handler_positions:
                 continue
             for trigger in handler.trigger_conditions:
                 if trigger(event):
@@ -2473,7 +2443,7 @@ class EventQueue:
         return matching_handlers
 
     @classmethod
-    def _event_trigger_candidates(cls, event: Event, *, include_simple: bool = True) -> List['EventHandler']:
+    def _event_trigger_candidates(cls, event: Event, *, include_simple: bool) -> List['EventHandler']:
         """Read only trigger buckets compatible with this event's native fields."""
         candidates: Dict[UUID, EventHandler] = {}
         for source in dict.fromkeys((None, event.source_entity_uuid)):
@@ -2483,9 +2453,8 @@ class EventQueue:
                 # contains distant positional registrations that it must skip.
                 if not include_simple and source is None and target is None:
                     continue
-                trigger = Trigger(event_type=event.event_type, event_phase=event.phase,
-                    event_source_entity_uuid=source, event_target_entity_uuid=target)
-                for handler in cls._event_handlers_by_trigger.get(trigger, ()):
+                key = (event.event_type, event.phase, source, target)
+                for handler in cls._event_handlers_by_trigger.get(key, ()):
                     candidates[handler.uuid] = handler
         return sorted(candidates.values(), key=lambda handler: cls._event_handler_order[handler.uuid])
 
@@ -2503,8 +2472,8 @@ class EventQueue:
         )
         for trigger in event_handler.trigger_conditions:
             if trigger.is_simple():
-                cls._event_handlers_by_simple_trigger[trigger.get_simple_trigger()].append(event_handler)
-            cls._event_handlers_by_trigger[trigger].append(event_handler)
+                cls._event_handlers_by_simple_trigger[(trigger.event_type, trigger.event_phase)].append(event_handler)
+            cls._event_handlers_by_trigger[trigger.index_key()].append(event_handler)
         cls._event_handlers[event_handler.uuid] = event_handler
         if event_handler.uuid not in cls._event_handler_order:
             cls._event_handler_order[event_handler.uuid] = cls._next_event_handler_order
@@ -2552,11 +2521,12 @@ class EventQueue:
         """Remove a handler from all indices."""
         for trigger in event_handler.trigger_conditions:
             if trigger.is_simple():
-                simple_trigger = trigger.get_simple_trigger()
-                if event_handler in cls._event_handlers_by_simple_trigger.get(simple_trigger, []):
-                    cls._event_handlers_by_simple_trigger[simple_trigger].remove(event_handler)
-            if event_handler in cls._event_handlers_by_trigger.get(trigger, []):
-                cls._event_handlers_by_trigger[trigger].remove(event_handler)
+                simple_key = (trigger.event_type, trigger.event_phase)
+                if event_handler in cls._event_handlers_by_simple_trigger.get(simple_key, []):
+                    cls._event_handlers_by_simple_trigger[simple_key].remove(event_handler)
+            key = trigger.index_key()
+            if event_handler in cls._event_handlers_by_trigger.get(key, []):
+                cls._event_handlers_by_trigger[key].remove(event_handler)
 
         cls._event_handlers.pop(event_handler.uuid, None)
         cls._event_handler_order.pop(event_handler.uuid, None)
@@ -2654,8 +2624,8 @@ class EventQueue:
                 cls._event_handler_order[handler.uuid] = cls._next_event_handler_order
                 cls._next_event_handler_order += 1
             for trigger in handler.trigger_conditions:
-                if handler not in cls._event_handlers_by_trigger[trigger]:
-                    cls._event_handlers_by_trigger[trigger].append(handler)
+                if handler not in cls._event_handlers_by_trigger[trigger.index_key()]:
+                    cls._event_handlers_by_trigger[trigger.index_key()].append(handler)
             cls._event_handlers_by_source_entity_uuid[handler.source_entity_uuid].append(handler)
 
     @classmethod

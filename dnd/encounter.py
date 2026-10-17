@@ -4,7 +4,7 @@ An encounter owns initiative order, round and turn boundaries, controller
 coordination, combat-log capture, and end-of-combat detection.
 """
 
-from typing import Any, Optional, Dict, List, ClassVar, Set, Tuple, Callable
+from typing import AbstractSet, Any, Optional, Dict, List, ClassVar, Set, Tuple, Callable
 
 __all__ = [
     "EncounterState",
@@ -85,25 +85,19 @@ def _compute_perceivers(event: Event) -> Set[str]:
             if pos:
                 positions.add(pos)
 
-    perceivers: Set[str] = set()
-    for pos in positions:
-        perceivers |= {str(u) for u in grid.get_subscribers_at(pos)}
-
-    for uuid in participant_uuids:
-        if uuid:
-            perceivers.add(str(uuid))
-
-    return perceivers
+    perceivers = grid.get_subscribers_for_cells(positions)
+    perceivers.update(uuid for uuid in participant_uuids if uuid)
+    return {str(uuid) for uuid in perceivers}
 
 
-def _compute_identified_entity_observers(event: Event) -> Dict[str, Set[str]]:
+def _compute_identified_entity_observers(event: Event) -> Dict[str, AbstractSet[str]]:
     """Capture which observers identify each entity participating in an event.
 
     A participant identifies itself; an observer subscribed to its cell
     identifies it when the participant is among that observer's contacts.
     """
     grid = get_map()
-    grants: Dict[str, Set[str]] = {}
+    grants: Dict[str, AbstractSet[str]] = {}
     participant_uuids = {
         entity_uuid
         for entity_uuid in event.get_participant_entity_uuids()
@@ -112,11 +106,8 @@ def _compute_identified_entity_observers(event: Event) -> Dict[str, Set[str]]:
 
     for participant_uuid in participant_uuids:
         position = grid.get_entity_position(participant_uuid)
-        if position is None:
-            grants[str(participant_uuid)] = {str(participant_uuid)}
-            continue
-        grants[str(participant_uuid)] = {text for observer, text in
-            spatial_senses_system.identifying_observers(participant_uuid, position) if Entity.get(observer) is not None}
+        grants[str(participant_uuid)] = (frozenset((str(participant_uuid),)) if position is None
+            else spatial_senses_system.identifying_observers(participant_uuid, position))
 
     return grants
 
