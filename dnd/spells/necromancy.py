@@ -59,12 +59,11 @@ from dnd.blocks.skills import SKILL_TO_ABILITY
 
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.damage import DamageResolution
-from dnd.core.action_types import ActionSelection, ActionVariantFacet, EntityDestinationSelection
-from dnd.types.discovery import ActorScan
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, EntityDestinationSelection, selection_facet
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.core.life_types import RemainsDisposition
 from dnd.core.events import ReviveEvent, PortalTransferEvent
 from dnd.spells.spell_utils import spell_valid_positions
-from uuid import uuid4
 from dnd.core.life_types import LifeState
 from dnd.conditions import Poisoned
 
@@ -1117,7 +1116,8 @@ class EyebitePanickedEffect(BaseCondition):
     def _move_along_flee_path(self, target: Entity, path: List[Tuple[int, int]], parent_event: Event) -> None:
         """Spend ordinary movement, preserving steps, terrain and reactions."""
         if len(path) > 1:
-            Move(source_entity_uuid=target.uuid, end_position=path[-1], path=path).apply(parent_event=parent_event)
+            flight = Move(source_entity_uuid=target.uuid, end_position=path[-1], path=path)
+            target.perform(flight, flight.current_selection(), parent_event=parent_event)
 
     def _create_flee_handler(self) -> EventHandler:
         """Create the turn-start forced flee handler."""
@@ -1143,7 +1143,8 @@ class EyebitePanickedEffect(BaseCondition):
                 target.remove_condition_by_uuid(effect_uuid, parent_event=event)
                 return None
 
-            dash_event = Dash(source_entity_uuid=target.uuid, template=False).apply(parent_event=event)
+            dash = Dash(source_entity_uuid=target.uuid, template=False)
+            dash_event = target.perform(dash, dash.current_selection(), parent_event=event)
             if dash_event is None or dash_event.canceled:
                 return None
 
@@ -2629,13 +2630,14 @@ class Revivify(SpellAction):
     def get_position_selection(self):
         return EntityDestinationSelection() if self.relocate else None
 
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="form",value="relocate" if self.relocate else "in_place",
-            label="Reposition companion" if self.relocate else "Revive in place"))
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return ((ActionVariantFacet(key="form", value="in_place", label="Revive in place"),),
+                (ActionVariantFacet(key="form", value="relocate", label="Reposition companion"),))
 
-    def get_discovery_variants(self,entity: Any):
-        return [variant.model_copy(update={"uuid":uuid4(),"relocate":relocate})
-            for variant in super().get_discovery_variants(entity) for relocate in (False,True)]
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "relocate": selection_facet(selection, "form") == "relocate"}
+
 
     def get_valid_positions(self):
         return spell_valid_positions(self)
@@ -2664,8 +2666,6 @@ class Revivify(SpellAction):
                 return "Choose a visible unoccupied supported destination within thirty feet"
         return None
 
-    def selection_preview_error(self):
-        return self._revival_selection_error(self.current_selection(), subjective=True)
 
     def get_additional_target_candidates(self):
         caster=Entity.get(self.source_entity_uuid)

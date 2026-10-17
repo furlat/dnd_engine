@@ -8,16 +8,16 @@ from dnd.conditions import Concentrating, InvisibilityEffect
 from dnd.core.base_conditions import ConditionStateChangedEvent
 from dnd.core.condition_types import ConditionTag
 from dnd.core.saving_throw_types import SAVING_THROW_CONTEXT_KEY, SavingThrowContext
-from dnd.types.discovery import ActorScan, Relationship
+from dnd.types.discovery import ActorScan, Relationship, ScanRecord
 from dnd.types.world import MovementMode
-from typing import Callable, Literal, Optional, Tuple, List
+from typing import Callable, ClassVar, Literal, Optional, Tuple, List
 from uuid import UUID, uuid4
 
 from dnd.types.physical_access import PhysicalAccess
 from pydantic import BaseModel, Field, model_validator
 from pydantic_core import PydanticUndefined
 
-from dnd.core.action_types import ActionSelection
+from dnd.core.action_types import ActionSelection, ActionVariantFacet
 from dnd.core.attack_types import NaturalWeaponSpec
 from dnd.blocks.base_item import BaseItem
 from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, Move, entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
@@ -566,17 +566,21 @@ class MultiattackAction(BaseAction):
         weapon = actor.equipment.get_weapon(slot)
         return weapon is not None and weapon.weapon_kind == replacement.weapon_kind
 
-    def get_discovery_variants(self, entity: object) -> list[BaseAction]:
-        if not isinstance(entity, Entity):
-            return []
-        # A full stat-block sequence is not an eligible restricted-budget action.
-        # Its ordinary action cost still permits Action Surge.
-        variants: list[BaseAction] = [self]
-        if self.attack_replacement is not None and self._substitution_available(entity) and not self.use_attack_substitution:
-            variants += [variant.model_copy(deep=True, update={"uuid":uuid4(),
-                "use_attack_substitution":True, "name":f"{self.name} ({self.attack_replacement.action.name})",
-                "registered_template_uuid":self.registered_template_uuid or self.uuid}) for variant in tuple(variants)]
-        return variants
+    # A full stat-block sequence is not an eligible restricted-budget action.
+    # Its ordinary action cost still permits Action Surge.
+    restricted_budget_eligible: ClassVar[bool] = False
+
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """The stat-block sequence, and its authored attack substitution when the held weapon allows it."""
+        actor = Entity.get(self.source_entity_uuid)
+        if self.attack_replacement is None or actor is None or not self._substitution_available(actor):
+            return ((),)
+        return ((), (ActionVariantFacet(key="form", value="substitution", label=self.attack_replacement.action.name),))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection),
+                "use_attack_substitution": any(facet.key == "form" for facet in selection.facets)}
 
     def _selected_attacks(self, target_uuid: Optional[UUID]) -> list[Attack]:
         result: list[Attack] = []
@@ -629,7 +633,7 @@ class MultiattackAction(BaseAction):
                 continue
             attack = Attack(source_entity_uuid=self.source_entity_uuid, weapon_slot=slot, costs=[], use_register=False)
             sub_selection = ActionSelection(template_uuid=attack.uuid, target_uuids=selection.target_uuids[:1])
-            if attack._requirements_error(scan, sub_selection) is None:
+            if attack.requirements_error(scan, sub_selection) is None:
                 return None
         return "No legal attacks for Multiattack"
 
@@ -644,7 +648,7 @@ class MultiattackAction(BaseAction):
             if target.get_hp() <= 0:
                 break
             if attack.pre_validate():
-                attack.apply(parent_event=effect_event)
+                actor.perform(attack, attack.current_selection(), parent_event=effect_event)
         return effect_event.with_updates(status_message=f"{self.name} completed")
 
     def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -699,9 +703,12 @@ class BonusDamageFeature(BaseCondition):
     melee_only: bool = Field(default=False, description="Whether only reach attacks qualify.")
     weapon_only: bool = Field(default=True, description="Whether only weapon damage events qualify.")
 
-    def get_action_damage_roll_profiles(self, action: object, actor: object) -> tuple[DamageRollProfile, ...]:
+    def get_action_damage_roll_profiles(self, action: object) -> tuple[DamageRollProfile, ...]:
         """Declare actor-known bonus damage when it is not target-dependent."""
-        if not isinstance(actor, Entity) or not isinstance(action, Attack):
+        if not isinstance(action, Attack):
+            return ()
+        actor = Entity.get(action.source_entity_uuid)
+        if actor is None:
             return ()
         if self.once_per_turn and f"{self.name} Used" in actor.active_conditions:
             return ()
@@ -887,9 +894,12 @@ class HitSaveRiderFeature(BaseCondition):
     condition_name: str = Field(default="Prone", description="Condition to apply.")
     excluded_creature_types: tuple[str, ...] = Field(default_factory=tuple, description="Creature types excluded from the rider.")
 
-    def get_action_target_effect_profile(self, action: object, actor: object) -> Optional[ActionTargetEffectProfile]:
+    def get_action_target_effect_profile(self, action: object) -> Optional[ActionTargetEffectProfile]:
         """Declare the save-based rider carried by matching attack actions."""
-        if not isinstance(actor, Entity) or not isinstance(action, Attack):
+        if not isinstance(action, Attack):
+            return None
+        actor = Entity.get(action.source_entity_uuid)
+        if actor is None:
             return None
         metadata = action.get_attack_source_metadata()
         weapon = actor.equipment.get_weapon(action.weapon_slot)

@@ -12,6 +12,7 @@ from enum import StrEnum
 from typing import FrozenSet, Optional, Tuple
 from uuid import UUID
 
+from dnd.core.action_types import RestrictedActionGrant
 from dnd.core.creature_types import CreatureType, Size
 from dnd.core.life_types import LifeState
 
@@ -91,7 +92,7 @@ class ActorScan:
     reach_cells: FrozenSet[Position]
     threat_domains: Mapping[UUID, FrozenSet[Position]]
     slot_capacity: Mapping[int, int]
-    restricted_grants: FrozenSet[str]
+    restricted_grants: Tuple[RestrictedActionGrant, ...]
     free_cast_grants: FrozenSet[UUID]
     source_item_charges: Mapping[UUID, int]
     active_encounter_uuid: Optional[UUID]

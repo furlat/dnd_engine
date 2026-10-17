@@ -189,7 +189,7 @@ class Controller(BaseObject):
         action = self.get_next_action(entity, context)
         if action is None:
             return ControllerStepResult(end_turn=True)
-        return ControllerStepResult(event=action.apply())
+        return ControllerStepResult(event=entity.perform(action, action.current_selection()))
 
     def on_turn_start(self, entity: Entity, context: TurnContext) -> None:
         """Handle turn start notification.

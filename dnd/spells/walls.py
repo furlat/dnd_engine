@@ -1,14 +1,14 @@
 """Native wall spells composed from existing spatial, damage and action owners."""
 
 from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
-from typing import Literal
+from typing import Literal, Optional, Tuple
 from math import hypot
 
 from pydantic import Field
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
-from dnd.core.base_actions import BaseAction, Cost, TargetType
-from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionSelection, PositionPathSelection, SinglePositionSelection
+from dnd.core.base_actions import Cost, TargetType
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionSelection, PositionPathSelection, SinglePositionSelection, selection_facet
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
@@ -23,7 +23,7 @@ from dnd.core.wall_geometry import wall_shell_cells, wall_side_cells
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.ignition import ignite_surface_contacts
-from dnd.types.discovery import ActorScan
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
@@ -234,8 +234,17 @@ class WallOfFire(SpellAction):
             return event.with_updates(area_geometry=self.wall_geometry())
         return event
 
-    def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self._placement_error(self.current_selection(), subjective=True)
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """A straight wall, or a ring heated on its inside or outside."""
+        form = lambda value: ActionVariantFacet(key="form", value=value, label=value.title())
+        return ((form("segment"),), *((form("ring"), ActionVariantFacet(key="side", value=side, label=f"Heat {side}"))
+                                       for side in ("inside", "outside")))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        wall_form = selection_facet(selection, "form")
+        return {**super()._selection_overrides(selection), "wall_form": wall_form,
+                "hot_side": "left" if wall_form == "segment" else selection_facet(selection, "side")}
 
     def get_selection_geometry(self):
         return self.wall_geometry()
@@ -300,22 +309,6 @@ class WallOfFire(SpellAction):
             concentration = self.ensure_concentration(effect)
             concentration.add_linked_condition(zone.uuid, zone.uuid)
         return effect
-
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        form = ActionVariantFacet(key="form", value=self.wall_form, label=self.wall_form.title())
-        return ((form,) if self.wall_form == "segment" else
-                (form, ActionVariantFacet(key="side", value=self.hot_side, label=f"Heat {self.hot_side}")))
-
-    def get_discovery_variants(self, entity) -> list[BaseAction]:
-        variants = []
-        for slot in super().get_discovery_variants(entity):
-            variants.append(slot.model_copy(update={"wall_form": "segment", "hot_side": "left"}))
-            for side in ("inside", "outside"):
-                variants.append(slot.model_copy(update={"wall_form": "ring", "hot_side": side}))
-        return variants
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__wall_{self.wall_form}_{self.hot_side}"
 
     def get_discovery_display_name(self) -> str:
         suffix = "straight" if self.wall_form == "segment" else f"ring, heat {self.hot_side}"

@@ -1,14 +1,14 @@
 """Permeable wall fields composed from geometry, area triggers and damage facts."""
 
 from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, Optional, Tuple
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
-from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection
-from dnd.core.base_actions import BaseAction, Cost, TargetType
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection, selection_facet
+from dnd.core.base_actions import Cost, TargetType
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
@@ -24,7 +24,7 @@ from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.ignition import resolve_interaction
 from dnd.types.abilities import AbilityName
-from dnd.types.discovery import ActorScan
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectChangeOperation, SpatialEffectInteractionIntensity, SpatialEffectInteractionOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
@@ -290,8 +290,12 @@ class WallOfThorns(SpellAction):
         event = super()._create_declaration_event(parent_event, use_register)
         return event.with_updates(area_geometry=self.wall_geometry()) if isinstance(event, SpellEvent) else event
 
-    def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self._placement_error(self.current_selection(), subjective=True)
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=form, label=form.title()),) for form in ("segment", "ring"))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "wall_form": selection_facet(selection, "form")}
 
     def get_selection_geometry(self):
         return self.wall_geometry()
@@ -326,16 +330,6 @@ class WallOfThorns(SpellAction):
             return effect
         return effect.cancel(status_message="Thorn wall creation was canceled")
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        return (ActionVariantFacet(key="form", value=self.wall_form, label=self.wall_form.title()),)
-
-    def get_discovery_variants(self, entity) -> list[BaseAction]:
-        return [slot.model_copy(update={"wall_form": form}) for slot in super().get_discovery_variants(entity)
-                for form in ("segment", "ring")]
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__wall_{self.wall_form}"
-
 
 class WindWall(SpellAction):
     name: str = "Wind Wall"
@@ -364,9 +358,6 @@ class WindWall(SpellAction):
     def _create_declaration_event(self, parent_event=None, use_register=True) -> Event | None:
         event = super()._create_declaration_event(parent_event, use_register)
         return event.with_updates(area_geometry=self.wall_geometry()) if isinstance(event, SpellEvent) else event
-
-    def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self._placement_error(self.current_selection(), subjective=True)
 
     def get_selection_geometry(self):
         return self.wall_geometry()

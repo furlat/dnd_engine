@@ -67,7 +67,7 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
         reaction_attack.behavior_binding = active_runtime_behavior_binding()
         if reaction_attack.pre_validate():
             reaction_attack.add_to_register()
-            reaction_attack.apply(parent_event=event)
+            reaction_source_entity.perform(reaction_attack, reaction_attack.current_selection(), parent_event=event)
 
     return event
 
@@ -124,7 +124,7 @@ def add_stand_when_healed_handler(entity: Entity) -> None:
         owner = Entity.get(owner_uuid)
         if owner is None or not owner.can_take_actions() or "Prone" not in owner.active_conditions: return None
         action = StandUp(source_entity_uuid=owner.uuid, reaction_stand=True)
-        if action.pre_validate(): action.apply(parent_event=event)
+        if action.pre_validate(): owner.perform(action, action.current_selection(), parent_event=event)
         return None
     entity.add_event_handler(StandWhenHealedHandler(name="Stand when healed", semantic_key="reaction.stand_when_healed",
         source_entity_uuid=entity.uuid, content_kind=RuntimeBehaviorKind.REACTION, player_toggleable=True,

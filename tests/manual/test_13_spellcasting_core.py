@@ -417,13 +417,13 @@ def test_spell_discovery_variants_share_the_read_only_definition_graph() -> None
     template = caster.get_action_template("Magic Missile")
 
     assert isinstance(template, SpellAction)
-    variant = template._create_variant(cast_at_level=2)
+    variant, = template.discovery_forms(caster.action_scan(subjective=True))
 
     assert variant.uuid != template.uuid
     assert variant.costs is not template.costs
     assert variant.spell_range is template.spell_range
     assert variant.is_variant is True
-    assert variant.cast_at_level == 2
+    assert variant.cast_at_level == 1 and variant.castable_levels == (1, 2)
 
 
 def find_action(actions, template_name: str) -> AvailableActionInfo:

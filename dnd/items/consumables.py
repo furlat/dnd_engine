@@ -4,7 +4,7 @@ from dnd.spells.spell_utils import fire_heal_roll_result
 
 from functools import partial
 from types import MappingProxyType
-from typing import Any, Optional, Literal, Self
+from typing import Optional, Literal, Self
 from uuid import UUID, uuid4
 
 from pydantic import Field, model_validator
@@ -304,9 +304,8 @@ class _DrinkHealingPotionAction(_PotionDrinkAction):
 
     healing_dice_count: int = Field(default=0,ge=0)
 
-    def get_fixed_healing(self, actor: Any) -> Optional[int]:
+    def get_fixed_healing(self) -> Optional[int]:
         """Return the potion's deterministic restoration amount."""
-        _ = actor
         return self.heal_amount if self.healing_dice_count == 0 else None
 
     def _apply(

@@ -1,5 +1,7 @@
 """Exact spellcasting-source propagation through spell action execution."""
 
+from dnd.core.action_types import ActionSelection
+
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -159,7 +161,7 @@ def test_spell_variants_and_executable_clones_preserve_exact_source() -> None:
         template=True,
     )
 
-    variant = template._create_variant(cast_at_level=3)
+    variant = template.with_selection(ActionSelection(template_uuid=template.uuid, cast_at_level=3))
     executable = template.instantiate(target_entity_uuid=uuid4())
     assert isinstance(executable, SpellAction)
 

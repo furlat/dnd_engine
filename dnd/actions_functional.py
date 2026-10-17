@@ -7,11 +7,11 @@ with registered templates manually.
 
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, Optional, List, Tuple, cast
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from dnd.core.base_actions import (
     BaseAction, TargetType, AvailableTarget, AvailableActionInfo,
-    AvailableActionsResult, AvailableSelectionPreview, SelectedRoute, SPELL_SLOT_TEMPLATE_SEPARATOR, prefers_safe_movement_path,
+    AvailableActionsResult, AvailableSelectionPreview, SelectedRoute, prefers_safe_movement_path,
 )
 from dnd.core.events import (
     Event,
@@ -24,7 +24,7 @@ from dnd.core.events import (
 from dnd.blocks.equipment import Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.core.equipment_types import WeaponSlot
 from dnd.types.world import MovementMode
-from dnd.core.action_types import ActionAffordance
+from dnd.core.action_types import ActionAffordance, ActionSelection
 from dnd.types.discovery import ActorScan
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.entity import Entity
@@ -279,76 +279,45 @@ def get_available_actions(
         include_aoe_preview=include_aoe_preview)
 
 
-def _parse_spell_variant_template_name(template_name: str) -> Tuple[str, Optional[int]]:
-    """Split a generated spell-variant execution name.
+def row_selection(
+    entity: Entity,
+    form: BaseAction,
+    primary: AvailableTarget,
+    extra_target_uuids: Tuple[UUID, ...] = (),
+    extra_target_positions: Tuple[Tuple[int, int], ...] = (),
+    *,
+    cast_at_level: Optional[int] = None,
+    prefer_safe: bool = True,
+) -> ActionSelection:
+    """The exact selection a discovery row and its chosen targets name, by uuid (plan §14.4b).
 
-    Args:
-        template_name: Action name from discovery.
-
-    Returns:
-        Base template name and optional cast level.
+    The row's form carries the payment, source item and authored choices; the
+    chosen targets, positions, level and route preference complete it.
     """
-    if SPELL_SLOT_TEMPLATE_SEPARATOR not in template_name:
-        return template_name, None
-    base_name, _, slot_level_text = template_name.rpartition(SPELL_SLOT_TEMPLATE_SEPARATOR)
-    if not base_name:
-        return template_name, None
-    try:
-        slot_level = int(slot_level_text)
-    except ValueError:
-        return template_name, None
-    if slot_level < 1 or slot_level > 9:
-        return template_name, None
-    return base_name, slot_level
-
-
-def _resolve_executable_template(entity: Entity, template_name: str) -> BaseAction:
-    """Resolve a registered template or generated discovery variant.
-
-    Args:
-        entity: Acting entity.
-        template_name: Action name from discovery.
-
-    Returns:
-        Registered template or generated non-template discovery variant.
-
-    Raises:
-        ValueError: If no matching template can be resolved.
-    """
-    base_name, cast_at_level = _parse_spell_variant_template_name(template_name)
-    template = entity.get_action_template(base_name)
-    if template is not None:
-        return template if cast_at_level is None else template.at_cast_level(cast_at_level)
-
-    for registered_template in entity.registered_actions:
-        for variant in registered_template.get_discovery_variants(entity):
-            if variant.get_discovery_template_name() == template_name:
-                return variant
-    raise ValueError(f"No template named {template_name}")
-
-
-def _bind_executable_action(action: BaseAction, **overrides) -> BaseAction:
-    """Bind target fields onto a template or generated variant.
-
-    Args:
-        action: Registered template or non-template generated variant.
-        **overrides: Target fields to set on the executable copy.
-
-    Returns:
-        Executable action instance.
-    """
-    if action.template:
-        return action.instantiate(**overrides)
-
-    registered_template_uuid = action.registered_template_uuid or action.uuid
-    update_dict: dict = {
-        "uuid": uuid4(),
-        "template": False,
-        "use_register": False,
-    }
-    update_dict.update(overrides)
-    update_dict["registered_template_uuid"] = registered_template_uuid
-    return action.model_copy(deep=True, update=update_dict)
+    own = form.current_selection()
+    position_selection = form.get_position_selection()
+    if extra_target_positions and (position_selection is None
+                                   or position_selection.kind not in ("path", "entity_destination")):
+        raise ValueError("This action does not select additional positions")
+    target_type = form.effective_target_type
+    if target_type in (TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT, TargetType.MULTI_ENTITY, TargetType.OBJECT):
+        if primary.target_uuid is None:
+            raise ValueError(f"{target_type.value} action requires target_uuid")
+        if position_selection is not None and position_selection.kind == "entity_destination" and len(
+                extra_target_positions) != 1:
+            raise ValueError("Choose exactly one destination")
+        target_uuids, positions = (primary.target_uuid, *extra_target_uuids), extra_target_positions
+    elif target_type in (TargetType.POSITION_AOE, TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
+        if primary.position is None:
+            raise ValueError(f"{target_type.value} action requires position")
+        target_uuids, positions = (), (primary.position, *extra_target_positions)
+    elif form.source_item_uuid is not None and not own.target_uuids:
+        # Item uses historically bind their owner explicitly; other SELF actions keep their own selection.
+        target_uuids, positions = (entity.uuid,), own.positions
+    else:
+        target_uuids, positions = own.target_uuids, own.positions
+    return replace(own, target_uuids=target_uuids, positions=positions, prefer_safe=prefer_safe,
+                   cast_at_level=cast_at_level if cast_at_level is not None else own.cast_at_level)
 
 
 def _selected_movement_route(
@@ -383,105 +352,6 @@ def _selected_movement_route(
     return None
 
 
-def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
-                    prefer_safe: bool = True, *,
-                    extra_target_positions: Optional[List[Tuple[int, int]]] = None) -> Optional[Event]:
-    """Execute an action from template + target.
-
-    Creates a one-shot instance from the selected template, binds the target
-    fields required by that template's effective target type, and applies it.
-
-    Args:
-        entity: Acting entity.
-        template_name: Registered template name.
-        target: Selected target from discovery.
-        prefer_safe: Whether movement actions prefer a discovered safe path.
-
-    Returns:
-        Resulting event, or `None` if execution failed.
-
-    Raises:
-        ValueError: If the template is not found or the target is invalid.
-    """
-    template = _resolve_executable_template(entity, template_name)
-    return _execute_bound_action(entity, template, target, prefer_safe=prefer_safe,
-                                 extra_target_positions=extra_target_positions or [])
-
-
-def _execute_bound_action(
-    entity: Entity,
-    template: BaseAction,
-    target: AvailableTarget,
-    *,
-    prefer_safe: bool,
-    extra_target_positions: Optional[List[Tuple[int, int]]] = None,
-) -> Optional[Event]:
-    """Execute one exact discovered action object against an authorized target."""
-
-    selection = template.get_position_selection()
-    if extra_target_positions and (selection is None or selection.kind not in ("path", "entity_destination")):
-        raise ValueError("This action does not select additional positions")
-    eff_tt = template.effective_target_type
-    if eff_tt in (TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT):
-        if target.target_uuid is None:
-            raise ValueError("ENTITY action requires target_uuid")
-        if selection is not None and selection.kind == "entity_destination":
-            if extra_target_positions is None or len(extra_target_positions) != 1:
-                raise ValueError("Choose exactly one destination")
-            instance = _bind_executable_action(template, target_entity_uuid=target.target_uuid,
-                end_position=extra_target_positions[0])
-        else:
-            instance = _bind_executable_action(template, target_entity_uuid=target.target_uuid)
-
-    elif eff_tt == TargetType.MULTI_ENTITY:
-        if target.target_uuid is None:
-            raise ValueError("MULTI_ENTITY action requires target_uuid")
-        extra = target.extra_target_uuids or []
-        instance = _bind_executable_action(
-            template,
-            target_entity_uuid=target.target_uuid,
-            extra_target_entity_uuids=extra
-        )
-
-    elif eff_tt == TargetType.POSITION_AOE:
-        if target.position is None:
-            raise ValueError("POSITION_AOE action requires position")
-        instance = _bind_executable_action(template, end_position=target.position, extra_target_positions=extra_target_positions or [])
-
-    elif eff_tt in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
-        if target.position is None:
-            raise ValueError("POSITION action requires position")
-        position_overrides: dict[str, object] = {
-            "end_position": target.position,
-            "prefer_safe": prefer_safe,
-            "extra_target_positions": extra_target_positions or [],
-        }
-        if isinstance(template, Move):
-            route = _selected_movement_route(
-                entity,
-                target,
-                prefer_safe=prefer_safe,
-            )
-            if route is not None:
-                position_overrides["path"] = list(route.path)
-        instance = _bind_executable_action(template, **position_overrides)
-
-    elif eff_tt == TargetType.OBJECT:
-        if target.target_uuid is None:
-            raise ValueError("OBJECT action requires target_uuid")
-        instance = _bind_executable_action(template, target_entity_uuid=target.target_uuid)
-
-    elif eff_tt == TargetType.SELF and template.source_item_uuid is not None:
-        # Item uses historically bind their owner explicitly. Ordinary SELF
-        # actions retain their native source-only declaration and own resolver.
-        instance = _bind_executable_action(template, target_entity_uuid=entity.uuid)
-
-    else:
-        instance = _bind_executable_action(template)
-
-    return instance.apply()
-
-
 def get_extra_position_options(
     entity: Entity, action_info: AvailableActionInfo, target: AvailableTarget,
     extra_target_positions: Optional[List[Tuple[int, int]]] = None,
@@ -491,22 +361,13 @@ def get_extra_position_options(
         raise ValueError("Second-point selection requires a first position")
     template = action_info.execution_template
     if template is None:
-        if action_info.is_item_use and action_info.source_item_uuid is not None:
-            item = BaseBlock.get(action_info.source_item_uuid)
-            if not isinstance(item, UsableItem):
-                return []
-            name = action_info.template_name.split("__item_")[0]
-            template = next((action for action in item.get_use_actions(entity.uuid)
-                             if action.get_discovery_template_name() == name), None)
-            if template is None:
-                return []
-        else:
-            template = _resolve_executable_template(entity, action_info.template_name)
+        raise ValueError("Position options require the original discovery row")
     selection = template.get_position_selection()
     if selection is not None and selection.kind == "entity_destination":
         if target.target_uuid is None:
             return []
-        template = template.model_copy(deep=False, update={"target_entity_uuid": target.target_uuid})
+        template = performed_action(entity, action_info).with_selection(
+            replace(template.current_selection(), target_uuids=(target.target_uuid,)))
     return template.get_valid_extra_target_positions(target.position, extra_target_positions or ())
 
 
@@ -594,14 +455,34 @@ def is_free_aim(action_info: AvailableActionInfo, target: AvailableTarget) -> bo
             and target.position is not None and target not in action_info.valid_targets)
 
 
-def row_template_at_level(action_info: AvailableActionInfo, cast_at_level: Optional[int]) -> Optional[BaseAction]:
-    """The row's executable template at the selected level: one of the row's `cast_levels` (plan D17)."""
-    template = action_info.execution_template
-    if cast_at_level is None or template is None or cast_at_level == action_info.cast_at_level:
-        return template
+def performed_action(entity: Entity, action_info: AvailableActionInfo) -> BaseAction:
+    """The action a row's selection names: the registered action its form shows, or the item's own use action.
+
+    A row's form is a discovery view; the executable instance is bound once,
+    from this action, by `Entity.perform`.
+    """
+    form = action_info.execution_template
+    if form is None:
+        raise ValueError("Execution requires the original discovery row")
+    if action_info.is_item_use:
+        return form
+    registered = entity.get_registered_action(form.registered_template_uuid or form.uuid)
+    if registered is None:
+        raise ValueError("The row's action is no longer registered")
+    return registered
+
+
+def row_form_at_level(entity: Entity, action_info: AvailableActionInfo, cast_at_level: Optional[int]) -> BaseAction:
+    """The row's form at the selected level: one of the row's `cast_levels` (plan D17)."""
+    form = action_info.execution_template
+    if form is None:
+        raise ValueError("Execution requires the original discovery row")
+    if cast_at_level is None or cast_at_level == action_info.cast_at_level:
+        return form
     if cast_at_level not in action_info.cast_levels:
         raise ValueError("This spell cannot be cast at that level now")
-    return template.at_cast_level(cast_at_level)
+    return performed_action(entity, action_info).with_selection(
+        replace(form.current_selection(), cast_at_level=cast_at_level))
 
 
 def execute_available_action(
@@ -614,46 +495,24 @@ def execute_available_action(
     extra_target_positions: Optional[List[Tuple[int, int]]] = None,
     cast_at_level: Optional[int] = None,
 ) -> Optional[Event]:
-    """Execute one exact discovery row without name lookup or target mutation."""
-    leveled = row_template_at_level(action_info, cast_at_level)
+    """Perform one exact discovery row's selection, by uuid, without name lookup (plan §14.4b)."""
+    form = row_form_at_level(entity, action_info, cast_at_level)
     validated_extras = validated_extra_target_uuids(
         action_info,
         target,
         extra_target_uuids,
         entity.action_scan(subjective=True),
-        leveled,
+        form,
     ) if extra_target_uuids else []
-    bound_target = target.model_copy(
-        deep=True,
-        update={"extra_target_uuids": validated_extras or None},
-    )
     if action_info.is_item_use and action_info.source_item_uuid:
-        action_name = (
-            action_info.template_name.split("__item_")[0]
-            if "__item_" in action_info.template_name
-            else action_info.template_name
-        )
         if action_info.target_type == TargetType.SELF:
-            return execute_use_action(entity, action_info.source_item_uuid, action_name,
-                                      discovered_template=action_info.execution_template)
-        return execute_use_action(
-            entity,
-            action_info.source_item_uuid,
-            action_name,
-            bound_target,
-            extra_target_positions=extra_target_positions,
-            discovered_template=action_info.execution_template,
-        )
-    template = leveled
-    if template is None:
-        template = _resolve_executable_template(entity, action_info.template_name)
-    return _execute_bound_action(
-        entity,
-        template,
-        bound_target,
-        prefer_safe=prefer_safe,
-        extra_target_positions=extra_target_positions,
-    )
+            return execute_use_action(entity, action_info.source_item_uuid, discovered_template=form)
+        return execute_use_action(entity, action_info.source_item_uuid, target=target,
+            extra_target_uuids=tuple(validated_extras),
+            extra_target_positions=extra_target_positions, discovered_template=form)
+    return entity.perform(performed_action(entity, action_info), row_selection(entity, form, target,
+        tuple(validated_extras), tuple(extra_target_positions or ()), cast_at_level=cast_at_level,
+        prefer_safe=prefer_safe))
 
 
 def selection_admission_error(
@@ -687,35 +546,31 @@ def _admitted_selection(
     entity: Entity, action_info: AvailableActionInfo, selected_targets: tuple[AvailableTarget, ...],
     extra_target_positions: tuple[Tuple[int, int], ...], cast_at_level: Optional[int],
 ) -> _SelectionAdmission:
-    """The row template bound to a non-empty ordered selection, with its admission reason."""
+    """The row form bound to a non-empty ordered selection, with its admission reason."""
     primary = selected_targets[0]
     if primary not in action_info.valid_targets and not is_free_aim(action_info, primary):
         return _SelectionAdmission("Target is no longer admitted")
     try:
-        template = row_template_at_level(action_info, cast_at_level)
-    except ValueError as error:
-        return _SelectionAdmission(str(error))
-    if template is None:
-        raise ValueError("Selection preview requires the original discovery row")
-    try:
+        template = row_form_at_level(entity, action_info, cast_at_level)
         scan = entity.action_scan(subjective=True)
         extras = validated_extra_target_uuids(action_info, primary,
             [str(target.target_uuid) for target in selected_targets[1:]], scan, template)
         if action_info.target_type is not TargetType.MULTI_ENTITY and len(selected_targets) != 1:
             raise ValueError("This action selects one target")
-        selection = template.get_position_selection()
-        update: dict[str, object] = {"target_entity_uuid": primary.target_uuid,
-            "end_position": primary.position,
-            "extra_target_entity_uuids": extras,
-            "extra_target_positions": list(extra_target_positions)}
-        if selection is not None and selection.kind == "entity_destination":
-            if len(extra_target_positions) > 1:
-                raise ValueError("Choose exactly one destination")
-            update.update(end_position=extra_target_positions[0] if extra_target_positions else None,
-                          extra_target_positions=[])
-        bound = template.model_copy(deep=False, update=update)
-        # The whole selection is admitted through the one admission path (plan §14.3b).
-        reason = bound.selection_preview_error() or template.discovery_error(scan, bound.current_selection())
+        position_selection = template.get_position_selection()
+        if (position_selection is not None and position_selection.kind == "entity_destination"
+                and len(extra_target_positions) > 1):
+            raise ValueError("Choose exactly one destination")
+        if position_selection is not None and position_selection.kind == "entity_destination" and not extra_target_positions:
+            # A creature chosen before its destination: the selection is not complete yet.
+            selection = replace(template.current_selection(),
+                                target_uuids=(primary.target_uuid,) if primary.target_uuid is not None else ())
+        else:
+            selection = row_selection(entity, template, primary, tuple(extras), extra_target_positions,
+                                      cast_at_level=cast_at_level)
+        # The instance Command would execute, admitted through the one admission path (plan §14.3b).
+        bound = performed_action(entity, action_info).with_selection(selection)
+        reason = bound.requirements_error(scan, selection) or bound.handler_admission_error(subjective=True)
     except ValueError as error:
         return _SelectionAdmission(str(error))
     return _SelectionAdmission(reason, template, bound, scan)
@@ -755,13 +610,11 @@ def preview_available_selection(
         if action_info.target_type is TargetType.MULTI_ENTITY and len(selected_targets) < (limit or 1):
             for candidate in pool:
                 try:
-                    candidate_extras = validated_extra_target_uuids(action_info, primary,
+                    validated_extra_target_uuids(action_info, primary,
                         [str(target.target_uuid) for target in (*selected_targets[1:], candidate)], scan, template)
                 except ValueError:
                     continue
-                proposal = bound.model_copy(deep=False, update={"extra_target_entity_uuids": candidate_extras})
-                if proposal.selection_preview_error() is None:
-                    next_targets.append(candidate)
+                next_targets.append(candidate)
         next_positions = (tuple(get_extra_position_options(entity, action_info, primary,
                            list(extra_target_positions)))
                           if selection is not None and selection.kind in ("path", "entity_destination") else ())
@@ -911,15 +764,16 @@ def execute_drop(entity: Entity, item_uuid: UUID, position: Optional[Tuple[int, 
         end_position=drop_pos,
         template=False
     )
-    return action.apply()
+    return entity.perform(action, action.current_selection())
 
 
 def execute_use_action(
     entity: Entity,
     item_uuid: UUID,
-    action_name: str,
+    action_name: Optional[str] = None,
     target: Optional[AvailableTarget] = None,
     *,
+    extra_target_uuids: Tuple[UUID, ...] = (),
     extra_target_positions: Optional[List[Tuple[int, int]]] = None,
     discovered_template: Optional[BaseAction] = None,
 ) -> Optional[Event]:
@@ -928,7 +782,7 @@ def execute_use_action(
     Args:
         entity: Entity using the item.
         item_uuid: UUID of the usable item.
-        action_name: Use action name, with or without the discovery suffix.
+        action_name: The item's use action name, when no discovered row form is given.
         target: Optional target for non-self use actions.
 
     Returns:
@@ -945,39 +799,22 @@ def execute_use_action(
     if grid.get_object_placement(item_uuid) is not None and grid.manual_object_contact(entity.uuid, item_uuid) is None:
         raise ValueError("Item is out of reach")
 
-    clean_name = action_name.split("__item_")[0] if "__item_" in action_name else action_name
-
-    templates = item.get_use_actions(entity.uuid) if discovered_template is None else ()
+    clean_name = action_name.split("__item_")[0] if action_name is not None else None
     template = discovered_template or next(
-        (
-            action
-            for action in templates
-            if action.get_discovery_template_name() == clean_name
-        ),
-        None,
-    )
+        (action for action in item.get_use_actions(entity.uuid) if action.get_discovery_template_name() == clean_name),
+        None)
     if template is None:
         raise ValueError(f"Use action '{action_name}' not found on item")
-    if discovered_template is not None and (template.source_item_uuid != item_uuid
-                                           or template.source_entity_uuid != entity.uuid):
+    if template.source_item_uuid != item_uuid or template.source_entity_uuid != entity.uuid:
         raise ValueError("Discovered item action belongs to a different source")
-
-    selection = template.get_position_selection()
-    if extra_target_positions and (selection is None or selection.kind not in ("path", "entity_destination")):
-        raise ValueError("This action does not select additional positions")
-
-    if (selection is not None and selection.kind == "entity_destination"
-            and (extra_target_positions is None or len(extra_target_positions) != 1)):
-        raise ValueError("Choose exactly one destination")
 
     charge_cost = template.charge_cost
     if item.charges != -1 and item.charges < charge_cost:
-        raise ValueError(f"Use action '{action_name}' requires {charge_cost} charges")
+        raise ValueError(f"Use action '{template.name}' requires {charge_cost} charges")
 
     chosen = target or AvailableTarget(index=0, target_uuid=entity.uuid)
-    return _execute_bound_action(entity, template, chosen, prefer_safe=True,
-                                 extra_target_positions=extra_target_positions)
-
+    return entity.perform(template, row_selection(entity, template, chosen, extra_target_uuids,
+        tuple(extra_target_positions or ())))
 
 
 def apply_action_overrides(

@@ -1,15 +1,15 @@
 """Solid wall spells: ordinary attackable sections and one native spatial owner."""
 
 from math import ceil, hypot, isclose
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, Optional, Tuple
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
 from dnd.actions import Move, SpellAction, SpellEvent, commit_forced_movement, entity_action_economy_cost_evaluator
 from dnd.blocks.base_item import BaseItem, WorldItem, PreparedItemRetirement
-from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection
-from dnd.core.base_actions import BaseAction, Cost, TargetType
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection, selection_facet
+from dnd.core.base_actions import Cost, TargetType
 from dnd.core.base_block import BaseBlock, resolution_order_key
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import ConditionTag, DurationType
@@ -28,7 +28,7 @@ from dnd.core.wall_geometry import wall_crosses_path, wall_path_contact, wall_sh
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spells.wall_fields import WallDamageSpec, WallFieldZone, apply_wall_damage, selection_wall_support_error, wall_condition_ref
-from dnd.types.discovery import ActorScan
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.types.event_facts import GroupEntryKind
 from dnd.types.materials import Material
 from dnd.types.physical_access import PhysicalAccess
@@ -550,10 +550,11 @@ def stone_enclosure_escapes(caster: Entity, geometry: WallAssemblyPresentationGe
         if not exits:
             continue
         destination = min(exits, key=lambda p: (costs[p], p))
-        Move(name="Escape forming wall", source_entity_uuid=entity.uuid, end_position=destination,
+        escape = Move(name="Escape forming wall", source_entity_uuid=entity.uuid, end_position=destination,
             path=paths[destination], use_movement_cost=False, movement_allowance_feet=speed,
             costs=[Cost(name="Wall enclosure escape", cost_type="reactions", cost=1,
-                        evaluator=entity_action_economy_cost_evaluator)]).apply(parent_event=parent_event)
+                        evaluator=entity_action_economy_cost_evaluator)])
+        entity.perform(escape, escape.current_selection(), parent_event=parent_event)
 
 
 class ConstructWall(SpellAction):
@@ -601,8 +602,30 @@ class ConstructWall(SpellAction):
         return WallAssemblyPresentationGeometry(path=path, base_height_steps=tile.height,
             width_feet=width, height_feet=self.dome_radius_feet if self.wall_form == "dome" else 10) if tile is not None else None
 
-    def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self._placement_error(self.current_selection(), subjective=True)
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """Panels pushing left or right (stone: 10 or 20 ft panels); a non-stone dome of 5 or 10 ft pushing in or out."""
+        form = lambda value: ActionVariantFacet(key="form", value=value, label=value.title())
+        panels = tuple((form("panels"), ActionVariantFacet(key="side", value=side, label=f"Push {side}"),
+                        *((ActionVariantFacet(key="width", value=str(width), label=f"{width} ft panels"),)
+                          if self.construction_material == "stone" else ()))
+                       for width in ((10, 20) if self.construction_material == "stone" else (10,))
+                       for side in ("left", "right"))
+        domes = () if self.construction_material == "stone" else tuple(
+            (form("dome"), ActionVariantFacet(key="side", value=side, label=f"Push {side}"),
+             ActionVariantFacet(key="radius", value=str(radius), label=f"{radius} ft radius"))
+            for radius in (5, 10) for side in ("inside", "outside"))
+        return (*panels, *domes)
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        chosen = {facet.key: facet.value for facet in selection.facets}
+        overrides = {**super()._selection_overrides(selection), "wall_form": selection_facet(selection, "form"),
+                     "displacement_side": selection_facet(selection, "side")}
+        if overrides["wall_form"] == "dome":
+            overrides["dome_radius_feet"] = int(selection_facet(selection, "radius"))
+        else:
+            overrides["stone_panel_width_feet"] = int(chosen.get("width", "10"))
+        return overrides
 
     def get_selection_geometry(self):
         return self.wall_geometry()
@@ -722,34 +745,6 @@ class ConstructWall(SpellAction):
                     zone.sections = remaining
                     if not remaining and not zone.applied:
                         zone.discard_from_runtime_owner()
-
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        facets = (ActionVariantFacet(key="form", value=self.wall_form, label=self.wall_form.title()),
-                  ActionVariantFacet(key="side", value=self.displacement_side, label=f"Push {self.displacement_side}"))
-        if self.wall_form == "dome":
-            return (*facets, ActionVariantFacet(key="radius", value=str(self.dome_radius_feet),
-                                               label=f"{self.dome_radius_feet} ft radius"))
-        if self.construction_material == "stone":
-            return (*facets, ActionVariantFacet(key="width", value=str(self.stone_panel_width_feet),
-                                               label=f"{self.stone_panel_width_feet} ft panels"))
-        return facets
-
-    def get_discovery_variants(self, entity) -> list[BaseAction]:
-        variants = []
-        for slot in super().get_discovery_variants(entity):
-            for width in ((10, 20) if self.construction_material == "stone" else (10,)):
-                for side in ("left", "right"):
-                    variants.append(slot.model_copy(update={"wall_form": "panels", "displacement_side": side,
-                                                            "stone_panel_width_feet": width}))
-            if self.construction_material != "stone":
-                for radius in (5, 10):
-                    for side in ("inside", "outside"):
-                        variants.append(slot.model_copy(update={"wall_form": "dome", "dome_radius_feet": radius,
-                                                                 "displacement_side": side}))
-        return variants
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__{self.wall_form}_{self.displacement_side}_{self.dome_radius_feet}_{self.stone_panel_width_feet}"
 
 
 class WallOfIce(ConstructWall):
@@ -943,13 +938,12 @@ class Forcecage(SpellAction):
     def get_selection_geometry(self):
         return forcecage_geometry(self.end_position,20 if self.cage_form=="cage" else 10) if self.end_position else None
 
-    def get_discovery_template_name(self):return super().get_discovery_template_name()+"__"+self.cage_form
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=form, label=form.title()),) for form in ("cage", "box"))
 
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.cage_form,label=self.cage_form.title()))
-
-    def get_discovery_variants(self,entity):
-        return [slot.model_copy(update={"cage_form":form}) for slot in super().get_discovery_variants(entity) for form in ("cage","box")]
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "cage_form": selection_facet(selection, "form")}
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
         side=20 if self.cage_form=="cage" else 10

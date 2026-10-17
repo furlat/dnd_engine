@@ -11,7 +11,6 @@ from dnd.core.creature_types import DamageType
 from dnd.core.action_types import (
     ActionSelection,
     CostSource,
-    CostSourceKind,
     AvailableHandlerInfo,
     ActionPresentationKind,
     ActionAffordance,
@@ -20,7 +19,6 @@ from dnd.core.action_types import (
     EntityTargetPerception,
     PositionSelection,
     RestrictedActionGrant,
-    RestrictedActionGrantProvider,
     RestrictedActionKind,
 )
 from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRef, EventResolutionRef, EffectPropagationLink, EffectOrigin, EffectOriginKind
@@ -50,7 +48,23 @@ from dnd.core.item_types import (
 )
 from dnd.core.modifiers import AdvantageStatus
 from dnd.blocks.sensory import Senses
-from typing import Any, Optional, Callable, ClassVar, OrderedDict, List, Dict, Iterator, Literal, Protocol, Sequence, Set, Tuple, cast, final, runtime_checkable
+from typing import (
+    Any,
+    Optional,
+    Callable,
+    ClassVar,
+    OrderedDict,
+    List,
+    Dict,
+    Literal,
+    Protocol,
+    Sequence,
+    Set,
+    Tuple,
+    cast,
+    final,
+    runtime_checkable,
+)
 from uuid import UUID, uuid4, uuid5
 from enum import Enum
 
@@ -285,8 +299,10 @@ class ActionDiscoveryDescription(BaseModel):
     cast_at_level: int | None = None
     cast_levels: tuple[int, ...] = ()
     is_spell_variant: bool = False
+    cast_cost_label: str | None = None
     damage_types: tuple[DamageType, ...] = ()
     loot_item_uuid: UUID | None = None
+    fixed_facets: tuple[ActionVariantFacet, ...] = ()
     spellcasting_source_id: UUID | None = None
     spellcasting_provider_id: str | None = None
     spellcasting_ability: str | None = None
@@ -1052,10 +1068,13 @@ class BaseAction(BaseObject):
     restricted_action_kinds: ClassVar[frozenset[RestrictedActionKind]] = (
         frozenset()
     )
+    # Whether a restricted grant (Haste) may pay for this action's ordinary channel.
+    restricted_budget_eligible: ClassVar[bool] = True
     _restricted_action_grant: Optional[RestrictedActionGrant] = PrivateAttr(
         default=None,
     )
     _source_item_controller_uuid: Optional[UUID] = PrivateAttr(default=None)
+    _selected_facets: Tuple[ActionVariantFacet, ...] = PrivateAttr(default=())
 
     def get_attack_source_metadata(self) -> Optional[AttackSourceMetadata]:
         return None
@@ -1096,10 +1115,6 @@ class BaseAction(BaseObject):
     def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return actor-known stochastic action data when the rule defines it.
 
-        Args:
-            actor: Entity discovering this action. The base layer intentionally
-                accepts an opaque owner to preserve dependency direction.
-
         Returns:
             Actor-baseline outcome profile, or ``None`` when the action has not
             declared enough rule data for quantitative policy reasoning.
@@ -1113,12 +1128,8 @@ class BaseAction(BaseObject):
     def get_conditional_costs(self) -> tuple[ConditionalCost,...]:
         return tuple(ConditionalCost.model_validate(cost.model_dump()) for cost in self.get_conditional_runtime_costs())
 
-    def get_fixed_healing(self, actor: Any) -> Optional[int]:
+    def get_fixed_healing(self) -> Optional[int]:
         """Return deterministic healing disclosed by this action rule.
-
-        Args:
-            actor: Entity discovering this action. The base contract remains
-                owner-agnostic to preserve dependency direction.
 
         Returns:
             Fixed hit points restored per execution, or ``None`` when healing
@@ -1129,10 +1140,6 @@ class BaseAction(BaseObject):
     def get_self_setup_profile(self) -> Optional[ActionSelfSetupProfile]:
         """Return the action's dependency-neutral self-setup annotation.
 
-        Args:
-            actor: Entity discovering the action. The base contract keeps the
-                owner opaque to preserve dependency direction.
-
         Returns:
             Logical setup profile, or ``None`` when the action declares no
             self-directed combat setup.
@@ -1142,10 +1149,6 @@ class BaseAction(BaseObject):
     def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Return conditional effects the rule applies to selected targets.
 
-        Args:
-            actor: Entity discovering the action. The core action layer keeps
-                the owner opaque to preserve dependency direction.
-
         Returns:
             Typed target-effect profile, or ``None`` when the action has not
             declared target-conditional rule effects.
@@ -1154,10 +1157,6 @@ class BaseAction(BaseObject):
 
     def get_world_effect_profile(self) -> Optional[ActionWorldEffectProfile]:
         """Return information or topology effects declared by the action rule.
-
-        Args:
-            actor: Entity discovering the action. The core action layer keeps
-                the owner opaque to preserve dependency direction.
 
         Returns:
             Typed world-effect profile, or ``None`` when the action does not
@@ -1531,33 +1530,29 @@ class BaseAction(BaseObject):
         """
         return None
 
-    def _valid_extra_target_positions(
-        self, start: Tuple[int, int], selected: Sequence[Tuple[int, int]], *, subjective: bool,
-    ) -> Iterator[Tuple[int, int]]:
-        """Grow explicit selection from admitted points without enumerating all paths."""
-        selection = self.get_position_selection()
-        if selection is not None and selection.kind == "entity_destination":
-            if selected or self.target_entity_uuid is None:
-                return
-            for position in self.get_valid_positions():
-                bound = self.model_copy(deep=False, update={"end_position": position})
-                if bound.selection_preview_error() is None:
-                    yield position
-            return
-        if selection is None or selection.kind != "path" or len(selected) >= selection.max_segments:
-            return
-        for position in self.get_valid_positions():
-            bound = self.model_copy(deep=False, update={
-                "end_position": start, "extra_target_positions": [*selected, position],
-            })
-            if bound.selection_preview_error() is None:
-                yield position
-
     def get_valid_extra_target_positions(
         self, start: Tuple[int, int], selected: Sequence[Tuple[int, int]] = (),
     ) -> List[Tuple[int, int]]:
-        """Query the next observer-admitted vertex for the selected explicit prefix."""
-        return list(self._valid_extra_target_positions(start, selected, subjective=True))
+        """The next vertex, or the destination for this instance's creature, the actor may add.
+
+        Each candidate is checked by the one admission path on the actor's
+        perceived scan (plan §14.3b), without a copy or an event.
+        """
+        selection = self.get_position_selection()
+        source = BaseBlock.get(self.source_entity_uuid)
+        if source is None or selection is None:
+            return []
+        scan = source.action_scan(subjective=True)
+        base = self.current_selection()
+        if selection.kind == "entity_destination":
+            if selected or not base.target_uuids:
+                return []
+            candidates = [replace(base, positions=(position,)) for position in self.get_valid_positions()]
+        elif selection.kind == "path" and len(selected) < selection.max_segments:
+            candidates = [replace(base, positions=(start, *selected, position)) for position in self.get_valid_positions()]
+        else:
+            return []
+        return [candidate.positions[-1] for candidate in candidates if self.requirements_error(scan, candidate) is None]
 
     def source_item_error(self, *, subjective: bool = False) -> Optional[str]:
         """Admission check; accepted last-charge effects may outlive their item."""
@@ -1662,15 +1657,8 @@ class BaseAction(BaseObject):
         """How the native action resolves an incomplete recipient allocation."""
         return "selected_only"
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        return ()
-
     def get_connector_traversal_discovery(self) -> Optional[ConnectorTraversalDiscovery]:
         return None
-
-    def selection_preview_error(self) -> Optional[str]:
-        """Read-only selection admission; never invokes eventful validation."""
-        return self.position_selection_error() or self.handler_admission_error(subjective=True)
 
     def get_selection_geometry(self) -> AoEPresentationGeometry | None:
         return None
@@ -1866,19 +1854,47 @@ class BaseAction(BaseObject):
         return None
 
     def with_selection(self, selection: ActionSelection) -> "BaseAction":
-        """The executable instance of this registered action for one exact selection (plan §14.4b)."""
-        instance = self.instantiate(**self._selection_overrides(selection))
-        if selection.cost_source.kind is CostSourceKind.RESTRICTED:
+        """The executable instance of this action for one exact selection (plan §14.4b).
+
+        An executable instance is its own selection: given exactly that, it is
+        itself. Otherwise a new instance, sharing nothing with this action,
+        carries the selection's targets, positions, source item, payment,
+        controller and authored choices.
+        """
+        if not self.template and selection == self.current_selection():
+            return self
+        return self._bound(selection, executable=True)
+
+    def _bound(self, selection: ActionSelection, *, executable: bool) -> "BaseAction":
+        """This action bound to one selection: an executable copy, or a read-only discovery form.
+
+        A discovery form shares the definition graph with the registered
+        action (only discovery reads it); executing it binds a deep copy.
+        """
+        if selection.template_uuid != (self.registered_template_uuid or self.uuid):
+            raise ValueError(f"The selection names another action than {self.name}")
+        grant = None
+        if selection.cost_source.restricted_grant_id is not None:
             source = BaseBlock.get(self.source_entity_uuid)
             grant = next((grant for grant in source.get_restricted_action_grants()
                           if grant.grant_id == selection.cost_source.restricted_grant_id), None) if source else None
             if grant is None:
                 raise ValueError("The selected restricted action grant is not available")
-            instance._restricted_action_grant = grant
+        overrides = self._selection_overrides(selection)
+        instance = (self.instantiate(**overrides) if executable else self.model_copy(update={
+            **overrides, "uuid": uuid4(), "template": False, "use_register": False,
+            "registered_template_uuid": self.registered_template_uuid or self.uuid}))
+        instance._restricted_action_grant = grant
+        instance._selected_facets = selection.facets
+        instance._source_item_controller_uuid = selection.controller_uuid
         return instance
 
     def _selection_overrides(self, selection: ActionSelection) -> dict:
-        """The executable fields one selection sets; spells add their level and casting cost."""
+        """The executable fields one selection sets.
+
+        Spells add their level and payment; an action with authored choices
+        (`facet_domain`) adds the fields its facets name.
+        """
         targets, positions = selection.target_uuids, selection.positions
         overrides: dict = {
             "target_entity_uuid": targets[0] if targets else None,
@@ -1917,6 +1933,7 @@ class BaseAction(BaseObject):
         """
         return None
 
+    @final
     def discovery_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Discovery's admission of one candidate: the shared path plus physical access, without a copy or an event.
 
@@ -1929,13 +1946,14 @@ class BaseAction(BaseObject):
                 and not selection.positions):
             error: Optional[str] = "No open destination"
             for destination in self.relocation_destinations(scan, selection):
-                error = self._requirements_error(scan, replace(selection, positions=(destination,)))
+                error = self.requirements_error(scan, replace(selection, positions=(destination,)))
                 if error is None:
                     break
             return error
-        return self._requirements_error(scan, selection)
+        return self.requirements_error(scan, selection)
 
-    def _requirements_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+    @final
+    def requirements_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Every non-cost requirement of one selection: shared admission, the action's rule, physical access.
 
         The scan's knowledge decides what is read: perception in discovery, the world at execution.
@@ -1952,11 +1970,11 @@ class BaseAction(BaseObject):
                             if not cell_occupied(scan, cell) and self.target_position_error(cell) is None))
 
     def _selection_targets(self, selection: ActionSelection) -> List[UUID]:
-        """The recipients a selection names; an area's come from its footprint at the aim."""
+        """The recipients a selection names; an area names none (its footprint resolves them at execution)."""
         if self.effective_target_type is TargetType.SELF:
             return [self.source_entity_uuid]
         if self.effective_target_type is TargetType.POSITION_AOE:
-            return self._area_targets_at(selection.positions[0])[0] if selection.positions else []
+            return []
         return list(selection.target_uuids)
 
     def _recipient_error(self, scan: ActorScan, targets: Sequence[UUID]) -> Optional[str]:
@@ -1983,9 +2001,9 @@ class BaseAction(BaseObject):
         positions = ((self.end_position,) if self.end_position is not None else ()) + tuple(self.extra_target_positions)
         grant = self._restricted_action_grant
         return ActionSelection(template_uuid=self.registered_template_uuid or self.uuid, target_uuids=targets,
-            positions=positions, source_item_uuid=self.source_item_uuid,
-            cost_source=(CostSource(kind=CostSourceKind.RESTRICTED, restricted_grant_id=grant.grant_id)
-                         if grant is not None else CostSource()))
+            positions=positions, source_item_uuid=self.source_item_uuid, facets=self._selected_facets,
+            controller_uuid=self._source_item_controller_uuid,
+            cost_source=CostSource(restricted_grant_id=grant.grant_id if grant is not None else None))
 
     def position_region(self) -> Optional[PositionRegion]:
         """The free-aim region of a position action, from its discovery contract and range."""
@@ -2012,28 +2030,74 @@ class BaseAction(BaseObject):
         return None
 
     def facet_domain(self, scan: ActorScan, level: Optional[int],
-                     target: Optional[ScanRecord]) -> Tuple[ActionVariantFacet, ...]:
-        """The authored choices open at one level, for one target when they depend on it."""
-        return ()
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """The authored choices open at one level, for one target when they depend on it (plan §14.4).
+
+        Each entry is one complete choice; `((),)` is an action without
+        choices and `()` an action with none open now. The facet values map
+        to fields in `_selection_overrides`.
+        """
+        return ((),)
+
+    def discovery_selections(self, scan: ActorScan) -> Tuple[ActionSelection, ...]:
+        """The selections this registered action lists before its choices and restricted grants.
+
+        Its own selection; a spell lists one per castable payment (plan D17),
+        a per-item or per-connector action one per item or connector.
+        """
+        return (self.current_selection(),)
+
+    @final
+    def discovery_forms(self, scan: ActorScan) -> List["BaseAction"]:
+        """This registered action's discovery rows, one read-only form each (plan §14.4).
+
+        Each listed selection, with each authored choice, at the ordinary costs
+        and then at each restricted grant that can pay for it. A form is the
+        action itself when the row is its own selection; nothing is copied for
+        a candidate target.
+        """
+        forms: List[BaseAction] = []
+        for listed in self.discovery_selections(scan):
+            domain = self.facet_domain(scan, listed.cast_at_level, None)
+            ordinary = [self._discovery_form(replace(listed, facets=facets)) for facets in domain]
+            forms.extend(ordinary)
+            if not ordinary:
+                continue
+            for grant in ordinary[0]._eligible_restricted_grants(scan):
+                paid = replace(listed.cost_source, restricted_grant_id=grant.grant_id)
+                forms.extend(self._discovery_form(replace(listed, cost_source=paid, facets=facets))
+                             for facets in domain)
+        return forms
+
+    def _discovery_form(self, selection: ActionSelection) -> "BaseAction":
+        return self if selection == self.current_selection() else self._bound(selection, executable=False)
+
+    def _eligible_restricted_grants(self, scan: ActorScan) -> Tuple[RestrictedActionGrant, ...]:
+        """The actor's restricted grants that may pay for this form's ordinary action channel."""
+        if self._restricted_action_grant is not None or not self.restricted_budget_eligible:
+            return ()
+        ordinary = [cost for cost in self.target_independent_effective_costs
+                    if cost.cost > 0 and cost.resource_name is None and cost.resource_cost == 0]
+        eligible_kinds = set(self.restricted_action_kinds)
+        if any(cost.cost_type == "actions" for cost in ordinary):
+            eligible_kinds.add(RestrictedActionKind.STANDARD_ACTION)
+        return tuple(grant for grant in scan.restricted_grants
+                     if not eligible_kinds.isdisjoint(grant.allowed_kinds)
+                     and any(cost.cost_type in grant.replaced_cost_types for cost in ordinary))
 
     def instantiate(self, **overrides) -> "BaseAction":
-        """Create an executable instance from this template.
+        """A new executable copy of this action with fields overridden.
 
         Uses model_copy() to preserve object types (e.g., AoE shape subclasses).
-        Instances are not registered (ephemeral, used once for apply()).
+        Instances are not registered (ephemeral, used once for apply()); they
+        keep the registered action they come from.
 
         Args:
             **overrides: Fields to override (target_entity_uuid, end_position, aoe_shape, etc.)
 
         Returns:
             BaseAction: A new instance that can be applied
-
-        Raises:
-            ValueError: If this is not a template
         """
-        if not self.template:
-            raise ValueError("Can only instantiate from a template")
-
         registered_template_uuid = self.registered_template_uuid or self.uuid
         update_dict: dict = {
             "uuid": uuid4(),
@@ -2045,79 +2109,41 @@ class BaseAction(BaseObject):
 
         return self.model_copy(deep=True, update=update_dict)
 
-    def get_discovery_variants(self, entity: Any) -> List["BaseAction"]:
-        """Return action forms that should appear in action discovery.
-
-        Args:
-            entity: Entity requesting available actions.
-
-        Returns:
-            Discovery actions for this template. Non-variant actions expose
-            themselves.
-        """
-        variants: List["BaseAction"] = [self]
-        eligible_kinds = set(self.restricted_action_kinds)
-        if any(
-            cost.cost_type == "actions"
-            and cost.cost > 0
-            and cost.resource_name is None
-            and cost.resource_cost == 0
-            for cost in self.target_independent_effective_costs
-        ):
-            eligible_kinds.add(RestrictedActionKind.STANDARD_ACTION)
-        if not eligible_kinds:
-            return variants
-        if not isinstance(entity, RestrictedActionGrantProvider):
-            return variants
-        for grant in entity.get_restricted_action_grants():
-            if eligible_kinds.isdisjoint(grant.allowed_kinds):
-                continue
-            if not any(
-                cost.cost_type in grant.replaced_cost_types
-                and cost.cost > 0
-                and cost.resource_name is None
-                and cost.resource_cost == 0
-                for cost in self.target_independent_effective_costs
-            ):
-                continue
-            registered_template_uuid = self.registered_template_uuid or self.uuid
-            variant = self.model_copy(
-                deep=True,
-                update={
-                    "uuid": uuid4(),
-                    "template": False,
-                    "use_register": False,
-                    "registered_template_uuid": registered_template_uuid,
-                },
-            )
-            variant._restricted_action_grant = grant
-            variants.append(variant)
-        return variants
-
     def describe_discovery(self) -> ActionDiscoveryDescription:
         return ActionDiscoveryDescription()
 
-    def at_cast_level(self, level: int) -> "BaseAction":
-        """This action cast at another of its listed levels; only spells have levels."""
-        raise ValueError(f"{self.name} has no cast levels")
-
+    @final
     def get_discovery_template_name(self) -> str:
-        """Return the machine-facing action name used for execution."""
-        base_name = self.name or "Unknown"
-        grant = self._restricted_action_grant
-        if grant is None:
-            return base_name
-        return (
-            f"{base_name}{RESTRICTED_ACTION_TEMPLATE_SEPARATOR}"
-            f"{grant.grant_id}"
-        )
+        """The row's command token, by one rule for every action (plan §14.4).
+
+        The name, a free cast's label, a slot spell's level, a loot child, the
+        authored choices and a restricted grant; never parsed back.
+        """
+        description = self.describe_discovery()
+        selection = self.current_selection()
+        name = self.name or "Unknown"
+        if description.cast_cost_label is not None:
+            name += f" [{description.cast_cost_label}]"
+        if description.is_spell_variant and description.spell_level:
+            name += f"{SPELL_SLOT_TEMPLATE_SEPARATOR}{description.cast_at_level}"
+        if description.loot_item_uuid is not None:
+            name += f"__child_{description.loot_item_uuid}"
+        name += "".join(f"__{facet.value}" for facet in selection.facets)
+        if selection.cost_source.restricted_grant_id is not None:
+            name += f"{RESTRICTED_ACTION_TEMPLATE_SEPARATOR}{selection.cost_source.restricted_grant_id}"
+        return name
 
     def get_discovery_display_name(self) -> str:
         """Return the human-facing action name used by UIs."""
         grant = self._restricted_action_grant
-        if grant is None:
-            return self.get_discovery_template_name()
-        return f"{grant.display_name}: {self.name or 'Unknown'}"
+        if grant is not None:
+            return f"{grant.display_name}: {self.name or 'Unknown'}"
+        labels = [facet.label for facet in self._selected_facets]
+        return f"{self.name or 'Unknown'} ({', '.join(labels)})" if labels else (self.name or "Unknown")
+
+    def row_facets(self) -> Tuple[ActionVariantFacet, ...]:
+        """The facets a discovery row discloses: the action's fixed ones, then its chosen ones."""
+        return (*self.describe_discovery().fixed_facets, *self._selected_facets)
 
     def get_restricted_action_display_name(self) -> Optional[str]:
         """Return the explicit restricted-budget label for this variant."""
@@ -2267,7 +2293,7 @@ class BaseAction(BaseObject):
 
     def _admit(self, declaration_event: ActionEvent, scan: ActorScan) -> ActionEvent:
         """Every requirement of this instance's own selection, then handler admission, on the action's one scan."""
-        error = (self._requirements_error(scan, self.current_selection())
+        error = (self.requirements_error(scan, self.current_selection())
                  or self.handler_admission_error(subjective=scan.subjective))
         if error is not None:
             return declaration_event.cancel(status_message=error)
@@ -2303,7 +2329,7 @@ class BaseAction(BaseObject):
         source = BaseBlock.get(self.source_entity_uuid)
         return (
             source is not None and self.contributions_active() and self.check_costs()
-            and self._requirements_error(source.action_scan(subjective=False), self.current_selection()) is None
+            and self.requirements_error(source.action_scan(subjective=False), self.current_selection()) is None
         )
 
     def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
@@ -2502,15 +2528,6 @@ class BaseAction(BaseObject):
                 f"{type(published).__name__}, expected ActionEvent"
             )
         return published
-
-    def apply_from_control(self, controller_uuid: UUID, *, parent_event: Event) -> Optional[Event]:
-        """Execute a linked item's action through its reachable authored handle."""
-        previous_controller = self._source_item_controller_uuid
-        self._source_item_controller_uuid = controller_uuid
-        try:
-            return self.apply(parent_event=parent_event)
-        finally:
-            self._source_item_controller_uuid = previous_controller
 
     def apply(self, parent_event: Optional[Event] = None) -> Optional[Event]:
         """Apply this action inside one passive causal-event batch.

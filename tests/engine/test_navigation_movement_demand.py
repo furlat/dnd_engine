@@ -102,7 +102,8 @@ def test_dash_reestablishes_affordable_paths_after_exhaustion(actor):
     move_to(actor, (12, 0))
 
 
-@pytest.mark.parametrize("kind", ["reachable", "los_reachable", "path", "legacy", "variant"])
+# A position action without a discovery contract is a free-aim region, not a path consumer (plan §14.4).
+@pytest.mark.parametrize("kind", ["reachable", "los_reachable", "path", "variant"])
 @pytest.mark.parametrize("register_after_move", [False, True])
 def test_custom_path_consumers_keep_the_legacy_domain(actor, kind, register_after_move):
     if not register_after_move:

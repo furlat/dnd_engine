@@ -7,7 +7,7 @@ replay tooling can depend on it without reversing ownership.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Annotated, Literal, Protocol, TypeAlias, Union, runtime_checkable
+from typing import Annotated, Literal, TypeAlias, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -157,31 +157,27 @@ class RestrictedActionGrant:
             raise ValueError("restricted action uses_per_turn must be positive")
 
 
-class CostSourceKind(str, Enum):
-    """What pays for one selected action."""
-
-    SLOT = "slot"
-    FREE_CAST = "free_cast"
-    RESTRICTED = "restricted"
-
-
 @dataclass(frozen=True, slots=True)
 class CostSource:
-    """The ordinary costs, or the one grant that replaces them."""
+    """Which grants pay instead of the ordinary costs.
 
-    kind: CostSourceKind = CostSourceKind.SLOT
+    A free cast replaces a spell's slot, a restricted grant replaces the
+    action-economy channel; the two are independent (a Haste action may cast a
+    free spell). Neither: the ordinary costs at the selected level.
+    """
+
     free_cast_grant_uuid: UUID | None = None
     restricted_grant_id: str | None = None
-
-    def __post_init__(self) -> None:
-        if ((self.free_cast_grant_uuid is not None) != (self.kind is CostSourceKind.FREE_CAST)
-                or (self.restricted_grant_id is not None) != (self.kind is CostSourceKind.RESTRICTED)):
-            raise ValueError("a cost source names exactly the grant of its kind")
 
 
 @dataclass(frozen=True, slots=True)
 class ActionSelection:
-    """One exact choice of a registered action, as the player or the AI made it (plan §14.4b)."""
+    """One exact choice of a registered action, as the player or the AI made it (plan §14.4b).
+
+    `facets` are the action's authored choices, one of its `facet_domain`;
+    `positions` are the aim, destination or vertices; `prefer_safe` is a
+    route choice of path movement.
+    """
 
     template_uuid: UUID
     cast_at_level: int | None = None
@@ -191,17 +187,15 @@ class ActionSelection:
     target_uuids: tuple[UUID, ...] = ()
     positions: tuple[tuple[int, int], ...] = ()
     controller_uuid: UUID | None = None
+    prefer_safe: bool = True
 
 
-@runtime_checkable
-class RestrictedActionGrantProvider(Protocol):
-    """Structural owner surface consumed by dependency-neutral actions."""
-
-    def get_restricted_action_grants(
-        self,
-    ) -> tuple[RestrictedActionGrant, ...]:
-        """Return the owner's current restricted action grants."""
-        ...
+def selection_facet(selection: ActionSelection, key: str) -> str:
+    """The value a selection chose for one authored facet key."""
+    for facet in selection.facets:
+        if facet.key == key:
+            return facet.value
+    raise ValueError(f"The selection names no {key} facet")
 
 
 __all__ = [
@@ -214,6 +208,5 @@ __all__ = [
     "SinglePositionSelection",
     "HasteActionPolicy",
     "RestrictedActionGrant",
-    "RestrictedActionGrantProvider",
     "RestrictedActionKind",
 ]

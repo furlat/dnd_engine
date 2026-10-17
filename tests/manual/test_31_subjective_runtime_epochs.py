@@ -1360,14 +1360,14 @@ def test_move_discovery_reuses_subjective_path_projection(monkeypatch) -> None:
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     path_cost_calls = 0
-    original_cost = Entity._movement_path_cost_feet
+    original_cost = Entity.movement_path_cost_feet
 
     def track_cost(self, *args, **kwargs):
         nonlocal path_cost_calls
         path_cost_calls += 1
         return original_cost(self, *args, **kwargs)
 
-    monkeypatch.setattr(Entity, "_movement_path_cost_feet", track_cost)
+    monkeypatch.setattr(Entity, "movement_path_cost_feet", track_cost)
     first_actions = archmage.get_available_actions()
     first_path_cost_calls = path_cost_calls
     second_actions = archmage.get_available_actions()

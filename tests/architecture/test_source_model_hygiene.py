@@ -312,7 +312,6 @@ WORLD_SCAN_EXCEPTIONS = {
     "dnd/runtime_reset.py": "reset_engine_runtime",  # clears the registry
     "dnd/content_system/pack_loader.py": "_engine_runtime_attribute_specs",  # cold-runtime check
     "dnd/scenarios/encounter_assembler.py": "assemble_encounter_recipe",  # empty-world setup guard
-    "dnd/classes/paladin.py": "get_discovery_variants",  # Cleansing Touch, bounded in PD1b
 }
 def read_text(path: Path) -> str:
     """Read repository text with a consistent encoding."""

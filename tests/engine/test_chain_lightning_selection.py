@@ -54,7 +54,8 @@ def test_upcast_adds_selected_recipients_not_damage_or_extra_casts(scene, slot):
     caster, (primary, secondary, distant, other) = scene
     row, option = choice(caster, primary)
     assert row.cast_levels == (6, 7, 8, 9) and row.allow_same_target is False
-    assert row.execution_template.at_cast_level(slot).get_multi_target_count() == slot - 2
+    form = row.execution_template
+    assert form.with_selection(replace(form.current_selection(), cast_at_level=slot)).get_multi_target_count() == slot - 2
     assert admitted(caster, row, primary, secondary) and admitted(caster, row, primary, other)
     assert not admitted(caster, row, primary, distant) and not admitted(caster, row, primary, primary)
     hp = {entity.uuid: entity.get_normal_hp() for entity in (primary, secondary, distant, other)}

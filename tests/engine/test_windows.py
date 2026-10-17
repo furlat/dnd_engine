@@ -48,7 +48,7 @@ def actor(game: Game, *, size: Size = Size.MEDIUM, position: tuple[int, int] = (
 
 def passage(entity: Entity) -> list:
     Entity.update_all_entities_senses()
-    return TraverseConnector(source_entity_uuid=entity.uuid).get_discovery_variants(entity)
+    return TraverseConnector(source_entity_uuid=entity.uuid, template=True).discovery_forms(entity.action_scan(subjective=True))
 
 
 @pytest.mark.parametrize("family", tuple(WINDOW_DEFINITIONS))

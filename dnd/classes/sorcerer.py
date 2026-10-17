@@ -20,7 +20,7 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
     BaseAction, ActionCategory, TargetType, Cost, CostType,
-    ActionEvent, ActionVariantFacet, spell_slot_cost_type,
+    ActionDiscoveryDescription, ActionEvent, ActionVariantFacet, spell_slot_cost_type,
 )
 from dnd.core.action_types import ActionSelection
 from dnd.types.discovery import ActorScan
@@ -1371,8 +1371,9 @@ class ConvertSlotToSP(BaseAction):
     slot_level: int = Field(default=1, ge=1, le=5, description="Spell slot level converted into sorcery points.")
     costs: List[Cost] = Field(default_factory=list, description="Generated bonus-action and spell-slot costs for this conversion.")
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        return (ActionVariantFacet(key="rank", value=str(self.slot_level), label=f"Level {self.slot_level}"),)
+    def describe_discovery(self) -> ActionDiscoveryDescription:
+        return ActionDiscoveryDescription(fixed_facets=(
+            ActionVariantFacet(key="rank", value=str(self.slot_level), label=f"Level {self.slot_level}"),))
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1436,8 +1437,9 @@ class ConvertSPToSlot(BaseAction):
     slot_level: int = Field(default=1, ge=1, le=5, description="Spell slot level created from sorcery points.")
     costs: List[Cost] = Field(default_factory=list, description="Generated bonus-action and sorcery-point costs for this conversion.")
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        return (ActionVariantFacet(key="rank", value=str(self.slot_level), label=f"Level {self.slot_level}"),)
+    def describe_discovery(self) -> ActionDiscoveryDescription:
+        return ActionDiscoveryDescription(fixed_facets=(
+            ActionVariantFacet(key="rank", value=str(self.slot_level), label=f"Level {self.slot_level}"),))
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)

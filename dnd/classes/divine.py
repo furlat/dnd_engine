@@ -211,7 +211,7 @@ class Turned(BaseCondition):
                 )
             )
         if not candidates:
-            Dodge(
+            dodge = Dodge(
                 source_entity_uuid=target.uuid,
                 behavior_binding=BehaviorBinding(
                     behavior_id="action.dodge",
@@ -219,9 +219,10 @@ class Turned(BaseCondition):
                     origin_root_id="action.dodge",
                     runtime_owner_uuid=target.uuid,
                 ),
-            ).apply(parent_event=event)
+            )
+            target.perform(dodge, dodge.current_selection(), parent_event=event)
             return None
-        result = Dash(
+        dash = Dash(
             source_entity_uuid=target.uuid,
             behavior_binding=BehaviorBinding(
                 behavior_id="action.dash",
@@ -229,12 +230,12 @@ class Turned(BaseCondition):
                 origin_root_id="action.dash",
                 runtime_owner_uuid=target.uuid,
             ),
-        ).apply(parent_event=event)
+        )
+        result = target.perform(dash, dash.current_selection(), parent_event=event)
         if result is not None and not result.canceled:
             *_, destination, path = max(candidates)
-            Move(
-                source_entity_uuid=target.uuid, end_position=destination, path=path
-            ).apply(parent_event=event)
+            flight = Move(source_entity_uuid=target.uuid, end_position=destination, path=path)
+            target.perform(flight, flight.current_selection(), parent_event=event)
 
 
 def turn_creature(

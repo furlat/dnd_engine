@@ -1417,9 +1417,8 @@ class MyrmidonBurrow(ElementalWarp):
             and actor is not None
             and actor.position == self.end_position
         ):
-            MyrmidonLanding(
-                source_entity_uuid=actor.uuid, end_position=actor.position, costs=[]
-            ).apply(parent_event=effect)
+            landing = MyrmidonLanding(source_entity_uuid=actor.uuid, end_position=actor.position, costs=[])
+            actor.perform(landing, landing.current_selection(), parent_event=effect)
         return effect
 
 
@@ -2438,7 +2437,7 @@ class MyrmidonStrikeDice(BaseCondition):
     damage_type: DamageType
     action_id: str
 
-    def get_action_damage_roll_profiles(self, action, actor):
+    def get_action_damage_roll_profiles(self, action):
         if (
             action.behavior_binding is not None
             and action.behavior_binding.behavior_id == self.action_id

@@ -1,18 +1,28 @@
 """Concrete action implementations for combat, movement, spells, and objects."""
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from contextlib import nullcontext
 from types import MappingProxyType
 
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_actions import (
     ActionDiscoveryDescription,
-    ActionCategory, ActionEvent, ActionOutcomeProfile, BaseAction, BaseCost,
-    Cost, CostType, DamageRollProfile, OutcomeApplicationScope, OutcomeResolution,
-    PositionDiscoveryContract, RESTRICTED_ACTION_TEMPLATE_SEPARATOR,
-    SPELL_SLOT_TEMPLATE_SEPARATOR, TargetType, ActionTargetEffectProfile,
-    spell_slot_cost_type, TargetEffectDisposition,
+    ActionCategory,
+    ActionEvent,
+    ActionOutcomeProfile,
+    BaseAction,
+    BaseCost,
+    Cost,
+    CostType,
+    DamageRollProfile,
+    OutcomeApplicationScope,
+    OutcomeResolution,
+    PositionDiscoveryContract,
+    TargetType,
+    ActionTargetEffectProfile,
+    spell_slot_cost_type,
+    TargetEffectDisposition,
 )
 from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec
 from dnd.core.values import ModifiableValue
@@ -31,7 +41,7 @@ from dnd.types.discovery import ActorScan
 from dnd.core.elevation import support_distance_feet
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.effect_types import EffectOrigin
-from dnd.core.action_types import ActionAffordance, ActionSelection, ActionVariantFacet, CostSourceKind, RestrictedActionKind
+from dnd.core.action_types import ActionAffordance, ActionSelection, ActionVariantFacet, CostSource, RestrictedActionKind
 from dnd.blocks.spellcasting import FreeSpellCastGrant
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -189,7 +199,7 @@ def entity_action_economy_cost_evaluator(source_entity_uuid: UUID, cost_type: Co
 
 
 def build_weapon_attack_outcome_profile(
-    actor: Any,
+    actor: Entity,
     weapon_slot: WeaponSlot,
     override_ability: Optional[AbilityName] = None,
     natural_weapon: Optional[NaturalWeaponSpec] = None,
@@ -202,10 +212,8 @@ def build_weapon_attack_outcome_profile(
         override_ability: Optional ability selected by the action rule.
 
     Returns:
-        Actor-owned stochastic data, or ``None`` for an invalid actor or slot.
+        Actor-owned stochastic data, or ``None`` for a slot without damage.
     """
-    if not isinstance(actor, Entity):
-        return None
     baseline = actor.weapon_attack_outcome_baseline(
         weapon_slot,
         override_ability,
@@ -333,8 +341,9 @@ def resolve_paid_entry_retreats(source: Entity, *, since_cursor: int, parent_eve
         if request.destination is None:
             continue
         source.materialize_navigation(max_distance=20)
-        Move(source_entity_uuid=source.uuid, end_position=request.destination,
-            path=[source.position, request.destination], prefer_safe=False).apply(parent_event=parent_event)
+        retreat = Move(source_entity_uuid=source.uuid, end_position=request.destination,
+            path=[source.position, request.destination], prefer_safe=False)
+        source.perform(retreat, retreat.current_selection(), parent_event=parent_event)
     # The original path stays interrupted even if the retreat removed its fear.
     return bool(requests)
 
@@ -571,12 +580,39 @@ class Move(BaseAction):
             self._setup_path()
             self._setup_costs_from_path()
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        return (ActionVariantFacet(key="movement", value=self.movement_mode.value,
-                                  label=self.movement_mode.value.title()),)
+    def describe_discovery(self) -> ActionDiscoveryDescription:
+        return ActionDiscoveryDescription(fixed_facets=(ActionVariantFacet(key="movement",
+            value=self.movement_mode.value, label=self.movement_mode.value.title()),))
 
     def get_movement_mode(self) -> MovementMode:
         return self.movement_mode
+
+    def current_selection(self) -> ActionSelection:
+        """The route preference is part of a move's selection."""
+        return replace(super().current_selection(), prefer_safe=self.prefer_safe)
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        """A destination's route: the known safe route when preferred and affordable, else the known route."""
+        overrides = super()._selection_overrides(selection)
+        overrides["prefer_safe"] = selection.prefer_safe
+        if selection.positions:
+            overrides["path"] = self._route_to(selection.positions[0], prefer_safe=selection.prefer_safe)
+        return overrides
+
+    def _route_to(self, end_position: Tuple[int, int], *, prefer_safe: bool) -> Optional[List[Tuple[int, int]]]:
+        mover = Entity.get(self.source_entity_uuid)
+        if mover is None:
+            return None
+        safe = mover.senses.safe_paths.get(end_position) if self.movement_mode is MovementMode.WALKING else None
+        if (prefer_safe and safe is not None and mover.movement_path_cost_feet(list(safe), MovementMode.WALKING)
+                <= mover.action_economy.movement_remaining()):
+            return list(safe)
+        if self.movement_mode is MovementMode.WALKING:
+            known = mover.senses.paths.get(end_position)
+            return list(known) if known is not None else None
+        _, paths = get_map().compute_paths(mover.position, requesting_entity_uuid=mover.uuid,
+            movement_mode=self.movement_mode, subjective=True)
+        return paths.get(end_position)
 
     def _movement_cost_evaluator(self, entity_uuid: UUID, cost_type: CostType, cost: int) -> bool:
         entity = Entity.get(entity_uuid)
@@ -686,14 +722,10 @@ class Move(BaseAction):
         self._setup_costs_from_path()
 
     def instantiate(self, **overrides) -> "Move":
-        """Create an executable Move instance from this template.
+        """A new executable Move; path and costs are recomputed for its destination unless given.
 
-        Uses model_copy() to preserve object types. Path/costs are reset
-        for recomputation based on new end_position.
+        Uses model_copy() to preserve object types.
         """
-        if not self.template:
-            raise ValueError("Can only instantiate from a template")
-
         registered_template_uuid = self.registered_template_uuid or self.uuid
         update_dict: dict = {
             "uuid": uuid4(),
@@ -1306,68 +1338,60 @@ class TraverseConnector(BaseAction):
             return ConnectorDestinationStatus.KNOWN_CLEAR
         return ConnectorDestinationStatus.KNOWN_BLOCKED
 
-    def get_discovery_variants(self, entity: Any) -> List[BaseAction]:
-        if not isinstance(entity, Entity):
-            return []
-        variants: List[BaseAction] = []
-        for connector in get_map().get_connectors_at(entity.position):
-            if not connector.enabled:
-                continue
-            oriented = self._oriented_connector(connector, entity.position)
-            if oriented is None:
-                continue
-            source_endpoint, destination_endpoint = oriented
-            movement_cost = get_map().connector_movement_cost(
-                connector, entity.position, entity.uuid, entity.size, subjective=True,
-                ignore_difficult_terrain=entity.ignore_difficult_terrain)
-            if movement_cost is None:
-                continue
-            discovery = ConnectorTraversalDiscovery(
-                command=TraversalConnectorCommand(
-                    connector_uuid=connector.uuid,
-                    connector_revision=connector.revision,
-                    connector_digest=connector.objective_digest,
-                    source_position=source_endpoint.position,
-                    destination_position=destination_endpoint.position,
-                ),
-                authored_id=connector.authored_id,
-                kind=connector.kind,
-                presentation_key=connector.presentation_key,
-                source_elevation_feet=source_endpoint.elevation_feet,
-                destination_elevation_feet=destination_endpoint.elevation_feet,
-                movement_cost_feet=movement_cost,
-                action_cost_type=connector.action_cost_type,
-                action_cost_amount=connector.action_cost_amount,
-                bidirectional=connector.bidirectional,
-                provocation_policy=connector.provocation_policy,
-                destination_status=self._destination_status(
-                    entity,
-                    destination_endpoint.position,
-                ),
-            )
-            variants.append(self.model_copy(deep=True, update={
-                "uuid": uuid4(),
-                "template": False,
-                "use_register": False,
-                "registered_template_uuid": (
-                    self.registered_template_uuid or self.uuid
-                ),
-                "connector_traversal": discovery,
-                "costs": self._variant_costs(connector, movement_cost),
-            }))
-        return variants
+    def discovery_selections(self, scan: ActorScan) -> Tuple[ActionSelection, ...]:
+        """One row per enabled connector the traverser stands at an entry of, whose passage it can pay."""
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None:
+            return ()
+        own = self.current_selection()
+        return tuple(replace(own, target_uuids=(connector.uuid,))
+                     for connector in get_map().get_connectors_at(entity.position)
+                     if self._traversal(entity, connector) is not None)
 
-    def get_discovery_template_name(self) -> str:
-        discovery = self.connector_traversal
-        if discovery is None:
-            return self.name
-        command = discovery.command
-        return (
-            f"Traverse Connector__connector_{command.connector_uuid}_"
-            f"{command.connector_revision}_{command.connector_digest}_"
-            f"{command.source_position[0]}_{command.source_position[1]}_"
-            f"{command.destination_position[0]}_{command.destination_position[1]}"
+    def _traversal(self, entity: Entity, connector: TraversalConnector) -> Optional[ConnectorTraversalDiscovery]:
+        """The traverser's declared passage through one connector from its cell, as it perceives it."""
+        if not connector.enabled:
+            return None
+        oriented = self._oriented_connector(connector, entity.position)
+        if oriented is None:
+            return None
+        source_endpoint, destination_endpoint = oriented
+        movement_cost = get_map().connector_movement_cost(
+            connector, entity.position, entity.uuid, entity.size, subjective=True,
+            ignore_difficult_terrain=entity.ignore_difficult_terrain)
+        if movement_cost is None:
+            return None
+        return ConnectorTraversalDiscovery(
+            command=TraversalConnectorCommand(
+                connector_uuid=connector.uuid,
+                connector_revision=connector.revision,
+                connector_digest=connector.objective_digest,
+                source_position=source_endpoint.position,
+                destination_position=destination_endpoint.position,
+            ),
+            authored_id=connector.authored_id,
+            kind=connector.kind,
+            presentation_key=connector.presentation_key,
+            source_elevation_feet=source_endpoint.elevation_feet,
+            destination_elevation_feet=destination_endpoint.elevation_feet,
+            movement_cost_feet=movement_cost,
+            action_cost_type=connector.action_cost_type,
+            action_cost_amount=connector.action_cost_amount,
+            bidirectional=connector.bidirectional,
+            provocation_policy=connector.provocation_policy,
+            destination_status=self._destination_status(entity, destination_endpoint.position),
         )
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        """The selected connector's declared passage and its costs; the traverser is its own target."""
+        overrides = super()._selection_overrides(selection)
+        entity = Entity.get(self.source_entity_uuid)
+        connector = get_map().get_connector(selection.target_uuids[0]) if selection.target_uuids else None
+        traversal = self._traversal(entity, connector) if entity is not None and connector is not None else None
+        if traversal is None:
+            raise ValueError("The selected connector cannot be traversed from here")
+        overrides.update(connector_traversal=traversal, costs=self._variant_costs(connector, traversal.movement_cost_feet))
+        return overrides
 
     def get_discovery_display_name(self) -> str:
         discovery = self.connector_traversal
@@ -2106,19 +2130,21 @@ class Attack(BaseAction):
     def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return the actor-baseline stochastic profile for this weapon attack."""
         actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         profile = build_weapon_attack_outcome_profile(
             actor,
             self.weapon_slot,
             self.override_ability,
             natural_weapon=self.get_natural_weapon(),
         )
-        if profile is None or actor is None:
+        if profile is None:
             return profile
         extra_damage_rolls: list[DamageRollProfile] = []
         for condition in actor.active_conditions.values():
             if not condition.contributions_active():
                 continue
-            for damage_profile in condition.get_action_damage_roll_profiles(self, actor):
+            for damage_profile in condition.get_action_damage_roll_profiles(self):
                 if isinstance(damage_profile, DamageRollProfile):
                     extra_damage_rolls.append(damage_profile)
         if not extra_damage_rolls:
@@ -2134,7 +2160,7 @@ class Attack(BaseAction):
             return None
         profiles: list[ActionTargetEffectProfile] = []
         for condition in actor.active_conditions.values():
-            profile = condition.get_action_target_effect_profile(self, actor)
+            profile = condition.get_action_target_effect_profile(self)
             if isinstance(profile, ActionTargetEffectProfile):
                 profiles.append(profile)
         if not profiles:
@@ -5084,7 +5110,7 @@ class SpellAction(BaseAction):
         actor = Entity.get(self.source_entity_uuid)
         source = actor.spellcasting.sources.get(self.spellcasting_source_id) if actor is not None else None
         return ActionDiscoveryDescription(spell_level=self.spell_level, cast_at_level=self.cast_at_level,
-            cast_levels=self.castable_levels, is_spell_variant=self.is_variant,
+            cast_levels=self.castable_levels, is_spell_variant=self.is_variant, cast_cost_label=self.cast_cost_label,
             spellcasting_source_id=self.spellcasting_source_id,
             spellcasting_provider_id=source.provider_id if source is not None else None,
             spellcasting_ability=source.ability if source is not None else None,
@@ -5247,40 +5273,39 @@ class SpellAction(BaseAction):
             return "ranged"
         return None
 
-    def generate_variants(self, entity: Entity) -> List['SpellAction']:
-        """Generate spell variants for available spell slots.
+    @property
+    def casts_without_slot(self) -> bool:
+        """A cantrip, a spell cast without a slot, or one an item pays for."""
+        return self.spell_level == 0 or self.alt_skip_slot or self.source_item_uuid is not None
 
-        Cantrips return a single slotless variant. Leveled spells return one
-        variant for each currently available spell slot at or above the base
-        spell level.
+    def discovery_selections(self, scan: ActorScan) -> Tuple[ActionSelection, ...]:
+        """A slotless spell as registered; otherwise one row per spell (plan D17) and one per free cast.
 
-        Args:
-            entity: The entity that would cast the spell
-
-        Returns:
-            List of SpellAction variants with appropriate costs
+        The slot row is at the lowest level with a slot available now and
+        carries every such level; with slot capacity but none available, it is
+        one unaffordable row at the lowest capacity.
         """
-        variants: List['SpellAction'] = []
+        own = self.current_selection()
+        if self.casts_without_slot:
+            return (own,)
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return ()
+        capacity = [level for level in range(self.spell_level, 10) if caster.has_spell_slot_capacity(level)]
+        available = [level for level in capacity if caster.has_spell_slot(level)]
+        rows = [replace(own, cast_at_level=(available or capacity)[0])] if capacity else []
+        rows.extend(replace(own, cast_at_level=self.spell_level, cost_source=CostSource(free_cast_grant_uuid=grant.grant_id))
+            for grant in caster.spellcasting.free_cast_grants.values()
+            if grant.source_id == self.spellcasting_source_id and grant.spell_id == self.get_authored_spell_id()
+            and grant.cast_rank == self.spell_level
+            and (not grant.outside_encounter_only or caster.active_encounter_uuid is None))
+        return tuple(rows)
 
-        if self.spell_level == 0:
-            variants.append(self._create_variant(cast_at_level=0))
-        else:
-            # One row per spell (plan D17), listed at the lowest level with a slot available now and
-            # carrying every such level; with slot capacity but none available, one unaffordable row.
-            capacity = [level for level in range(self.spell_level, 10) if entity.has_spell_slot_capacity(level)]
-            available = tuple(level for level in capacity if entity.has_spell_slot(level))
-            if available:
-                variants.append(self._create_variant(cast_at_level=available[0], castable_levels=available))
-            elif capacity:
-                variants.append(self._create_variant(cast_at_level=capacity[0]))
-
-        for grant in entity.spellcasting.free_cast_grants.values():
-            if (grant.source_id == self.spellcasting_source_id and grant.spell_id == self.get_authored_spell_id()
-                    and grant.cast_rank == self.spell_level
-                    and (not grant.outside_encounter_only or entity.active_encounter_uuid is None)):
-                variants.append(self._create_variant(cast_at_level=self.spell_level, costs=self._free_cast_costs(grant),
-                    cast_cost_grant_id=grant.grant_id, cast_cost_label=grant.label))
-        return variants
+    def current_selection(self) -> ActionSelection:
+        """The cast level and free cast are part of a spell's selection; a registered spell has chosen neither."""
+        own = super().current_selection()
+        return replace(own, cast_at_level=None if self.template else self.cast_at_level,
+            cost_source=replace(own.cost_source, free_cast_grant_uuid=self.cast_cost_grant_id))
 
     def _free_cast_costs(self, grant: FreeSpellCastGrant) -> List[Cost]:
         """The base-rank cast's costs when one free-cast grant pays instead of a slot."""
@@ -5291,20 +5316,29 @@ class SpellAction(BaseAction):
         return costs
 
     def _selection_overrides(self, selection: ActionSelection) -> dict:
-        """A spell's level and casting cost come from the selection too."""
+        """A spell's level and payment come from the selection too.
+
+        A spell cast without a slot casts as provided. A slot or free cast stores normalized
+        executable costs, so the registered cost transforms are not applied a
+        second time.
+        """
         overrides = super()._selection_overrides(selection)
+        free_cast = selection.cost_source.free_cast_grant_uuid
+        if self.casts_without_slot and free_cast is None:
+            return overrides
         level = selection.cast_at_level if selection.cast_at_level is not None else self.cast_at_level
-        overrides["cast_at_level"] = level
-        if selection.cost_source.kind is CostSourceKind.FREE_CAST:
-            caster = Entity.get(self.source_entity_uuid)
-            grant = (caster.spellcasting.free_cast_grants.get(selection.cost_source.free_cast_grant_uuid)
-                     if caster is not None and selection.cost_source.free_cast_grant_uuid is not None else None)
+        caster = Entity.get(self.source_entity_uuid)
+        overrides.update(cast_at_level=level, is_variant=True, alt_cost_type=None, alt_extra_costs=[], alt_skip_slot=False)
+        if free_cast is not None:
+            grant = caster.spellcasting.free_cast_grants.get(free_cast) if caster is not None else None
             if grant is None:
                 raise ValueError("The selected free cast is not available")
             overrides.update(costs=self._free_cast_costs(grant), cast_cost_grant_id=grant.grant_id,
-                cast_cost_label=grant.label)
+                cast_cost_label=grant.label, castable_levels=())
         else:
-            overrides["costs"] = self._get_costs_for_level(level)
+            overrides.update(costs=self._get_costs_for_level(level), cast_cost_grant_id=None, cast_cost_label=None,
+                castable_levels=tuple(castable for castable in range(self.spell_level, 10) if caster is not None
+                    and caster.has_spell_slot_capacity(castable) and caster.has_spell_slot(castable)))
         return overrides
 
     def casting_entitlement_error(self) -> str | None:
@@ -5327,48 +5361,6 @@ class SpellAction(BaseAction):
         return None
 
 
-    def get_discovery_variants(self, entity: Any) -> List[BaseAction]:
-        """Return spell forms that should appear in action discovery.
-
-        Args:
-            entity: Entity requesting available actions.
-
-        Returns:
-            The registered cantrip or slotless override template, or generated
-            slot-level variants for leveled spells.
-        """
-        spell_variants: List[BaseAction]
-        if self.spell_level == 0 or self.alt_skip_slot:
-            spell_variants = [self]
-        else:
-            spell_variants = list(self.generate_variants(entity))
-        return [
-            variant
-            for spell_variant in spell_variants
-            for variant in BaseAction.get_discovery_variants(
-                spell_variant,
-                entity,
-            )
-        ]
-
-    def get_discovery_template_name(self) -> str:
-        """Return a stable execution name for this spell discovery row."""
-        base_name = self.name or "Unknown"
-        if self.cast_cost_grant_id is not None:
-            base_name += f" [{self.cast_cost_label}]"
-        if self.is_variant and self.spell_level > 0:
-            base_name = (
-                f"{base_name}{SPELL_SLOT_TEMPLATE_SEPARATOR}"
-                f"{self.cast_at_level}"
-            )
-        grant = self._restricted_action_grant
-        if grant is not None:
-            return (
-                f"{base_name}{RESTRICTED_ACTION_TEMPLATE_SEPARATOR}"
-                f"{grant.grant_id}"
-            )
-        return base_name
-
     def get_discovery_display_name(self) -> str:
         """Return a human-facing label for this spell discovery row."""
         base_name = self.name or "Unknown"
@@ -5377,45 +5369,6 @@ class SpellAction(BaseAction):
         if self.is_variant and self.spell_level > 0:
             return f"{base_name} (Level {self.cast_at_level})"
         return base_name
-
-    def at_cast_level(self, level: int) -> 'SpellAction':
-        """This spell cast at one slot level, with that level's costs (a row checks its own cast_levels)."""
-        return self._create_variant(cast_at_level=level, castable_levels=self.castable_levels)
-
-    def _create_variant(self, cast_at_level: int, **overrides) -> 'SpellAction':
-        """Create a lightweight read-only discovery variant for one slot level.
-
-        Definition submodels are shared with the registered template while the
-        variant is inspected during discovery. Execution subsequently creates
-        one deep executable copy before any target or area state can mutate.
-
-        Args:
-            cast_at_level: The spell slot level to use (0 for cantrips)
-            **overrides: Additional field overrides
-
-        Returns:
-            A new SpellAction instance configured for this cast level
-        """
-        registered_template_uuid = self.registered_template_uuid or self.uuid
-        update_dict: dict = {
-            "uuid": uuid4(),
-            "cast_at_level": cast_at_level,
-            "is_variant": True,
-            "template": False,
-            "use_register": False,
-            "costs": self._get_costs_for_level(cast_at_level),
-            # Slot variants store normalized executable costs.  Retaining the
-            # template's cost transforms would make ``effective_costs`` apply
-            # them a second time, most critically duplicating named-resource
-            # costs on generated/upcast spells.
-            "alt_cost_type": None,
-            "alt_extra_costs": [],
-            "alt_skip_slot": False,
-        }
-        update_dict.update(overrides)
-        update_dict["registered_template_uuid"] = registered_template_uuid
-
-        return self.model_copy(deep=False, update=update_dict)
 
     def _get_costs_for_level(self, level: int) -> List[Cost]:
         """Get costs for casting at a specific level.
@@ -5697,19 +5650,19 @@ class Drop(BaseAction):
     item_uuid: Optional[UUID] = Field(default=None, description="UUID of the item to drop (bound at creation)")
     charge_cost: int = Field(default=0, description="Dropping an item does not use its charges.")
 
-    def get_discovery_variants(self, entity: Entity) -> List[BaseAction]:
-        """Specialize the ordinary Drop template to each current inventory item."""
-        return [self.model_copy(deep=True, update={
-            "item_uuid": item.uuid, "source_item_uuid": item.uuid,
-            "name": f"Drop ({item.name})",
-        }) for item in entity.inventory.items.values()
-            if item.intrinsic_owner_uuid is None]
+    def discovery_selections(self, scan: ActorScan) -> Tuple[ActionSelection, ...]:
+        """One row per inventory item the actor may drop."""
+        entity = Entity.get(self.source_entity_uuid)
+        own = self.current_selection()
+        return tuple(replace(own, source_item_uuid=item.uuid) for item in entity.inventory.items.values()
+                     if item.intrinsic_owner_uuid is None) if entity is not None else ()
 
-    def get_discovery_template_name(self) -> str:
-        return f"Drop__item_{self.item_uuid}" if self.item_uuid is not None else "Drop"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "item_uuid": selection.source_item_uuid}
 
     def get_discovery_display_name(self) -> str:
-        return self.name or "Drop"
+        item = BaseBlock.get(self.item_uuid) if self.item_uuid is not None else None
+        return f"Drop ({item.name})" if item is not None else (self.name or "Drop")
 
     def get_physical_access(self) -> Optional[PhysicalAccess]:
         return PhysicalAccess.BODY

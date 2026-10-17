@@ -52,7 +52,7 @@ def cast_prepared(actor, spell_id, rank, target=None):
     )
     variant = next(
         variant
-        for variant in template.get_discovery_variants(actor)
+        for variant in template.discovery_forms(actor.action_scan(subjective=True))
         if variant.cast_at_level == rank and variant.cast_cost_grant_id is None
     )
     result = variant.model_copy(
