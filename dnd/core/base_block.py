@@ -1,5 +1,5 @@
 from dnd.core.events import ConditionMembershipCommittedEvent
-from dnd.core.action_types import ActionEconomyCostType
+from dnd.core.action_types import ActionEconomyCostType, RestrictedActionGrant
 from typing import AbstractSet, Dict, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
@@ -30,6 +30,7 @@ from dnd.types.senses import (
     SensesType as SensesType,
     SensesView,
 )
+from dnd.types.discovery import ActorScan
 from dnd.types.world import LightLevel as LightLevel, MovementMode, OccupancyLayer
 from dnd.types.actor import EntityStatsState
 from dnd.types.physical_access import ContactPassage, PhysicalAccess
@@ -609,6 +610,14 @@ class BaseBlock(BaseModel):
     def get_senses(self) -> Optional[SensesView]:
         """Override in Entity to return Senses block for subjective perception."""
         return None
+
+    def action_scan(self, *, with_navigation: bool = False) -> ActorScan:
+        """The actor scan admission reads (plan §14.2); only creatures act."""
+        raise ValueError(f"{self.name} does not perform actions")
+
+    def get_restricted_action_grants(self) -> tuple[RestrictedActionGrant, ...]:
+        """Named restricted action budgets; only creatures hold them."""
+        return ()
 
     def is_object_known_to(self, observer_uuid: UUID) -> bool:
         """Explicit authored knowledge; ordinary entities grant no object contact."""

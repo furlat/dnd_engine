@@ -1021,6 +1021,31 @@ Test fallout is 94 test files calling `get_available_actions` and 35 using `exec
   - `apply(scan, selection, parent_event=None)`; base `_validate` calls `_admission_error`.
 - **`Entity`:** `action_scan(...)`, `creature_facts()`, and `perform(action, selection, parent_event=None)` as the only `apply` entry, with an AST test.
 
+**Correction (2026-10-17, coordinator, listed for sign-off): the executable instance keeps `apply(parent_event)`.**
+§14.3b had `apply(scan, selection, parent_event)` with "≈33 callers". It missed the tests: 159 test files make 673
+direct `.apply()` calls on executable instances. The intent is kept without that churn:
+- an executable instance is its own selection (`current_selection()` from its fields, which only `with_selection`
+  and `instantiate` set);
+- the base `_validate` asks the source block for its scan (`BaseBlock.action_scan()`, defined by Entity) and calls
+  `_admission_error(scan, self.current_selection())`: one legality path, shared with discovery;
+- discovery calls `_admission_error(scan, candidate)` on the registered template itself, with no copy and no event;
+- `Entity.perform(action, selection, parent_event)` = `action.with_selection(selection).apply(parent_event)` is the
+  only `.apply(` caller in `dnd/` (AST test over `dnd/`; tests keep building instances).
+
+**PD1b exit items (owned by the coordinator, gate (c) fails while they are open):**
+1. Physical access joins `_admission_error` and the `physical_access_error` override chain is deleted: Continual Flame, connector traversal and Multiattack declare their access as data the base reads.
+2. Per-target isolation: each per-target application is its own `with_selection` instance; `_apply_target_application` no longer mutates and restores `self.target_entity_uuid`.
+3. Execution scans carry no navigation (`action_scan(with_navigation=False)`); the `discovery.action_scan` counter is checked on the caster-step and Gust/Spirit Guardians walk rows, and no non-creature apply source reaches `_validate`.
+
+**Open in the fan-out: physical access.** Three `physical_access_error` overrides change the base check instead of
+adding to it (Continual Flame admits carried items without reach; connector traversal and Multiattack replace it).
+`rule_error` is additive, so the base reach check joins `_admission_error` only once those three are expressed as
+data the base reads (e.g. the access the action declares for the selected target), not as overrides.
+
+**Open in the fan-out: target counts.** 9 `get_all_targets` overrides cap or dedupe selected targets (Bless/Bane,
+Hold Person upcast, Eyebite...). Base admission now checks the selection as named, so "at most N" and "distinct"
+become `rule_error` messages instead of silent trimming.
+
 **Fan-out.** Five sub-agents run on disjoint file groups. Each converts the files' `_validate`, discovery-only and hook overrides into `rule_error`, plus profile hooks without an actor parameter, variants to `facet_domain`, and `apply()` callers to `Entity.perform`. Each runs its files' suites.
 
 | Group | Files | Override sites |

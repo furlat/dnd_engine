@@ -157,6 +157,42 @@ class RestrictedActionGrant:
             raise ValueError("restricted action uses_per_turn must be positive")
 
 
+class CostSourceKind(str, Enum):
+    """What pays for one selected action."""
+
+    SLOT = "slot"
+    FREE_CAST = "free_cast"
+    RESTRICTED = "restricted"
+
+
+@dataclass(frozen=True, slots=True)
+class CostSource:
+    """The ordinary costs, or the one grant that replaces them."""
+
+    kind: CostSourceKind = CostSourceKind.SLOT
+    free_cast_grant_uuid: UUID | None = None
+    restricted_grant_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if ((self.free_cast_grant_uuid is not None) != (self.kind is CostSourceKind.FREE_CAST)
+                or (self.restricted_grant_id is not None) != (self.kind is CostSourceKind.RESTRICTED)):
+            raise ValueError("a cost source names exactly the grant of its kind")
+
+
+@dataclass(frozen=True, slots=True)
+class ActionSelection:
+    """One exact choice of a registered action, as the player or the AI made it (plan §14.4b)."""
+
+    template_uuid: UUID
+    cast_at_level: int | None = None
+    cost_source: CostSource = CostSource()
+    source_item_uuid: UUID | None = None
+    facets: tuple[ActionVariantFacet, ...] = ()
+    target_uuids: tuple[UUID, ...] = ()
+    positions: tuple[tuple[int, int], ...] = ()
+    controller_uuid: UUID | None = None
+
+
 @runtime_checkable
 class RestrictedActionGrantProvider(Protocol):
     """Structural owner surface consumed by dependency-neutral actions."""

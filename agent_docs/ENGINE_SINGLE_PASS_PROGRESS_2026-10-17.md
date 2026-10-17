@@ -22,18 +22,18 @@ Hard rules:
 | P0b | ✅ done (P0b-1 + P0b-2, all §1 rows) |
 | P1 | ✅ done (commit 9944b4adb; gate below) |
 | P2 | ✅ done (commit ebff512eb) |
-| PD1a | — | one footprint |
-| P3 (+PB2) | — | |
-| PB3 | — | |
-| Re-measure | — | |
-| PD1b | — | rows, legality, selection |
+| PD1a | ✅ done (commit 6beb44d87) | one footprint; footprint gate carried to PD1b |
+| P3 (+PB2) | ✅ done (commits 6beb44d87, f3728625a) | every §6 row within 30 P per group |
+| PB3 | ✅ done except L12 (protocol decision) | gas-trap fence test left for sign-off |
+| Re-measure | timings logged; residual ranking running | |
+| PD1b | in progress (core API, round 0 profile hooks, round 1 rule_error fan-out) | rows, legality, selection |
 | PD1c | — | after D14 approval |
-| P4a | — | |
+| P4a | partial (obscurement index, in 6beb44d87) | |
 | P5 | — | |
 | PD2 | — | session cache conditional |
 | P4b | — | conditional |
 | P6 | — | |
-| P7 | — | |
+| P7 | partial (light-source deltas, in 6beb44d87) | |
 | P8 | — | |
 | PC | — | other repo; human |
 
@@ -74,3 +74,4 @@ Hard rules:
 - 2026-10-17: **PB3** (`tests/engine/test_rules_deviation_fixes.py`, each case failing on the P2 snapshot first): L1 Hypnotic Pattern needs sight; L2 Silence thunder immunity; L4/L11 Slow and Mass Cure Wounds 6 targets lowest HP first (`lowest_hp_first`); L9 Daylight dispels only ≤3rd-level Darkness; I difficult terrain is a floor of 2; L6 Web lowers light one level (tile `dimmers`, non-stacking); M every zone turn trigger at EXECUTION (20 sites + `tests/architecture/test_zone_turn_trigger_phase.py`). M consequence: Nauseated ends at the turn end. L12 blocked on a protocol decision (half-cell centre). P recorded only.
 - 2026-10-17: **P3 remainder**: shared staged loop `dnd/spatial/area_reach.py` (Fireball + `payload_blast`, barrier integrity + destruction lineage, no revision counter); entries for wall formation, Ice Knife burst, Glyph payload, `payload_blast`, nested batches, plate pulses, trap fire, portal transfer, material interactions (`resolve_interaction`, 8 emitters); phase B takes callables (`EventQueue.after_group`); scoped roll sharing for nested entries; group settlers (GridMap flushes its light fact without a reducer: fixed a lost light publication in observer-less worlds). Regressions found and fixed: Moonbeam activation spent the fence before the cast loop (L8); P4a obscurement index stale after removal on removed support.
 - 2026-10-17: **P3 gate, counts mode** (FR / hazard-only per operation, 30 observers; baseline `baseline_pre_p3` in brackets): Fireball 30 / 0 [194 / 3,263]; Circle of Death 7 / 23 [7 / 4,013]; Ice Storm 4 / 26; Sleet cast 30 / 1, drop 30 / 1 [30 / 31 each at P2]; Darkness 30 / 1, Daylight over Darkness 30 / 1 [90, 150 FR at P0b]; Web 30 / 1 (Web now dims light), Grease 0 / 31, Spike Growth 0 / 31; Wall of Stone 30 / 0 [337 FR]; Turn Undead 0 / 30 [31 FR]; plate→gas vent 30 / 31 [32 / 633]; plate→3 portals 30 / 31 [1,006 ms, 90 FR]; Gust walk 1 / 60 per step [30 FR per step]; Spirit Guardians walk 3–9 / 90 per 3-cell move [90 FR]; Thunderwave→Spike Growth 30 / 0; round step 0 FR; summon cast 31 / 2, drop 30 / 1; Delayed Blast 30 / 2. Every row is within the §6 conservative "30 P per group". Fixes made for the gate: anchor loss inline / anchor movement in phase B (a destroyed trap no longer strikes inside its own group), one group per plate press, Daylight's install and dispel in one group, zone-membership/terrain facts read no occupancy (anchored zones no longer force a full recompute mid-step), and a group declares the facts that complete right after its settle (`OpenGroup.completes_after`) so observers do not settle a zone's own change twice.
+- 2026-10-17: **Re-measure after P3** (ordinary = timing-qualified, archive of f3728625a, `p3gate_*_ordinary.json`; P0b baseline in brackets): Sleet cast 2.0 s [228.5 s], drop 0.89 s [30.1 s]; Fireball 0.79 s [6.8 s]; Ice Storm 0.41 s [9.6 s]; Circle of Death 1.08 s [1.37 s]; Spike Growth 89 / 41 ms [8.1 / 7.1 s]; Web 204 / 198 ms [3.7 / 3.0 s]; Grease 87 ms [1.1 s]; Darkness 1.20 s [2.8 s], Daylight 1.39 s [4.8 s]; Wall of Stone 576 ms [3.2 s]; plate→vent 263 ms [750 ms]; plate→3 portals 431 ms [1,006 ms]; Turn Undead 123 ms [387 ms]; Gust walk ~171 ms per step [~480–770 ms]; Spirit Guardians walk ~410–690 ms per 3-cell move [~1.1–1.5 s]; Thunderwave into Spike Growth 252 ms [781 ms]; summon cast/drop 276 / 211 ms [266 / 201 ms]; turn handoff 12–15 ms; first AI decision 1.81 s, then 0.2–0.7 s (non-sensory: discovery, PD1b). The caster Choices row was not re-timed (373.7 s pre-PD1b at P0b; PD1a counts 373 s): it is PD1b's gate.
