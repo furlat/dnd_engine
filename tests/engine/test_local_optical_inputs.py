@@ -86,7 +86,7 @@ def test_snapshot_keeps_explicit_optics_on_removed_support_and_tracks_removal():
     before = grid.observer_spatial_revisions(observer)
     grid.remove_optical_obscurement(owner)
     assert not grid.capture_optical_obscurements((0, 0), 2)
-    assert grid.observer_spatial_revisions(observer).optical > before.optical
+    assert grid.observer_spatial_revisions(observer).obscurement > before.obscurement
 
 
 def test_subscriber_revisions_follow_local_geometry_light_and_occupancy():
@@ -125,13 +125,13 @@ def test_area_move_and_footprint_change_commit_optics_before_light_children():
     darkness = DarknessZone(source_entity_uuid=source, position=(1, 0), area=Sphere(radius_feet=0, propagation="connected"))
     darkness.activate(parent_event=None)
     grid.subscribe_to_cells(observer, {(1, 0), (3, 0)})
-    initial = grid.observer_spatial_revisions(observer).optical
+    initial = grid.observer_spatial_revisions(observer).obscurement
     observations = []
 
     def observe_light(event, _source_uuid):
         observations.append((set(darkness.affected_positions),
             grid.get_optical_obscurements_at((3, 0)),
-            grid.observer_spatial_revisions(observer).optical))
+            grid.observer_spatial_revisions(observer).obscurement))
         return None
 
     EventQueue.add_event_handler(EventHandler(source_entity_uuid=source,
@@ -143,7 +143,7 @@ def test_area_move_and_footprint_change_commit_optics_before_light_children():
     assert added and all(row[1] == {OpticalObscurement.MAGICAL_DARKNESS} and row[2] > initial
                          for row in added)
     observations.clear()
-    initial = grid.observer_spatial_revisions(observer).optical
+    initial = grid.observer_spatial_revisions(observer).obscurement
     darkness.change_footprint({(4, 0)}, parent_event=cause(source))
     assert observations and all(not row[1] and row[2] > initial for row in observations)
     assert not grid.capture_optical_obscurements((3, 0), 0)

@@ -81,6 +81,7 @@ class ObserverRevisions(NamedTuple):
     illumination: int = 0
     propagation: int = 0
     occupancy: int = 0
+    obscurement: int = 0
 
 
 __all__ = [

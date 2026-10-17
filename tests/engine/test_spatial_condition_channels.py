@@ -60,6 +60,12 @@ def _counted(operation: Callable[[], object]) -> Counter[str]:
     return counts
 
 
+def _sight_revisions(grid, observer_uuid: UUID) -> tuple[int, int]:
+    """The observer revisions of physical sight and route obscurement."""
+    revisions = grid.observer_spatial_revisions(observer_uuid)
+    return revisions.optical, revisions.obscurement
+
+
 def _observe(observer: Entity) -> Observation:
     observer.materialize_navigation(max_distance=8)
     snapshot = capture_senses_snapshot(observer.senses)
@@ -87,13 +93,13 @@ def check_zone(case: ZoneCase) -> None:
     before = _observe(near)
     assert before.hazards == dict.fromkeys(ZONE_CELLS, False), case.name
     assert BEYOND in before.visible, case.name
-    optical_before = {o.uuid: grid.observer_spatial_revisions(o.uuid).optical for o in observers}
+    optical_before = {o.uuid: _sight_revisions(grid, o.uuid) for o in observers}
 
     source = uuid4()
     zone = case.build(source)
     counts = _counted(lambda: zone.activate(parent_event=_cause(source)))
     assert zone.affected_positions == ZONE_CELLS, case.name
-    optical_moved = {o.uuid: grid.observer_spatial_revisions(o.uuid).optical != optical_before[o.uuid]
+    optical_moved = {o.uuid: _sight_revisions(grid, o.uuid) != optical_before[o.uuid]
                      for o in observers}
     assert optical_moved == dict.fromkeys(optical_before, case.moves_optical), case.name
     if not case.moves_optical:
@@ -111,11 +117,11 @@ def check_zone(case: ZoneCase) -> None:
         assert installed_cost is not None, case.name
         assert (installed_cost > before_cost) is case.difficult, case.name
 
-    optical_installed = {o.uuid: grid.observer_spatial_revisions(o.uuid).optical for o in observers}
+    optical_installed = {o.uuid: _sight_revisions(grid, o.uuid) for o in observers}
     counts = _counted(lambda: zone.deactivate(parent_event=_cause(source)))
     if not case.moves_optical:
         assert counts["sensory.full_recompute"] == 0, (case.name, counts)
-        assert {o.uuid: grid.observer_spatial_revisions(o.uuid).optical
+        assert {o.uuid: _sight_revisions(grid, o.uuid)
                 for o in observers} == optical_installed, case.name
     assert _observe(near) == before, case.name
 

@@ -561,12 +561,12 @@ class GridMap:
     def _bump_observer_revisions(
         self, channels: frozenset[SpatialChannel], positions: Optional[Collection[Tuple[int, int]]],
     ) -> None:
-        # An observer's field reads physical sight and route obscurement alike.
-        optical = int(SpatialChannel.OPTICAL in channels or SpatialChannel.OBSCUREMENT in channels)
+        optical = int(SpatialChannel.OPTICAL in channels)
         illumination = int(SpatialChannel.ILLUMINATION in channels)
         propagation = int(SpatialChannel.PROPAGATION in channels)
         occupancy = int(SpatialChannel.OCCUPANCY in channels)
-        if not (optical or illumination or propagation or occupancy):
+        obscurement = int(SpatialChannel.OBSCUREMENT in channels)
+        if not (optical or illumination or propagation or occupancy or obscurement):
             return
         observers = (self._observer_revisions if positions is None
                      else self.get_dependent_observers_for_cells(positions))
@@ -577,6 +577,7 @@ class GridMap:
                 illumination=current.illumination + illumination,
                 propagation=current.propagation + propagation,
                 occupancy=current.occupancy + occupancy,
+                obscurement=current.obscurement + obscurement,
             )
 
     @property

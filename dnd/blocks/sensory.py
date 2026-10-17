@@ -882,6 +882,7 @@ class SpatialSensesSystem:
             and not previous_field.volume_fields
             and all(route[0] for route in previous_field.optical_routes.values())
             and previous_field.revisions.optical == revisions.optical
+            and previous_field.revisions.obscurement == revisions.obscurement
             and previous_field.revisions.propagation == revisions.propagation
             and revisions.illumination - previous_field.revisions.illumination in (0, 1)
         )
@@ -983,8 +984,10 @@ class SpatialSensesSystem:
         if diagnostic:
             record_action_timing("sensory.recompute.nonvisual_geometry_ms", phase_started)
             phase_started = time.perf_counter()
+        # Side structures change only with an optical or propagation revision
+        # (obscurement and light leave them): the retained snapshot shifts.
         previous_boundaries = (previous_field.boundaries
-            if light_event is not None and previous_field is not None
+            if previous_field is not None
             and previous_field.revisions.optical == revisions.optical
             and previous_field.revisions.propagation == revisions.propagation else None)
         boundary_positions = optical_candidates | set().union(*nonvisual_positions.values())
@@ -2126,6 +2129,7 @@ class SpatialSensesSystem:
         revisions = get_map().observer_spatial_revisions(observer_uuid)
         return (
             field.revisions.optical == revisions.optical
+            and field.revisions.obscurement == revisions.obscurement
             # Propagation geometry reaches the field only through non-visual senses.
             and (field.revisions.propagation == revisions.propagation or not field.nonvisual_positions)
             and (not illumination or field.revisions.illumination == revisions.illumination)
