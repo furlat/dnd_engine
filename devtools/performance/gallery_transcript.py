@@ -26,6 +26,7 @@ and healing rolls: those now carry the read's target where the base left the val
 """
 
 import argparse
+import dataclasses
 import importlib.util
 import json
 import random
@@ -81,7 +82,7 @@ def record(tree: Path, out: Path) -> None:
                'identified': {str(k): sorted(map(str, v)) for k, v in event.identified_entity_observer_uuids.items()},
                'located': {str(k): sorted(map(str, v)) for k, v in event.located_entity_observer_uuids.items()},
                'located_pos': {str(k): sorted(map(str, v)) for k, v in event.located_position_observer_uuids.items()},
-               'presentations': [presentation.model_dump(mode='json')
+               'presentations': [dataclasses.asdict(presentation)
                                  for presentation in event.effective_handler_presentations]}
         if event.combat_log is not None:
             row['log'] = event.combat_log.model_dump(mode='json')
