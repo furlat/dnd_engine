@@ -182,7 +182,7 @@ def test_full_stack_merge_removes_source_child_in_cold_view(cache_world):
     assert incoming.uuid not in actor.inventory.items
     assert held.stack_count == 5
     assert state.objects[chest.uuid].contained_items == ()
-    assert held.uuid in state.actors[actor.uuid].controlled_items and state.items[held.uuid]["stack_count"] == 5
+    assert held.uuid in state.actors[actor.uuid].controlled_items and state.items[held.uuid].state.stack_count == 5
 
 
 def test_losing_sight_clears_contents_and_does_not_discover_private_items(cache_world):

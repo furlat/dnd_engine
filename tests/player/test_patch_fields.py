@@ -1,7 +1,7 @@
 """A body or item patch can carry every field of the value it patches.
 
 A field added to `PlayerActor` or `ItemPresentationState` without its patch
-field would never reach a seat after first acquisition.
+field or item component would never reach a seat.
 """
 
 from dataclasses import fields, replace
@@ -11,7 +11,7 @@ from uuid import uuid4
 from dnd.core.equipment_types import WeaponSet
 from dnd.core.item_types import ItemPresentationState
 from dnd.core.life_types import LifeState
-from dnd.player.facts import ITEM_LOOK_FIELDS, ActorChanges, ItemFields, PlayerActor, PlayerObservation, VisualLoadout
+from dnd.player.facts import ActorChanges, ItemLook, ItemProfile, ItemState, PlayerActor, PlayerObservation, VisualLoadout
 from dnd.player.projection import actor_changes
 from dnd.player.reduction import observed_actor
 from dnd.types.appearance import AppearanceConfig
@@ -31,6 +31,7 @@ def test_actor_changes_cover_every_body_field():
     assert actor_changes(hurt, hurt) == {}
 
 
-def test_item_fields_cover_every_item_field_and_the_look():
-    assert set(get_type_hints(ItemFields)) == set(ItemPresentationState.model_fields) - {"item_uuid"}
-    assert set(ITEM_LOOK_FIELDS) <= set(get_type_hints(ItemFields))
+def test_item_components_partition_every_item_field():
+    components = [{row.name for row in fields(value)} for value in (ItemLook, ItemProfile, ItemState)]
+    assert sum(len(names) for names in components) == len(set().union(*components))
+    assert set().union(*components) == set(ItemPresentationState.model_fields) - {"item_uuid"}

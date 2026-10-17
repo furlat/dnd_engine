@@ -8,7 +8,7 @@ from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.player.content import UIContentManifest
 from dnd.core.content.descriptors import ContentDescriptor, ContentVisibility
 from dnd.player.facts import (
-    ActionFact, ActorChanges, AttackFact, SpellFact, ConditionChangeFact, ConditionFact, EquipmentFact, ItemFields,
+    ActionFact, ActorChanges, AttackFact, SpellFact, ConditionChangeFact, ConditionFact, EquipmentFact, ItemLook,
     ItemPatch, MechanismActivationFact, ObjectDestroyedFact, PlayerActor, PlayerLineage, PlayerState,
     SensoryFact, VisualLoadout,
 )
@@ -22,10 +22,10 @@ def _body_content(creature_content_ref: str | None, visual_loadout: VisualLoadou
     return known
 
 
-def _item_content(fields: ItemFields) -> set[str]:
-    known = {fields["item_id"]} if "item_id" in fields else set()
-    known.update(effect.behavior_id for effect in fields.get("item_effects", ()))
-    return known
+def _item_content(look: ItemLook | None) -> set[str]:
+    if look is None:
+        return set()
+    return {look.item_id, *(effect.behavior_id for effect in look.item_effects)}
 
 
 def _actor_content(actor: PlayerActor) -> set[str]:
@@ -37,7 +37,7 @@ def _patch_content(changes: ActorChanges, items: tuple[ItemPatch, ...]) -> set[s
     known = _body_content(changes.get("creature_content_ref"), changes.get("visual_loadout"),
         changes.get("conditions", ()))
     for row in items:
-        known.update(_item_content(row.changes))
+        known.update(_item_content(row.look))
     return known
 
 
@@ -103,7 +103,7 @@ def admitted_content(catalog: UIContentManifest, state: PlayerState,
     for actor in state.actors.values():
         known.update(_actor_content(actor))
     for record in state.items.values():
-        known.update(_item_content(record))
+        known.update(_item_content(record.look))
     known.update(row.item.item_id for row in state.objects.values())
     known.update(effect.behavior_id for row in state.objects.values() for effect in row.item.item_effects)
     known.update(item.item_id for row in state.objects.values() for item in row.contained_items or ())

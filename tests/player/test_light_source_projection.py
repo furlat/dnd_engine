@@ -15,7 +15,6 @@ from dnd.game import Game
 from dnd.items.torches import build_torch
 from dnd.player.capture import CompletedLineage, ObjectiveRow, capture_interval, capture_lineages
 from dnd.player.audience import PlayerAudience
-from dnd.player.facts import ITEM_LOOK_FIELDS
 from dnd.player.projection import begin_projection, project_lineage
 from dnd.player.event_record import RecordedEvent, encode_event
 from dnd.player.reduction import reduce_initialization, reduce_lineage
@@ -109,7 +108,8 @@ def test_carried_source_keeps_inventory_private_to_controller(world):
             if observer is owner:
                 assert torch.uuid in actor.controlled_items
                 item = state.items[torch.uuid]
-                assert (item["is_lit"], item["bright_radius_feet"], item["dim_radius_feet"]) == (lit, 35, 15)
+                assert item.state is not None
+                assert (item.state.is_lit, item.look.bright_radius_feet, item.look.dim_radius_feet) == (lit, 35, 15)
             else:
                 assert actor.controlled_items is None
                 assert torch.uuid not in state.objects
@@ -140,11 +140,11 @@ def test_disclosed_equipment_source_after_values_preserve_activation(world, lit)
     actor = state.actors[owner.uuid]
     source, = actor.visual_loadout.layers
     assert actor.controlled_items is None
-    look = state.items[source.item_uuid]
+    record = state.items[source.item_uuid]
     # A foreign equipped item discloses its look only.
-    assert set(look) == set(ITEM_LOOK_FIELDS)
-    assert (source.is_lit, look["very_bright_radius_feet"],
-        look["bright_radius_feet"], look["dim_radius_feet"]) == (lit, 6, 19, 31)
+    assert record.profile is None and record.state is None
+    assert (source.is_lit, record.look.very_bright_radius_feet,
+        record.look.bright_radius_feet, record.look.dim_radius_feet) == (lit, 6, 19, 31)
 
 
 @pytest.mark.parametrize('equipped', (False, True))

@@ -48,12 +48,12 @@ from dnd.player.facts import (
     MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage,
     PlayerNode, PlayerObject, PlayerObservation, PlayerState, PlayerHUDSnapshot, CombatLogAppend,
     PlayerWorld, SensoryFact, ShoveFact, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
-    VersionRow, VisualItem, VisualLoadout, WorldUpdate, ItemFields, ItemPatch, ITEM_LOOK_FIELDS, TileFieldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
+    VersionRow, VisualItem, VisualLoadout, WorldUpdate, ItemLook, ItemPatch, ItemProfile, ItemState, PlayerItem, TileFieldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
 )
 from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
-from dnd.player.reduction import (apply_body_fact, apply_sensed_fact, apply_world_update, commit_current,
-    observe_body, observed_actor, occurrence_order)
+from dnd.player.reduction import (apply_body_fact, apply_sensed_fact, apply_world_update, change_membership,
+    commit_current, observe_body, observed_actor, occurrence_order)
 from dnd.player.compatibility import legacy_damage_reference
 from dnd.world_facts import world_event_objects, world_event_footprints, world_objects_at
 
@@ -108,25 +108,57 @@ def _visual_loadout(actor: ActorState) -> VisualLoadout:
         for slot, identity in actor.equipment))
 
 
-def _item_fields(item: ItemPresentationState) -> ItemFields:
-    """Every field of an item instance, without its identity."""
-    return ItemFields(**{key: value for key, value in item if key != "item_uuid"})
+def _item_look(item: ItemPresentationState) -> ItemLook:
+    return ItemLook(item_id=item.item_id, item_kind=item.item_kind, visual_item_name=item.visual_item_name,
+        visual_variant_id=item.visual_variant_id, equipped_visual_policy=item.equipped_visual_policy,
+        item_effects=item.item_effects, very_bright_radius_feet=item.very_bright_radius_feet,
+        bright_radius_feet=item.bright_radius_feet, dim_radius_feet=item.dim_radius_feet)
+
+
+def _item_profile(item: ItemPresentationState) -> ItemProfile:
+    return ItemProfile(name=item.name, description=item.description, rarity=item.rarity, weight=item.weight,
+        value=item.value, tags=item.tags, is_pickable=item.is_pickable, is_equippable=item.is_equippable,
+        is_usable=item.is_usable, is_targetable=item.is_targetable, door_mechanism=item.door_mechanism,
+        door_swing=item.door_swing, stack_id=item.stack_id, damage_dice=item.damage_dice,
+        damage_type=item.damage_type, weapon_properties=item.weapon_properties, armor_type=item.armor_type,
+        armor_ac=item.armor_ac, shield_ac_bonus=item.shield_ac_bonus, max_charges=item.max_charges,
+        max_stack=item.max_stack, is_consumable=item.is_consumable, map_char=item.map_char,
+        include_in_senses_objects=item.include_in_senses_objects,
+        include_in_adjacent_senses_objects=item.include_in_adjacent_senses_objects,
+        include_in_available_object_actions=item.include_in_available_object_actions,
+        maximum_hit_points=item.maximum_hit_points, concentration_capacity=item.concentration_capacity,
+        boundary_structure=item.boundary_structure)
+
+
+def _item_state(item: ItemPresentationState) -> ItemState:
+    return ItemState(stack_count=item.stack_count, charges=item.charges, integrity=item.integrity,
+        destruction_outcome=item.destruction_outcome, remnant_state=item.remnant_state,
+        current_hit_points=item.current_hit_points, concentration_slots=item.concentration_slots,
+        construction_owner_uuid=item.construction_owner_uuid, construction_geometry=item.construction_geometry,
+        construction_suppressions=item.construction_suppressions, known_to_creator=item.known_to_creator,
+        supported_by_uuid=item.supported_by_uuid, contact_passage=item.contact_passage,
+        surface_residues=item.surface_residues, linked_spatial_condition_uuid=item.linked_spatial_condition_uuid,
+        is_open=item.is_open, is_engaged=item.is_engaged, blocks_movement=item.blocks_movement,
+        blocks_optics=item.blocks_optics, blocks_propagation=item.blocks_propagation, is_lit=item.is_lit)
 
 
 def _item_records(actor: ActorState, observer: PlayerAudience) -> tuple[ItemPatch, ...]:
-    """The complete disclosed record of each item a body shows: every field of its controller's
-    inventory, the look of an equipped item to anyone else."""
+    """Each item a body shows, with every component the seat may know: look, profile and state of
+    its controller's inventory, the look of an equipped item to anyone else."""
     if observer.controls(actor.uuid):
-        return tuple(ItemPatch(item_uuid=item.item_uuid, changes=_item_fields(item)) for item in actor.items)
+        return tuple(ItemPatch(item_uuid=item.item_uuid, look=_item_look(item), profile=_item_profile(item),
+            state=_item_state(item)) for item in actor.items)
     items = {item.item_uuid: item for item in actor.items}
-    return tuple(ItemPatch(item_uuid=identity, changes=ItemFields(**{key: value for key, value in items[identity]
-        if key in ITEM_LOOK_FIELDS})) for _, identity in actor.equipment)
+    return tuple(ItemPatch(item_uuid=identity, look=_item_look(items[identity]))
+        for identity in dict.fromkeys(identity for _, identity in actor.equipment))
 
 
-def item_changes(before: ItemFields | None, after: ItemFields) -> ItemFields:
-    """The patch that turns the seat's record `before` (absent: every disclosed field) into `after`."""
-    return ItemFields(**{key: value for key, value in after.items()
-        if before is None or key not in before or before[key] != value})
+def item_patch(before: PlayerItem | None, after: ItemPatch) -> ItemPatch:
+    """The components of a disclosed record `after` that the seat's record `before` lacks or holds otherwise."""
+    return ItemPatch(item_uuid=after.item_uuid,
+        look=after.look if before is None or before.look != after.look else None,
+        profile=after.profile if before is None or before.profile != after.profile else None,
+        state=after.state if before is None or before.state != after.state else None)
 
 
 def _public_actor(actor: ActorState, observer: PlayerAudience) -> PlayerActor:
@@ -211,7 +243,6 @@ def _gear_observation(event_uuid: UUID, actor: ActorState, observer: PlayerAudie
 
 def _sensory_fact(event: SensoryUpdateEvent) -> SensoryFact:
     return SensoryFact(observer_uuid=event.observer_uuid, initial=event.initial,
-        observed_changes=event.observed_changes,
         observer_position=event.observer_position, observer_position_changed=event.observer_position_changed,
         effective_light_levels_changed=dict(event.effective_light_levels_changed),
         hazardous_cells_changed=dict(event.hazardous_cells_changed),
@@ -1101,9 +1132,8 @@ def _disclosed_changes(changes: ActorChanges, disclosed: set[UUID]) -> ActorChan
 
 
 def _disclosed_items(patches: tuple[ItemPatch, ...], disclosed: set[UUID]) -> tuple[ItemPatch, ...]:
-    return tuple(replace(row, changes={**row.changes, "concentration_slots": _disclosed_slots(
-        row.changes["concentration_slots"], disclosed)}) if "concentration_slots" in row.changes else row
-        for row in patches)
+    return tuple(replace(row, state=replace(row.state, concentration_slots=_disclosed_slots(
+        row.state.concentration_slots, disclosed))) if row.state is not None else row for row in patches)
 
 
 def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
@@ -1134,11 +1164,11 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
     nodes: list[PlayerNode] = []
     # The actors the seat has bodies for, and the condition memberships it holds, at this point of the walk.
     known: set[UUID] = set(remembered.actors)
-    members: dict[UUID, set[UUID]] = {}
+    members: dict[UUID, dict[UUID, ConditionFact]] = {}
 
-    def held_conditions(identity: UUID) -> set[UUID]:
+    def held_conditions(identity: UUID) -> dict[UUID, ConditionFact]:
         if identity not in members:
-            members[identity] = {row.condition_uuid for row in remembered.actors[identity].conditions}
+            members[identity] = {row.condition_uuid: row for row in remembered.actors[identity].conditions}
         return members[identity]
 
     superseded: set[UUID] = set()
@@ -1206,7 +1236,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                 changes=actor_changes(None, observed), contact=admission.contact,
                 items=_item_records(admission.actor, observer)))
             known.add(observed.uuid)
-            members[observed.uuid] = {row.condition_uuid for row in observed.conditions}
+            members[observed.uuid] = {row.condition_uuid: row for row in observed.conditions}
             admission = next(pending, None)
         if not event.canceled:
             if isinstance(event, EntityCreatedEvent):
@@ -1307,11 +1337,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                     condition=removed)
                 known_removals.add(event.uuid)
         if isinstance(fact, ConditionChangeFact) and not event.canceled:
-            held = held_conditions(fact.target_entity_uuid)
-            if fact.event_type is EventType.CONDITION_REMOVAL:
-                held.discard(fact.condition.condition_uuid)
-            elif fact.condition.category is not ConditionCategory.INTERNAL:
-                held.add(fact.condition.condition_uuid)
+            change_membership(held_conditions(fact.target_entity_uuid), fact)
         if isinstance(fact, SpatialFact) and not event.canceled:
             if commit_current(remembered, fact, source_cursor=indexes[event.uuid], version_cursors=indexes):
                 apply_sensed_fact(remembered, fact, known, source_cursor=indexes[event.uuid],
@@ -1393,11 +1419,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
     for index, node in enumerate(nodes):
         if isinstance(node.fact, SensoryFact):
             nodes[index] = replace(node, fact=replace(node.fact,
-                cause_event_uuid=node.fact.cause_event_uuid if node.fact.cause_event_uuid in disclosed_versions else None,
-                observed_changes=tuple(reference.model_copy(update={
-                    "resolution_ref": reference.resolution_ref if reference.resolution_ref is not None
-                        and reference.resolution_ref.lineage_uuid in disclosed else None})
-                    for reference in node.fact.observed_changes if reference.source_event_uuid in disclosed_versions)))
+                cause_event_uuid=node.fact.cause_event_uuid if node.fact.cause_event_uuid in disclosed_versions else None))
         elif isinstance(node.fact, SpellFact) and node.fact.application is not None:
             if node.fact.application.lineage_uuid not in disclosed:
                 nodes[index] = replace(node, fact=replace(node.fact, application=None))
@@ -1467,9 +1489,8 @@ def _public_changes(changes: ActorChanges, cursors: dict[int, int], versions: di
 
 
 def _public_items(patches: tuple[ItemPatch, ...], cursors: dict[int, int], *, owned: bool) -> tuple[ItemPatch, ...]:
-    return tuple(replace(row, changes={**row.changes, "item_effects": _public_item_effects(
-        row.changes["item_effects"], cursors, owned=owned)}) if "item_effects" in row.changes else row
-        for row in patches)
+    return tuple(replace(row, look=replace(row.look, item_effects=_public_item_effects(
+        row.look.item_effects, cursors, owned=owned))) if row.look is not None else row for row in patches)
 
 
 def _observe_spatial_revisions(state: "ProjectionState", nodes: tuple[PlayerNode, ...]) -> None:
@@ -1569,9 +1590,7 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
             spatial = {identity: effect.model_copy(update={
                 "owner_revision": state.spatial_versions[(identity, effect.owner_revision)]})
                 for identity, effect in fact.spatial_effects_changed.items()}
-            fact = replace(fact, spatial_effects_changed=spatial, observed_changes=tuple(reference.model_copy(update={
-                "source_index": state.public_versions[reference.source_event_uuid]})
-                for reference in fact.observed_changes if reference.source_event_uuid in state.public_versions))
+            fact = replace(fact, spatial_effects_changed=spatial)
         elif isinstance(fact, ActionFact) and fact.reaction is not None:
             fact = replace(fact, reaction=replace(fact.reaction, triggered_lineage_uuid=(fact.reaction.triggered_lineage_uuid
                 if fact.reaction.triggered_lineage_uuid in state.disclosed_lineages else None)))
@@ -1640,8 +1659,8 @@ class ProjectionState:
 
 def _item_patches(remembered: PlayerState, records: tuple[ItemPatch, ...]) -> tuple[ItemPatch, ...]:
     """Each disclosed record as the patch against the seat's record of that item; unchanged items drop out."""
-    return tuple(patch for row in records
-        if (patch := replace(row, changes=item_changes(remembered.items.get(row.item_uuid), row.changes))).changes)
+    return tuple(patch for row in records if (patch := item_patch(remembered.items.get(row.item_uuid), row)).look
+        is not None or patch.profile is not None or patch.state is not None)
 
 
 def _emit_bodies(remembered: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
@@ -1672,7 +1691,7 @@ def _emit_bodies(remembered: PlayerState, nodes: tuple[PlayerNode, ...], version
                 emitted.append(patch)
             case PlayerNode():
                 fact = row.fact
-                if isinstance(fact, EquipmentFact) and fact.source_entity_uuid in remembered.actors:
+                if isinstance(fact, EquipmentFact):
                     before = remembered.actors[fact.source_entity_uuid]
                     fact = replace(fact, changes=actor_changes(before, replace(before, **fact.changes)),
                         items=_item_patches(remembered, fact.items))

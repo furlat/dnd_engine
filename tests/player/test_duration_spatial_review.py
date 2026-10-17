@@ -83,7 +83,7 @@ def test_item_duration_survival_updates_owned_equipment_without_reapplying(world
     turn = owner.on_turn_start(encounter_uuid, round_number=1)
     state, _ = consume(projection, state, (turn,))
     assert weapon.uuid in state.actors[owner.uuid].controlled_items
-    effect = next(effect for effect in state.items[weapon.uuid]["item_effects"] if effect.effect_uuid == condition.uuid)
+    effect = next(effect for effect in state.items[weapon.uuid].look.item_effects if effect.effect_uuid == condition.uuid)
     assert condition.duration.duration == 2
     assert effect.duration is not None and effect.duration.remaining_rounds == 2
     assert len(weapon.get_extra_damages()) == 1

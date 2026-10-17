@@ -47,7 +47,7 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
     template = next(node.fact for node in initial.nodes
         if isinstance(node.fact, SensoryFact) and node.fact.observer_uuid == owner.uuid)
     sensory = replace(template, initial=False, observer_position_changed=False,
-        effective_light_levels_changed={}, cause_event_uuid=None, observed_changes=(),
+        effective_light_levels_changed={}, cause_event_uuid=None,
         visible_cells_added=(), visible_cells_removed=(), seen_cells_added=(),
         entity_contacts_changed={}, entity_contacts_removed=frozenset(),
         object_contacts_changed={}, object_contacts_removed=frozenset(),

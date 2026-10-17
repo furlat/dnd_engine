@@ -21,7 +21,7 @@ from dnd.core.combat_log import CombatLogEntry
 from dnd.core.content.identities import HandlerDispatchOutcome
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.creature_types import AttackOutcome
-from dnd.core.effect_types import ObjectSectionVolume, ObservedChangeRef, ApplicationMembership, ResolutionRef, EffectPropagationLink
+from dnd.core.effect_types import ObjectSectionVolume, ApplicationMembership, ResolutionRef, EffectPropagationLink
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.types.event_facts import EventPhase, EventType, LandingKind, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState, WorldTileChanges
 from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot, ItemResourceChange, ItemEffectPresentationState,
@@ -100,20 +100,27 @@ class CombatLogAppend:
     entry: CombatLogEntry
 
 
-class ItemFields(TypedDict, total=False):
-    """An item instance's disclosed fields (`ItemPresentationState` without its identity).
-
-    As a record it holds what the seat knows of the item: the look of an item
-    equipped on an observed body (`ITEM_LOOK_FIELDS`), every field for an item
-    of a controlled inventory. As a patch, present fields replace the known ones.
-    """
-
-    __pydantic_config__ = ConfigDict(extra="forbid")
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ItemLook:
+    """What any viewer of an equipped item sees of it; `is_lit` travels in its layer."""
 
     item_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")]
+    item_kind: ItemPresentationKind
+    visual_item_name: str
+    visual_variant_id: str | None
+    equipped_visual_policy: EquippedVisualPolicy
+    item_effects: tuple[ItemEffectPresentationState, ...]
+    very_bright_radius_feet: Annotated[int, Field(ge=0)] | None
+    bright_radius_feet: Annotated[int, Field(ge=0)] | None
+    dim_radius_feet: Annotated[int, Field(ge=0)] | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ItemProfile:
+    """What a controlled item is: the fields its use does not change."""
+
     name: str
     description: str | None
-    item_kind: ItemPresentationKind
     rarity: ItemRarity
     weight: float
     value: int
@@ -124,34 +131,36 @@ class ItemFields(TypedDict, total=False):
     is_targetable: bool
     door_mechanism: DoorMechanism | None
     door_swing: DoorSwing | None
-    remnant_state: ItemRemnantState | None
-    integrity: ItemIntegrity
-    destruction_outcome: str | None
     stack_id: str | None
-    visual_item_name: str
-    visual_variant_id: str | None
-    item_effects: tuple[ItemEffectPresentationState, ...]
-    equipped_visual_policy: EquippedVisualPolicy
     damage_dice: str | None
     damage_type: str | None
     weapon_properties: tuple[str, ...]
     armor_type: str | None
     armor_ac: int | None
     shield_ac_bonus: int | None
-    charges: Annotated[int, Field(ge=-1)] | None
     max_charges: Annotated[int, Field(ge=-1)] | None
-    stack_count: Annotated[int, Field(ge=0)]
     max_stack: Annotated[int, Field(ge=1)]
     is_consumable: bool
     map_char: str
     include_in_senses_objects: bool
     include_in_adjacent_senses_objects: bool
     include_in_available_object_actions: bool
-    current_hit_points: Annotated[int, Field(ge=0)] | None
     maximum_hit_points: Annotated[int, Field(ge=0)] | None
     concentration_capacity: Annotated[int, Field(ge=0)]
-    concentration_slots: tuple[ItemConcentrationSlot, ...]
     boundary_structure: BoundaryStructure | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ItemState:
+    """What a controlled item's use and the world change."""
+
+    stack_count: Annotated[int, Field(ge=0)]
+    charges: Annotated[int, Field(ge=-1)] | None
+    integrity: ItemIntegrity
+    destruction_outcome: str | None
+    remnant_state: ItemRemnantState | None
+    current_hit_points: Annotated[int, Field(ge=0)] | None
+    concentration_slots: tuple[ItemConcentrationSlot, ...]
     construction_owner_uuid: UUID | None
     construction_geometry: AoEPresentationGeometry | None
     construction_suppressions: tuple[SpellSuppression, ...]
@@ -166,22 +175,28 @@ class ItemFields(TypedDict, total=False):
     blocks_optics: bool
     blocks_propagation: bool
     is_lit: bool | None
-    very_bright_radius_feet: Annotated[int, Field(ge=0)] | None
-    bright_radius_feet: Annotated[int, Field(ge=0)] | None
-    dim_radius_feet: Annotated[int, Field(ge=0)] | None
 
 
-# What any viewer of an equipped item sees of it; `is_lit` travels in its layer.
-ITEM_LOOK_FIELDS = ("item_id", "item_kind", "visual_item_name", "visual_variant_id", "equipped_visual_policy",
-    "item_effects", "very_bright_radius_feet", "bright_radius_feet", "dim_radius_feet")
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlayerItem:
+    """What a seat knows of one item instance: its look and, once it controlled the item, its profile and state.
+
+    The profile and state are current while the item is in a controlled inventory.
+    """
+
+    look: ItemLook
+    profile: ItemProfile | None = None
+    state: ItemState | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ItemPatch:
-    """One item's fields new to the seat: its whole disclosed record the first time, then what changed."""
+    """One item's components new to the seat: all it may know the first time, then the components that changed."""
 
     item_uuid: UUID
-    changes: ItemFields
+    look: ItemLook | None = None
+    profile: ItemProfile | None = None
+    state: ItemState | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -609,7 +624,6 @@ class ActionFact:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SensoryFact:
     kind: Literal["sensory"] = "sensory"
-    observed_changes: tuple[ObservedChangeRef, ...] = ()
     observer_uuid: UUID
     initial: bool
     observer_position: tuple[int, int]
@@ -889,8 +903,8 @@ class PlayerState:
     # Keep spatial commit order across separately timed presentation groups.
     spatial_commit_cursors: dict[UUID, int] = field(default_factory=dict)
     actors: dict[UUID, PlayerActor] = field(default_factory=dict)
-    # Every item instance the seat has seen, by uuid: its look or, once controlled, its whole record.
-    items: dict[UUID, ItemFields] = field(default_factory=dict)
+    # Every item instance the seat has seen, by uuid.
+    items: dict[UUID, PlayerItem] = field(default_factory=dict)
     current_actor_uuid: UUID | None = None
     round_number: int = 0
     hud_snapshot: PlayerHUDSnapshot | None = None

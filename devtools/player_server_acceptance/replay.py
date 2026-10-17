@@ -18,7 +18,7 @@ from typing import Any
 from dnd_player import transport as sdk
 from pydantic import TypeAdapter
 
-from dnd.player.facts import ITEM_LOOK_FIELDS, PlayerState
+from dnd.player.facts import PlayerState
 from dnd.player.reduction import reduce_initialization, reduce_operation
 from server.protocol import InitializationResponse, PlayerOperation
 
@@ -75,9 +75,6 @@ def check_group(group: dict, controlled: set[str], events: dict[str, int], linea
         if fact is None:
             continue
         counts['fact:' + fact['kind']] += 1
-        if fact['kind'] == 'sensory':
-            for change in fact['observed_changes']:
-                require(events.get(change['source_event_uuid']) == change['source_index'], 'Sensory occurrence reference is not closed')
         if fact['kind'] == 'spatial' and fact['commit_event_uuid'] is not None:
             require(fact['commit_event_uuid'] in events, 'Spatial commit occurrence is not disclosed')
         if fact['kind'] == 'equipment':
@@ -103,7 +100,7 @@ def check_body(actor_uuid: str, changes: dict, items: list, controlled: set[str]
     if actor_uuid in controlled:
         return
     require(changes.get('controlled_items') is None, 'Foreign body patch exposes private inventory')
-    require(all(set(row['changes']) <= set(ITEM_LOOK_FIELDS) for row in items), 'Foreign item patch exposes private fields')
+    require(all(row['profile'] is None and row['state'] is None for row in items), 'Foreign item patch exposes private fields')
 
 
 def replay_stream(directory: Path) -> dict[str, Any]:

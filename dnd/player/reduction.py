@@ -15,7 +15,7 @@ from dnd.types.event_facts import EventType, SpatialChangeType
 from dnd.player.audience import (AudienceComposition, apply_current_audience, audience_view,
     begin_audience_composition, observe_audience, resolve_audience)
 from dnd.player.facts import (
-    AttackFact, ConditionChangeFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact,
+    AttackFact, ConditionChangeFact, ConditionFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
     PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SpatialFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact, FactionFact,
 )
@@ -108,9 +108,18 @@ def observed_actor(previous: PlayerActor | None, observation: PlayerObservation)
 
 
 def apply_item_patches(target: PlayerState, patches: tuple[ItemPatch, ...]) -> None:
-    """Records replace, never mutate: a patch makes the item's new record."""
+    """A patch's components replace the seat's; against an absent record it carries the look."""
     for patch in patches:
-        target.items[patch.item_uuid] = {**target.items.get(patch.item_uuid, {}), **patch.changes}
+        previous = target.items.get(patch.item_uuid)
+        if previous is None:
+            if patch.look is None:
+                raise ValueError("An item's first record requires its look")
+            target.items[patch.item_uuid] = PlayerItem(look=patch.look, profile=patch.profile, state=patch.state)
+        else:
+            target.items[patch.item_uuid] = PlayerItem(
+                look=patch.look if patch.look is not None else previous.look,
+                profile=patch.profile if patch.profile is not None else previous.profile,
+                state=patch.state if patch.state is not None else previous.state)
 
 
 def observe_body(target: PlayerState, observation: PlayerObservation) -> bool:
@@ -226,14 +235,18 @@ def apply_body_fact(target: PlayerState, fact: PlayerFact) -> None:
             actor = target.actors[fact.source_entity_uuid]
             if actor.controlled_items is None or not target.viewing_audience.controls(actor.uuid):
                 raise ValueError("item charges require the controlled actor's inventory")
-            if fact.item_uuid in actor.controlled_items:
-                target.items[fact.item_uuid] = {**target.items[fact.item_uuid],
-                    "charges": fact.charges_after, "stack_count": fact.stack_count_after}
             if fact.item_destroyed:
+                target.items.pop(fact.item_uuid, None)
                 target.actors[actor.uuid] = replace(actor,
                     controlled_items=tuple(identity for identity in actor.controlled_items if identity != fact.item_uuid),
                     visual_loadout=replace(actor.visual_loadout, layers=tuple(layer for layer in actor.visual_loadout.layers
                         if layer.item_uuid != fact.item_uuid)))
+            elif fact.item_uuid in actor.controlled_items:
+                record = target.items[fact.item_uuid]
+                if record.state is None:
+                    raise ValueError("item charges require the controlled item's state")
+                target.items[fact.item_uuid] = replace(record, state=replace(record.state,
+                    charges=fact.charges_after, stack_count=fact.stack_count_after))
         case SensoryFact():
             if fact.observer_position_changed and fact.observer_uuid in target.actors:
                 target.actors[fact.observer_uuid] = replace(target.actors[fact.observer_uuid], last_visual_position=fact.observer_position)
@@ -265,18 +278,14 @@ def apply_body_fact(target: PlayerState, fact: PlayerFact) -> None:
             target.actors[actor.uuid] = replace(actor, life_state=fact.new_state, normal_hp=fact.normal_hit_points,
                 remains_disposition=fact.remains_disposition)
         case EquipmentFact():
-            actor = target.actors.get(fact.source_entity_uuid)
-            if actor is not None:
-                target.actors[actor.uuid] = replace(actor, **fact.changes)
-                apply_item_patches(target, fact.items)
+            actor = target.actors[fact.source_entity_uuid]
+            target.actors[actor.uuid] = replace(actor, **fact.changes)
+            apply_item_patches(target, fact.items)
         case ConditionChangeFact():
             actor = target.actors[fact.target_entity_uuid]
             condition = fact.condition
             members = {row.condition_uuid: row for row in actor.conditions}
-            if fact.event_type is EventType.CONDITION_REMOVAL:
-                members.pop(condition.condition_uuid, None)
-            elif condition.category is not ConditionCategory.INTERNAL:
-                members[condition.condition_uuid] = condition
+            change_membership(members, fact)
             target.actors[actor.uuid] = replace(actor, conditions=tuple(members.values()),
                 spatial_disposition=(condition.resulting_stats.spatial_disposition
                     if condition.resulting_stats is not None else actor.spatial_disposition),
@@ -305,6 +314,14 @@ def commit_current(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
             return False
         target.spatial_commit_cursors[fact.entity_uuid] = committed_at
     return True
+
+
+def change_membership(members: dict[UUID, ConditionFact], fact: ConditionChangeFact) -> None:
+    """A condition fact's effect on its target's memberships: a removal ends one, an internal condition is never held."""
+    if fact.event_type is EventType.CONDITION_REMOVAL:
+        members.pop(fact.condition.condition_uuid, None)
+    elif fact.condition.category is not ConditionCategory.INTERNAL:
+        members[fact.condition.condition_uuid] = fact.condition
 
 
 def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
