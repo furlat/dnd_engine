@@ -24,7 +24,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_tiles import Tile
-from dnd.core.gridmap import SpatialConditionOwner, get_map
+from dnd.core.gridmap import GridMap, SpatialConditionOwner, get_map
 from dnd.core.geometry import supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
@@ -394,6 +394,33 @@ def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
     )
 
 
+# The event schema keys light and hazard changes by "x,y" text. The key of every cell of a box,
+# built once and grown to cover new boxes (a cell's key never changes), so a payload gathers
+# its keys instead of formatting one per cell.
+_CELL_KEYS: Dict[str, CellLayer] = {}
+
+
+def _cell_keys(box: Box) -> CellLayer:
+    table = _CELL_KEYS.get("table")
+    if table is None or not (table.box[0] <= box[0] and table.box[1] <= box[1]
+                             and box[2] <= table.box[2] and box[3] <= table.box[3]):
+        target = box if table is None else union_box(table.box, box)
+        xs, ys = np.meshgrid(np.arange(target[0], target[2] + 1), np.arange(target[1], target[3] + 1), indexing="ij")
+        keys = np.empty(xs.shape, dtype=object)
+        keys.ravel()[:] = [f"{x},{y}" for x, y in zip(xs.ravel().tolist(), ys.ravel().tolist())]
+        table = _CELL_KEYS["table"] = CellLayer(target[0], target[1], keys)
+    return table
+
+
+def _keyed_values(box: Box, xs: np.ndarray, ys: np.ndarray, values: np.ndarray) -> Dict[str, Any]:
+    """A payload mapping of box-relative cells to values, keyed by the cells' "x,y" text."""
+    if not xs.size:
+        return {}
+    table = _cell_keys(box)
+    keys = table.values[xs + (box[0] - table.x0), ys + (box[1] - table.y0)]
+    return dict(zip(keys.tolist(), values[xs, ys].tolist()))
+
+
 def _mask_positions(x0: int, y0: int, mask: np.ndarray) -> List[Position]:
     xs, ys = np.nonzero(mask)
     return list(zip((xs + x0).tolist(), (ys + y0).tolist()))
@@ -427,8 +454,7 @@ def _cell_delta(before: PublishedSenses, after: PublishedSenses, initial: bool,
             return [], [], seen_added, {}, {}
         box = a.visible.box
         hx, hy = np.nonzero(a.visible.values & (embed(b.hazard, box, np.dtype(bool)) != a.hazard.values))
-        return [], [], seen_added, {}, {f"{x},{y}": hazardous for x, y, hazardous in zip(
-            (hx + box[0]).tolist(), (hy + box[1]).tolist(), a.hazard.values[hx, hy].tolist())}
+        return [], [], seen_added, {}, _keyed_values(box, hx, hy, a.hazard.values)
     box = (a.visible.box if not b.visible.values.size else b.visible.box if not a.visible.values.size
            else union_box(b.visible.box, a.visible.box))
     after_visible = embed(a.visible, box, np.dtype(bool))
@@ -444,10 +470,8 @@ def _cell_delta(before: PublishedSenses, after: PublishedSenses, initial: bool,
         hazard_changed = after_visible & (~before_visible | (embed(b.hazard, box, np.dtype(bool)) != after_hazard))
     lx, ly = np.nonzero(light_changed)
     hx, hy = np.nonzero(hazard_changed)
-    light = {f"{x},{y}": level for x, y, level in zip((lx + box[0]).tolist(), (ly + box[1]).tolist(),
-                                                     after_light[lx, ly].tolist())}
-    hazards = {f"{x},{y}": hazardous for x, y, hazardous in zip((hx + box[0]).tolist(), (hy + box[1]).tolist(),
-                                                               after_hazard[hx, hy].tolist())}
+    light = _keyed_values(box, lx, ly, after_light)
+    hazards = _keyed_values(box, hx, hy, after_hazard)
     return (_mask_positions(box[0], box[1], added), _mask_positions(box[0], box[1], removed), seen_added,
             light, hazards)
 
@@ -917,6 +941,8 @@ class SpatialSensesSystem:
         # version advances with every update, and the update's changed target keys are kept.
         self._table: Optional[ContactTable] = None
         self._table_version = 0
+        # The map the fields and tables were read from.
+        self._map: Optional[GridMap] = None
         self._table_changes: Optional[np.ndarray] = None
         # The last settled group's late-completing facts and its observers. A
         # zone change opened in that group completes right after it (its
@@ -949,6 +975,7 @@ class SpatialSensesSystem:
         self._table = None
         self._table_version = 0
         self._table_changes = None
+        self._map = None
 
     def _recording(self) -> bool:
         """Whether facts are recorded for the open group instead of settled now.
@@ -1291,6 +1318,13 @@ class SpatialSensesSystem:
 
     def _world(self) -> SettlementWorld:
         grid = get_map()
+        if grid is not self._map:
+            # A replaced map: every field and table read the old one.
+            self.fields.clear()
+            self._identity_grants.clear()
+            self._light_table = None
+            self._table = None
+            self._map = grid
         exists = grid.cell_exists
         grid.settle_obscurement_activity()
         hazard_owners, hazard_x, hazard_y, hazard_owner = grid.hazard_owners()
@@ -2260,7 +2294,7 @@ class SpatialSensesSystem:
         emitter's descriptor inputs."""
         grid = get_map()
         lights = world.light_sources
-        visual_keys = np.unique(contact_rows[contact_rows[:, 5] != 0, 7])
+        visual_keys = np.sort(contact_rows[contact_rows[:, 5] != 0, 7])
         known = field.light_inputs
         if known is not None and known[0] is lights and known[1] is visible and np.array_equal(known[2], visual_keys):
             return known, field.light_values
@@ -2271,9 +2305,9 @@ class SpatialSensesSystem:
             slots = lights.slots[slotted]
             lit[slotted] = ((words[slots // 64] >> (slots % 64).astype(np.uint64)) & np.uint64(1)) != 0
         own = self._target_key(observer_uuid, True)
-        anchor_entity = (lights.anchor_entity_key >= 0) & (np.isin(lights.anchor_entity_key, visual_keys, kind="table")
+        anchor_entity = (lights.anchor_entity_key >= 0) & (_in_sorted(lights.anchor_entity_key, visual_keys)
                                                           | (lights.anchor_entity_key == own))
-        anchor_item = (lights.anchor_item_key >= 0) & np.isin(lights.anchor_item_key, visual_keys, kind="table")
+        anchor_item = (lights.anchor_item_key >= 0) & _in_sorted(lights.anchor_item_key, visual_keys)
         inputs = (lights, visible, visual_keys, lit, anchor_entity, anchor_item)
         previous = senses.light_sources
         previous_values = field.light_values
@@ -2299,16 +2333,18 @@ class SpatialSensesSystem:
         # A first view describes every lit emitter afresh; a settled one starts from what it published.
         sources = dict(previous) if known is not None else {}
         values_of = dict(previous_values) if known is not None else {}
+        membership = known is None
+        replaced = False
         # Emitters gone from the table are no longer lit.
         for identity in gone:
-            sources.pop(identity, None)
+            membership = sources.pop(identity, None) is not None or membership
             values_of.pop(identity, None)
         for row, row_lit, entity_seen, item_seen in zip(
                 [lights.rows[index] for index in np.flatnonzero(check).tolist()], lit[check].tolist(),
                 anchor_entity[check].tolist(), anchor_item[check].tolist()):
             identity = row.identity
             if not row_lit:
-                sources.pop(identity, None)
+                membership = sources.pop(identity, None) is not None or membership
                 values_of.pop(identity, None)
                 continue
             values = row.values + (row.anchor_uuid if entity_seen else None, row.anchor_uuid if item_seen else None)
@@ -2327,19 +2363,23 @@ class SpatialSensesSystem:
                         dim_radius_feet=dim, actor_anchored=actor_anchored, anchor_entity_uuid=anchor_entity_uuid,
                         anchor_item_uuid=anchor_item_uuid)
                 sources[identity] = descriptor
+            current = previous.get(identity)
+            membership = membership or current is None
+            replaced = replaced or (current is not None and current is not sources[identity])
             values_of[identity] = values
-        if sources.keys() == previous.keys() and all(sources[identity] is previous[identity] for identity in sources):
+        if not membership and not replaced:
             return inputs, values_of
-        # Published in table order.
-        order = [row.identity for row in lights.rows if row.identity in sources]
-        sources = {identity: sources[identity] for identity in order}
-        values_of = {identity: values_of[identity] for identity in order}
-        for identity in previous:
-            if identity not in sources:
-                senses.light_source_removals[identity] = max(previous[identity].revision,
-                    grid.light_source_revision(identity))
-        for identity in sources:
-            senses.light_source_removals.pop(identity, None)
+        if membership:
+            # Published in table order; a replaced descriptor keeps its place.
+            order = [row.identity for row in lights.rows if row.identity in sources]
+            sources = {identity: sources[identity] for identity in order}
+            values_of = {identity: values_of[identity] for identity in order}
+            for identity in previous:
+                if identity not in sources:
+                    senses.light_source_removals[identity] = max(previous[identity].revision,
+                        grid.light_source_revision(identity))
+            for identity in sources:
+                senses.light_source_removals.pop(identity, None)
         senses.light_sources = sources
         return inputs, values_of
 
@@ -2457,6 +2497,13 @@ def _targets_at(table: ContactTable, positions: Set[Position]) -> np.ndarray:
         return np.isin(_pack_cells(np.zeros(xs.size, dtype=np.int64), xs, ys), cells)
     return np.concatenate((table.cell_target_key[at(table.cell_x, table.cell_y)],
                            table.side_target_key[at(table.side_x, table.side_y) | at(table.across_x, table.across_y)]))
+
+
+def _in_sorted(values: np.ndarray, keys: np.ndarray) -> np.ndarray:
+    """Whether each value is among sorted keys."""
+    if not keys.size:
+        return np.zeros(values.shape, dtype=bool)
+    return keys[np.minimum(np.searchsorted(keys, values), keys.size - 1)] == values
 
 
 def _light_table_diff(previous: LightSourceTable, current: LightSourceTable,

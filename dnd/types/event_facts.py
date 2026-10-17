@@ -170,6 +170,14 @@ class GroupEntryKind(str, Enum):
     MOVE_STEP = "move_step"
 
 
+# The entries whose facts happen at once: inside them, after-group handlers, summon departures and
+# reactions wait for the group's settlement (plan §5.3). A move step is one creature's own step.
+SIMULTANEOUS_ENTRIES: frozenset[GroupEntryKind] = frozenset(GroupEntryKind) - {GroupEntryKind.MOVE_STEP}
+# What a move step causes and joins it: the zones anchored to the mover follow it. Any other entry
+# opened inside a step starts after the step's facts settled.
+JOINS_A_STEP: frozenset[GroupEntryKind] = frozenset({GroupEntryKind.ZONE_MOVE})
+
+
 class HandlerGroupDispatch(str, Enum):
     """When a handler runs relative to an open simultaneous group (plan §5.3)."""
 

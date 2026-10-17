@@ -34,7 +34,7 @@ __all__ = [
     "DeathSaveEvent", "InstantDeathEvent", "DeathEvent",
 ]
 
-from dnd.types.event_facts import (GroupEntryKind, HandlerGroupDispatch, LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
+from dnd.types.event_facts import (JOINS_A_STEP, SIMULTANEOUS_ENTRIES, GroupEntryKind, HandlerGroupDispatch, LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -170,9 +170,9 @@ class OpenGroup:
     completes_after: Set[UUID] = field(default_factory=set)
 
     def holds_simultaneous_entry(self) -> bool:
-        """Whether a simultaneous entry is open. A move step alone only settles perception once:
-        its handlers, departures and reactions run as they would without a group."""
-        return any(kind is not GroupEntryKind.MOVE_STEP for kind in self.kinds)
+        """Whether a simultaneous entry is open (`SIMULTANEOUS_ENTRIES`). A move step alone only
+        settles perception once: its handlers, departures and reactions run as without a group."""
+        return any(kind in SIMULTANEOUS_ENTRIES for kind in self.kinds)
 
 
 def merge_grants(grants: Dict[str, FrozenSet[str]], added: Mapping[str, FrozenSet[str]]) -> None:
@@ -1748,9 +1748,9 @@ class EventQueue:
         """
         current = cls._open_group.get()
         if current is not None:
-            if not current.holds_simultaneous_entry() and kind is not GroupEntryKind.ZONE_MOVE:
-                # A move step's facts settle before anything but its own following zones starts
-                # inside it (another step, a transfer, a trap): never across steps.
+            if not current.holds_simultaneous_entry() and kind not in JOINS_A_STEP:
+                # A move step's facts settle before an entry it does not cause starts inside it
+                # (another step, a transfer, a trap): never across steps.
                 cls._settle_open_group(current)
             current.kinds.append(kind)
             # A nested area shares its own roll inside a group that doesn't.
@@ -1782,7 +1782,8 @@ class EventQueue:
 
     @classmethod
     def _settle_open_group(cls, group: OpenGroup) -> None:
-        """Settle what an open group recorded so far, and keep it open."""
+        """Settle what an open group recorded so far, and keep it open. Every system and settler
+        drains what it holds, so the group's close settles only what came after."""
         group.settling = True
         try:
             for system in tuple(cls._pre_completion_systems.values()):

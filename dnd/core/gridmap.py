@@ -7,7 +7,7 @@ from bisect import bisect_left, bisect_right
 from heapq import heappop, heappush
 from dnd.core.condition_types import ConditionDurationSummary
 
-from typing import ClassVar, Literal, AbstractSet, Collection, Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Set, DefaultDict, Protocol, Union, cast
+from typing import Literal, AbstractSet, Collection, Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Set, DefaultDict, Protocol, Union, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
@@ -310,6 +310,10 @@ class LightSourceData(BaseModel):
     contribution_owner_uuid: Optional[UUID] = Field(default=None, description="Optional condition owner gating this light's contribution.")
 
 
+# Facts that settle as one step with what follows from them: an arrival is one creature's move step.
+SETTLES_AS_STEP: Dict[EventType, GroupEntryKind] = {EventType.SPATIAL_ENTITY_ENTERED: GroupEntryKind.MOVE_STEP}
+
+
 class GridMap:
     """Singleton-like manager for grid state and spatial queries.
 
@@ -318,9 +322,6 @@ class GridMap:
     """
 
     _instance: Optional['GridMap'] = None
-    # One clock for the cell grids' revisions of every map: a revision read from one map never
-    # equals one read from another.
-    _grid_clock: ClassVar[int] = 0
 
     def __init__(self):
         self._tiles: Dict[Tuple[int, int], Tile] = {}
@@ -384,8 +385,10 @@ class GridMap:
         self._obscurement_layers: Dict[UUID, CellLayer] = {}
         self._obscurement_active: Dict[UUID, bool] = {}
         self._cell_obscurement = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
-        self._bump_sight_grids()
-        self._bump_light_grid()
+        # Advanced by every write that changes the Tile/obscurement or light grid; a settlement keyed
+        # on them reads this map (perception forgets its fields when the map is replaced).
+        self._sight_grid_revision = 0
+        self._light_grid_revision = 0
         # Each spatial condition's committed footprint as a bool layer and as cell
         # coordinates (same commit as its cells).
         self._condition_footprints: Dict[UUID, CellLayer] = {}
@@ -483,13 +486,12 @@ class GridMap:
     def publish_committed_spatial_event(
         self,
         event: 'SpatialChangeEvent',
-        settles_with: Optional[GroupEntryKind] = None,
     ) -> Optional['SpatialChangeEvent']:
         """Publish one non-vetoable fact for already committed spatial state.
 
-        With `settles_with`, the fact's effect phase and what follows from it (zones and lights
-        that move with it) are one group of that kind rooted at the fact: perception settles
-        once, before the fact completes."""
+        A fact that settles as a step (`SETTLES_AS_STEP`, an arrival) opens, outside any group,
+        one group rooted at its effect: what follows from it (the zones and lights that move
+        with it) settles with it, once, before it completes."""
         if not self._events_enabled:
             self._pending_committed_events.append(event)
             return None
@@ -508,21 +510,15 @@ class GridMap:
                 ).phase_to(EventPhase.EXECUTION)
             ),
         )
-        with (EventQueue.group(settles_with, root=current_event) if settles_with is not None
-              else nullcontext()) as group:
-            if group is not None:
-                group.completes_after.add(current_event.lineage_uuid)
-            current_event = cast(
-                SpatialChangeEvent,
-                EventQueue.publish_committed_phase(
-                    current_event.model_copy(
-                        update={"use_register": False},
-                    ).phase_to(EventPhase.EFFECT)
-                ),
-            )
-            if group is not None:
-                # What follows the effect (lights, the settled view) attaches to the open effect.
-                group.root_uuid = current_event.uuid
+        effect = current_event.model_copy(update={"use_register": False}).phase_to(EventPhase.EFFECT)
+        step = SETTLES_AS_STEP.get(event.event_type)
+        # A step opened here is rooted at the fact's open effect; inside an open group it joins it
+        # (and a step already open settles first: never across steps).
+        opens_step = step is not None and EventQueue.open_group() is None
+        with EventQueue.group(step, root=effect) if step is not None else nullcontext() as group:
+            if opens_step and group is not None:
+                group.completes_after.add(effect.lineage_uuid)
+            current_event = cast(SpatialChangeEvent, EventQueue.publish_committed_phase(effect))
             self._settle_entity_presence_before_completion(current_event)
             self._settle_object_presence_before_completion(current_event)
             self._recompute_lights_before_spatial_completion(current_event)
@@ -604,12 +600,10 @@ class GridMap:
             self._bump_light_grid()
 
     def _bump_sight_grids(self) -> None:
-        GridMap._grid_clock += 1
-        self._sight_grid_revision = GridMap._grid_clock
+        self._sight_grid_revision += 1
 
     def _bump_light_grid(self) -> None:
-        GridMap._grid_clock += 1
-        self._light_grid_revision = GridMap._grid_clock
+        self._light_grid_revision += 1
 
     @property
     def sight_grid_revision(self) -> int:
@@ -2916,7 +2910,6 @@ class GridMap:
                 )
             )
         if new_position is not None:
-            # One move step: the arrival and the zones and lights that follow it settle together.
             self.publish_committed_spatial_event(
                 SpatialChangeEvent.entity_entered(
                     new_position,
@@ -2925,8 +2918,7 @@ class GridMap:
                     parent_event=parent_event,
                     previous_occupancy_layer=previous_occupancy_layer,
                     occupancy_layer=occupancy_layer,
-                ),
-                settles_with=GroupEntryKind.MOVE_STEP,
+                )
             )
 
     def get_entity_position(self, entity_uuid: UUID) -> Optional[Tuple[int, int]]:
