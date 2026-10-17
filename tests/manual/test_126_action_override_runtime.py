@@ -496,10 +496,10 @@ def test_extra_resource_cost_gates_discovery_execution_and_is_consumed() -> None
     )
 
     assert not template.check_costs()
-    assert len(template.generate_variants(caster)) == 1
+    assert len(template.discovery_forms(caster.action_scan(subjective=True))) == 1
     assert [
         cost.name
-        for cost in template.generate_variants(caster)[0].effective_costs
+        for cost in template.discovery_forms(caster.action_scan(subjective=True))[0].effective_costs
         if cost.resource_name == "sorcery_points"
     ] == ["Sorcery Points"]
     unaffordable = find_action(caster, "Fire Bolt")
@@ -559,7 +559,7 @@ def test_generated_upcast_variant_checks_and_consumes_extra_resource_once() -> N
         recharge_type=RechargeType.LONG_REST,
     )
 
-    unaffordable_variant = template.generate_variants(caster)[0]
+    unaffordable_variant = template.discovery_forms(caster.action_scan(subjective=True))[0]
     assert not unaffordable_variant.check_costs()
     assert len(
         [

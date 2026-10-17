@@ -366,7 +366,8 @@ def get_extra_position_options(
     if selection is not None and selection.kind == "entity_destination":
         if target.target_uuid is None:
             return []
-        template = template.with_selection(replace(template.current_selection(), target_uuids=(target.target_uuid,)))
+        template = performed_action(entity, action_info).with_selection(
+            replace(template.current_selection(), target_uuids=(target.target_uuid,)))
     return template.get_valid_extra_target_positions(target.position, extra_target_positions or ())
 
 
@@ -444,7 +445,24 @@ def is_free_aim(action_info: AvailableActionInfo, target: AvailableTarget) -> bo
             and target.position is not None and target not in action_info.valid_targets)
 
 
-def row_form_at_level(action_info: AvailableActionInfo, cast_at_level: Optional[int]) -> BaseAction:
+def performed_action(entity: Entity, action_info: AvailableActionInfo) -> BaseAction:
+    """The action a row's selection names: the registered action its form shows, or the item's own use action.
+
+    A row's form is a discovery view; the executable instance is bound once,
+    from this action, by `Entity.perform`.
+    """
+    form = action_info.execution_template
+    if form is None:
+        raise ValueError("Execution requires the original discovery row")
+    if action_info.is_item_use:
+        return form
+    registered = entity.get_registered_action(form.registered_template_uuid or form.uuid)
+    if registered is None:
+        raise ValueError("The row's action is no longer registered")
+    return registered
+
+
+def row_form_at_level(entity: Entity, action_info: AvailableActionInfo, cast_at_level: Optional[int]) -> BaseAction:
     """The row's form at the selected level: one of the row's `cast_levels` (plan D17)."""
     form = action_info.execution_template
     if form is None:
@@ -453,7 +471,8 @@ def row_form_at_level(action_info: AvailableActionInfo, cast_at_level: Optional[
         return form
     if cast_at_level not in action_info.cast_levels:
         raise ValueError("This spell cannot be cast at that level now")
-    return form.with_selection(replace(form.current_selection(), cast_at_level=cast_at_level))
+    return performed_action(entity, action_info).with_selection(
+        replace(form.current_selection(), cast_at_level=cast_at_level))
 
 
 def execute_available_action(
@@ -467,7 +486,7 @@ def execute_available_action(
     cast_at_level: Optional[int] = None,
 ) -> Optional[Event]:
     """Perform one exact discovery row's selection, by uuid, without name lookup (plan §14.4b)."""
-    form = row_form_at_level(action_info, cast_at_level)
+    form = row_form_at_level(entity, action_info, cast_at_level)
     validated_extras = validated_extra_target_uuids(
         action_info,
         target,
@@ -481,8 +500,9 @@ def execute_available_action(
         return execute_use_action(entity, action_info.source_item_uuid, target=target,
             extra_target_uuids=tuple(validated_extras),
             extra_target_positions=extra_target_positions, discovered_template=form)
-    return entity.perform(form, row_selection(entity, form, target, tuple(validated_extras),
-        tuple(extra_target_positions or ()), cast_at_level=cast_at_level, prefer_safe=prefer_safe))
+    return entity.perform(performed_action(entity, action_info), row_selection(entity, form, target,
+        tuple(validated_extras), tuple(extra_target_positions or ()), cast_at_level=cast_at_level,
+        prefer_safe=prefer_safe))
 
 
 def selection_admission_error(
@@ -521,7 +541,7 @@ def _admitted_selection(
     if primary not in action_info.valid_targets and not is_free_aim(action_info, primary):
         return _SelectionAdmission("Target is no longer admitted")
     try:
-        template = row_form_at_level(action_info, cast_at_level)
+        template = row_form_at_level(entity, action_info, cast_at_level)
         scan = entity.action_scan(subjective=True)
         extras = validated_extra_target_uuids(action_info, primary,
             [str(target.target_uuid) for target in selected_targets[1:]], scan, template)
@@ -538,9 +558,9 @@ def _admitted_selection(
         else:
             selection = row_selection(entity, template, primary, tuple(extras), extra_target_positions,
                                       cast_at_level=cast_at_level)
-        bound = template.with_selection(selection)
-        # The exact selection is admitted through the one admission path (plan §14.3b).
-        reason = template.requirements_error(scan, selection) or bound.handler_admission_error(subjective=True)
+        # The instance Command would execute, admitted through the one admission path (plan §14.3b).
+        bound = performed_action(entity, action_info).with_selection(selection)
+        reason = bound.requirements_error(scan, selection) or bound.handler_admission_error(subjective=True)
     except ValueError as error:
         return _SelectionAdmission(str(error))
     return _SelectionAdmission(reason, template, bound, scan)

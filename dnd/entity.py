@@ -5632,6 +5632,10 @@ class Entity(BaseBlock):
         """
         return next((a for a in self.registered_actions if a.name == name), None)
 
+    def get_registered_action(self, template_uuid: UUID) -> Optional[BaseAction]:
+        """The registered action a selection names by uuid (plan §14.4b)."""
+        return next((action for action in self.registered_actions if action.uuid == template_uuid), None)
+
     @property
     def entity_actions(self) -> List[BaseAction]:
         """Actions that target other entities (Attack, multi-target spells)."""

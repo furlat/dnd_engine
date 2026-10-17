@@ -341,9 +341,10 @@ def test_structural_extra_attack_preserves_haste_ordering(
         _execute(fighter, haste_attack, target_uuid=target.uuid)
 
     assert fighter.action_economy.resources["extra_attacks"].current == 1
+    # The structural template's weapon is an authored choice: its row names the chosen slot.
     _execute(
         fighter,
-        "Extra Attack_MELEE_MAIN",
+        "Extra Attack__MELEE_MAIN",
         target_uuid=target.uuid,
     )
     assert fighter.action_economy.resources["extra_attacks"].current == 0
@@ -444,7 +445,7 @@ def test_haste_discovery_exposes_every_standard_action_variant() -> None:
     variants = {
         variant.get_discovery_template_name(): variant
         for template in fighter.registered_actions
-        for variant in template.get_discovery_variants(fighter)
+        for variant in template.discovery_forms(fighter.action_scan(subjective=True))
     }
     names = set(variants)
 
@@ -459,7 +460,7 @@ def test_haste_discovery_exposes_every_standard_action_variant() -> None:
     assert f"Extra Attack_MELEE_MAIN{HASTE_GRANT_SUFFIX}" not in names
 
     for registered_template in fighter.registered_actions:
-        for variant in registered_template.get_discovery_variants(fighter):
+        for variant in registered_template.discovery_forms(fighter.action_scan(subjective=True)):
             if variant is not registered_template:
                 assert (
                     variant.registered_template_uuid
@@ -494,12 +495,12 @@ def test_srd_haste_policy_keeps_the_restricted_action_whitelist() -> None:
     )
     spell_variant_names = {
         variant.get_discovery_template_name()
-        for variant in spell.get_discovery_variants(fighter)
+        for variant in spell.discovery_forms(fighter.action_scan(subjective=True))
     }
     action_variant_names = {
         variant.get_discovery_template_name()
         for template in fighter.registered_actions
-        for variant in template.get_discovery_variants(fighter)
+        for variant in template.discovery_forms(fighter.action_scan(subjective=True))
     }
 
     assert "Strict Policy Probe" in spell_variant_names

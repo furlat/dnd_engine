@@ -1846,13 +1846,22 @@ class BaseAction(BaseObject):
         """The executable instance of this action for one exact selection (plan §14.4b).
 
         An executable instance is its own selection: given exactly that, it is
-        itself. Otherwise a new instance carries the selection's targets,
-        positions, source item, payment, controller and authored choices.
+        itself. Otherwise a new instance, sharing nothing with this action,
+        carries the selection's targets, positions, source item, payment,
+        controller and authored choices.
+        """
+        if not self.template and selection == self.current_selection():
+            return self
+        return self._bound(selection, executable=True)
+
+    def _bound(self, selection: ActionSelection, *, executable: bool) -> "BaseAction":
+        """This action bound to one selection: an executable copy, or a read-only discovery form.
+
+        A discovery form shares the definition graph with the registered
+        action (only discovery reads it); executing it binds a deep copy.
         """
         if selection.template_uuid != (self.registered_template_uuid or self.uuid):
             raise ValueError(f"The selection names another action than {self.name}")
-        if not self.template and selection == self.current_selection():
-            return self
         grant = None
         if selection.cost_source.restricted_grant_id is not None:
             source = BaseBlock.get(self.source_entity_uuid)
@@ -1860,7 +1869,10 @@ class BaseAction(BaseObject):
                           if grant.grant_id == selection.cost_source.restricted_grant_id), None) if source else None
             if grant is None:
                 raise ValueError("The selected restricted action grant is not available")
-        instance = self.instantiate(**self._selection_overrides(selection))
+        overrides = self._selection_overrides(selection)
+        instance = (self.instantiate(**overrides) if executable else self.model_copy(update={
+            **overrides, "uuid": uuid4(), "template": False, "use_register": False,
+            "registered_template_uuid": self.registered_template_uuid or self.uuid}))
         instance._restricted_action_grant = grant
         instance._selected_facets = selection.facets
         instance._source_item_controller_uuid = selection.controller_uuid
@@ -2045,7 +2057,7 @@ class BaseAction(BaseObject):
         return forms
 
     def _discovery_form(self, selection: ActionSelection) -> "BaseAction":
-        return self if selection == self.current_selection() else self.with_selection(selection)
+        return self if selection == self.current_selection() else self._bound(selection, executable=False)
 
     def _eligible_restricted_grants(self, scan: ActorScan) -> Tuple[RestrictedActionGrant, ...]:
         """The actor's restricted grants that may pay for this form's ordinary action channel."""
