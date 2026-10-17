@@ -202,8 +202,13 @@ def deposit_residue(
     ellipses: tuple[ResidueEllipse, ...] = (),
     amount: int = 1,
     deposit_source: MaterialDepositSource | None = None,
+    batch: list[tuple[int, int]] | None = None,
 ) -> TileResidueState | None:
-    """Accumulate the authored amount within one existing native membership."""
+    """Accumulate the authored amount within one existing native membership.
+
+    With ``batch``, an accumulation on an existing membership records its tile
+    there for one publication covering the whole deposit, not one per tile.
+    """
     if amount < 1:
         raise ValueError("Deposited residue amount must be positive")
     existing = tile.active_conditions.get(profile.name)
@@ -226,8 +231,11 @@ def deposit_residue(
                     row = rows[matching]
                     rows[matching] = row.model_copy(update={"amount": row.amount + added})
                     condition.contributions = tuple(rows)
-            get_map().publish_tile_state_changed(tile.position, source_entity_uuid=tile.uuid,
-                parent_event=parent_event.uuid if parent_event is not None else None)
+            if batch is not None:
+                batch.append(tile.position)
+            else:
+                get_map().publish_tile_state_changed(tile.position, source_entity_uuid=tile.uuid,
+                    parent_event=parent_event.uuid if parent_event is not None else None)
             return condition.snapshot_tile_residue()
         return state
     condition = TileResidueCondition(

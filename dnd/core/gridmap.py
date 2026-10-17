@@ -1639,6 +1639,18 @@ class GridMap:
             senses_hint=SensesUpdateHint(),
         ))
 
+    def publish_tiles_state_changed(
+        self, positions: Collection[Tuple[int, int]], *, source_entity_uuid: UUID,
+        parent_event: Optional[UUID] = None,
+    ) -> Optional[SpatialChangeEvent]:
+        """One inert after-value fact for many tiles, without invalidating traversal."""
+        changed = sorted(position for position in set(positions) if position in self._tiles)
+        if not changed:
+            return None
+        return self.publish_committed_spatial_event(SpatialChangeEvent.tiles_changed(
+            tuple(self._tiles[position].to_world_tile_state() for position in changed),
+            source_entity_uuid=source_entity_uuid, parent_event=parent_event, inert=True))
+
     def commit_tile_mechanics(
         self,
         positions: Collection[Tuple[int, int]],

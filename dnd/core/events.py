@@ -3917,11 +3917,13 @@ class SpatialChangeEvent(Event):
     @classmethod
     def tiles_changed(cls, rows: Tuple[WorldTileState, ...], *,
                       source_entity_uuid: UUID,
-                      parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
-        """One committed traversal change covering every changed Tile (plan §5.5).
+                      parent_event: Optional[UUID] = None,
+                      inert: bool = False) -> 'SpatialChangeEvent':
+        """One committed change covering every changed Tile (plan §5.5).
 
         The rows are complete after-values; observers and world folds read them
-        as one fact instead of one fact per cell.
+        as one fact instead of one fact per cell. ``inert`` after-values (residue
+        amounts) change no traversal, like a single inert tile refresh.
         """
         if not rows:
             raise ValueError("A tile mechanics change needs at least one Tile")
@@ -3935,7 +3937,7 @@ class SpatialChangeEvent(Event):
             phase=EventPhase.DECLARATION,
             use_register=False,
             parent_event=parent_event,
-            senses_hint=SensesUpdateHint(requires_paths=True),
+            senses_hint=SensesUpdateHint() if inert else SensesUpdateHint(requires_paths=True),
         )
 
     @classmethod

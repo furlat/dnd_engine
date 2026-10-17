@@ -15,7 +15,7 @@ from dnd.content_system.creature_materialization import materialize_creature
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
-from dnd.core.events import Damage, DamageAppliedEvent, EventPhase, EventQueue, EventType, SpatialChangeEvent
+from dnd.core.events import Damage, DamageAppliedEvent, EventPhase, EventQueue, EventType, SpatialChangeEvent, SpatialChangeType
 from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
@@ -178,17 +178,18 @@ def test_repeated_injuries_record_authored_amount_without_changing_membership_or
         assert injury.body_release is not None
         if prior:
             assert (grid.optical_revision, grid.movement_revision) == revisions
+            # One splatter is one change (plan R1): one fact whose rows are every cell's after-value.
             changes = [event for _, event in EventQueue.iter_events_since(cursor)
                        if isinstance(event, SpatialChangeEvent) and event.phase is EventPhase.COMPLETION
-                       and event.tile_state is not None]
+                       and event.change_type is SpatialChangeType.TILES_CHANGED]
             cells = {cell for region in injury.body_release.regions for cell in region.positions}
-            assert len(changes) == len(cells) * int(prior[0].amount != amount)
+            assert len(changes) == int(prior[0].amount != amount)
             if changes:
-                at_origin, = [change for change in changes
-                              if change.tile_state is not None and change.tile_state.position == creature.position]
-                assert at_origin.tile_state is not None and changes[0].parent_event is not None
-                assert at_origin.tile_state.residues == (residue,)
-                parent = EventQueue.get_event_by_uuid(changes[0].parent_event)
+                change, = changes
+                assert {row.position for row in change.tile_states} == cells and change.parent_event is not None
+                at_origin, = [row for row in change.tile_states if row.position == creature.position]
+                assert at_origin.residues == (residue,)
+                parent = EventQueue.get_event_by_uuid(change.parent_event)
                 assert parent is not None and parent.lineage_uuid == injury.lineage_uuid
 
 

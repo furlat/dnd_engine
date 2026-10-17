@@ -129,11 +129,15 @@ class BodyResponseProcessor:
                 for destination in region.positions:
                     footprints.setdefault(destination, []).append(local_ellipse(region.ellipse, destination))
             deposited: set[tuple[int, int]] = set()
+            accumulated: list[tuple[int, int]] = []
             for destination, ellipses in footprints.items():
                 tile = get_map().get_tile(*destination)
                 assert tile is not None
-                if deposit_residue(tile, self.profile.residue, parent_event=event, ellipses=tuple(ellipses)) is not None:
+                if deposit_residue(tile, self.profile.residue, parent_event=event, ellipses=tuple(ellipses),
+                                   batch=accumulated) is not None:
                     deposited.add(destination)
+            # One splatter is one change: every accumulation in it is one fact (plan R1).
+            get_map().publish_tiles_state_changed(accumulated, source_entity_uuid=owner.uuid, parent_event=event.uuid)
             regions = tuple(BodyReleaseRegion(ellipse=region.ellipse, elevation_steps=region.elevation_steps,
                 positions=tuple(cell for cell in region.positions if cell in deposited))
                 for region in regions if any(cell in deposited for cell in region.positions))
