@@ -19,6 +19,7 @@ from dnd.spells.conjuration import FogCloudZone, GreaseZone
 from dnd.spells.transmutation import SpikeGrowthZone
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from tests.engine.test_senses_light_stealth import create_skeleton, reset_senses_state
+from dnd.types.cells import CellMask, cell_in, value_at
 
 ZONE_CELLS = frozenset({(4, 0), (4, 1), (4, 2)})
 BEYOND = (6, 1)
@@ -26,8 +27,8 @@ BEYOND = (6, 1)
 
 @dataclass(frozen=True)
 class Observation:
-    visible: frozenset[tuple[int, int]]
-    hazards: dict[tuple[int, int], bool | None]
+    visible: CellMask
+    hazards: dict[tuple[int, int], int | None]
     path_cost_beyond: int | None
     perceived_effects: frozenset[UUID]
 
@@ -58,8 +59,8 @@ def _observe(observer: Entity) -> Observation:
     observer.materialize_navigation(max_distance=8)
     snapshot = capture_senses_snapshot(observer.senses)
     return Observation(
-        visible=frozenset(snapshot.visible),
-        hazards={cell: snapshot.hazardous_cells.get(cell) for cell in ZONE_CELLS},
+        visible=snapshot.visible,
+        hazards={cell: value_at(snapshot.hazardous_cells, cell) for cell in ZONE_CELLS},
         path_cost_beyond=observer.senses.path_costs.get(BEYOND),
         perceived_effects=frozenset(snapshot.spatial_effects),
     )
@@ -80,7 +81,7 @@ def check_zone(case: ZoneCase) -> None:
     near = observers[0]
     before = _observe(near)
     assert before.hazards == dict.fromkeys(ZONE_CELLS, False), case.name
-    assert BEYOND in before.visible, case.name
+    assert cell_in(before.visible, BEYOND), case.name
     optical_before = grid.optical_revision
 
     source = uuid4()
@@ -97,7 +98,7 @@ def check_zone(case: ZoneCase) -> None:
     before_cost, installed_cost = before.path_cost_beyond, installed.path_cost_beyond
     assert before_cost is not None, case.name
     if case.hides_beyond:
-        assert BEYOND not in installed.visible, case.name
+        assert not cell_in(installed.visible, BEYOND), case.name
     else:
         assert installed.visible == before.visible, case.name
         assert installed_cost is not None, case.name

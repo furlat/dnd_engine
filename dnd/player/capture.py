@@ -13,7 +13,7 @@ from uuid import UUID
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, TraverseConnectorEvent, ShoveEvent, SpellEvent
 from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
-from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
+from dnd.core.sensory_fold import copy_senses_snapshot, reduce_senses_snapshot
 from dnd.core.base_actions import ActionEvent, BaseCost
 from dnd.core.combat_log import CombatLogEntry
 from dnd.spells.abjuration import CounterspellReactionEvent
@@ -382,27 +382,6 @@ def capture_interval(
     )
 
 
-def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
-    if snapshot is None:
-        return None
-    return SensesSnapshot(
-        position=snapshot.position,
-        visible=set(snapshot.visible),
-        seen=set(snapshot.seen),
-        entities=dict(snapshot.entities),
-        objects=dict(snapshot.objects),
-        effective_light_levels=dict(snapshot.effective_light_levels),
-        hazardous_cells=dict(snapshot.hazardous_cells),
-        spatial_effects=dict(snapshot.spatial_effects),
-        light_sources=dict(snapshot.light_sources), light_source_removals=dict(snapshot.light_source_removals),
-        paths_dirty=snapshot.paths_dirty,
-        passive_perception=snapshot.passive_perception,
-        sense_modes_hash=snapshot.sense_modes_hash,
-        sense_modes=tuple(mode.model_copy(deep=True) for mode in snapshot.sense_modes),
-        visual_access=snapshot.visual_access,
-    )
-
-
 def apply_world_fact(target: PresentationTarget, event: Event, condition: ConditionFact | None = None) -> bool:
     """Fold recorded world after-values, reporting whether any were applied."""
     holdings_changed = bool(remove_previous_item_holdings(target.actors, event)) if isinstance(event, ItemLocationStateEvent) else False
@@ -537,7 +516,7 @@ def copy_target(target: PresentationTarget) -> PresentationTarget:
         target,
         recorded_world=copy_world_facts(target.recorded_world),
         actors=dict(target.actors),
-        senses=_copy_snapshot(target.senses),
+        senses=copy_senses_snapshot(target.senses) if target.senses is not None else None,
     )
 
 
@@ -669,20 +648,16 @@ def _detach_retained_event(event: Event) -> Event:
                     if type(contact) is PerceivedContact:
                         memo[id(contact)] = contact
             memo.update({
-                id(event.visible_cells_added): list(event.visible_cells_added),
-                id(event.visible_cells_removed): list(event.visible_cells_removed),
-                id(event.seen_cells_added): list(event.seen_cells_added),
+                id(value): value for value in (event.visible_cells_added, event.visible_cells_removed,
+                    event.seen_cells_added, event.effective_light_levels_changed, event.hazardous_cells_changed)})
+            memo.update({
                 id(event.entity_contacts_removed): set(event.entity_contacts_removed),
                 id(event.object_contacts_removed): set(event.object_contacts_removed),
                 id(event.spatial_effects_removed): set(event.spatial_effects_removed),
-                id(event.effective_light_levels_changed): dict(event.effective_light_levels_changed),
-                id(event.objective_light_levels_changed): dict(event.objective_light_levels_changed),
-                id(event.ambient_light_levels_changed): dict(event.ambient_light_levels_changed),
                 id(event.light_sources_changed): {identity: source.model_copy(update={
                     'affected_tiles': dict(source.affected_tiles)})
                     for identity, source in event.light_sources_changed.items()},
                 id(event.light_sources_removed): dict(event.light_sources_removed),
-                id(event.hazardous_cells_changed): dict(event.hazardous_cells_changed),
             })
         case SpatialChangeEvent():
             if event.light_level_map is not None:

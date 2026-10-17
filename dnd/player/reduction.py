@@ -5,7 +5,7 @@ import json
 from types import MappingProxyType
 from typing import Collection, Iterator, Mapping
 from dnd.types.actor import SpatialDisposition
-from dnd.types.senses import copy_senses_snapshot
+from dnd.core.sensory_fold import copy_senses_snapshot
 from dnd.core.effect_types import ResolutionRef
 from uuid import UUID
 

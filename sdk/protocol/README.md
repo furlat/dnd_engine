@@ -2,13 +2,26 @@
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
 owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
-331 shared definitions and 1,774 object-field rows. `protocol-identity.json` binds
-protocol 1 and player schema 12 to the exact canonical schema digest.
+333 shared definitions and 1,781 object-field rows. `protocol-identity.json` binds
+protocol 1 and player schema 13 to the exact canonical schema digest.
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
 - `field-ledger.json`: each reachable field, required/default shape and source owner.
 - The Python and TypeScript packages carry the same schema and digest.
+
+## Packed cells (schema 13)
+
+A set of map cells is one `CellMask` `{x0, y0, width, height, bits}`: cell
+`(x0 + i, y0 + j)` is bit `i * height + j` of the base64url `bits`, least
+significant bit first in each byte. The box is the set's bounding box, so an
+empty set has width and height 0. Per-cell values are a `CellValues`
+`{cells, values}`: one byte per cell of `cells`, in that bit order. The sensory
+cell fields (`visible_cells_added` / `_removed`, `seen_cells_added`,
+`effective_light_levels_changed`, `hazardous_cells_changed`, a light level or
+0 / 1) use these forms. An empty one is left out of the update: its default is the
+empty value. The native sensory event no longer carries objective or ambient
+light maps.
 
 ## Patches and occurrence identities (schema 12)
 
@@ -104,8 +117,7 @@ footprint. The Python reference composition is `dnd/player/audience.py`.
 
 Ordinary native light/world events update the existing tile `resolved_light`
 and `default_light` fields through `WorldUpdate` tile patches. Compact emitter
-observations do not create a second per-observer illumination map. Optional
-objective/ambient sensory maps remain readable for archived schema-9 records.
+observations do not create a second per-observer illumination map.
 `resolved_light` is objective native MAX/cap illumination;
 `senses.light_levels` is the observer's effective level and can include
 darkvision. `default_light` is actual ambient illumination, independent of the

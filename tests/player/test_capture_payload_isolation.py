@@ -11,6 +11,7 @@ from dnd.core.events import (EventPhase, EventQueue, SensoryUpdateEvent,
 from dnd.player.capture import capture_lineage
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.senses import PerceivedContact, SenseMode, SensesType
+from tests.sensory_cells import packed_cells
 
 
 class ExtendedContact(PerceivedContact):
@@ -54,11 +55,12 @@ def test_captured_sensory_lineage_detaches_containers_and_mutable_extensions():
     reset_engine_runtime()
     try:
         observer, subject, extension = uuid4(), uuid4(), uuid4()
+        # Packed cell values are immutable; the containers beside them are detached.
         event = SensoryUpdateEvent(source_entity_uuid=observer, observer_uuid=observer,
-            visible_cells_added=[(1, 2)], seen_cells_added=[(1, 2)],
+            **packed_cells(dict(visible_cells_added=[(1, 2)], seen_cells_added=[(1, 2)],
+                effective_light_levels_changed={(1, 2): 3}, hazardous_cells_changed={(1, 2): False})),
             entity_contacts_changed={subject: PerceivedContact(position=(1, 2), visual=True),
                 extension: ExtendedContact(position=(2, 2), visual=True, notes=['observed'])},
-            effective_light_levels_changed={'1,2': 3}, hazardous_cells_changed={'1,2': False},
             sense_modes=[SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)],
         ).phase_to(EventPhase.COMPLETION)
         event.identified_entity_observer_uuids[str(subject)] = frozenset({str(observer)})
@@ -74,10 +76,6 @@ def test_captured_sensory_lineage_detaches_containers_and_mutable_extensions():
         event.identified_entity_observer_uuids[str(subject)] = frozenset()
         event.located_entity_observer_uuids[str(subject)] = frozenset()
         event.located_position_observer_uuids['1,2'] = frozenset()
-        event.visible_cells_added.clear()
-        event.seen_cells_added.clear()
-        event.effective_light_levels_changed['1,2'] = 0
-        event.hazardous_cells_changed['1,2'] = True
         event.entity_contacts_changed[extension].notes.append('later')
         event.entity_contacts_changed.clear()
         event.entity_contacts_removed.add(subject)

@@ -12,6 +12,7 @@ from uuid import UUID
 import pygame
 
 from dnd.core.events import EventPhase
+from dnd.types.cells import cell_in
 from dnd.core.presentation_geometry import CylinderPresentationGeometry, SpherePresentationGeometry
 from game.animation import facing_for_delta
 from game.animation_data import load_animation_data
@@ -168,7 +169,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 support = before.tiles.get(geometry.center)
                 for layer in binding.layers:
                     volume = layer.composition in ("xy_volume", "xyz_volume")
-                    if not volume and geometry.center not in before.senses.visible:
+                    if not volume and not cell_in(before.senses.visible, geometry.center):
                         continue
                     elevation = support.elevation_steps if support is not None else effect.anchor_elevation_steps
                     if elevation is None:

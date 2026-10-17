@@ -20,6 +20,7 @@ from dnd.reactions import add_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import MistyStep
 from dnd.core.world_edges import ElevationSurfaceKind
+from dnd.types.cells import cell_in
 
 
 @pytest.fixture
@@ -105,7 +106,7 @@ def test_misty_step_discovers_a_visible_landing_across_unwalkable_water(
         grid.set_tile(3, y, name="Water", walking_cost=0, swimming_cost=1)
     destination = (5, 2)
     caster.materialize_navigation()
-    assert (destination in capture_senses_snapshot(caster.senses).visible)
+    assert (cell_in(capture_senses_snapshot(caster.senses).visible, destination))
     assert destination not in caster.senses.paths
     assert MistyStep(source_entity_uuid=caster.uuid, end_position=destination).pre_validate()
     available = get_available_actions(caster)

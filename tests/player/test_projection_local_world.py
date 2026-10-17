@@ -3,6 +3,7 @@
 from uuid import uuid4
 
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
+from tests.sensory_cells import packed_cells
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import (
     EventPhase, SensoryUpdateEvent, SpatialChangeEvent, SpatialChangeType, WorldInitializedEvent, WorldModifiedEvent,
@@ -51,7 +52,7 @@ def objective(index, event):
 
 def sensory(observer, **changes):
     return SensoryUpdateEvent.model_validate(dict(source_entity_uuid=observer,
-        observer_uuid=observer, use_register=False, phase=EventPhase.COMPLETION, **changes),
+        observer_uuid=observer, use_register=False, phase=EventPhase.COMPLETION, **packed_cells(changes)),
         context=PASSIVE_EVENT_REPLAY)
 
 

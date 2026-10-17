@@ -24,6 +24,7 @@ from dnd.core.values import BaseValue
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.core.cells import mask_positions
 
 
 class RecordingController(Controller):
@@ -161,7 +162,7 @@ def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
     assert (5, 1) in {
         position
         for update in updates
-        for position in update.seen_cells_added
+        for position in mask_positions(update.seen_cells_added)
     }
     assert EventQueue.get_events_by_type(EventType.SENSORY_UPDATE)
 
