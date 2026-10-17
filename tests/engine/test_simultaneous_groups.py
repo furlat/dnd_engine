@@ -48,7 +48,8 @@ def _counting():
 def _observation(observer: Entity) -> dict:
     snapshot = capture_senses_snapshot(observer.senses)
     return {"visible": snapshot.visible, "entities": snapshot.entities, "objects": snapshot.objects,
-        "hazardous_cells": snapshot.hazardous_cells, "light": snapshot.effective_light_levels}
+        "hazardous_cells": snapshot.hazardous_cells, "light": snapshot.effective_light_levels,
+        "light_sources": snapshot.light_sources}
 
 
 def assert_matches_cold_recompute(*observers: Entity) -> None:
