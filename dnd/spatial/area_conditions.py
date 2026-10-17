@@ -121,8 +121,10 @@ class SpatialCondition(BaseCondition):
                 or self.movement_expenditure_extra
                 or self.hazard_filter is not None):
             channels.add(SpatialChannel.MOVEMENT)
-        if self.optical_obscurement is not None or self.blocks_physical_optics:
+        if self.blocks_physical_optics:
             channels.add(SpatialChannel.OPTICAL)
+        if self.optical_obscurement is not None:
+            channels.add(SpatialChannel.OBSCUREMENT)
         declared = self.crossing_channels or frozenset()
         channels.update(edge_revision_channels(channel for channel in WorldEdgeChannel if channel in declared))
         return frozenset(channels)

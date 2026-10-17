@@ -4,6 +4,8 @@ from functools import lru_cache
 from bisect import bisect_left, bisect_right
 from typing import Literal, Set, Tuple, List, Optional
 
+import numpy as np
+
 
 def grid_distance_cells(
     origin: Tuple[int, int],
@@ -142,6 +144,45 @@ def supercover_line_relative(dx: int, dy: int) -> Tuple[Tuple[int, int], ...]:
 def supercover_cells_relative(dx: int, dy: int) -> frozenset[Tuple[int, int]]:
     """The cells of `supercover_line_relative(dx, dy)`, for set intersection."""
     return frozenset(_supercover_line_relative_cached(dx, dy))
+
+
+# Square radius in cells of the vectorized route table (81 x 81 endpoints).
+ROUTE_TABLE_RADIUS = 40
+
+
+@lru_cache(maxsize=1)
+def supercover_route_table() -> Tuple[np.ndarray, np.ndarray]:
+    """Every `supercover_line_relative` from the origin within the table square, as flat cell indices.
+
+    Row ``(dx + r) * (2r + 1) + (dy + r)`` holds the line to (dx, dy) in order, its cells
+    flattened the same way and padded with ``(2r + 1) ** 2`` (one past the grid); the
+    second array holds each line's length. The same stepping rule as the scalar line,
+    applied to every endpoint at once.
+    """
+    radius = ROUTE_TABLE_RADIUS
+    side = 2 * radius + 1
+    dx, dy = (axis.ravel() for axis in np.meshgrid(
+        np.arange(-radius, radius + 1), np.arange(-radius, radius + 1), indexing="ij"))
+    nx, ny, sx, sy = np.abs(dx), np.abs(dy), np.sign(dx), np.sign(dy)
+    x, y, ix, iy = (np.zeros_like(dx) for _ in range(4))
+    cells = np.full((dx.size, 2 * radius + 1), side * side, dtype=np.int32)
+    cells[:, 0] = radius * side + radius
+    lengths = np.ones(dx.size, dtype=np.int32)
+    for step in range(1, 2 * radius + 1):
+        active = (ix < nx) | (iy < ny)
+        x_mid = (1 + 2 * ix) * ny
+        y_mid = (1 + 2 * iy) * nx
+        move_x = active & (ix < nx) & ((iy >= ny) | (x_mid < y_mid))
+        move_y = active & ~move_x & (iy < ny) & ((ix >= nx) | (y_mid < x_mid))
+        step_x = move_x | (active & ~move_x & ~move_y)
+        step_y = move_y | (active & ~move_x & ~move_y)
+        x += sx * step_x
+        y += sy * step_y
+        ix += step_x
+        iy += step_y
+        cells[active, step] = ((x + radius) * side + (y + radius))[active]
+        lengths += active
+    return cells, lengths
 
 
 @lru_cache(maxsize=8192)

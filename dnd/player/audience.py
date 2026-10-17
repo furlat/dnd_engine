@@ -116,8 +116,12 @@ def _effect_signature(value: PerceivedSpatialEffect) -> tuple:
         value.presence_mode, value.area_propagation, value.deposit_source)
 
 
-_JOINED_OPTIONAL = ('anchor_position', 'anchor_elevation_steps', 'anchor_entity_uuid', 'anchor_item_uuid',
-                    'sustainer_item_uuid', 'concentration_slot_uuid', 'area_geometry')
+def _joined_optional(value: PerceivedSpatialEffect) -> dict:
+    """The fields one observation may leave unset and another may supply."""
+    return {'anchor_position': value.anchor_position, 'anchor_elevation_steps': value.anchor_elevation_steps,
+        'anchor_entity_uuid': value.anchor_entity_uuid, 'anchor_item_uuid': value.anchor_item_uuid,
+        'sustainer_item_uuid': value.sustainer_item_uuid, 'concentration_slot_uuid': value.concentration_slot_uuid,
+        'area_geometry': value.area_geometry}
 
 
 def _join_effects(first: PerceivedSpatialEffect, rows: Iterable[PerceivedSpatialEffect]) -> PerceivedSpatialEffect:
@@ -129,7 +133,7 @@ def _join_effects(first: PerceivedSpatialEffect, rows: Iterable[PerceivedSpatial
     if first.owner_revision is None:
         return first
     signature = _effect_signature(first)
-    optional = {key: getattr(first, key) for key in _JOINED_OPTIONAL}
+    optional = _joined_optional(first)
     positions = set(first.positions)
     volume = set(first.visible_volume_positions)
     upper = {(row.position, row.lower_height_planes): row for row in first.upper_volume_surfaces}
@@ -141,8 +145,8 @@ def _join_effects(first: PerceivedSpatialEffect, rows: Iterable[PerceivedSpatial
         if second.owner_revision != first.owner_revision or _effect_signature(second) != signature:
             continue
         values = {}
-        for key in _JOINED_OPTIONAL:
-            old, new = optional[key], getattr(second, key)
+        for key, new in _joined_optional(second).items():
+            old = optional[key]
             if old is not None and new is not None and old != new:
                 break
             values[key] = old if old is not None else new

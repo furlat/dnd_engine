@@ -778,11 +778,13 @@ class SpatialSensesSystem:
         if sensory_events:
             EventQueue.register_completion_sequence(sensory_events)
             self.published_observers.update(event.observer_uuid for event in sensory_events)
+        self._forget_refreshed_light_changes()
 
     def register_observer(self, observer_uuid: UUID, senses: Senses) -> None:
         """Register an observer without independently materializing its world view."""
         self.senses_by_observer[observer_uuid] = senses
         senses._field = None
+        senses._light_epoch = None
 
     def unregister_observer(self, observer_uuid: UUID) -> None:
         """Remove an observer and all of its candidate memberships."""
@@ -1809,6 +1811,13 @@ class SpatialSensesSystem:
         if sensory_events:
             EventQueue.register_completion_sequence(sensory_events)
             self.published_observers.update(event.observer_uuid for event in sensory_events)
+        self._forget_refreshed_light_changes()
+
+    def _forget_refreshed_light_changes(self) -> None:
+        """Retain only the emitter revisions some registered observer has not refreshed past."""
+        epochs = [senses._light_epoch for senses in self.senses_by_observer.values() if senses._light_epoch is not None]
+        if epochs:
+            get_map().forget_light_changes_through(min(epochs))
 
     def _reduce_observer(
         self,
@@ -2033,14 +2042,12 @@ class SpatialSensesSystem:
         grid = get_map()
         candidates = None
         if scope is not None and senses._light_epoch is not None:
-            candidates = grid.light_sources_changed_since(senses._light_epoch)
-            if candidates is not None:
-                positions, entities, objects = scope
-                candidates |= grid.light_sources_at(positions)
-                for identity in (*entities, *objects):
-                    block = BaseBlock.get(identity)
-                    if block is not None:
-                        candidates |= block.get_attached_light_sources()
+            positions, entities, objects = scope
+            candidates = grid.light_sources_changed_since(senses._light_epoch) | grid.light_sources_at(positions)
+            for identity in (*entities, *objects):
+                block = BaseBlock.get(identity)
+                if block is not None:
+                    candidates |= block.get_attached_light_sources()
         senses._light_epoch = grid.light_epoch
         previous = senses.light_sources
         sources = grid.observe_light_sources(observer_uuid, senses.visible.keys(), senses.entities, senses.objects,

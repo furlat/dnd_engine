@@ -11,10 +11,12 @@ from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
 
+import numpy as np
 from pydantic import BaseModel, Field
 
 from dnd.types.event_facts import LandingKind
-from dnd.core.geometry import (circle_positions, supercover_line, supercover_cells_relative,
+from dnd.core.geometry import (ROUTE_TABLE_RADIUS, circle_positions, supercover_line, supercover_cells_relative,
+    supercover_route_table,
     supercover_slope_order, supercover_incoming_ranges, supercover_incoming_rank_ranges)
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
@@ -83,6 +85,10 @@ from dnd.types.world_placement import (
 from dnd.action_timing import action_timing_enabled, record_action_count, record_action_elapsed, record_action_timing
 
 OpticalSnapshot = Dict[Tuple[int, int], Dict[UUID, frozenset[OpticalObscurement]]]
+# One bit per obscurement value, and the value set of every bit mask, for vectorized routes.
+_OBSCUREMENT_BITS = {value: 1 << index for index, value in enumerate(OpticalObscurement)}
+_OBSCUREMENT_SETS = tuple(frozenset(value for value, bit in _OBSCUREMENT_BITS.items() if mask & bit)
+                          for mask in range(1 << len(_OBSCUREMENT_BITS)))
 
 SPATIAL_CHUNK_SIZE = 16
 FOV_CACHE_ORIGINS = 64
@@ -275,7 +281,6 @@ class GridMap:
         # observer's last epoch names exactly the emitters changed since.
         self._light_epoch = 0
         self._light_changes: List[Tuple[int, UUID]] = []
-        self._light_changes_floor = 0
         self._block_light_suppressions: DefaultDict[UUID, Set[str]] = defaultdict(set)
         self._optical_obscurements_by_position: DefaultDict[
             Tuple[int, int], Dict[UUID, OpticalObscurement]
@@ -545,7 +550,8 @@ class GridMap:
     def _bump_observer_revisions(
         self, channels: frozenset[SpatialChannel], positions: Optional[Collection[Tuple[int, int]]],
     ) -> None:
-        optical = int(SpatialChannel.OPTICAL in channels)
+        # An observer's field reads physical sight and route obscurement alike.
+        optical = int(SpatialChannel.OPTICAL in channels or SpatialChannel.OBSCUREMENT in channels)
         illumination = int(SpatialChannel.ILLUMINATION in channels)
         propagation = int(SpatialChannel.PROPAGATION in channels)
         occupancy = int(SpatialChannel.OCCUPANCY in channels)
@@ -5571,16 +5577,43 @@ class GridMap:
         ``exclude_end`` leaves out the target cell itself (the route before it).
         """
         ox, oy = origin
+        radius = ROUTE_TABLE_RADIUS
+        result: Dict[Tuple[int, int], Set[OpticalObscurement]] = {}
+        tabled: List[Tuple[int, int]] = []
         relative = {(x - ox, y - oy): owners for (x, y), owners in snapshot.items()}
         obscured = set(relative)  # a set: `line & obscured` iterates the shorter side in C
-        result: Dict[Tuple[int, int], Set[OpticalObscurement]] = {}
         for position in positions:
             dx, dy = position[0] - ox, position[1] - oy
+            if -radius <= dx <= radius and -radius <= dy <= radius:
+                tabled.append(position)
+                continue
             crossed = supercover_cells_relative(dx, dy) & obscured
             if exclude_end and crossed:
                 crossed = crossed - {(dx, dy)}
             result[position] = ({value for offset in crossed for values in relative[offset].values() for value in values}
                                 if crossed else set())
+        if not tabled:
+            return result
+        # Every tabled route at once: each cell's obscurement values as bits,
+        # gathered along the routes and OR-reduced (the endpoint dropped first
+        # when excluded).
+        side = 2 * radius + 1
+        cells, lengths = supercover_route_table()
+        indices, masks = [], []
+        for (dx, dy), owners in relative.items():
+            if -radius <= dx <= radius and -radius <= dy <= radius:
+                indices.append((dx + radius) * side + dy + radius)
+                masks.append(sum({_OBSCUREMENT_BITS[value] for values in owners.values() for value in values}))
+        grid = np.zeros(side * side + 1, dtype=np.uint8)
+        grid[indices] = masks
+        offsets = np.array(tabled, dtype=np.int64) - (ox, oy)
+        rows = (offsets[:, 0] + radius) * side + offsets[:, 1] + radius
+        row_lengths = lengths[rows]
+        crossed = grid[cells[rows, :int(row_lengths.max())]]
+        if exclude_end:
+            crossed[np.arange(rows.size), row_lengths - 1] = 0
+        for position, mask in zip(tabled, np.bitwise_or.reduce(crossed, axis=1).tolist()):
+            result[position] = set(_OBSCUREMENT_SETS[mask])
         return result
 
     def _publish_optical_obscurement_change(
@@ -5592,9 +5625,9 @@ class GridMap:
         """Publish one committed batch fact for a conditional optical change."""
         live = {position for position in positions if position in self._tiles}
         if not live:
-            self._bump_observer_revisions(frozenset({SpatialChannel.OPTICAL}), positions)
+            self._bump_observer_revisions(frozenset({SpatialChannel.OBSCUREMENT}), positions)
             return
-        self._bump_spatial_revisions(frozenset({SpatialChannel.OPTICAL}), positions)
+        self._bump_spatial_revisions(frozenset({SpatialChannel.OBSCUREMENT}), positions)
         representative = min(live)
         event = SpatialChangeEvent.tile_changed(
             representative,
@@ -5667,21 +5700,20 @@ class GridMap:
         self._light_source_revisions[source.uuid] = source.revision
         self._light_epoch += 1
         self._light_changes.append((self._light_epoch, source.uuid))
-        if len(self._light_changes) > 4096:
-            del self._light_changes[:2048]
-            self._light_changes_floor = self._light_changes[0][0] - 1
 
     @property
     def light_epoch(self) -> int:
         """The latest emitter revision's position in the change order."""
         return self._light_epoch
 
-    def light_sources_changed_since(self, epoch: int) -> Optional[Set[UUID]]:
-        """Emitters revised after this epoch; None when the retained order no longer reaches it."""
-        if epoch < self._light_changes_floor:
-            return None
+    def light_sources_changed_since(self, epoch: int) -> Set[UUID]:
+        """Emitters revised after this epoch; its observer's refresh keeps it retained."""
         start = bisect_right(self._light_changes, epoch, key=lambda row: row[0])
         return {identity for _, identity in self._light_changes[start:]}
+
+    def forget_light_changes_through(self, epoch: int) -> None:
+        """Drop revisions every observer has already refreshed past."""
+        del self._light_changes[:bisect_right(self._light_changes, epoch, key=lambda row: row[0])]
 
     def light_sources_at(self, positions: Iterable[Tuple[int, int]]) -> Set[UUID]:
         """Emitters currently contributing illumination at these cells."""
@@ -6384,7 +6416,6 @@ class GridMap:
         self._light_sources.clear()
         self._light_source_revisions.clear()
         self._light_changes.clear()
-        self._light_changes_floor = self._light_epoch
         self._block_light_suppressions.clear()
         self._optical_obscurements_by_position.clear()
         self._optical_obscurement_positions_by_source.clear()

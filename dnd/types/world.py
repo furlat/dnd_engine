@@ -53,7 +53,10 @@ class SpatialChannel(StrEnum):
     """Objective world channel whose change invalidates derived spatial state."""
 
     MOVEMENT = "movement"
+    # Physical sight geometry: what shadowcast field of view reads.
     OPTICAL = "optical"
+    # Conditional obscurement along sight routes; physical field of view is unchanged.
+    OBSCUREMENT = "obscurement"
     ILLUMINATION = "illumination"
     PROPAGATION = "propagation"
     OCCUPANCY = "occupancy"
