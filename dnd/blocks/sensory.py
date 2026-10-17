@@ -24,7 +24,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_tiles import Tile
-from dnd.core.gridmap import SpatialConditionOwner, get_map
+from dnd.core.gridmap import GridMap, SpatialConditionOwner, get_map
 from dnd.core.geometry import supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
@@ -393,11 +393,6 @@ def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
     )
 
 
-def _mask_positions(x0: int, y0: int, mask: np.ndarray) -> List[Position]:
-    xs, ys = np.nonzero(mask)
-    return list(zip((xs + x0).tolist(), (ys + y0).tolist()))
-
-
 def _seen_added(before: CellLayer, after: CellLayer, initial: bool) -> CellMask:
     if initial or not before.values.size:
         return pack_mask(after.x0, after.y0, after.values.astype(bool))
@@ -739,8 +734,8 @@ class SettlementWorld:
     light_sources: LightSourceTable
     optical_revision: int
     propagation_revision: int
-    sight_version: int               # advances when the Tile or obscurement grid differs from the last settlement's
-    light_version: int               # advances when the light grid differs from the last settlement's
+    sight_version: int               # GridMap's Tile and obscurement grid revision (advanced by their writers)
+    light_version: int               # GridMap's light grid revision
 
 
 STEALTH_NONE = np.iinfo(np.int64).min
@@ -898,6 +893,7 @@ class SpatialSensesSystem:
         self._pending: Dict[UUID, _GroupSettlement] = {}
         self._settling = False
         self._absorbing_light = False
+        self._settled_with_light = False
         # The identity grants of a creature at a cell, valid while no observer's published
         # perception changes: every perception write (register, unregister, recompute,
         # reset) clears them.
@@ -911,10 +907,9 @@ class SpatialSensesSystem:
         # version advances with every update, and the update's changed target keys are kept.
         self._table: Optional[ContactTable] = None
         self._table_version = 0
+        # The map the fields and tables were read from.
+        self._map: Optional[GridMap] = None
         self._table_changes: Optional[np.ndarray] = None
-        # The last settlement's Tile, obscurement and light grids with their versions: an observer
-        # that read the current versions reads the same grids over its window.
-        self._grids: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, int, int]] = None
         # The last settled group's late-completing facts and its observers. A
         # zone change opened in that group completes right after it (its
         # completion reads settled senses); those observers already settled it.
@@ -939,13 +934,14 @@ class SpatialSensesSystem:
         self._pending.clear()
         self._settling = False
         self._absorbing_light = False
+        self._settled_with_light = False
         self._identity_grants.clear()
         self._target_ids.clear()
         self._light_table = None
-        self._grids = None
         self._table = None
         self._table_version = 0
         self._table_changes = None
+        self._map = None
 
     def _recording(self) -> bool:
         """Whether facts are recorded for the open group instead of settled now.
@@ -959,13 +955,21 @@ class SpatialSensesSystem:
                 and (self._absorbing_light or not group.settling))
 
     def settle_group(self, group: OpenGroup) -> None:
-        """Publish the group's pending light, then settle every recorded observer once."""
-        root_uuid = group.root_uuid
-        self._absorbing_light = True
+        """Publish the group's pending light and settle every recorded observer once: with the light
+        fact, before it completes (its consumers read the settled view), or after, without one."""
+        self._absorbing_light, self._settled_with_light = True, False
         try:
-            get_map().settle_pending_lights(parent_event=root_uuid)
+            get_map().settle_pending_lights(parent_event=group.root_uuid)
         finally:
             self._absorbing_light = False
+        if not self._settled_with_light or self._pending:
+            covered = self._covered_observers if self._settled_with_light else frozenset()
+            self._settle_recorded(group)
+            self._covered_observers |= covered
+
+    def _settle_recorded(self, group: OpenGroup) -> None:
+        """Settle every observer recorded while the group was open, once, with all its facts."""
+        root_uuid = group.root_uuid
         pending, self._pending = self._pending, {}
         self._covered_facts, self._covered_observers = frozenset(group.completes_after), frozenset(pending)
         # A zone change opened in the group completes right after it and its
@@ -1137,6 +1141,13 @@ class SpatialSensesSystem:
         if self._recording():
             for observer_uuid in self.selected_observers(event):
                 self._pending.setdefault(observer_uuid, _GroupSettlement([])).events.append(event)
+            group = EventQueue.open_group()
+            if self._absorbing_light and group is not None and event.event_type in (
+                    EventType.SPATIAL_LIGHT_CHANGED, EventType.SPATIAL_LIGHT_SOURCES_CHANGED):
+                # The group's own light fact is its last: the group settles with it, before it completes;
+                # what its consumers do then reduces as after the group.
+                self._absorbing_light, self._settled_with_light = False, True
+                self._settle_recorded(group)
             return
         deferred: Set[UUID] = set()
         if event.lineage_uuid in self._covered_facts:
@@ -1273,6 +1284,13 @@ class SpatialSensesSystem:
 
     def _world(self) -> SettlementWorld:
         grid = get_map()
+        if grid is not self._map:
+            # A replaced map: every field and table read the old one.
+            self.fields.clear()
+            self._identity_grants.clear()
+            self._light_table = None
+            self._table = None
+            self._map = grid
         exists = grid.cell_exists
         grid.settle_obscurement_activity()
         hazard_owners, hazard_x, hazard_y, hazard_owner = grid.hazard_owners()
@@ -1288,20 +1306,10 @@ class SpatialSensesSystem:
                 np.array([self._target_key(anchor, False) if anchor is not None else -1
                           for _, anchor, _, _ in light_rows], dtype=np.int64),
                 light_rows)
-        kept = self._grids
-        obscurement, light = grid.cell_obscurement, grid.cell_light
-        sight_version = light_version = 0
-        if kept is not None:
-            same_shape = kept[0].shape == exists.values.shape
-            sight_version = kept[3] + (0 if same_shape and np.array_equal(kept[0], exists.values)
-                                       and np.array_equal(kept[1], obscurement.values) else 1)
-            light_version = kept[4] + (0 if same_shape and np.array_equal(kept[2], light.values) else 1)
-        if kept is None or (sight_version, light_version) != kept[3:]:
-            self._grids = (exists.values.copy(), obscurement.values.copy(), light.values.copy(),
-                           sight_version, light_version)
-        return SettlementWorld(exists, light, grid.obscurement_layers(), obscurement,
+        return SettlementWorld(exists, grid.cell_light, grid.obscurement_layers(), grid.cell_obscurement,
                                hazard_owners, hazard_x, hazard_y, hazard_owner, lights,
-                               grid.optical_revision, grid.propagation_revision, sight_version, light_version)
+                               grid.optical_revision, grid.propagation_revision, grid.sight_grid_revision,
+                               grid.light_grid_revision)
 
     def _recompute(self, observers: Sequence[UUID], affected: Mapping[UUID, Optional[Set[Position]]],
                    shared: SharedValues, table_cells: Optional[Set[Position]],
@@ -1658,7 +1666,10 @@ class SpatialSensesSystem:
         # fixtures stand.
         surfaces = {position for positions in volumes.values() for position in positions}
         surfaces.update(row.position for rows in upper.values() for row in rows)
+        # An observation also reads the observer's contacts (a fixture's anchor) and its passive
+        # perception (hazard perception): any contact change or a passive change re-runs the stage.
         fixtures_kept = (view.published and cells.visible is before_visible and affected is not None
+                         and contact_changes == (frozenset(), frozenset()) and field.passive == passive
                          and volumes == field.volumes and upper == field.upper
                          and not any(cell_visible(cells, position) or position in surfaces for position in affected))
         effect_before = {} if fixtures_kept else self._refresh_spatial_effects(
@@ -2249,7 +2260,7 @@ class SpatialSensesSystem:
         emitter's descriptor inputs."""
         grid = get_map()
         lights = world.light_sources
-        visual_keys = np.unique(contact_rows[contact_rows[:, 5] != 0, 7])
+        visual_keys = np.sort(contact_rows[contact_rows[:, 5] != 0, 7])
         known = field.light_inputs
         if known is not None and known[0] is lights and known[1] is visible and np.array_equal(known[2], visual_keys):
             return known, field.light_values
@@ -2260,9 +2271,9 @@ class SpatialSensesSystem:
             slots = lights.slots[slotted]
             lit[slotted] = ((words[slots // 64] >> (slots % 64).astype(np.uint64)) & np.uint64(1)) != 0
         own = self._target_key(observer_uuid, True)
-        anchor_entity = (lights.anchor_entity_key >= 0) & (np.isin(lights.anchor_entity_key, visual_keys, kind="table")
+        anchor_entity = (lights.anchor_entity_key >= 0) & (_in_sorted(lights.anchor_entity_key, visual_keys)
                                                           | (lights.anchor_entity_key == own))
-        anchor_item = (lights.anchor_item_key >= 0) & np.isin(lights.anchor_item_key, visual_keys, kind="table")
+        anchor_item = (lights.anchor_item_key >= 0) & _in_sorted(lights.anchor_item_key, visual_keys)
         inputs = (lights, visible, visual_keys, lit, anchor_entity, anchor_item)
         previous = senses.light_sources
         previous_values = field.light_values
@@ -2288,16 +2299,18 @@ class SpatialSensesSystem:
         # A first view describes every lit emitter afresh; a settled one starts from what it published.
         sources = dict(previous) if known is not None else {}
         values_of = dict(previous_values) if known is not None else {}
+        membership = known is None
+        replaced = False
         # Emitters gone from the table are no longer lit.
         for identity in gone:
-            sources.pop(identity, None)
+            membership = sources.pop(identity, None) is not None or membership
             values_of.pop(identity, None)
         for row, row_lit, entity_seen, item_seen in zip(
                 [lights.rows[index] for index in np.flatnonzero(check).tolist()], lit[check].tolist(),
                 anchor_entity[check].tolist(), anchor_item[check].tolist()):
             identity = row.identity
             if not row_lit:
-                sources.pop(identity, None)
+                membership = sources.pop(identity, None) is not None or membership
                 values_of.pop(identity, None)
                 continue
             values = row.values + (row.anchor_uuid if entity_seen else None, row.anchor_uuid if item_seen else None)
@@ -2316,19 +2329,23 @@ class SpatialSensesSystem:
                         dim_radius_feet=dim, actor_anchored=actor_anchored, anchor_entity_uuid=anchor_entity_uuid,
                         anchor_item_uuid=anchor_item_uuid)
                 sources[identity] = descriptor
+            current = previous.get(identity)
+            membership = membership or current is None
+            replaced = replaced or (current is not None and current is not sources[identity])
             values_of[identity] = values
-        if sources.keys() == previous.keys() and all(sources[identity] is previous[identity] for identity in sources):
+        if not membership and not replaced:
             return inputs, values_of
-        # Published in table order.
-        order = [row.identity for row in lights.rows if row.identity in sources]
-        sources = {identity: sources[identity] for identity in order}
-        values_of = {identity: values_of[identity] for identity in order}
-        for identity in previous:
-            if identity not in sources:
-                senses.light_source_removals[identity] = max(previous[identity].revision,
-                    grid.light_source_revision(identity))
-        for identity in sources:
-            senses.light_source_removals.pop(identity, None)
+        if membership:
+            # Published in table order; a replaced descriptor keeps its place.
+            order = [row.identity for row in lights.rows if row.identity in sources]
+            sources = {identity: sources[identity] for identity in order}
+            values_of = {identity: values_of[identity] for identity in order}
+            for identity in previous:
+                if identity not in sources:
+                    senses.light_source_removals[identity] = max(previous[identity].revision,
+                        grid.light_source_revision(identity))
+            for identity in sources:
+                senses.light_source_removals.pop(identity, None)
         senses.light_sources = sources
         return inputs, values_of
 
@@ -2446,6 +2463,13 @@ def _targets_at(table: ContactTable, positions: Set[Position]) -> np.ndarray:
         return np.isin(_pack_cells(np.zeros(xs.size, dtype=np.int64), xs, ys), cells)
     return np.concatenate((table.cell_target_key[at(table.cell_x, table.cell_y)],
                            table.side_target_key[at(table.side_x, table.side_y) | at(table.across_x, table.across_y)]))
+
+
+def _in_sorted(values: np.ndarray, keys: np.ndarray) -> np.ndarray:
+    """Whether each value is among sorted keys."""
+    if not keys.size:
+        return np.zeros(values.shape, dtype=bool)
+    return keys[np.minimum(np.searchsorted(keys, values), keys.size - 1)] == values
 
 
 def _light_table_diff(previous: LightSourceTable, current: LightSourceTable,
