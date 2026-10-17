@@ -714,7 +714,7 @@ def _retained_event(event: Event, audience: PlayerAudience,
                     retained_entries: dict[int, CombatLogEntry | None] | None = None,
                     *, omit_sensory_payload: bool = False,
                     bodies: dict[tuple[UUID, bool, bool | None], Event] | None = None) -> Event:
-    """The seat's retained copy: the shared detached body plus this seat's combat log."""
+    """The seat's retained event: the shared detached body, copied only to carry this seat's combat log."""
     projected_log = project_combat_log(
         event.combat_log, known_entity_names=known_entity_names, retained_entries=retained_entries,
         known_connector_uuids=known_connector_uuids, known_content_ids=known_content_ids,
@@ -728,6 +728,8 @@ def _retained_event(event: Event, audience: PlayerAudience,
         body = _retained_body(event, controls, omit_sensory_payload=omit_sensory_payload)
         if bodies is not None:
             bodies[key] = body
+    if projected_log is None:
+        return body
     return body.model_copy(update={"combat_log": deepcopy(projected_log)})
 
 
