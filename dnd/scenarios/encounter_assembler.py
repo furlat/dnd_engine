@@ -39,6 +39,7 @@ from dnd.core.content.materialization import (
     CreaturePossessionMode,
 )
 from dnd.core.content.registration import get_content_declaration
+from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
 from dnd.encounter import Encounter
@@ -55,6 +56,7 @@ from dnd.items.spell_items import (
     build_wand_of_magic_missiles,
 )
 from dnd.reactions import add_opportunity_attack_handler
+from dnd.types.event_facts import GroupEntryKind
 from dnd.scenarios.encounter_compatibility import (
     check_built_encounter_compatibility,
     check_encounter_compatibility,
@@ -503,11 +505,13 @@ def assemble_encounter_recipe(
     except BaseException:
         _discard_provisional_entities(tuple(by_address.values()))
         raise
-    for (roster_slot_id, member_id), entity in by_address.items():
-        game.deploy_entity(
-            entity,
-            positions[roster_slot_id][member_id],
-        )
+    # Every member arrives at once: observers settle once, after the last deploy.
+    with EventQueue.group(GroupEntryKind.DEPLOYMENT):
+        for (roster_slot_id, member_id), entity in by_address.items():
+            game.deploy_entity(
+                entity,
+                positions[roster_slot_id][member_id],
+            )
     for target, effect in deferred:
         _apply_deferred_setup_effect(
             target,

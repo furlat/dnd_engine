@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from contextvars import ContextVar
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, StrictInt, field_serializer, model_validator
-from typing import AbstractSet, Union, List, Optional, Dict, Mapping, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
+from typing import FrozenSet, Union, List, Optional, Dict, Mapping, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
 from dnd.core.values import (AdvantageBreakdownRow, ModifiableValue, ValueBreakdownRow, ValueRead, ValueReading,
     read_value)
 from dnd.types.actor import TemporaryHitPointsGrant, ConditionState
@@ -170,6 +170,16 @@ class OpenGroup:
     # Lineages of facts opened in the group that complete right after its
     # settle (a zone's own change): settled observers need no second pass.
     completes_after: Set[UUID] = field(default_factory=set)
+
+
+def merge_grants(grants: Dict[str, FrozenSet[str]], added: Mapping[str, FrozenSet[str]]) -> None:
+    """Union observer grants into one version's dict; a value is replaced only when the union adds observers."""
+    for identity, observers in added.items():
+        held = grants.get(identity)
+        if held is None:
+            grants[identity] = observers
+        elif not observers <= held:
+            grants[identity] = held | observers
 
 
 def value_log_rows(rows: Sequence[ValueBreakdownRow]) -> List[ModifierBreakdown]:
@@ -352,7 +362,7 @@ class Event(BaseModel):
     # Passive archive admission may need current defaults without claiming they
     # were recorded. The recording codec alone owns this omission metadata.
     _recorded_omissions: frozenset[str] = PrivateAttr(default=frozenset())
-    identified_entity_observer_uuids: Dict[str, Set[str]] = Field(
+    identified_entity_observer_uuids: Dict[str, FrozenSet[str]] = Field(
         default_factory=dict,
         exclude=True,
         description=(
@@ -360,7 +370,7 @@ class Event(BaseModel):
             "values are observer UUIDs that identified that participant."
         ),
     )
-    located_entity_observer_uuids: Dict[str, Set[str]] = Field(
+    located_entity_observer_uuids: Dict[str, FrozenSet[str]] = Field(
         default_factory=dict,
         exclude=True,
         description=(
@@ -368,7 +378,7 @@ class Event(BaseModel):
             "unlike identity grants these are recomputed at every event version."
         ),
     )
-    located_position_observer_uuids: Dict[str, Set[str]] = Field(
+    located_position_observer_uuids: Dict[str, FrozenSet[str]] = Field(
         default_factory=dict,
         exclude=True,
         description=(
@@ -421,14 +431,11 @@ class Event(BaseModel):
 
     def completion_position_observer_evidence(
         self,
-        completion_locations: Dict[str, Set[str]],
-    ) -> Dict[str, Set[str]]:
+        completion_locations: Mapping[str, FrozenSet[str]],
+    ) -> Dict[str, FrozenSet[str]]:
         """Return coordinate grants to freeze onto the completion version."""
         del completion_locations
-        return {
-            key: set(observer_uuids)
-            for key, observer_uuids in self.located_position_observer_uuids.items()
-        }
+        return dict(self.located_position_observer_uuids)
 
     def model_post_init(self, __context: Any) -> None:
         if __context is PASSIVE_EVENT_REPLAY:
@@ -489,12 +496,8 @@ class Event(BaseModel):
         if new_phase == EventPhase.COMPLETION:
             EventQueue.run_pre_completion_callbacks(self)
             if EventQueue._identified_entity_observer_computer is not None:
-                phase_updates["located_entity_observer_uuids"] = {
-                    entity_uuid: set(observer_uuids)
-                    for entity_uuid, observer_uuids in (
-                        EventQueue._identified_entity_observer_computer(self).items()
-                    )
-                }
+                phase_updates["located_entity_observer_uuids"] = (
+                    EventQueue._identified_entity_observer_computer(self))
             completion_locations = phase_updates.get(
                 "located_entity_observer_uuids",
                 self.located_entity_observer_uuids,
@@ -529,18 +532,10 @@ class Event(BaseModel):
                 temp_event = self.model_copy(update=phase_updates)
                 combat_log = temp_event.generate_combat_log()
                 if combat_log is not None:
-                    combat_log.identified_entity_observer_uuids = {
-                        entity_uuid: set(observer_uuids)
-                        for entity_uuid, observer_uuids in temp_event.identified_entity_observer_uuids.items()
-                    }
-                    combat_log.located_entity_observer_uuids = {
-                        entity_uuid: set(observer_uuids)
-                        for entity_uuid, observer_uuids in temp_event.located_entity_observer_uuids.items()
-                    }
-                    combat_log.located_position_observer_uuids = {
-                        position: set(observer_uuids)
-                        for position, observer_uuids in temp_event.located_position_observer_uuids.items()
-                    }
+                    # The log shares the version's frozen grant values; neither mutates them.
+                    combat_log.identified_entity_observer_uuids = temp_event.identified_entity_observer_uuids
+                    combat_log.located_entity_observer_uuids = temp_event.located_entity_observer_uuids
+                    combat_log.located_position_observer_uuids = temp_event.located_position_observer_uuids
                     if EventQueue._perceiver_computer:
                         combat_log.perceiver_uuids = EventQueue.perceivers_for_event(temp_event)
 
@@ -1369,7 +1364,7 @@ class EventQueue:
     _combat_log_callback: Optional[Callable[['Event'], None]] = None
     _perceiver_computer: Optional[Callable[['Event'], Set[str]]] = None
     _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
-    _identified_entity_observer_computer: Optional[Callable[['Event'], Mapping[str, AbstractSet[str]]]] = None
+    _identified_entity_observer_computer: Optional[Callable[['Event'], Dict[str, FrozenSet[str]]]] = None
 
     @classmethod
     def begin_turn_execution(cls, execution_id: Optional[UUID] = None) -> UUID:
@@ -1426,7 +1421,7 @@ class EventQueue:
     @classmethod
     def set_identified_entity_observer_computer(
         cls,
-        func: Optional[Callable[['Event'], Mapping[str, AbstractSet[str]]]],
+        func: Optional[Callable[['Event'], Dict[str, FrozenSet[str]]]],
     ) -> None:
         """Register the event-time participant identity provider.
 
@@ -1436,9 +1431,9 @@ class EventQueue:
         possessed when the event began.
 
         Args:
-            func: Callback returning participant UUID keys and the observer
-                UUIDs that currently identify each participant. The sets are
-                read only; each stored version receives its own copies.
+            func: Callback returning a fresh dict of participant UUID keys to
+                the frozen observer UUID sets that currently identify each
+                participant. Versions share those frozen values.
         """
         cls._identified_entity_observer_computer = func
 
@@ -2294,31 +2289,22 @@ class EventQueue:
             raise ValueError(f"Event UUID collision for {event.uuid}")
         timing = action_timing_enabled()
         total_started = time.perf_counter() if timing else 0.0
+        # Grants are shared frozen values: each version holds one dict of them,
+        # and a union makes a new value only when it adds observers.
         started = time.perf_counter() if timing else 0.0
-        identified = {
-            entity_uuid: set(observer_uuids)
-            for entity_uuid, observer_uuids in event.identified_entity_observer_uuids.items()
-        }
+        identified = dict(event.identified_entity_observer_uuids)
         if timing:
             record_action_timing("event_queue.store.copy_identified_ms", started)
         if cls._identified_entity_observer_computer is None:
-            located = {
-                entity_uuid: set(observer_uuids)
-                for entity_uuid, observer_uuids in event.located_entity_observer_uuids.items()
-            }
+            located = event.located_entity_observer_uuids
         else:
             # Location grants are this version's own; identity accumulates.
             started = time.perf_counter() if timing else 0.0
-            captured = cls._identified_entity_observer_computer(event)
-            located = {
-                entity_uuid: set(observer_uuids)
-                for entity_uuid, observer_uuids in captured.items()
-            }
+            located = cls._identified_entity_observer_computer(event)
             if timing:
                 record_action_timing("event_queue.store.compute_identified_ms", started)
             started = time.perf_counter() if timing else 0.0
-            for entity_uuid, observer_uuids in captured.items():
-                identified.setdefault(entity_uuid, set()).update(observer_uuids)
+            merge_grants(identified, located)
             if timing:
                 record_action_timing("event_queue.store.merge_identified_ms", started)
 
@@ -2329,8 +2315,7 @@ class EventQueue:
                 # Canceled children retain the same causal parent as completed
                 # ones; relationship identity exists before any terminal phase.
                 event.parent_lineage = parent_event.lineage_uuid
-            for entity_uuid, observer_uuids in parent_event.identified_entity_observer_uuids.items():
-                identified.setdefault(entity_uuid, set()).update(observer_uuids)
+            merge_grants(identified, parent_event.identified_entity_observer_uuids)
         event.identified_entity_observer_uuids = identified
         event.located_entity_observer_uuids = located
         if timing:
@@ -4404,11 +4389,10 @@ class PortalTransferEvent(Event):
         return {self.start_position, self.end_position}
 
     def completion_position_observer_evidence(
-        self, completion_locations: Dict[str, Set[str]],
-    ) -> Dict[str, Set[str]]:
+        self, completion_locations: Mapping[str, FrozenSet[str]],
+    ) -> Dict[str, FrozenSet[str]]:
         evidence = super().completion_position_observer_evidence(completion_locations)
-        evidence[position_evidence_key(self.start_position)] = set(
-            self.located_entity_observer_uuids.get(str(self.target_entity_uuid), set()))
+        evidence[position_evidence_key(self.start_position)] = self.located_entity_observer_uuids.get(str(self.target_entity_uuid), frozenset())
         # A paid arrival reaction may already have moved the creature again.
         # The crossing's direct entry child records who saw the actual exit.
         for child in self.get_children_events():
@@ -4416,8 +4400,7 @@ class PortalTransferEvent(Event):
                     and child.change_type is SpatialChangeType.ENTITY_ENTERED
                     and child.entity_uuid == self.target_entity_uuid
                     and child.position == self.end_position):
-                evidence[position_evidence_key(self.end_position)] = set(
-                    child.located_entity_observer_uuids.get(str(self.target_entity_uuid), set()))
+                evidence[position_evidence_key(self.end_position)] = child.located_entity_observer_uuids.get(str(self.target_entity_uuid), frozenset())
         return evidence
 
 
@@ -4515,8 +4498,8 @@ class ForcedMovementEvent(Event):
 
     def completion_position_observer_evidence(
         self,
-        completion_locations: Dict[str, Set[str]],
-    ) -> Dict[str, Set[str]]:
+        completion_locations: Mapping[str, FrozenSet[str]],
+    ) -> Dict[str, FrozenSet[str]]:
         """Freeze independent pre-displacement and post-displacement grants."""
         if (
             self.target_entity_uuid is None
@@ -4529,12 +4512,8 @@ class ForcedMovementEvent(Event):
         evidence = super().completion_position_observer_evidence(
             completion_locations
         )
-        evidence[position_evidence_key(self.start_position)] = set(
-            self.located_entity_observer_uuids.get(entity_key, set())
-        )
-        evidence[position_evidence_key(self.end_position)] = set(
-            completion_locations.get(entity_key, set())
-        )
+        evidence[position_evidence_key(self.start_position)] = self.located_entity_observer_uuids.get(entity_key, frozenset())
+        evidence[position_evidence_key(self.end_position)] = completion_locations.get(entity_key, frozenset())
         for child_uuid in self.lineage_children_events:
             child = EventQueue.get_event_by_uuid(child_uuid)
             if (isinstance(child, SpatialChangeEvent)
@@ -4542,8 +4521,7 @@ class ForcedMovementEvent(Event):
                     and child.entity_uuid == self.target_entity_uuid
                     and child.position == self.end_position
                     and child.phase is EventPhase.DECLARATION):
-                evidence[position_evidence_key(self.end_position)] = set(
-                    child.located_entity_observer_uuids.get(entity_key, set()))
+                evidence[position_evidence_key(self.end_position)] = child.located_entity_observer_uuids.get(entity_key, frozenset())
                 break
         return evidence
 
@@ -4597,19 +4575,15 @@ class StepMovementEvent(Event):
 
     def completion_position_observer_evidence(
         self,
-        completion_locations: Dict[str, Set[str]],
-    ) -> Dict[str, Set[str]]:
+        completion_locations: Mapping[str, FrozenSet[str]],
+    ) -> Dict[str, FrozenSet[str]]:
         """Freeze independent pre-step and post-step coordinate grants."""
         entity_key = str(self.source_entity_uuid)
         evidence = super().completion_position_observer_evidence(
             completion_locations
         )
-        evidence[position_evidence_key(self.from_position)] = set(
-            self.located_entity_observer_uuids.get(entity_key, set())
-        )
-        evidence[position_evidence_key(self.to_position)] = set(
-            completion_locations.get(entity_key, set())
-        )
+        evidence[position_evidence_key(self.from_position)] = self.located_entity_observer_uuids.get(entity_key, frozenset())
+        evidence[position_evidence_key(self.to_position)] = completion_locations.get(entity_key, frozenset())
         for child_uuid in self.lineage_children_events:
             child = EventQueue.get_event_by_uuid(child_uuid)
             if (isinstance(child, SpatialChangeEvent)
@@ -4618,8 +4592,7 @@ class StepMovementEvent(Event):
                     and child.position == self.to_position
                     and child.phase is EventPhase.DECLARATION):
                 # Entry handlers may relocate again before this step completes.
-                evidence[position_evidence_key(self.to_position)] = set(
-                    child.located_entity_observer_uuids.get(entity_key, set()))
+                evidence[position_evidence_key(self.to_position)] = child.located_entity_observer_uuids.get(entity_key, frozenset())
                 break
         return evidence
 

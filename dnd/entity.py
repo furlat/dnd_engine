@@ -1624,8 +1624,9 @@ class Entity(BaseBlock):
         if errors:
             raise BaseExceptionGroup("Actor retirement publication failed after commitment", errors)
 
-    def validate_initial_composition(self) -> None:
-        """Validate one finished aggregate without publishing its birth fact."""
+    def validate_initial_composition(self, *, parent_event: Event | None = None,
+                                     summon_origin: SummonOrigin | None = None) -> EntityCreatedEvent:
+        """Validate one finished aggregate; return its unpublished birth fact."""
         if self.creation_committed:
             raise RuntimeError("entity creation is already committed")
         if self.is_deployed or self.is_spatially_suspended:
@@ -1648,7 +1649,7 @@ class Entity(BaseBlock):
             raise RuntimeError(
                 "registered action ownership disagrees with entity identity",
             )
-        self._entity_created_event()
+        return self._entity_created_event(parent_event=parent_event, summon_origin=summon_origin)
 
     def install_initial_items(
         self,
@@ -1696,8 +1697,7 @@ class Entity(BaseBlock):
                       parent_event: Event | None = None,
                       summon_origin: SummonOrigin | None = None) -> PreparedBirth:
         """Validate and retain the complete birth while still undeployed."""
-        self.validate_initial_composition()
-        created = self._entity_created_event(parent_event=parent_event, summon_origin=summon_origin)
+        created = self.validate_initial_composition(parent_event=parent_event, summon_origin=summon_origin)
         if initial_conditions:
             states = {state.condition_uuid: state for state in created.initial_condition_states}
             if initial_conditions.owner_uuid != self.uuid:

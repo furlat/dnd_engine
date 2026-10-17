@@ -321,6 +321,7 @@ class Measurement:
         self.collections = Counter()
         self.collection_ms = Counter()
         self.young_survivors = 0
+        self.gc_debt_ms = 0.0
         self._collection_started = 0.0
         self._young_before = 0
         self.schema_builds = []
@@ -366,10 +367,17 @@ class Measurement:
             reset_action_timing_recorder(timing_token)
             reset_action_count_recorder(count_token)
 
+    def settle_gc_debt(self):
+        """One full collection outside the timed span, so an op is charged only for collections it triggers
+        itself. Its time is reported as `full_pass_ms_before`: what one full pass costs at this heap size."""
+        started = perf_counter()
+        gc.collect()
+        self.gc_debt_ms = (perf_counter() - started) * 1000
+
     def gc_report(self):
         return {'schema_builds': self.schema_builds, 'gc': {'collections': {str(generation): count for generation, count in sorted(self.collections.items())},
             'ms': {str(generation): round(elapsed, 3) for generation, elapsed in sorted(self.collection_ms.items())},
-            'young_survivors': self.young_survivors}}
+            'young_survivors': self.young_survivors, 'full_pass_ms_before': round(self.gc_debt_ms, 3)}}
 
     def report(self):
         if self.mode == 'ordinary':
@@ -393,6 +401,7 @@ def measured_operation(runtime, mode, kind, action_factory, faces=()):
     before = actor_states(runtime)
     cursor = EventQueue.event_cursor()
     marks = {}
+    measurement.settle_gc_debt()
 
     def operation():
         marks['start'] = perf_counter()
@@ -439,6 +448,7 @@ def measured_request(mode, kind, request):
     measurement = Measurement(mode)
     cursor = EventQueue.event_cursor()
     span = {}
+    measurement.settle_gc_debt()
 
     def timed():
         started = perf_counter()
