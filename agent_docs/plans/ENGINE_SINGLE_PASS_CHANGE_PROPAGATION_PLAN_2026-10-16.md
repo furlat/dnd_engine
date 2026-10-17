@@ -532,6 +532,9 @@ stopped and reported.
 | D12 | Available-actions model (§14) | **Decided** (human 2026-10-17) |
 | D13 | Movement destination list kept; only its compute overhead fixed | **Decided** |
 | D14 | Whole-world scans replaced by bounded owner queries (§14.8, `WHOLE_WORLD_SCAN_REDESIGN_2026-10-17.md`) | **Approved** (human 2026-10-17); Q-W2 perceived preview; Q-W3 delete |
+| D15 | Residues: one condition per material for the whole map, updated per deposit (per-cell amounts and contributions), instead of one condition membership per tile | **Decided** (human 2026-10-17: "one condition for material across all map that gets updated … so we have good scaling") |
+| D16 | One sensory fold per seat: the projection's and the current state's audience compositions are one (the duplication predates event-stream reduction) | **Decided** (human 2026-10-17: "we obviously do not need to duplicate … or to even keep the separation if it is not needed") |
+| D17 | Spells listed once with castable levels; the selection names the level; the AI always casts the base level | **Decided** (human 2026-10-17) |
 | D11 | Worktree | **Done** |
 
 ### 8.1 Verified bugs (verification pass at `d13e6ad`)
