@@ -141,3 +141,8 @@ Hard rules:
   1. Removing a non-wall optical zone (Wall of Fire, Wall of Thorns) does not re-light, so the light stays stale and observer views are wrong.
   2. `commit_entity_presence`'s anchor scan assumes that no entity-anchored zone blocks optics, and nothing checks it.
   Both get failing-first tests.
+- 2026-10-17: **Human sign-offs.**
+  - Wall of Stone: lit areas behind a new wall go dark. Approved.
+  - BG3 Haste eligibility: approved.
+  - The walk contact change rides the zone fact instead of the light fact: fine.
+  - Human: focus on engine speed, not rules minutiae. From now on, rule-level side effects of speed work are logged here, not raised one by one.
