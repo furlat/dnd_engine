@@ -5992,16 +5992,24 @@ class Entity(BaseBlock):
             footprints[identity] = footprint
         return footprint
 
-    def _aoe_aim_points(self, admitted: Sequence[Tuple[int, int]]) -> List[Tuple[int, int]]:
-        """One aim point per perceived creature, the actor included (plan §14.1).
+    def _aoe_aim_points(self, template: BaseAction, admitted: Sequence[Tuple[int, int]],
+                        scan: ActorScan) -> List[Tuple[int, int]]:
+        """One aim point per perceived creature, the actor included (plan §14.1), that the action admits.
 
-        Free aims anywhere in the row's region are validated on demand.
+        Each aim passes the one admission path (plan §14.3b). Free aims anywhere
+        in the row's region are validated on demand.
         """
         allowed = set(admitted)
         aims = {contact.position for contact in self.senses.entities.values() if contact.position in allowed}
         if self.position in allowed:
             aims.add(self.position)
-        return sorted(aims)
+        base = template.current_selection()
+        admitted_aims = []
+        for aim in sorted(aims):
+            record_action_count("discovery.validation", 1)
+            if template.discovery_error(scan, replace(base, positions=(aim,))) is None:
+                admitted_aims.append(aim)
+        return admitted_aims
 
     def _compute_aoe_at_position(
         self,
@@ -6445,13 +6453,15 @@ class Entity(BaseBlock):
         template: BaseAction,
         contract: PositionDiscoveryContract,
         candidates: Sequence[AvailableTarget],
+        scan: ActorScan,
     ) -> List[AvailableTarget]:
-        """Retain candidates whose target-specialized costs are affordable."""
+        """Retain candidates the action admits (plan §14.3b) whose target-specialized costs are affordable."""
         executable: List[AvailableTarget] = []
         remaining_movement = self.action_economy.movement_remaining()
         # Cost evaluation only reads the selected destination. Keep one detached
         # probe for this query instead of copying the full action for every cell.
         targeted_template = template.model_copy(deep=True)
+        base = template.current_selection()
         for candidate in candidates:
             if candidate.position is None:
                 continue
@@ -6460,6 +6470,9 @@ class Entity(BaseBlock):
                 and candidate.path_cost is not None
                 and candidate.path_cost > remaining_movement
             ):
+                continue
+            record_action_count("discovery.validation", 1)
+            if template.discovery_error(scan, replace(base, positions=(candidate.position,))) is not None:
                 continue
             targeted_template.end_position = candidate.position
             target_costs = targeted_template.effective_costs
@@ -6647,6 +6660,7 @@ class Entity(BaseBlock):
                         template,
                         template.position_discovery,
                         candidates,
+                        scan,
                     ) if template.is_movement else [])
                     if not template.is_movement and candidates:
                         actions.append(self._make_action_info(
@@ -7036,6 +7050,7 @@ class Entity(BaseBlock):
 
     def _collect_los_actions(
         self,
+        scan: ActorScan,
         discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
@@ -7087,6 +7102,7 @@ class Entity(BaseBlock):
                         template,
                         template.position_discovery,
                         candidates,
+                        scan,
                     )
                     availability_status = (
                         ActionAvailabilityStatus.AVAILABLE
@@ -7209,7 +7225,7 @@ class Entity(BaseBlock):
                 else:
                     valid_pos_list = template.get_valid_positions()
 
-                valid_pos_list = self._aoe_aim_points(valid_pos_list)
+                valid_pos_list = self._aoe_aim_points(template, valid_pos_list, scan)
                 if not include_aoe_preview and not template.aoe_require_targets:
                     valid_positions = [AvailableTarget(
                         index=index, position=position,
@@ -7535,7 +7551,7 @@ class Entity(BaseBlock):
                 if use_shape_template is None:
                     continue
 
-                valid_pos_list = self._aoe_aim_points(use_template.get_valid_positions())
+                valid_pos_list = self._aoe_aim_points(use_template, use_template.get_valid_positions(), scan)
 
                 use_valid_positions: List[AvailableTarget] = []
                 use_idx = 0
@@ -7807,6 +7823,7 @@ class Entity(BaseBlock):
         started = time.perf_counter() if timing else 0.0
         result.position_actions.extend(
             self._collect_los_actions(
+                scan,
                 discovery_variants,
                 caster_visible_positions,
                 legal_only,

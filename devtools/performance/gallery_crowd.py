@@ -30,6 +30,7 @@ from uuid import uuid4, uuid5
 from dnd.action_timing import (reset_action_count_recorder, reset_action_timing_recorder,
     set_action_count_recorder, set_action_timing_recorder)
 from dnd.actions import DropConcentration, Move
+from dnd.actions_functional import preview_available_selection, selection_admission_error
 from dnd.ai.policies.basic import BASIC_POLICY_ID
 from dnd.content.characters.premades import CLERIC_PREMADE_ID
 from dnd.content.items.environment_item_builders import build_oil_barrel
@@ -54,6 +55,7 @@ from dnd.spatial.portals import materialize_portal
 from dnd.spatial.triggers import materialize_pressure_plate
 from dnd.spells.catalog_content import SPELL_CATALOG_METADATA_BY_NAME, SPELL_CONTENT_IDENTITY_SPECS
 from dnd.spells.conjuration import Entangle
+from dnd.types.event_facts import EventPhase
 from dnd.types.controls import ActivationLink
 from dnd.types.traps import TrapState
 from server import worker
@@ -569,6 +571,121 @@ def choices_case(accepts, behavior_id, aim):
     return case
 
 
+def _admitted_positions(actor, row, target, level):
+    """Command's admission of one listed target, completing a vertex path through preview's next vertices."""
+    positions = ()
+    kind = row.position_selection.kind if row.position_selection is not None else 'single'
+    for _ in range(8):
+        reason = selection_admission_error(actor, row, (target,), positions, cast_at_level=level)
+        if reason is None or kind != 'path':
+            return reason, positions
+        preview = preview_available_selection(actor, row, (target,), positions, include_aoe_effects=False,
+            cast_at_level=level)
+        if not preview.next_positions:
+            return reason, positions
+        positions = (*positions, preview.next_positions[0])
+    return reason, positions
+
+
+def _root_outcome(cursor, actor_uuid):
+    """The actor's root action lineage since `cursor`: its last phase and whether it ever reached execution."""
+    phases, last = {}, {}
+    for _, event in EventQueue.iter_events_since(cursor):
+        if event.parent_lineage is None and event.source_entity_uuid == actor_uuid:
+            phases.setdefault(event.lineage_uuid, set()).add(event.phase)
+            last[event.lineage_uuid] = event
+    if not last:
+        return None
+    lineage, event = next(iter(last.items()))
+    return {'event': event.name, 'phase': event.phase.value, 'canceled': event.canceled,
+        'reached_execution': EventPhase.EXECUTION in phases[lineage], 'status': event.status_message}
+
+
+def _row_key(row):
+    """A row's identity across worlds: its name without the item uuid, and its display name."""
+    return row.template_name.split('__item_')[0], row.display_name
+
+
+def agreement_case(accepts, godmode, recipe_options=None):
+    """Gate (b): discovery and Command agree on every row x listed target x castable level.
+
+    Every affordable row's listed targets pass Command's admission (`selection_admission_error`) at every
+    castable level. Then one sample per row (its first admitted target at the listed level) is executed through
+    Command on a fresh discovery and must not cancel at admission (a root lineage that never reached
+    execution). A sample whose row an earlier sample made unavailable (Silence on the caster) runs in a fresh world.
+    """
+
+    def case(runtime, driver, mode, caster_uuid):
+        seat, actor_uuid = driver.turn_of(accepts)
+        actor = runtime.session.game.entities[actor_uuid]
+        driver.choices(seat, actor_uuid)
+        original = runtime.session.discovery.original
+        checked, refused, keys = 0, [], []
+        for row in original.all_actions:
+            if not row.can_afford or not row.valid_targets:
+                continue
+            for target in row.valid_targets:
+                for level in (row.cast_levels or (None,)):
+                    checked += 1
+                    reason, positions = _admitted_positions(actor, row, target, level)
+                    if reason is not None:
+                        refused.append({'row': row.template_name, 'target': target.index,
+                            'target_uuid': target.target_uuid, 'position': target.position, 'level': level,
+                            'positions': positions, 'reason': reason})
+                    elif _row_key(row) not in keys:
+                        keys.append(_row_key(row))
+
+        def current_row(key):
+            seat, input_uuid = driver.input_seat()
+            choices = driver.choices(seat, input_uuid).choices
+            rows = driver.runtime.session.discovery.original.all_actions
+            return seat, input_uuid, choices, next((row for row in rows
+                if _row_key(row) == key and row.can_afford and row.valid_targets), None)
+
+        def restart():
+            session.close_session(driver.runtime.session)
+            driver.runtime, _, _ = worker.start(start_request(godmode, recipe_options or {}))
+            prepare_world(driver.runtime, _uuid_named(driver.runtime, CASTER_NAME))
+            driver.turn_of(accepts)
+
+        executed, admission_cancels, worlds = [], [], 1
+        for key in keys:
+            driver.runtime.session.game.entities[driver.input_seat()[1]].action_economy.reset_all_costs()
+            seat, input_uuid, choices, row = current_row(key)
+            if row is None:
+                restart()
+                worlds += 1
+                seat, input_uuid, choices, row = current_row(key)
+            if row is None:
+                executed.append({'row': key[0], 'skipped': 'not rediscovered in a fresh world'})
+                continue
+            entity = driver.runtime.session.game.entities[input_uuid]
+            level = row.cast_at_level
+            chosen = next(((target, positions) for target in row.valid_targets
+                for reason, positions in (_admitted_positions(entity, row, target, level),) if reason is None), None)
+            if chosen is None:
+                admission_cancels.append({'row': key[0], 'rejected': 'no listed target admitted on rediscovery'})
+                continue
+            target, positions = chosen
+            selection = ActionSelection(action_index=row.discovery_index, target_indices=(target.index,),
+                extra_target_positions=positions, prefer_safe=False, cast_at_level=level)
+            cursor = EventQueue.event_cursor()
+            try:
+                driver.command(seat, input_uuid, ExecuteSelectionIntent(
+                    discovery_generation=choices.discovery_generation, selection=selection))
+            except AssertionError as error:
+                admission_cancels.append({'row': key[0], 'rejected': str(error)})
+                continue
+            outcome = _root_outcome(cursor, input_uuid)
+            executed.append({'row': key[0], **(outcome or {'event': None})})
+            if outcome is not None and outcome['canceled'] and not outcome['reached_execution']:
+                admission_cancels.append({'row': key[0], **outcome})
+        return [{'kind': 'agreement', 'rows': sum(1 for row in original.all_actions if row.can_afford),
+            'checked_selections': checked, 'refused': refused, 'samples': len(keys), 'worlds': worlds,
+            'executed': executed, 'admission_cancels': admission_cancels}]
+    return case
+
+
 CASES = {
     # P1/P2 gate rows (P0b-1).
     'fireball': (False, sequence_case(cast('spell.fireball', aim=FIREBALL_AIM))),
@@ -619,6 +736,9 @@ CASES = {
     'mass_healing_word': (False, sequence_case(cast('spell.mass_healing_word', targets=ALLY_NAMES)),
         {'roster': 'damaged_party'}),
     'ai_decision': (False, ai_turn_case, {'blue_ai': True}),
+    # Gate (b) of PD1b: discovery and Command agree.
+    'agreement_caster': (True, agreement_case(lambda seat, actor: actor.name == CASTER_NAME, True)),
+    'agreement_fighter': (False, agreement_case(lambda seat, actor: seat == 'blue', False)),
 }
 
 
@@ -640,6 +760,7 @@ def run(args):
         report['setup'] = prepare_world(runtime, caster_uuid)
         report['setup_ms'] = (perf_counter() - started) * 1000
         report['operations'] = case(runtime, driver, args.mode, caster_uuid)
+        runtime = driver.runtime  # a case may continue in a fresh world
         report['status'] = 'passed'
     except BaseException as error:
         report['status'] = 'failed'
@@ -653,7 +774,8 @@ def run(args):
         args.output.write_text(json.dumps(report, indent=2, default=str))
         print(json.dumps({'status': report['status'], 'case': args.case, 'mode': args.mode,
             'report': str(args.output), 'operations': [{key: row.get(key) for key in (
-                'kind', 'total_ms', 'native_ms', 'publication_ms', 'event_versions', 'deaths')}
+                'kind', 'total_ms', 'native_ms', 'publication_ms', 'event_versions', 'deaths')
+                if key in row or row.get('kind') != 'agreement'}
                 for row in report['operations']]}, default=str), flush=True)
 
 

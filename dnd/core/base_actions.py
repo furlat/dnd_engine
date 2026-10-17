@@ -1921,11 +1921,11 @@ class BaseAction(BaseObject):
                             if not cell_occupied(scan, cell) and self.target_position_error(cell) is None))
 
     def _selection_targets(self, selection: ActionSelection) -> List[UUID]:
-        """The recipients a selection names; an area's come from its footprint at the aim."""
+        """The recipients a selection names; an area names none (its footprint resolves them at execution)."""
         if self.effective_target_type is TargetType.SELF:
             return [self.source_entity_uuid]
         if self.effective_target_type is TargetType.POSITION_AOE:
-            return self._area_targets_at(selection.positions[0])[0] if selection.positions else []
+            return []
         return list(selection.target_uuids)
 
     def _recipient_error(self, scan: ActorScan, targets: Sequence[UUID]) -> Optional[str]:
