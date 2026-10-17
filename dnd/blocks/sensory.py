@@ -793,11 +793,10 @@ class SpatialSensesSystem:
         self._pending: Dict[UUID, _GroupSettlement] = {}
         self._settling = False
         self._absorbing_light = False
-        # Advanced by every recompute: the identity grants of a creature at a
-        # cell hold while no observer's published perception changed.
-        self.perception_revision = 0
+        # The identity grants of a creature at a cell, valid while no observer's published
+        # perception changes: every perception write (register, unregister, recompute,
+        # reset) clears them.
         self._identity_grants: Dict[Tuple[UUID, Tuple[int, int]], FrozenSet[str]] = {}
-        self._identity_grants_revision = -1
         # The last settled group's late-completing facts and its observers. A
         # zone change opened in that group completes right after it (its
         # completion reads settled senses); those observers already settled it.
@@ -822,7 +821,6 @@ class SpatialSensesSystem:
         self._pending.clear()
         self._settling = False
         self._absorbing_light = False
-        self.perception_revision += 1
         self._identity_grants.clear()
 
     def _recording(self) -> bool:
@@ -891,14 +889,14 @@ class SpatialSensesSystem:
         """Register an observer without independently materializing its world view."""
         self.senses_by_observer[observer_uuid] = senses
         self.fields.pop(observer_uuid, None)
-        self.perception_revision += 1
+        self._identity_grants.clear()
 
     def unregister_observer(self, observer_uuid: UUID) -> None:
         """Remove an observer and its field."""
         self.senses_by_observer.pop(observer_uuid, None)
         self.published_observers.discard(observer_uuid)
         if self.fields.pop(observer_uuid, None) is not None:
-            self.perception_revision += 1
+            self._identity_grants.clear()
 
     # ------------------------------------------------------------------ selection
 
@@ -933,9 +931,6 @@ class SpatialSensesSystem:
         Every holder is a registered Entity: only entities register as
         observers, and an entity leaves the registry after it unregisters here.
         """
-        if self._identity_grants_revision != self.perception_revision:
-            self._identity_grants.clear()
-            self._identity_grants_revision = self.perception_revision
         grants = self._identity_grants.get((subject_uuid, position))
         if grants is None:
             holders = self.contact_holders(subject_uuid, self.observers_granted((position,)))
@@ -1178,7 +1173,7 @@ class SpatialSensesSystem:
         touched = {}
         for view in views:
             touched[view.owner.uuid] = self._publish(view, world, table, affected[view.owner.uuid], shared)
-        self.perception_revision += 1
+        self._identity_grants.clear()
         return touched
 
     def _view(self, observer_uuid: UUID, world: SettlementWorld) -> ObserverView:
@@ -1554,6 +1549,13 @@ class SpatialSensesSystem:
                 side_mask[side_rows].tolist()):
             identity = uuids[target]
             objects[identity] = contact((x, y), visual, mask, start_objects.get(identity))
+        # Contacts are listed in evidence order (cells x-major, construction knowledge in placement
+        # order, sides), each at its first row, whatever the history of the recomputes.
+        kinds = rows[:, 0].tolist()
+        entity_order = dict.fromkeys(identity for identity, kind in zip(row_uuids, kinds) if kind == ROW_ENTITY)
+        object_order = dict.fromkeys(identity for identity, kind in zip(row_uuids, kinds) if kind != ROW_ENTITY)
+        entities = {identity: entities[identity] for identity in entity_order if identity in entities}
+        objects = {identity: objects[identity] for identity in object_order if identity in objects}
         return (entities, objects, rows, row_uuids,
                 (frozenset(entity_touched), frozenset(object_touched)) if view.published else None)
 
