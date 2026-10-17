@@ -257,3 +257,13 @@ Hard rules:
 - 2026-10-17 (logged late): **Worker GC policy (9568bffbc), human decision** ("i am fine with 1-3"): no automatic collection inside requests; after each reply, collect that request's survivors and freeze them; cycles are printed as an alarm; EndGame unfreezes and collects. The gallery times the post-reply collection per op as `collect_after_ms`.
 - 2026-10-18: **Open from PV1a-2/PV1a-3, not done:** 2-D batching of the light stage, hazards, fixtures, emitter lit words and emit (only contacts are batched); the emit still builds the pydantic payload; the mover's own wall FOV is ~4 ms per step. PT navigation as a cost grid is not started.
 - 2026-10-18: **Long game (50 turns, blue AI) did not finish:** stopped by its 60-minute timeout with no report; RSS 8.8 GB at 47 min; every AI advance printed one 15-object cycle (tuple/function/cell, one runtime type). Memory retention is the next refactor (human).
+- 2026-10-18: **PH-2 parked, not merged** (branch ph2b; step-2 review of 380e7c484 done, step 3 unfinished; the implementing agent stopped at the usage limit).
+  - Review found no accidental mutation of owned records, and every old combine site goes through `composed()`.
+  - Needs the human's decision: a single value used to be read live; `parts()` now snapshots its rows when called (opponent-side reads and single-value damage packets: equipment.py:579/:1369, spellcasting.py:633, paladin.py:207, consumables.py:142, traits.py:795). EB-02-010 was rewritten to the snapshot behaviour but is still named `..._read_live`.
+  - To fix before merging:
+    - `with_rows` gives extra rows the last part's normalizer, and dedupes on only one path.
+    - `remove_all_modifiers` makes a read return `normalizer(0)`.
+    - `_validated_parts` has a silent fallback.
+    - `value_bounds`, `outgoing_advantage` and `value_resistance` are second mechanisms used only by tests.
+    - 57 temporary `parts(ModifiableValue(...))` records still register (a pre-existing leak).
+    - The `sort_keys` change in gallery_transcript.py belongs in its own commit.
