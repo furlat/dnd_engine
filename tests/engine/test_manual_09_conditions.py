@@ -16,7 +16,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier, modifier_of
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import create_test_entity, reset_combat_state
 
@@ -98,7 +98,7 @@ class TutorialProficiencyCondition(BaseCondition):
             name="Tutorial Proficiency Bonus",
             value=self.bonus,
         )
-        modifier_uuid = value.self_static.add_value_modifier(modifier)
+        modifier_uuid = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, modifier)
         event = event.phase_to(EventPhase.EFFECT, condition=self)
         return [(value.uuid, modifier_uuid)], [], [], [], event
 
@@ -218,12 +218,12 @@ def test_modifier_condition_owns_and_cleans_its_bonus() -> None:
     modifier_uuid = condition.modifers_uuids[goblin.proficiency_bonus.uuid][0]
 
     assert goblin.proficiency_bonus.normalized_score == base_proficiency + 3
-    assert modifier_uuid in goblin.proficiency_bonus.self_static.value_modifiers
+    assert modifier_of(goblin.proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier_uuid) is not None
 
     goblin.remove_condition("TutorialProficiency")
 
     assert goblin.proficiency_bonus.normalized_score == base_proficiency
-    assert modifier_uuid not in goblin.proficiency_bonus.self_static.value_modifiers
+    assert modifier_of(goblin.proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier_uuid) is None
     assert condition.applied is False
     assert goblin.active_conditions == {}
 
@@ -257,8 +257,8 @@ def test_same_name_condition_replaces_and_cleans_the_old_condition() -> None:
     assert first.applied is False
     assert second.applied is True
     assert goblin.active_conditions == {"TutorialProficiency": second}
-    assert first_modifier_uuid not in goblin.proficiency_bonus.self_static.value_modifiers
-    assert second_modifier_uuid in goblin.proficiency_bonus.self_static.value_modifiers
+    assert modifier_of(goblin.proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, first_modifier_uuid) is None
+    assert modifier_of(goblin.proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, second_modifier_uuid) is not None
     assert goblin.proficiency_bonus.normalized_score == base_proficiency + 2
 
 

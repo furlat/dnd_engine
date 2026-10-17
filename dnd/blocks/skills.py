@@ -1,7 +1,7 @@
 from typing import Dict, Optional, List, Callable, Tuple
 from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field, computed_field
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.core.modifiers import NumericalModifier
 
 from dnd.core.base_block import BaseBlock
@@ -211,7 +211,7 @@ class Skill(BaseBlock):
             skill_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.skill_bonus, value_name=name+" Skill Bonus")
             if len(config.skill_bonus_modifiers) > 0:
                 for modifier in config.skill_bonus_modifiers:
-                    skill_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                    add_modifier(skill_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
             skill = cls(
                 source_entity_uuid=source_entity_uuid,

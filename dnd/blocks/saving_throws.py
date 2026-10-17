@@ -1,7 +1,7 @@
 from typing import Dict, Optional,  List, Callable, Tuple
 from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field,  computed_field
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.base_block import BaseBlock
 from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
@@ -177,7 +177,7 @@ class SavingThrow(BaseBlock):
         else:
             bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.bonus, value_name=name+" Saving Throw Bonus")
             for modifier in config.bonus_modifiers:
-                bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             saving_throw = cls(
                 source_entity_uuid=source_entity_uuid,
                 name=name,

@@ -28,7 +28,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import create_test_entity, reset_combat_state
 
@@ -153,14 +153,12 @@ class EngineBookModifierCondition(BaseCondition):
     ) -> tuple[list[tuple[UUID, UUID]], list[UUID], list[UUID], list[UUID], Event]:
         value = ModifiableValue.get(self.target_value_uuid)
         assert isinstance(value, ModifiableValue)
-        modifier_uuid = value.self_static.add_value_modifier(
-            NumericalModifier(
+        modifier_uuid = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 name=self.name,
                 value=self.bonus,
-            )
-        )
+            ))
         event = declaration_event.phase_to(EventPhase.EFFECT, condition=self)
         return [(value.uuid, modifier_uuid)], [], [], [], event
 

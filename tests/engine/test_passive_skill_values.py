@@ -11,6 +11,7 @@ from dnd.core.modifiers import (
 from dnd.core.proficiency_types import ProficiencyMode
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.fixture
@@ -58,10 +59,9 @@ def test_passive_skill_keeps_last_uuid_winner_normalizer(actor):
     skill = actor.skill_set.get_skill("perception")
     skill.add_proficiency_source(uuid4(), ProficiencyMode.FULL)
     shared = uuid4()
-    actor.proficiency_bonus.self_static.add_value_modifier(number(actor, 100, uuid=shared))
-    skill.skill_bonus.self_static.add_value_modifier(number(actor, 5, uuid=shared, score_normalizer=lambda n: n * 2))
-    actor.ability_scores.wisdom.modifier_bonus.self_static.add_value_modifier(
-        number(actor, 2, uuid=shared, score_normalizer=lambda n: n * 3))
+    add_modifier(actor.proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, number(actor, 100, uuid=shared))
+    add_modifier(skill.skill_bonus, Channel.SELF_STATIC, Kind.VALUE, number(actor, 5, uuid=shared, score_normalizer=lambda n: n * 2))
+    add_modifier(actor.ability_scores.wisdom.modifier_bonus, Channel.SELF_STATIC, Kind.VALUE, number(actor, 2, uuid=shared, score_normalizer=lambda n: n * 3))
     check_passive(actor, 21)
 
 
@@ -71,14 +71,14 @@ def test_passive_factor_presence_keeps_channel_and_aggregate_bounds(actor, inact
     ability.ability_score.get_base_modifier().value = 10
     skill = actor.skill_set.get_skill("perception").skill_bonus
     skill.get_base_modifier().value = 10
-    skill.self_static.add_max_constraint(number(actor, 8, score_normalizer=lambda n: 0))
+    add_modifier(skill, Channel.SELF_STATIC, Kind.MAX, number(actor, 8, score_normalizer=lambda n: 0))
     value, bound = number(actor, 10), number(actor, 20)
-    skill.self_contextual.add_value_modifier(ContextualNumericalModifier(
+    add_modifier(skill, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
         source_entity_uuid=actor.uuid, callable=lambda *_: value))
-    skill.self_contextual.add_max_constraint(ContextualNumericalModifier(
+    add_modifier(skill, Channel.SELF_CONTEXTUAL, Kind.MAX, ContextualNumericalModifier(
         source_entity_uuid=actor.uuid, callable=lambda *_: bound))
     if inactive_factor:
-        skill.self_static.add_factor(ArithmeticFactor(source_entity_uuid=actor.uuid,
+        add_modifier(skill, Channel.SELF_STATIC, Kind.FACTOR, ArithmeticFactor(source_entity_uuid=actor.uuid,
             numerator=2, contribution_owner_uuid=uuid4()))
     check_passive(actor, expected)
 
@@ -86,14 +86,14 @@ def test_passive_factor_presence_keeps_channel_and_aggregate_bounds(actor, inact
 def test_passive_fractional_factor_truncates_after_raw_ability_normalization(actor):
     ability = actor.ability_scores.wisdom
     ability.ability_score.get_base_modifier().value = 20
-    ability.ability_score.self_static.add_factor(ArithmeticFactor(source_entity_uuid=actor.uuid,
+    add_modifier(ability.ability_score, Channel.SELF_STATIC, Kind.FACTOR, ArithmeticFactor(source_entity_uuid=actor.uuid,
         numerator=1, denominator=2))
-    ability.ability_score.self_static.add_max_constraint(number(actor, 9))
-    ability.ability_score.self_static.add_advantage_modifier(AdvantageModifier(
+    add_modifier(ability.ability_score, Channel.SELF_STATIC, Kind.MAX, number(actor, 9))
+    add_modifier(ability.ability_score, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
         source_entity_uuid=actor.uuid, value=AdvantageStatus.ADVANTAGE))
     skill = actor.skill_set.get_skill("perception").skill_bonus
     skill.get_base_modifier().value = -4
-    skill.self_static.add_factor(ArithmeticFactor(source_entity_uuid=actor.uuid,
+    add_modifier(skill, Channel.SELF_STATIC, Kind.FACTOR, ArithmeticFactor(source_entity_uuid=actor.uuid,
         numerator=1, denominator=2))
     assert ability.ability_score.score == 9
     assert ability_score_normalizer(9) == -1
@@ -104,7 +104,7 @@ def test_passive_direct_ability_bonus_constraint_clamps_combined_skill(actor):
     ability = actor.ability_scores.wisdom
     ability.ability_score.get_base_modifier().value = 16
     ability.modifier_bonus.get_base_modifier().value = 2
-    ability.modifier_bonus.self_static.add_max_constraint(number(actor, 4))
+    add_modifier(ability.modifier_bonus, Channel.SELF_STATIC, Kind.MAX, number(actor, 4))
     check_passive(actor, 14)
 
 
@@ -116,7 +116,7 @@ def test_passive_is_a_read_with_no_target_and_no_context(actor):
         calls.append((source, current_target, context))
         return number(actor, 4, use_register=False)
 
-    skill.self_contextual.add_value_modifier(ContextualNumericalModifier(
+    add_modifier(skill, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
         source_entity_uuid=actor.uuid, callable=conditional))
     check_passive(actor, 16)
     assert calls and all(row == (actor.uuid, None, None) for row in calls)
@@ -129,14 +129,14 @@ def test_passive_proficiency_callback_contributes_its_own_normalized_value(actor
         return number(actor, 5, use_register=False)
 
     modifier = ContextualNumericalModifier(source_entity_uuid=actor.uuid, callable=conditional)
-    actor.proficiency_bonus.self_contextual.add_value_modifier(modifier)
+    add_modifier(actor.proficiency_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, modifier)
     check_passive(actor, 20)
 
 
 def test_passive_rechecks_contextual_advantage_after_neutral_result(actor):
     answers = iter((AdvantageStatus.NONE, AdvantageStatus.DISADVANTAGE))
     skill = actor.skill_set.get_skill("perception").skill_bonus
-    skill.self_contextual.add_advantage_modifier(ContextualAdvantageModifier(
+    add_modifier(skill, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
         source_entity_uuid=actor.uuid,
         callable=lambda *_: AdvantageModifier(source_entity_uuid=actor.uuid,
             value=next(answers), use_register=False)))
@@ -147,14 +147,14 @@ def clamped_perception(actor):
     """Owner channels with their own bounds: static 3+2 in [8, 10], contextual 4 in [6, 7]."""
     skill = actor.skill_set.get_skill("perception").skill_bonus
     skill.get_base_modifier().value = 3
-    skill.self_static.add_min_constraint(number(actor, 8))
-    skill.self_static.add_max_constraint(number(actor, 10))
+    add_modifier(skill, Channel.SELF_STATIC, Kind.MIN, number(actor, 8))
+    add_modifier(skill, Channel.SELF_STATIC, Kind.MAX, number(actor, 10))
     contextual_value, minimum, maximum = number(actor, 4), number(actor, 6), number(actor, 7)
-    skill.self_contextual.add_value_modifier(ContextualNumericalModifier(
+    add_modifier(skill, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
         source_entity_uuid=actor.uuid, callable=lambda *_: contextual_value))
-    skill.self_contextual.add_min_constraint(ContextualNumericalModifier(
+    add_modifier(skill, Channel.SELF_CONTEXTUAL, Kind.MIN, ContextualNumericalModifier(
         source_entity_uuid=actor.uuid, callable=lambda *_: minimum))
-    skill.self_contextual.add_max_constraint(ContextualNumericalModifier(
+    add_modifier(skill, Channel.SELF_CONTEXTUAL, Kind.MAX, ContextualNumericalModifier(
         source_entity_uuid=actor.uuid, callable=lambda *_: maximum))
     return skill
 
@@ -163,7 +163,7 @@ def clamped_perception(actor):
 def test_passive_keeps_separate_channel_clamps_inside_owner_global_bounds(actor, factored):
     skill = clamped_perception(actor)
     if factored:
-        skill.self_static.add_factor(ArithmeticFactor(source_entity_uuid=actor.uuid, numerator=2))
+        add_modifier(skill, Channel.SELF_STATIC, Kind.FACTOR, ArithmeticFactor(source_entity_uuid=actor.uuid, numerator=2))
     check_passive(actor, 20)
 
 
@@ -173,12 +173,12 @@ def test_opposed_read_keeps_separate_channel_clamps_and_loose_global_bounds(acto
     skill = clamped_perception(actor)
     opponent = Entity.create(uuid4(), "Passive opponent", config=EntityConfig())
     opponent.compose_entity()
-    outgoing = opponent.skill_set.get_skill("perception").skill_bonus.to_target_static
-    outgoing.add_value_modifier(NumericalModifier(source_entity_uuid=opponent.uuid, value=3))
-    outgoing.add_min_constraint(NumericalModifier(source_entity_uuid=opponent.uuid, value=4))
-    outgoing.add_max_constraint(NumericalModifier(source_entity_uuid=opponent.uuid, value=20))
+    outgoing = opponent.skill_set.get_skill("perception").skill_bonus
+    add_modifier(outgoing, Channel.TO_TARGET_STATIC, Kind.VALUE, NumericalModifier(source_entity_uuid=opponent.uuid, value=3))
+    add_modifier(outgoing, Channel.TO_TARGET_STATIC, Kind.MIN, NumericalModifier(source_entity_uuid=opponent.uuid, value=4))
+    add_modifier(outgoing, Channel.TO_TARGET_STATIC, Kind.MAX, NumericalModifier(source_entity_uuid=opponent.uuid, value=20))
     if factored:
-        skill.self_static.add_factor(ArithmeticFactor(source_entity_uuid=actor.uuid, numerator=2))
+        add_modifier(skill, Channel.SELF_STATIC, Kind.FACTOR, ArithmeticFactor(source_entity_uuid=actor.uuid, numerator=2))
     assert 10 + actor.skill_bonus(opponent.uuid, "perception").normalized_score == expected
     assert actor.passive_skill("perception") == 20
 
@@ -188,9 +188,9 @@ def test_passive_reads_each_contextual_constraint_once_per_read(actor):
     skill = actor.skill_set.get_skill("perception").skill_bonus
     contextual = number(actor, 20)
     answers = iter((number(actor, 10), None, number(actor, 6)))
-    skill.self_contextual.add_value_modifier(ContextualNumericalModifier(
+    add_modifier(skill, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
         source_entity_uuid=actor.uuid, callable=lambda *_: contextual))
-    skill.self_contextual.add_max_constraint(ContextualNumericalModifier(
+    add_modifier(skill, Channel.SELF_CONTEXTUAL, Kind.MAX, ContextualNumericalModifier(
         source_entity_uuid=actor.uuid, callable=lambda *_: next(answers)))
     assert 10 + actor.skill_bonus(None, "perception").normalized_score == 20
     assert next(answers) is None
@@ -203,7 +203,7 @@ def test_passive_proficiency_contextual_advantage_applies(actor):
     modifier = ContextualAdvantageModifier(source_entity_uuid=actor.uuid,
         callable=lambda *_: AdvantageModifier(source_entity_uuid=actor.uuid,
             value=AdvantageStatus.DISADVANTAGE, use_register=False))
-    actor.proficiency_bonus.self_contextual.add_advantage_modifier(modifier)
+    add_modifier(actor.proficiency_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier)
     check_passive(actor, 7)
 
 
@@ -213,7 +213,7 @@ def test_passive_proficiency_outgoing_callback_does_not_contribute(actor):
     def outgoing(source, target, context):
         raise AssertionError("Outgoing channels do not contribute to the passive score")
 
-    actor.proficiency_bonus.to_target_contextual.add_value_modifier(ContextualNumericalModifier(
+    add_modifier(actor.proficiency_bonus, Channel.TO_TARGET_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
         source_entity_uuid=actor.uuid, callable=outgoing))
     check_passive(actor, 15)
 
@@ -222,19 +222,19 @@ def test_passive_contextual_uuid_winners_and_channel_advantage_cancellation(acto
     skill = actor.skill_set.get_skill("perception").skill_bonus
     bonus = actor.ability_scores.wisdom.modifier_bonus
     shared_value, shared_advantage = uuid4(), uuid4()
-    for channel, amount in ((skill.self_contextual, 7), (bonus.self_contextual, 3)):
+    for value, amount in ((skill, 7), (bonus, 3)):
         payload = number(actor, amount, score_normalizer=lambda n: n * 2)
-        channel.add_value_modifier(ContextualNumericalModifier(uuid=shared_value,
+        add_modifier(value, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(uuid=shared_value,
             source_entity_uuid=actor.uuid, callable=lambda *_, payload=payload: payload))
-    for channel, value in ((actor.proficiency_bonus.self_static, AdvantageStatus.ADVANTAGE),
-                           (skill.self_static, AdvantageStatus.DISADVANTAGE),
-                           (bonus.self_static, AdvantageStatus.ADVANTAGE)):
-        channel.add_advantage_modifier(AdvantageModifier(uuid=shared_advantage,
+    for owner, value in ((actor.proficiency_bonus, AdvantageStatus.ADVANTAGE),
+                         (skill, AdvantageStatus.DISADVANTAGE),
+                         (bonus, AdvantageStatus.ADVANTAGE)):
+        add_modifier(owner, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(uuid=shared_advantage,
             source_entity_uuid=actor.uuid, value=value))
-    for channel, value in ((skill.self_contextual, AdvantageStatus.ADVANTAGE),
-                           (bonus.self_contextual, AdvantageStatus.DISADVANTAGE)):
+    for owner, value in ((skill, AdvantageStatus.ADVANTAGE),
+                         (bonus, AdvantageStatus.DISADVANTAGE)):
         payload = AdvantageModifier(source_entity_uuid=actor.uuid, value=value)
-        channel.add_advantage_modifier(ContextualAdvantageModifier(uuid=shared_advantage,
+        add_modifier(owner, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(uuid=shared_advantage,
             source_entity_uuid=actor.uuid, callable=lambda *_, payload=payload: payload))
     check_passive(actor, 18)
 
@@ -252,7 +252,7 @@ def test_passive_rejects_mismatched_value_sources(actor, ability_bonus):
 
 def test_passive_retains_outgoing_modifier_target_validation(actor):
     skill = actor.skill_set.get_skill("perception").skill_bonus
-    skill.to_target_static.add_value_modifier(number(actor, 3, target_entity_uuid=actor.uuid))
+    add_modifier(skill, Channel.TO_TARGET_STATIC, Kind.VALUE, number(actor, 3, target_entity_uuid=actor.uuid))
     with pytest.raises(ValueError, match="Outgoing modifier target"):
         actor.skill_bonus(None, "perception")
     with pytest.raises(ValueError, match="Outgoing modifier target"):

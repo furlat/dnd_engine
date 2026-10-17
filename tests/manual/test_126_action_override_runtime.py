@@ -79,6 +79,7 @@ from tests.engine.support import (
     remove_spell_attack_modifier,
     reset_combat_state,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def reset_override_state(width: int = 12, height: int = 6) -> None:
@@ -214,14 +215,12 @@ def force_save_result(
 ) -> None:
     """Make a non-natural-1/non-natural-20 save deterministic."""
     saving_throw = entity.saving_throws.get_saving_throw(ability_name)
-    saving_throw.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(saving_throw.bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             name=f"Override test {ability_name} save",
             value=100 if succeeds else -100,
-        )
-    )
+        ))
 
 
 def sorcery_point_cost(amount: int = 2) -> Cost:

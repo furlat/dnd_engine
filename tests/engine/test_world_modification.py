@@ -35,7 +35,7 @@ from dnd.core.traversal_connectors import (
     TraversalConnectorDefinition,
     TraversalConnectorKind,
 )
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier, remove_modifier
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.core.world_edges import SlopeAxis
 from dnd.entity import Entity, EntityConfig
@@ -503,7 +503,7 @@ def test_tile_detachment_authenticates_root_channel_and_modifier_ownership() -> 
         name="Foreign movement effect",
         value=1,
     )
-    tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(foreign_modifier)
+    add_modifier(tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, foreign_modifier)
     with pytest.raises(ValueError, match="modifier ownership"):
         set_world_tile((0, 0), author_uuid=uuid4(), name="Rejected again")
     assert BaseObject.get(foreign_modifier.uuid) is foreign_modifier
@@ -544,8 +544,8 @@ def test_tile_detachment_rejects_same_owner_modifier_aliases() -> None:
     flying_base = tile.edit_movement_cost(MovementMode.FLYING).get_base_modifier()
     assert walking_base is not None
     assert flying_base is not None
-    tile.edit_movement_cost(MovementMode.FLYING).self_static.remove_value_modifier(flying_base.uuid)
-    tile.edit_movement_cost(MovementMode.FLYING).self_static.add_value_modifier(walking_base)
+    remove_modifier(tile.edit_movement_cost(MovementMode.FLYING), flying_base.uuid, Channel.SELF_STATIC, Kind.VALUE)
+    add_modifier(tile.edit_movement_cost(MovementMode.FLYING), Channel.SELF_STATIC, Kind.VALUE, walking_base)
     cursor = EventQueue.event_cursor()
 
     with pytest.raises(ValueError, match="modifier identities"):

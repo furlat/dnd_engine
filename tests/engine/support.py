@@ -21,6 +21,7 @@ from dnd.core.modifiers import (
     AutoHitStatus,
 )
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier
 
 
 def create_test_entity(
@@ -93,7 +94,7 @@ def force_attack_hit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.equipment.melee_attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    mod_uuid = add_modifier(entity.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
     return mod_uuid
 
 
@@ -113,7 +114,7 @@ def force_attack_miss(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.equipment.melee_attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    mod_uuid = add_modifier(entity.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
     return mod_uuid
 
 
@@ -133,7 +134,7 @@ def force_attack_crit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.equipment.melee_attack_bonus.self_static.add_critical_modifier(modifier)
+    mod_uuid = add_modifier(entity.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.CRITICAL, modifier)
     return mod_uuid
 
 
@@ -153,7 +154,7 @@ def force_spell_attack_hit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.spellcasting.spell_attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    mod_uuid = add_modifier(entity.spellcasting.spell_attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
     return mod_uuid
 
 
@@ -174,7 +175,7 @@ def force_spell_attack_crit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.spellcasting.spell_attack_bonus.self_static.add_critical_modifier(modifier)
+    mod_uuid = add_modifier(entity.spellcasting.spell_attack_bonus, Channel.SELF_STATIC, Kind.CRITICAL, modifier)
     return mod_uuid
 
 
@@ -186,7 +187,7 @@ def remove_spell_attack_modifier(entity: Entity, modifier_uuid: UUID):
         entity: The entity with the modifier
         modifier_uuid: UUID returned from force_spell_attack_* function
     """
-    entity.spellcasting.spell_attack_bonus.self_static.remove_modifier(modifier_uuid)
+    remove_modifier(entity.spellcasting.spell_attack_bonus, modifier_uuid, Channel.SELF_STATIC)
 
 
 def remove_attack_modifier(entity: Entity, modifier_uuid: UUID):
@@ -197,7 +198,7 @@ def remove_attack_modifier(entity: Entity, modifier_uuid: UUID):
         entity: The entity with the modifier
         modifier_uuid: UUID returned from force_attack_* function
     """
-    entity.equipment.melee_attack_bonus.self_static.remove_modifier(modifier_uuid)
+    remove_modifier(entity.equipment.melee_attack_bonus, modifier_uuid, Channel.SELF_STATIC)
 
 
 def run_turn_until_end(encounter: Encounter, entity: Entity):
@@ -282,13 +283,11 @@ def set_hp(entity: Entity, hp: int):
     max_hp = get_max_hp(entity)
     if hp > max_hp:
 
-        entity.health.max_hit_points_bonus.self_static.add_value_modifier(
-            NumericalModifier.create(
+        add_modifier(entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                 source_entity_uuid=entity.uuid,
                 name="Test HP Boost",
                 value=hp - max_hp
-            )
-        )
+            ))
 
     current = entity.get_hp()
     if hp < current:

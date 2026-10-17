@@ -29,7 +29,7 @@ from dnd.core.events import (
 from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.aoe import AoEShape, Sphere, objective_footprint
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier
 from dnd.entity import Entity
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 from dnd.types.material_deposits import MaterialDepositSource
@@ -1396,7 +1396,7 @@ class AreaCondition(SpatialCondition):
             modifier.contribution_owner_uuid = self.uuid
             modifier.contribution_position = position
             value = tile.edit_movement_cost(MovementMode.WALKING)
-            modifier_uuid = value.self_static.add_min_constraint(modifier)
+            modifier_uuid = add_modifier(value, Channel.SELF_STATIC, Kind.MIN, modifier)
             row = (value.uuid, modifier_uuid)
             self._terrain_modifiers[position] = row
             owned.append(row)
@@ -1429,7 +1429,7 @@ class AreaCondition(SpatialCondition):
             )
             value = ModifiableValue.get(value_uuid)
             if value is not None:
-                value.remove_modifier(modifier_uuid)
+                remove_modifier(value, modifier_uuid)
             tracked = self.modifers_uuids.get(value_uuid)
             if tracked is not None:
                 self.modifers_uuids[value_uuid] = [

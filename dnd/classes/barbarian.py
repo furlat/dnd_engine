@@ -21,7 +21,7 @@ Level 20: Primal Champion
 
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.values import ValueRead, read_value
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier
 from dnd.types.class_features import RelentlessRageIntervention
 from dnd.core.condition_types import DurationType
 from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
@@ -195,8 +195,7 @@ class RecklessAttacking(BaseCondition):
             callable=reckless_attack_check,
         )
         mod_uuid = (
-            target.equipment.melee_attack_bonus.self_contextual
-            .add_advantage_modifier(melee_adv_mod)
+            add_modifier(target.equipment.melee_attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, melee_adv_mod)
         )
         outs.append((target.equipment.melee_attack_bonus.uuid, mod_uuid))
 
@@ -206,7 +205,7 @@ class RecklessAttacking(BaseCondition):
             source_entity_uuid=self.target_entity_uuid,
             target_entity_uuid=self.target_entity_uuid
         )
-        mod_uuid = target.equipment.ac_bonus.to_target_static.add_advantage_modifier(attacker_adv_mod)
+        mod_uuid = add_modifier(target.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, attacker_adv_mod)
         outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -468,7 +467,7 @@ class DangerSense(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=danger_sense_check
         )
-        mod_uuid = dex_save.bonus.self_contextual.add_advantage_modifier(danger_mod)
+        mod_uuid = add_modifier(dex_save.bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, danger_mod)
         outs.append((dex_save.bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -547,7 +546,7 @@ class FastMovement(BaseCondition):
             callable=fast_movement_check
         )
         for speed in target.action_economy.speed_values:
-            mod_uuid = speed.self_contextual.add_value_modifier(speed_mod)
+            mod_uuid = add_modifier(speed, Channel.SELF_CONTEXTUAL, Kind.VALUE, speed_mod)
             outs.append((speed.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -673,7 +672,7 @@ class FeralInstinct(BaseCondition):
             target_entity_uuid=self.target_entity_uuid
         )
 
-        mod_uuid = target.initiative.self_static.add_advantage_modifier(init_adv)
+        mod_uuid = add_modifier(target.initiative, Channel.SELF_STATIC, Kind.ADVANTAGE, init_adv)
         outs.append((target.initiative.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -727,7 +726,7 @@ class BrutalCritical(BaseCondition):
             name="Brutal Critical",
             value=self.extra_dice
         )
-        mod_uuid = target.equipment.crit_extra_dice_melee.self_static.add_value_modifier(brutal_mod)
+        mod_uuid = add_modifier(target.equipment.crit_extra_dice_melee, Channel.SELF_STATIC, Kind.VALUE, brutal_mod)
         outs.append((target.equipment.crit_extra_dice_melee.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -1050,7 +1049,7 @@ class PrimalChampion(BaseCondition):
             name="Primal Champion (STR)",
             value=4
         )
-        mod_uuid = target.ability_scores.strength.ability_score.self_static.add_value_modifier(str_mod)
+        mod_uuid = add_modifier(target.ability_scores.strength.ability_score, Channel.SELF_STATIC, Kind.VALUE, str_mod)
         outs.append((target.ability_scores.strength.ability_score.uuid, mod_uuid))
 
         con_mod = NumericalModifier.create(
@@ -1058,7 +1057,7 @@ class PrimalChampion(BaseCondition):
             name="Primal Champion (CON)",
             value=4
         )
-        mod_uuid = target.ability_scores.constitution.ability_score.self_static.add_value_modifier(con_mod)
+        mod_uuid = add_modifier(target.ability_scores.constitution.ability_score, Channel.SELF_STATIC, Kind.VALUE, con_mod)
         outs.append((target.ability_scores.constitution.ability_score.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(

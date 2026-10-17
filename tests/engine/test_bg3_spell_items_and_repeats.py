@@ -19,6 +19,7 @@ from dnd.spells.enchantment import Hex
 from tests.engine.test_bg3_rank_one_two_spells import game, combatant
 from tests.engine.test_bg3_spell_hit_riders import cast, equip
 from tests.manual.spell_regression_support import force_save_result
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def test_goodberry_real_bonus_action_consumption_and_source_long_rest(game):
@@ -80,12 +81,12 @@ def test_dragons_breath_recipient_pays_repeat_with_original_dc(game):
 def test_vampiric_own_damage_healing_excludes_same_type_hex_and_repeat_slot(game,resistance):
     caster=combatant(game)
     enemy=combatant(game,'Enemy',(3,2),'foes')
-    caster.max_concentration_slots.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(caster.max_concentration_slots, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name="Native second concentration slot",value=1,source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid))
     caster.receive_damage(50,DamageType.FORCE,enemy.uuid)
     cast(Hex,caster,enemy)
     if resistance:
-        enemy.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+        add_modifier(enemy.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=enemy.uuid,damage_type=DamageType.NECROTIC,value=ResistanceStatus.RESISTANCE))
     hp=caster.get_hp()
     with fixed_dice_faces(15,4,4,4,6):result=cast(VampiricTouch,caster,enemy)
@@ -152,12 +153,12 @@ def test_revivify_rejects_noncompanion_and_disintegrated_remains_before_cost(gam
 def test_vampiric_post_mitigation_includes_temporary_hp_and_overkill_but_not_hex(game,flat_reduction,temp_hp,target_hp):
     caster=combatant(game)
     enemy=combatant(game,'Enemy',(3,2),'foes')
-    caster.max_concentration_slots.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(caster.max_concentration_slots, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name="Native second concentration slot",value=1,source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid))
     caster.receive_damage(50,DamageType.FORCE,enemy.uuid)
     cast(Hex,caster,enemy)
     if flat_reduction:
-        enemy.health.damage_reduction.self_static.add_value_modifier(NumericalModifier(
+        add_modifier(enemy.health.damage_reduction, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name="Packet defense",value=flat_reduction,source_entity_uuid=enemy.uuid,target_entity_uuid=enemy.uuid))
     if temp_hp:enemy.health.add_temporary_hit_points(temp_hp,enemy.uuid)
     enemy.health.damage_taken=enemy.get_max_hp()-target_hp
@@ -213,7 +214,7 @@ def test_ally_breath_uses_original_caster_dc_and_no_recipient_damage_bonus(game)
     caster=combatant(game)
     ally=combatant(game,'Ally',(3,2),intelligence=8)
     enemy=combatant(game,'Enemy',(5,2),'foes')
-    ally.spellcasting.spell_damage_bonus.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(ally.spellcasting.spell_damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name='Recipient extra damage',value=25,source_entity_uuid=ally.uuid))
     cast(DragonsBreath,caster,ally,element='acid')
     exhale=next(action for action in ally.registered_actions if isinstance(action,ExhaleDragonsBreath))

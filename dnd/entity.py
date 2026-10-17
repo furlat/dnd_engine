@@ -10,8 +10,20 @@ from functools import cache
 import time
 
 from dnd.action_timing import action_timing_enabled, record_action_count, record_action_elapsed, record_action_timing
-from dnd.core.values import (BaseValue, ModifiableValue, AdvantageStatus, ValueRead, ValueReading,
-    composed_passive_score, outgoing_of, read_value, value_score)
+from dnd.core.values import (
+    BaseValue,
+    ModifiableValue,
+    AdvantageStatus,
+    ValueRead,
+    ValueReading,
+    composed_passive_score,
+    outgoing_of,
+    read_value,
+    value_score,
+    Channel,
+    Kind,
+    add_modifier,
+)
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.elevation import support_distance_feet
@@ -1829,12 +1841,12 @@ class Entity(BaseBlock):
         action_economy = ActionEconomy.create(source_entity_uuid=source_entity_uuid, config=config.action_economy)
         proficiency_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.proficiency_bonus)
         for modifier in config.proficiency_bonus_modifiers:
-            proficiency_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            add_modifier(proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
         dex_mod = ability_scores.get_ability("dexterity").modifier
         initiative = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=dex_mod, value_name="initiative")
         for modifier in config.initiative_modifiers:
-            initiative.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            add_modifier(initiative, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
         spellcasting = SpellcastingBlock.create(
             source_entity_uuid=source_entity_uuid,
@@ -4284,15 +4296,13 @@ class Entity(BaseBlock):
             return combined
 
         ability_modifier = self.ability_scores.get_ability(ability_name).modifier
-        combined.self_static.add_value_modifier(
-            NumericalModifier(
+        add_modifier(combined, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 source_entity_uuid=self.uuid,
                 target_entity_uuid=self.uuid,
                 name=f"{ability_name.title()} Spell Damage Affinity",
                 value=ability_modifier,
                 use_register=False,
-            ),
-        )
+            ))
         return combined
 
     def spell_damage_outcome_bonus(self) -> int:

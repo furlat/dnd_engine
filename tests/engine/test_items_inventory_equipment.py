@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from dnd.core.values import ValueRead
+from dnd.core.values import ValueRead, Channel, Kind, add_modifier, remove_modifier
 from dnd.actions_functional import execute_use_action, setup_standard_actions
 from dnd.blocks.base_item import BaseItem
 from dnd.content.items.authored_item_builders import build_authored_item
@@ -420,12 +420,12 @@ def test_eb_13_015_heavy_armor_strength_requirement_reduces_speed() -> None:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
     )
-    entity.ability_scores.strength.ability_score.self_static.add_value_modifier(strength_boost)
+    add_modifier(entity.ability_scores.strength.ability_score, Channel.SELF_STATIC, Kind.VALUE, strength_boost)
 
     assert entity.ability_scores.strength.ability_score.score == 13
     assert entity.action_economy.movement_remaining() == 30
 
-    entity.ability_scores.strength.ability_score.self_static.remove_value_modifier(strength_boost.uuid)
+    remove_modifier(entity.ability_scores.strength.ability_score, strength_boost.uuid, Channel.SELF_STATIC, Kind.VALUE)
 
     assert entity.action_economy.movement_remaining() == 20
 
@@ -538,30 +538,24 @@ def test_eb_13_019_equipment_damage_bonuses_are_counted_once() -> None:
     melee_base = damage_bonus(WeaponSlot.MELEE_MAIN)
     ranged_base = damage_bonus(WeaponSlot.RANGED_MAIN)
 
-    entity.equipment.damage_bonus.self_static.add_value_modifier(
-        NumericalModifier(
+    add_modifier(entity.equipment.damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name="General Weapon Focus",
             value=3,
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-        )
-    )
-    entity.equipment.melee_damage_bonus.self_static.add_value_modifier(
-        NumericalModifier(
+        ))
+    add_modifier(entity.equipment.melee_damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name="Melee Style",
             value=5,
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-        )
-    )
-    entity.equipment.ranged_damage_bonus.self_static.add_value_modifier(
-        NumericalModifier(
+        ))
+    add_modifier(entity.equipment.ranged_damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name="Ranged Style",
             value=7,
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-        )
-    )
+        ))
 
     assert damage_bonus(WeaponSlot.MELEE_MAIN) == melee_base + 3 + 5
     assert damage_bonus(WeaponSlot.RANGED_MAIN) == ranged_base + 3 + 7

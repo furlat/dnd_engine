@@ -21,6 +21,7 @@ from dnd.entity import Entity
 from dnd.types.abilities import AbilityName, SavingThrowName, SkillName
 from dnd.types.character_progression import AppliedClassLevel, CharacterClass
 from dnd.types.character_receipts import FighterGrantReceipt
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, modifier_of
 
 
 _SECOND_WIND = "class_feature.fighter.second_wind"
@@ -165,60 +166,50 @@ def _apply_style(
         return
     modifier_id = _source(entity, f"{resolved.level.step_id}.{style}.modifier")
     if style.endswith(".archery"):
-        entity.equipment.ranged_attack_bonus.self_static.add_value_modifier(
-            NumericalModifier(
+        add_modifier(entity.equipment.ranged_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 uuid=modifier_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
                 name="Archery",
                 value=2,
-            ),
-        )
+            ))
         ranged.append(modifier_id)
     elif style.endswith(".defense"):
-        entity.equipment.ac_bonus.self_contextual.add_value_modifier(
-            ContextualNumericalModifier(
+        add_modifier(entity.equipment.ac_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
                 uuid=modifier_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
                 name="Defense",
                 callable=fighter.defense_ac_check,
-            ),
-        )
+            ))
         armor.append(modifier_id)
     elif style.endswith(".dueling"):
-        entity.equipment.melee_damage_bonus.self_contextual.add_value_modifier(
-            ContextualNumericalModifier(
+        add_modifier(entity.equipment.melee_damage_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
                 uuid=modifier_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
                 name="Dueling",
                 callable=fighter.dueling_damage_check,
-            ),
-        )
+            ))
         melee.append(modifier_id)
     elif style.endswith(".two_weapon_fighting"):
         melee_id = _source(entity, f"{resolved.level.step_id}.{style}.melee")
         ranged_id = _source(entity, f"{resolved.level.step_id}.{style}.ranged")
-        entity.equipment.off_hand_melee_ability_bonus.self_contextual.add_value_modifier(
-            ContextualNumericalModifier(
+        add_modifier(entity.equipment.off_hand_melee_ability_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
                 uuid=melee_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
                 name="Two-Weapon Fighting",
                 callable=fighter.twf_off_hand_melee_ability_bonus,
-            ),
-        )
+            ))
         off_hand_melee.append(melee_id)
-        entity.equipment.off_hand_ranged_ability_bonus.self_contextual.add_value_modifier(
-            ContextualNumericalModifier(
+        add_modifier(entity.equipment.off_hand_ranged_ability_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
                 uuid=ranged_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
                 name="Two-Weapon Fighting",
                 callable=fighter.twf_off_hand_ranged_ability_bonus,
-            ),
-        )
+            ))
         off_hand_ranged.append(ranged_id)
     elif style.endswith(".great_weapon_fighting"):
         _register_handler(
@@ -458,7 +449,7 @@ def _apply_level_features(
                 entity,
                 f"{step_id}.{critical_feature_id}.{suffix}",
             )
-            value.self_static.add_value_modifier(NumericalModifier(
+            add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 uuid=modifier_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
@@ -481,15 +472,13 @@ def _apply_level_features(
             )
             ability_checks.append((ability, source_id))
         modifier_id = _source(entity, f"{step_id}.{_REMARKABLE_ATHLETE}.jump")
-        entity.jump_distance_additive.self_contextual.add_value_modifier(
-            ContextualNumericalModifier(
+        add_modifier(entity.jump_distance_additive, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
                 uuid=modifier_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
                 name="Remarkable Athlete",
                 callable=_remarkable_athlete_jump_bonus,
-            ),
-        )
+            ))
         jump_modifiers.append(modifier_id)
     if _SURVIVOR in resolved.feature_ids:
         handler = fighter.create_survivor_handler(
@@ -551,41 +540,40 @@ def _validate_fighter_receipt_ownership(
         raise RuntimeError("Fighter attack grant ownership changed")
 
     numerical_owners = (
-        (entity.equipment.ranged_attack_bonus.self_static.value_modifiers,
+        (entity.equipment.ranged_attack_bonus, Channel.SELF_STATIC, Kind.VALUE,
          receipt.ranged_attack_bonus_modifier_ids),
-        (entity.equipment.crit_threshold_melee.self_static.value_modifiers,
+        (entity.equipment.crit_threshold_melee, Channel.SELF_STATIC, Kind.VALUE,
          receipt.melee_critical_threshold_modifier_ids),
-        (entity.equipment.crit_threshold_ranged.self_static.value_modifiers,
+        (entity.equipment.crit_threshold_ranged, Channel.SELF_STATIC, Kind.VALUE,
          receipt.ranged_critical_threshold_modifier_ids),
     )
-    for modifiers, modifier_ids in numerical_owners:
+    for value, channel, kind, modifier_ids in numerical_owners:
         for modifier_id in modifier_ids:
-            modifier = modifiers.get(modifier_id)
+            modifier = modifier_of(value, channel, kind, modifier_id)
             if modifier is None or NumericalModifier.get(modifier_id) is not modifier:
                 raise RuntimeError("Fighter numerical modifier ownership changed")
     for ability, modifier_id in receipt.ability_score_modifier_ids:
-        modifiers = entity.ability_scores.get_ability(
+        modifier = modifier_of(entity.ability_scores.get_ability(
             ability,
-        ).ability_score.self_static.value_modifiers
-        modifier = modifiers.get(modifier_id)
+        ).ability_score, Channel.SELF_STATIC, Kind.VALUE, modifier_id)
         if modifier is None or NumericalModifier.get(modifier_id) is not modifier:
             raise RuntimeError("Fighter ability modifier ownership changed")
 
     contextual_owners = (
-        (entity.equipment.ac_bonus.self_contextual.value_modifiers,
+        (entity.equipment.ac_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE,
          receipt.armor_class_bonus_modifier_ids),
-        (entity.equipment.melee_damage_bonus.self_contextual.value_modifiers,
+        (entity.equipment.melee_damage_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE,
          receipt.melee_damage_bonus_modifier_ids),
-        (entity.equipment.off_hand_melee_ability_bonus.self_contextual.value_modifiers,
+        (entity.equipment.off_hand_melee_ability_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE,
          receipt.off_hand_melee_ability_bonus_modifier_ids),
-        (entity.equipment.off_hand_ranged_ability_bonus.self_contextual.value_modifiers,
+        (entity.equipment.off_hand_ranged_ability_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE,
          receipt.off_hand_ranged_ability_bonus_modifier_ids),
-        (entity.jump_distance_additive.self_contextual.value_modifiers,
+        (entity.jump_distance_additive, Channel.SELF_CONTEXTUAL, Kind.VALUE,
          receipt.jump_distance_additive_modifier_ids),
     )
-    for modifiers, modifier_ids in contextual_owners:
+    for value, channel, kind, modifier_ids in contextual_owners:
         for modifier_id in modifier_ids:
-            modifier = modifiers.get(modifier_id)
+            modifier = modifier_of(value, channel, kind, modifier_id)
             if (
                 modifier is None
                 or ContextualNumericalModifier.get(modifier_id) is not modifier
@@ -641,7 +629,7 @@ def _remove_fighter_receipt(entity: Entity, receipt: FighterGrantReceipt) -> Non
         if not entity.action_economy.remove_attack_multiplicity_grant(source_id):
             raise RuntimeError("Fighter attack grant is missing")
     for modifier_id in reversed(receipt.jump_distance_additive_modifier_ids):
-        entity.jump_distance_additive.self_contextual.remove_value_modifier(modifier_id)
+        remove_modifier(entity.jump_distance_additive, modifier_id, Channel.SELF_CONTEXTUAL, Kind.VALUE)
         ContextualNumericalModifier.unregister(modifier_id)
     for ability, source_id in reversed(receipt.ability_check_proficiency_sources):
         if not entity.ability_scores.get_ability(
@@ -649,42 +637,30 @@ def _remove_fighter_receipt(entity: Entity, receipt: FighterGrantReceipt) -> Non
         ).remove_check_proficiency_source(source_id):
             raise RuntimeError("Fighter ability-check source is missing")
     for modifier_id in reversed(receipt.ranged_critical_threshold_modifier_ids):
-        entity.equipment.crit_threshold_ranged.self_static.remove_value_modifier(
-            modifier_id,
-        )
+        remove_modifier(entity.equipment.crit_threshold_ranged, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.melee_critical_threshold_modifier_ids):
-        entity.equipment.crit_threshold_melee.self_static.remove_value_modifier(
-            modifier_id,
-        )
+        remove_modifier(entity.equipment.crit_threshold_melee, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.off_hand_ranged_ability_bonus_modifier_ids):
-        entity.equipment.off_hand_ranged_ability_bonus.self_contextual.remove_value_modifier(
-            modifier_id,
-        )
+        remove_modifier(entity.equipment.off_hand_ranged_ability_bonus, modifier_id, Channel.SELF_CONTEXTUAL, Kind.VALUE)
         ContextualNumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.off_hand_melee_ability_bonus_modifier_ids):
-        entity.equipment.off_hand_melee_ability_bonus.self_contextual.remove_value_modifier(
-            modifier_id,
-        )
+        remove_modifier(entity.equipment.off_hand_melee_ability_bonus, modifier_id, Channel.SELF_CONTEXTUAL, Kind.VALUE)
         ContextualNumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.melee_damage_bonus_modifier_ids):
-        entity.equipment.melee_damage_bonus.self_contextual.remove_value_modifier(
-            modifier_id,
-        )
+        remove_modifier(entity.equipment.melee_damage_bonus, modifier_id, Channel.SELF_CONTEXTUAL, Kind.VALUE)
         ContextualNumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.armor_class_bonus_modifier_ids):
-        entity.equipment.ac_bonus.self_contextual.remove_value_modifier(modifier_id)
+        remove_modifier(entity.equipment.ac_bonus, modifier_id, Channel.SELF_CONTEXTUAL, Kind.VALUE)
         ContextualNumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.ranged_attack_bonus_modifier_ids):
-        entity.equipment.ranged_attack_bonus.self_static.remove_value_modifier(
-            modifier_id,
-        )
+        remove_modifier(entity.equipment.ranged_attack_bonus, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for ability, modifier_id in reversed(receipt.ability_score_modifier_ids):
-        entity.ability_scores.get_ability(
+        remove_modifier(entity.ability_scores.get_ability(
             ability,
-        ).ability_score.self_static.remove_value_modifier(modifier_id)
+        ).ability_score, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for feature_id, source_id in reversed(receipt.feature_sources):
         if not entity.remove_feature_source(feature_id, source_id):
@@ -819,9 +795,9 @@ def apply_fighter_level(
 
         for ability, amount in resolved.ability_increases:
             modifier_id = _source(entity, f"{level.step_id}.asi.{ability}")
-            entity.ability_scores.get_ability(
+            add_modifier(entity.ability_scores.get_ability(
                 ability,
-            ).ability_score.self_static.add_value_modifier(NumericalModifier(
+            ).ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 uuid=modifier_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,

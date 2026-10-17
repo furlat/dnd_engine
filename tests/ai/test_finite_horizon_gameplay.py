@@ -9,6 +9,7 @@ from tests.ai.support import (
     advance_native_ai_test_game,
     build_native_ai_test_game,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def test_non_damaging_match_respects_the_test_decision_budget() -> None:
@@ -22,15 +23,13 @@ def test_non_damaging_match_respects_the_test_decision_budget() -> None:
     }
     for actor in game.assembled.entities:
         for damage_type in DamageType:
-            actor.health.damage_reduction.self_static.add_resistance_modifier(
-                ResistanceModifier(
+            add_modifier(actor.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
                     source_entity_uuid=actor.uuid,
                     target_entity_uuid=actor.uuid,
                     name=f"Test immunity to {damage_type.value}",
                     value=ResistanceStatus.IMMUNITY,
                     damage_type=damage_type,
-                )
-            )
+                ))
 
     result = advance_native_ai_test_game(
         game,

@@ -35,7 +35,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import AdvantageStatus, BaseValue, ValueReading
+from dnd.core.values import AdvantageStatus, BaseValue, ValueReading, Channel, Kind, add_modifier
 from dnd.types.senses import PerceivedContact
 from dnd.conditions import Exhaustion
 from dnd.entity import Entity, EntityConfig
@@ -277,14 +277,12 @@ def test_eb_06_006_targeted_skill_bonus_imports_target_outgoing_modifiers() -> N
     target = configured_entity("Target", (1, 0), "monsters")
     base_athletics = actor.skill_bonus(None, "athletics").normalized_score
 
-    target.skill_set.athletics.skill_bonus.to_target_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(target.skill_set.athletics.skill_bonus, Channel.TO_TARGET_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=target.uuid,
             target_entity_uuid=actor.uuid,
             name="Slippery Target",
             value=-2,
-        )
-    )
+        ))
 
     targeted_athletics = actor.skill_bonus(target.uuid, "athletics")
 

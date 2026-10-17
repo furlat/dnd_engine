@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 from dnd.action_timing import record_action_count
 from dnd.core.damage import DamageComponentResolution, DamageResolution
 from dnd.core.life_types import LifeState, RemainsDisposition
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     NumericalModifier,
@@ -234,14 +234,12 @@ class HitDice(BaseBlock):
                 if identity_uuid is not None
                 else uuid4()
             )
-            modifiable_hit_dice_value.self_static.add_value_modifier(
-                NumericalModifier(
+            add_modifier(modifiable_hit_dice_value, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     uuid=modifier_uuid,
                     source_entity_uuid=source_entity_uuid,
                     name=modifier[0],
                     value=modifier[1],
-                )
-            )
+                ))
         modifiable_hit_dice_count = ModifiableValue.create(
             source_entity_uuid=source_entity_uuid,
             base_value=resolved.hit_dice_count,
@@ -254,14 +252,12 @@ class HitDice(BaseBlock):
                 if identity_uuid is not None
                 else uuid4()
             )
-            modifiable_hit_dice_count.self_static.add_value_modifier(
-                NumericalModifier(
+            add_modifier(modifiable_hit_dice_count, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     uuid=modifier_uuid,
                     source_entity_uuid=source_entity_uuid,
                     name=modifier[0],
                     value=modifier[1],
-                )
-            )
+                ))
         return cls(
             uuid=identity_uuid or uuid4(),
             source_entity_uuid=source_entity_uuid,
@@ -831,7 +827,7 @@ class Health(BaseBlock):
         if modifier.value > 0 and modifier.value > self.temporary_hit_points.score:
 
             self.temporary_hit_points.remove_all_modifiers()
-            self.temporary_hit_points.self_static.add_value_modifier(modifier)
+            add_modifier(self.temporary_hit_points, Channel.SELF_STATIC, Kind.VALUE, modifier)
             self.temporary_hit_points_grant = TemporaryHitPointsGrant(
                 instance_uuid=modifier.uuid, source_id=source_id,
             )
@@ -851,7 +847,7 @@ class Health(BaseBlock):
             self.temporary_hit_points_grant = None
         else:
 
-            self.temporary_hit_points.self_static.add_value_modifier(modifier)
+            add_modifier(self.temporary_hit_points, Channel.SELF_STATIC, Kind.VALUE, modifier)
 
     def preserve_normal_hit_points(self, previous_normal_hp: int, *, maximum_hp: int) -> None:
         """Reconcile a changed maximum without healing or dealing damage again.
@@ -899,19 +895,19 @@ class Health(BaseBlock):
             hit_dices = [HitDice.create(source_entity_uuid=source_entity_uuid, config=hit_dice) for hit_dice in config.hit_dices]
             max_hit_points_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.max_hit_points_bonus, value_name="Max Hit Points Bonus")
             for modifier in config.max_hit_points_bonus_modifiers:
-                max_hit_points_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             temporary_hit_points = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.temporary_hit_points, value_name="Temporary Hit Points")
             for modifier in config.temporary_hit_points_modifiers:
-                temporary_hit_points.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(temporary_hit_points, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             damage_reduction = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.damage_reduction, value_name="Damage Reduction")
             for modifier in config.damage_reduction_modifiers:
-                damage_reduction.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(damage_reduction, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             for vulnerability in config.vulnerabilities:
-                damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.VULNERABILITY, damage_type=vulnerability, name=f"Vulnerability to {vulnerability}"))
+                add_modifier(damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.VULNERABILITY, damage_type=vulnerability, name=f"Vulnerability to {vulnerability}"))
             for resistance in config.resistances:
-                damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.RESISTANCE, damage_type=resistance, name=f"Resistance to {resistance}"))
+                add_modifier(damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.RESISTANCE, damage_type=resistance, name=f"Resistance to {resistance}"))
             for immunity in config.immunities:
-                damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.IMMUNITY, damage_type=immunity, name=f"Immunity to {immunity}"))
+                add_modifier(damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.IMMUNITY, damage_type=immunity, name=f"Immunity to {immunity}"))
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
                        hit_dices=hit_dices, max_hit_points_bonus=max_hit_points_bonus, temporary_hit_points=temporary_hit_points, damage_reduction=damage_reduction,

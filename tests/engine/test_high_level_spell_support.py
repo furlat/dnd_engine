@@ -38,19 +38,18 @@ from tests.engine.test_high_level_spell_controls import (
     high_actor,
 )
 from tests.manual.spell_regression_support import force_save_result
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.mark.parametrize("success", [False, True])
 def test_feeblemind_damage_on_both_saves_and_exact_cure(game, success):
     caster = high_actor(game)
     target = high_actor(game, "Victim", (3, 2), "foes")
-    target.ability_scores.get_ability(
+    add_modifier(target.ability_scores.get_ability(
         "intelligence"
-    ).ability_score.self_static.add_min_constraint(
-        NumericalModifier(
+    ).ability_score, Channel.SELF_STATIC, Kind.MIN, NumericalModifier(
             name="Native minimum", value=19, source_entity_uuid=target.uuid
-        )
-    )
+        ))
     before = target.ability_scores.get_ability("intelligence").ability_score.score
     hp = target.get_hp()
     force_save_result(target, "intelligence", succeeds=success)

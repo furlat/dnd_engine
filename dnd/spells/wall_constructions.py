@@ -38,6 +38,7 @@ from dnd.types.summoning import TerminalOwnerRelease
 from dnd.types.world import MovementMode, WorldEdgeChannel
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 from dnd.conditions import Prone
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class FrigidAirZone(WallFieldZone):
@@ -715,7 +716,7 @@ class ConstructWall(SpellAction):
                             vertical_extent_steps=ceil(section.height_feet / 5), footprint_offsets=offsets))
                     pending.append((item, anchor))
                     if item.health is not None and self.construction_material == "ice":
-                        item.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+                        add_modifier(item.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
                             source_entity_uuid=caster.uuid, target_entity_uuid=item.uuid, name="Ice fire vulnerability",
                             damage_type=DamageType.FIRE, value=ResistanceStatus.VULNERABILITY))
                     grid.validate_object_placement(item.uuid, anchor)

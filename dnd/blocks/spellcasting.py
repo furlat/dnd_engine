@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.events import Damage
@@ -667,13 +667,11 @@ class SpellcastingBlock(BaseBlock):
             value_name="Spell Attack Bonus"
         )
         for mod_name, mod_value in config.spell_attack_modifiers:
-            spell_attack_bonus.self_static.add_value_modifier(
-                NumericalModifier.create(
+            add_modifier(spell_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                     source_entity_uuid=source_entity_uuid,
                     name=mod_name,
                     value=mod_value
-                )
-            )
+                ))
 
         spell_damage_bonus = ModifiableValue.create(
             source_entity_uuid=source_entity_uuid,
@@ -681,13 +679,11 @@ class SpellcastingBlock(BaseBlock):
             value_name="Spell Damage Bonus"
         )
         for mod_name, mod_value in config.spell_damage_modifiers:
-            spell_damage_bonus.self_static.add_value_modifier(
-                NumericalModifier.create(
+            add_modifier(spell_damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                     source_entity_uuid=source_entity_uuid,
                     name=mod_name,
                     value=mod_value
-                )
-            )
+                ))
 
         spell_dc_bonus = ModifiableValue.create(
             source_entity_uuid=source_entity_uuid,
@@ -695,13 +691,11 @@ class SpellcastingBlock(BaseBlock):
             value_name="Spell DC Bonus"
         )
         for mod_name, mod_value in config.spell_dc_modifiers:
-            spell_dc_bonus.self_static.add_value_modifier(
-                NumericalModifier.create(
+            add_modifier(spell_dc_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                     source_entity_uuid=source_entity_uuid,
                     name=mod_name,
                     value=mod_value
-                )
-            )
+                ))
 
         spell_crit_threshold = ModifiableValue.create(
             source_entity_uuid=source_entity_uuid,
@@ -709,13 +703,11 @@ class SpellcastingBlock(BaseBlock):
             value_name="Spell Crit Threshold"
         )
         for mod_name, mod_value in config.spell_crit_threshold_modifiers:
-            spell_crit_threshold.self_static.add_value_modifier(
-                NumericalModifier.create(
+            add_modifier(spell_crit_threshold, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                     source_entity_uuid=source_entity_uuid,
                     name=mod_name,
                     value=mod_value
-                )
-            )
+                ))
 
         spell_crit_extra_dice = ModifiableValue.create(
             source_entity_uuid=source_entity_uuid,
@@ -723,13 +715,11 @@ class SpellcastingBlock(BaseBlock):
             value_name="Spell Crit Extra Dice"
         )
         for mod_name, mod_value in config.spell_crit_extra_dice_modifiers:
-            spell_crit_extra_dice.self_static.add_value_modifier(
-                NumericalModifier.create(
+            add_modifier(spell_crit_extra_dice, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                     source_entity_uuid=source_entity_uuid,
                     name=mod_name,
                     value=mod_value
-                )
-            )
+                ))
 
         extra_spell_damage_bonus: List[ModifiableValue] = []
         for i, modifiers in enumerate(config.extra_spell_damage_bonus_modifiers):
@@ -739,13 +729,11 @@ class SpellcastingBlock(BaseBlock):
                 value_name=f"Extra Spell Damage Bonus {i}"
             )
             for mod_name, mod_value in modifiers:
-                bonus.self_static.add_value_modifier(
-                    NumericalModifier.create(
+                add_modifier(bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                         source_entity_uuid=source_entity_uuid,
                         name=mod_name,
                         value=mod_value
-                    )
-            )
+                    ))
             extra_spell_damage_bonus.append(bonus)
 
         extra_spell_damage_type = [DamageType(t) for t in config.extra_spell_damage_types]

@@ -36,7 +36,7 @@ from dnd.core.modifiers import (
     ResistanceModifier,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue, ValueRead, read_value
+from dnd.core.values import BaseValue, ValueRead, read_value, Channel, Kind, add_modifier
 from dnd.types.senses import OBSCUREMENT_SETS, OpticalObscurement
 from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import execute_by_index, setup_standard_actions
@@ -200,27 +200,23 @@ def create_family_target(
 def penalize_save(entity: Entity, ability_name: AbilityName, value: int = -100) -> None:
     """Make a save fail deterministically unless the engine applies an auto rule."""
     save = entity.saving_throws.get_saving_throw(ability_name)
-    save.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(save.bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             name=f"Book {ability_name} save penalty",
             value=value,
-        )
-    )
+        ))
 
 
 def boost_save(entity: Entity, ability_name: AbilityName, value: int = 100) -> None:
     """Make a save succeed deterministically unless the engine applies an auto rule."""
     save = entity.saving_throws.get_saving_throw(ability_name)
-    save.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(save.bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             name=f"Book {ability_name} save boost",
             value=value,
-        )
-    )
+        ))
 
 
 def assert_completed_spell(event: Event | None) -> SpellEvent:
@@ -316,14 +312,12 @@ class BookAbilityScoreReduction(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         ability = target.ability_scores.get_ability(self.ability_name)
-        modifier_uuid = ability.ability_score.self_static.add_value_modifier(
-            NumericalModifier.create(
+        modifier_uuid = add_modifier(ability.ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid or self.target_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 name="Book ability score reduction",
                 value=self.penalty,
-            )
-        )
+            ))
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             status_message=f"Applied Book Ability Score Reduction to {self.ability_name}",
@@ -352,14 +346,12 @@ class BookHitPointMaximumReduction(BaseCondition):
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
-        modifier_uuid = target.health.max_hit_points_bonus.self_static.add_value_modifier(
-            NumericalModifier.create(
+        modifier_uuid = add_modifier(target.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid or self.target_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 name="Book hit point maximum reduction",
                 value=self.penalty,
-            )
-        )
+            ))
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             status_message="Applied Book Hit Point Maximum Reduction",
@@ -2485,15 +2477,13 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     immune_target = create_family_target(name="Poison Immune Target", position=(10, 6), hp_dice=8)
     penalize_save(retching_target, "constitution")
     penalize_save(immune_target, "constitution")
-    immune_target.health.damage_reduction.self_static.add_resistance_modifier(
-        ResistanceModifier(
+    add_modifier(immune_target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=immune_target.uuid,
             target_entity_uuid=immune_target.uuid,
             value=ResistanceStatus.IMMUNITY,
             damage_type=DamageType.POISON,
             name="Book poison immunity",
-        )
-    )
+        ))
     Entity.update_all_entities_senses(max_distance=120)
 
     with patch("dnd.core.dice.random.randint", return_value=10):
@@ -2894,14 +2884,12 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
     caster = create_family_caster(position=(1, 1), spell_slots={2: 1})
     target = create_family_target(name="Web Target", position=(5, 5), hp_dice=8)
     penalize_save(target, "dexterity")
-    target.skill_set.get_skill("athletics").skill_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(target.skill_set.get_skill("athletics").skill_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
             name="Book athletics escape boost",
             value=100,
-        )
-    )
+        ))
     Entity.update_all_entities_senses(max_distance=60)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):

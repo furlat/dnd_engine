@@ -29,6 +29,7 @@ from dnd.spells.evocation import IceStorm, Sunbeam, SunbeamEffect, Sunburst
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor, force_save_result, reset_spell_regression_arena,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.fixture
@@ -341,7 +342,7 @@ def test_solar_success_halves_damage_without_blindness(scene, spell, destination
 
 def test_ice_storm_mixed_resistance_and_source_death_preserve_terrain_until_round(scene):
     caster, target = scene
-    target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
         source_entity_uuid=target.uuid, target_entity_uuid=target.uuid, name="Cold immunity",
         value=ResistanceStatus.IMMUNITY, damage_type=DamageType.COLD))
     before = target.get_normal_hp()

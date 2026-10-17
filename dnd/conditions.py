@@ -99,6 +99,7 @@ from dnd.creature_transforms import (
     apply_unconscious_transform,
     apply_visual_denial_transform,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 UNDERWATER_MELEE_EXCEPTION_WEAPONS: Tuple[str, ...] = ("dagger", "javelin", "shortsword", "spear", "trident")
 UNDERWATER_RANGED_EXCEPTION_WEAPON_TOKENS: Tuple[str, ...] = ("crossbow", "net", "javelin", "spear", "trident", "dart")
@@ -336,24 +337,20 @@ class Underwater(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity, Entity):
             outs: List[Tuple[UUID, UUID]] = []
-            disadvantage_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
-                modifier=ContextualAdvantageModifier(
+            disadvantage_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
                     name="Underwater",
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
                     callable=underwater_attack_disadvantage,
-                )
-            )
+                ))
             outs.append((target_entity.equipment.attack_bonus.uuid, disadvantage_uuid))
 
-            automiss_uuid = target_entity.equipment.attack_bonus.self_contextual.add_auto_hit_modifier(
-                modifier=ContextualAutoHitModifier(
+            automiss_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.AUTO_HIT, ContextualAutoHitModifier(
                     name="Underwater",
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
                     callable=underwater_ranged_automiss,
-                )
-            )
+                ))
             outs.append((target_entity.equipment.attack_bonus.uuid, automiss_uuid))
 
             effect_event = declaration_event.phase_to(
@@ -522,15 +519,15 @@ class Blinded(BaseCondition):
                     effect_source_uuid=self.source_entity_uuid,
                 )
             )
-            self_static_condition_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Blinded",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            to_target_static_condition_uuid =target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(AdvantageModifier(name="Blinded",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+            self_static_condition_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Blinded",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+            to_target_static_condition_uuid =add_modifier(target_entity.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Blinded",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied attack advantage modifers from Blinded to {target_entity.name}")
             outs.append((target_entity.equipment.attack_bonus.uuid,self_static_condition_uuid))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_static_condition_uuid))
             for skill in skills_requiring_sight:
                 skill_obj = target_entity.skill_set.get_skill(skill)
 
-                modifier_uuid=skill_obj.skill_bonus.self_static.add_auto_hit_modifier(AutoHitModifier(name="Blinded",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+                modifier_uuid=add_modifier(skill_obj.skill_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, AutoHitModifier(name="Blinded",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
                 outs.append((skill_obj.skill_bonus.uuid,modifier_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied skill advantage modifers from Blinded to {target_entity.name}")
             return outs, [], [], [], effect_event
@@ -563,14 +560,14 @@ class Charmed(BaseCondition):
         elif isinstance(target_entity,Entity):
             outs = []
             charmed_attack_check = self.get_charmed_attack_check()
-            self_static_condition_uuid = target_entity.equipment.attack_bonus.self_contextual.add_auto_hit_modifier(modifier=ContextualAutoHitModifier(name="Charmed",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=charmed_attack_check))
+            self_static_condition_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.AUTO_HIT, ContextualAutoHitModifier(name="Charmed",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=charmed_attack_check))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied contextual auto hit modifers from Charmed to {target_entity.name}")
             outs.append((target_entity.equipment.attack_bonus.uuid,self_static_condition_uuid))
 
             charmed_skill_check = self.get_charmed_skill_check()
             for skill in skills_social:
                 skill_obj = target_entity.skill_set.get_skill(skill)
-                to_target_static_condition_uuid = skill_obj.skill_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Charmed",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=charmed_skill_check))
+                to_target_static_condition_uuid = add_modifier(skill_obj.skill_bonus, Channel.TO_TARGET_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(name="Charmed",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=charmed_skill_check))
                 outs.append((skill_obj.skill_bonus.uuid,to_target_static_condition_uuid))
             effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied contextual advantage modifers from Charmed to {target_entity.name}")
             def prevent_harm(event: Event, _source_uuid: UUID) -> Event | None:
@@ -694,7 +691,7 @@ class Deafened(BaseCondition):
             outs = []
             for skill in skills_requiring_hearing:
                 skill_obj = target_entity.skill_set.get_skill(skill)
-                modifier_uuid = skill_obj.skill_bonus.self_static.add_auto_hit_modifier(AutoHitModifier(name="Deafened",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+                modifier_uuid = add_modifier(skill_obj.skill_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, AutoHitModifier(name="Deafened",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
                 outs.append((skill_obj.skill_bonus.uuid,modifier_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied skills auto hit modifers from Deafened to {target_entity.name}")
             return outs, [], [], [], effect_event
@@ -837,14 +834,12 @@ class Exhaustion(BaseCondition):
             if self.level >= 1:
                 for skill in all_skills:
                     skill_obj = target_entity.skill_set.get_skill(skill)
-                    modifier_uuid = skill_obj.skill_bonus.self_static.add_advantage_modifier(
-                        AdvantageModifier(
+                    modifier_uuid = add_modifier(skill_obj.skill_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                             name="Exhaustion",
                             value=AdvantageStatus.DISADVANTAGE,
                             source_entity_uuid=source_uuid,
                             target_entity_uuid=target_uuid,
-                        )
-                    )
+                        ))
                     outs.append((skill_obj.skill_bonus.uuid, modifier_uuid))
                 effect_event = effect_event.phase_to(
                     EventPhase.EFFECT,
@@ -854,31 +849,27 @@ class Exhaustion(BaseCondition):
 
             if 2 <= self.level < 5:
                 for speed in target_entity.action_economy.speed_values:
-                    modifier_uuid = speed.self_static.add_factor(ArithmeticFactor(
+                    modifier_uuid = add_modifier(speed, Channel.SELF_STATIC, Kind.FACTOR, ArithmeticFactor(
                         name="Exhaustion", numerator=1, denominator=2,
                         source_entity_uuid=source_uuid, target_entity_uuid=target_uuid))
                     outs.append((speed.uuid, modifier_uuid))
 
             if self.level >= 3:
-                attack_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(
-                    AdvantageModifier(
+                attack_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                         name="Exhaustion",
                         value=AdvantageStatus.DISADVANTAGE,
                         source_entity_uuid=source_uuid,
                         target_entity_uuid=target_uuid,
-                    )
-                )
+                    ))
                 outs.append((target_entity.equipment.attack_bonus.uuid, attack_uuid))
                 for ability_name in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"):
                     saving_throw = target_entity.saving_throws.get_saving_throw(ability_name)
-                    save_uuid = saving_throw.bonus.self_static.add_advantage_modifier(
-                        AdvantageModifier(
+                    save_uuid = add_modifier(saving_throw.bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                             name="Exhaustion",
                             value=AdvantageStatus.DISADVANTAGE,
                             source_entity_uuid=source_uuid,
                             target_entity_uuid=target_uuid,
-                        )
-                    )
+                        ))
                     outs.append((saving_throw.bonus.uuid, save_uuid))
                 effect_event = effect_event.phase_to(
                     EventPhase.EFFECT,
@@ -894,14 +885,12 @@ class Exhaustion(BaseCondition):
                 )
                 target_max_hp = current_max_hp // 2
                 penalty = target_max_hp - current_max_hp
-                modifier_uuid = target_entity.health.max_hit_points_bonus.self_static.add_value_modifier(
-                    NumericalModifier(
+                modifier_uuid = add_modifier(target_entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                         name="Exhaustion",
                         value=penalty,
                         source_entity_uuid=source_uuid,
                         target_entity_uuid=target_uuid,
-                    )
-                )
+                    ))
                 outs.append((target_entity.health.max_hit_points_bonus.uuid, modifier_uuid))
                 effect_event = effect_event.phase_to(
                     EventPhase.EFFECT,
@@ -911,14 +900,12 @@ class Exhaustion(BaseCondition):
 
             if self.level >= 5:
                 for speed in target_entity.action_economy.speed_values:
-                    modifier_uuid = speed.self_static.add_max_constraint(
-                        NumericalModifier(
+                    modifier_uuid = add_modifier(speed, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(
                             name="Exhaustion",
                             value=0,
                             source_entity_uuid=source_uuid,
                             target_entity_uuid=target_uuid,
-                        )
-                    )
+                        ))
                     outs.append((speed.uuid, modifier_uuid))
                 effect_event = effect_event.phase_to(
                     EventPhase.EFFECT,
@@ -974,11 +961,11 @@ class Dodging(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
-            to_target_static_condition_uuid =target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(AdvantageModifier(name="Dodging",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+            to_target_static_condition_uuid =add_modifier(target_entity.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Dodging",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_static_condition_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Dodging self to others advantage modifier to {target_entity.name}")
             dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
-            dex_save_modifier_uuid = dex_save.bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Dodging",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+            dex_save_modifier_uuid = add_modifier(dex_save.bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Dodging",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((dex_save.bonus.uuid,dex_save_modifier_uuid))
             effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Dodging Dexterity saving throw advantage modifier to {target_entity.name}")
             return outs, [], [], [], effect_event
@@ -1079,7 +1066,7 @@ def apply_frightened_disadvantage(
     values.extend(ability.check_bonus for ability in (
         target.ability_scores.strength, target.ability_scores.dexterity, target.ability_scores.constitution,
         target.ability_scores.intelligence, target.ability_scores.wisdom, target.ability_scores.charisma))
-    return [(value.uuid, value.self_contextual.add_advantage_modifier(ContextualAdvantageModifier(
+    return [(value.uuid, add_modifier(value, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
         name="Frightened", source_entity_uuid=target.uuid, target_entity_uuid=source_uuid,
         callable=disadvantage))) for value in values]
 
@@ -1138,7 +1125,7 @@ class Frightened(BaseCondition):
                 return outs, [direction.uuid], [], [], effect_event
             if self.residue_origin is None:
                 for speed in target_entity.action_economy.speed_values:
-                    max_movement_constraint_uuid = speed.self_contextual.add_max_constraint(constraint=ContextualNumericalModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frigthener_in_senses_zero_max_speed()))
+                    max_movement_constraint_uuid = add_modifier(speed, Channel.SELF_CONTEXTUAL, Kind.MAX, ContextualNumericalModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frigthener_in_senses_zero_max_speed()))
                     outs.append((speed.uuid,max_movement_constraint_uuid))
                 effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Frightened movement constraint to {target_entity.name}")
                 return outs, [], [], [], effect_event
@@ -1450,9 +1437,9 @@ class Invisible(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
-            self_contextual_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=unseen_attacker_advantage))
+            self_contextual_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=unseen_attacker_advantage))
             outs.append((target_entity.equipment.attack_bonus.uuid,self_contextual_uuid))
-            to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=unseen_target_disadvantage))
+            to_target_contextual_uuid = add_modifier(target_entity.equipment.ac_bonus, Channel.TO_TARGET_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=unseen_target_disadvantage))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_uuid))
             try:
                 effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Invisible to target disadvantage modifier to {target_entity.name}")
@@ -1607,12 +1594,12 @@ class Petrified(BaseCondition):
                     source_entity_uuid=source_uuid,
                     target_entity_uuid=target_uuid,
                 )
-                resistance_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(resistance_modifier)
+                resistance_uuid = add_modifier(target_entity.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, resistance_modifier)
                 outs.append((target_entity.health.damage_reduction.uuid, resistance_uuid))
             poison_immunity = ResistanceModifier(name="Petrified poison immunity",
                 value=ResistanceStatus.IMMUNITY, damage_type=DamageType.POISON,
                 source_entity_uuid=source_uuid, target_entity_uuid=target_uuid)
-            poison_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(poison_immunity)
+            poison_uuid = add_modifier(target_entity.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, poison_immunity)
             outs.append((target_entity.health.damage_reduction.uuid, poison_uuid))
             target_entity.add_condition_immunity_source("Poisoned", self.uuid)
             effect_event = effect_event.phase_to(
@@ -1661,12 +1648,12 @@ class Poisoned(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
-            self_static_attack_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Poisoned",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+            self_static_attack_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Poisoned",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.attack_bonus.uuid,self_static_attack_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Poisoned self to others advantage modifier to {target_entity.name}")
             for skill in all_skills:
                 skill_obj = target_entity.skill_set.get_skill(skill)
-                skill_static_modifier_uuid = skill_obj.skill_bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Poisoned",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+                skill_static_modifier_uuid = add_modifier(skill_obj.skill_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Poisoned",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
                 outs.append((skill_obj.skill_bonus.uuid,skill_static_modifier_uuid))
             effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Poisoned to all skills disadvantage modifier to {target_entity.name}")
             return outs, [], [], [], effect_event
@@ -1723,10 +1710,8 @@ class Prone(BaseCondition):
             outs: List[Tuple[UUID, UUID]] = []
             handler_uuids: List[UUID] = []
 
-            self_static_attack_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(
-                AdvantageModifier(name="Prone", value=AdvantageStatus.DISADVANTAGE,
-                                  source_entity_uuid=self.target_entity_uuid, target_entity_uuid=self.source_entity_uuid)
-            )
+            self_static_attack_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Prone", value=AdvantageStatus.DISADVANTAGE,
+                                  source_entity_uuid=self.target_entity_uuid, target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.attack_bonus.uuid, self_static_attack_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self},
                                                        status_message=f"Applied Prone to {target_entity.name}")
@@ -1806,17 +1791,17 @@ class Restrained(BaseCondition):
         elif isinstance(target_entity,Entity):
             outs = []
             for speed in target_entity.action_economy.speed_values:
-                speed_max_constrain_uuid = speed.self_static.add_max_constraint(constraint=NumericalModifier(name="Restrained",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+                speed_max_constrain_uuid = add_modifier(speed, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(name="Restrained",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
                 outs.append((speed.uuid,speed_max_constrain_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Restrained max speed constraint to {target_entity.name}")
-            self_static_attack_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Restrained",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+            self_static_attack_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Restrained",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.attack_bonus.uuid,self_static_attack_uuid))
             effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Restrained to self disadvantage modifier to {target_entity.name}")
             dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
-            dex_save_disadvantage_uuid = dex_save.bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Restrained",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+            dex_save_disadvantage_uuid = add_modifier(dex_save.bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Restrained",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((dex_save.bonus.uuid,dex_save_disadvantage_uuid))
             effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Restrained disadvantage to dex saves for {target_entity.name}")
-            to_target_static_uuid = target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(AdvantageModifier(name="Restrained",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+            to_target_static_uuid = add_modifier(target_entity.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Restrained",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_static_uuid))
             effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Restrained to target contextual advantage modifier to {target_entity.name}")
             return outs, [], [], [], effect_event
@@ -2429,14 +2414,12 @@ class NoReactions(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        reaction_max_uuid = target_entity.action_economy.reactions.self_static.add_max_constraint(
-            constraint=NumericalModifier(
+        reaction_max_uuid = add_modifier(target_entity.action_economy.reactions, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(
                 name="No Reactions",
                 value=0,
                 source_entity_uuid=self.source_entity_uuid or self.target_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid
-            )
-        )
+            ))
         outs.append((target_entity.action_economy.reactions.uuid, reaction_max_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -2483,14 +2466,12 @@ class Hidden(BaseCondition):
             outs: List[Tuple[UUID, UUID]] = []
             handler_uuids: List[UUID] = []
 
-            adv_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
-                modifier=ContextualAdvantageModifier(
+            adv_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
                     name="Hidden (Unseen Attacker)",
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
                     callable=unseen_attacker_advantage
-                )
-            )
+                ))
             outs.append((target_entity.equipment.attack_bonus.uuid, adv_uuid))
 
             try:
@@ -2670,24 +2651,20 @@ class InvisibilityEffect(BaseCondition):
             handler_uuids: List[UUID] = []
 
 
-            self_ctx_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
-                modifier=ContextualAdvantageModifier(
+            self_ctx_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
                     name="Invisible (Unseen Attacker)",
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
                     callable=unseen_attacker_advantage
-                )
-            )
+                ))
             outs.append((target_entity.equipment.attack_bonus.uuid, self_ctx_uuid))
 
-            to_target_ctx_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(
-                modifier=ContextualAdvantageModifier(
+            to_target_ctx_uuid = add_modifier(target_entity.equipment.ac_bonus, Channel.TO_TARGET_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
                     name="Invisible (Unseen Target)",
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
                     callable=unseen_target_disadvantage
-                )
-            )
+                ))
             outs.append((target_entity.equipment.ac_bonus.uuid, to_target_ctx_uuid))
 
             try:
@@ -2804,24 +2781,20 @@ class GreaterInvisibilityEffect(BaseCondition):
             handler_uuids: List[UUID] = []
 
 
-            self_ctx_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
-                modifier=ContextualAdvantageModifier(
+            self_ctx_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
                     name="Greater Invisibility (Unseen Attacker)",
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
                     callable=unseen_attacker_advantage
-                )
-            )
+                ))
             outs.append((target_entity.equipment.attack_bonus.uuid, self_ctx_uuid))
 
-            to_target_ctx_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(
-                modifier=ContextualAdvantageModifier(
+            to_target_ctx_uuid = add_modifier(target_entity.equipment.ac_bonus, Channel.TO_TARGET_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
                     name="Greater Invisibility (Unseen Target)",
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
                     callable=unseen_target_disadvantage
-                )
-            )
+                ))
             outs.append((target_entity.equipment.ac_bonus.uuid, to_target_ctx_uuid))
 
             try:
@@ -3020,7 +2993,7 @@ class Revealed(BaseCondition):
         modifiers=[]
         if self.grants_attack_advantage and isinstance(target,Entity):
             value=target.equipment.ac_bonus
-            ident=value.to_target_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+            ident=add_modifier(value, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
                 value=AdvantageStatus.ADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
             modifiers.append((value.uuid,ident))
         grid=get_map()

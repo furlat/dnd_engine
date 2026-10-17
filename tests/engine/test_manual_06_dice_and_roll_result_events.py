@@ -3,7 +3,7 @@
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
-from dnd.core.values import ValueRead, read_value
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType
 from dnd.core.equipment_types import WeaponSlot
@@ -72,14 +72,12 @@ def test_plain_d20_and_advantage_selection() -> None:
         value_name="Attack Bonus With Advantage",
         base_value=3,
     )
-    advantage_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(advantage_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=hero_id,
             target_entity_uuid=goblin_id,
             name="High Ground",
             value=AdvantageStatus.ADVANTAGE,
-        )
-    )
+        ))
 
     with patch("random.randint", side_effect=[4, 17]):
         advantage_roll = Dice(

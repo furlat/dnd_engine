@@ -100,7 +100,7 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.core.saving_throw_types import SavingThrowContext
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.entity import Entity
 from dnd.monsters.traits import NaturalAttack
 from dnd.spatial.area_conditions import AreaCondition
@@ -201,9 +201,7 @@ class Shocked(BaseCondition):
             return [], [], [], [], event.cancel(status_message="Recipient absent")
         outputs = []
         value = target.action_economy.reactions
-        ident = value.self_static.add_max_constraint(
-            NumericalModifier(name=self.name, value=0, source_entity_uuid=target.uuid)
-        )
+        ident = add_modifier(value, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(name=self.name, value=0, source_entity_uuid=target.uuid))
         outputs.append((value.uuid, ident))
         values = [
             target.ability_scores.dexterity.check_bonus,
@@ -215,13 +213,11 @@ class Shocked(BaseCondition):
             if ability == "dexterity"
         )
         for value in values:
-            ident = value.self_static.add_advantage_modifier(
-                AdvantageModifier(
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                     name=self.name,
                     value=AdvantageStatus.DISADVANTAGE,
                     source_entity_uuid=target.uuid,
-                )
-            )
+                ))
             outputs.append((value.uuid, ident))
         expiry = target_turn_expiry_handler(self, turn_ends=2)
         target.add_event_handler(expiry)
@@ -246,11 +242,9 @@ class TremblingLegs(BaseCondition):
             (target.ability_scores.dexterity.ability_score, -1),
             *((speed, -8) for speed in target.action_economy.speed_values),
         ]:
-            ident = value.self_static.add_value_modifier(
-                NumericalModifier(
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name=self.name, value=amount, source_entity_uuid=target.uuid
-                )
-            )
+                ))
             outputs.append((value.uuid, ident))
         expiry = target_turn_expiry_handler(self, turn_ends=3)
         target.add_event_handler(expiry)
@@ -328,14 +322,12 @@ class Chilled(BaseCondition):
             (DamageType.COLD, ResistanceStatus.VULNERABILITY),
             (DamageType.FIRE, ResistanceStatus.RESISTANCE),
         ):
-            ident = value.self_static.add_resistance_modifier(
-                ResistanceModifier(
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
                     name=self.name,
                     value=status,
                     damage_type=damage_type,
                     source_entity_uuid=target.uuid,
-                )
-            )
+                ))
             outputs.append((value.uuid, ident))
         expiry = target_turn_expiry_handler(self, turn_ends=2)
         target.add_event_handler(expiry)
@@ -360,14 +352,12 @@ class Brittle(BaseCondition):
         value = target.health.damage_reduction
         outputs = []
         for kind in (DamageType.BLUDGEONING, DamageType.THUNDER):
-            ident = value.self_static.add_resistance_modifier(
-                ResistanceModifier(
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
                     name=self.name,
                     value=ResistanceStatus.VULNERABILITY,
                     damage_type=kind,
                     source_entity_uuid=target.uuid,
-                )
-            )
+                ))
             outputs.append((value.uuid, ident))
 
         def tick(boundary, _):
@@ -416,18 +406,14 @@ class Dazed(BaseCondition):
             return [], [], [], [], event.cancel(status_message="Recipient absent")
         outputs = []
         value = target.action_economy.reactions
-        ident = value.self_static.add_max_constraint(
-            NumericalModifier(name=self.name, value=0, source_entity_uuid=target.uuid)
-        )
+        ident = add_modifier(value, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(name=self.name, value=0, source_entity_uuid=target.uuid))
         outputs.append((value.uuid, ident))
         value = target.saving_throws.get_saving_throw("wisdom").bonus
-        ident = value.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        ident = add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name=self.name,
                 value=AdvantageStatus.DISADVANTAGE,
                 source_entity_uuid=target.uuid,
-            )
-        )
+            ))
         outputs.append((value.uuid, ident))
         expiry = target_turn_expiry_handler(self, turn_ends=2)
         target.add_event_handler(expiry)
@@ -452,11 +438,9 @@ class TransmutedToSteel(BaseCondition):
             (target.equipment.ac_bonus, 2),
             *((speed, -20) for speed in target.action_economy.speed_values),
         ]:
-            ident = value.self_static.add_value_modifier(
-                NumericalModifier(
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name=self.name, value=amount, source_entity_uuid=target.uuid
-                )
-            )
+                ))
             outputs.append((value.uuid, ident))
         expiry = target_turn_expiry_handler(self, turn_ends=4)
         target.add_event_handler(expiry)
@@ -2297,7 +2281,7 @@ class DragonSharedResistance(BaseCondition):
             damage_type=self.damage_type,
             source_entity_uuid=self.source_entity_uuid,
         )
-        identity = value.self_static.add_resistance_modifier(modifier)
+        identity = add_modifier(value, Channel.SELF_STATIC, Kind.RESISTANCE, modifier)
         return [(value.uuid, identity)], [], [], [], event.phase_to(EventPhase.EFFECT)
 
 

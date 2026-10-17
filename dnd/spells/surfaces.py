@@ -14,7 +14,7 @@ from dnd.core.dice import AttackOutcome
 from dnd.core.events import Damage, SpatialChangeEvent, Event, EventHandler, EventPhase, EventType, Trigger
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.saving_throw_types import SavingThrowEffectTag
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition
 from dnd.spatial.environmental_conditions import IceSurface, FireSurface, ElectrifiedWater, DRY_TRANSITION
@@ -35,7 +35,7 @@ class AcidSurfacePenalty(BaseCondition):
         if target is None:
             return [],[],[],[],event.cancel(status_message="Acid recipient is absent")
         value=target.equipment.ac_bonus
-        identity=value.self_static.add_value_modifier(NumericalModifier(name="Acid Surface",value=-2,
+        identity=add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name="Acid Surface",value=-2,
             source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
         return [(value.uuid,identity)],[],[],[],event.phase_to(EventPhase.EFFECT)
 

@@ -74,7 +74,15 @@ from dnd.core.base_conditions import BaseCondition, Duration, SpellProtectionReg
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import bind_runtime_action_before_admission
 from dnd.core.condition_types import ConditionCategory, ConditionRemovalTrigger, ConditionTag, DurationType, HazardFilter
-from dnd.core.values import ModifiableValue, ValueRead, read_value
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+    remove_modifier,
+)
 from dnd.core.dice import AttackOutcome, Dice, RollType, roll_die_face
 from dnd.core.effect_types import EffectOrigin, EffectOriginKind, EffectEndpoint, EffectPropagationLink, ApplicationMembership
 from dnd.core.life_types import LifeState
@@ -319,7 +327,7 @@ class RayOfFrostEffect(BaseCondition):
             target_entity_uuid=self.target_entity_uuid
         )
         for speed in target.action_economy.speed_values:
-            mod_uuid = speed.self_static.add_value_modifier(speed_reduction)
+            mod_uuid = add_modifier(speed, Channel.SELF_STATIC, Kind.VALUE, speed_reduction)
             outs.append((speed.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -2009,7 +2017,7 @@ class Sunburst(SpellAction):
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid
             )
-            mod_uuid = target.saving_throws.get_saving_throw("constitution").bonus.self_static.add_advantage_modifier(disadv_mod)
+            mod_uuid = add_modifier(target.saving_throws.get_saving_throw("constitution").bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, disadv_mod)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -2021,7 +2029,7 @@ class Sunburst(SpellAction):
             _, save_roll, success = target.saving_throw(save_request)
         finally:
             if mod_uuid is not None:
-                target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_modifier(mod_uuid)
+                remove_modifier(target.saving_throws.get_saving_throw("constitution").bonus, mod_uuid, Channel.SELF_STATIC)
 
         save_bonus = save_roll.bonus  # the bonus the save applied
 
@@ -2264,14 +2272,12 @@ class GuidingBoltMarked(BaseCondition):
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
 
-        adv_uuid = target.equipment.ac_bonus.to_target_static.add_advantage_modifier(
-            AdvantageModifier(
+        adv_uuid = add_modifier(target.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name="Guiding Bolt",
                 value=AdvantageStatus.ADVANTAGE,
                 source_entity_uuid=self.target_entity_uuid,
                 target_entity_uuid=self.source_entity_uuid
-            )
-        )
+            ))
         outs.append((target.equipment.ac_bonus.uuid, adv_uuid))
 
         handler = self._create_remove_on_attack_handler()
@@ -3207,9 +3213,9 @@ def _apply_sunbeam(spell: SpellAction, event: SpellEvent, *, dc: int,
     if caster is None or target is None:
         return event.cancel(status_message="Caster or target missing")
     modifier_uuid = None
-    save_bonus = target.saving_throws.get_saving_throw("constitution").bonus.self_static
+    save_bonus = target.saving_throws.get_saving_throw("constitution").bonus
     if target.creature_type in (CreatureType.UNDEAD, CreatureType.OOZE):
-        modifier_uuid = save_bonus.add_advantage_modifier(AdvantageModifier(
+        modifier_uuid = add_modifier(save_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             name="Sunbeam (Undead/Ooze)", value=AdvantageStatus.DISADVANTAGE,
             source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
     try:
@@ -3217,7 +3223,7 @@ def _apply_sunbeam(spell: SpellAction, event: SpellEvent, *, dc: int,
             caster=caster, target=target, ability_name="constitution", dc=dc)
     finally:
         if modifier_uuid is not None:
-            save_bonus.remove_modifier(modifier_uuid)
+            remove_modifier(save_bonus, modifier_uuid, Channel.SELF_STATIC)
     if effect.canceled:
         return effect
     damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
@@ -4844,7 +4850,7 @@ class FireShieldEffect(BaseCondition):
         value = target.health.damage_reduction
         modifier = ResistanceModifier(name=self.name, value=ResistanceStatus.RESISTANCE, damage_type=resisted,
             source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid)
-        value.self_static.add_resistance_modifier(modifier)
+        add_modifier(value, Channel.SELF_STATIC, Kind.RESISTANCE, modifier)
         self.light_source_uuid = get_map().add_light_source(position=target.position,
             bright_radius_feet=10, dim_radius_feet=10, anchor_uuid=target.uuid, parent_event=event.uuid)
 
@@ -5938,7 +5944,7 @@ class ResilientSphereEffect(BaseCondition):
         if target is None: return [], [], [], [], event.cancel(status_message="Sphere recipient absent")
         modifiers = []
         for value in target.action_economy.speed_values:
-            ident = value.self_static.add_factor(ArithmeticFactor(name=self.name, numerator=1, denominator=2,
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.FACTOR, ArithmeticFactor(name=self.name, numerator=1, denominator=2,
                 source_entity_uuid=target.uuid))
             modifiers.append((value.uuid, ident))
         def boundary(incoming: Event, _: UUID):

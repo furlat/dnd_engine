@@ -3,7 +3,7 @@
 from uuid import uuid4
 from pydantic import ValidationError
 
-from dnd.core.values import ValueRead, read_value
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType, fixed_dice_faces
 from dnd.core.modifiers import (
@@ -148,13 +148,11 @@ def test_advantage_and_disadvantage_print_both_d20_faces(capsys) -> None:
         value_name="Attack Bonus",
         base_value=5,
     )
-    advantaged_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(advantaged_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=hero_id,
             name="High Ground",
             value=AdvantageStatus.ADVANTAGE,
-        )
-    )
+        ))
     advantaged_d20 = Dice(
         count=1,
         value=20,
@@ -174,13 +172,11 @@ def test_advantage_and_disadvantage_print_both_d20_faces(capsys) -> None:
         value_name="Attack Bonus",
         base_value=5,
     )
-    disadvantaged_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(disadvantaged_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=hero_id,
             name="Long Range",
             value=AdvantageStatus.DISADVANTAGE,
-        )
-    )
+        ))
     disadvantaged_d20 = Dice(
         count=1,
         value=20,
@@ -230,20 +226,16 @@ def test_roll_state_snapshots_print_critical_and_auto_hit_flags(capsys) -> None:
         value_name="Attack Bonus",
         base_value=5,
     )
-    attack_bonus.self_static.add_critical_modifier(
-        CriticalModifier(
+    add_modifier(attack_bonus, Channel.SELF_STATIC, Kind.CRITICAL, CriticalModifier(
             source_entity_uuid=hero_id,
             name="Paralyzed Target",
             value=CriticalStatus.AUTOCRIT,
-        )
-    )
-    attack_bonus.self_static.add_auto_hit_modifier(
-        AutoHitModifier(
+        ))
+    add_modifier(attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, AutoHitModifier(
             source_entity_uuid=hero_id,
             name="Guided Strike",
             value=AutoHitStatus.AUTOHIT,
-        )
-    )
+        ))
     d20 = Dice(
         count=1,
         value=20,

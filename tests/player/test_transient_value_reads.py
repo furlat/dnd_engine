@@ -11,7 +11,16 @@ from dnd.controller import Controller, HumanController, PassController, TurnCont
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue
 from dnd.core.modifiers import ContextualNumericalModifier, NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue, ValueRead, outgoing_of, value_score
+from dnd.core.values import (
+    BaseValue,
+    ModifiableValue,
+    ValueRead,
+    outgoing_of,
+    value_score,
+    Channel,
+    Kind,
+    add_modifier,
+)
 from dnd.encounter import AdvanceResult, Encounter, TurnState
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -42,17 +51,16 @@ def test_temporary_values_preserve_context_bounds_and_owned_uuid_lookup(focused_
         score_normalizer=ability_score_normalizer)
     bonus = ModifiableValue.create(source_entity_uuid=owner, base_value=1)
     ceiling = NumericalModifier(source_entity_uuid=owner, value=6)
-    bonus.self_static.add_max_constraint(ceiling)
+    add_modifier(bonus, Channel.SELF_STATIC, Kind.MAX, ceiling)
     incoming = ModifiableValue.create(source_entity_uuid=target)
-    incoming.to_target_static.add_value_modifier(
-        NumericalModifier(source_entity_uuid=target, value=1))
+    add_modifier(incoming, Channel.TO_TARGET_STATIC, Kind.VALUE, NumericalModifier(source_entity_uuid=target, value=1))
     focused = NumericalModifier(source_entity_uuid=target, value=2)
 
     def focus_bonus(source_entity_uuid: UUID, target_entity_uuid: UUID | None,
                     context: dict | None) -> NumericalModifier | None:
         return focused if context and context.get("focused") else None
 
-    incoming.to_target_contextual.add_value_modifier(ContextualNumericalModifier(
+    add_modifier(incoming, Channel.TO_TARGET_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
         source_entity_uuid=target, callable=focus_bonus))
     read = ValueRead(owner, target, opponent=outgoing_of([incoming], context={"focused": focused_context}))
     registered = base.combine_values([bonus])
@@ -80,8 +88,7 @@ def test_temporary_values_preserve_context_bounds_and_owned_uuid_lookup(focused_
 def test_temporary_ability_read_keeps_combined_constraints():
     ability = Ability.create(source_entity_uuid=uuid4(), name="constitution",
         config=AbilityConfig(ability_score=16, modifier_bonus=2))
-    ability.modifier_bonus.self_static.add_max_constraint(
-        NumericalModifier(source_entity_uuid=ability.source_entity_uuid, value=4))
+    add_modifier(ability.modifier_bonus, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(source_entity_uuid=ability.source_entity_uuid, value=4))
     registered = ability.get_combined_values()
     assert ModifiableValue.get(registered.uuid) is registered
     assert registered.normalized_score == 4

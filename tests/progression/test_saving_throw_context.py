@@ -19,7 +19,7 @@ from dnd.core.saving_throw_types import (
     SavingThrowEffectTag,
 )
 from dnd.core.spell_execution import spell_execution_scope
-from dnd.core.values import ContextualAdvantageModifier
+from dnd.core.values import ContextualAdvantageModifier, Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import Cloudkill, PoisonSpray, StinkingCloud
@@ -182,14 +182,12 @@ def test_saving_throw_request_propagates_exact_context_to_save_modifiers() -> No
         return None
 
     wisdom_save = target.saving_throws.get_saving_throw("wisdom")
-    wisdom_save.bonus.self_contextual.add_advantage_modifier(
-        ContextualAdvantageModifier(
+    add_modifier(wisdom_save.bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
             name="Exact magical charm advantage",
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
             callable=exact_magic_advantage,
-        ),
-    )
+        ))
 
     request = source.create_saving_throw_request(
         target_entity_uuid=target.uuid,

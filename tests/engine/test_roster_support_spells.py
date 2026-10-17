@@ -28,6 +28,7 @@ from dnd.spells.transmutation import Barkskin, Fly, Longstrider, Shillelagh
 from dnd.spells.evocation import FireShield
 from dnd.spells.transmutation import HasteEffect, SlowedEffect
 from dnd.types.world import MovementMode
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.fixture
@@ -77,7 +78,7 @@ def test_longstrider_reapplication_and_removal_preserve_spent_movement(game):
 @pytest.mark.parametrize("base_ac", [10, 18, 23])
 def test_barkskin_is_whole_ac_floor_and_concentration_removes_it(game, base_ac):
     caster = actor(game)
-    caster.equipment.ac_bonus.self_static.add_value_modifier(NumericalModifier(name="Armor test", value=base_ac-10,
+    add_modifier(caster.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name="Armor test", value=base_ac-10,
         source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid))
     before = caster.ac_bonus().normalized_score
     cast(Barkskin, caster)

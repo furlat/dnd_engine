@@ -1,7 +1,7 @@
 from typing import Dict, Optional, List, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field,  computed_field
-from dnd.core.values import ModifiableValue, ValueRead, value_score
+from dnd.core.values import ModifiableValue, ValueRead, value_score, Channel, Kind, add_modifier
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
 
@@ -172,11 +172,11 @@ class Ability(BaseBlock):
             ability_score = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.ability_score, value_name=name+" Ability Score", score_normalizer=ability_score_normalizer)
             if len(config.ability_scores_modifiers) > 0:
                 for modifier in config.ability_scores_modifiers:
-                    ability_score.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                    add_modifier(ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             modifier_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.modifier_bonus, value_name=name+" Modifier Bonus")
             if len(config.modifier_bonus_modifiers) > 0:
                 for modifier in config.modifier_bonus_modifiers:
-                    modifier_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                    add_modifier(modifier_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             return cls(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, name=name, ability_score=ability_score, modifier_bonus=modifier_bonus)
 
 class AbilityScoresConfig(BaseModel):

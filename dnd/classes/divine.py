@@ -18,6 +18,7 @@ from dnd.core.creature_types import CreatureType
 from dnd.entity import Entity
 from dnd.spells.spell_utils import target_turn_expiry_handler
 from dnd.types.world import MovementMode
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class ClassFeatureLifetime(BaseCondition):
@@ -121,14 +122,12 @@ class Turned(BaseCondition):
             target.add_event_handler(handler)
         # Reactions are denied through the native capacity owner, independently of fear.
         from_reactions = target.action_economy.reactions
-        modifier = from_reactions.self_static.add_max_constraint(
-            NumericalModifier(
+        modifier = add_modifier(from_reactions, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=target.uuid,
                 name="Turned",
                 value=0,
-            )
-        )
+            ))
         return (
             [(from_reactions.uuid, modifier)],
             [handler.uuid for handler in handlers],

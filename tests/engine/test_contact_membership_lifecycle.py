@@ -15,6 +15,7 @@ from dnd.types.world import CardinalDirection
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 from tests.engine.test_senses_light_stealth import create_skeleton, reset_senses_state
 from tests.engine.test_sensory_initial_replay import sensory_since
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.fixture(autouse=True)
@@ -90,8 +91,7 @@ def test_contact_callback_changes_center_membership_before_object_observation(re
         return NumericalModifier(source_entity_uuid=observer.uuid, value=0,
             use_register=False)
 
-    observer.skill_set.get_skill("perception").skill_bonus.self_contextual.add_value_modifier(
-        ContextualNumericalModifier(source_entity_uuid=observer.uuid,
+    add_modifier(observer.skill_set.get_skill("perception").skill_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(source_entity_uuid=observer.uuid,
             callable=change_membership))
     observer.update_entity_senses(max_distance=6)
     assert not pending

@@ -4,7 +4,15 @@ from typing import AbstractSet, Optional, List, Tuple, Dict, Union, Sequence
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, StrictInt
-from dnd.core.values import ModifiableValue
+from dnd.core.values import (
+    ModifiableValue,
+    Channel,
+    Kind,
+    add_modifier,
+    remove_modifier,
+    modifier_of,
+    modifiers_of,
+)
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.base_actions import CostType, spell_slot_cost_type
 from dnd.core.action_types import ActionEconomyCostType, HasteActionPolicy, RestrictedActionGrant
@@ -573,17 +581,15 @@ class ActionEconomy(BaseBlock):
                 desired.add(ActionEconomyCostType.ACTIONS)
         for channel, modifier_uuid in tuple(self._action_bonus_lock_modifiers.items()):
             if channel not in desired:
-                channels[channel].self_static.remove_max_constraint(modifier_uuid)
+                remove_modifier(channels[channel], modifier_uuid, Channel.SELF_STATIC, Kind.MAX)
                 del self._action_bonus_lock_modifiers[channel]
         for channel in desired - self._action_bonus_lock_modifiers.keys():
-            self._action_bonus_lock_modifiers[channel] = channels[channel].self_static.add_max_constraint(
-                NumericalModifier(
+            self._action_bonus_lock_modifiers[channel] = add_modifier(channels[channel], Channel.SELF_STATIC, Kind.MAX, NumericalModifier(
                     name="Action/bonus exclusion",
                     value=0,
                     source_entity_uuid=self.source_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                ),
-            )
+                ))
 
     def get_attack_multiplicity_grants(
         self,
@@ -805,7 +811,7 @@ class ActionEconomy(BaseBlock):
             return
         for rank, modifier_uuid in receipt.capacity_modifier_uuids:
             value = self.spell_slot_value(rank)
-            if modifier_uuid not in value.self_static.value_modifiers:
+            if modifier_of(value, Channel.SELF_STATIC, Kind.VALUE, modifier_uuid) is None:
                 raise RuntimeError(
                     "installed normal spell-slot capacity lost an owned "
                     f"modifier for rank {rank}"
@@ -816,7 +822,7 @@ class ActionEconomy(BaseBlock):
         value = self.spell_slot_value(rank)
         existing_uuid = self._normal_spell_slot_floor_modifier_uuids.get(rank)
         if existing_uuid is not None:
-            existing = value.self_static.min_constraints.get(existing_uuid)
+            existing = modifier_of(value, Channel.SELF_STATIC, Kind.MIN, existing_uuid)
             if (
                 existing is None
                 or existing.name != "Normal Spell Slot Availability Floor"
@@ -836,7 +842,7 @@ class ActionEconomy(BaseBlock):
             name="Normal Spell Slot Availability Floor",
             value=0,
         )
-        value.self_static.add_min_constraint(floor)
+        add_modifier(value, Channel.SELF_STATIC, Kind.MIN, floor)
         self._normal_spell_slot_floor_modifier_uuids[rank] = floor.uuid
         return floor.uuid
 
@@ -850,7 +856,7 @@ class ActionEconomy(BaseBlock):
             if self.get_cost_modifiers(spell_slot_cost_type(rank)):
                 continue
             value = self.spell_slot_value(rank)
-            floor = value.self_static.min_constraints.get(floor_uuid)
+            floor = modifier_of(value, Channel.SELF_STATIC, Kind.MIN, floor_uuid)
             if (
                 floor is None
                 or floor.name != "Normal Spell Slot Availability Floor"
@@ -860,7 +866,7 @@ class ActionEconomy(BaseBlock):
                     "normal spell-slot availability floor ownership conflict "
                     f"for rank {rank}"
                 )
-            value.self_static.remove_min_constraint(floor_uuid)
+            remove_modifier(value, floor_uuid, Channel.SELF_STATIC, Kind.MIN)
             floor.remove_from_register()
             self._normal_spell_slot_floor_modifier_uuids.pop(rank)
 
@@ -914,9 +920,7 @@ class ActionEconomy(BaseBlock):
             )
 
         for rank, modifier_uuid in old_handles.items():
-            self.spell_slot_value(rank).self_static.remove_value_modifier(
-                modifier_uuid
-            )
+            remove_modifier(self.spell_slot_value(rank), modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
             NumericalModifier.unregister(modifier_uuid)
 
         new_handles: List[Tuple[int, UUID]] = []
@@ -934,9 +938,7 @@ class ActionEconomy(BaseBlock):
                 ),
                 value=desired_by_rank.get(rank, 0) - baselines[rank],
             )
-            self.spell_slot_value(rank).self_static.add_value_modifier(
-                capacity_modifier
-            )
+            add_modifier(self.spell_slot_value(rank), Channel.SELF_STATIC, Kind.VALUE, capacity_modifier)
             new_handles.append((rank, capacity_modifier.uuid))
 
         receipt = NormalSpellSlotCapacityReceipt(
@@ -965,9 +967,7 @@ class ActionEconomy(BaseBlock):
             return False
         self._validate_installed_normal_spell_slot_capacity()
         for rank, modifier_uuid in receipt.capacity_modifier_uuids:
-            self.spell_slot_value(rank).self_static.remove_value_modifier(
-                modifier_uuid
-            )
+            remove_modifier(self.spell_slot_value(rank), modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
             NumericalModifier.unregister(modifier_uuid)
         self._normal_spell_slot_capacity_receipt = None
         self._release_unused_normal_spell_slot_floors()
@@ -1008,7 +1008,7 @@ class ActionEconomy(BaseBlock):
         if cost_type == "movement":
             raise ValueError("Movement expenditure is not a speed modifier")
         value = self._get_value_for_cost_type(cost_type)
-        return [mod for mod in value.self_static.value_modifiers.values()
+        return [mod for mod in modifiers_of(value, Channel.SELF_STATIC, Kind.VALUE)
                 if mod.name is not None and "cost" in mod.name]
 
     @property
@@ -1073,7 +1073,7 @@ class ActionEconomy(BaseBlock):
         for cost_type in turn_based_types:
             value = self._get_value_for_cost_type(cost_type)
             for modifier in self.get_cost_modifiers(cost_type):
-                value.self_static.remove_value_modifier(modifier.uuid)
+                remove_modifier(value, modifier.uuid, Channel.SELF_STATIC, Kind.VALUE)
 
     def reset_spell_slot_costs(self) -> None:
         """Reset spell slot costs (restore all spell slots).
@@ -1084,7 +1084,7 @@ class ActionEconomy(BaseBlock):
             cost_type = spell_slot_cost_type(level)
             value = self.spell_slot_value(level)
             for modifier in self.get_cost_modifiers(cost_type):
-                value.self_static.remove_value_modifier(modifier.uuid)
+                remove_modifier(value, modifier.uuid, Channel.SELF_STATIC, Kind.VALUE)
                 modifier.remove_from_register()
         self._release_unused_normal_spell_slot_floors()
 
@@ -1102,7 +1102,7 @@ class ActionEconomy(BaseBlock):
             modifier.value += restored
             remaining -= restored
             if modifier.value == 0:
-                value.self_static.remove_value_modifier(modifier.uuid)
+                remove_modifier(value, modifier.uuid, Channel.SELF_STATIC, Kind.VALUE)
                 modifier.remove_from_register()
             if not remaining:
                 break
@@ -1199,7 +1199,7 @@ class ActionEconomy(BaseBlock):
                 )
                 pending_modifier = modifier
                 pending_cost_type = cost.cost_type
-                value.self_static.add_value_modifier(modifier)
+                add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, modifier)
                 installed.append(ActionEconomyDebitHandle(
                     cost_type=cost.cost_type,
                     modifier_uuid=modifier.uuid,
@@ -1211,19 +1211,16 @@ class ActionEconomy(BaseBlock):
         except Exception:
             if pending_modifier is not None and pending_cost_type is not None:
                 pending_value = self._get_value_for_cost_type(pending_cost_type)
-                pending_value.self_static.remove_value_modifier(
-                    pending_modifier.uuid
-                )
+                remove_modifier(pending_value, pending_modifier.uuid, Channel.SELF_STATIC, Kind.VALUE)
                 pending_modifier.remove_from_register()
             for handle in reversed(installed):
                 if handle.cost_type == "movement":
                     self.movement_debits.pop(handle.modifier_uuid, None)
                     continue
                 value = self._get_value_for_cost_type(handle.cost_type)
-                modifier = value.self_static.value_modifiers.get(
-                    handle.modifier_uuid
+                modifier = modifier_of(value, Channel.SELF_STATIC, Kind.VALUE, handle.modifier_uuid
                 )
-                value.self_static.remove_value_modifier(handle.modifier_uuid)
+                remove_modifier(value, handle.modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
                 if modifier is not None:
                     modifier.remove_from_register()
             raise
@@ -1285,7 +1282,7 @@ class ActionEconomy(BaseBlock):
                     raise ValueError("Movement debit receipt no longer names exact spent feet")
                 continue
             value = self._get_value_for_cost_type(handle.cost_type)
-            modifier = value.self_static.value_modifiers.get(handle.modifier_uuid)
+            modifier = modifier_of(value, Channel.SELF_STATIC, Kind.VALUE, handle.modifier_uuid)
             if (
                 type(modifier) is not NumericalModifier
                 or modifier.name != handle.modifier_name
@@ -1302,7 +1299,7 @@ class ActionEconomy(BaseBlock):
                 del self.movement_debits[handle.modifier_uuid]
         for handle, modifier in exact_modifiers:
             value = self._get_value_for_cost_type(handle.cost_type)
-            value.self_static.remove_value_modifier(handle.modifier_uuid)
+            remove_modifier(value, handle.modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
             modifier.remove_from_register()
         self._release_unused_normal_spell_slot_floors()
     def commit_fixed_costs_without_dispatch(
@@ -1373,19 +1370,19 @@ class ActionEconomy(BaseBlock):
         else:
             actions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.actions, value_name="Actions")
             for modifier in config.actions_modifiers:
-                actions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(actions, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
             bonus_actions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.bonus_actions, value_name="Bonus Actions")
             for modifier in config.bonus_actions_modifiers:
-                bonus_actions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(bonus_actions, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
             reactions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.reactions, value_name="Reactions")
             for modifier in config.reactions_modifiers:
-                reactions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(reactions, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
             movement = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.movement, value_name="Movement")
             for modifier in config.movement_modifiers:
-                movement.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(movement, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
             spell_slot_1 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(1, 0), value_name="Spell Slot 1")
             spell_slot_2 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(2, 0), value_name="Spell Slot 2")

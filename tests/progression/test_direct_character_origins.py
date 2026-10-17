@@ -59,7 +59,15 @@ from dnd.types.character_progression import (
 )
 from dnd.types.abilities import AbilityName
 from dnd.types.senses import SenseMode, SensesType
-from dnd.core.values import ValueRead, read_value
+from dnd.core.values import (
+    ValueRead,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+    modifier_of,
+    remove_modifier,
+)
 from tests.engine.support import create_test_entity
 
 
@@ -769,9 +777,9 @@ def test_direct_dragonborn_breath_executes_damage_save_and_rest_use() -> None:
         name="Fail Breath Weapon save",
         value=-100,
     )
-    target.saving_throws.get_saving_throw(
+    add_modifier(target.saving_throws.get_saving_throw(
         "dexterity",
-    ).bonus.self_static.add_value_modifier(save_modifier)
+    ).bonus, Channel.SELF_STATIC, Kind.VALUE, save_modifier)
     apply_origin(caster, _resolved(Species.DRAGONBORN), character_level=6)
     template = _action(caster, "action.origin.dragonborn.breath_weapon")
     hp_before = target.get_hp()
@@ -1210,12 +1218,10 @@ def test_origin_removal_rejects_a_modifier_moved_to_a_foreign_channel() -> None:
     )
     receipt = apply_origin(entity, _resolved(Species.HUMAN), character_level=1)
     ability, modifier_uuid = receipt.ability_score_modifier_ids[0]
-    modifier = entity.ability_scores.get_ability(
-        ability,
-    ).ability_score.self_static.value_modifiers.pop(modifier_uuid)
-    entity.health.max_hit_points_bonus.self_static.value_modifiers[
-        modifier_uuid
-    ] = modifier
+    ability_score = entity.ability_scores.get_ability(ability).ability_score
+    modifier = modifier_of(ability_score, Channel.SELF_STATIC, Kind.VALUE, modifier_uuid)
+    remove_modifier(ability_score, modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
+    add_modifier(entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier)
 
     with pytest.raises(RuntimeError, match="modifier ownership changed"):
         remove_origin(entity)

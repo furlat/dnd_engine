@@ -20,7 +20,7 @@ from dnd.core.events import Event, EventPhase, Range, RangeType
 from dnd.types.abilities import AbilityName
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton
 from tests.engine.test_items_inventory_equipment import (
@@ -171,16 +171,14 @@ class _DefenderSword(Weapon):
             target_entity_uuid=entity_uuid,
         )
         self._ac_modifier_uuid = (
-            entity.equipment.ac_bonus.self_static.add_value_modifier(modifier)
+            add_modifier(entity.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier)
         )
 
     def _on_unequip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
         entity = Entity.get(entity_uuid)
         if not isinstance(entity, Entity) or self._ac_modifier_uuid is None:
             return
-        entity.equipment.ac_bonus.self_static.remove_modifier(
-            self._ac_modifier_uuid
-        )
+        remove_modifier(entity.equipment.ac_bonus, self._ac_modifier_uuid, Channel.SELF_STATIC)
         self._ac_modifier_uuid = None
 
 
@@ -222,7 +220,7 @@ class _CloakOfProtectionCondition(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
         )
         ac_modifier_uuid = (
-            entity.equipment.ac_bonus.self_static.add_value_modifier(ac_modifier)
+            add_modifier(entity.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, ac_modifier)
         )
         owned_modifiers.append(
             (entity.equipment.ac_bonus.uuid, ac_modifier_uuid)
@@ -237,7 +235,7 @@ class _CloakOfProtectionCondition(BaseCondition):
                 target_entity_uuid=self.target_entity_uuid,
             )
             save_modifier_uuid = (
-                saving_throw.bonus.self_static.add_value_modifier(save_modifier)
+                add_modifier(saving_throw.bonus, Channel.SELF_STATIC, Kind.VALUE, save_modifier)
             )
             owned_modifiers.append(
                 (saving_throw.bonus.uuid, save_modifier_uuid)

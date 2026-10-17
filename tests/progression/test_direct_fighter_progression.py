@@ -40,7 +40,15 @@ from dnd.core.equipment_types import (
 from dnd.core.events import Range, RangeType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import (
+    BaseValue,
+    ModifiableValue,
+    Channel,
+    Kind,
+    add_modifier,
+    modifier_of,
+    remove_modifier,
+)
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.proficiency_types import ProficiencyMode
 from dnd.entity import Entity, EntityConfig
@@ -299,9 +307,7 @@ def test_fighter_champion_applies_1_to_20_and_removes_20_to_1_exactly() -> None:
         name="Sibling ranged bonus",
         value=1,
     )
-    entity.equipment.ranged_attack_bonus.self_static.add_value_modifier(
-        sibling_modifier,
-    )
+    add_modifier(entity.equipment.ranged_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, sibling_modifier)
     entity.skill_set.athletics.add_proficiency_source(
         sibling_source,
         ProficiencyMode.FULL,
@@ -548,12 +554,9 @@ def test_fighter_removal_rejects_a_modifier_moved_to_a_foreign_channel() -> None
     level = _fighter_level(1)
     receipt = apply_fighter_level(entity, level)
     modifier_uuid = receipt.ranged_attack_bonus_modifier_ids[0]
-    modifier = entity.equipment.ranged_attack_bonus.self_static.value_modifiers.pop(
-        modifier_uuid,
-    )
-    entity.equipment.crit_threshold_melee.self_static.value_modifiers[
-        modifier_uuid
-    ] = modifier
+    modifier = modifier_of(entity.equipment.ranged_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier_uuid)
+    remove_modifier(entity.equipment.ranged_attack_bonus, modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
+    add_modifier(entity.equipment.crit_threshold_melee, Channel.SELF_STATIC, Kind.VALUE, modifier)
     action_order = tuple(action.uuid for action in entity.registered_actions)
 
     with pytest.raises(RuntimeError, match="modifier ownership changed"):

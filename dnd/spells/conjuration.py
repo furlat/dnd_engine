@@ -70,7 +70,15 @@ from dnd.core.condition_types import (
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.types.senses import OBSCUREMENT_BITS, OpticalObscurement, PerceivedSpatialEffect
 from dnd.core.dice import AttackOutcome, Dice, RollType
-from dnd.core.values import ModifiableValue, ValueRead, read_value
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+    remove_modifier,
+)
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, ExposedFlameEvent, SpatialChangeEvent, SpatialEffectInteractionEvent
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
@@ -2011,7 +2019,7 @@ class SpiritGuardiansSlowed(BaseCondition):
         for speed in entity.action_economy.speed_values:
             modifier = ArithmeticFactor(name="Spirit Guardians Slowed", numerator=1, denominator=2,
                 source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid)
-            speed.self_static.add_factor(modifier)
+            add_modifier(speed, Channel.SELF_STATIC, Kind.FACTOR, modifier)
             outs.append((speed.uuid, modifier.uuid))
 
         effect_event = declaration_event.phase_to(
@@ -3468,14 +3476,12 @@ class NauseatedCondition(BaseCondition):
         outs: List[Tuple[UUID, UUID]] = []
         target_uuid = target.uuid
 
-        actions_uuid = target.action_economy.actions.self_static.add_max_constraint(
-            NumericalModifier(
+        actions_uuid = add_modifier(target.action_economy.actions, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(
                 name="Nauseated",
                 value=0,
                 source_entity_uuid=target_uuid,
                 target_entity_uuid=self.source_entity_uuid,
-            )
-        )
+            ))
         outs.append((target.action_economy.actions.uuid, actions_uuid))
 
         # "Spends its action that turn": zone turn triggers run at EXECUTION,
@@ -4464,14 +4470,14 @@ class HeroesFeastBuff(BaseCondition):
         target.add_condition_immunity_source("Poisoned", self.uuid)
         target.add_condition_immunity_source("Frightened", self.uuid)
         wisdom = target.saving_throws.get_saving_throw("wisdom").bonus
-        advantage = wisdom.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+        advantage = add_modifier(wisdom, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
             value=AdvantageStatus.ADVANTAGE, source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid))
         reduction = target.health.damage_reduction
-        immunity = reduction.self_static.add_resistance_modifier(ResistanceModifier(name=self.name,
+        immunity = add_modifier(reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(name=self.name,
             value=ResistanceStatus.IMMUNITY, damage_type=DamageType.POISON,
             source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid))
         maximum = target.health.max_hit_points_bonus
-        self.modifier_uuid = maximum.self_static.add_value_modifier(NumericalModifier(name=self.name,
+        self.modifier_uuid = add_modifier(maximum, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name=self.name,
             value=0, source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid))
         return [(wisdom.uuid, advantage), (reduction.uuid, immunity), (maximum.uuid, self.modifier_uuid)], [], [], [], event.phase_to(EventPhase.EFFECT)
 
@@ -4510,7 +4516,7 @@ class HeroesFeastBuff(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is not None and self.modifier_uuid is not None:
             previous = target.get_normal_hp()
-            target.health.max_hit_points_bonus.remove_modifier(self.modifier_uuid)
+            remove_modifier(target.health.max_hit_points_bonus, self.modifier_uuid)
             self.modifers_uuids.pop(target.health.max_hit_points_bonus.uuid, None)
             self.modifier_uuid = None
             target.health.preserve_normal_hit_points(previous, maximum_hp=target.get_max_hp())

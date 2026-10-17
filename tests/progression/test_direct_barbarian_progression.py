@@ -35,7 +35,7 @@ from dnd.core.events import Event, EventHandler, EventPhase, EventType, Trigger
 from dnd.core.events import EventQueue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.proficiency_types import ProficiencyMode
-from dnd.core.values import BaseValue
+from dnd.core.values import BaseValue, Channel, Kind, add_modifier, modifier_of, modifiers_of
 from dnd.entity import Entity, EntityConfig
 from dnd.conditions import Charmed, Frightened
 from dnd.runtime_reset import reset_engine_runtime
@@ -182,9 +182,7 @@ def test_barbarian_berserker_applies_1_to_20_and_removes_exactly() -> None:
         name="Sibling critical die",
         value=1,
     )
-    entity.equipment.crit_extra_dice_melee.self_static.add_value_modifier(
-        sibling_modifier,
-    )
+    add_modifier(entity.equipment.crit_extra_dice_melee, Channel.SELF_STATIC, Kind.VALUE, sibling_modifier)
     entity.skill_set.athletics.add_proficiency_source(
         sibling_source,
         ProficiencyMode.FULL,
@@ -488,14 +486,14 @@ def test_failed_frenzied_child_admission_releases_its_raging_root(
     object_registry = set(BaseObject._registry)
     register_action = Entity.register_action
     modifier_owners = (
-        entity.skill_set.get_skill("athletics").skill_bonus.self_static.advantage_modifiers,
-        entity.saving_throws.get_saving_throw("strength").bonus.self_static.advantage_modifiers,
-        entity.equipment.melee_damage_bonus.self_contextual.value_modifiers,
-        entity.health.damage_reduction.self_static.resistance_modifiers,
+        (entity.skill_set.get_skill("athletics").skill_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE),
+        (entity.saving_throws.get_saving_throw("strength").bonus, Channel.SELF_STATIC, Kind.ADVANTAGE),
+        (entity.equipment.melee_damage_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE),
+        (entity.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE),
     )
-    modifier_rows = tuple(set(owner) for owner in modifier_owners)
-    cost_owner = entity.action_economy.bonus_actions.self_static.value_modifiers
-    cost_ids = set(cost_owner)
+    modifier_rows = tuple({modifier.uuid for modifier in modifiers_of(*owner)} for owner in modifier_owners)
+    cost_owner = (entity.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.VALUE)
+    cost_ids = {modifier.uuid for modifier in modifiers_of(*cost_owner)}
     rage_modifier_ids: set[UUID] = set()
 
     def retain_raging_ownership(event: Event) -> None:
@@ -540,18 +538,18 @@ def test_failed_frenzied_child_admission_releases_its_raging_root(
     assert set(BaseBlock._registry) == block_registry
     # Completion facts evaluate and register derived stat values;
     # cleanup owns Rage's modifiers, not every value evaluated during execution.
-    assert tuple(set(owner) for owner in modifier_owners) == modifier_rows
+    assert tuple({modifier.uuid for modifier in modifiers_of(*owner)} for owner in modifier_owners) == modifier_rows
     assert rage_modifier_ids
     assert all(BaseObject.get(modifier_id) is None for modifier_id in rage_modifier_ids)
     assert object_registry <= set(BaseObject._registry)
-    committed_cost_ids = set(cost_owner) - cost_ids
+    committed_cost_ids = {modifier.uuid for modifier in modifiers_of(*cost_owner)} - cost_ids
     assert len(committed_cost_ids) == 1
-    committed_cost = cost_owner[committed_cost_ids.pop()]
+    committed_cost = modifier_of(*cost_owner, committed_cost_ids.pop())
     assert isinstance(committed_cost, NumericalModifier)
     assert committed_cost.name == "Frenzy_cost"
     assert (
-        committed_cost.uuid
-        in entity.action_economy.bonus_actions.self_static.value_modifiers
+        modifier_of(entity.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.VALUE, committed_cost.uuid)
+        is not None
     )
 
 
@@ -669,8 +667,8 @@ def test_failed_raging_root_admission_releases_each_owned_artifact(
     assert isinstance(committed_cost, NumericalModifier)
     assert committed_cost.name == f"{action_name}_cost"
     assert (
-        committed_cost.uuid
-        in entity.action_economy.bonus_actions.self_static.value_modifiers
+        modifier_of(entity.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.VALUE, committed_cost.uuid)
+        is not None
     )
 
 

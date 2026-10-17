@@ -31,7 +31,16 @@ from dnd.core.events import (
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
 from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome, roll_die_face
 from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, ContextualNumericalModifier
-from dnd.core.values import ModifiableValue, ValueRead, has_static_advantage_row, read_value, reading_with_advantage_row
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    has_static_advantage_row,
+    read_value,
+    reading_with_advantage_row,
+    Channel,
+    Kind,
+    add_modifier,
+)
 from dnd.blocks.equipment import Weapon, Shield
 from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
 from dnd.core.feature_grants import AttackMultiplicityGrant
@@ -114,7 +123,7 @@ class FightingStyleArchery(BaseCondition):
             name="Archery",
             value=2
         )
-        mod_uuid = target.equipment.ranged_attack_bonus.self_static.add_value_modifier(archery_mod)
+        mod_uuid = add_modifier(target.equipment.ranged_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, archery_mod)
         outs.append((target.equipment.ranged_attack_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -195,7 +204,7 @@ class FightingStyleDefense(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=defense_ac_check
         )
-        mod_uuid = target.equipment.ac_bonus.self_contextual.add_value_modifier(defense_mod)
+        mod_uuid = add_modifier(target.equipment.ac_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, defense_mod)
         outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -291,7 +300,7 @@ class FightingStyleDueling(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=dueling_damage_check
         )
-        mod_uuid = target.equipment.melee_damage_bonus.self_contextual.add_value_modifier(dueling_mod)
+        mod_uuid = add_modifier(target.equipment.melee_damage_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, dueling_mod)
         outs.append((target.equipment.melee_damage_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -671,7 +680,7 @@ class FightingStyleTwoWeaponFighting(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=twf_off_hand_melee_ability_bonus
         )
-        mod_uuid = target.equipment.off_hand_melee_ability_bonus.self_contextual.add_value_modifier(melee_mod)
+        mod_uuid = add_modifier(target.equipment.off_hand_melee_ability_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, melee_mod)
         outs.append((target.equipment.off_hand_melee_ability_bonus.uuid, mod_uuid))
 
         ranged_mod = ContextualNumericalModifier(
@@ -680,7 +689,7 @@ class FightingStyleTwoWeaponFighting(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=twf_off_hand_ranged_ability_bonus
         )
-        mod_uuid = target.equipment.off_hand_ranged_ability_bonus.self_contextual.add_value_modifier(ranged_mod)
+        mod_uuid = add_modifier(target.equipment.off_hand_ranged_ability_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, ranged_mod)
         outs.append((target.equipment.off_hand_ranged_ability_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -904,7 +913,7 @@ class ActionSurging(BaseCondition):
             source_entity_uuid=self.target_entity_uuid,
             target_entity_uuid=self.target_entity_uuid
         )
-        mod_uuid = target_entity.action_economy.actions.self_static.add_value_modifier(modifier)
+        mod_uuid = add_modifier(target_entity.action_economy.actions, Channel.SELF_STATIC, Kind.VALUE, modifier)
         outs.append((target_entity.action_economy.actions.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -1116,7 +1125,7 @@ class ImprovedCritical(BaseCondition):
             name="Improved Critical",
             value=1
         )
-        mod_uuid = target.equipment.crit_threshold.self_static.add_value_modifier(crit_mod)
+        mod_uuid = add_modifier(target.equipment.crit_threshold, Channel.SELF_STATIC, Kind.VALUE, crit_mod)
         outs.append((target.equipment.crit_threshold.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -1465,7 +1474,7 @@ class SuperiorCritical(BaseCondition):
             name="Superior Critical",
             value=2
         )
-        mod_uuid = target.equipment.crit_threshold.self_static.add_value_modifier(crit_mod)
+        mod_uuid = add_modifier(target.equipment.crit_threshold, Channel.SELF_STATIC, Kind.VALUE, crit_mod)
         outs.append((target.equipment.crit_threshold.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(

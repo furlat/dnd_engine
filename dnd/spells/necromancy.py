@@ -43,7 +43,15 @@ from dnd.core.modifiers import (
     NumericalModifier,
     ContextualAdvantageModifier,
 )
-from dnd.core.values import ModifiableValue, ValueRead, read_value
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+    remove_modifier,
+)
 from functools import partial
 from typing import Any, Dict
 from dnd.entity import Entity
@@ -191,7 +199,7 @@ class ChillTouchEffect(BaseCondition):
             disadvantage = ContextualAdvantageModifier(name="Chill Touch (Undead)",
                 source_entity_uuid=target.uuid, target_entity_uuid=caster.uuid,
                 callable=partial(self.undead_attack_disadvantage, caster.uuid))
-            identity = target.equipment.attack_bonus.self_contextual.add_advantage_modifier(disadvantage)
+            identity = add_modifier(target.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, disadvantage)
             modifiers.append((target.equipment.attack_bonus.uuid, identity))
         handler = source_turn_expiry_handler(self, declaration_event, at_end=False,
             expire=lambda event: target.remove_condition_by_uuid(self.uuid, parent_event=event))
@@ -393,7 +401,7 @@ class Blight(SpellAction):
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid
             )
-            mod_uuid = target.saving_throws.get_saving_throw("constitution").bonus.self_static.add_advantage_modifier(disadv_mod)
+            mod_uuid = add_modifier(target.saving_throws.get_saving_throw("constitution").bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, disadv_mod)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -405,7 +413,7 @@ class Blight(SpellAction):
             _, save_roll, success = target.saving_throw(save_request)
         finally:
             if mod_uuid is not None:
-                target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_modifier(mod_uuid)
+                remove_modifier(target.saving_throws.get_saving_throw("constitution").bonus, mod_uuid, Channel.SELF_STATIC)
 
         save_bonus = save_roll.bonus  # the bonus the save applied
 
@@ -860,27 +868,23 @@ class SickenedCondition(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        mod_uuid = target.equipment.attack_bonus.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        mod_uuid = add_modifier(target.equipment.attack_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name="Sickened (attacks)",
                 value=AdvantageStatus.DISADVANTAGE,
                 source_entity_uuid=target.uuid,
                 target_entity_uuid=self.source_entity_uuid
-            )
-        )
+            ))
         outs.append((target.equipment.attack_bonus.uuid, mod_uuid))
 
         for skill_name in SKILL_TO_ABILITY:
             skill = target.skill_set.get_skill(skill_name)
-            skill_modifier = skill.skill_bonus.self_static.add_advantage_modifier(
-                AdvantageModifier(name="Sickened (ability checks)", value=AdvantageStatus.DISADVANTAGE,
+            skill_modifier = add_modifier(skill.skill_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Sickened (ability checks)", value=AdvantageStatus.DISADVANTAGE,
                     source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid))
             outs.append((skill.skill_bonus.uuid, skill_modifier))
 
         for ability_name in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"):
             check_bonus = target.ability_scores.get_ability(type_cast(AbilityName, ability_name)).check_bonus
-            check_modifier = check_bonus.self_static.add_advantage_modifier(
-                AdvantageModifier(name="Sickened (raw ability checks)", value=AdvantageStatus.DISADVANTAGE,
+            check_modifier = add_modifier(check_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Sickened (raw ability checks)", value=AdvantageStatus.DISADVANTAGE,
                     source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid))
             outs.append((check_bonus.uuid, check_modifier))
 
@@ -1704,8 +1708,7 @@ class HarmEffect(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
             return [], [], [], [], declaration_event.cancel(status_message="Harm target not found")
-        self.modifier_uuid = target.health.max_hit_points_bonus.self_static.add_value_modifier(
-            NumericalModifier(name="Harm", value=0, source_entity_uuid=self.source_entity_uuid,
+        self.modifier_uuid = add_modifier(target.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name="Harm", value=0, source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=target.uuid))
         return [(target.health.max_hit_points_bonus.uuid, self.modifier_uuid)], [], [], [], declaration_event.phase_to(EventPhase.EFFECT)
 
@@ -1746,7 +1749,7 @@ class HarmEffect(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is not None and self.modifier_uuid is not None:
             previous_hp = target.get_normal_hp()
-            target.health.max_hit_points_bonus.remove_modifier(self.modifier_uuid)
+            remove_modifier(target.health.max_hit_points_bonus, self.modifier_uuid)
             self.modifers_uuids.clear()
             self.modifier_uuid = None
             target.health.preserve_normal_hit_points(previous_hp, maximum_hp=target.get_max_hp())
@@ -1962,26 +1965,22 @@ class AbilityCurseEffect(BaseCondition):
         outs: List[Tuple[UUID, UUID]] = []
 
         save = target.saving_throws.get_saving_throw(self.cursed_ability)
-        mod_uuid = save.bonus.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        mod_uuid = add_modifier(save.bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name="Bestow Curse (save)",
                 value=AdvantageStatus.DISADVANTAGE,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid
-            )
-        )
+            ))
         outs.append((save.bonus.uuid, mod_uuid))
 
         for skill_name in _ABILITY_TO_SKILLS.get(self.cursed_ability, []):
             skill = target.skill_set.get_skill(skill_name)
-            mod_uuid = skill.skill_bonus.self_static.add_advantage_modifier(
-                AdvantageModifier(
+            mod_uuid = add_modifier(skill.skill_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                     name="Bestow Curse (skill)",
                     value=AdvantageStatus.DISADVANTAGE,
                     source_entity_uuid=self.source_entity_uuid,
                     target_entity_uuid=self.target_entity_uuid
-                )
-            )
+                ))
             outs.append((skill.skill_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -2036,14 +2035,12 @@ class AttackCurseEffect(BaseCondition):
                 )
             return None
 
-        mod_uuid = target.equipment.attack_bonus.self_contextual.add_advantage_modifier(
-            ContextualAdvantageModifier(
+        mod_uuid = add_modifier(target.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
                 name="Bestow Curse (attack)",
                 callable=attack_curse_check,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid
-            )
-        )
+            ))
         outs.append((target.equipment.attack_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -2133,14 +2130,12 @@ class InactionCurseEffect(BaseCondition):
             _, _, success = target.saving_throw(save_request)
 
             if not success:
-                constraint_uuid = target.action_economy.actions.self_static.add_max_constraint(
-                    constraint=NumericalModifier(
+                constraint_uuid = add_modifier(target.action_economy.actions, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(
                         name="Bestow Curse (inaction)",
                         value=0,
                         source_entity_uuid=target_uuid,
                         target_entity_uuid=target_uuid
-                    )
-                )
+                    ))
                 curse_condition._action_constraint_uuid = constraint_uuid
                 curse_condition._action_value_uuid = target.action_economy.actions.uuid
 
@@ -2172,7 +2167,7 @@ class InactionCurseEffect(BaseCondition):
             if curse_condition._action_constraint_uuid and curse_condition._action_value_uuid:
                 value = ModifiableValue.get(curse_condition._action_value_uuid)
                 if value and isinstance(value, ModifiableValue):
-                    value.self_static.remove_max_constraint(curse_condition._action_constraint_uuid)
+                    remove_modifier(value, curse_condition._action_constraint_uuid, Channel.SELF_STATIC, Kind.MAX)
                 curse_condition._action_constraint_uuid = None
                 curse_condition._action_value_uuid = None
 
@@ -2195,7 +2190,7 @@ class InactionCurseEffect(BaseCondition):
         if self._action_constraint_uuid and self._action_value_uuid:
             value = ModifiableValue.get(self._action_value_uuid)
             if value and isinstance(value, ModifiableValue):
-                value.self_static.remove_max_constraint(self._action_constraint_uuid)
+                remove_modifier(value, self._action_constraint_uuid, Channel.SELF_STATIC, Kind.MAX)
             self._action_constraint_uuid = None
             self._action_value_uuid = None
         return super()._remove(event)

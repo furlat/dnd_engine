@@ -15,6 +15,7 @@ from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.traits import register_sneak_attack
 from tests.engine.support import create_test_entity, reset_combat_state
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.mark.parametrize(
@@ -52,13 +53,11 @@ def test_sneak_attack_uses_queued_attack_circumstance(
     assert isinstance(sword, Weapon)
     assert attacker.equipment.equip(sword, WeaponSlot.MELEE_MAIN)
     register_sneak_attack(attacker)
-    attacker.equipment.melee_attack_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(attacker.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=attacker.uuid,
             name="Attack circumstance",
             value=circumstance,
-        )
-    )
+        ))
     Entity.update_all_entities_senses()
     hp_before = target.get_hp()
 

@@ -7,7 +7,7 @@ import random
 
 import pytest
 
-from dnd.core.values import ValueRead, read_value
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import (
@@ -250,14 +250,12 @@ def test_eb_03_001_d20_advantage_and_disadvantage_select_rolls() -> None:
     assert normal_roll.advantage_status == AdvantageStatus.NONE
 
     advantage_bonus = make_bonus(source_uuid, target_uuid, base_value=3)
-    advantage_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(advantage_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=target_uuid,
             name="High Ground",
             value=AdvantageStatus.ADVANTAGE,
-        )
-    )
+        ))
     with fixed_randint(4, 17):
         advantage_roll = Dice(
             count=1,
@@ -270,14 +268,12 @@ def test_eb_03_001_d20_advantage_and_disadvantage_select_rolls() -> None:
     assert advantage_roll.advantage_status == AdvantageStatus.ADVANTAGE
 
     disadvantage_bonus = make_bonus(source_uuid, target_uuid, base_value=3)
-    disadvantage_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(disadvantage_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=target_uuid,
             name="Obscured",
             value=AdvantageStatus.DISADVANTAGE,
-        )
-    )
+        ))
     with fixed_randint(4, 17):
         disadvantage_roll = Dice(
             count=1,

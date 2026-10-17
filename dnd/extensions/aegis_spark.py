@@ -13,6 +13,7 @@ from dnd.core.events import Event, EventPhase, Range, RangeType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity
 from dnd.types.discovery import ActorScan
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class AegisSparkEffect(BaseCondition):
@@ -51,7 +52,7 @@ class AegisSparkEffect(BaseCondition):
             name="Aegis Spark Armor",
             value=self.armor_bonus,
         )
-        armor_uuid = target.equipment.ac_bonus.self_static.add_value_modifier(armor_modifier)
+        armor_uuid = add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, armor_modifier)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,

@@ -9,7 +9,7 @@ from dnd.core.content.runtime import RuntimeBehaviorKind, bind_runtime_behavior_
 from dnd.core.events import Damage, DamageRollResultEvent, Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.item_properties import ArmorPenalties, ItemProperty, UnseenStrike, WearerBonus, WearerValue
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, ContextualNumericalModifier, NumericalModifier
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +75,7 @@ def install_item_properties(item_uuid: UUID, item_id: str, item_name: str,
             if values is None:
                 continue
             value = values.charisma if property.target is WearerValue.CHARISMA else values.spell_attack
-            handle = value.self_static.add_value_modifier(NumericalModifier(name=property.name,
+            handle = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name=property.name,
                 value=property.bonus, source_entity_uuid=item_uuid, target_entity_uuid=wearer_uuid,
                 contribution_owner_uuid=item_uuid))
             contributions.append(ItemPropertyContribution(wearer_uuid, handle, value))
@@ -83,14 +83,14 @@ def install_item_properties(item_uuid: UUID, item_id: str, item_name: str,
             if values is None:
                 continue
             if property.stealth_disadvantage:
-                handle = values.stealth.self_static.add_advantage_modifier(AdvantageModifier(
+                handle = add_modifier(values.stealth, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                     name=f"{item_name} Stealth Disadvantage", value=AdvantageStatus.DISADVANTAGE,
                     source_entity_uuid=wearer_uuid))
                 contributions.append(ItemPropertyContribution(wearer_uuid, handle, values.stealth))
             if property.strength_requirement is not None:
                 name = f"{item_name} Strength Requirement"
                 for speed in values.speeds:
-                    handle = speed.self_contextual.add_value_modifier(ContextualNumericalModifier(
+                    handle = add_modifier(speed, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
                         name=name, source_entity_uuid=wearer_uuid, target_entity_uuid=wearer_uuid,
                         callable=partial(_strength_penalty, strength=values.strength,
                             requirement=property.strength_requirement, name=name)))
@@ -102,9 +102,9 @@ def release_item_properties(contributions: list[ItemPropertyContribution]) -> No
     for contribution in contributions:
         if contribution.value is not None:
             if contribution.contextual:
-                contribution.value.self_contextual.remove_value_modifier(contribution.handle_uuid)
+                remove_modifier(contribution.value, contribution.handle_uuid, Channel.SELF_CONTEXTUAL, Kind.VALUE)
             else:
-                contribution.value.self_static.remove_modifier(contribution.handle_uuid)
+                remove_modifier(contribution.value, contribution.handle_uuid, Channel.SELF_STATIC)
         else:
             wearer = BaseBlock.get(contribution.wearer_uuid)
             handler = EventHandler.get(contribution.handle_uuid)

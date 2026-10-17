@@ -66,7 +66,16 @@ from dnd.core.modifiers import (
     ContextualAdvantageModifier,
     NumericalModifier,
 )
-from dnd.core.values import ModifiableValue, ValueRead, read_value, reading_with_value_row
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    read_value,
+    reading_with_value_row,
+    Channel,
+    Kind,
+    add_modifier,
+    modifier_of,
+)
 from dnd.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
 from dnd.core.condition_types import ConditionCategory, DurationType
@@ -306,7 +315,7 @@ class PackTacticsFeature(BaseCondition):
             target_entity_uuid=owner.uuid,
             callable=pack_tactics_advantage,
         )
-        mod_uuid = owner.equipment.attack_bonus.self_contextual.add_advantage_modifier(modifier)
+        mod_uuid = add_modifier(owner.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier)
         effect_event = declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{owner.name} has Pack Tactics")
         return [(owner.equipment.attack_bonus.uuid, mod_uuid)], [], [], [], effect_event
 
@@ -347,8 +356,8 @@ class SunlightSensitivityFeature(BaseCondition):
             target_entity_uuid=owner.uuid,
             callable=_sunlight_perception_disadvantage,
         )
-        attack_uuid = owner.equipment.attack_bonus.self_contextual.add_advantage_modifier(attack_mod)
-        perception_uuid = owner.skill_set.perception.skill_bonus.self_contextual.add_advantage_modifier(perception_mod)
+        attack_uuid = add_modifier(owner.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, attack_mod)
+        perception_uuid = add_modifier(owner.skill_set.perception.skill_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, perception_mod)
         effect_event = declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{owner.name} has Sunlight Sensitivity")
         return [(owner.equipment.attack_bonus.uuid, attack_uuid), (owner.skill_set.perception.skill_bonus.uuid, perception_uuid)], [], [], [], effect_event
 
@@ -396,7 +405,7 @@ class ConditionalSaveAdvantageFeature(BaseCondition):
                 target_entity_uuid=owner.uuid,
                 callable=_condition_context_save_advantage(self.condition_contexts, self.name),
             )
-            mod_uuid = save.bonus.self_contextual.add_advantage_modifier(modifier)
+            mod_uuid = add_modifier(save.bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier)
             outs.append((save.bonus.uuid, mod_uuid))
         effect_event = declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{owner.name} has {self.name}")
         return outs, [], [], [], effect_event
@@ -457,7 +466,7 @@ class KeenPerceptionFeature(BaseCondition):
             target_entity_uuid=owner.uuid,
             callable=_keen_perception_advantage(self.modes, self.name),
         )
-        mod_uuid = owner.skill_set.perception.skill_bonus.self_contextual.add_advantage_modifier(modifier)
+        mod_uuid = add_modifier(owner.skill_set.perception.skill_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier)
         effect_event = declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{owner.name} has {self.name}")
         return [(owner.skill_set.perception.skill_bonus.uuid, mod_uuid)], [], [], [], effect_event
 
@@ -1576,7 +1585,7 @@ class MagicResistance(BaseCondition):
                 owner.saving_throws.charisma_saving_throw):
             modifier = ContextualAdvantageModifier(name=self.name, source_entity_uuid=owner.uuid,
                 target_entity_uuid=owner.uuid, callable=magical_save_advantage)
-            handle = saving_throw.bonus.self_contextual.add_advantage_modifier(modifier)
+            handle = add_modifier(saving_throw.bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier)
             handles.append((saving_throw.bonus.uuid, handle))
         return handles, [], [], [], event.phase_to(EventPhase.EFFECT)
 
@@ -1655,7 +1664,7 @@ class LifeDrainReduction(BaseCondition):
         value = target.health.max_hit_points_bonus
         modifier = NumericalModifier(name=self.name, value=-self.amount,
             source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid)
-        value.self_static.add_value_modifier(modifier)
+        add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, modifier)
         target.health.damage_taken = max(0, target.get_max_hp()-min(current_hp, max(0,target.get_max_hp())))
         if target.get_max_hp() <= 0:
             target.receive_instant_death(self.source_entity_uuid, "Life Drain reduced maximum HP to zero", event.uuid)
@@ -1673,7 +1682,7 @@ class LifeDrainReduction(BaseCondition):
         hp=max(0,victim.get_normal_hp())
         value=victim.health.max_hit_points_bonus
         for handle in self.modifers_uuids.get(value.uuid,[]):
-            value.self_static.value_modifiers[handle].value -= amount
+            modifier_of(value, Channel.SELF_STATIC, Kind.VALUE, handle).value -= amount
         self.amount += amount
         victim.health.damage_taken=max(0,victim.get_max_hp()-min(hp,max(0,victim.get_max_hp())))
         ConditionStateChangedEvent(source_entity_uuid=event.source_entity_uuid,target_entity_uuid=victim.uuid,

@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 
-from dnd.core.values import ValueRead, read_value
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier
 from dnd.actions import Attack
 from dnd.blocks.health import HealthConfig
 from dnd.classes.fighter import GreatWeaponFighting
@@ -278,7 +278,7 @@ def test_great_weapon_fighting_leaves_extra_damage_packet_faces_unchanged(game):
 def test_ordinary_dice_advantage_stays_on_the_same_face_queue(game, advantage, expected):
     owner = actor(game)
     modifier = bonus(owner)
-    modifier.self_static.add_advantage_modifier(AdvantageModifier(source_entity_uuid=owner.uuid, value=advantage))
+    add_modifier(modifier, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(source_entity_uuid=owner.uuid, value=advantage))
     with fixed_dice_faces(2, 18):
         result = Dice(count=1, value=20, bonus=reading(modifier), roll_type=RollType.SAVE).roll
     assert result.results == [2, 18] and result.total == expected

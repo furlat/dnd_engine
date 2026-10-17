@@ -23,6 +23,7 @@ from tests.engine.support import set_hp
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor, force_save_result, reset_spell_regression_arena,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def scene(*, creature_type=CreatureType.HUMANOID):
@@ -296,7 +297,7 @@ def test_harm_caps_normal_hp_after_resistance_and_counts_temporary_hp(affinity, 
     maximum = target.get_max_hp()
     set_hp(target, 5)
     target.health.add_temporary_hit_points(10, target.uuid)
-    target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
         name="Native affinity", source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
         damage_type=DamageType.NECROTIC, value=affinity))
     cast_harm(caster, target, face=6)

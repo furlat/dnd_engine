@@ -11,7 +11,16 @@ from dnd.core.condition_types import DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.modifiers import ContextualNumericalModifier, NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue, ValueRead, read_value
+from dnd.core.values import (
+    BaseValue,
+    ModifiableValue,
+    ValueRead,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+    modifier_of,
+)
 
 
 class LeafBlock(BaseBlock):
@@ -62,7 +71,7 @@ class ValueBonusCondition(BaseCondition):
             name="Engine Book Bonus",
             value=self.bonus,
         )
-        modifier_uuid = value.self_static.add_value_modifier(modifier)
+        modifier_uuid = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, modifier)
         event = event.phase_to(EventPhase.EFFECT)
         return [(value.uuid, modifier_uuid)], [], [], [], event
 
@@ -147,8 +156,7 @@ def test_eb_05_002_block_values_hold_no_read_state_and_a_read_carries_it() -> No
         seen.append((source, target, context))
         return None
 
-    block.child.leaf_value.self_contextual.add_value_modifier(
-        ContextualNumericalModifier(source_entity_uuid=source_uuid, callable=observe))
+    add_modifier(block.child.leaf_value, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(source_entity_uuid=source_uuid, callable=observe))
     context = {"range": "melee", "cover": "none"}
 
     read_value(block.child.leaf_value, ValueRead(source_uuid, target_uuid, context))
@@ -246,7 +254,7 @@ def test_eb_05_005_condition_cleanup_removes_owned_modifiers() -> None:
     assert list(condition.modifers_uuids) == [block.direct_value.uuid]
     assert len(condition.modifers_uuids[block.direct_value.uuid]) == 1
     modifier_uuid = condition.modifers_uuids[block.direct_value.uuid][0]
-    assert modifier_uuid in block.direct_value.self_static.value_modifiers
+    assert modifier_of(block.direct_value, Channel.SELF_STATIC, Kind.VALUE, modifier_uuid) is not None
 
     block.remove_condition("ValueBonusCondition")
 
@@ -506,8 +514,8 @@ def test_eb_05_009_same_name_condition_replaces_old_condition() -> None:
     assert block.active_conditions == {"ValueBonusCondition": second_condition}
     assert block.active_conditions_by_uuid == {second_condition.uuid: second_condition}
     assert block.active_conditions_by_source[source_uuid] == ["ValueBonusCondition"]
-    assert first_modifier_uuid not in block.direct_value.self_static.value_modifiers
-    assert second_modifier_uuid in block.direct_value.self_static.value_modifiers
+    assert modifier_of(block.direct_value, Channel.SELF_STATIC, Kind.VALUE, first_modifier_uuid) is None
+    assert modifier_of(block.direct_value, Channel.SELF_STATIC, Kind.VALUE, second_modifier_uuid) is not None
     assert block.direct_value.normalized_score == base_score + 9
 
 
@@ -547,8 +555,8 @@ def test_eb_05_014_duplicate_name_replacement_updates_source_indexes() -> None:
     assert block.active_conditions_by_uuid == {second_condition.uuid: second_condition}
     assert block.active_conditions_by_source[first_source_uuid] == []
     assert block.active_conditions_by_source[second_source_uuid] == ["ValueBonusCondition"]
-    assert first_modifier_uuid not in block.direct_value.self_static.value_modifiers
-    assert second_modifier_uuid in block.direct_value.self_static.value_modifiers
+    assert modifier_of(block.direct_value, Channel.SELF_STATIC, Kind.VALUE, first_modifier_uuid) is None
+    assert modifier_of(block.direct_value, Channel.SELF_STATIC, Kind.VALUE, second_modifier_uuid) is not None
     assert block.direct_value.normalized_score == base_score + 6
 
 

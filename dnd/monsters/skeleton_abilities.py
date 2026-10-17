@@ -19,6 +19,7 @@ from dnd.spells.spell_utils import seen_recipients_error
 from dnd.types.discovery import ActorScan
 from dnd.actions import entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.conditions import Concentrating
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class Marked(BaseCondition):
@@ -82,7 +83,7 @@ class Marked(BaseCondition):
             source_entity_uuid=target_uuid,
             target_entity_uuid=source_uuid,
         )
-        mod_uuid = target.equipment.ac_bonus.to_target_static.add_advantage_modifier(modifier)
+        mod_uuid = add_modifier(target.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, modifier)
         outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
 
         target.add_condition_immunity("Invisible", immunity_name="Marked")

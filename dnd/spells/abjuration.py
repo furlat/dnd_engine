@@ -85,7 +85,7 @@ from dnd.core.equipment_types import UnarmoredAc
 from dnd.core.dice import RollType, AttackOutcome, Dice, roll_die_face
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterruptionLogData
 from dnd.entity import Entity, PreparedSpatialReturn
-from dnd.core.values import ModifiableValue, reading_with_value_row
+from dnd.core.values import ModifiableValue, reading_with_value_row, Channel, Kind, add_modifier
 from dnd.spatial.ignition import apply_elemental_surface_contacts
 from dnd.actions import (
     commit_forced_movement,
@@ -225,7 +225,7 @@ class ShieldBuff(BaseCondition):
             name="Shield",
             value=5
         )
-        mod_uuid = target.equipment.ac_bonus.self_static.add_value_modifier(mod)
+        mod_uuid = add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, mod)
         outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
 
         def shield_magic_missile_blocker(event: Event, handler_source_uuid: UUID) -> Optional[Event]:
@@ -654,7 +654,7 @@ class ProtectionFromEnergyEffect(BaseCondition):
             value=ResistanceStatus.RESISTANCE,
             damage_type=self.energy_type
         )
-        mod_uuid = target.health.damage_reduction.self_static.add_resistance_modifier(resist_mod)
+        mod_uuid = add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, resist_mod)
         outs.append((target.health.damage_reduction.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -792,7 +792,7 @@ class StoneskinEffect(BaseCondition):
                 value=ResistanceStatus.RESISTANCE,
                 damage_type=damage_type
             )
-            mod_uuid = target.health.damage_reduction.self_static.add_resistance_modifier(resist_mod)
+            mod_uuid = add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, resist_mod)
             outs.append((target.health.damage_reduction.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -1777,7 +1777,7 @@ class ProtectionFromPoisonEffect(BaseCondition):
             value=ResistanceStatus.RESISTANCE,
             damage_type=DamageType.POISON
         )
-        mod_uuid = target.health.damage_reduction.self_static.add_resistance_modifier(resist_mod)
+        mod_uuid = add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, resist_mod)
         outs.append((target.health.damage_reduction.uuid, mod_uuid))
 
         poison_save_abilities: Tuple[AbilityName, ...] = (
@@ -1790,14 +1790,12 @@ class ProtectionFromPoisonEffect(BaseCondition):
         )
         for ability_name in poison_save_abilities:
             save = target.saving_throws.get_saving_throw(ability_name)
-            save_mod_uuid = save.bonus.self_contextual.add_advantage_modifier(
-                ContextualAdvantageModifier(
+            save_mod_uuid = add_modifier(save.bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
                     name="Protection from Poison",
                     source_entity_uuid=target.uuid,
                     target_entity_uuid=self.source_entity_uuid,
                     callable=_protection_from_poison_save_advantage,
-                )
-            )
+                ))
             outs.append((save.bonus.uuid, save_mod_uuid))
 
         target.add_condition_immunity_source("Poisoned", self.uuid)
@@ -2495,14 +2493,12 @@ class ShieldOfFaithEffect(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         outs: List[Tuple[UUID, UUID]] = []
-        modifier_uuid = target.equipment.ac_bonus.self_static.add_value_modifier(
-            NumericalModifier(
+        modifier_uuid = add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 name="Shield of Faith",
                 value=2,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-            )
-        )
+            ))
         outs.append((target.equipment.ac_bonus.uuid, modifier_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -2605,14 +2601,12 @@ class AidEffect(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         outs: List[Tuple[UUID, UUID]] = []
-        modifier_uuid = target.health.max_hit_points_bonus.self_static.add_value_modifier(
-            NumericalModifier(
+        modifier_uuid = add_modifier(target.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 name="Aid",
                 value=self.hp_bonus,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-            )
-        )
+            ))
         outs.append((target.health.max_hit_points_bonus.uuid, modifier_uuid))
 
         con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
@@ -2972,14 +2966,12 @@ class BeaconOfHopeEffect(BaseCondition):
         handler_uuids: List[UUID] = []
 
         wis_save = target.saving_throws.get_saving_throw("wisdom")
-        modifier_uuid = wis_save.bonus.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        modifier_uuid = add_modifier(wis_save.bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name="Beacon of Hope",
                 value=AdvantageStatus.ADVANTAGE,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-            )
-        )
+            ))
         outs.append((wis_save.bonus.uuid, modifier_uuid))
 
         heal_handler = self._create_heal_maximizer()
@@ -3131,7 +3123,7 @@ class ProtectionFromEvilAndGoodEffect(BaseCondition):
         for name in ("Charmed","Frightened"):
             target.add_condition_immunity_source(name,self.uuid,immunity_check=self._blocks_condition)
         value=target.equipment.ac_bonus
-        ident=value.to_target_contextual.add_advantage_modifier(ContextualAdvantageModifier(name=self.name,
+        ident=add_modifier(value, Channel.TO_TARGET_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(name=self.name,
             source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid,callable=self._attack_penalty))
         return [(value.uuid,ident)],[],[],[],event.phase_to(EventPhase.EFFECT)
 
@@ -3206,7 +3198,7 @@ class PassWithoutTraceBonus(BaseCondition):
         if target is None:
             return [],[],[],[],event.cancel(status_message="Aura recipient no longer exists")
         value=target.skill_set.get_skill("stealth").skill_bonus
-        ident=value.self_static.add_value_modifier(NumericalModifier(name=self.name,value=10,
+        ident=add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name=self.name,value=10,
             source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
         return [(value.uuid,ident)],[],[],[],event.phase_to(EventPhase.EFFECT)
 
@@ -3515,7 +3507,7 @@ class AuraOfLifeBenefit(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None: return [], [], [], [], event.cancel(status_message="Aura recipient absent")
         value = target.health.damage_reduction
-        ident = value.self_static.add_resistance_modifier(ResistanceModifier(name=self.name,
+        ident = add_modifier(value, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(name=self.name,
             value=ResistanceStatus.RESISTANCE, damage_type=DamageType.NECROTIC,
             source_entity_uuid=target.uuid))
         def revive(boundary: Event, _: UUID):
@@ -3624,11 +3616,11 @@ class HolyAuraEffect(BaseCondition):
         modifiers = []
         for ability in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"):
             value = target.saving_throws.get_saving_throw(ability).bonus
-            ident = value.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
                 value=AdvantageStatus.ADVANTAGE, source_entity_uuid=target.uuid))
             modifiers.append((value.uuid, ident))
         value = target.equipment.ac_bonus
-        ident = value.to_target_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+        ident = add_modifier(value, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
             value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=target.uuid))
         modifiers.append((value.uuid, ident))
         self.light_source_uuid = get_map().add_light_source(target.position, bright_radius_feet=0,
@@ -3775,7 +3767,7 @@ class DispelEvilAndGoodEffect(ProtectionFromEvilAndGoodEffect):
         caster = Entity.get(self.source_entity_uuid)
         if caster is None: return [], [], [], [], event.cancel(status_message="Ward caster absent")
         value = caster.equipment.ac_bonus
-        ident = value.to_target_contextual.add_advantage_modifier(ContextualAdvantageModifier(name=self.name,
+        ident = add_modifier(value, Channel.TO_TARGET_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(name=self.name,
             source_entity_uuid=caster.uuid, callable=self._attack_penalty))
         action = BreakEnchantment(source_entity_uuid=caster.uuid, ward_uuid=self.uuid, template=True)
         caster.register_action(action)

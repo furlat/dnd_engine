@@ -8,7 +8,7 @@ from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.events import WorldTileState
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.types.materials import Material, TileSurface
@@ -332,7 +332,7 @@ class Tile(BaseBlock):
         if cost <= 0 and mode is not MovementMode.FLYING:
             name = {MovementMode.WALKING: "Impassable", MovementMode.SWIMMING: "No Water",
                     MovementMode.BURROWING: "No Earth"}[mode]
-            value.self_static.add_max_constraint(NumericalModifier.create(
+            add_modifier(value, Channel.SELF_STATIC, Kind.MAX, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid, name=name, value=0))
         match mode:
             case MovementMode.WALKING:

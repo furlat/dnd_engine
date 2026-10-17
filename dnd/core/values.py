@@ -29,6 +29,32 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 import random
+from enum import Enum
+
+
+class Channel(Enum):
+    """Which side of a value a modifier row acts on."""
+
+    SELF_STATIC = "self_static"
+    TO_TARGET_STATIC = "to_target_static"
+    SELF_CONTEXTUAL = "self_contextual"
+    TO_TARGET_CONTEXTUAL = "to_target_contextual"
+    FIXED = "fixed"
+
+
+class Kind(Enum):
+    """What a modifier row contributes."""
+
+    VALUE = "value"
+    MIN = "min"
+    MAX = "max"
+    FACTOR = "factor"
+    ADVANTAGE = "advantage"
+    CRITICAL = "critical"
+    AUTO_HIT = "auto_hit"
+    SIZE = "size"
+    DAMAGE_TYPE = "damage_type"
+    RESISTANCE = "resistance"
 
 
 def identity(x: int) -> int:
@@ -2105,6 +2131,78 @@ class ModifiableValue(BaseValue):
     def outgoing_auto_hit(self) -> AutoHitStatus:
         """Return the hit override exported to targeters; AUTOMISS takes precedence."""
         return _auto_hit_status([self.to_target_static.auto_hit, self.to_target_contextual.auto_hit])
+
+
+def _channel_of(value: 'ModifiableValue', channel: Channel) -> Union[StaticValue, ContextualValue]:
+    match channel:
+        case Channel.SELF_STATIC:
+            return value.self_static
+        case Channel.TO_TARGET_STATIC:
+            return value.to_target_static
+        case Channel.SELF_CONTEXTUAL:
+            return value.self_contextual
+        case Channel.TO_TARGET_CONTEXTUAL:
+            return value.to_target_contextual
+    raise ValueError(f"{channel} is not a modifier channel")
+
+
+def _bucket(value: 'ModifiableValue', channel: Channel, kind: Kind) -> Dict[UUID, Any]:
+    if channel is Channel.FIXED:
+        if kind is not Kind.VALUE:
+            raise ValueError("fixed scores are value rows")
+        return value.fixed_scores
+    holder = _channel_of(value, channel)
+    match kind:
+        case Kind.VALUE:
+            return holder.value_modifiers
+        case Kind.MIN:
+            return holder.min_constraints
+        case Kind.MAX:
+            return holder.max_constraints
+        case Kind.FACTOR:
+            return holder.factor_modifiers
+        case Kind.ADVANTAGE:
+            return holder.advantage_modifiers
+        case Kind.CRITICAL:
+            return holder.critical_modifiers
+        case Kind.AUTO_HIT:
+            return holder.auto_hit_modifiers
+        case Kind.SIZE:
+            return holder.size_modifiers
+        case Kind.DAMAGE_TYPE:
+            return holder.damage_type_modifiers
+        case Kind.RESISTANCE:
+            return holder.resistance_modifiers
+    raise ValueError(f"{kind} is not a modifier kind")
+
+
+def add_modifier(value: 'ModifiableValue', channel: Channel, kind: Kind, modifier: Any) -> UUID:
+    """Add one modifier row to a value; a row with the same (channel, kind, uuid) is replaced in place."""
+    _bucket(value, channel, kind)[modifier.uuid] = modifier
+    return modifier.uuid
+
+
+def remove_modifier(value: 'ModifiableValue', uuid: UUID, channel: Optional[Channel] = None,
+                    kind: Optional[Kind] = None) -> None:
+    """Remove a modifier from every row of a value, or only from one channel, or one (channel, kind)."""
+    if channel is None:
+        value.remove_modifier(uuid)
+    elif kind is not None:
+        _bucket(value, channel, kind).pop(uuid, None)
+    elif channel is Channel.FIXED:
+        value.fixed_scores.pop(uuid, None)
+    else:
+        _channel_of(value, channel).remove_modifier(uuid)
+
+
+def modifiers_of(value: 'ModifiableValue', channel: Channel, kind: Kind) -> tuple:
+    """The modifiers of one (channel, kind) of a value, in insertion order."""
+    return tuple(_bucket(value, channel, kind).values())
+
+
+def modifier_of(value: 'ModifiableValue', channel: Channel, kind: Kind, uuid: UUID) -> Any:
+    """The modifier with this uuid in one (channel, kind) of a value, or None."""
+    return _bucket(value, channel, kind).get(uuid)
 
 
 def _fixed_score(value: 'ModifiableValue', excluded: frozenset[UUID]) -> Optional[int]:

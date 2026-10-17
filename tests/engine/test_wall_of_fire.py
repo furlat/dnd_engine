@@ -26,6 +26,7 @@ from dnd.types.physical_access import PhysicalAccess
 from dnd.types.world import CardinalDirection, OccupancyLayer
 from tests.manual.spell_regression_support import create_spell_regression_actor, force_save_result, reset_spell_regression_arena
 from tests.engine.support import admitted_in_discovery
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def scene(*, level=4):
@@ -109,7 +110,7 @@ def test_overlapping_walls_keep_their_separate_damage_sources():
 def test_fire_immunity_produces_no_applied_wall_damage_accent():
     caster = scene()
     target = actor("Immune", (7, 6))
-    target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
         source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
         value=ResistanceStatus.IMMUNITY, damage_type=DamageType.FIRE, name="Fire immunity"))
     cast(caster)

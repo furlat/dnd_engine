@@ -17,7 +17,16 @@ from dnd.core.modifiers import (
     ResistanceModifier,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue, ModifiableValue, ValueRead, outgoing_of, read_value
+from dnd.core.values import (
+    BaseValue,
+    ModifiableValue,
+    ValueRead,
+    outgoing_of,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+)
 
 
 def reset_value_state() -> None:
@@ -57,22 +66,18 @@ def test_first_value_example_prints_visible_breakdown(capsys) -> None:
         value_name="Armor Class",
         base_value=10,
     )
-    armor_class.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(armor_class, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=hero_id,
             target_entity_uuid=hero_id,
             name="Shield",
             value=2,
-        )
-    )
-    armor_class.self_static.add_value_modifier(
-        NumericalModifier.create(
+        ))
+    add_modifier(armor_class, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=hero_id,
             target_entity_uuid=hero_id,
             name="Defense Style",
             value=1,
-        )
-    )
+        ))
 
     breakdown = armor_class.get_breakdown()
     breakdown_names = ", ".join(entry.name for entry in breakdown)
@@ -129,13 +134,11 @@ def test_base_values_modifiers_normalization_and_breakdown(capsys) -> None:
         value_name="Attack Bonus",
         base_value=1,
     )
-    attack_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=hero_id,
             name="Magic Weapon",
             value=1,
-        )
-    )
+        ))
 
     combined_attack_bonus = strength_score.combine_values(
         [attack_bonus],
@@ -200,13 +203,11 @@ def test_static_channels_print_constraints_roll_states_and_resistances(capsys) -
         value_name="Movement",
         base_value=30,
     )
-    movement.self_static.add_max_constraint(
-        NumericalModifier.create(
+    add_modifier(movement, Channel.SELF_STATIC, Kind.MAX, NumericalModifier.create(
             source_entity_uuid=hero_id,
             name="Grappled",
             value=0,
-        )
-    )
+        ))
     movement_after_grapple = movement.score
     assert movement_after_grapple == 0
 
@@ -214,57 +215,45 @@ def test_static_channels_print_constraints_roll_states_and_resistances(capsys) -
         source_entity_uuid=hero_id,
         value_name="Attack Roll State",
     )
-    attack_roll_state.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(attack_roll_state, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=hero_id,
             name="Unseen Attacker",
             value=AdvantageStatus.ADVANTAGE,
-        )
-    )
+        ))
     advantage_after_unseen = attack_roll_state.advantage
     assert advantage_after_unseen == AdvantageStatus.ADVANTAGE
 
-    attack_roll_state.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(attack_roll_state, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=hero_id,
             name="Long Range",
             value=AdvantageStatus.DISADVANTAGE,
-        )
-    )
+        ))
     advantage_after_long_range = attack_roll_state.advantage
     assert advantage_after_long_range == AdvantageStatus.NONE
 
-    attack_roll_state.self_static.add_critical_modifier(
-        CriticalModifier(
+    add_modifier(attack_roll_state, Channel.SELF_STATIC, Kind.CRITICAL, CriticalModifier(
             source_entity_uuid=hero_id,
             name="Paralyzed Target",
             value=CriticalStatus.AUTOCRIT,
-        )
-    )
-    attack_roll_state.self_static.add_critical_modifier(
-        CriticalModifier(
+        ))
+    add_modifier(attack_roll_state, Channel.SELF_STATIC, Kind.CRITICAL, CriticalModifier(
             source_entity_uuid=hero_id,
             name="Critical Immunity",
             value=CriticalStatus.NOCRIT,
-        )
-    )
+        ))
     critical_state = attack_roll_state.critical
     assert critical_state == CriticalStatus.NOCRIT
 
-    attack_roll_state.self_static.add_auto_hit_modifier(
-        AutoHitModifier(
+    add_modifier(attack_roll_state, Channel.SELF_STATIC, Kind.AUTO_HIT, AutoHitModifier(
             source_entity_uuid=hero_id,
             name="Guided Strike",
             value=AutoHitStatus.AUTOHIT,
-        )
-    )
-    attack_roll_state.self_static.add_auto_hit_modifier(
-        AutoHitModifier(
+        ))
+    add_modifier(attack_roll_state, Channel.SELF_STATIC, Kind.AUTO_HIT, AutoHitModifier(
             source_entity_uuid=hero_id,
             name="Sanctuary",
             value=AutoHitStatus.AUTOMISS,
-        )
-    )
+        ))
     auto_hit_state = attack_roll_state.auto_hit
     assert auto_hit_state == AutoHitStatus.AUTOMISS
 
@@ -272,36 +261,30 @@ def test_static_channels_print_constraints_roll_states_and_resistances(capsys) -
         source_entity_uuid=hero_id,
         value_name="Damage Response",
     )
-    damage_response.self_static.add_resistance_modifier(
-        ResistanceModifier(
+    add_modifier(damage_response, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=hero_id,
             name="Fire Resistance",
             value=ResistanceStatus.RESISTANCE,
             damage_type=DamageType.FIRE,
-        )
-    )
+        ))
     fire_after_resistance = damage_response.resistance[DamageType.FIRE]
     assert fire_after_resistance == ResistanceStatus.RESISTANCE
 
-    damage_response.self_static.add_resistance_modifier(
-        ResistanceModifier(
+    add_modifier(damage_response, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=hero_id,
             name="Oil Vulnerability",
             value=ResistanceStatus.VULNERABILITY,
             damage_type=DamageType.FIRE,
-        )
-    )
+        ))
     fire_after_vulnerability = damage_response.resistance[DamageType.FIRE]
     assert fire_after_vulnerability == ResistanceStatus.NONE
 
-    damage_response.self_static.add_resistance_modifier(
-        ResistanceModifier(
+    add_modifier(damage_response, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=hero_id,
             name="Fire Immunity",
             value=ResistanceStatus.IMMUNITY,
             damage_type=DamageType.FIRE,
-        )
-    )
+        ))
     fire_after_immunity = damage_response.resistance[DamageType.FIRE]
     assert fire_after_immunity == ResistanceStatus.IMMUNITY
 
@@ -346,14 +329,12 @@ def test_contextual_modifiers_print_current_context_results(capsys) -> None:
         value_name="Ranged Attack Bonus",
         base_value=5,
     )
-    ranged_attack_bonus.self_contextual.add_value_modifier(
-        ContextualNumericalModifier(
+    add_modifier(ranged_attack_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
             source_entity_uuid=hero_id,
             target_entity_uuid=goblin_id,
             name="High Ground",
             callable=high_ground_bonus,
-        )
-    )
+        ))
 
     score_without_context = ranged_attack_bonus.score
     assert score_without_context == 5
@@ -406,22 +387,18 @@ def test_opposed_read_prints_the_opponent_outgoing_modifiers(capsys) -> None:
         base_value=13,
     )
 
-    goblin_defense.to_target_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(goblin_defense, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=blinded_goblin_id,
             target_entity_uuid=hero_id,
             name="Blinded",
             value=AdvantageStatus.ADVANTAGE,
-        )
-    )
-    goblin_defense.to_target_static.add_value_modifier(
-        NumericalModifier.create(
+        ))
+    add_modifier(goblin_defense, Channel.TO_TARGET_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=blinded_goblin_id,
             target_entity_uuid=hero_id,
             name="Exposed Target",
             value=2,
-        )
-    )
+        ))
 
     score_before_import = hero_attack.score
     advantage_before_import = hero_attack.advantage

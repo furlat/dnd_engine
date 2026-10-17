@@ -10,7 +10,7 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventPhase, EventQueue
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier
 
 
 class TutorialLeafBlock(BaseBlock):
@@ -62,7 +62,7 @@ class TutorialArmorBonusCondition(BaseCondition):
             name="Tutorial Armor Bonus",
             value=self.bonus,
         )
-        modifier_uuid = value.self_static.add_value_modifier(modifier)
+        modifier_uuid = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, modifier)
         event = event.phase_to(EventPhase.EFFECT)
         return [(value.uuid, modifier_uuid)], [], [], [], event
 

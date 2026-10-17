@@ -36,7 +36,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.conditions import Poisoned, Prone
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.entity import Entity
@@ -425,8 +425,7 @@ class Wet(BaseCondition):
             (DamageType.LIGHTNING, ResistanceStatus.VULNERABILITY),
         ):
             modifier_uuid = (
-                target.health.damage_reduction.self_static
-                .add_resistance_modifier(ResistanceModifier(
+                add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
                     name=f"Wet {damage_type.value}",
                     source_entity_uuid=self.source_entity_uuid,
                     target_entity_uuid=target.uuid,

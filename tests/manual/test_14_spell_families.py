@@ -29,7 +29,7 @@ from dnd.core.modifiers import (
     NumericalModifier,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue
+from dnd.core.values import BaseValue, Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from tests.spell_test_exports import (
     ALL_SPELLS,
@@ -108,14 +108,12 @@ def penalize_saving_throw(
 ) -> None:
     """Make one saving throw fail deterministically."""
     saving_throw = entity.saving_throws.get_saving_throw(ability_name)
-    saving_throw.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(saving_throw.bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             name=f"{ability_name.title()} tutorial penalty",
             value=value,
-        )
-    )
+        ))
 
 
 def set_current_normal_hp(entity: Entity, target_hp: int, source: Entity) -> None:

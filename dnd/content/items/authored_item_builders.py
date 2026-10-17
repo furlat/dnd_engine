@@ -24,7 +24,7 @@ from dnd.core.events import (
     Range,
     RangeType,
 )
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.content.items.authored_item_definitions import (
     ACOLYTE_GEAR_DEFINITIONS,
     CHEST_DEFINITIONS,
@@ -184,13 +184,11 @@ def _build_weapon(
         extra_damage_type=[packet.damage_type for packet in packets],
     )
     if definition.attack_disadvantage:
-        weapon.attack_bonus.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        add_modifier(weapon.attack_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 source_entity_uuid=source_entity_uuid,
                 name="Rusty Blade",
                 value=AdvantageStatus.DISADVANTAGE,
-            ),
-        )
+            ))
     return weapon
 
 

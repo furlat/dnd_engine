@@ -37,14 +37,13 @@ from tests.progression.prepared_class_support import prepared_build, prepared_le
 from tests.progression.test_paladin_features import paladin, use
 from tests.engine.test_roster_support_spells import game as game
 from tests.engine.test_bg3_rank_one_two_spells import combatant
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def test_sacred_weapon_follows_exact_item_and_current_wielder_then_level_cleanup(game):
     actor = paladin(game, 3)
     ally = combatant(game, "Ally", (3, 2))
-    ally.ability_scores.charisma.ability_score.self_static.add_value_modifier(
-        NumericalModifier(source_entity_uuid=ally.uuid, value=6)
-    )
+    add_modifier(ally.ability_scores.charisma.ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(source_entity_uuid=ally.uuid, value=6))
     mace = build_authored_item("weapon.mace", actor.uuid)
     assert actor.loot_item(mace) and actor.equip_item(mace.uuid, WeaponSlot.MELEE_MAIN)
     result = use(actor, SacredWeapon)

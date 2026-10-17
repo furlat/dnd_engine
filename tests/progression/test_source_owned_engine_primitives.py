@@ -22,7 +22,7 @@ from dnd.blocks.spellcasting import SpellcastingBlock
 from dnd.core.base_actions import BaseAction
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier
 from dnd.types.character_progression import RitualPreparationPolicy
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
@@ -273,7 +273,7 @@ def test_hit_dice_remove_by_uuid_preserves_other_blocks_and_spend() -> None:
         name="Borrowed hit-die proof",
         value=3,
     )
-    target_value.to_target_static.add_value_modifier(borrowed_modifier)
+    add_modifier(target_value, Channel.TO_TARGET_STATIC, Kind.VALUE, borrowed_modifier)
     borrowed_channel_uuid = target_value.to_target_static.uuid
 
     assert health.remove_hit_dice_by_uuid(d10.uuid)

@@ -24,7 +24,16 @@ from dnd.core.base_actions import (
     TargetEffectDisposition,
 )
 from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec
-from dnd.core.values import ModifiableValue, OpponentOutgoing, ValueRead, ValueReading, read_value
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    ValueReading,
+    outgoing_of,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+)
 from dnd.core.spell_damage import finalize_spell_damage_roll
 from dnd.core.condition_types import ConditionRemovalTrigger, DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
@@ -2238,24 +2247,20 @@ class Attack(BaseAction):
             is_ranged = execution_event.range is not None and execution_event.range.type == RangeType.RANGE
 
             if is_ranged and execution_event.is_long_range:
-                attack_value.self_static.add_advantage_modifier(
-                    AdvantageModifier(
+                add_modifier(attack_value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                         name="Long Range",
                         value=AdvantageStatus.DISADVANTAGE,
                         source_entity_uuid=source_entity_uuid,
                         target_entity_uuid=target_entity_uuid
-                    )
-                )
+                    ))
 
             if is_ranged and execution_event.is_threatened:
-                attack_value.self_static.add_advantage_modifier(
-                    AdvantageModifier(
+                add_modifier(attack_value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                         name="Threatened (Ranged)",
                         value=AdvantageStatus.DISADVANTAGE,
                         source_entity_uuid=source_entity_uuid,
                         target_entity_uuid=target_entity_uuid
-                    )
-                )
+                    ))
             record_action_timing("attack.ranged_disadvantage_modifiers_ms", started)
 
             started = time.perf_counter()
@@ -2265,10 +2270,9 @@ class Attack(BaseAction):
                 new_phase=EventPhase.EXECUTION,
                 status_message="Rolling attack",
                 attack_bonus=read_value(attack_value, ValueRead(source_entity_uuid, target_entity_uuid, attack_context,
-                    OpponentOutgoing(ac_value.to_target_static, ac_value.to_target_contextual))),
+                    outgoing_of((ac_value,), None))),
                 ac=read_value(ac_value, ValueRead(target_entity_uuid, source_entity_uuid, None,
-                    OpponentOutgoing(attack_value.to_target_static, attack_value.to_target_contextual,
-                                     attack_value_context))),
+                    outgoing_of((attack_value,), attack_value_context))),
             )
             record_action_timing("attack.phase_to_roll_ms", started)
 
@@ -4558,23 +4562,21 @@ def resolve_spell_attack_values(caster:Entity,target:Entity|BaseItem,parent_even
         else ModifiableValue.create(source_entity_uuid=target.uuid, base_value=target.armor_class, value_name="Object AC"))
     context = {"attack_origin_position": attack_origin_position} if attack_origin_position is not None else None
     for modifier in extra_advantage_modifiers:
-        attack_value.self_static.add_advantage_modifier(modifier)
+        add_modifier(attack_value, Channel.SELF_STATIC, Kind.ADVANTAGE, modifier)
 
     is_threatened = ranged and caster.is_threatened()
     if is_threatened:
-        attack_value.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        add_modifier(attack_value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name="Threatened (Ranged)",
                 value=AdvantageStatus.DISADVANTAGE,
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid,
-            )
-        )
+            ))
 
     attack_bonus = read_value(attack_value, ValueRead(caster.uuid, target.uuid, context,
-        OpponentOutgoing(ac_value.to_target_static, ac_value.to_target_contextual, context)))
+        outgoing_of((ac_value,), context)))
     target_ac = read_value(ac_value, ValueRead(target.uuid, caster.uuid, context,
-        OpponentOutgoing(attack_value.to_target_static, attack_value.to_target_contextual, context)))
+        outgoing_of((attack_value,), context)))
     dice_roll = caster.roll_d20(
         attack_bonus,
         RollType.ATTACK,
