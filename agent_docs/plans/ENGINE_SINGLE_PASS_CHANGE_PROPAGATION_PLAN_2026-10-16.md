@@ -1,4 +1,4 @@
-# Single-pass change propagation — analysis and plan (v3.8)
+# Single-pass change propagation — analysis and plan (v3.9)
 
 Date: 2026-10-16. Status: **APPROVED by the human 2026-10-17 (incl. D7c, Q7 EXECUTION convention, temp-HP record-only).** **v3.5 adds available-actions discovery (§14, PD1/PD2) per the human's 2026-10-17 decisions (model approved 2026-10-17).** **v3.6 folds in the §14 antislop/antiOOP reviews and the whole-world-scan redesign. v3.7 folds in the v3.6 re-reviews, the human's answers (D14 approved; Q-W1, Q-W3, Q-W4 decided) and the first P0a measurements; open items are in §14.10.** Implementation is at P0a.
 
@@ -490,50 +490,132 @@ refreshes and C versions remain per terrain install until P2.
 Human, 2026-10-17:
 
 - "of course we need good targets for all the slowdowns we are getting this needs to be smooth and playable";
-- "i would say that 100ms is the max for any operations above that is crazy / 50 starts getting acceptable / <20 / <16 is where we would love to be".
+- "i would say that 100ms is the max for any operations above that is crazy / 50 starts getting acceptable / <20 / <16 is where we would love to be";
+- "in general anotehr constraint no more than 100kb for each payload -- it should be more than enough to handle a single sub turn event";
+- "for now I would like to ignore gc mangament and reach the point where gc does not trigger or is not meaningfull it is more of an alaarm button for us now".
 
-§6 prices perception only. These targets cover the whole request the player waits on, and apply to every operation, worst case included.
+§6 prices perception only. These targets cover the whole request the player waits on and every update the server sends.
 
 | Tier | Rule |
 | --- | --- |
-| **Ceiling** | No run of any operation over 100 ms. |
+| **Ceiling** | No run of any operation over 100 ms; no seat update over 100 KB encoded. |
 | **Acceptable** | Median ≤50 ms. |
 | **Goal** | Median ≤20 ms; ≤16 ms (one frame at 60 fps) is where we want to be. |
 
+§6's Sleet sensory target (≤150 ms, "P4b + D9") is above the ceiling and withdrawn; §6b owns that term.
+
 **How a row is measured.**
 
-- GC rows (worst case: ~30 observers, the godmode caster), ordinary mode, this machine.
-- 3 runs per row: the median is held to a tier, and every run is held to the ceiling.
-- Wall clock includes GC pauses.
-- Split: `native_ms` / `publication_ms` from `gallery_crowd.py`. Publication stays at most ~30 % of a row (now ~50 %).
-- §6's sensory targets stay; they are part of the native budget.
+- One row per operation of every `gallery_crowd.py` CASES entry; the exit can't be met by leaving rows out.
+- 3 runs at one named commit, with no concurrent test or agent load. The median is held to a tier; every run is held to the ceiling.
+- Wall clock, GC pauses included.
+- Cast rows report the tool's five spans: construction, native, operation, publication, encoding. Request rows (Choices, Preview, Command, AI Advance) report the total; their split comes from the CPU sampler.
+- Payload: the largest encoded seat update of the operation (`encoded_bytes`).
+- GC is an alarm: gen-2 collections per operation are counted (`gc.callbacks`, to add to the tool) and reported with the row.
 
-| Row (GC case) | Now ms: total (native / publication), median of 3 at 7f836e17b | Owners |
+**Now** (median / worst of 3 ms; native / publication medians where reported). Provisional: the logs date from 16:34–16:47, before a7a2b9bf0, under agent load. All rows are re-timed at one commit once the current agent wave is merged.
+
+| Row (GC case, operation) | Now | Owners |
 | --- | --- | --- |
-| Preview, caster / fighter | 7 / 5 | goal met; keep |
-| Choices hit | 0 | goal met; keep |
-| Choices miss, caster (577 rows) | 252 | PD1b, PD2, P8 |
-| Choices miss, fighter | 140 | PD1b, PD2, P8 |
-| Command, fighter attack (request path) | 46 | acceptable; P6, P7 toward the goal |
-| Command, caster Fireball (request path) | 668 (one sampled run 435: apply 213, publication 201) | P5, P6, P8; P7 |
-| Fireball | 323 (159 / 148) | P5, P6, P8; P7 |
-| Circle of Death | 334 (156 / 158) | P5, P6, P8; P7 |
-| Ice Storm | 203 (85 / 101) | P6; P7 |
-| Sleet Storm cast | 513 (265 / 226) | P5, P4b re-scoped; P7 |
-| Sleet Storm concentration drop | 769 (191 / 538) | P7 (D16) |
-| Gust of Wind cast | 190 (133 / 37) | P5, P6 |
-| Gust of Wind walk, per move | 93–102 (51–63 / 31–37) | P5, P6; P7 |
-| Spirit Guardians cast | 81 (45 / 26) | P6; P7 |
-| Spirit Guardians walk, per move (3 cells, aura carried) | 233–308 (123–166 / 99–115) | P5, P6; P7 |
-| AI Advance (one decision and the action it runs) | 99–327 | PD2, P7 (AI knowledge) |
+| Preview, caster | 7 / 8 | goal met; keep |
+| Preview, fighter | 5 / 5 | goal met; keep |
+| Choices hit, caster and fighter | 0 / 0 | goal met; keep |
+| Choices miss, caster (123 rows, 1,474 targets) | 252 / 261 | PD1b, PD2 |
+| Choices miss, fighter | 140 / 148 | PD1b, PD2 |
+| Command, fighter attack | 46 / 48 | acceptable; P6, P7 toward the goal |
+| Command, caster Fireball | 668 / 685 | P6, P7, PV1–PV3; the gap to the direct cast is measured with the sampler |
+| Fireball | 323 / 343 (159 / 148) | P6, P7, PV1–PV3 |
+| Circle of Death | 334 / 359 (156 / 158) | P6, P7, PV1–PV3 |
+| Ice Storm | 203 / 205 (85 / 101) | P6, P7, PV1–PV3 |
+| Sleet Storm cast (largest update 1.65 MB) | 513 / 536 (265 / 226) | PV1; P7, PV2, PV3 |
+| Sleet Storm concentration drop (5.06 MB) | 769 / 790 (191 / 538) | PV1; P7, PV2, PV3 |
+| Gust of Wind cast | 190 / 196 (133 / 37) | P5, P6, PV1; P7, PV2 |
+| Gust of Wind move | 93–102 / 105 (51–63 / 31–37) | P5, P6, PV1; P7, PV2 |
+| Spirit Guardians cast | 81 / 88 (45 / 26) | P6; P7 |
+| Spirit Guardians move (3 cells, aura carried) | 233–308 / 605 (123–166 / 99–115) | P5, P6, PV1; P7, PV2 |
+| AI Advance, turn start | 304 / 345 | turn-start navigation has no owner (question 4, §6b) |
+| AI Advance, decision only | 99–101 / 105 | PD2, P7 |
+| AI Advance, acting (276 versions) | 327 / 351 | P6, P7 |
+
+Rows still to measure: magic_missile, chain_lightning, holy_aura, mass_heal, mass_healing_word, delayed_blast_fireball, grease, web, spike_growth, cloudkill (cast, drop), darkness_daylight (Darkness, Daylight), thunderwave_spike_growth, caster_steps, turn_start, turn_undead, gas_vent_plate, portal_plate, wall_of_stone, summon_retirement, round_step_zones. The tool can't yet measure reactions on a human seat or a whole AI round (question 5, §6b).
 
 **Rules.**
 
-- The ceiling on every row is the program's exit gate, together with the phase gates in §7. The acceptable and goal tiers are reported per row at each re-time.
-- After each merged phase the integrator re-times every row (3 runs) and records the table in the progress log.
-- A row still over the ceiling once its owners have landed gets its residual terms measured (CPU sampler, counts) and reported to the human with a proposed phase. Targets are never silently changed.
-- §1 routine rows must not regress.
-- Gen-2 collections inside a measured row are counted and reported with the row. Per the human, GC is a symptom of too much work: it falls with the allocations the phases remove.
+- The exit passes only when every row holds the ceiling, in ms and in KB. A miss blocks the exit until the human decides.
+- After each merged batch the integrator re-times every row and records the table in the progress log.
+- A row still over the ceiling once its owners have landed gets its residual terms measured (sampler, counts) and reported to the human with a proposed phase. Targets are never silently changed.
+- Rows come down by removing work in systems: facts, passes, copies, allocations, bytes.
+  - No new cache or memo attributes on entities, blocks, values, conditions or runtime dataclasses.
+  - No manager or registry classes, no lazy properties.
+  - A value that must be kept is a frozen value owned by the system that computes it, keyed by named revisions, with its invalidation stated in this plan.
+- GC tuning, freezing around operations, pooling and disabling the collector are not fixes.
+
+## 6b. Subjective vision as data (PV1–PV3, D19)
+
+Human, 2026-10-17:
+
+- "maybe the whole subjective vision thing needs a fix so that we can get to arrays as quickly as possible";
+- "you already know that nothing sees that no need to comptue shit" (a heavy blocker should prune work, not add it);
+- "no reason for this stuff t obe sent we can have better handing and partial updateds on for bodies";
+- one observer per seat is the worst case, so per-seat deduplication is not the fix.
+
+**Evidence (GC, 2026-10-17).**
+
+- **Blocker size changes nothing.** Darkness (~28 cells), Cloudkill (~50) and Sleet Storm (~200) each cause 30 full recomputes over the same 50,535 observer-cell pairs.
+  - Heavy obscurement is a per-cell filter over each observer's whole wall FOV (`recompute_observer`, optical stage).
+  - The numpy route masks (`get_optical_route_masks`) already hold the answer, and are then walked cell by cell in Python.
+  - Volume geometry, hazards, cell contacts, reverse memberships and emit are per-cell Python too.
+- **The blue seat (26 observers) receives 1.65 MB on the cast and 5.06 MB on the drop.**
+  - `observed_changes` is 51 % of the cast. It is derivable (0 mismatches over 3,543 rows), and no player-side runtime reader uses it.
+  - Re-sent bodies are 76 % of the drop: 234 re-acquisitions of 20 actors, identical to what the client holds. The `| acquired` term in `projection.py:_project_nodes` bypasses the known-actor check.
+  - 58 of 59 item fields are static per `item_id`.
+  - Hazards are re-sent as `false` for every re-added cell, and light sources come back at the revision the client already holds.
+- **Readers by cell** are heavy in sensory, entity pathing, projection, audience and the AI knowledge reducer; rules make about 24 such reads.
+
+**PV1 — perception as arrays (engine; no protocol change).**
+
+- **World grids**, one integer per cell, kept by their writers: obscurement bits, light level, occupant, hazard bits. The cached wall FOV stays (no corner-rule change).
+- **One observer's view** is a pure function of (position, senses, grids) over its window:
+  - blocked = route masks ∩ the bits that occlude every visual sense the observer has at that range. Heavy obscurement blocks plain sight; magical darkness blocks unless Devil's Sight or Truesight reaches.
+  - visible = wall FOV ∧ ¬blocked ∧ light allows. The first-opaque-surface rule is kept.
+  - Non-visual senses are radius masks; contacts and hazards are read from the grids at visible cells.
+- **`Senses`' per-cell state** (visible, seen, effective light, hazardous cells, field maps) becomes arrays. Readers migrate, and the set and dict forms are deleted.
+- **One settlement path:** affected observers are recomputed. The hazard-only and scoped paths are deleted, with their scope, footprint-scope, change-log and epoch machinery. The exact list is fixed from the code at implementation.
+- **A delta is a mask difference.**
+- **Gate:**
+  - the spike (devtools only) first: per-observer ms, plus equality with today's result on seven GC cases;
+  - before deletion, equality with the old implementation on every GC case;
+  - per-observer recompute ≤1 ms;
+  - obscuring-spell cost independent of area.
+
+**PV2 — compact deltas on the wire (engine + protocol).**
+
+- `observed_changes` leaves the player `SensoryFact`; the native event keeps it.
+- Cell sets are packed masks over the observer window. Light levels are packed per changed cell; hazards are sent as true cells only.
+- Object contacts are not sent where the client can derive them (study class c).
+- Light sources are restored by (uuid, revision); the HUD is sent only when it changes; spatial effects are a content id plus packed cells.
+- **Gate:** every update ≤100 KB on every row; the Sleet cast and drop sensory delta ≤2 KB per observer.
+
+**PV3 — bodies as patches (engine + protocol).**
+
+- A seat receives an actor body in full once.
+- After that, including on re-acquisition, it receives only the fields that differ from `ProjectionState.remembered.actors[uuid]`, or nothing.
+- Items are sent as (item_uuid, item_id) plus their mutable fields. `EquipmentFact` becomes an item patch; the visual loadout is (slot, item_uuid, item_id, is_lit).
+- **Gate:** no body bytes for unchanged re-acquisitions; the D16-C replica test (the fold of emitted updates equals a cold composition) passes.
+
+**Order.**
+
+1. Spike.
+2. PV1, alongside P7.
+3. PV2 and PV3 after P7, because they share the projection code. They need the SDK schema bump and the Godot client (PC).
+
+**Questions for the human.**
+
+1. Should static item mechanics move into the client content catalog (PV3)?
+2. Should the client keep light levels and hazards for cells that leave view (today `apply_current_senses` deletes them), so re-entry needs no resend (PV2)? This changes the shared reducer's memory.
+3. How do we coordinate the protocol bump with the Godot client?
+4. Turn-start navigation has no owning phase. Add one?
+5. Should the gallery get cases for reactions on a human seat and for a whole AI round?
 
 ## 7. Phases (execution order) and gates
 
@@ -561,10 +643,13 @@ Human, 2026-10-17:
 | **PD2** | **Costs of what is kept (§14.7):**<br>• Command uses the bare admission check, not a full preview;<br>• preview cached as its projection, no JSON-size measurement, no double deep copy;<br>• capture without dump/validate rounds; `_make_action_info` without per-row `BaseCost.model_validate`;<br>• AI row-profile dumps removed;<br>• movement list (D13): copies at `entity.py:6885-6892`, per-call key sorting, shared path tuples, OA exposure intersection once per path tree, per-step hazard checks, swim/climb/fly bounded by remaining movement (U5);<br>• `_prepare_position_preview_cache` keyed by GridMap revisions instead of re-sorting each call;<br>• retained discovery graphs released at the operation boundary (§9.10).<br>*Conditional on the post-PD1 measurement (like P4b), adopted only if R(S−h) > Um+I+F (handoff:194):* owner revisions (external writes routed through owners first), the session cache by input sections, selection staleness on the same keys. | Choices cache hit / miss / Preview / Command ms before/after; copies/serializations per request counted |
 | **P4b** | *(conditional on the re-measure)* bounded passes: VU over shadow regions; ray-accumulated route obscurement | D9; eliminated > maintenance |
 | **P6** | Event machinery: COMPLETION handler lookup; per-cell dispatch re-reads; identity computation per version (D4); turn witness set; Fireball latest-version access; residue-fear provenance | versions and dispatch counts before/after |
-| **P7** | Seat-independent capture (pure function, frozen value); one fold per seat; AI knowledge reduction consumes settled sensory events once per group | publication and AI ms before/after |
+| **P7** | Seat-independent capture (pure function, frozen value); one fold per seat; AI knowledge reduction consumes settled sensory events once per group.<br>**D16-C**, the mirror fold leaves the live path. Deleted: `AudienceRuntime.latest`, `current_composition`, `committed_log_count`, `exclusive_current` and both of its branches, `PreparedPlayerOperation`, `prepare_current_operation`, `apply_current_operation`, the `prepared_sensory` parameters and the `prepare_sensory_delta` default. Capture and bookkeeping read `ProjectionState.remembered` (actors, content and the last HUD named there). `CaptureCheckpoint`'s own fold is derived from the projection fold, and its reset branch is deleted. The devtools consumers migrate with no `latest` shim. Reconnect and recording work from the journal. A capture error stays fatal. | publication and AI ms before/after; per-seat wire identical; replica test (the fold of emitted updates from initialization == `remembered` == a cold composition), with no production flag |
 | **P8** | Value layer: min/max once per read; bounded breakdown cache; stats snapshot on change | passive-perception and resistance evaluation counts before/after |
+| **PV1** | Perception as arrays (§6b): world grids, one pure per-observer view, one settlement path, `Senses` cell state as arrays; spike first | §6b PV1 gate |
+| **PV2** | Compact deltas on the wire (§6b); after P7 | §6b PV2 gate; every update ≤100 KB |
+| **PV3** | Bodies as patches (§6b); after P7 | §6b PV3 gate |
 | **PC** | *(other repo; human)* NDClientGodot SDK schema 9 → 11; grouped world boundaries | — |
-| **Exit** | Whole-action targets (§6a, D18): every GC row re-timed after each merged phase | no run of any §6a row over 100 ms; acceptable (median ≤50) and goal (≤20 / ≤16) tiers reported per row; misses reported with residual terms |
+| **Exit** | Whole-action targets (§6a, D18): every operation of every GC case re-timed after each merged batch | every run of every row ≤100 ms and every seat update ≤100 KB; acceptable and goal tiers reported per row; a miss blocks the exit until the human decides |
 
 **Correctness oracle.**
 
@@ -604,7 +689,8 @@ stopped and reported.
 | D16 | One sensory fold per seat: the projection's and the current state's audience compositions are one (the duplication predates event-stream reduction) | **Decided** (human 2026-10-17: "we obviously do not need to duplicate … or to even keep the separation if it is not needed") |
 | D17 | Spells listed once with castable levels; the selection names the level; the AI always casts the base level | **Decided** (human 2026-10-17) |
 | D16-C | D16's method: the server mirror fold (`prepare_current_operation` / `apply_current_operation`, the current composition) leaves the live path; bookkeeping reads the outgoing update; the replica check (emitted-update fold == cold composition) becomes a test | **Approved** (human 2026-10-17: "c is ok") |
-| D18 | Whole-action targets (§6a) for every operation: 100 ms ceiling, ≤50 ms acceptable, ≤20 / ≤16 ms goal | **Decided** (human 2026-10-17) |
+| D18 | Whole-action targets (§6a) for every operation: 100 ms ceiling, ≤50 ms acceptable, ≤20 / ≤16 ms goal; ≤100 KB per update; GC is an alarm, not managed | **Decided** (human 2026-10-17) |
+| D19 | Subjective vision as data (§6b): perception as arrays, compact deltas, bodies as patches | **Decided** (human 2026-10-17); questions 1–5 in §6b open |
 | D11 | Worktree | **Done** |
 
 ### 8.1 Verified bugs (verification pass at `d13e6ad`)
@@ -771,6 +857,12 @@ worktree. The rest is static reading.
 
 ## 12. Changes
 
+**v3.8 → v3.9** (human 2026-10-17 and the v3.8 reviews):
+
+- §6a: one row per GC operation; median and worst run; five spans; 100 KB per update; GC as an alarm; exit blocked by any miss; fixes are system work, not object caches; the 30 % publication share removed.
+- §6b: subjective vision as data (PV1–PV3), from the Sleet / Darkness / Cloudkill measurements and the payload study.
+- P7 carries the D16-C deletion list and the replica test.
+
 **v3.7 → v3.8** (human 2026-10-17):
 
 - §6a whole-action targets (D18, human tiers): 100 ms ceiling for any operation, ≤50 ms acceptable, ≤20 / ≤16 ms goal; owners per row; an exit row in §7.
@@ -886,6 +978,7 @@ worktree. The rest is static reading.
 - **Bug verification:** done (§8.1).
 - **v3.5 §14:** antislop (13) and antiOOP (14), all accepted into v3.6. Where they conflicted, the code decided: `_aoe_origin_fov_cache` and `compute_subjective`/`compute_for_targeting` are dead (antislop); the footprint cache is not a new one (antiOOP; the existing `_propagation_fov_cache` remains).
 - **Whole-world redesign:** its own antislop (9 minor) and antiOOP (2 major) reviews, accepted; its `get_target_variants` hook is replaced by the §14.4 `facet_domain`/`with_selection` pair.
+- **v3.8 §6a / D16-C:** antislop (12) and antiOOP (11), accepted into v3.9, with two changes. A kept value's invalidation is stated in the plan; a separate human approval per value was not adopted, since the human did not ask for it. Request rows stay total-only with a sampler split; the tool is not extended for them.
 - **v3.6:** antislop (16) and antiOOP (14) re-reviews, all accepted into v3.7 except: antiOOP #5 (move spell protection into the footprint with provenance) is replaced by antislop #2 (leave it at its 5 sites; Globe is out of scope by human decision); antiOOP #7 (delete four relationship methods, migrate ~50 callers) is narrowed to a leaf function the methods delegate to; antiOOP #8 (106 profile hooks) is a human question (Q-W6); the antiOOP rule "no `Entity.get` in predicates" is dropped after the human's objection (rules keep world access).
 
 ## 14. Available actions (discovery) — human-decided model (2026-10-17)
