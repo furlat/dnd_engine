@@ -1,5 +1,6 @@
 """Engine semantic tests for grid, tiles, terrain, and pathfinding."""
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import UUID, uuid4
 
 import pytest
@@ -593,7 +594,7 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
     assert not grid.can_transition((1, 1), (2, 1), actor.uuid)
 
     jump = Jump(source_entity_uuid=actor.uuid, template=True)
-    assert (3, 1) in actor.senses.visible
+    assert (3, 1) in capture_senses_snapshot(actor.senses).visible
     assert not grid.raycast_clear((1, 1), (3, 1), channel=WorldEdgeChannel.PROPAGATION)
     assert (3, 1) not in jump.get_valid_positions()
 

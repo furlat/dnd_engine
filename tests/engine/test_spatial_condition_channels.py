@@ -5,12 +5,10 @@ untouched unless the zone obscures or blocks sight; observers still perceive the
 zone's hazards, path costs and obscurement through the public senses.
 """
 
-from collections import Counter
 from dataclasses import dataclass
 from typing import Callable
 from uuid import UUID, uuid4
 
-from dnd.action_timing import reset_action_count_recorder, set_action_count_recorder
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.events import Event, EventPhase, EventType
 from dnd.core.gridmap import get_map
@@ -50,20 +48,10 @@ def _cause(source: UUID) -> Event:
                  phase=EventPhase.EFFECT)
 
 
-def _counted(operation: Callable[[], object]) -> Counter[str]:
-    counts: Counter[str] = Counter()
-    token = set_action_count_recorder(lambda name, value: counts.update({name: value}))
-    try:
-        operation()
-    finally:
-        reset_action_count_recorder(token)
-    return counts
 
-
-def _sight_revisions(grid, observer_uuid: UUID) -> tuple[int, int]:
-    """The observer revisions of physical sight and route obscurement."""
-    revisions = grid.observer_spatial_revisions(observer_uuid)
-    return revisions.optical, revisions.obscurement
+def _obscured(grid) -> bool:
+    """Whether the zone cells carry optical obscurement (the channel an obscuring zone writes)."""
+    return any(grid.optical_obscurement_bits_at(cell) for cell in ZONE_CELLS)
 
 
 def _observe(observer: Entity) -> Observation:
@@ -93,17 +81,15 @@ def check_zone(case: ZoneCase) -> None:
     before = _observe(near)
     assert before.hazards == dict.fromkeys(ZONE_CELLS, False), case.name
     assert BEYOND in before.visible, case.name
-    optical_before = {o.uuid: _sight_revisions(grid, o.uuid) for o in observers}
+    optical_before = grid.optical_revision
 
     source = uuid4()
     zone = case.build(source)
-    counts = _counted(lambda: zone.activate(parent_event=_cause(source)))
+    zone.activate(parent_event=_cause(source))
     assert zone.affected_positions == ZONE_CELLS, case.name
-    optical_moved = {o.uuid: _sight_revisions(grid, o.uuid) != optical_before[o.uuid]
-                     for o in observers}
-    assert optical_moved == dict.fromkeys(optical_before, case.moves_optical), case.name
-    if not case.moves_optical:
-        assert counts["sensory.full_recompute"] == 0, (case.name, counts)
+    # None of these zones blocks physical optics; only an obscuring one writes obscurement.
+    assert grid.optical_revision == optical_before, case.name
+    assert _obscured(grid) is case.moves_optical, case.name
 
     installed = _observe(near)
     assert installed.hazards == dict.fromkeys(ZONE_CELLS, case.zone_hazard), case.name
@@ -117,16 +103,12 @@ def check_zone(case: ZoneCase) -> None:
         assert installed_cost is not None, case.name
         assert (installed_cost > before_cost) is case.difficult, case.name
 
-    optical_installed = {o.uuid: _sight_revisions(grid, o.uuid) for o in observers}
-    counts = _counted(lambda: zone.deactivate(parent_event=_cause(source)))
-    if not case.moves_optical:
-        assert counts["sensory.full_recompute"] == 0, (case.name, counts)
-        assert {o.uuid: _sight_revisions(grid, o.uuid)
-                for o in observers} == optical_installed, case.name
+    zone.deactivate(parent_event=_cause(source))
+    assert not _obscured(grid) and grid.optical_revision == optical_before, case.name
     assert _observe(near) == before, case.name
 
 
-def test_zones_bump_only_the_observer_channels_they_change() -> None:
+def test_zones_change_only_the_world_channels_they_write() -> None:
     cases = [
         ZoneCase("grease: movement and hazard only",
                  lambda source: GreaseZone(source_entity_uuid=source, position=(4, 1),

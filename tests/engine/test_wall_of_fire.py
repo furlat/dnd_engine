@@ -1,5 +1,6 @@
 """Wall commands retain physical placement and resolve the SRD damage lifecycle."""
 
+from dnd.blocks.sensory import capture_senses_snapshot
 import pytest
 
 from dnd.action_dispatch import dispatch_available_action
@@ -19,6 +20,7 @@ from dnd.core.events import DamageAppliedEvent, EventPhase, EventQueue, SensoryU
 from dnd.core.gridmap import get_map
 from dnd.core.presentation_geometry import WallPresentationGeometry
 from dnd.entity import Entity
+from dnd.spells.conjuration import FogCloudZone
 from dnd.spells.walls import WallOfFire, WallOfFireZone
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.world import CardinalDirection, OccupancyLayer
@@ -311,7 +313,8 @@ def test_endpoint_selection_rechecks_changed_world_before_spending(change):
     template = WallOfFire(source_entity_uuid=caster.uuid, template=True)
     assert (9, 5) in template.get_valid_extra_target_positions((5, 5))
     if change == "hidden":
-        caster.senses.visible[(9, 5)] = False
+        FogCloudZone(source_entity_uuid=caster.uuid, position=(9, 5), affected_positions={(9, 5)}).activate(
+            parent_event=None)
     elif change == "solid":
         get_map().set_tile(7, 5, tile=Tile.create((7, 5), blocks_propagation=True), fire_event=False)
     else:

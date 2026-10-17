@@ -12,7 +12,8 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalWall
 from dnd.player.event_record import decode_event, encode_event
-from dnd.types.senses import OpticalObscurement, SenseMode, SensesType, reduce_senses_snapshot
+from dnd.spells.conjuration import FogCloudZone
+from dnd.types.senses import SenseMode, SensesType, reduce_senses_snapshot
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from tests.engine.test_senses_light_stealth import create_skeleton, reset_senses_state
 from tests.engine.test_sensory_initial_replay import sensory_since
@@ -25,7 +26,8 @@ def test_moving_torch_observations_equal_public_full_refresh(obscured):
     mover = create_skeleton(name="Ordinary observer", position=(2, 1), darkvision=False)
     target = create_skeleton(name="Light frontier", position=(5, 1), darkvision=False)
     if obscured:
-        grid.apply_optical_obscurement(uuid4(), {(0, 1)}, OpticalObscurement.HEAVY)
+        FogCloudZone(source_entity_uuid=uuid4(), position=(0, 1), affected_positions={(0, 1)}).activate(
+            parent_event=None)
     grid.add_light_source(mover.position, bright_radius_feet=5,
         dim_radius_feet=5, anchor_uuid=mover.uuid)
     mover.update_entity_senses(max_distance=3)

@@ -18,7 +18,7 @@ from dnd.spells.conjuration import Darkness, Daylight, StinkingCloud, Web
 from dnd.spells.evocation import MassCureWounds, Shatter
 from dnd.spells.illusion import HypnoticPattern, Silence
 from dnd.spells.transmutation import Slow
-from dnd.types.senses import OpticalObscurement
+from dnd.types.senses import OBSCUREMENT_SETS, OpticalObscurement
 from dnd.types.spatial_effects import SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from tests.engine.support import set_hp
 from tests.manual.spell_regression_support import create_spell_regression_actor, reset_spell_regression_arena
@@ -100,9 +100,10 @@ def test_daylight_dispels_only_darkness_of_third_level_or_lower(caster: Entity, 
                                                                 dispelled: bool) -> None:
     other = create_spell_regression_actor("Daylight caster", (15, 15), "heroes", spell_slots={3: 1})
     cast(Darkness(source_entity_uuid=caster.uuid, end_position=CENTER, cast_at_level=darkness_level))
-    assert OpticalObscurement.MAGICAL_DARKNESS in get_map().get_optical_obscurements_at(CENTER)
+    assert OpticalObscurement.MAGICAL_DARKNESS in OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(CENTER)]
     cast(Daylight(source_entity_uuid=other.uuid, end_position=(12, 12), cast_at_level=3))
-    darkness_remains = OpticalObscurement.MAGICAL_DARKNESS in get_map().get_optical_obscurements_at(CENTER)
+    darkness_remains = (OpticalObscurement.MAGICAL_DARKNESS
+                        in OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(CENTER)])
     assert darkness_remains is not dispelled
 
 

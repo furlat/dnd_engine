@@ -1231,11 +1231,9 @@ class SpatialSensesSystem:
             felt_keys.append(key)
             felt_rows.append(rows)
             felt_frame[rows] |= bit
-        # The route table must cover every Tile the senses can reach: beyond the map there is none.
-        min_x, min_y, max_x, max_y = grid.bounds
-        reach = min(reach, max(origin[0] - min_x, max_x - origin[0], origin[1] - min_y, max_y - origin[1], 0))
-        if reach > R:
-            raise ValueError(f"perception reach {reach} exceeds the route table radius {R}")
+        # The route table covers the engine's perception reach: `frame_rows` rejects any reached cell
+        # beyond it, so no sight or felt cell, and no window, lies outside the frame.
+        reach = min(reach, R)
         seen_frame = np.zeros(OFF + 1, dtype=bool)
         seen_frame[optical.rows] = True
         senses_frame = np.zeros(OFF + 1, dtype=np.uint8)

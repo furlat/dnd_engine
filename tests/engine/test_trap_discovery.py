@@ -1,5 +1,6 @@
 """A fixture's discovery and last observed state survive mechanical toggles."""
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import UUID
 
 from dnd.conditions import Blinded
@@ -46,12 +47,12 @@ def test_detected_inert_trap_remains_known_after_perception_drops() -> None:
     scout.remove_condition_by_uuid(bonus.uuid)
     assert scout.get_passive_perception() <= 15
     assert scout.senses.spatial_effects[trap.uuid] == known
-    assert scout.senses.hazardous_cells[(3, 0)]
+    assert capture_senses_snapshot(scout.senses).hazardous_cells[(3, 0)]
     assert trap.set_trap_state(TrapState.DEACTIVATED, parent_event=cause(scout))
     inert = scout.senses.spatial_effects[trap.uuid]
     assert inert.trap_state is TrapState.DEACTIVATED
     assert inert.description != known.description
-    assert not scout.senses.hazardous_cells[(3, 0)]
+    assert not capture_senses_snapshot(scout.senses).hazardous_cells[(3, 0)]
     assert trap.uuid not in witness.senses.spatial_effects
 
     trap.set_trap_state(TrapState.ACTIVATED, parent_event=cause(scout))
@@ -67,7 +68,7 @@ def test_unseen_toggle_keeps_remembered_description_until_sight_returns() -> Non
     remembered = observer.senses.spatial_effects[trap.uuid]
     blindness = Blinded(source_entity_uuid=observer.uuid, target_entity_uuid=observer.uuid)
     observer.add_condition(blindness)
-    assert (3, 0) not in observer.senses.visible
+    assert (3, 0) not in capture_senses_snapshot(observer.senses).visible
     trap.set_trap_state(TrapState.DEACTIVATED, parent_event=cause(observer))
     assert observer.senses.spatial_effects[trap.uuid] == remembered
     assert recorded_senses(observer.uuid).spatial_effects[trap.uuid] == remembered

@@ -1,5 +1,6 @@
 """Native commands cross one-way portals without stale movement or hidden costs."""
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from collections.abc import Iterator
 from uuid import uuid4
 
@@ -170,7 +171,7 @@ def test_exit_need_not_be_visible_and_keeps_its_own_height(game):
     get_map().set_tile_elevation((7, 2), height=3, surface_kind=ElevationSurfaceKind.ORDINARY, slope_axis=None)
     materialize_portal({(1, 1)}, (7, 2))
     Entity.update_all_entities_senses()
-    assert (7, 2) not in traveler.senses.visible
+    assert (7, 2) not in capture_senses_snapshot(traveler.senses).visible
     result = Move(source_entity_uuid=traveler.uuid, end_position=(1, 1),
                   path=[(0, 1), (1, 1)], prefer_safe=False).apply()
     assert result is not None and not result.canceled

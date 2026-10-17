@@ -1,5 +1,6 @@
 """Engine semantic tests for object identity and registries."""
 
+from dnd.blocks.sensory import spatial_senses_system
 from uuid import uuid4
 
 import pytest
@@ -521,7 +522,7 @@ def test_world_presence_and_carried_light_settle_before_spatial_completion() -> 
     assert not entity.is_deployed
     assert entity.is_spatially_suspended
     assert grid.get_entity_position(entity.uuid) is None
-    assert grid.get_entity_subscriptions(entity.uuid) == set()
+    assert entity.uuid not in spatial_senses_system.observers_granted(grid.get_all_tiles())
 
     entity.restore_spatial_presence(retained_position)
     assert entity.is_deployed

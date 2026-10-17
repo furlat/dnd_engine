@@ -15,7 +15,6 @@ from dnd.types.world import CardinalDirection
 from dnd.player.event_record import decode_event, encode_event
 from dnd.spatial.environmental_conditions import SpikeTrap
 from dnd.spells.conjuration import DarknessZone, FogCloudZone
-from dnd.types.senses import OpticalObscurement
 from dnd.types.senses import reduce_senses_snapshot
 from tests.engine.test_senses_light_stealth import create_skeleton, reset_senses_state
 from tests.engine.test_sensory_initial_replay import sensory_since
@@ -106,9 +105,10 @@ def test_moving_light_and_explicit_obscurement_with_nonoptical_trap():
         assert updates
         assert any(EventQueue.get_event_by_uuid(event.cause_event_uuid).event_type
             is EventType.SPATIAL_LIGHT_CHANGED for event in updates)
-    grid.apply_optical_obscurement(trap.uuid, {(3, 1)}, OpticalObscurement.HEAVY)
+    fog = FogCloudZone(source_entity_uuid=observer.uuid, position=(3, 1), affected_positions={(3, 1)})
+    fog.activate(parent_event=None)
     assert target.uuid not in observer.senses.entities
-    grid.remove_optical_obscurement(trap.uuid)
+    fog.deactivate()
     assert target.uuid in observer.senses.entities
     assert grid.has_spatial_condition(trap.uuid)
 

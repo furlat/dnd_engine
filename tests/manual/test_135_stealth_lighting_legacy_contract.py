@@ -7,6 +7,7 @@ This module maps all 58 logical cases to current selectors and restores the
 remaining behavior with deterministic state and event-lifecycle assertions.
 """
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from collections import Counter
 from dataclasses import dataclass
 from enum import StrEnum
@@ -1109,7 +1110,7 @@ def test_magical_darkness_controls_attack_discovery_by_sense_mode() -> None:
     assert target.uuid in attacker.senses.entities
     assert target_is_discoverable(attacker, target.uuid)
     assert (
-        attacker.senses.effective_light_levels[target.position]
+        capture_senses_snapshot(attacker.senses).effective_light_levels[target.position]
         == LightLevel.BRIGHT_LIGHT
     )
 

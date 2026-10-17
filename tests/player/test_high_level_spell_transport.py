@@ -14,6 +14,7 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventQueue
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.gridmap import get_map
+from dnd.core.view import visible_positions
 from dnd.player.commands import ActionSelection, ToggleHandler
 from dnd.reactions import add_stand_when_healed_handler
 from dnd.spells.abjuration import DispelEvilAndGood
@@ -67,7 +68,7 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
     if spell is DispelEvilAndGood:
         point = next(
             position
-            for position in actor.senses.visible
+            for position in visible_positions(actor.senses.cells)
             if grid_distance_feet(actor.position, position) <= 10
             and get_map().is_walkable_for(*position, requesting_entity_uuid=actor.uuid)
             and not get_map().get_entities_at(position)

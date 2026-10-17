@@ -1,5 +1,6 @@
 """Real spills retain their source geometry independently of the broken item."""
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import UUID
 
 import pytest
@@ -159,7 +160,7 @@ def test_visible_fragment_keeps_source_geometry_without_discovering_anchor_or_hi
     observer.update_entity_senses(max_distance=1)
     owner, = get_map().get_spatial_conditions()
     observed = observer.senses.spatial_effects[owner.uuid]
-    assert observed.anchor_position is None and (3, 3) not in observer.senses.visible
+    assert observed.anchor_position is None and (3, 3) not in capture_senses_snapshot(observer.senses).visible
     assert observed.positions == ((4, 3),)
     assert observed.deposit_source is not None and observed.deposit_source.origin == (3, 3)
     assert barrel.uuid not in observer.senses.objects

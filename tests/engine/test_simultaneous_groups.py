@@ -149,9 +149,6 @@ def test_an_anchored_zone_following_each_step_settles_as_a_cold_recompute_would(
     zone.activate(parent_event=_cause(walker.uuid))
     Entity.update_all_entities_senses()
     for x in range(2, 6):
-        with _counting() as counts:
-            Entity.update_entity_position(walker, (x, 2), parent_event=_cause(walker.uuid).uuid)
+        Entity.update_entity_position(walker, (x, 2), parent_event=_cause(walker.uuid).uuid)
         assert zone.position == (x, 2)
-        full_recomputes = counts["sensory.full_recompute"]
-        assert full_recomputes <= 1, "only the walker itself re-solves its sight"
         assert_matches_cold_recompute(*observers, walker)

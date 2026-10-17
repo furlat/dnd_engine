@@ -1,5 +1,6 @@
 """One physical object has several supports, without duplicating its identity."""
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from collections.abc import Iterator
 from uuid import UUID, uuid4
 
@@ -190,7 +191,7 @@ def test_far_end_attack_and_same_identity_destruction_update_only_real_supports(
     item.place_on_grid((2, 3))
     tile_ids = tuple(support.tile_uuid for support in placement(item).covered_supports)
     attacker.update_entity_senses(max_distance=1)
-    assert (2, 3) not in attacker.senses.visible
+    assert (2, 3) not in capture_senses_snapshot(attacker.senses).visible
     assert attacker.senses.objects[item.uuid].position == (3, 3)
     assert object_choices(attacker, item)
     assert all(choice.position == (3, 3) for choice in object_choices(attacker, item))

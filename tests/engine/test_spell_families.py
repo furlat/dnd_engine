@@ -1,5 +1,6 @@
 """Engine semantic tests for spell families and implemented spells."""
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from typing import Optional, cast
 from unittest.mock import patch
 from uuid import UUID, uuid4
@@ -36,7 +37,7 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.core.values import BaseValue
-from dnd.types.senses import OpticalObscurement
+from dnd.types.senses import OBSCUREMENT_SETS, OpticalObscurement
 from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import execute_by_index, setup_standard_actions
 from dnd.content.items.authored_item_builders import build_authored_item
@@ -2186,7 +2187,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     assert len(cloudkill_zone.event_handlers_uuids) == 2
     assert (
         OpticalObscurement.HEAVY
-        in get_map().get_optical_obscurements_at((10, 10))
+        in OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 10))]
     )
 
     hp_before_entry = get_hp(target)
@@ -2298,10 +2299,10 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     assert (24, 16) in fog_zone.affected_positions
     assert fog_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert fog_edge_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((16, 16)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((16, 16))] == {
         OpticalObscurement.HEAVY
     }
-    assert get_map().get_optical_obscurements_at((24, 16)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((24, 16))] == {
         OpticalObscurement.HEAVY
     }
     assert fog_outside_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
@@ -2310,7 +2311,7 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     caster.remove_condition("Concentrating")
     assert fog_zone not in get_map().get_spatial_conditions()
     assert fog_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((16, 16)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((16, 16))] == set()
 
     reset_spell_family_state(width=24, height=24)
     dark_caster = create_family_caster(
@@ -2351,9 +2352,9 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     assert center_tile is not None
     assert center_tile.resolved_light_level == LightLevel.DARKNESS
     assert not center_tile.blocks_optics_at_center()
-    assert (11, 10) not in darkvision_observer.senses.visible
-    assert (11, 10) not in darkvision_observer.senses.effective_light_levels
-    assert get_map().get_optical_obscurements_at((11, 10)) == {
+    assert (11, 10) not in capture_senses_snapshot(darkvision_observer.senses).visible
+    assert (11, 10) not in capture_senses_snapshot(darkvision_observer.senses).effective_light_levels
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((11, 10))] == {
         OpticalObscurement.MAGICAL_DARKNESS
     }
     assert "Concentrating" in dark_caster.active_conditions
@@ -2408,7 +2409,7 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     assert plague_zone.optical_obscurement is None
     assert plague_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert plague_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 5))] == set()
     assert target_hp_before - get_hp(target) == 18
     assert caster.action_economy.spell_slot_7.normalized_score == 0
 
@@ -2416,7 +2417,7 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     assert plague_zone not in get_map().get_spatial_conditions()
     assert plague_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert plague_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 5))] == set()
 
     reset_spell_family_state(width=30, height=30)
     caster = create_family_caster(position=(5, 10), spell_slots={8: 1})
@@ -2448,10 +2449,10 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     assert cloud_zone.optical_obscurement == OpticalObscurement.HEAVY
     assert old_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert old_trailing_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(old_center) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(old_center)] == {
         OpticalObscurement.HEAVY
     }
-    assert get_map().get_optical_obscurements_at((6, 10)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((6, 10))] == {
         OpticalObscurement.HEAVY
     }
     assert target_hp_before - get_hp(target) == 30
@@ -2467,13 +2468,13 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     assert new_center_tile is not None
     assert new_leading_tile is not None
     assert old_trailing_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((6, 10)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((6, 10))] == set()
     assert new_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert new_leading_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(new_center) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(new_center)] == {
         OpticalObscurement.HEAVY
     }
-    assert get_map().get_optical_obscurements_at((16, 10)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((16, 10))] == {
         OpticalObscurement.HEAVY
     }
 
@@ -2515,7 +2516,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     assert not cloud_zone.adds_difficult_terrain
     assert cloud_zone.optical_obscurement == OpticalObscurement.HEAVY
     assert cloud_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 5)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 5))] == {
         OpticalObscurement.HEAVY
     }
     assert "Nauseated" not in retching_target.active_conditions
@@ -2536,7 +2537,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     caster.remove_condition("Concentrating")
     assert cloud_zone not in get_map().get_spatial_conditions()
     assert cloud_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 5))] == set()
 
     reset_spell_family_state(width=24, height=18)
     grid = get_map()
@@ -2578,7 +2579,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     assert "Prone" not in concentrating_target.active_conditions
     assert storm_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert storm_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 10)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 10))] == {
         OpticalObscurement.HEAVY
     }
 
@@ -2600,7 +2601,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     assert storm_zone not in get_map().get_spatial_conditions()
     assert storm_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert storm_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 10)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 10))] == set()
 
 
 def test_eb_15_041_stinking_cloud_skips_breathless_creatures() -> None:
@@ -2927,7 +2928,7 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
     assert web_zone.optical_obscurement is None
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT  # Web lowers light one level (human Q5)
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
     assert any(
         isinstance(condition, WebRestrained)
         for condition in target.active_conditions_by_uuid.values()
@@ -2957,7 +2958,7 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
     assert web_zone not in get_map().get_spatial_conditions()
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
 
 
 def test_entangle_owns_difficult_terrain_restraint_and_concentration_cleanup() -> None:
@@ -3081,7 +3082,7 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
     assert "Concentrating" in caster.active_conditions
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT  # Web lowers light one level (human Q5)
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
 
     turn_start = caster.on_turn_start(round_number=2, turn_index=0)
 
@@ -3091,7 +3092,7 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
     assert web_zone.event_handlers_uuids == []
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
 
 
 def test_web_restraint_memberships_release_only_their_exact_source() -> None:
@@ -3178,7 +3179,7 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert (6, 5) in web_zone.affected_positions
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT  # Web lowers light one level (human Q5)
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
     assert web_zone in get_map().get_spatial_conditions_at((5, 5))
     assert any(
         isinstance(condition, WebRestrained)
@@ -3223,11 +3224,11 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert len(web_zone.event_handlers_uuids) == 1
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
     assert web_zone not in get_map().get_spatial_conditions_at((5, 5))
     assert adjacent_web_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert adjacent_web_tile.resolved_light_level == LightLevel.DIM_LIGHT  # still webbed (human Q5)
-    assert get_map().get_optical_obscurements_at((6, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((6, 5))] == set()
     assert not any(
         isinstance(condition, WebRestrained)
         for condition in target.active_conditions_by_uuid.values()
@@ -3259,7 +3260,7 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert web_zone.event_handlers_uuids == []
     assert adjacent_web_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert adjacent_web_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((6, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((6, 5))] == set()
 
 
 def test_eb_15_011_haste_modifier_bundle_and_lethargy_cleanup() -> None:

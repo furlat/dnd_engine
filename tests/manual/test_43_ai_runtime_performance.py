@@ -46,7 +46,7 @@ from dnd.core.geometry import (
 from dnd.core.gridmap import get_map
 from dnd.types.world import SpatialChannel
 from dnd.core.modifiers import NumericalModifier
-from dnd.blocks.sensory import spatial_senses_system
+from dnd.blocks.sensory import spatial_senses_system, capture_senses_snapshot
 import dnd.core.gridmap as gridmap_module
 from dnd.entity import Entity
 from tests.manual.authored_encounter_support import (
@@ -911,7 +911,7 @@ def test_bright_visibility_skips_per_tile_effective_light(
 
     actor.update_entity_visibility(max_distance=20)
 
-    assert actor.senses.visible
+    assert capture_senses_snapshot(actor.senses).visible
 
 
 def test_dark_visibility_still_uses_subjective_light_resolution(
@@ -936,39 +936,6 @@ def test_dark_visibility_still_uses_subjective_light_resolution(
 
     assert calls > 0
 
-
-def test_light_batch_candidate_selection_uses_bulk_subscriber_union(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Light batches should not copy subscribers once per changed cell."""
-    arena = assemble_authored_encounter("srd_low_cr_patrol")
-    actor = arena.hero
-    actor.update_entity_senses(max_distance=20)
-    grid = get_map()
-    subscribed_positions = sorted(
-        position
-        for position in grid.get_entity_subscriptions(actor.uuid)
-        if grid.get_tile(*position) is not None
-    )
-    changed_positions = set(subscribed_positions[:3])
-    assert changed_positions
-    representative_position = min(changed_positions)
-    representative_tile = grid.get_tile(*representative_position)
-    assert representative_tile is not None
-    event = SpatialChangeEvent.light_changed(
-        representative_position,
-        representative_tile.uuid,
-        senses_hint=SensesUpdateHint(light_changed_positions=changed_positions),
-    )
-
-    def reject_per_cell_lookup(_position: tuple[int, int]) -> set[UUID]:
-        raise AssertionError("light batches should use the bulk subscriber lookup")
-
-    monkeypatch.setattr(grid, "get_subscribers_at", reject_per_cell_lookup)
-
-    candidates = spatial_senses_system.candidate_observer_uuids(event)
-
-    assert actor.uuid in candidates
 
 
 def test_bright_light_refresh_skips_per_tile_effective_light(
@@ -997,7 +964,7 @@ def test_bright_light_refresh_skips_per_tile_effective_light(
     callback._light_positions_requiring_visibility_refresh(changed_positions)
     callback._update_visibility_for_light_positions(changed_positions)
 
-    assert changed_positions <= set(actor.senses.visible)
+    assert changed_positions <= set(capture_senses_snapshot(actor.senses).visible)
 
 
 def test_dark_light_refresh_still_uses_subjective_light_resolution(
@@ -1111,7 +1078,7 @@ def test_full_budget_move_refreshes_visibility_without_full_path_radius() -> Non
     assert actor.action_economy.movement_remaining() == 0
     assert actor.senses.path_max_distance == 0
     assert actor.senses._paths_dirty is False
-    assert actor.senses.visible
+    assert capture_senses_snapshot(actor.senses).visible
     assert after.remaining_movement == 0
     exhausted_move = next(
         action

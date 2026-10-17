@@ -1,5 +1,6 @@
 """Deterministic parity for the archived 16-case sense-buff spell matrix."""
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import UUID
 
 from dnd.actions import SpellEvent
@@ -368,7 +369,7 @@ def test_darkvision_reactively_reveals_dark_target_and_cleanup_hides_it() -> Non
     assert not _cast_darkvision(caster, caster).canceled
     assert enemy.uuid in caster.senses.entities
     assert (
-        caster.senses.effective_light_levels[enemy.position] is LightLevel.DIM_LIGHT
+        capture_senses_snapshot(caster.senses).effective_light_levels[enemy.position] is LightLevel.DIM_LIGHT
     )
     assert tile.resolved_light_level is LightLevel.DARKNESS
 

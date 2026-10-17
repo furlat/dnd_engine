@@ -1,5 +1,6 @@
 """Native location and effect operations respect authored occupancy layers."""
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from collections.abc import Iterator
 from uuid import uuid4
 
@@ -231,5 +232,5 @@ def test_explicit_hazard_layer_and_observation_keep_distinct_meanings(
     }
     assert not grid.is_walkable_for(1, 1, occupant.uuid, walk_in_danger=False)
     assert grid.is_walkable_for(2, 1, occupant.uuid, walk_in_danger=False)
-    assert occupant.senses.hazardous_cells[(1, 1)] is True
-    assert occupant.senses.hazardous_cells[(2, 1)] is False
+    assert capture_senses_snapshot(occupant.senses).hazardous_cells[(1, 1)] is True
+    assert capture_senses_snapshot(occupant.senses).hazardous_cells[(2, 1)] is False

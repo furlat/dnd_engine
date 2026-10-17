@@ -112,11 +112,11 @@ def test_web_observation_retains_only_seen_cells_and_replays_leave_reacquire_rem
     zone = next(zone for zone in get_map().get_spatial_conditions() if isinstance(zone, WebZone))
     observed = observer.senses.spatial_effects[zone.uuid]
     assert observed.trap_state is None
-    assert set(observed.positions) == zone.affected_positions.intersection(observer.senses.visible)
+    assert set(observed.positions) == zone.affected_positions.intersection(capture_senses_snapshot(observer.senses).visible)
     assert set(observed.positions) < zone.affected_positions
     checkpoint()
     Entity.update_entity_position(observer, (30, 13))
-    assert not zone.affected_positions.intersection(observer.senses.visible)
+    assert not zone.affected_positions.intersection(capture_senses_snapshot(observer.senses).visible)
     assert observer.senses.spatial_effects[zone.uuid] == observed
     checkpoint()
     if remove_while_hidden:

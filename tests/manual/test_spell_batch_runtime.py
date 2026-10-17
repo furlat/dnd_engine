@@ -190,7 +190,7 @@ def test_gust_observation_origin_disclosure_and_removal_replay_without_native_wo
     if not remove_while_hidden:
         assert caster.remove_condition("Concentrating")
     retained = observer.senses.spatial_effects.get(zone.uuid)
-    assert retained is None or set(retained.positions).isdisjoint(observer.senses.visible)
+    assert retained is None or set(retained.positions).isdisjoint(capture_senses_snapshot(observer.senses).visible)
     checkpoint()
     # Previously observed but still hidden cells retain their last known state.
     # Seeing the complete former area establishes that every part is gone.

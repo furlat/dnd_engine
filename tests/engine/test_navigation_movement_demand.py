@@ -83,7 +83,7 @@ def test_exhausted_move_keeps_walkable_discovery_and_serialized_perception(actor
     assert actor.action_economy.movement_remaining() == 0
     assert targets(actor, "Move") == set()
     assert actor.senses.paths == {(6, 0): [(6, 0)]}
-    assert actor.senses.walkable == {position: True for position in actor.senses.visible}
+    assert actor.senses.walkable == {position: True for position in capture_senses_snapshot(actor.senses).visible}
     replayed = None
     for event in sensory_since(actor.uuid):
         replayed = reduce_senses_snapshot(actor.uuid, replayed, decode_event(encode_event(event)))
@@ -142,7 +142,7 @@ def test_exhausted_flight_keeps_walking_navigation(actor):
 def test_restored_paths_use_current_terrain_in_remembered_cells(actor):
     actor.update_entity_senses(max_distance=1, path_max_distance=20)
     move_to(actor, (6, 0))
-    assert (10, 0) in actor.senses.seen and (10, 0) not in actor.senses.visible
+    assert (10, 0) in capture_senses_snapshot(actor.senses).seen and (10, 0) not in capture_senses_snapshot(actor.senses).visible
     grid = get_map()
     grid.set_tile(10, 0, tile=wall_factory((10, 0)))
     actor.register_action(path_consumer(actor, "reachable"))
@@ -160,7 +160,7 @@ def test_hidden_mutation_sensory_prefix_matches_full_navigation_reference():
         move_to(actor, (6, 0))
         if restore_full_domain:
             actor.materialize_navigation(max_distance=20)
-        assert (10, 0) in actor.senses.seen and (10, 0) not in actor.senses.visible
+        assert (10, 0) in capture_senses_snapshot(actor.senses).seen and (10, 0) not in capture_senses_snapshot(actor.senses).visible
         cursor = EventQueue.event_cursor()
         get_map().set_tile(10, 0, tile=wall_factory((10, 0)))
         first = capture_senses_snapshot(actor.senses)

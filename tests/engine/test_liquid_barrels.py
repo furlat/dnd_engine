@@ -1,5 +1,6 @@
 """Real destruction leaves independently owned materials with ground contact."""
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from collections.abc import Iterator
 from uuid import uuid4
 
@@ -354,7 +355,7 @@ def test_visible_material_publishes_only_its_observed_cells(world: Game, content
     cause = completed(0)[-1]
     hidden.activate(parent_event=cause)
     observer.update_entity_senses()
-    assert (4, 1) in observer.senses.visible
+    assert (4, 1) in capture_senses_snapshot(observer.senses).visible
     assert hidden.uuid not in observer.senses.spatial_effects
 
 

@@ -1,5 +1,6 @@
 """Misty Step discovery and one committed teleport retain the spell's lineage."""
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from collections.abc import Iterator
 from uuid import UUID, uuid4
 
@@ -104,7 +105,7 @@ def test_misty_step_discovers_a_visible_landing_across_unwalkable_water(
         grid.set_tile(3, y, name="Water", walking_cost=0, swimming_cost=1)
     destination = (5, 2)
     caster.materialize_navigation()
-    assert caster.senses.visible[destination]
+    assert (destination in capture_senses_snapshot(caster.senses).visible)
     assert destination not in caster.senses.paths
     assert MistyStep(source_entity_uuid=caster.uuid, end_position=destination).pre_validate()
     available = get_available_actions(caster)

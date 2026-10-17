@@ -11,6 +11,7 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.base_tiles import tile_light_contributions
 from dnd.core.events import EventPhase, EventQueue, EventType, SensoryUpdateEvent
 from dnd.core.gridmap import get_map
+from dnd.core.view import cell_visible
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.items.torches import build_torch
@@ -167,7 +168,7 @@ def test_unseen_offscreen_emitter_exposes_optics_without_actor_or_inventory_iden
     Entity.update_entity_position(owner, (3, 5))
     state, _, _ = advance(projection, state, roots_since(cursor), witness)
     source, = state.senses.light_sources.values()
-    assert source.position == (3, 5) and source.position not in witness.senses.visible
+    assert source.position == (3, 5) and not cell_visible(witness.senses.cells, source.position)
     assert source.affected_tiles == {} and source.anchor_entity_uuid is None
     assert source.anchor_item_uuid is None
     assert any(source.source_uuid in tile_light_contributions(get_map().get_tile(*position))[0]
