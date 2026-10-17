@@ -21,7 +21,7 @@ from dnd.core.events import (
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import ResistanceStatus
 from dnd.types.actor_facts import ActorState, ConditionFact
-from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
+from dnd.types.senses import SensesSnapshot, apply_current_senses, prepare_sensory_delta
 from dnd.world_facts import WorldFacts, apply_world_fact, world_event_positions
 
 
@@ -76,15 +76,32 @@ def project_actor(actor: ActorState, observers: list[str], *, controlled: bool,
 Key = TypeVar("Key")
 
 
-def _move_observer(index: dict[Key, set[str]], observer: str, old: AbstractSet[Key], new: AbstractSet[Key]) -> None:
-    """Keep one inverted index of an observer's snapshot in step with its change."""
-    for key in old - new:
+def _move_observer(index: dict[Key, set[str]], observer: str, left: AbstractSet[Key], came: AbstractSet[Key]) -> None:
+    """Keep one inverted index of an observer's snapshot in step: drop the keys it left, add those it gained."""
+    for key in left - came:
         if (observers := index.get(key)) is not None:
             observers.discard(observer)
             if not observers:
                 del index[key]
-    for key in new - old:
+    for key in came - left:
         index.setdefault(key, set()).add(observer)
+
+
+def _snapshot_moves(before: SensesSnapshot, event: SensoryUpdateEvent) -> tuple[tuple[set, set], ...]:
+    """The (left, gained) keys of the visible, seen, entity and object views, read before the delta applies."""
+    added = set(event.visible_cells_added)
+    visible = before.visible
+    entities, objects = before.entities, before.objects
+    changed_entities, changed_objects = event.entity_contacts_changed, event.object_contacts_changed
+    return (
+        ({cell for cell in event.visible_cells_removed if cell in visible and cell not in added},
+         {cell for cell in added if cell not in visible}),
+        (set(), {cell for cell in event.seen_cells_added if cell not in before.seen}),
+        ({identity for identity in event.entity_contacts_removed if identity in entities and identity not in changed_entities},
+         {identity for identity in changed_entities if identity not in entities}),
+        ({identity for identity in event.object_contacts_removed if identity in objects and identity not in changed_objects},
+         {identity for identity in changed_objects if identity not in objects}),
+    )
 
 
 @dataclass(slots=True)
@@ -164,16 +181,23 @@ class AIKnowledge:
             self._refresh_world(positions, objects)
 
         if isinstance(event, SensoryUpdateEvent) and event.observer_uuid in self.controlled_entity_uuids:
+            observer = str(event.observer_uuid)
             before = self.senses.get(event.observer_uuid)
-            after = reduce_senses_snapshot(event.observer_uuid, before, event)
+            prepared = prepare_sensory_delta(event.observer_uuid, before, event)
+            # The delta names everything it moves; the owned snapshot advances in place.
+            moves = _snapshot_moves(before, event) if before is not None and not event.initial else None
+            left_visible = moves[0][0] if moves is not None else set()
             if before is not None and self.dirty_tiles:
                 # A tile nobody else sees stops being visible here: its remembered row is its
                 # projection at its last visible touch, which is now (before ancestor facts).
-                observer = str(event.observer_uuid)
-                for position in (before.visible - after.visible) & self.dirty_tiles:
+                if moves is None:
+                    after_visible = set(event.visible_cells_added)
+                    left_visible = before.visible - after_visible
+                for position in left_visible & self.dirty_tiles:
                     if self.visible_index.get(position, set()) <= {observer}:
                         self._project_visible_tile(position)
                         self.dirty_tiles.discard(position)
+            after = apply_current_senses(before if moves is not None else None, event, prepared)
             # Spatial owners have committed these after-values before publishing
             # their sensory child, even though the parent terminal version is later.
             parent = event.parent_lineage
@@ -186,7 +210,12 @@ class AIKnowledge:
                         objects.update(changed_objects)
                 parent = ancestor.parent_lineage
             self.senses[event.observer_uuid] = after
-            self._reindex(str(event.observer_uuid), before, after)
+            if moves is None:
+                self._reindex(observer, before, after)
+            else:
+                for index, (left, came) in zip((self.visible_index, self.seen_index, self.entity_index,
+                                                self.object_index), moves):
+                    _move_observer(index, observer, left, came)
             self.dirty_observers.add(event.observer_uuid)
             actors = set(event.entity_contacts_changed) | set(event.entity_contacts_removed)
             actors.add(event.observer_uuid)
