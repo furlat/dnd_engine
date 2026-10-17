@@ -11,7 +11,7 @@ from dnd.actions_functional import execute_by_index, get_available_actions, setu
 from dnd.actor_projection import condition_fact
 from dnd.ai.contracts.observation import KnowledgeState
 from dnd.ai.runtime.knowledge_reduction import AIKnowledge
-from dnd.ai.runtime.knowledge_system import bind_ai_knowledge, open_assignment_knowledge
+from dnd.ai.runtime.knowledge_system import assignment_knowledge, bind_ai_knowledge, open_assignment_knowledge
 from dnd.ai.runtime.movement_revalidation import SubjectiveMovementContinuationGuard
 from dnd.ai.runtime.state_projection import SubjectiveAIStateProjector
 from dnd.blocks.health import HealthConfig, HitDiceConfig
@@ -29,6 +29,7 @@ from dnd.types.actor_facts import ConditionFact
 from dnd.player.event_record import RecordedEvent
 from dnd.player.audience import resolve_audience
 from dnd.player.capture import _retained_event
+from tests.ai.support import build_native_ai_test_game
 
 
 SOURCE_ROWS = TypeAdapter(list[tuple[int, RecordedEvent, ConditionFact | None]])
@@ -200,3 +201,21 @@ def test_native_movement_guard_learns_at_step_before_movement_root_completes() -
         assert guard.world.known_entities[str(subject.uuid)].normal_hp == 40
         assert any(isinstance(event, SensoryUpdateEvent) and subject.uuid in event.entity_contacts_changed
                    for _, event in EventQueue.iter_events_since(0))
+
+
+def test_knowledge_read_at_each_decision_equals_one_cold_fold_of_the_record() -> None:
+    """Knowledge advanced in pieces (opened at start, at batch dispatches and at reads) equals one fold from the start."""
+    game = build_native_ai_test_game("encounter.srd_goblinoid_warband")
+    try:
+        for step in range(12):
+            game.assembled.encounter.advance_one_controller_action_boundary()
+            for controller in game.controllers:
+                held = assignment_knowledge(game.ai_knowledge, controller.uuid)
+                cold = AIKnowledge(held.controlled_entity_uuids)
+                cold.consume((index, event, None) for index, event in EventQueue.iter_events_since(0))
+                assert (held.source_cursor, held.observers, held.known_entities, held.known_objects,
+                        held.known_tiles, held.senses, held.actors) == (
+                    cold.source_cursor, cold.observers, cold.known_entities, cold.known_objects,
+                    cold.known_tiles, cold.senses, cold.actors), (step, controller.assignment_id)
+    finally:
+        reset_engine_runtime()

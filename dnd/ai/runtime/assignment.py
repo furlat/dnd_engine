@@ -39,6 +39,7 @@ from dnd.ai.runtime.assignment_lifecycle import (
 from dnd.ai.runtime.knowledge_system import (
     AIKnowledgeSystem,
     close_assignment_knowledge,
+    open_assignment_knowledge,
 )
 from dnd.ai.runtime.state_projection import (
     AIDecisionState,
@@ -165,10 +166,12 @@ class NativeAIAssignment:
         return self._binding
 
     def start(self, entities: list[Entity]) -> None:
-        """Start once after exact encounter ownership has been established."""
+        """Start once after exact encounter ownership has been established; its knowledge opens here."""
         if self._state is AIAssignmentState.CLOSED:
             raise RuntimeError("native AI assignment is closed")
         validate_assignment_ownership(self.controlled_entity_uuids, entities)
+        if self._state is AIAssignmentState.CREATED:
+            open_assignment_knowledge(self._knowledge, self._knowledge_key, self.controlled_entity_uuids)
         self._state = AIAssignmentState.STARTED
 
     def close(self) -> None:

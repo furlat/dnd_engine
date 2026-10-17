@@ -1,14 +1,15 @@
 """The AI knowledge system: the one owner of every native AI assignment's knowledge.
 
-Bound at composition (`bind_ai_knowledge`), the system advances each open
-assignment's `AIKnowledge` to the EventQueue cursor at every batch dispatch. A
-decision or movement-guard read inside a batch first advances its own
-assignment the same way, over that batch's versions only.
+One system per session and event generation (`bind_ai_knowledge`). Knowledge has
+one advance, to the EventQueue cursor, run from two places: for every open
+assignment at each EventQueue batch dispatch (inside the operation), and for one
+assignment when its decision or movement guard reads it inside a batch that has
+not been dispatched yet (`assignment_knowledge`, the batch's versions only).
 
-Lifetime: an assignment's knowledge opens where the assignment is created, by
-folding the recorded history once (the cold fold), and is dropped when the
-assignment closes. A new event generation (`EventQueue.reset`) removes the batch
-callback; reads of the earlier generation's system are refused.
+Lifetime: an assignment's knowledge opens when the assignment starts, by folding
+the recorded history once (the cold fold), and is dropped when it closes.
+`EventQueue.reset` removes the batch callback; reads of an earlier event
+generation's system are refused.
 """
 
 from collections.abc import Sequence
@@ -30,10 +31,10 @@ class AIKnowledgeSystem:
         """Batch dispatch: advance every open assignment to the cursor."""
         del events
         for knowledge in self.knowledge.values():
-            advance_knowledge(knowledge)
+            _advance(knowledge)
 
 
-def advance_knowledge(knowledge: AIKnowledge) -> None:
+def _advance(knowledge: AIKnowledge) -> None:
     """Fold the recorded versions after this knowledge's cursor (the one advance)."""
     knowledge.consume((index, event, None) for index, event in EventQueue.iter_events_since(knowledge.source_cursor))
 
@@ -54,10 +55,8 @@ def unbind_ai_knowledge(system: AIKnowledgeSystem) -> None:
 def open_assignment_knowledge(system: AIKnowledgeSystem, key: UUID, controlled_entity_uuids: tuple[UUID, ...]) -> None:
     """Create one assignment's knowledge by the cold fold of the recorded history."""
     _require_generation(system)
-    if key in system.knowledge:
-        raise ValueError("AI assignment knowledge is already open")
     knowledge = AIKnowledge(controlled_entity_uuids)
-    advance_knowledge(knowledge)
+    _advance(knowledge)
     system.knowledge[key] = knowledge
 
 
@@ -67,10 +66,10 @@ def close_assignment_knowledge(system: AIKnowledgeSystem, key: UUID) -> None:
 
 
 def assignment_knowledge(system: AIKnowledgeSystem, key: UUID) -> AIKnowledge:
-    """One assignment's knowledge at the current cursor, for a decision or guard read."""
+    """One assignment's knowledge at the cursor, for a decision or movement-guard read."""
     _require_generation(system)
     knowledge = system.knowledge[key]
-    advance_knowledge(knowledge)
+    _advance(knowledge)
     return knowledge
 
 
@@ -81,7 +80,6 @@ def _require_generation(system: AIKnowledgeSystem) -> None:
 
 __all__ = [
     "AIKnowledgeSystem",
-    "advance_knowledge",
     "assignment_knowledge",
     "bind_ai_knowledge",
     "close_assignment_knowledge",

@@ -7,8 +7,6 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.ai.contracts.decision import PolicyIntent
-from dnd.ai.contracts.observation import SubjectiveWorldState
 from dnd.ai.instrumentation import AIInstrumentation
 from dnd.ai.policies.basic import (
     BASIC_POLICY_ID,
@@ -17,7 +15,7 @@ from dnd.ai.policies.basic import (
 )
 from dnd.ai.registry import PolicyRegistry
 from dnd.ai.runtime.assignment import NativeAIAssignment
-from dnd.ai.runtime.knowledge_system import AIKnowledgeSystem, open_assignment_knowledge
+from dnd.ai.runtime.knowledge_system import AIKnowledgeSystem
 from dnd.controller import (
     Controller,
     ControllerExecutionMode,
@@ -47,10 +45,6 @@ class NativeAIController(Controller):
     policy_id: str = Field(default=BASIC_POLICY_ID)
     maximum_decisions_per_turn: int | None = Field(default=None, ge=1)
 
-    _policy_registry: PolicyRegistry[
-        SubjectiveWorldState,
-        PolicyIntent,
-    ] | None = PrivateAttr(default=None)
     _instrumentation: AIInstrumentation | None = PrivateAttr(default=None)
     _assignment: NativeAIAssignment | None = PrivateAttr(default=None)
 
@@ -68,7 +62,7 @@ class NativeAIController(Controller):
         instrumentation: AIInstrumentation | None = None,
         maximum_decisions_per_turn: int | None = None,
     ) -> "NativeAIController":
-        """Create one side-owned native controller and open its assignment's knowledge."""
+        """Create one side-owned native controller; its assignment's knowledge lives in `knowledge`."""
         controller = cls(
             source_entity_uuid=source_entity_uuid,
             game_id=game_id,
@@ -77,21 +71,18 @@ class NativeAIController(Controller):
             policy_id=policy_id,
             maximum_decisions_per_turn=maximum_decisions_per_turn,
         )
-        controller._policy_registry = registry or _default_policy_registry()
         controller._instrumentation = instrumentation or AIInstrumentation()
-        assignment = NativeAIAssignment(
-            game_id=controller.game_id,
-            assignment_id=controller.assignment_id,
-            controlled_entity_uuids=controller.controlled_entity_uuids,
-            policy_id=controller.policy_id,
-            registry=controller._policy_registry,
+        controller._assignment = NativeAIAssignment(
+            game_id=game_id,
+            assignment_id=assignment_id,
+            controlled_entity_uuids=controlled_entity_uuids,
+            policy_id=policy_id,
+            registry=registry or _default_policy_registry(),
             instrumentation=controller._instrumentation,
             knowledge=knowledge,
             knowledge_key=controller.uuid,
-            maximum_decisions_per_turn=controller.maximum_decisions_per_turn,
+            maximum_decisions_per_turn=maximum_decisions_per_turn,
         )
-        open_assignment_knowledge(knowledge, controller.uuid, assignment.controlled_entity_uuids)
-        controller._assignment = assignment
         return controller
 
     @property
@@ -102,7 +93,6 @@ class NativeAIController(Controller):
     @property
     def instrumentation(self) -> AIInstrumentation:
         """Return core-owned instrumentation used by this assignment."""
-        self._require_assignment()
         assert self._instrumentation is not None
         return self._instrumentation
 
