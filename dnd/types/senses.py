@@ -255,12 +255,11 @@ def prepare_sensory_delta(expected_observer_uuid: UUID, previous: SensesSnapshot
 
 
 def apply_current_senses(previous: SensesSnapshot | None, event: SensoryDelta,
-                         prepared: PreparedSensoryDelta | None = None) -> SensesSnapshot:
+                         prepared: PreparedSensoryDelta) -> SensesSnapshot:
     """Advance containers owned exclusively by a current-state fold.
 
     Retained public snapshots must use reduce_senses_snapshot instead.
     """
-    prepared = prepared or prepare_sensory_delta(event.observer_uuid, previous, event)
     if event.initial:
         previous = SensesSnapshot(
             position=event.observer_position, visible=set(), seen=set(),

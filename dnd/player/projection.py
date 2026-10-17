@@ -1529,7 +1529,11 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
 
 @dataclass(slots=True)
 class ProjectionState:
-    """Private recorded aggregates and last-observed memory for one observer."""
+    """Private recorded aggregates and last-observed memory for one observer.
+
+    `remembered` is the audience's one fold: actors, world, senses, the last
+    published HUD and the admitted content its client holds.
+    """
 
     world: PresentationTarget
     actors: dict[UUID, ActorState]
@@ -1567,6 +1571,8 @@ def project_after_values(state: ProjectionState, hud: PlayerHUDSnapshot | None,
     public_logs = tuple(replace(row, encounter_log_index=state.next_log_append + index,
         operation_end_cursor=boundary(row.operation_end_cursor)) for index, row in enumerate(appends))
     state.next_log_append += len(public_logs)
+    if public_hud is not None:
+        state.remembered.hud_snapshot = public_hud
     return public_hud, public_logs
 
 

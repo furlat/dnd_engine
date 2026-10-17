@@ -11,12 +11,10 @@ from pydantic import TypeAdapter, ValidationError
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventPhase, EventType, SpatialChangeEvent, SpatialChangeType
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
-from dnd.player.audience import begin_audience_composition
 from dnd.player.capture import CompletedLineage
 from dnd.player.facts import PlayerLineage, PlayerSequence, PlayerUpdate, TileFieldUpdate
 from dnd.player.projection import begin_projection, project_lineage
-from dnd.player.reduction import (apply_current_operation, decode_player_sequence,
-    encode_player_sequence, prepare_current_operation, reduce_initialization,
+from dnd.player.reduction import (decode_player_sequence, encode_player_sequence, reduce_initialization,
     reduce_lineage, reduce_operation, stage_lineage)
 from dnd.types.materials import Material, TileSurface
 from dnd.types.residues import TileResidueState
@@ -137,7 +135,7 @@ def test_hidden_tile_changes_remain_private_until_discovery_and_identity_replace
     assert after.tiles[(1, 0)] == replacement and state.tiles[(1, 0)] == old
 
 
-def test_owned_preflight_checks_tile_bases_in_event_order_without_staging_future_values():
+def test_client_fold_checks_tile_bases_in_event_order_without_staging_future_values():
     start = initial((), ((1, 0),), {})
     projection, public = begin_projection(start)
     before = reduce_initialization(public)
@@ -150,8 +148,6 @@ def test_owned_preflight_checks_tile_bases_in_event_order_without_staging_future
     invalid = update.model_copy(update={'lineages': (replace(packet, world_updates=(invalid_world,)),)})
     retained = deepcopy(before)
     with pytest.raises(ValueError, match='already known tile'):
-        prepare_current_operation(before, invalid, log_count=0)
-    with pytest.raises(ValueError, match='already known tile'):
         reduce_operation(before, invalid)
     assert before == retained
 
@@ -163,16 +159,13 @@ def test_owned_preflight_checks_tile_bases_in_event_order_without_staging_future
         world_updates=(replace(packet.world_updates[0], tiles=(tile,), tile_changes=()),))
     patch = replace(later, world_updates=(replace(later.world_updates[0], tiles=(), tile_changes=(missing,)),))
     valid = update.model_copy(update={'lineages': (introduction, patch)})
-    prepared = prepare_current_operation(before, valid, log_count=0)
-    actual = deepcopy(before)
-    apply_current_operation(actual, valid, prepared, begin_audience_composition(actual.perception, actual.observer_uuid))
-    assert actual == reduce_operation(before, valid)
+    actual = reduce_operation(before, valid)
     assert actual.tiles[(99, 99)].resolved_light is LightLevel.DARKNESS
     invalid = update.model_copy(update={'lineages': (
         replace(packet, world_updates=(replace(packet.world_updates[0], tiles=(), tile_changes=(missing,)),)),
         replace(later, world_updates=(replace(later.world_updates[0], tiles=(tile,), tile_changes=()),)))})
     with pytest.raises(ValueError, match='already known tile'):
-        prepare_current_operation(before, invalid, log_count=0)
+        reduce_operation(before, invalid)
     assert before == retained
 
 
