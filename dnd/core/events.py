@@ -1692,12 +1692,12 @@ class EventQueue:
         cls,
         callback: Callable[[Sequence['Event']], None],
     ) -> None:
-        """Add a passive callback that receives one completed causal batch.
+        """Add a callback that receives one completed causal batch.
 
         Events registered outside an explicit batch are delivered as a
         one-event sequence. Nested action applications share the outer action's
         batch, preserving authoritative storage order across reactions and
-        child actions.
+        child actions. A callback's error propagates to the dispatching scope.
 
         Args:
             callback: Passive observer invoked after the batch boundary.
@@ -1816,18 +1816,13 @@ class EventQueue:
 
     @classmethod
     def _dispatch_event_batch(cls, events: Sequence['Event']) -> None:
-        """Notify passive batch observers without affecting engine execution."""
+        """Notify batch observers; an observer's error is fatal and propagates."""
         timing = action_timing_enabled()
         total_started = time.perf_counter() if timing else 0.0
         for callback in list(cls._on_event_batch_callbacks):
             callback_started = time.perf_counter() if timing else 0.0
             try:
                 callback(events)
-            except Exception:
-                logger.exception(
-                    "Passive event-batch observer %s failed",
-                    cls._timing_callback_name(callback),
-                )
             finally:
                 if timing:
                     callback_name = cls._timing_callback_name(callback)
