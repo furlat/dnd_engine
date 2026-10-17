@@ -1276,7 +1276,7 @@ def test_move_discovery_uses_cached_senses_path_costs(
     def reject_path_rescan(*_args: Any, **_kwargs: Any) -> int:
         raise AssertionError("movement discovery should use cached path costs")
 
-    monkeypatch.setattr(Entity, "_movement_path_cost_feet", reject_path_rescan)
+    monkeypatch.setattr(Entity, "movement_path_cost_feet", reject_path_rescan)
 
     available = actor.get_available_actions()
     move_info = next(
@@ -1319,7 +1319,7 @@ def test_weighted_move_discovery_uses_cached_senses_path_costs(
     def reject_path_rescan(*_args: Any, **_kwargs: Any) -> int:
         raise AssertionError("weighted movement discovery should use cached path costs")
 
-    monkeypatch.setattr(Entity, "_movement_path_cost_feet", reject_path_rescan)
+    monkeypatch.setattr(Entity, "movement_path_cost_feet", reject_path_rescan)
 
     available = actor.get_available_actions()
     move_info = next(

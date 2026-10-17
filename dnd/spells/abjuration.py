@@ -13,7 +13,7 @@ from dnd.spells.spell_utils import (apply_concentrating_zone, living_recipients_
 from functools import partial
 from types import MappingProxyType
 from typing import Any, ClassVar, Dict, Literal, Optional, List, Set, Tuple
-from uuid import UUID, uuid4
+from uuid import UUID
 from dnd.core.base_block import PreparedConditionRemovals
 from dnd.core.creature_types import CreatureType
 from dnd.conditions import Concentrating, prepare_control_removals, Blinded
@@ -54,8 +54,8 @@ from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.effect_types import EffectOriginKind
-from dnd.core.action_types import ActionSelection, ActionVariantFacet
-from dnd.types.discovery import ActorScan
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.types.event_facts import GroupEntryKind, HandlerGroupDispatch
 from dnd.core.events import Damage, Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, ForcedMovementEvent, PortalTransferEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
 from dnd.types.character_progression import OriginCapability
@@ -3442,13 +3442,13 @@ class GlyphOfWarding(SpellAction):
     def has_authored_damage(self) -> bool:
         return self.payload in ("acid", "cold", "fire", "lightning", "thunder")
 
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.payload,label=self.payload.title()))
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=payload, label=payload.title()),)
+                     for payload in ("acid","cold","fire","lightning","thunder","sleep","detonation"))
 
-    def get_discovery_variants(self,entity: Any):
-        return [variant.model_copy(update={"uuid":uuid4(),"payload":payload})
-            for variant in super().get_discovery_variants(entity)
-            for payload in ("acid","cold","fire","lightning","thunder","sleep","detonation")]
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "payload": selection_facet(selection, "form")}
 
     def get_valid_positions(self):
         return spell_valid_positions(self)

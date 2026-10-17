@@ -1117,7 +1117,7 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
             evaluator=entity_action_economy_cost_evaluator,
         )],
     )
-    attack.apply(parent_event=event)
+    entity.perform(attack, attack.current_selection(), parent_event=event)
 
     return event
 

@@ -3,7 +3,7 @@ import pytest
 from uuid import uuid4
 
 from dnd.actions import SpellEvent
-from dnd.actions_functional import execute_action
+from dnd.actions_functional import execute_available_action
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import ConditionApplicationEvent
@@ -126,6 +126,6 @@ def test_continual_flame_discovery_includes_own_gear_without_exposing_another_in
     identities = {target.target_uuid for target in action.valid_targets}
     assert own.uuid in identities and floor.uuid in identities and hidden.uuid not in identities
     selected = next(target for target in action.valid_targets if target.target_uuid == own.uuid)
-    result = execute_action(caster, action.template_name, selected)
+    result = execute_available_action(caster, action, selected)
     assert result is not None and not result.canceled
     assert own.to_item_presentation_state().item_effects

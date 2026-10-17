@@ -464,15 +464,10 @@ def _build_action_capabilities(
     """
     total_started = time.perf_counter()
     started = time.perf_counter()
-    registered_variants = (
-        registered_actions
-        if registered_actions is not None
-        else tuple(
-            variant
-            for template in actor.registered_actions
-            for variant in template.get_discovery_variants(actor)
-        )
-    )
+    if registered_actions is None:
+        scan = actor.action_scan(subjective=True)
+        registered_actions = tuple(form for template in actor.registered_actions for form in template.discovery_forms(scan))
+    registered_variants = registered_actions
     registered_sources = [(variant, None) for variant in registered_variants]
     _record_timing(record_timing, "build_capabilities.registered_variants_ms", started)
 

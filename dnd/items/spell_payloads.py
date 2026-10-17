@@ -5,7 +5,7 @@ spell school. Payload power and source are retained data, independent of holder.
 """
 
 from collections.abc import Mapping
-from typing import Literal, Optional
+from typing import Literal, Optional, Tuple
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
@@ -18,7 +18,7 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
 )
 from dnd.blocks.base_item import BaseItem, PreparedItemRetirement, UsableItem
-from dnd.core.action_types import ActionSelection, ActionVariantFacet
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
 from dnd.core.aoe import Sphere, objective_footprint
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock, PreparedConditionApplication
@@ -52,7 +52,7 @@ from dnd.spatial.environmental_conditions import IceSurface
 from dnd.spatial.ignition import apply_elemental_surface_contacts
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.spells.spell_utils import placement_error
-from dnd.types.discovery import ActorScan
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.types.physical_access import PhysicalAccess
 
 
@@ -422,34 +422,15 @@ class TouchDelayedFireball(BaseAction):
     def get_range(self):
         return Range(type=RangeType.RANGE, normal=40)
 
-    def get_discovery_variants(self, entity):
-        return [
-            self.model_copy(
-                update={"throw_after_touch": False, "target_type": TargetType.SELF}
-            ),
-            self.model_copy(
-                update={
-                    "throw_after_touch": True,
-                    "target_type": TargetType.POSITION_LOS,
-                }
-            ),
-        ]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return ((ActionVariantFacet(key="form", value="pickup", label="Touch and pick up"),),
+                (ActionVariantFacet(key="form", value="throw", label="Touch and throw"),))
 
-    def get_variant_facets(self):
-        return (
-            ActionVariantFacet(
-                key="form",
-                value="throw" if self.throw_after_touch else "pickup",
-                label="Touch and throw"
-                if self.throw_after_touch
-                else "Touch and pick up",
-            ),
-        )
-
-    def get_discovery_template_name(self):
-        return super().get_discovery_template_name() + (
-            "__throw" if self.throw_after_touch else "__pickup"
-        )
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        throw = selection_facet(selection, "form") == "throw"
+        return {**super()._selection_overrides(selection), "throw_after_touch": throw,
+                "target_type": TargetType.POSITION_LOS if throw else TargetType.SELF}
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         actor = Entity.get(self.source_entity_uuid)

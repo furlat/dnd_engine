@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 from dnd.types.world import MovementMode
 from dnd.actions import SpellAction
 from dnd.actions_functional import (
-    execute_action,
+    execute_available_action,
     execute_by_index,
     execute_use_action,
     get_available_actions,
@@ -522,11 +522,7 @@ def test_permanent_weapon_coat_discovery_damage_and_cleanup() -> None:
     )
     hp_before = get_hp(target)
     with fixed_dice_faces(10, 4, 3):
-        attack_result = execute_action(
-            caster,
-            attack.template_name,
-            target_row,
-        )
+        attack_result = execute_available_action(caster, attack, target_row)
     remove_attack_modifier(caster, modifier_uuid)
 
     assert attack_result is not None and not attack_result.canceled

@@ -3,7 +3,7 @@
 Contains: Divine Smite (per-level handlers that add radiant damage on melee hit).
 """
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from uuid import UUID
 
 from dnd.core.aoe import AoEShape, Sphere
@@ -33,7 +33,6 @@ from dnd.core.content.registration import get_content_declaration
 from dnd.entity import Entity
 
 from typing import Literal
-from uuid import uuid4
 from pydantic import Field, PrivateAttr
 from dnd.actions import (
     entity_action_economy_cost_applier,
@@ -45,8 +44,8 @@ from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock, PreparedConditionRemovals
 from dnd.core.base_conditions import BaseCondition, Duration, ConditionApplicationEvent
 from dnd.core.condition_types import ConditionTag, DurationType
-from dnd.core.action_types import ActionSelection, ActionVariantFacet, EntityTargetPerception
-from dnd.types.discovery import ActorScan
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, EntityTargetPerception, selection_facet
+from dnd.types.discovery import ActorScan, Relationship, ScanRecord
 from dnd.types.physical_access import PhysicalAccess
 from dnd.core.events import Range, RangeType, SpatialChangeEvent
 from dnd.core.modifiers import (
@@ -570,19 +569,12 @@ class LayOnHands(BaseAction):
     def get_range(self):
         return Range(type=RangeType.REACH, normal=5)
 
-    def get_discovery_variants(self, actor):
-        return [
-            self.model_copy(update={"uuid": uuid4(), "mode": mode})
-            for mode in ("lesser", "greater", "cure")
-        ]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=mode, label=mode.title()),) for mode in ("lesser", "greater", "cure"))
 
-    def get_variant_facets(self):
-        return (
-            ActionVariantFacet(key="form", value=self.mode, label=self.mode.title()),
-        )
-
-    def get_discovery_template_name(self):
-        return f"Lay on Hands [{self.mode}]"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "mode": selection_facet(selection, "form")}
 
     def get_discovery_display_name(self):
         return f"Lay on Hands ({self.mode.title()})"
@@ -1252,22 +1244,15 @@ class SacredWeapon(BaseAction):
         )
     )
 
-    def get_discovery_variants(self, actor):
-        return [
-            self.model_copy(update={"uuid": uuid4(), "weapon_slot": slot})
-            for slot in WeaponSlot
-            if actor.equipment.get_weapon(slot) is not None
-        ]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """Each slot holding a weapon."""
+        actor = Entity.get(self.source_entity_uuid)
+        return tuple((ActionVariantFacet(key="form", value=slot.value, label=slot.value),)
+                     for slot in WeaponSlot if actor is not None and actor.equipment.get_weapon(slot) is not None)
 
-    def get_discovery_template_name(self):
-        return f"Sacred Weapon [{self.weapon_slot.value}]"
-
-    def get_variant_facets(self):
-        return (
-            ActionVariantFacet(
-                key="form", value=self.weapon_slot.value, label=self.weapon_slot.value
-            ),
-        )
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "weapon_slot": WeaponSlot(selection_facet(selection, "form"))}
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         actor = Entity.get(self.source_entity_uuid)
@@ -1434,28 +1419,24 @@ class CleansingTouch(BaseAction):
     def get_range(self):
         return Range(type=RangeType.REACH, normal=5)
 
-    def get_discovery_variants(self, actor):
-        return [
-            self.model_copy(update={"uuid": uuid4(), "condition_uuid": condition.uuid})
-            for target in Entity.get_all_entities()
-            if target.uuid == actor.uuid or actor.is_ally(target)
-            for condition in cleansing_candidates(target)
-        ]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """The supported spells on the actor and on the perceived allies within touch (plan §14.4).
 
-    def get_discovery_template_name(self):
-        return f"Cleansing Touch [{self.condition_uuid}]"
+        Never a whole-world scan: allies the actor does not perceive are not listed.
+        """
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return ()
+        recipients = [actor, *(ally for identity, record in scan.creatures.items()
+                               if record.relationship is Relationship.ALLY
+                               and max(abs(record.position[0] - scan.position[0]), abs(record.position[1] - scan.position[1])) <= 1
+                               and (ally := Entity.get(identity)) is not None)]
+        return tuple((ActionVariantFacet(key="form", value=str(condition.uuid), label=condition.get_display_name()),)
+                     for recipient in recipients for condition in cleansing_candidates(recipient))
 
-    def get_variant_facets(self):
-        condition = BaseCondition.get(self.condition_uuid)
-        return (
-            ActionVariantFacet(
-                key="form",
-                value=str(self.condition_uuid),
-                label=condition.get_display_name()
-                if condition is not None
-                else "Absent spell",
-            ),
-        )
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "condition_uuid": UUID(selection_facet(selection, "form"))}
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None

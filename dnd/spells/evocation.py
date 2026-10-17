@@ -12,7 +12,6 @@ from dnd.spells.spell_utils import (spell_condition_profile, condition_damage, t
     selected_cast_level, target_count_error)
 
 from typing import cast
-from uuid import uuid4
 from dnd.actions import AttackEvent
 from dnd.core.elevation import support_distance_feet
 from dnd.types.actor import ConditionState
@@ -22,7 +21,7 @@ from typing import Any, ClassVar, FrozenSet, Literal, Optional, List, Set, Tuple
 from uuid import UUID
 
 from dnd.types.physical_access import PhysicalAccess
-from dnd.types.discovery import ActorScan, Relationship
+from dnd.types.discovery import ActorScan, Relationship, ScanRecord
 from dnd.items.spell_payloads import SpellPayloadItem, SpellPayloadLifetime, build_spell_payload, payload_blast, commit_payload_cast
 from dnd.core.gridmap import PreparedObjectPlacement
 from dnd.spells.wall_fields import BladeBarrierZone, WallDamageSpec, selection_field_geometry, selection_wall_support_error
@@ -39,7 +38,7 @@ from dnd.conditions import prepare_control_removals
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
 
-from dnd.core.action_types import ActionVariantFacet
+from dnd.core.action_types import ActionVariantFacet, selection_facet
 from dnd.core.base_actions import (
     ActionCategory,
     lowest_hp_first,
@@ -3747,7 +3746,7 @@ class TrueStrike(SpellAction):
             additional_damages=additional, costs=[], template=False)
         bind_runtime_action_before_admission(attack, current_binding=attack.behavior_binding,
             runtime_owner_uuid=caster.uuid)
-        attack_result = attack.apply(parent_event=effect_event)
+        attack_result = caster.perform(attack, attack.current_selection(), parent_event=effect_event)
 
         return effect_event.with_updates(
             status_message=f"{self.name}: {attack_result.status_message}" if attack_result else f"{self.name} failed"
@@ -4888,16 +4887,12 @@ class FireShield(SpellAction):
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
     shield_kind: Literal["warm", "chill"] = "warm"
 
-    def get_discovery_variants(self, entity: Any) -> list[BaseAction]:
-        return [variant.model_copy(deep=True, update={"uuid":uuid4(), "shield_kind":kind,
-            "registered_template_uuid":self.registered_template_uuid or self.uuid})
-            for variant in super().get_discovery_variants(entity) for kind in ("warm","chill")]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=kind, label=kind.title()),) for kind in ("warm", "chill"))
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        return (ActionVariantFacet(key="form", value=self.shield_kind, label=self.shield_kind.title()),)
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__{self.shield_kind}"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "shield_kind": selection_facet(selection, "form")}
 
     def get_discovery_display_name(self) -> str:
         return f"{super().get_discovery_display_name()} ({self.shield_kind})"
@@ -5005,18 +5000,14 @@ class SorcerousBurst(SpellAction):
     def performs_attack(self) -> bool:
         return True
 
-    def get_discovery_variants(self, entity: Any) -> list[BaseAction]:
-        return [variant.model_copy(deep=True, update={"uuid":uuid4(), "element":element,
-            "spell_damage_type":DamageType(element.title()),
-            "registered_template_uuid":self.registered_template_uuid or self.uuid})
-            for variant in super().get_discovery_variants(entity)
-            for element in ('acid','cold','fire','lightning','poison','psychic','thunder')]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="damage_type", value=element, label=element.title()),)
+                     for element in ('acid','cold','fire','lightning','poison','psychic','thunder'))
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet,...]:
-        return (ActionVariantFacet(key="damage_type",value=self.element,label=self.element.title()),)
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__{self.element}"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        element = selection_facet(selection, "damage_type")
+        return {**super()._selection_overrides(selection), "element": element, "spell_damage_type": DamageType(element.title())}
 
     def model_post_init(self, context: Any) -> None:
         super().model_post_init(context)
@@ -5533,16 +5524,18 @@ class ChromaticOrb(SpellAction):
         if self.target_mode=="ground":
             self.target_type=TargetType.POSITION_LOS
 
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="damage_type",value=self.element,label=self.element.title()),
-            ActionVariantFacet(key="side",value=self.target_mode,label=self.target_mode.title()))
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="damage_type", value=element, label=element.title()),
+                      ActionVariantFacet(key="side", value=mode, label=mode.title()))
+                     for element in ("acid","cold","fire","lightning","poison","thunder")
+                     for mode in (("creature",) if element == "thunder" else ("creature", "ground")))
 
-    def get_discovery_variants(self,entity: Any):
-        return [variant.model_copy(update={"uuid":uuid4(),"element":element,"spell_damage_type":DamageType[element.upper()],
-            "target_mode":mode,"target_type":TargetType.POSITION_LOS if mode=="ground" else TargetType.ENTITY})
-            for variant in super().get_discovery_variants(entity)
-            for element in ("acid","cold","fire","lightning","poison","thunder")
-            for mode in (("creature",) if element=="thunder" else ("creature","ground"))]
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        element, mode = selection_facet(selection, "damage_type"), selection_facet(selection, "side")
+        return {**super()._selection_overrides(selection), "element": element,
+                "spell_damage_type": DamageType[element.upper()], "target_mode": mode,
+                "target_type": TargetType.POSITION_LOS if mode == "ground" else TargetType.ENTITY}
 
     def get_valid_positions(self):
         return spell_valid_positions(self)
@@ -5640,13 +5633,14 @@ class AcidArrow(SpellAction):
         if self.target_mode=="ground":
             self.target_type=TargetType.POSITION_LOS
 
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="side",value=self.target_mode,label=self.target_mode.title()))
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="side", value=mode, label=mode.title()),) for mode in ("creature", "ground"))
 
-    def get_discovery_variants(self,entity: Any):
-        return [variant.model_copy(update={"uuid":uuid4(),"target_mode":mode,
-            "target_type":TargetType.POSITION_LOS if mode=="ground" else TargetType.ENTITY})
-            for variant in super().get_discovery_variants(entity) for mode in ("creature","ground")]
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        mode = selection_facet(selection, "side")
+        return {**super()._selection_overrides(selection), "target_mode": mode,
+                "target_type": TargetType.POSITION_LOS if mode == "ground" else TargetType.ENTITY}
 
     def get_valid_positions(self):
         return spell_valid_positions(self)
@@ -6112,14 +6106,6 @@ class ArcaneSwordStrike(SpellAction):
             return None
         return self.spell_attack_outcome_profile(actor,dice_count=3,die_size=10,damage_type=DamageType.FORCE)
 
-    def selection_preview_error(self):
-        error=super().selection_preview_error()
-        if error:return error
-        error=retained_sword_anchor_error(self.source_entity_uuid, self.grant_condition_uuid, self.end_position)
-        if error:return error
-        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        return None if target is not None and self.get_target_distance(target.position)<=5 else "Victim is beyond the sword's reach"
-
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """The retained sword can reach the anchor, and a perceived victim is within 5ft of it."""
         anchor = selection.positions[0] if selection.positions else None
@@ -6210,14 +6196,6 @@ class ArcaneSword(SpellAction):
         event=super()._create_declaration_event(parent_event,use_register)
         return event.with_updates(effect_source_position=self.end_position) if event is not None else None
 
-    def selection_preview_error(self):
-        error=super().selection_preview_error()
-        if error:return error
-        error=new_sword_anchor_error(self.source_entity_uuid, self.end_position)
-        if error:return error
-        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        return None if target is not None and self.get_target_distance(target.position)<=5 else "Victim is beyond the sword's reach"
-
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """A new sword anchor in reach, with the victim within 5ft of it."""
         anchor = selection.positions[0] if selection.positions else None
@@ -6264,13 +6242,15 @@ class FreezingSphere(SpellAction):
     def get_range(self):
         return Range(type=RangeType.REACH,normal=5) if self.delivery=="portable" else super().get_range()
 
-    def get_discovery_template_name(self):return super().get_discovery_template_name()+"__"+self.delivery
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.delivery,label=self.delivery.title()))
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=mode, label=mode.title()),) for mode in ("launch", "portable"))
 
-    def get_discovery_variants(self,entity):
-        return [slot.model_copy(update={"delivery":mode,"target_type":TargetType.ENTITY if mode=="portable" else TargetType.POSITION_AOE})
-            for slot in super().get_discovery_variants(entity) for mode in ("launch","portable")]
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        mode = selection_facet(selection, "form")
+        return {**super()._selection_overrides(selection), "delivery": mode,
+                "target_type": TargetType.ENTITY if mode == "portable" else TargetType.POSITION_AOE}
+
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """A willing living recipient for the portable sphere, otherwise a visible launch point."""

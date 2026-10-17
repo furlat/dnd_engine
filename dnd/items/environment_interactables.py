@@ -1,6 +1,7 @@
 """Runtime actions and item types for interactive environment objects."""
 
 import random
+from dataclasses import replace
 from typing import Optional, List, cast as type_cast
 from uuid import UUID, uuid4
 from pydantic import Field
@@ -347,8 +348,12 @@ class ToggleLeverAction(BaseAction):
             actions = target.get_use_actions(self.source_entity_uuid)
             if not actions:
                 return effect.cancel(status_message="Linked item cannot change state")
-            action = actions[0].instantiate() if actions[0].template else actions[0]
-            result = action.apply_from_control(lever.uuid, parent_event=effect)
+            actor = Entity.get(self.source_entity_uuid)
+            if actor is None:
+                return effect.cancel(status_message="Lever user is absent")
+            # The linked item's action, reached through this lever (its selection's controller).
+            result = actor.perform(actions[0], replace(actions[0].current_selection(), controller_uuid=lever.uuid),
+                                   parent_event=effect)
             if result is None or result.canceled or control_value(target) != desired_value:
                 return effect.cancel(status_message="Linked item did not change state")
         if lever.is_active:
@@ -494,9 +499,6 @@ class LootItemAction(BaseAction):
     target_type: TargetType = TargetType.SELF
     costs: List[Cost] = Field(default_factory=list)
     loot_item_uuid: UUID
-
-    def get_discovery_template_name(self) -> str:
-        return f"Loot__child_{self.loot_item_uuid}"
 
     def describe_discovery(self) -> ActionDiscoveryDescription:
         return ActionDiscoveryDescription(loot_item_uuid=self.loot_item_uuid)

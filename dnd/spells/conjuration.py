@@ -8,7 +8,7 @@ from dnd.conditions import Restrained
 from dnd.spells.hit_effects import AttackBackedSpell
 from dnd.types.physical_access import PhysicalAccess
 from typing import Any, ClassVar, Literal, Optional, List, Set, Tuple, cast as type_cast
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
@@ -36,8 +36,8 @@ from dnd.core.base_actions import (
     TopologyEffectProfile,
 )
 from dnd.core.aoe import Sphere
-from dnd.core.action_types import ActionSelection, ActionVariantFacet, EntityDestinationSelection
-from dnd.types.discovery import ActorScan
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, EntityDestinationSelection, selection_facet
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.core.positioning import PositionPublicationError
 from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent, Duration
 from dnd.core.content.descriptors import (
@@ -400,10 +400,6 @@ class AcidSplash(SpellAction):
             targets.append(self.target_entity_uuid)
         targets.extend(self.extra_target_entity_uuids)
         return targets[:2]
-
-    def selection_preview_error(self) -> str | None:
-        return _acid_splash_spread_error([target.position for identity in self.get_all_targets()
-                                          if (target := Entity.get(identity)) is not None])
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """At most two seen targets in range, within 5ft of each other."""
@@ -2322,18 +2318,14 @@ class SpiritGuardians(SpellAction):
         self.spell_damage_type = self.damage_type
         super().model_post_init(__context)
 
-    def get_discovery_variants(self, entity: Any) -> list[BaseAction]:
-        return [variant.model_copy(deep=True, update={"uuid": uuid4(), "damage_type": kind,
-            "spell_damage_type": kind, "registered_template_uuid": self.registered_template_uuid or self.uuid})
-            for variant in super().get_discovery_variants(entity)
-            for kind in (DamageType.RADIANT, DamageType.NECROTIC)]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="damage_type", value=kind.value.lower(), label=kind.value),)
+                     for kind in (DamageType.RADIANT, DamageType.NECROTIC))
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        return (ActionVariantFacet(key="damage_type", value=self.damage_type.value.lower(),
-                                   label=self.damage_type.value),)
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__{self.damage_type.value.lower()}"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        kind = DamageType(selection_facet(selection, "damage_type").title())
+        return {**super()._selection_overrides(selection), "damage_type": kind, "spell_damage_type": kind}
 
     def get_discovery_display_name(self) -> str:
         return f"{super().get_discovery_display_name()} ({self.damage_type.value.lower()})"
@@ -4070,9 +4062,6 @@ class DimensionDoor(SpellAction):
         if not (x0 <= x <= x1 and y0 <= y <= y1):
             return "Destination lies outside this map"
         return self.target_position_error(destination)
-
-    def selection_preview_error(self) -> str | None:
-        return self._selection_error(self.current_selection())
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         return self._selection_error(selection)

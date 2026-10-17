@@ -1,12 +1,12 @@
 """Native attack components and caster-owned quarry state for Mark and Hex."""
-from typing import Callable, ClassVar, Literal
+from typing import Callable, ClassVar, Literal, Optional, Tuple
 from uuid import UUID, uuid4
 
 from pydantic import Field, PrivateAttr
 
 from dnd.actions import Attack, AttackEvent, SpellAction, SpellEvent, create_weapon_attack_declaration_event, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, grant_weapon_attack_batch, weapon_attack_error
 from dnd.conditions import ConcentrationActionMarker
-from dnd.core.action_types import ActionSelection, ActionVariantFacet
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
 from dnd.core.base_block import BaseBlock, PreparedConditionApplication, PreparedConditionRemovals
 from dnd.core.action_types import RestrictedActionKind
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType, spell_slot_cost_type
@@ -20,7 +20,7 @@ from dnd.core.life_types import LifeState
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.spells.spell_utils import seen_recipients_error
-from dnd.types.discovery import ActorScan
+from dnd.types.discovery import ActorScan, ScanRecord
 
 
 def spell_component_allowed(owner: BaseCondition, target_uuid: UUID) -> bool:
@@ -215,14 +215,13 @@ class AttackBackedSpell(SpellAction):
             Cost(name="Hit spell slot",cost_type=spell_slot_cost_type(self.cast_at_level),cost=1,
                 evaluator=entity_action_economy_cost_evaluator)]
 
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.weapon_slot.value,
-            label=self.weapon_slot.value.replace('_',' ').title()))
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=slot.value, label=slot.value.replace('_',' ').title()),)
+                     for slot in ((WeaponSlot.MELEE_MAIN, WeaponSlot.RANGED_MAIN) if self.ranged_allowed else (WeaponSlot.MELEE_MAIN,)))
 
-    def get_discovery_variants(self,entity):
-        return [variant.model_copy(update={"uuid":uuid4(),"weapon_slot":slot})
-            for variant in super().get_discovery_variants(entity)
-            for slot in ((WeaponSlot.MELEE_MAIN,WeaponSlot.RANGED_MAIN) if self.ranged_allowed else (WeaponSlot.MELEE_MAIN,))]
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "weapon_slot": WeaponSlot(selection_facet(selection, "form"))}
 
     def get_range(self) -> Range:
         caster=Entity.get(self.source_entity_uuid)

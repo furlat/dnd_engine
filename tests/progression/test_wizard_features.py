@@ -48,7 +48,7 @@ def cast(actor, spell_id, target=None, *, rank=1, free=False, **kw):
     )
     variant = next(
         variant
-        for variant in template.get_discovery_variants(actor)
+        for variant in template.discovery_forms(actor.action_scan(subjective=True))
         if variant.cast_at_level == rank
         and (variant.cast_cost_grant_id is not None) == free
     )

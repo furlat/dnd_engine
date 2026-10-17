@@ -15,13 +15,12 @@ from dnd.core.modifiers import NumericalModifier, ContextualAdvantageModifier
 from dnd.core.values import ModifiableValue
 from dnd.conditions import prepare_control_removals
 from dnd.spells.hit_effects import QuarrySustain, ReapplyQuarry, install_hit_rider
-from dnd.core.action_types import ActionSelection, ActionVariantFacet
-from dnd.types.discovery import ActorScan
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.core.base_actions import Cost
 from dnd.actions import entity_action_economy_cost_evaluator
 from dnd.types.abilities import AbilityName
 from dnd.spells.content_metadata import srd_action_identity
-from uuid import uuid4
 
 from pydantic import Field, PrivateAttr
 
@@ -1814,11 +1813,8 @@ class CommandFleeEffect(CommandNextTurnEffect):
                     ),
                 )
                 path = list(target.senses.paths[best_position])
-                Move(
-                    source_entity_uuid=target.uuid,
-                    end_position=best_position,
-                    path=path,
-                ).apply(parent_event=event)
+                flight = Move(source_entity_uuid=target.uuid, end_position=best_position, path=path)
+                target.perform(flight, flight.current_selection(), parent_event=event)
 
         self._spend_commanded_turn(target)
 
@@ -2487,13 +2483,13 @@ class Hex(SpellAction):
     costs: list[Cost] = Field(default_factory=lambda:[Cost(name="Hex",cost_type="bonus_actions",cost=1,
         evaluator=entity_action_economy_cost_evaluator)])
 
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="ability",value=self.ability,label=self.ability.title()))
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="ability", value=ability, label=ability.title()),)
+                     for ability in ("strength","dexterity","constitution","intelligence","wisdom","charisma"))
 
-    def get_discovery_variants(self,entity: Any):
-        return [variant.model_copy(update={"uuid":uuid4(),"ability":ability})
-            for variant in super().get_discovery_variants(entity)
-            for ability in ("strength","dexterity","constitution","intelligence","wisdom","charisma")]
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "ability": selection_facet(selection, "ability")}
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         return self.single_recipient_error(scan, selection)

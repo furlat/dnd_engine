@@ -1,16 +1,16 @@
 """Three authored summon spells using native costs, selection and event dispatch."""
 
-from typing import cast
+from typing import Optional, Tuple, cast
 
 from pydantic import Field
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
-from dnd.core.action_types import ActionVariantFacet
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
 from dnd.core.creature_types import DamageType
-from dnd.core.base_actions import BaseAction, Cost, PositionDiscoveryContract, TargetType
+from dnd.core.base_actions import Cost, PositionDiscoveryContract, TargetType
 from dnd.core.events import EventPhase, EventQueue, Range, RangeType, SummonAdmissionEvent
-from dnd.entity import Entity
 from dnd.summoning.forms import available_forms, selected_form
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.types.summoning import SummonApplication, SummonFamily, SummonSelection
 
 
@@ -54,19 +54,14 @@ class SummonSpell(SpellAction):
             return "Summoning is not bound to this encounter"
         return None
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        form = next((form for form in available_forms(self.family, self.cast_at_level)
-                     if form.form_id == self.form_id), None)
-        return (ActionVariantFacet(key="form", value=self.form_id or "choose",
-                                  label=form.display_name if form else "Choose creature"),)
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """One choice per creature form open at the cast level."""
+        return tuple((ActionVariantFacet(key="form", value=form.form_id, label=form.display_name),)
+                     for form in available_forms(self.family, level if level is not None else self.cast_at_level))
 
-    def get_discovery_variants(self, entity: Entity) -> list[BaseAction]:
-        return [slot.model_copy(update={"form_id": form.form_id})
-            for slot in super().get_discovery_variants(entity)
-            for form in available_forms(self.family, cast(SpellAction, slot).cast_at_level)]
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__summon_{self.form_id or 'choose'}"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "form_id": selection_facet(selection, "form")}
 
     def get_discovery_display_name(self) -> str:
         form = next((form for form in available_forms(self.family, self.cast_at_level)
@@ -164,12 +159,13 @@ class SummonDragon(SummonSpell):
         elements=(DamageType.ACID,DamageType.COLD,DamageType.FIRE,DamageType.LIGHTNING,DamageType.POISON)
         if choice.breath_type not in elements or choice.shared_resistance not in elements:raise ValueError("Choose one of the five elemental types")
         return choice
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="damage_type",value=self.breath_type.value,label=self.breath_type.value+" Breath"),
-            ActionVariantFacet(key="resistance",value=self.shared_resistance.value,label=self.shared_resistance.value+" shared resistance"))
-    def get_discovery_variants(self,entity):
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """Each form, with an independently chosen Breath and shared resistance."""
         elements=(DamageType.ACID,DamageType.COLD,DamageType.FIRE,DamageType.LIGHTNING,DamageType.POISON)
-        return [variant.model_copy(update={"breath_type":breath,"shared_resistance":shared})
-            for variant in super().get_discovery_variants(entity) for breath in elements for shared in elements]
-    def get_discovery_template_name(self):
-        return f"{super().get_discovery_template_name()}__breath_{self.breath_type.value.lower()}__resist_{self.shared_resistance.value.lower()}"
+        return tuple((*form, ActionVariantFacet(key="damage_type", value=breath.value, label=breath.value+" Breath"),
+                      ActionVariantFacet(key="resistance", value=shared.value, label=shared.value+" shared resistance"))
+                     for form in super().facet_domain(scan, level, target) for breath in elements for shared in elements)
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "breath_type": DamageType(selection_facet(selection, "damage_type")),
+                "shared_resistance": DamageType(selection_facet(selection, "resistance"))}

@@ -154,7 +154,7 @@ def test_wight_multiattack_replaces_one_longsword_and_has_no_bow_replacement(gam
     equip(owner,'weapon.longsword',WeaponSlot.MELEE_MAIN)
     action=wight_melee_multiattack(owner.uuid)
     action.template=True
-    choice=next(variant for variant in action.get_discovery_variants(owner) if variant.use_attack_substitution)
+    choice=next(variant for variant in action.discovery_forms(owner.action_scan(subjective=True)) if variant.use_attack_substitution)
     with fixed_dice_faces(15,4,1,15,2): result=choice.instantiate(target_entity_uuid=target.uuid).apply()
     assert result and not result.canceled
     roots=[event for event in EventQueue.get_events_by_type(EventType.ATTACK) if event.phase is EventPhase.DECLARATION]
@@ -163,7 +163,7 @@ def test_wight_multiattack_replaces_one_longsword_and_has_no_bow_replacement(gam
     equip(owner,'weapon.longbow',WeaponSlot.RANGED_MAIN)
     ranged=MultiattackAction(source_entity_uuid=owner.uuid,attack_sequence=((WeaponSlot.RANGED_MAIN,2),),
         attack_replacement=action.attack_replacement)
-    assert not any(variant.use_attack_substitution for variant in ranged.get_discovery_variants(owner))
+    assert not any(variant.use_attack_substitution for variant in ranged.discovery_forms(owner.action_scan(subjective=True)))
 
 
 def test_odd_speed_haste_and_slow_do_not_depend_on_application_order(game):

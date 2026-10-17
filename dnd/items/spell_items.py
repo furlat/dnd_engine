@@ -141,22 +141,24 @@ class SpellGrantingItem(UsableItem):
                         self.scroll_cast_level,
                     )
                 )
-                action = template._create_variant(
-                    cast_at_level=cast_level,
-                    costs=[
-                        Cost(
-                            name="Use Item",
-                            cost_type="actions",
-                            cost=1,
-                            evaluator=entity_action_economy_cost_evaluator,
-                        ),
-                    ],
-                    source_item_uuid=self.uuid,
-                    source_item_presentation=source_item_presentation,
-                    source_entity_uuid=user_entity_uuid,
-                    template=True,
-                    charge_cost=template_charge_cost,
-                )
+                # The item pays: its use cost and charges replace the slot, at the item's level.
+                action = template.model_copy(update={
+                    "uuid": uuid4(),
+                    "cast_at_level": cast_level,
+                    "is_variant": True,
+                    "use_register": False,
+                    "alt_cost_type": None,
+                    "alt_extra_costs": [],
+                    "alt_skip_slot": False,
+                    "costs": [Cost(name="Use Item", cost_type="actions", cost=1,
+                                   evaluator=entity_action_economy_cost_evaluator)],
+                    "source_item_uuid": self.uuid,
+                    "source_item_presentation": source_item_presentation,
+                    "source_entity_uuid": user_entity_uuid,
+                    "template": True,
+                    "charge_cost": template_charge_cost,
+                    "registered_template_uuid": template.registered_template_uuid or template.uuid,
+                })
                 if action.behavior_binding is None:
                     self.bind_dynamic_use_action(action)
                 result.append(action)

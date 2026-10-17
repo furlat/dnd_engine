@@ -15,8 +15,8 @@ Level 18: Champion - Survivor (DEFERRED)
 
 from typing import Any, ClassVar, Dict
 from dnd.core.geometry import grid_distance_feet
-from dnd.core.action_types import ActionSelection, RestrictedActionKind
-from dnd.types.discovery import ActorScan
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, RestrictedActionKind, selection_facet
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.class_features import IndomitableReroll
 from dnd.core.condition_types import ConditionCategory, DurationType
@@ -1158,39 +1158,24 @@ class ExtraAttack(Attack):
     ], description="One earned attack credit, without another action payment.")
     discover_equipped_weapon_slots: bool = Field(default=False, description="Whether discovery expands this template over equipped slots.")
 
-    def get_discovery_variants(self, entity: Any) -> List[BaseAction]:
-        """Expand a structural family template over the current weapon set."""
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """A structural family template chooses among the current weapon set; a bound one has no choice."""
         if not self.discover_equipped_weapon_slots:
-            return super().get_discovery_variants(entity)
-        if not isinstance(entity, Entity):
-            return []
-        variants: List[Attack] = []
-        for slot in (
-            WeaponSlot.MELEE_MAIN,
-            WeaponSlot.MELEE_OFF,
-            WeaponSlot.RANGED_MAIN,
-            WeaponSlot.RANGED_OFF,
-        ):
-            weapon = entity.equipment._get_weapon_by_slot(slot)
-            if isinstance(weapon, Shield) or weapon is None and slot is not WeaponSlot.MELEE_MAIN:
-                continue
-            variants.append(
-                self.model_copy(
-                    deep=True,
-                    update={
-                        "uuid": uuid4(),
-                        "name": f"Extra Attack_{slot.value}",
-                        "weapon_slot": slot,
-                        "template": False,
-                        "use_register": False,
-                        "registered_template_uuid": (
-                            self.registered_template_uuid or self.uuid
-                        ),
-                    },
-                ),
-            )
-        return [candidate for variant in variants
-            for candidate in Attack.get_discovery_variants(variant, entity)]
+            return ((),)
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None:
+            return ()
+        return tuple((ActionVariantFacet(key="form", value=slot.value, label=slot.value.replace("_", " ").title()),)
+                     for slot in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF)
+                     if not (isinstance(weapon := entity.equipment._get_weapon_by_slot(slot), Shield)
+                             or weapon is None and slot is not WeaponSlot.MELEE_MAIN))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        overrides = super()._selection_overrides(selection)
+        if self.discover_equipped_weapon_slots:
+            overrides["weapon_slot"] = WeaponSlot(selection_facet(selection, "form"))
+        return overrides
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Require a committed ordinary Attack before exposing the earned batch."""

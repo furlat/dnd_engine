@@ -23,7 +23,7 @@ from dnd.core.life_types import RemainsDisposition
 from dnd.core.base_block import BaseBlock
 from dnd.types.physical_access import PhysicalAccess
 
-from dnd.core.action_types import ActionSelection, EntityTargetPerception, ActionVariantFacet
+from dnd.core.action_types import ActionSelection, EntityTargetPerception, ActionVariantFacet, selection_facet
 from dnd.core.action_types import EntityDestinationSelection
 from dnd.core.base_actions import (
     ActionCategory,
@@ -109,7 +109,7 @@ from dnd.types.spatial_effects import (
 from dnd.spells.content_metadata import srd_condition_identity, srd_action_identity, srd_spell_identity
 from dnd.spells.spell_utils import (deliver_spell_damage, spell_valid_positions, fire_heal_roll_result,
     living_recipients_error, placement_error, seen_point_error, selected_cast_level, target_count_error)
-from dnd.types.discovery import ActorScan
+from dnd.types.discovery import ActorScan, ScanRecord
 
 
 SPIKE_GROWTH_ZONE_CONTENT_REF = ContentRef(
@@ -1293,16 +1293,13 @@ class EnhanceAbility(SpellAction):
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
     enhance_ability_type: AbilityName = Field(default="strength", description="Ability key selected for enhancement.")
 
-    def get_discovery_variants(self, entity: Entity) -> list[BaseAction]:
-        return [variant.model_copy(update={"enhance_ability_type": value})
-                for variant in super().get_discovery_variants(entity)
-                for value in ('strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma')]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="ability", value=value, label=value.title()),)
+                     for value in ('strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'))
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        return (ActionVariantFacet(key="ability", value=self.enhance_ability_type, label=self.enhance_ability_type.title()),)
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__enhance_ability_type_{self.enhance_ability_type}"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "enhance_ability_type": selection_facet(selection, "ability")}
 
     def get_discovery_display_name(self) -> str:
         return f"{super().get_discovery_display_name()} · {self.enhance_ability_type.title()}"
@@ -1452,16 +1449,12 @@ class EnlargeReduce(SpellAction):
         ]
         return bool(unwilling), unwilling
 
-    def get_discovery_variants(self, entity: Entity) -> list[BaseAction]:
-        return [variant.model_copy(update={"enlarge_mode": value})
-                for variant in super().get_discovery_variants(entity)
-                for value in ('enlarge', 'reduce')]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=value, label=value.title()),) for value in ('enlarge', 'reduce'))
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        return (ActionVariantFacet(key="form", value=self.enlarge_mode, label=self.enlarge_mode.title()),)
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__enlarge_mode_{self.enlarge_mode}"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "enlarge_mode": selection_facet(selection, "form")}
 
     def get_discovery_display_name(self) -> str:
         return f"{super().get_discovery_display_name()} · {self.enlarge_mode.title()}"
@@ -1669,13 +1662,6 @@ class TelekinesisMove(BaseAction):
         marker = caster.active_conditions_by_uuid.get(self.marker_uuid) if caster else None
         return marker is not None and marker.applied and marker.contributions_active()
 
-    def selection_preview_error(self) -> str | None:
-        caster = Entity.get(self.source_entity_uuid)
-        if caster is None:
-            return "Caster is unavailable"
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        return self.position_selection_error() or _telekinesis_selection_error(caster, target, self.end_position)
-
     def relocation_destinations(self, scan: ActorScan, selection: ActionSelection) -> Tuple[Tuple[int, int], ...]:
         return _telekinesis_destinations(self, scan, selection)
 
@@ -1722,13 +1708,6 @@ class Telekinesis(SpellAction):
         recipients = [target_uuid for target_uuid in targets
             if (target := Entity.get(target_uuid)) is not None and not caster.is_ally(target)]
         return bool(recipients), recipients
-
-    def selection_preview_error(self) -> str | None:
-        caster = Entity.get(self.source_entity_uuid)
-        if caster is None:
-            return "Caster is unavailable"
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        return self.position_selection_error() or _telekinesis_selection_error(caster, target, self.end_position)
 
     def relocation_destinations(self, scan: ActorScan, selection: ActionSelection) -> Tuple[Tuple[int, int], ...]:
         return _telekinesis_destinations(self, scan, selection)
@@ -2087,14 +2066,15 @@ class Shillelagh(SpellAction):
         weapon = caster.equipment.get_weapon(slot)
         return weapon if weapon is not None and weapon.weapon_kind in (WeaponKind.CLUB, WeaponKind.QUARTERSTAFF) and weapon.material is Material.WOOD else None
 
-    def get_discovery_variants(self, entity: Any) -> list[BaseAction]:
-        return [variant.model_copy(deep=True, update={"uuid": uuid4(), "weapon_slot": slot,
-                "registered_template_uuid": self.registered_template_uuid or self.uuid})
-            for variant in super().get_discovery_variants(entity)
-            for slot in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF) if self._held_weapon(slot) is not None]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """The held weapon to empower: main or off hand."""
+        return tuple((ActionVariantFacet(key="form", value=slot.value,
+                                         label="Main hand" if slot is WeaponSlot.MELEE_MAIN else "Off hand"),)
+                     for slot in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF) if self._held_weapon(slot) is not None)
 
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__{self.weapon_slot.value}"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "weapon_slot": WeaponSlot(selection_facet(selection, "form"))}
 
     def get_discovery_display_name(self) -> str:
         return f"{super().get_discovery_display_name()} ({'main hand' if self.weapon_slot is WeaponSlot.MELEE_MAIN else 'off hand'})"
@@ -2192,13 +2172,13 @@ class MagicWeapon(SpellAction):
         recipient=Entity.get(recipient_uuid or self.source_entity_uuid)
         return recipient.equipment.get_weapon(self.weapon_slot) if recipient is not None else None
 
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.weapon_slot.value,
-            label=self.weapon_slot.value.replace('_',' ').title()))
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=slot.value, label=slot.value.replace('_',' ').title()),)
+                     for slot in WeaponSlot)
 
-    def get_discovery_variants(self,entity: Any):
-        return [variant.model_copy(update={"uuid":uuid4(),"weapon_slot":slot})
-            for variant in super().get_discovery_variants(entity) for slot in WeaponSlot]
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "weapon_slot": WeaponSlot(selection_facet(selection, "form"))}
 
     def _create_declaration_event(self,parent_event: Event | None=None,use_register: bool=True):
         event=super()._create_declaration_event(parent_event,use_register)
@@ -2303,18 +2283,16 @@ class CreateOrDestroyWater(SpellAction):
         if self.aoe_shape is None:
             self.aoe_shape=Sphere(radius_feet=13+7*self.get_upcast_bonus())
 
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="form",value=self.mode,label=self.mode.title()))
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=mode, label=mode.title()),) for mode in ("create", "destroy"))
 
-    def get_discovery_variants(self,entity: Any):
-        result=[]
-        for variant in super().get_discovery_variants(entity):
-            if not isinstance(variant,CreateOrDestroyWater):
-                raise ValueError("Water spell variants require the authored spell")
-            for mode in ("create","destroy"):
-                shape=Sphere(radius_feet=13+7*variant.get_upcast_bonus())
-                result.append(variant.model_copy(update={"uuid":uuid4(),"mode":mode,"aoe_shape":shape}))
-        return result
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        """The mode, and the area at the selected level."""
+        overrides = super()._selection_overrides(selection)
+        level = overrides.get("cast_at_level", self.cast_at_level)
+        return {**overrides, "mode": selection_facet(selection, "form"),
+                "aoe_shape": Sphere(radius_feet=13+7*max(0, level-self.spell_level))}
 
     def _resolve_execution_targets(self):
         return self._resolve_area_targets() if self.effective_target_type is TargetType.POSITION_AOE else super()._resolve_execution_targets()
@@ -2453,13 +2431,13 @@ class DragonsBreath(SpellAction):
         return spell_condition_profile(self,actor,key="dragons_breath",condition_type=DragonsBreathEffect,beneficial=True,
             save_ability=None,fact=None,)
 
-    def get_variant_facets(self):
-        return (*super().get_variant_facets(),ActionVariantFacet(key="damage_type",value=self.element,label=self.element.title()))
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="damage_type", value=element, label=element.title()),)
+                     for element in ("acid","cold","fire","lightning","poison"))
 
-    def get_discovery_variants(self,entity: Any):
-        return [variant.model_copy(update={"uuid":uuid4(),"element":element})
-            for variant in super().get_discovery_variants(entity)
-            for element in ("acid","cold","fire","lightning","poison")]
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "element": selection_facet(selection, "damage_type")}
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         caster=Entity.get(self.source_entity_uuid)

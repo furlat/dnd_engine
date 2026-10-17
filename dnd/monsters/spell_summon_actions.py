@@ -1417,9 +1417,8 @@ class MyrmidonBurrow(ElementalWarp):
             and actor is not None
             and actor.position == self.end_position
         ):
-            MyrmidonLanding(
-                source_entity_uuid=actor.uuid, end_position=actor.position, costs=[]
-            ).apply(parent_event=effect)
+            landing = MyrmidonLanding(source_entity_uuid=actor.uuid, end_position=actor.position, costs=[])
+            actor.perform(landing, landing.current_selection(), parent_event=effect)
         return effect
 
 

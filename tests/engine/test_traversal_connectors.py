@@ -163,7 +163,7 @@ def test_connector_variant_commits_one_exact_transfer_and_cost() -> None:
         source_entity_uuid=actor.uuid,
         template=True,
     )
-    variants = template.get_discovery_variants(actor)
+    variants = template.discovery_forms(actor.action_scan(subjective=True))
     assert len(variants) == 1
     variant = variants[0]
     assert isinstance(variant, TraverseConnector)
@@ -210,7 +210,7 @@ def test_connector_step_veto_spends_nothing_and_leaves_actor_at_source() -> None
     variant = TraverseConnector(
         source_entity_uuid=actor.uuid,
         template=True,
-    ).get_discovery_variants(actor)[0]
+    ).discovery_forms(actor.action_scan(subjective=True))[0]
     movement_before = actor.action_economy.movement_remaining()
 
     def stop_step(event: Event, _source_uuid) -> Event:

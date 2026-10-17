@@ -1,7 +1,6 @@
 """Wizard native recovery and source-owned Evocation event processors."""
 
-from typing import Optional
-from uuid import uuid4
+from typing import Optional, Tuple
 from pydantic import Field
 
 from dnd.actions import (
@@ -10,7 +9,7 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
 )
-from dnd.core.action_types import ActionSelection
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
 from dnd.core.base_actions import BaseAction, Cost, TargetType, spell_slot_cost_type
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import DurationType, ConditionCategory
@@ -30,7 +29,7 @@ from dnd.core.events import (
 )
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
-from dnd.types.discovery import ActorScan
+from dnd.types.discovery import ActorScan, ScanRecord
 
 
 class WizardRecoveryState(BaseCondition):
@@ -163,15 +162,15 @@ class ArcaneRecovery(BaseAction):
     target_type: TargetType = TargetType.SELF
     slot_rank: int = Field(default=1, ge=1, le=5)
 
-    def get_discovery_variants(self, entity):
-        return [
-            self.model_copy(update={"uuid": uuid4(), "slot_rank": rank})
-            for rank in range(1, 6)
-            if entity.has_spell_slot_capacity(rank)
-        ]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """Each slot rank (1-5) the wizard has capacity for."""
+        actor = Entity.get(self.source_entity_uuid)
+        return tuple((ActionVariantFacet(key="rank", value=str(rank), label=f"Level {rank}"),)
+                     for rank in range(1, 6) if actor is not None and actor.has_spell_slot_capacity(rank))
 
-    def get_discovery_template_name(self):
-        return f"Arcane Recovery [Level {self.slot_rank}]"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "slot_rank": int(selection_facet(selection, "rank"))}
 
     def get_discovery_display_name(self):
         return f"Arcane Recovery (Level {self.slot_rank})"

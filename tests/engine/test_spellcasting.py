@@ -1,5 +1,6 @@
 """Engine semantic tests for spellcasting core."""
 
+from dataclasses import replace
 from typing import Optional, cast
 from uuid import uuid4
 
@@ -22,6 +23,7 @@ from dnd.conditions import Concentrating, Dashing
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_BY_CLASS,
 )
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
@@ -414,27 +416,25 @@ def test_eb_14_005_cantrip_dice_scale_at_srd_thresholds() -> None:
     assert cantrip._get_cantrip_dice_count(20) == 4
 
 
-def test_eb_14_006_generate_variants_uses_available_slots() -> None:
-    """EB-14-006: explicit variant generation creates ephemeral cast choices."""
+def test_eb_14_006_discovery_forms_use_available_slots() -> None:
+    """EB-14-006: discovery lists a cantrip as registered and a slot spell once at its castable levels."""
     reset_spell_state()
     caster = create_spellcaster(spell_slots={1: 2, 3: 1})
     cantrip_template = FireBolt(source_entity_uuid=caster.uuid, template=True)
     missile_template = MagicMissile(source_entity_uuid=caster.uuid, template=True)
+    scan = caster.action_scan(subjective=True)
 
-    cantrip_variants = cantrip_template.generate_variants(caster)
-    missile_variants = missile_template.generate_variants(caster)
+    cantrip_forms = cantrip_template.discovery_forms(scan)
+    missile_forms = missile_template.discovery_forms(scan)
 
-    assert len(cantrip_variants) == 1
-    assert cantrip_variants[0].cast_at_level == 0
-    assert cantrip_variants[0].template is False
-    assert cantrip_variants[0].use_register is False
-    assert [cost.cost_type for cost in cantrip_variants[0].costs] == ["actions"]
+    assert cantrip_forms == [cantrip_template]
+    assert [cost.cost_type for cost in cantrip_forms[0].costs] == ["actions"]
 
     # One cast choice per spell with its castable levels (plan D17), listed at the lowest.
-    missile, = missile_variants
+    missile, = missile_forms
     assert missile.cast_at_level == 1 and missile.castable_levels == (1, 3)
     assert missile.template is False and missile.is_variant
-    upcast = missile.at_cast_level(3)
+    upcast = missile.with_selection(replace(missile.current_selection(), cast_at_level=3))
     assert [cost.cost_type for cost in upcast.costs] == [
         "actions",
         "spell_slot_3",
@@ -469,7 +469,8 @@ def test_eb_14_007_registered_spells_surface_executable_slot_variants() -> None:
     assert missile.can_afford and missile.is_spell_variant
     assert target.uuid in [target_info.target_uuid for target_info in missile.valid_targets]
     assert missile.execution_template is not None
-    assert missile.execution_template.at_cast_level(3).get_multi_target_count() == 5
+    form = missile.execution_template
+    assert form.with_selection(replace(form.current_selection(), cast_at_level=3)).get_multi_target_count() == 5
     assert len(fire_bolt_actions) == 1
 
     caster.action_economy.consume("spell_slot_1", 1)
@@ -507,9 +508,8 @@ def test_eb_14_019_generated_upcast_variant_executes_with_higher_slot() -> None:
     Entity.update_all_entities_senses()
 
     template = MagicMissile(source_entity_uuid=caster.uuid, template=True)
-    variant, = template.generate_variants(caster)
-    level_three = variant.at_cast_level(3)
-    level_three.target_entity_uuid = target.uuid
+    level_three = template.with_selection(ActionSelection(template_uuid=template.uuid, cast_at_level=3,
+                                                          target_uuids=(target.uuid,)))
 
     hp_before = target.get_hp()
     result = level_three.apply()
@@ -663,7 +663,7 @@ def test_eb_14_012_spell_action_overrides_change_template_costs_not_slot_variant
 
     template = caster.get_action_template("Magic Missile")
     assert isinstance(template, SpellAction)
-    assert template.generate_variants(caster) == []
+    assert template.discovery_forms(caster.action_scan(subjective=True)) == []
     assert not any(info.template_name == "Magic Missile" for info in get_available_actions(caster).all_actions)
 
     modified = apply_action_overrides(
@@ -686,7 +686,8 @@ def test_eb_14_012_spell_action_overrides_change_template_costs_not_slot_variant
     assert overridden[0].cost_type == "bonus_actions"
     assert overridden[0].can_afford
     assert target.uuid in [target_info.target_uuid for target_info in overridden[0].valid_targets]
-    assert template.generate_variants(caster) == []
+    # Cast without a slot, the spell is listed as registered: no slot row.
+    assert template.discovery_forms(caster.action_scan(subjective=True)) == [template]
 
     clear_action_overrides(caster, modified)
 
@@ -983,7 +984,7 @@ if __name__ == "__main__":
         test_eb_14_003_entity_spell_numbers_compose_from_multiple_blocks,
         test_eb_14_004_spell_actions_create_spell_events_and_slot_costs,
         test_eb_14_005_cantrip_dice_scale_at_srd_thresholds,
-        test_eb_14_006_generate_variants_uses_available_slots,
+        test_eb_14_006_discovery_forms_use_available_slots,
         test_eb_14_007_registered_spells_surface_executable_slot_variants,
         test_eb_14_019_generated_upcast_variant_executes_with_higher_slot,
         test_eb_14_008_magic_missile_convolution_aggregates_child_casts,

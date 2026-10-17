@@ -4449,7 +4449,7 @@ class Entity(BaseBlock):
             threat_domains=({reactor.uuid: frozenset(cells) for reactor, cells in self._visible_hostile_threat_domains()}
                             if with_navigation else {}),
             slot_capacity={level: self.action_economy.spell_slot_value(level).normalized_score for level in range(1, 10)},
-            restricted_grants=frozenset(grant.grant_id for grant in self.get_restricted_action_grants()),
+            restricted_grants=self.get_restricted_action_grants(),
             free_cast_grants=frozenset(self.spellcasting.free_cast_grants),
             source_item_charges={item.uuid: item.charges for item in carried if isinstance(item, UsableItem)},
             active_encounter_uuid=self.active_encounter_uuid,
@@ -5313,17 +5313,15 @@ class Entity(BaseBlock):
         effective_path_distance = path_max_distance or max_distance
         self._materialize_navigation_distance(effective_path_distance)
 
-    def _requires_exhausted_movement_paths(
-        self,
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
-    ) -> bool:
+    def _position_action_forms(self) -> Dict[UUID, List[BaseAction]]:
+        """The discovery forms of the position actions, on this creature's perceived scan."""
+        scan = self.action_scan(subjective=True)
+        return {registered.uuid: registered.discovery_forms(scan) for registered in self.position_actions}
+
+    def _requires_exhausted_movement_paths(self, forms: Mapping[UUID, List[BaseAction]]) -> bool:
         """Return whether discovery still consumes paths with no movement left."""
         for registered in self.position_actions:
-            variants = (discovery_variants.get(registered.uuid)
-                        if discovery_variants is not None else None)
-            if variants is None:
-                variants = registered.get_discovery_variants(self)
-            for template in variants:
+            for template in forms.get(registered.uuid, ()):
                 target_type = template.effective_target_type
                 if target_type in (TargetType.POSITION, TargetType.POSITION_LOS):
                     contract = template.position_discovery
@@ -5343,7 +5341,7 @@ class Entity(BaseBlock):
         )
         if (remaining_distance == 0
                 and self.action_economy.movement_remaining(MovementMode.WALKING) <= 0
-                and not self._requires_exhausted_movement_paths()):
+                and not self._requires_exhausted_movement_paths(self._position_action_forms())):
             self._materialize_navigation_distance(0)
         else:
             self.materialize_navigation(max_distance=20, path_max_distance=remaining_distance)
@@ -5738,7 +5736,7 @@ class Entity(BaseBlock):
             position_region=template.position_region(),
             conditional_costs=template.get_conditional_costs(),
             allocation_completion=template.get_allocation_completion(),
-            variant_facets=template.get_variant_facets(),
+            variant_facets=template.row_facets(),
             interaction_affordance=(ActionAffordance(surface="world", binding="source_item", default_priority=100)
                 if is_item_use and source_item_uuid is not None
                 and get_map().get_object_placement(source_item_uuid) is not None
@@ -6128,19 +6126,13 @@ class Entity(BaseBlock):
     def _collect_self_actions(
         self,
         scan: ActorScan,
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
+        forms: Mapping[UUID, List[BaseAction]],
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
         """Collect SELF-targeting actions (Dash, Dodge, etc.)."""
         actions: List[AvailableActionInfo] = []
         for registered_template in self.registered_actions:
-            variants = (
-                discovery_variants.get(registered_template.uuid)
-                if discovery_variants is not None
-                else None
-            )
-            if variants is None:
-                variants = registered_template.get_discovery_variants(self)
+            variants = forms[registered_template.uuid]
             for template in variants:
                 if template.effective_target_type is not TargetType.SELF:continue
                 template_name = template.get_discovery_template_name()
@@ -6183,7 +6175,7 @@ class Entity(BaseBlock):
         potential_targets: Dict[UUID, Tuple[int, int]],
         include_dead: bool,
         scan: ActorScan,
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
+        forms: Mapping[UUID, List[BaseAction]],
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
         """Collect entity-targeting actions.
@@ -6206,13 +6198,7 @@ class Entity(BaseBlock):
         for registered_template in registered_entity_actions:
             base_label = self._timing_label(registered_template.name)
             started = time.perf_counter() if timing else 0.0
-            variants = (
-                discovery_variants.get(registered_template.uuid)
-                if discovery_variants is not None
-                else None
-            )
-            if variants is None:
-                variants = registered_template.get_discovery_variants(self)
+            variants = forms[registered_template.uuid]
             if timing:
                 record_action_timing(
                     f"available_actions.entity_actions.variant_generation.{base_label}_ms",
@@ -6599,7 +6585,7 @@ class Entity(BaseBlock):
         self,
         remaining_movement: int,
         scan: ActorScan,
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
+        forms: Mapping[UUID, List[BaseAction]],
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
@@ -6616,13 +6602,7 @@ class Entity(BaseBlock):
         threat_domains: Optional[List[Tuple['Entity', Set[Tuple[int, int]]]]] = None  # once per call
         hazard: Dict[Tuple[int, int], bool] = {}  # per cell, once per call: paths share their steps
         for registered_template in self.registered_actions:
-            variants = (
-                discovery_variants.get(registered_template.uuid)
-                if discovery_variants is not None
-                else None
-            )
-            if variants is None:
-                variants = registered_template.get_discovery_variants(self)
+            variants = forms[registered_template.uuid]
             for template in variants:
                 target_type = template.effective_target_type
                 if target_type not in (TargetType.POSITION, TargetType.POSITION_PATH):
@@ -6777,7 +6757,7 @@ class Entity(BaseBlock):
                                 and position in self.senses.safe_paths
                             ):
                                 safe_path_list = list(self.senses.safe_paths[position])
-                                safe_cost = self._movement_path_cost_feet(
+                                safe_cost = self.movement_path_cost_feet(
                                     safe_path_list,
                                     MovementMode.WALKING,
                                 )
@@ -7028,7 +7008,7 @@ class Entity(BaseBlock):
         self._fast_move_target_cache[cache_context] = tuple(valid_positions)
         return valid_positions
 
-    def _movement_path_cost_feet(
+    def movement_path_cost_feet(
         self,
         path: List[Tuple[int, int]],
         movement_mode: MovementMode,
@@ -7051,7 +7031,7 @@ class Entity(BaseBlock):
     def _collect_los_actions(
         self,
         scan: ActorScan,
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
+        forms: Mapping[UUID, List[BaseAction]],
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
@@ -7063,13 +7043,7 @@ class Entity(BaseBlock):
         # action (range does not vary with the level row), stopping at the first cell.
         region_open: Dict[UUID, bool] = {}
         for registered_template in self.registered_actions:
-            variants = (
-                discovery_variants.get(registered_template.uuid)
-                if discovery_variants is not None
-                else None
-            )
-            if variants is None:
-                variants = registered_template.get_discovery_variants(self)
+            variants = forms[registered_template.uuid]
             for template in variants:
                 if template.effective_target_type != TargetType.POSITION_LOS:
                     continue
@@ -7159,7 +7133,7 @@ class Entity(BaseBlock):
         include_dead: bool,
         scan: ActorScan,
         footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
+        forms: Mapping[UUID, List[BaseAction]],
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
         include_aoe_preview: bool = True,
@@ -7180,13 +7154,7 @@ class Entity(BaseBlock):
         self._prepare_position_preview_cache(visible_position_set)
 
         for registered_template in self.registered_actions:
-            variants = (
-                discovery_variants.get(registered_template.uuid)
-                if discovery_variants is not None
-                else None
-            )
-            if variants is None:
-                variants = registered_template.get_discovery_variants(self)
+            variants = forms[registered_template.uuid]
             for template in variants:
                 if template.effective_target_type != TargetType.POSITION_AOE:
                     continue
@@ -7412,7 +7380,7 @@ class Entity(BaseBlock):
                 behavior_id=action.behavior_binding.behavior_id, label=action.name or "Use",
                 description=action.description or "",
                 template_name=f"{action.get_discovery_template_name()}__item_{identity}",
-                configured_action_ref=action.configured_action_ref, variant_facets=action.get_variant_facets(),
+                configured_action_ref=action.configured_action_ref, variant_facets=action.row_facets(),
                 contact_positions=tuple(sorted(position for position in candidates
                     if grid.manual_object_contact(self.uuid, identity, subjective=scan.subjective, origin=position) is not None))))
         for identity in self.senses.objects:
@@ -7727,16 +7695,13 @@ class Entity(BaseBlock):
         if timing:
             record_action_timing("available_actions.result_model_ms", started)
 
+        # One actor scan for this call; every candidate is checked against it.
+        scan = self.action_scan(subjective=True)
+
         started = time.perf_counter() if timing else 0.0
-        discovery_variants = {
-            template.uuid: template.get_discovery_variants(self)
-            for template in self.registered_actions
-        }
-        result.set_registered_action_variants([
-            variant
-            for template in self.registered_actions
-            for variant in discovery_variants[template.uuid]
-        ])
+        # One read-only form per discovery row of each registered action (plan §14.4).
+        forms = {template.uuid: template.discovery_forms(scan) for template in self.registered_actions}
+        result.set_registered_action_variants([form for template in self.registered_actions for form in forms[template.uuid]])
         if timing:
             record_action_timing("available_actions.registered_variants_ms", started)
 
@@ -7758,11 +7723,8 @@ class Entity(BaseBlock):
         if timing:
             record_action_timing("available_actions.potential_targets_ms", started)
 
-        # One actor scan for this call; every candidate is checked against it.
-        scan = self.action_scan(subjective=True)
-
         started = time.perf_counter() if timing else 0.0
-        result.self_actions = self._collect_self_actions(scan, discovery_variants, legal_only)
+        result.self_actions = self._collect_self_actions(scan, forms, legal_only)
         if timing:
             record_action_timing("available_actions.collect_self_actions_ms", started)
 
@@ -7771,7 +7733,7 @@ class Entity(BaseBlock):
             potential_targets,
             include_dead,
             scan,
-            discovery_variants,
+            forms,
             legal_only,
         )
         if timing:
@@ -7779,7 +7741,7 @@ class Entity(BaseBlock):
 
         required_path_distance = max(1, (remaining_movement + 4) // 5) if remaining_movement > 0 else 0
         if (self.senses.path_max_distance == 0
-                and self._requires_exhausted_movement_paths(discovery_variants)):
+                and self._requires_exhausted_movement_paths(forms)):
             # A newly registered consumer needs the domain omitted at the last
             # exhausted movement boundary before it can read current paths.
             required_path_distance = max(required_path_distance, 20)
@@ -7813,7 +7775,7 @@ class Entity(BaseBlock):
         result.position_actions = self._collect_path_actions(
             result.remaining_movement,
             scan,
-            discovery_variants,
+            forms,
             caster_visible_positions,
             legal_only,
         )
@@ -7824,7 +7786,7 @@ class Entity(BaseBlock):
         result.position_actions.extend(
             self._collect_los_actions(
                 scan,
-                discovery_variants,
+                forms,
                 caster_visible_positions,
                 legal_only,
             )
@@ -7838,7 +7800,7 @@ class Entity(BaseBlock):
                 include_dead,
                 scan,
                 footprints,
-                discovery_variants,
+                forms,
                 caster_visible_positions,
                 legal_only,
                 include_aoe_preview,

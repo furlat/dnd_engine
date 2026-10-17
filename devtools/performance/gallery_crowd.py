@@ -572,12 +572,12 @@ def choices_case(accepts, behavior_id, aim):
 
 
 def _admitted_positions(actor, row, target, level):
-    """Command's admission of one listed target, completing a vertex path through preview's next vertices."""
+    """Command's admission of one listed target, completing its vertices or destination through preview's options."""
     positions = ()
     kind = row.position_selection.kind if row.position_selection is not None else 'single'
     for _ in range(8):
         reason = selection_admission_error(actor, row, (target,), positions, cast_at_level=level)
-        if reason is None or kind != 'path':
+        if reason is None or kind not in ('path', 'entity_destination'):
             return reason, positions
         preview = preview_available_selection(actor, row, (target,), positions, include_aoe_effects=False,
             cast_at_level=level)

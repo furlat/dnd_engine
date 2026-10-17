@@ -66,3 +66,34 @@ def test_profile_hooks_take_no_actor() -> None:
                 if any(argument.arg in ("actor", "entity") for argument in node.args.args):
                     with_actor.append(f"{path.relative_to(ROOT)}:{node.lineno} {node.name}")
     assert with_actor == []
+
+
+# `.apply(` calls in dnd/ that are not actions: proficiency sources and a zone condition's own apply.
+NON_ACTION_APPLIES = {
+    ("dnd/entity.py", "ability.check_proficiency_sources.apply"),
+    ("dnd/entity.py", "skill.proficiency_sources.apply"),
+    ("dnd/blocks/saving_throws.py", "self.proficiency_sources.apply"),
+    ("dnd/blocks/skills.py", "self.proficiency_sources.apply"),
+    ("dnd/spatial/area_conditions.py", "self.apply"),
+}
+
+
+def test_entity_perform_is_the_only_action_apply_entry() -> None:
+    """Every action in the engine is performed by its actor (plan §14.11); only `super().apply` chains."""
+    callers = []
+    for path in sorted((ROOT / "dnd").rglob("*.py")):
+        relative = str(path.relative_to(ROOT))
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        perform = {id(node) for function in ast.walk(tree)
+                   if isinstance(function, ast.FunctionDef) and function.name == "perform" and relative == "dnd/entity.py"
+                   for node in ast.walk(function)}
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "apply"):
+                continue
+            receiver = node.func.value
+            if isinstance(receiver, ast.Call) and isinstance(receiver.func, ast.Name) and receiver.func.id == "super":
+                continue
+            if id(node) in perform or (relative, ast.unparse(node.func)) in NON_ACTION_APPLIES:
+                continue
+            callers.append(f"{relative}:{node.lineno} {ast.unparse(node.func)}")
+    assert callers == []
