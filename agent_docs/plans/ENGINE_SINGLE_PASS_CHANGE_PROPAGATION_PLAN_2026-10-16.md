@@ -1,4 +1,4 @@
-# Single-pass change propagation — analysis and plan (v3.9)
+# Single-pass change propagation — analysis and plan (v3.10)
 
 Date: 2026-10-16. Status: **APPROVED by the human 2026-10-17 (incl. D7c, Q7 EXECUTION convention, temp-HP record-only).** **v3.5 adds available-actions discovery (§14, PD1/PD2) per the human's 2026-10-17 decisions (model approved 2026-10-17).** **v3.6 folds in the §14 antislop/antiOOP reviews and the whole-world-scan redesign. v3.7 folds in the v3.6 re-reviews, the human's answers (D14 approved; Q-W1, Q-W3, Q-W4 decided) and the first P0a measurements; open items are in §14.10.** Implementation is at P0a.
 
@@ -533,11 +533,11 @@ Human, 2026-10-17:
 | Gust of Wind move | 93–102 / 105 (51–63 / 31–37) | P5, P6, PV1; P7, PV2 |
 | Spirit Guardians cast | 81 / 88 (45 / 26) | P6; P7 |
 | Spirit Guardians move (3 cells, aura carried) | 233–308 / 605 (123–166 / 99–115) | P5, P6, PV1; P7, PV2 |
-| AI Advance, turn start | 304 / 345 | turn-start navigation has no owner (question 4, §6b) |
+| AI Advance, turn start | 304 / 345 | P7, PV1, PD1b / PD2, PT |
 | AI Advance, decision only | 99–101 / 105 | PD2, P7 |
 | AI Advance, acting (276 versions) | 327 / 351 | P6, P7 |
 
-Rows still to measure: magic_missile, chain_lightning, holy_aura, mass_heal, mass_healing_word, delayed_blast_fireball, grease, web, spike_growth, cloudkill (cast, drop), darkness_daylight (Darkness, Daylight), thunderwave_spike_growth, caster_steps, turn_start, turn_undead, gas_vent_plate, portal_plate, wall_of_stone, summon_retirement, round_step_zones. The tool can't yet measure reactions on a human seat or a whole AI round (question 5, §6b).
+Rows still to measure: magic_missile, chain_lightning, holy_aura, mass_heal, mass_healing_word, delayed_blast_fireball, grease, web, spike_growth, cloudkill (cast, drop), darkness_daylight (Darkness, Daylight), thunderwave_spike_growth, caster_steps, turn_start, turn_undead, gas_vent_plate, portal_plate, wall_of_stone, summon_retirement, round_step_zones. Cases to add: a reaction on a human seat, and a whole AI round (§6b).
 
 **Rules.**
 
@@ -572,50 +572,87 @@ Human, 2026-10-17:
   - Hazards are re-sent as `false` for every re-added cell, and light sources come back at the revision the client already holds.
 - **Readers by cell** are heavy in sensory, entity pathing, projection, audience and the AI knowledge reducer; rules make about 24 such reads.
 
-**PV1 — perception as arrays (engine; no protocol change).**
+**First principles.**
 
-- **World grids**, one integer per cell, kept by their writers: obscurement bits, light level, occupant, hazard bits. The cached wall FOV stays (no corner-rule change).
-- **One observer's view** is a pure function of (position, senses, grids) over its window:
-  - blocked = route masks ∩ the bits that occlude every visual sense the observer has at that range. Heavy obscurement blocks plain sight; magical darkness blocks unless Devil's Sight or Truesight reaches.
-  - visible = wall FOV ∧ ¬blocked ∧ light allows. The first-opaque-surface rule is kept.
-  - Non-visual senses are radius masks; contacts and hazards are read from the grids at visible cells.
-- **`Senses`' per-cell state** (visible, seen, effective light, hazardous cells, field maps) becomes arrays. Readers migrate, and the set and dict forms are deleted.
-- **One settlement path:** affected observers are recomputed. The hazard-only and scoped paths are deleted, with their scope, footprint-scope, change-log and epoch machinery. The exact list is fixed from the code at implementation.
-- **A delta is a mask difference.**
+- What can stop vision is a finite set: walls and optical boundaries, heavy obscurement, magical darkness, and the light level at the target cell.
+- What can see is a finite set: plain sight, darkvision, Devil's Sight and Truesight (each with a range), plus blindsight and tremorsense.
+- So subjective vision is a table, not a per-cell procedure. Today's rule (`_visual_route_modes`, `_route_light_levels`) is exactly:
+
+| On the route | Plain sight | Darkvision | Devil's Sight | Truesight | Blindsight / Tremorsense |
+| --- | --- | --- | --- | --- | --- |
+| Wall / optical boundary | blocks | blocks | blocks | blocks | own reach rule (unchanged) |
+| Heavy obscurement | blocks | blocks | blocks | blocks | ignores |
+| Magical darkness | blocks | blocks | sees through in range | sees through in range | ignores |
+
+- Light at the target cell: plain sight needs more than darkness; darkvision turns darkness into dim and dim into bright; Devil's Sight and Truesight turn darkness into bright.
+- Per cell: 4 eligibility bits (plain, darkvision, Devil's Sight, Truesight). Range and the route's obscurement bits decide each bit. The effective light, or "not seen", is one lookup in a 16 × 5 table.
+- A bigger blocker means more zeros, not more work.
+- Only checks against specific targets stay per target, over the creatures and objects on visible cells, never over cells: invisibility, hiding, object inclusion, and boundary evidence.
+
+**World grids: one owner each, replacing storage.**
+
+| Grid | Owner and writer | Deleted |
+| --- | --- | --- |
+| Obscurement: per-owner footprint masks, with combined bits derived in the same write | GridMap, written only at the AreaCondition membership commit; `excluded_owner_uuid` reads the per-owner layer | `_optical_obscurement_by_position` push dict, the `condition.get_optical_obscurement_at` pull branch, `_obscurement_index`, `_optics_blocking` |
+| Resolved light level | written where `_resolve_light_contributions` runs; `Tile.resolved_light_level` reads it | the per-tile resolved copy |
+| Hazards | the owners' footprints already held by GridMap; per observer, each owner's `is_hazardous_for` is called once and its footprint OR-ed | per-cell hazard dicts |
+| Occupancy | unchanged authority (tile membership); contacts iterate the occupants in the window and index the visible mask | — (no occupant grid) |
+
+P4a's obscurement and light items fold into PV1, so that storage migrates once. P4b is closed: measured, not adopted.
+
+**PV1 — perception as arrays, end to end.**
+
+- **The view function** lives in a `dnd/core` module and takes primitives: origin, the sense ranges, and the grids. numpy stays out of `dnd/types`.
+- **The cell sets in snapshots, native events and wire** are one frozen packed value: origin, shape and bytes.
+- **`Senses` holds published perception only:** window origin, visible, light and hazard arrays, the `seen` mask in map coordinates, and contacts. `ObserverField`, route modes, volume fields and the light epoch move into `SpatialSensesSystem`, keyed by observer uuid.
+- **Rules and discovery** (~30 sites) read through a few pure query functions.
+- **One settlement path:** observers whose window box intersects the change box are recomputed. The emit diffs the arrays directly.
+- **Deleted:**
+  - the hazard-only and scoped paths (`_can_scope`, `_update_scoped`, `_fact_scope`, footprint scope refresh, the emitter change log, the contact epoch);
+  - the reverse cell indexes;
+  - `Senses.apply_sensory_update`;
+  - the set forms in `SensesSnapshot`, `capture_senses_snapshot`, `apply_current_senses` (the one shared reducer), the AI's `visible_index` / `seen_index` and `observers_by_known_position`.
+- **The protocol changes freely.** The human said to ignore the Godot client: this repo's protocol and SDK are updated in the same change.
 - **Gate:**
-  - the spike (devtools only) first: per-observer ms, plus equality with today's result on seven GC cases;
-  - before deletion, equality with the old implementation on every GC case;
+  - the spike (devtools only): per-observer ms, plus equality with today's result on seven GC cases;
+  - equality with recordings made at the pre-PV1 commit (an archived arm), with no flag in `dnd/`;
   - per-observer recompute ≤1 ms;
   - obscuring-spell cost independent of area.
 
-**PV2 — compact deltas on the wire (engine + protocol).**
+**PV2 — the rest of the wire.**
 
 - `observed_changes` leaves the player `SensoryFact`; the native event keeps it.
-- Cell sets are packed masks over the observer window. Light levels are packed per changed cell; hazards are sent as true cells only.
-- Object contacts are not sent where the client can derive them (study class c).
-- Light sources are restored by (uuid, revision); the HUD is sent only when it changes; spatial effects are a content id plus packed cells.
-- **Gate:** every update ≤100 KB on every row; the Sleet cast and drop sensory delta ≤2 KB per observer.
+- The HUD is sent only when it changes. Spatial effects are a content id plus packed cells.
+- Object and entity contact changes are packed uuid deltas. The client derives nothing.
+- **Multi-observer seats** (human: "handle the per seat scenario per observer but of course when shared we should optimize"): each changed cell, body and item is sent once per seat, and each observer gets a bit list over the seat's shared cells. A one-observer seat is plain per-observer.
+- No retained client-side state for cells out of view (human: "a bad idea to keep 2 states"). Cells coming back into view carry their light and hazard values, packed.
+- **Gate:** every update ≤100 KB on every row.
 
-**PV3 — bodies as patches (engine + protocol).**
+**PV3 — bodies and items as patches.**
 
-- A seat receives an actor body in full once.
-- After that, including on re-acquisition, it receives only the fields that differ from `ProjectionState.remembered.actors[uuid]`, or nothing.
-- Items are sent as (item_uuid, item_id) plus their mutable fields. `EquipmentFact` becomes an item patch; the visual loadout is (slot, item_uuid, item_id, is_lit).
-- **Gate:** no body bytes for unchanged re-acquisitions; the D16-C replica test (the fold of emitted updates equals a cold composition) passes.
+- There is one observation type: a patch against `ProjectionState.remembered`. First acquisition is a patch against an absent body, so there is no full-body branch.
+- The patch is computed in projection, after disclosure, from a before/after of the touched actors.
+- `remembered` changes only through `apply_player_fact` on the emitted patch, the same reducer the client runs.
+- **Items:** the client can't know items in advance (human). A seat receives an item's full record the first time it sees that `item_uuid`, then only patches. `EquipmentFact` becomes an item patch. The `PlayerActor` / `VisualItem` types change, not just the encoder.
+- **Gate:** no body bytes for unchanged re-acquisitions; the D16-C replica test passes.
+
+**PT — turn start** (human: "of course bro it is unacepptable").
+
+- First AI Advance, sampled under load:
+  - AI knowledge catch-up ~48 %, folding every event since the AI's last turn: P7's AI item, plus PV1, since its indexes become arrays;
+  - AI discovery ~33 %, mostly object-contact checks that build a pydantic object per contact, plus object HP reads: PD1b / PD2;
+  - turn-start navigation ~11 %.
+- **Navigation:** one path search over a cost grid with a predecessor array. `walkable`, `paths`, `path_costs`, `safe_*` and `collision_blocked` stop being per-cell dicts and sets.
+- **Gate:** the turn-start rows within the ceiling.
+
+**Measurement cases to add:** a reaction that pauses for a human seat (an opportunity attack, Counterspell), and a whole AI round (every native-AI combatant's turn in sequence).
 
 **Order.**
 
 1. Spike.
 2. PV1, alongside P7.
-3. PV2 and PV3 after P7, because they share the projection code. They need the SDK schema bump and the Godot client (PC).
-
-**Questions for the human.**
-
-1. Should static item mechanics move into the client content catalog (PV3)?
-2. Should the client keep light levels and hazards for cells that leave view (today `apply_current_senses` deletes them), so re-entry needs no resend (PV2)? This changes the shared reducer's memory.
-3. How do we coordinate the protocol bump with the Godot client?
-4. Turn-start navigation has no owning phase. Add one?
-5. Should the gallery get cases for reactions on a human seat and for a whole AI round?
+3. PV2 and PV3 after P7, because they share the projection code.
+4. PT after PV1, because navigation shares the grids.
 
 ## 7. Phases (execution order) and gates
 
@@ -645,9 +682,10 @@ Human, 2026-10-17:
 | **P6** | Event machinery: COMPLETION handler lookup; per-cell dispatch re-reads; identity computation per version (D4); turn witness set; Fireball latest-version access; residue-fear provenance | versions and dispatch counts before/after |
 | **P7** | Seat-independent capture (pure function, frozen value); one fold per seat; AI knowledge reduction consumes settled sensory events once per group.<br>**D16-C**, the mirror fold leaves the live path. Deleted: `AudienceRuntime.latest`, `current_composition`, `committed_log_count`, `exclusive_current` and both of its branches, `PreparedPlayerOperation`, `prepare_current_operation`, `apply_current_operation`, the `prepared_sensory` parameters and the `prepare_sensory_delta` default. Capture and bookkeeping read `ProjectionState.remembered` (actors, content and the last HUD named there). `CaptureCheckpoint`'s own fold is derived from the projection fold, and its reset branch is deleted. The devtools consumers migrate with no `latest` shim. Reconnect and recording work from the journal. A capture error stays fatal. | publication and AI ms before/after; per-seat wire identical; replica test (the fold of emitted updates from initialization == `remembered` == a cold composition), with no production flag |
 | **P8** | Value layer: min/max once per read; bounded breakdown cache; stats snapshot on change | passive-perception and resistance evaluation counts before/after |
-| **PV1** | Perception as arrays (§6b): world grids, one pure per-observer view, one settlement path, `Senses` cell state as arrays; spike first | §6b PV1 gate |
-| **PV2** | Compact deltas on the wire (§6b); after P7 | §6b PV2 gate; every update ≤100 KB |
-| **PV3** | Bodies as patches (§6b); after P7 | §6b PV3 gate |
+| **PV1** | Perception as arrays end to end (§6b): owned world grids, one pure view function, one settlement path, packed cell sets through snapshot, event and wire; P4a's obscurement and light items folded in; spike first | §6b PV1 gate |
+| **PV2** | The rest of the wire (§6b); after P7 | §6b PV2 gate; every update ≤100 KB |
+| **PV3** | Bodies and items as patches (§6b); after P7 | §6b PV3 gate |
+| **PT** | Turn start (§6b): navigation as a cost grid with a predecessor array | turn-start rows within the ceiling |
 | **PC** | *(other repo; human)* NDClientGodot SDK schema 9 → 11; grouped world boundaries | — |
 | **Exit** | Whole-action targets (§6a, D18): every operation of every GC case re-timed after each merged batch | every run of every row ≤100 ms and every seat update ≤100 KB; acceptable and goal tiers reported per row; a miss blocks the exit until the human decides |
 
@@ -690,7 +728,7 @@ stopped and reported.
 | D17 | Spells listed once with castable levels; the selection names the level; the AI always casts the base level | **Decided** (human 2026-10-17) |
 | D16-C | D16's method: the server mirror fold (`prepare_current_operation` / `apply_current_operation`, the current composition) leaves the live path; bookkeeping reads the outgoing update; the replica check (emitted-update fold == cold composition) becomes a test | **Approved** (human 2026-10-17: "c is ok") |
 | D18 | Whole-action targets (§6a) for every operation: 100 ms ceiling, ≤50 ms acceptable, ≤20 / ≤16 ms goal; ≤100 KB per update; GC is an alarm, not managed | **Decided** (human 2026-10-17) |
-| D19 | Subjective vision as data (§6b): perception as arrays, compact deltas, bodies as patches | **Decided** (human 2026-10-17); questions 1–5 in §6b open |
+| D19 | Subjective vision as data (§6b): perception as one table applied as arrays; compact deltas; bodies and items as patches; turn start | **Decided** (human 2026-10-17); human answers: no item catalog, no retained client state, the Godot client ignored, turn start owned, per-observer deltas with shared parts once per seat |
 | D11 | Worktree | **Done** |
 
 ### 8.1 Verified bugs (verification pass at `d13e6ad`)
@@ -856,6 +894,16 @@ worktree. The rest is static reading.
 | AI discovery | `ai/runtime/decision_epoch.py:148-157, 819-845, 948-971` |
 
 ## 12. Changes
+
+**v3.9 → v3.10** (human answers and the v3.9 antiOOP review):
+
+- §6b from first principles: vision as a sense × interceptor table applied as arrays.
+- World grids with one owner each, replacing storage.
+- `Senses` published only.
+- Packed cell sets end to end.
+- One observation type for bodies.
+- PT for turn start.
+- P4a folded into PV1; P4b closed.
 
 **v3.8 → v3.9** (human 2026-10-17 and the v3.8 reviews):
 
