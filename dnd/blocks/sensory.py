@@ -1854,7 +1854,8 @@ class SpatialSensesSystem:
             # Support elevation, traversal and other spatial changes retain
             # their full refresh (including upper-volume sight planes).
             hazard_before = {}
-            effect_before = self._refresh_hazards(observer_uuid, senses, hazard_positions,
+            effect_before = self._refresh_hazards(observer_uuid, senses,
+                self._current_field_hazard_positions(observer_uuid, events),
                 hazard_before=hazard_before, visibility_changed_positions=set())
             before = replace(before, hazardous_cells={position: value
                 for position, value in hazard_before.items() if value is not None})
@@ -1925,6 +1926,25 @@ class SpatialSensesSystem:
         if isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent)) and event.resulting_tile is not None:
             return {event.resulting_tile.position}
         return None
+
+    def _current_field_hazard_positions(self, observer_uuid: UUID,
+                                        events: Sequence[Event]) -> Optional[Set[Tuple[int, int]]]:
+        """Cells whose hazards the facts can change while the observer's field stays current.
+
+        Hazard verdicts read the observer's passive perception, faction and
+        perceived effects, never its conditions: with a current field (same
+        passive perception) its own condition changes no verdict.
+        """
+        positions: Set[Tuple[int, int]] = set()
+        for event in events:
+            if (event.event_type in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL)
+                    and event.target_entity_uuid == observer_uuid):
+                continue
+            event_positions = self._hazard_positions_for(event)
+            if event_positions is None:
+                return None
+            positions |= event_positions
+        return positions
 
     @staticmethod
     def _is_owner_refresh(event: Event, observer_uuid: UUID) -> bool:
@@ -2103,8 +2123,7 @@ class SpatialSensesSystem:
             positions |= event_positions
             entities |= event_entities
             objects |= event_objects
-        own_refresh = any(self._is_owner_refresh(event, observer_uuid)
-            and not isinstance(event, SpatialChangeEvent) for event in events)
+        own_refresh = any(event.event_type is EventType.TURN_START for event in events)
         for position in grid.get_contact_candidate_cells(positions):
             entities.update(grid.get_entities_at(position))
             objects.update(grid.get_center_objects_at(position))
