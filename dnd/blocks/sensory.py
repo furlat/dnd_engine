@@ -2121,10 +2121,14 @@ class SpatialSensesSystem:
             visibility_changed_positions=positions)
         before = replace(before, spatial_effects={identity: value for identity, value in effect_before.items()
             if value is not None})
-        self.refresh_observer(observer_uuid)
         self._refresh_light_sources(observer_uuid, senses)
         after = _capture_senses_transition(senses, positions & senses.seen,
             positions=positions, entities=entities, objects=objects, effects=set(effect_before))
+        # A light change writes visibility and contacts only inside these scopes and
+        # never paths: the observer's footprint can change only if they did.
+        if (before.visible != after.visible or before.entities.keys() != after.entities.keys()
+                or before.objects.keys() != after.objects.keys()):
+            self.refresh_observer(observer_uuid)
         if (before.visible != after.visible or before.seen != after.seen
                 or before.entities != after.entities or before.objects != after.objects
                 or before.hazardous_cells != after.hazardous_cells or before.spatial_effects != after.spatial_effects):
