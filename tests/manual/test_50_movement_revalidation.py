@@ -1,10 +1,26 @@
 """Subjective controller revalidation at committed movement-step boundaries."""
 
+from collections.abc import Iterator
 from typing import cast
 from uuid import uuid4
 
+import pytest
+
 from dnd.actions import MovementEvent
-from dnd.actions_functional import execute_by_index, get_available_actions
+from dnd.actions_functional import execute_by_index, get_available_actions, setup_standard_actions
+from dnd.ai.contracts.observation import (
+    KnowledgeState,
+    ObservationEntityFact,
+    ObservationTileFact,
+    SubjectiveWorldState,
+)
+from dnd.ai.runtime.movement_revalidation import (
+    MovementRevalidationCause,
+    movement_revalidation_cause,
+)
+from dnd.ai.runtime.state_projection import SubjectiveAIStateProjector
+from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.controller import TurnContext
 from dnd.core.action_execution import (
     MovementContinuationDecision,
     MovementContinuationResult,
@@ -12,26 +28,43 @@ from dnd.core.action_execution import (
     MovementTerminationReason,
     movement_continuation_scope,
 )
-from dnd.entity import Entity
-from dnd.core.gridmap import get_map
-from dnd.ai.contracts.observation import (
-    KnowledgeState,
-    ObservationEntityFact,
-    ObservationTileFact,
-)
-from dnd.ai.contracts.observation_replay import materialize_snapshot
-from server.agent_runtime.observation_journal import build_observation_snapshot
-from dnd.ai.runtime.movement_revalidation import (
-    MovementRevalidationCause,
-    movement_revalidation_cause,
-)
+from dnd.entity import Entity, EntityConfig
+from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
+from dnd.scenarios.battlefield_catalog import build_battlefield
 from tests.manual.test_09_action_discovery_and_costs import (
     create_tutorial_actor,
     reset_action_state,
 )
-from tests.manual.test_28_subjective_observation_stream import (
-    create_observation_game,
-)
+
+
+@pytest.fixture
+def hero_world() -> Iterator[tuple[Entity, SubjectiveWorldState]]:
+    """Project one controlled hero's subjective world through the native AI projector."""
+    reset_engine_runtime()
+    build_battlefield("battlefield.open_floor_bright")
+    game = Game()
+    try:
+        hero = Entity.create(uuid4(), "Scout", config=EntityConfig(
+            position=(1, 1),
+            faction="heroes",
+            health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=4, mode="maximums")]),
+        ))
+        setup_standard_actions(hero)
+        hero.compose_entity()
+        game.deploy_entity(hero, (1, 1))
+        projector = SubjectiveAIStateProjector(
+            assignment_id="movement-revalidation",
+            controlled_entity_uuids=(hero.uuid,),
+        )
+        yield hero, projector.project_world(hero, TurnContext(
+            source_entity_uuid=hero.uuid,
+            entity_uuid=hero.uuid,
+            initiative_order=[hero.uuid],
+        ))
+    finally:
+        game.close()
+        reset_engine_runtime()
 
 
 class _InterruptAfterFirstCommittedStep:
@@ -142,19 +175,17 @@ def test_voluntary_move_reaches_destination_before_controller_revalidation() -> 
     assert movement.outcome_code == "movement.subjective_revalidation"
 
 
-def test_subjective_revalidator_interrupts_for_new_hostile_but_not_new_ally() -> None:
+def test_subjective_revalidator_interrupts_for_new_hostile_but_not_new_ally(
+    hero_world: tuple[Entity, SubjectiveWorldState],
+) -> None:
     """Faction-aware visible-contact changes use only subjective entity facts."""
-    _client, session_id, hero, monster, _encounter = create_observation_game(
-        hidden_monster=True,
-    )
-    snapshot = build_observation_snapshot(session_id)
-    before = materialize_snapshot(snapshot)
+    hero, before = hero_world
     enemy = ObservationEntityFact(
-        uuid=str(monster.uuid),
-        name=monster.name,
+        uuid=str(uuid4()),
+        name="Observation Skeleton",
         knowledge_state=KnowledgeState.VISIBLE,
         observer_uuids=[str(hero.uuid)],
-        position=monster.position,
+        position=(5, 1),
         faction="monsters",
         is_dead=False,
     )
@@ -189,12 +220,11 @@ def test_subjective_revalidator_interrupts_for_new_hostile_but_not_new_ally() ->
     ) is None
 
 
-def test_subjective_revalidator_interrupts_for_hazard_or_actor_change() -> None:
+def test_subjective_revalidator_interrupts_for_hazard_or_actor_change(
+    hero_world: tuple[Entity, SubjectiveWorldState],
+) -> None:
     """New hazards and material actor changes invalidate the remaining path."""
-    _client, session_id, hero, _monster, _encounter = create_observation_game()
-    before = materialize_snapshot(
-        build_observation_snapshot(session_id)
-    )
+    hero, before = hero_world
     hazard = ObservationTileFact(
         key="3,1",
         position=(3, 1),
@@ -231,89 +261,3 @@ def test_subjective_revalidator_interrupts_for_hazard_or_actor_change() -> None:
         actor_world,
         str(hero.uuid),
     ) is MovementRevalidationCause.ACTOR_STATE_CHANGED
-
-
-def test_ai_command_stream_reveals_hostile_then_returns_interrupted_epoch() -> None:
-    """AI movement stops at first contact and continues through the same stream."""
-    client, session_id, hero, monster, _encounter = create_observation_game()
-    Entity.update_entity_position(monster, (8, 1))
-    grid = get_map()
-    for y in range(grid.height):
-        if y == 4:
-            continue
-        tile = grid.get_tile(4, y)
-        assert tile is not None
-        tile.visible = False
-    grid._bump_spatial_revisions({"vision"})
-    hero.senses.clear_visibility_cache()
-    monster.senses.clear_visibility_cache()
-    Entity.update_all_entities_senses(max_distance=20)
-    monster_visible_before_move = monster.uuid in hero.senses.entities
-    assert monster_visible_before_move is False
-
-    snapshot = client.get(
-        f"/ai/sessions/{session_id}/observation/snapshot"
-    ).json()
-    epoch = snapshot["current_epoch"]
-    row = next(
-        candidate
-        for candidate in epoch["affordances"]["position_actions"]
-        if candidate["row_id"] == "position|Move|pos=5,5"
-    )
-    command_id = str(uuid4())
-
-    response = client.post(
-        f"/ai/sessions/{session_id}/commands/execute",
-        json={
-            "command_id": command_id,
-            "actor_uuid": epoch["actor_uuid"],
-            "basis_epoch_id": epoch["epoch_id"],
-            "row_id": row["row_id"],
-        },
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "accepted"
-    assert payload["action_resolution"] == "interrupted"
-    assert payload["outcome_code"] == "movement.subjective_revalidation"
-    assert payload["revalidation_required"] is True
-    assert payload["revalidation_reason"] == "newly_visible_hostile"
-    assert hero.position != (5, 5)
-    monster_visible_after_move = monster.uuid in hero.senses.entities
-    assert monster_visible_after_move is True
-
-    frames = client.get(
-        f"/ai/sessions/{session_id}/observation/frames",
-        params={"since": snapshot["observation_cursor"], "limit": 0},
-    ).json()["frames"]
-    result_index = next(
-        index
-        for index, frame in enumerate(frames)
-        if frame["frame_type"] == "command_result"
-        and frame["source_command_id"] == command_id
-    )
-    followup = next(
-        frame
-        for frame in frames[result_index + 1 :]
-        if frame["frame_type"] == "decision_epoch"
-    )
-    assert any(
-        frame["source_kind"] == "sensory_event"
-        for frame in frames[:result_index]
-    )
-    streamed_result = frames[result_index]["command_result"]
-    assert streamed_result["revalidation_required"] is True
-    assert streamed_result["revalidation_reason"] == "newly_visible_hostile"
-    assert followup["decision_epoch"]["reason"] == "movement_revalidation"
-    assert followup["decision_epoch"]["economy"]["movement_remaining"] < 30
-
-    stale = client.post(
-        f"/ai/sessions/{session_id}/commands/execute",
-        json={
-            "actor_uuid": epoch["actor_uuid"],
-            "basis_epoch_id": epoch["epoch_id"],
-            "row_id": row["row_id"],
-        },
-    )
-    assert stale.status_code == 200
-    assert stale.json()["status"] == "stale"

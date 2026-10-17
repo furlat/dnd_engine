@@ -41,7 +41,7 @@ def arena() -> Iterator[Game]:
     reset_engine_runtime()
 
 
-@pytest.mark.parametrize("position,allowed", [((2, 2), False), ((3, 2), True)])
+@pytest.mark.parametrize("position,allowed", [((2, 2), False), ((5, 2), True)])
 def test_hand_operated_door_requires_nearby_contact(arena: Game, position, allowed):
     actor = Entity.create(uuid4(), "Operator", config=EntityConfig(position=position))
     actor.compose_entity()

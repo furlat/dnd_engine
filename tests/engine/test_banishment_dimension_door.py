@@ -75,7 +75,7 @@ def test_dimension_door_commits_all_travelers_before_arrival_reactions(scene, wi
     assert len(transfers) == (2 if with_companion else 1)
     assert all(event.committed and event.portal_uuid is None for event in transfers)
     assert len({event.parent_event for event in transfers}) == 1
-    assert all(event.effect_origin is not None and event.effect_origin.source_id == "dimension_door" for event in transfers)
+    assert all(event.effect_origin is not None and event.effect_origin.source_id == "spell.dimension_door" for event in transfers)
     assert caster.action_economy.actions.normalized_score == 0
     assert caster.action_economy.spell_slot_4.normalized_score == 2
 

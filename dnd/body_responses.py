@@ -18,7 +18,7 @@ from dnd.residues import (
     ResidueProfile, deposit_residue,
 )
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult, ResidueEllipse
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import OccupancyLayer, WorldEdgeChannel
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +73,7 @@ def receiving_regions(position: tuple[int, int], shapes: tuple[ResidueEllipse, .
                 admitted[target] = all(
                     (tile := grid.get_tile(*cell)) is not None and tile.height == origin.height
                     for cell in supercover_line(position, target)
-                ) and grid.raycast_clear(position, target, "propagation")
+                ) and grid.raycast_clear(position, target, WorldEdgeChannel.PROPAGATION)
             if admitted[target]:
                 positions.append(target)
         if positions:

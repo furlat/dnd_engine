@@ -34,7 +34,7 @@ from dnd.core.events import (
     SpatialEffectInteractionEvent,
     Trigger,
 )
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
 from dnd.core.values import ModifiableValue
 from dnd.conditions import Poisoned, Prone
@@ -49,7 +49,7 @@ from dnd.spatial.transitions import bind_spatial_interactions
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.traps import TrapConditionPayload, TrapDamage, TrapPayload, TrapState
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import OccupancyLayer, SpatialChannel
 from dnd.types.spatial_effects import (
     SpatialEffectBlockingPolicy,
     SpatialEffectChangeOperation,
@@ -1012,7 +1012,7 @@ def build_environmental_replacement(
 class SpikeTrap(SpatialCondition):
     """One persistent spike mechanism, its footprint and authored payload."""
 
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset()
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
 
     name: str = Field(default="Spike Trap")
     description: str = Field(
@@ -1053,6 +1053,9 @@ class SpikeTrap(SpatialCondition):
         return bool(senses is not None and self.uuid in senses.spatial_effects) or super().is_hazard_perceived_by(
             requesting_entity_uuid,
         )
+
+    def spatial_channels(self) -> frozenset[SpatialChannel]:
+        return super().spatial_channels() | {SpatialChannel.MOVEMENT}
 
     def is_hazardous_for(
         self, entity_uuid: Optional[UUID] = None, *,

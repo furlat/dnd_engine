@@ -1,0 +1,1068 @@
+# Single-pass change propagation — analysis and plan (v3.7)
+
+Date: 2026-10-16. Status: **APPROVED by the human 2026-10-17 (incl. D7c, Q7 EXECUTION convention, temp-HP record-only).** **v3.5 adds available-actions discovery (§14, PD1/PD2) per the human's 2026-10-17 decisions (model approved 2026-10-17).** **v3.6 folds in the §14 antislop/antiOOP reviews and the whole-world-scan redesign. v3.7 folds in the v3.6 re-reviews, the human's answers (D14 approved; Q-W1, Q-W3, Q-W4 decided) and the first P0a measurements; open items are in §14.10.** Implementation is at P0a.
+
+**Hard rules from the human (2026-10-17):** "do not let old path exist and fallbacks — we want one correct way for things to work, and then fix if it breaks stuff; it means we did not plan in advance well enough." Every replaced mechanism is deleted, not kept beside the new one; no compatibility shims, no fallback branches, no feature flags. A breakage is fixed in the one path, and the plan is corrected if it missed the case.
+
+- **Worktree** (canonical copy of this plan):
+  `/home/tommaso/.codex/worktrees/single-pass-propagation/dnd_engine`
+- **Branch:** `codex/single-pass-propagation`, created from `d13e6ad083f` on the
+  human's instruction. Agents don't commit.
+- **Base:** `d13e6ad083f` (spell worktree: Antimagic removed, schema 11;
+  production `229ce` is its ancestor). All refs are base-relative lines.
+
+| Abbreviation | Path |
+| --- | --- |
+| BA | `dnd/core/base_actions.py` |
+| ACT | `dnd/actions.py` |
+| AC | `dnd/spatial/area_conditions.py` |
+| EV | `dnd/core/events.py` |
+| GM | `dnd/core/gridmap.py` |
+| SEN | `dnd/blocks/sensory.py` |
+| EVO | `dnd/spells/evocation.py` |
+| CONJ | `dnd/spells/conjuration.py` |
+| ABJ | `dnd/spells/abjuration.py` |
+
+Companions in this worktree's `agent_docs/`:
+
+- `AOE_SYSTEM_INDEX_2026-10-16.md`: patterns, ordering hazards, handlers.
+- `CODEBASE_STUDY_NOTES_2026-10-16.md`
+- `ENGINE_PERFORMANCE_HANDOFF_2026-10-16.md`: measured evidence.
+- `ENGINE_COMPUTATION_THEORY_2026-10-16.md`
+
+## 0. Human direction
+
+**Problem:**
+
+- "cut times by a lot … things trigger multiple cascade across sensory systems
+  instead of happening only once and same sensory computations are repeated across
+  observers"
+- "invalidation and recomputations are global while often only e.g. 1 light source
+  changed … pervasively across many systems that might be untracked"
+
+**Method:**
+
+- Stress with "big rooms with lot of people and lights and destroyable objects".
+- Analysis and an analytic plan with expected recomputation counts, before any
+  code, in a new worktree.
+- "the main leading change will be a new event containing the accumulated changes"
+  (§5.5).
+- "separating objective physical changes from how a single agent perceives it …
+  light interacts with subjective stuff" (§4).
+- "all area of effect spells … index all of them … DO ALL THE WORK". Spell-level
+  work is owned here.
+
+**Decided:**
+
+| # | Decision |
+| --- | --- |
+| D0 | Base `d13e6ad`; Antimagic stays removed ("hundreds of edge cases") |
+| D7 | The per-target loop "was intended to be something that could be parallelized" |
+| D7a | "we do all damages (all damage reactions happen) … nothing magical … choices on order that earlier was implicit in the loop". Reactions can't affect other targets; Counterspell "way before". |
+| D6a | One damage roll per area effect |
+| D6 | "if we have any other bugs they need to be fixed" |
+| D11 | Worktree created on instruction |
+| D12 | Available actions in scope (§14): env use within reach + move+use suggestions; no object attack rows; AoE aim points per perceived creature with hit sets; spells listed once with allowed levels; single space scan; "make it fast" |
+| D13 | Movement destination list kept ("we need the path to know if reachable… important for ai") |
+
+## 1. Stress scenario "Gallery Crowd" (GC)
+
+Lantern Gallery (`dnd/scenarios/battlefield_catalog.py:357`):
+
+- hall x 24–71 × y 2–37 (1,728 cells), dark;
+- 26 hall wall torches lit by the fixture + 6 carried (L = 32);
+- 30 creatures (party 4, enemies 26), 2 audiences;
+- sight radius 80 (`encounter_assembler.py:379`), so V ≈ 30 observers per hall
+  cell;
+- ~100 breakable props: monuments, statues, bookshelves and crate stacks block
+  optics and propagation and leave debris; plus oil barrels.
+
+Cases (one or more per index pattern):
+
+| Pattern | Case | Instance values |
+| --- | --- | --- |
+| P-a | Circle of Death into the crowd; Holy Aura on 8 allies; Blindness ×3 twinned | 12 hit, 8 die |
+| P-b + P-f | **Fireball classic** | T=10, D=6, Lc=1 corpse torch, B=5 light-blocking props (each K≈3 in-range sources, f=1 debris cell), 1 oil barrel (c=9) → spill → ignite |
+| P-c | Magic Missile at 3 targets incl. a Shield holder; Chain Lightning (primary + 4); Color Spray | — |
+| P-d | Sleet Storm cast and drop (C≈200, obscured); Ice Storm (C≈49, 4 deaths) | — |
+| P-e | Gust of Wind zone (terrain, anchored) with caster walking 6 steps; Spirit Guardians walk (membership only, no terrain); Cloudkill caster turn | — |
+| P-g1 | Pressure plate → gas vent; portal with 3 occupants; Delayed Blast bead destroyed by Fireball | — |
+| P-g2 | Turn Undead on 6 undead | — |
+| P-h | Wall of Stone | S=10, D=4 displaced, E=1 escaper, p=3 path steps |
+| P-i | Round step with 3 ROUNDS zones (Sleet, Entangle, Gust) | — |
+| Light geometry | Darkness cast, then Daylight dispelling it | — |
+| Ordered | Thunderwave pushing 4 creatures 10 ft into Spike Growth; Mass Heal; summon retirement | 8 ENTER entries |
+
+Routine baselines: creature step, torch-bearer step, door toggle, turn start, AI
+decision.
+
+Discovery (Choices) baselines (§14.6):
+
+- the party caster with the godmode grant of all ~47 area/multi-target spells at levels 1–9 (the held experiment's worst case);
+- one enemy fighter (weapon attacks + env use);
+- each measured as cache miss, cache hit, Preview and Command.
+
+All counts are predictions; P0b measures them.
+
+## 2. Cost model (hypothesis until P0b)
+
+Sensory cost = `Σ settled facts × candidate observers × cost(path)`.
+
+- FR = one full `recompute_observer` (SEN:708).
+- Constants fitted from the saved production gallery runs (V=6):
+  - ≈5.2 ms unobscured FR;
+  - ≈44.6 ms under Sleet obscurement (attributed, unprofiled, to the per-cell
+    supercover walk SEN:819-866);
+  - ≈8 ms Ice Storm.
+- The cost-only Sleet arm (1,487 ms) is not yet reconciled.
+- P0b measures FR count and time, per-version cost, per-seat publication and AI
+  reduction, reconciles, then scales to GC.
+- The discovery cost model is §14.6 (rows × variants × candidates × per-candidate copy/validation, now vs after PD1).
+
+## 3. Root causes
+
+| # | Cause | Main sites |
+| --- | --- | --- |
+| R1 | One logical change → many facts/passes | per-cell tile events AC:1339-1427; per-source light events GM:5985-6042; manual reducer + completion AC:972, 1510; duration republish AC:964-974; death chain (`entity.py:2531-2556`, `base_block.py:572-589`); destruction chain (`blocks/base_item.py:722-782`); identity computation per version EV:2159-2172 |
+| R2 | No objective→subjective delta | full recompute for perceivability/death/effect; tile hint `requires_paths=True` GM:1629 blocks the cheap path (movement doesn't touch observer revisions); light eligibility by causal parent SEN:1639, 1843-1857; `_paths_dirty` boolean |
+| R3 | Global invalidation | whole-cache clears GM:584-641; three-channel area bumps AC:285, 472, 662, 742, 1572; light recompute scans all sources GM:5985; per-entity caches on global counters (`entity.py:6103-6113, 6181-6187, 6648-6699`); Fireball re-stage on any propagation bump EVO:1039; choices on any cursor change |
+| R4 | Objective work repeated per observer/seat | per-observer boundary snapshot, obscurement capture + supercover walks, light descriptors (GM:4139-4219, 5383-5450, 5539-5578); per-seat capture/folds (`player/capture.py`); AI knowledge re-sorts |
+| R5 | No group semantics | per-target EXECUTION re-dispatch BA:2218 (every CAST_SPELL/BASE_ACTION execution handler and every CAST_SPELL effect handler re-runs per target; Counterspell has no root guard ABJ:939-965); handlers acting on others fire mid-loop; shared mutable `self.target_entity_uuid` (BA:2201); per-target damage rolls; 4 sort keys |
+| R7 | Discovery enumerates instead of solving | per-level variant rows; per-cell LOS/wall/AoE candidates with deep copies and eventful validation; object target pools; whole-world scans; caches keyed on the event cursor; discovery/execution footprint mismatch (§14) |
+| R6 | Untracked or misplaced writes; channel strings | condition positions without bumps GM:1542, 1663; `Tile.edit_movement_cost`; 31 private GridMap accesses from content through `get_map()` locals; outside `_paths_dirty` writes; `Set[str]` channels + positional revision tuple |
+
+## 4. Objective physical layer vs subjective perception
+
+**Objective layer.** Owners are GridMap, Tile, Item and Entity fields; no observer
+is involved. Revision bumps and cache invalidation happen **at the write**, so
+objective reads are never stale.
+
+| Kind | Storage / rule |
+| --- | --- |
+| Geometry | blockers, boundary structures (`_object_placements`, bands). FOV from an origin is a pure function of origin, radius and blockers. |
+| Obscurement | `_optical_obscurements_by_position`. The push API exists; AreaCondition becomes its writer and the pull branch goes. |
+| Illumination | `Tile._light` contributions, `source.affected_tiles`. A geometry change re-lights only the sources whose lit area contains the cell. |
+| Movement | tile costs, occupancy, walkability |
+| Subject state | position, stealth DC, invisible, life state. The life-state commit stays atomic and immediate: occupancy, light suppression and perceivability together. |
+
+**Subjective layer.** `SpatialSensesSystem` writes each observer's `Senses`:
+
+| Derived item | What it is |
+| --- | --- |
+| Sight field | FOV from origin within range |
+| Perceived light/visibility | objective light × modes (darkvision, devil's sight, truesight) × obscurement along the route |
+| Contacts | stealth vs passive perception; invisibility vs truesight/see invisible |
+| Known hazards | the owner's `is_hazardous_for`, per observer |
+| Navigation | movement data + perceived blockers + hazards |
+| Memory | `seen` and contacts. Only advanced. |
+
+**Dependency table.** An objective change at X triggers this subjective work for
+each affected observer:
+
+| Objective change | Subjective work |
+| --- | --- |
+| Geometry | field in X's shadow region, then light/contacts/hazards there |
+| Obscurement | visibility for cells whose route crosses X |
+| Illumination at Y | perceived light at Y ∩ field + contacts there |
+| Movement | navigation freshness only (revision compare); occupancy also updates one contact |
+| Subject | that one contact |
+| Own capability | own light/contacts/hazards |
+| Own move | field from the new origin |
+
+**Data model:**
+
+- One channel enum in the leaf `dnd/types/world.py`, keying
+  `observer_spatial_revisions`.
+- Writers derive the channels.
+- The reducer picks work from the fact's data and per-observer revisions, never
+  from causal parents.
+- Geometry uses objective positions (`get_position()`), never another block's
+  `senses.position`.
+
+## 5. Groups and single settlement
+
+### 5.1 The rule (D7/D7a/D6a)
+
+For any area or multi-target effect:
+
+1. **Root:** cast-level reactions once, at declaration/execution, as today.
+2. **A. The effect on every target, in one fixed order:**
+   - one shared damage roll, with roll-level modifiers applied once (Overchannel
+     maximize, Empowered Evocation);
+   - then per target: save (fixed order) → target-level modifiers inside the damage
+     lifecycle (Sculpt Spells, Potent Cantrip, resistance, Shield, Death Ward,
+     Relentless Rage) → HP → death state;
+   - plus the same-instant effects: terrain, ignition, ash, debris, and all stages
+     of one Fireball/payload blast.
+   - **Pushes resolve step by step, inline, per target in the fixed order.** Each
+     step fires its traps, zone/residue/portal entries and falls on that step. A
+     step that kills, incapacitates or forces a retreat stops that push, exactly as
+     today (`actions.py:411-430`).
+3. **Settle once:** one light publication + one subjective pass per affected
+   observer.
+4. **B. Reactions to A's damage and deaths, same order, each its own group:**
+   Hellish Rebuke, Retaliation, Fire Shield, Holy Aura blindness, concentration
+   saves and releases, aura refresh, summon departures, payload explosions.
+5. **The spell completes.**
+
+**Movement is always step by step and is never a group** (human, 2026-10-16:
+"opportunity attack could happen and kill before even other steps happen or traps
+get hit").
+
+- **Voluntary movement (Move):** each step commits on its own. OA, traps and zone
+  entries fire on that step; a kill or incapacitation stops the move before the
+  next step (`actions.py:836+`). Perception settles on that step, so the AI and the
+  next OA see it. The only change is the cost of that per-step update (the §4
+  delta instead of a full recompute for other observers).
+- **Forced movement inside a group:** the same per-step trigger semantics. Only the
+  observers' perception update is deferred to the group's single settle; no OA
+  applies to forced movement.
+
+### 5.2 Where groups open
+
+| Entry | Covers |
+| --- | --- |
+| Convolution branch of `_apply_action` (BA:2514-2545), from target resolution through `_finalize_aoe` | P-a, P-b (one group per blast; stages are sub-steps), P-c, `_finalize_aoe` installs, P-f, residues |
+| `SpatialCondition.activate` (AC:580-627) | zone install incl. APPEAR |
+| Zone move: `relocate_anchor` / `move_zone` / `_change_footprint` | P-e |
+| Wall formation (`wall_constructions.py:641-715`) | P-h |
+| In-cast free loops | Ice Knife burst, Moonbeam/Glyph initial exposure, `payload_blast` |
+| P-g2 nested batches (Turn Undead etc.) | — |
+| Round step (`encounter.py:712-716`) | zone ticks/expiries |
+| Trap/plate fire, portal transfer, material interaction | — |
+
+**Nesting:**
+
+- An entry reached inside an open group joins it.
+- Phase-B items run after depth returns to 0, each opening a fresh group.
+- `BaseAction.apply` itself does **not** open a group. Single-target actions and
+  each Move step settle per fact through the §4 delta, as today but cheap.
+- Move is `POSITION_PATH` (`actions.py:563`), so OA and attack validation keep
+  per-step perception (`reactions.py:50`, `actions.py:261`).
+
+**Mechanism:** a dedicated ContextVar on `EventQueue`, next to
+`_event_batch_depth` (EV:1285-1292). It holds the group root event uuid, the
+entry-kind stack (a leaf enum in `dnd/types/event_facts.py`) and the
+deferred-dispatch list. It is **not** `batch_on_event_callbacks`, which encounter
+opens around a whole controller decision (`encounter.py:1365-1375`).
+
+### 5.3 Inside a group
+
+1. **Fixed order.**
+   - `resolution_order_key(block)` in `base_block.py` (`get_position()`, name,
+     uuid) replaces the `getattr` in `target_resolution_sort_key` (BA:118-127). That
+     `getattr` is an AGENTS.md violation and mis-sorts carried and unplaced items
+     at (0,0).
+   - Sort once at the iteration owner (`_resolve_execution_targets` /
+     `_apply_target_batch`).
+   - Exceptions: player-selected `get_all_targets` order (Chain Lightning primary
+     at index 0, darts, Mass Heal targets) and authored physical order
+     (supported-item depth composes `(depth, *key)`; material op order).
+2. **Objective writes and their revision/cache invalidation are immediate.** Only
+   light publication and the subjective reducer defer. Fireball stage reach and
+   push destinations therefore read current objective state.
+3. **Perception reads see pre-group perception.** This follows automatically: the
+   reducer records instead of settling, and the group check sits inside
+   `SpatialSensesSystem.recompute_observer` (SEN:708), so direct callers
+   (`update_entity_senses`, `materialize_navigation` in `entity.py`, `actions.py`,
+   `evocation.py`, `necromancy.py`) are covered.
+4. **Handler dispatch:**
+   - `BaseHandler.group_dispatch: HandlerGroupDispatch {INLINE, AFTER_GROUP}`; the
+     enum lives in `dnd/types/event_facts.py`; default INLINE.
+   - While a group is open, EventQueue stores AFTER_GROUP dispatches as (handler
+     uuid, deep-copied event) in arrival order (precedent EV:2040-2045) and replays
+     them in phase B.
+   - Deferred handlers must return `None` or the unchanged event, enforced like
+     `validation_only` (EV:1959-1962). They revalidate liveness themselves.
+   - **Spatial ENTER/LEAVE handlers (traps, zones, residues, portals) are always
+     INLINE**, whether the step is voluntary or forced. They are per-step movement
+     rules, not reactions.
+   - **Non-handler consequences** are split: the inline part records state on its
+     owner, and an AFTER_GROUP handler executes it. Precedent:
+     `SpellPayload.detonation_requested` / `defer_detonation`
+     (`spell_payloads.py:227-228, 263, 274`).
+   - The concentration handler (today it returns a modified event) splits into its
+     save/release (AFTER_GROUP) and inline bookkeeping. Summon departure and the
+     encounter-end check split the same way.
+   - An architecture test asserts every O handler in index §7 declares AFTER_GROUP.
+5. **Root vs per-application handlers.** P3 produces a complete table for every
+   CAST_SPELL/BASE_ACTION execution and effect handler: Counterspell, Silence,
+   Hidden reveal, InvisibilityEffect reveal, Greater Invisibility check, Sanctuary
+   self-break, MetamagicAutoRemove, Vicious Mockery, Globe, Sculpt Spells,
+   Forcecage, Wet, Divine Health, Resilient Sphere.
+   - The discriminator is `application` on ActionEvents (already the convention:
+     `wizard.py:233`, `cleric.py:67/121`, `paladin.py:1121`) and `resolution_ref`
+     for other events.
+   - Counterspell and Greater Invisibility become root-only. Greater
+     Invisibility's once-per-cast check is a rules point listed for sign-off (D6).
+6. **Iteration isolation:**
+   - per-target state lives on the per-target event, not in a mutated
+     `self.target_entity_uuid`;
+   - pools stay on their owners: the per-cast action instance (ephemeral via
+     `instantiate`, BA:1818-1845) for Mass Heal/Sleep/Color Spray, and Guardian of
+     Faith's lifetime zone budget;
+   - one shared damage roll drawn at group open; saves in the fixed order.
+
+### 5.4 Close sequence
+
+The settle runs in the **group root event's pre-completion**. Sensory events then
+attach to an open parent, and `located_entity_observer_uuids` (EV:441-449) is
+computed from settled senses.
+
+- `PreCompletionSystem` (EV:133-138) gains `settle_group(root)`, invoked through
+  the existing `_pre_completion_systems` registry.
+- `SpatialSensesSystem.settle_group` calls a public
+  `GridMap.settle_pending_lights()` first, then runs one subjective pass per
+  affected observer. The order is explicit in code.
+- Pending work stays with its owners: GridMap's pending re-light cells, the
+  reducer's pending facts. None of it lives in the ContextVar.
+- Then phase B: deferred dispatches in order, each in a fresh group.
+
+### 5.5 The accumulated-changes event (D1)
+
+- **Independent loop** (no rule callback between iterations): terrain cells at
+  install/footprint change/removal, the per-source light recompute, Sleet dousing.
+  - Keep the writes and publish one `SpatialChangeEvent` with `change_type` and
+    `WorldTileState` rows, accumulated through `SpatialRemovalPublication`
+    (AC:48-55, 835-858).
+  - **EFFECT dispatch is kept.** Readers migrate from `event.position` to
+    `get_affected_positions()`: residue fear (`conditions.py:1150`), pending return
+    (`entity.py:1047`), `_spatial_world_after_values`, `world_facts.py`.
+- **Dependent loop:** residue deposits (each vetoable, `residues.py:244-245`) keep
+  one fact per iteration; inside a group they settle at close.
+
+### 5.6 Ordered cases
+
+| Case | Resolution |
+| --- | --- |
+| Voluntary movement | not a group. Step by step as today: OA, traps and zone entries per step; a kill stops the move; perception settles per step via the §4 delta. |
+| Forced movement (Thunderwave, Gust, Seismic Strike, Glyph detonation, wall displacement, stone escapes) | each target's push resolves step by step, inline, in the fixed target order, against committed occupancy. Traps, zone entries, falls and paid retreats fire on their step and can stop the push (`actions.py:411-430`), unchanged. |
+| Pools/budgets | sequential on their owners; refunds on cancelled applications (PB) |
+| Self-interference (Banishment of self, Exhale Dragon's Breath granter, markers, Faerie Fire) | concentration release in phase B; all targets resolve under the pre-group grant |
+| Perception publications per target | settled once at close |
+| Fireball / `payload_blast` stages | One shared staged-loop implementation in `spell_payloads.py` or below; today it's duplicated (EVO:929-1045 and `spell_payloads.py:53-206`) with different keys. Each stage checks its own barrier set's `integrity is DESTROYED`; the item records its destruction lineage, feeding `prerequisite_destruction_lineages`. No event scan, no global propagation counter. A Delayed Blast bead destroyed mid-group detonates in phase B. |
+| Material op order, barrel spills, supported depth, portal exit, plate pulses | authored order |
+| Summon retirement, encounter end, aura refresh, anchors moved by pushed creatures | phase B |
+
+### 5.7 Perception-read outcome changes (listed for sign-off)
+
+Mid-group perception reads now see pre-group perception:
+
+- unseen attacker/target on later rays (`conditions.py:1470/1489`);
+- Frightened source visibility (`conditions.py:1120/1132`);
+- Hidden reveal;
+- Counterspell and OA eligibility;
+- Chain Lightning secondaries;
+- Color Spray/Sleep eligibility (already a pre-pass).
+
+Geometry readers of `senses.position` switch to objective positions:
+`creature_transforms.py:222/246`, `fighter.py:460`,
+`barbarian.py:1095/1255/1378/1521`, `transmutation.py:807`, `conjuration.py:606`,
+Thunderwave EVO:1606-1607.
+
+## 6. Predicted counts (GC)
+
+| Unit | Meaning |
+| --- | --- |
+| FR | full recompute |
+| P | §4 pass for one observer |
+| O | the number of phase-B items, each its own group |
+
+- "After P3" assumes P1–P3; global cache wipes remain until P5.
+- "Conservative" prices P as FR; "Target" needs P4b.
+
+| Case | Now | After P3 (conservative) | After P5 | Target |
+| --- | --- | --- | --- | --- |
+| Circle of Death (12 hit, 8 die) | 8×31 = 248 FR (~1.3 s) | 30·(1+O) P | wipes 0 | ~10 ms + O |
+| Holy Aura ×8 | ~240 FR | 30 P | — | ~10 ms |
+| **Fireball classic** | ~816 FR + barrel (2c+7)·V ≈ 750 FR + 1,470 hazard-only; ~25 wipes | 30·(1+O) P (~150 ms + O); wipes remain | 0 wipes | ~20 ms + O |
+| Magic Missile / Chain Lightning / Color Spray | deaths·(V+1) + blinds·V | 30·(1+O) P each | — | ~10 ms |
+| Sleet cast (C≈200) | 202·V = 6,060 FR obscured (~270 s) | 30 P obscured (~1.35 s) | — | ≤150 ms (P4b + D9) |
+| Sleet drop | ≈6,030 FR (~30 s) | 30 P (~150 ms) | — | ~50 ms |
+| Ice Storm (C≈49, 4 deaths) | ≈1,654 FR (~13 s at 8 ms) | 30·(1+O) P | — | ~10 ms |
+| Gust of Wind zone, 6 caster steps | per step (1 + 2ΔC + L)·V | per step: zone-move group ≤30 P | — | ~5 ms/step |
+| Wall of Stone (S=10, D=4, E=1, p=3) | S·V + 2V + 3D·V + 2E·p·V ≈ 540 FR | 30 P + escape steps (per-step deltas) | — | — |
+| Round step, 3 ROUNDS zones | 180 FR | 0 solves; ≤30 descriptor updates if duration is projected | — | <1 ms |
+| Thunderwave ×4 (10 ft) into Spike Growth | pushes × steps × 8 ENTER cascades | 30 P; the 8 Spike Growth entries resolve inline on their steps | — | — |
+| P-g1 / P-g2 / Darkness–Daylight / summon retirement | measured in P0b | 30 P per group | — | — |
+
+**P1 residue, stated honestly:** once `requires_paths` is gone, C·V hazard-only
+refreshes and C versions remain per terrain install until P2.
+
+**Non-sensory terms**, reported separately:
+
+- versions × per-version cost (the base adds `ActionCostsCommittedEvent`,
+  `ActionApplicationCommittedEvent`, `ConditionMembershipCommittedEvent` and
+  `EffectApplicationEvent` ×3);
+- per-seat publication (handoff 47–350 ms);
+- rules work;
+- AI knowledge reduction;
+- turn-start navigation;
+- AI decision;
+- Choices: modelled in §14.6 (PD1/PD2).
+
+## 7. Phases (execution order) and gates
+
+**Order (decided 2026-10-17; the human left it to the plan):**
+
+- **Sensory first:** P1 is the smallest change with the largest measured term (Sleet cast 5,931 FR).
+- **PD1a before P3:** P3's shared staged loop consumes the one footprint function.
+- **PD1b after P3 and the re-measure:** both rewrite `BaseAction.apply` and the per-target loop. P3 lands groups and per-target state first, then PD1b moves to `apply(scan, selection)`.
+
+| Phase | Scope | Gate |
+| --- | --- | --- |
+| **P0a** | ✅ Worktree created, environment synced, docs copied. ✅ First counters added (full recompute, each sensory fast path, light-source FOVs, cache clears). ✅ Known failures triaged; stale tests fixed (69 pass). Running: cleanup of the 106 uncollectable test files. To do: GC fixture harness (§9.4); discovery counters (rows, copies, validations, footprints, emitted targets); remaining counters (P by kind, cache misses, facts by type, versions, deferred dispatches). Production comparison uses the archived arm `.runtime/causal-execution/production-229ce/` (no checkout). | fixture loads; counters visible; `--collect-only tests` has 0 errors |
+| **PB1** | ✅ **Done 2026-10-17** (A, B: one latest-wins arbitration for activation and footprint moves, `SpatialCondition._begin_footprint_change`; K: monotonic revisions + path cache cleared in `clear()`, light reseeded in `create_rectangle`; tests `test_spatial_conditions.py::test_exclusive_conditions_latest_wins_without_raising`, `test_gridmap_rebuild.py`). Blocker bugs confirmed by verification: crashes (exclusive-surface raise, cloud-overlap raise), stale caches after `clear`/`create_rectangle`, any triaged failure blocking the fixture | failing-first case per bug |
+| **P0b** | **Split 2026-10-17 so P1 isn't blocked on measurement: P0b-1 (now) = ordinary + counts for the P1/P2 gate rows (Fireball, Sleet cast/drop, Ice Storm, both Choices rows); P0b-2 (before P3) = the remaining GC, routine and production-arm rows.** Baselines: the saved production fixture (reconcile §2 and the cost-only arm), then every GC row, routine row and discovery row (§1); counts **and** ordinary complete-operation timings | each "Now" within ±15 % or the model corrected and the human told |
+| **P1** | **Step 1 done 2026-10-17:** the reducer no longer treats `requires_paths` (movement topology) as a full recompute; support changes still force one through the observer optical revision. Sleet cast FR 5,931 → 90 (264 s → 7.8 s counts mode), drop 5,901 → 60 (31.7 s → 1.5 s); hazard-only residue 5,842 as stated. **Step 2 running:** `SpatialChannel` / `WorldEdgeChannel` everywhere, named `ObserverRevisions`, `SpatialCondition.spatial_channels()` bumped by GridMap at membership commits. **Moved to P2:** `invalidate_spatial_caches` private + AST ban; the remaining outside writers (terrain modifiers, residues, item blocking, walls, entity size/flight) are re-routed there anyway. Channel enum; writer-derived channels; tile mechanics without `requires_paths`; area conditions bump only their channels; `invalidate_spatial_caches` private; AST architecture test banning `_`-prefixed access on values bound from `get_map()` (31 current sites migrate) | Sleet cast FR 6,060 → ~60 (+ C·V hazard-only, stated); ordinary timings for Sleet cast/drop, Ice Storm, Fireball |
+| **P2** | Single reducer entry (remove AC:972, 1510; D8); duration as a state fact; §5.5 facts with EFFECT dispatch and 4 reader migrations; light per cause | predicted versions/passes + ordinary timings |
+| **PD1a** | **One footprint (§14.3a):** `objective_footprint(shape, aim, caster_pos, source_pos)` in `dnd/core/aoe.py` (11 callers); AoEShape a frozen value without result fields; one propagation primitive; `AreaPropagation` value for cylinders; spell protection untouched at its 5 sites (Globe out of scope); zones take their area from `AreaCondition.area` (76 + 13 declarations); the listed geometry paths, `filter_propagation_positions`, its cache and the dead caches deleted (U1, U2, U4) | (a) per AoE spell × aim (no Globe), discovery hit set == execution affected set, U1/U2 written failing-first; mechanism/corner outcome changes listed; footprints 7,938 measured → ≤580 computed / ≈230 distinct |
+| **P3** | §5.2–§5.4 mechanism; handler dispatch enum + phase B + non-handler splits; root/per-application table; isolation; single damage roll (sites in §9.2); shared staged loop; objective positions (§5.7); SEN:1848 illumination-gap gate reworked (deferral guarantees a gap > 1). Includes **PB2** group-related bugs: Counterspell/Greater Invisibility per target, twinned validation, pool refunds, fence, parent cancellation, sort-key `getattr`. | every §6 "After P3" row; changed outcomes listed for sign-off |
+| **PB3** | Rules deviations confirmed unintended (D6) | failing-first case each |
+| **Re-measure** | — | top residual terms with counts and timings |
+| **PD1b** | **Rows, legality, selection, switched together (§14.2–§14.5):** the actor scan; `_admission_error` + `rule_error(scan, selection)` replacing 232 `_validate` + 4 discovery-only overrides (Q-W5); `Entity.perform` as the only `apply` entry; spells listed once with castable levels; aim points with hit sets; relocation destinations from the scan; region descriptors; env use via rings; objects from perception; Cleansing Touch and connectors bounded; one `ActionSelection` (§14.4b) through every consumer; the per-cell, variant, name/index paths deleted; bug G fixed by construction; profile hooks on the scan (Q-W6) | (b) discovery and Command agree on every GC row × target × level; (c) player, AI and server lanes green; remaining `_validate` overrides = the named handler-admission list; eventful validations 148,567 measured → 0; emitted targets 209,734 → ≤580 aims + ≈435 creature + ≈350 zone + R; LOS enumeration 378.7 s → 0; ordinary Choices timing reported (§14.6) |
+| **PD1c** | **Whole-world scans at execution (§14.8)**; D14 approved | GM1 brute-force equality; AST ban on world iteration in `dnd/`; the redesign's tests |
+| **P4a** | Shared objective inputs: boundary structures stored with placements; obscurement from the existing storage; light descriptors from one index | per-observer objective rebuild count → 0; timing |
+| **P5** | Scoped invalidation: cache entries keep bounds and drop on intersection; light selection by recorded lit area; entity caches on `observer_spatial_revisions`; path freshness by revisions; maintained barrier set | global wipes → 0; cache misses before/after; timing |
+| **PD2** | **Costs of what is kept (§14.7):**<br>• Command uses the bare admission check, not a full preview;<br>• preview cached as its projection, no JSON-size measurement, no double deep copy;<br>• capture without dump/validate rounds; `_make_action_info` without per-row `BaseCost.model_validate`;<br>• AI row-profile dumps removed;<br>• movement list (D13): copies at `entity.py:6885-6892`, per-call key sorting, shared path tuples, OA exposure intersection once per path tree, per-step hazard checks, swim/climb/fly bounded by remaining movement (U5);<br>• `_prepare_position_preview_cache` keyed by GridMap revisions instead of re-sorting each call;<br>• retained discovery graphs released at the operation boundary (§9.10).<br>*Conditional on the post-PD1 measurement (like P4b), adopted only if R(S−h) > Um+I+F (handoff:194):* owner revisions (external writes routed through owners first), the session cache by input sections, selection staleness on the same keys. | Choices cache hit / miss / Preview / Command ms before/after; copies/serializations per request counted |
+| **P4b** | *(conditional on the re-measure)* bounded passes: VU over shadow regions; ray-accumulated route obscurement | D9; eliminated > maintenance |
+| **P6** | Event machinery: COMPLETION handler lookup; per-cell dispatch re-reads; identity computation per version (D4); turn witness set; Fireball latest-version access; residue-fear provenance | versions and dispatch counts before/after |
+| **P7** | Seat-independent capture (pure function, frozen value); one fold per seat; AI knowledge reduction consumes settled sensory events once per group | publication and AI ms before/after |
+| **P8** | Value layer: min/max once per read; bounded breakdown cache; stats snapshot on change | passive-perception and resistance evaluation counts before/after |
+| **PC** | *(other repo; human)* NDClientGodot SDK schema 9 → 11; grouped world boundaries | — |
+
+**Correctness oracle.**
+
+- At each group close in tests, per observer, run a cold `recompute_observer` on a
+  copied `Senses`. Compare `visible`, `entities`, `objects`, `hazardous_cells` and
+  `effective_light_levels`; memory is excluded.
+- Run the existing sensory, light, Fireball, Globe, residue-fear, pending-return
+  and player capture suites.
+- Rule outcomes are data-driven from P0b. Outcomes changed by decided rules (one
+  roll, phase B, fixed order, §5.6/§5.7, bug fixes) are listed for sign-off.
+
+**Lanes.** Counts go in the architecture or live/integration lane; no wall-clock
+asserts in the default lane. A phase that doesn't remove its predicted term is
+stopped and reported.
+
+## 8. Decisions
+
+| # | Decision | Status |
+| --- | --- | --- |
+| D0 | Base `d13e6ad` | **Decided** |
+| D1 | Accumulated-changes facts with EFFECT dispatch; 4 readers migrated | **Approved** (with the plan, 2026-10-17) |
+| D2 | Outside groups, facts settle per fact through the §4 delta | Follows from §5.2 |
+| D3 | Duration-only ticks don't re-solve observers | **Approved** |
+| D4 | Identity grants per version, per-handler copies, lineage lists | Keep unless P6 shows they're safe to reduce |
+| D5 | ~~Discovery in a separate plan~~ **Superseded:** discovery is in scope (§14) | Human 2026-10-17 |
+| D6 | All bugs fixed: engine bugs outright; rules deviations checked against the branch's spell plans and SRD; recorded adaptations stay; unclear ones go to the human | **Decided** |
+| D6a | One damage roll per area effect | **Decided** |
+| D7 / D7a | Groups for area/multi-target resolution; "all damages, then reactions"; cast-level reactions at root | **Decided** |
+| D7c | Groups also at the zone/wall/trap/portal/round-step entries of the index (area mechanics beyond casts). Supersedes handoff lines 110 ("no fabricated simultaneous admission") and 140 ("do not freeze every target at cast start") for area resolution. | **Approved** |
+| D8 | APPEAR effects needing the field observed first, if any, when the manual reducer calls go | Check in P2 |
+| D9 | Ray-accumulated obscurement equals per-cell supercover semantics, or a defined change accepted | Only if P4b |
+| D10 | Fixed order except player-selected order and authored physical order | **Approved** (correctness, not performance) |
+| D12 | Available-actions model (§14) | **Decided** (human 2026-10-17) |
+| D13 | Movement destination list kept; only its compute overhead fixed | **Decided** |
+| D14 | Whole-world scans replaced by bounded owner queries (§14.8, `WHOLE_WORLD_SCAN_REDESIGN_2026-10-17.md`) | **Approved** (human 2026-10-17); Q-W2 perceived preview; Q-W3 delete |
+| D11 | Worktree | **Done** |
+
+### 8.1 Verified bugs (verification pass at `d13e6ad`)
+
+Probes for A, B, C and I were run; A and I were re-run by the coordinator in this
+worktree. The rest is static reading.
+
+**PB1: before the GC baseline (blockers)**
+
+| Id | Bug | Fix |
+| --- | --- | --- |
+| A | Exclusive same-layer surface **raises** on different content (AC:354-358, re-raised at :596-598). Reachable: Flaming Sphere trail, Winter's Breath, `patch()`, Grease/Web/Entangle/Spike Growth/Ice Storm cast over each other, oil→fire beside overlapping debris or acid. Probe: Fire on Grease and Fire on Wet both raise. | latest wins and substitutes; never raise (Q1) |
+| B | A moving cloud **raises** on any other cloud-layer occupant (`_change_footprint` → GM:1653-1660), inside the caster's TURN_START handler (CONJ:2011, 3593) | latest wins (Q1); moves use activation arbitration |
+| K | `GridMap.clear()` keeps `_path_cache`/occupancy revision while resetting other revisions; `create_rectangle` drops non-attached light contributions (GM:6312-6380, 2423-2441) | clear caches; monotonic revisions; reseed like `set_tile` |
+| R-stale ✅ done | Base failing tests that are stale: Globe ×4 (fixed dice faces exhausted by damageable walls), Dimension Door ×2 (`spell.dimension_door` id), lifecycle helper ×3 (`CombatLogEntry.data`), world-prop cold init ×4 (`_retained_event` audience API), entity birth ×1, body residue ×1, 2 collection errors (missing `tests.game.*` / `game.runtime_*`) | update expectations; list for sign-off |
+| R-door ✅ done | 54 door tests reach across a full cell to an edge-mounted door (stale, Q8) | move actors to a cell touching the edge; list for sign-off |
+
+**PB2: with P3 (group-related)**
+
+| Id | Bug | Fix |
+| --- | --- | --- |
+| E | Counterspell re-fires per target application (ABJ:939-965, 1063-1067) | ignore `application is not None` |
+| F | Greater Invisibility rolls an escalating Stealth check per application; twinned on [self, ally] checks the caster twice (`conditions.py:2829-2846`). The check itself is a recorded BG3 adaptation. | root events only; root lineage as creation lineage |
+| G | Twinned Invisibility/Greater Invisibility `_validate` skip `super()`: the 2nd target has no range/visibility/duplicate check (`illusion.py:886-906, 977-997`). Wider pattern: 102 of 174 spell/class `_validate` overrides skip `super()`. | **moved to PD1b:** fixed by construction: base checks live in the non-overridable `_admission_error`, rules in the additive `rule_error` (§14.3b) |
+| J | The generic loop never re-checks root cancellation, cast concentration or target liveness. `prepare_concentration` silently creates new concentration mid-batch (ACT:5217-5220). | per-iteration checks |
+| N | Spirit Guardians slow leased before admission (CONJ:2363-2366) | admit first |
+| Q | `senses.position` used for geometry (Thunderwave and 9 other sites, §5.7) | objective positions |
+| D | Sleep/Color Spray consume pool HP for vetoed candidates | refund and continue (Q3) |
+| C | First-per-turn fence keyed by target only. Grease/Insect Plague/Incendiary/IceSurface lose the end-of-turn save after entering (SRD says both). | key by (target, arrival group / TURN_START / TURN_END) (Q2) |
+| L8 | Moonbeam cast exposure bypasses the fence (EVO:5998-6001) | route through `_admit_trigger(APPEAR)` |
+| S | Sort-key `getattr` (BA:118-127) | `resolution_order_key` |
+
+**PB3: rules deviations confirmed unintended**
+
+| Id | Bug | Fix |
+| --- | --- | --- |
+| I | Overlapping difficult terrain stacks (+1 per zone; probe 1→2→3; SRD says it never stacks) | minimum-cost constraint of 2 |
+| L1 | Hypnotic Pattern has no "sees the pattern" filter | `can_see_visual_effects` |
+| L2 | Silence lacks the thunder immunity its docstring promises | membership contribution; no sound system (Q6) |
+| L4 | Slow has no 6-creature cap | up to 6, lowest HP first (Q4) |
+| L9 | Daylight dispels Darkness of any level (SRD: 3rd or lower) | level check |
+| L11 | Mass Cure Wounds takes the first 6 by position | up to 6, lowest HP first (Q4) |
+| L12 | Guardian of Faith presentation centred on the top-left cell | centre on the footprint |
+| P | Admission-time temp-HP diff (`entity.py:3749, 3797`), latent | record only (approved) |
+| M | Turn-start saves split across EXECUTION/EFFECT phases | one convention: EXECUTION for every zone turn trigger (Q7, approved) |
+| L6 | Web lacks its light obscurement | one-level light reduction, non-stacking (Q5) |
+
+**PD1/PD2: discovery bugs**
+
+| Id | Bug | Fix |
+| --- | --- | --- |
+| U1 | Caster-origin shapes (cones, lines, Thunderwave) over-report hits in discovery: no propagation filter, which execution applies (`entity.py:6059-6060` vs `core/aoe.py:225-233`) | one footprint function (PD1) |
+| U2 | Cylinders (Ice Storm, Flame Strike, Call Lightning) under-report hits: discovery filters by propagation, execution doesn't (`entity.py:6061-6068` vs `core/aoe.py:396-437`) | one footprint function (PD1) |
+| U3 | `secondary_targets` mutated in place on shared cached targets (`entity.py:5740-5745`), also on the AI path | fresh rows (PD2) |
+| U4 | `_aoe_origin_fov_cache` is never read (dead) (`entity.py:8106-8109`) | delete (PD1) |
+| U5 | Swimming discovery runs an unbounded `compute_paths` every call (`entity.py:6850-6865`) | bound by remaining movement (PD2) |
+
+**Not bugs** (verified):
+
+- Holy Aura range/choice (matches the SRD plan).
+- Calm Emotions without a save, and Preserve Life without a pool (recorded BG3
+  adaptations).
+- Entangle/Tentacles without LEAVE (SRD: restrained "until the spell ends").
+- Sanctuary area break.
+- Banishment of self (RAW-consistent, guarded); see Q9.
+
+**Human decisions (2026-10-17):**
+
+| Q | Decision |
+| --- | --- |
+| Q1 | **Latest wins.** An incoming exclusive surface or cloud with no authored transition substitutes the incumbent in the conflicting cells; same-content moves displace as activation does; never raise. A full material-transition graph is later work, not this plan. |
+| Q2 | **Rules, not a choice:** first entry on a turn, start of turn and end of turn are separate triggers per the SRD (Grease, Insect Plague, Incendiary, Cloudkill, Tentacles, IceSurface). Fence keyed by (target, arrival group / TURN_START / TURN_END). |
+| Q3 | **Refund:** vetoed Sleep/Color Spray candidates cost nothing; continue down the list. |
+| Q4 | **Slow and Mass Cure Wounds:** no caster choice. Up to 6 creatures, **lowest current HP first** (fixed-order key as tie-break). |
+| Q5 | **Web lowers light one level** on its cells (VERY_BRIGHT→BRIGHT→DIM→DARKNESS; never below DARKNESS; non-stacking), instead of a new obscurement tier. Needs a small relative "dim one step" contribution beside the existing caps (`base_tiles.py:399-413, 610-619`); none exists today. |
+| Q6 | No sound system: Silence gets thunder immunity only. |
+| Q7 | Asked "what is canon and what is BG3". **Canon:** core 5e doesn't order turn-start effects; Xanathar's simultaneous-effects rule lets the turn's creature choose. BG3: not claimed. **Code:** EXECUTION was chosen deliberately on 2026-02-05 (`c58b3a8`: "Fire BEFORE auto-stand at EFFECT") so a creature knocked prone by a turn-start save still auto-stands that turn (`actions_functional.py:136-175`); "until next turn" effects like Dodge are still active during that save, a creature-favourable order consistent with Xanathar. **Recommendation:** EXECUTION for every zone turn trigger, with this reason documented. **Approved (2026-10-17).** |
+| Q8 | **Stale tests, not a bug.** The tests place the actor at (2,3) with the door on the east edge of (3,3) (`test_environment_destruction.py:110-114`), i.e. reaching across a full cell; edge-mounted doors correctly refuse that. The 54 tests move their actors to a cell touching the edge (expectation update, listed for sign-off). |
+| Q9 | Self-Banishment stays. |
+| I | Difficult terrain doesn't stack (minimum-cost 2). |
+| Globe | **Out of scope** (late-game spell; fix when a boss needs it): X (acid flask) and H (Globe area trimming) dropped. |
+| P | Temp-HP admission diff is latent (nothing grants temp HP inside the damage's own admission today). Recording only, not fixing now. **Approved (2026-10-17).** |
+
+## 9. Open study items
+
+1. **Deferred dispatch details:** liveness revalidation per deferred handler kind;
+   which existing handlers return modified events and so must be split like
+   concentration.
+2. **Single-roll sites:** every AoE `_apply` that rolls damage (index §3). Classify
+   each damage-roll-result handler (`wizard.py:252-331`, `hit_effects.py:68`) as
+   roll-level or target-level. Zone exposures (one creature per trigger) are
+   unaffected.
+3. **Client timing:** one reveal and one world boundary per group; schema gap (PC).
+4. **GC fixture harness** (`devtools/performance/gallery_crowd.py`, seed recipe vendored at `devtools/performance/gallery_crowd_seed_recipe.json`, no credentials):
+   - the real worker runtime (`server.worker.start`) on an extended authored Lantern Gallery recipe: torch-carrying fighters (`hero.fighter_l5_shield_torch`) with starting damage in the blast clusters, spread witnesses, lit hall torches, an oil barrel, then a plate/vent, a portal, undead and a summoner;
+   - one case per fresh process; modes ordinary / counts / profile (the shape of the archived `gallery_baseline_v1.py`);
+   - measured as construct → apply → operation → both-audience publication → encoding, plus Choices/Preview/Command for discovery;
+   - `devtools/player_server_acceptance/performance_spells.py` imports the deleted
+     `game/` package and isn't reused.
+5. **Movement/AI per step:** AI continuation reads settled perception after each
+   step, which holds because Move isn't a group. Measure AI reduction per step in
+   P7.
+6. ~~Whole-world scans~~ merged into §14.8 (v3.6).
+7. ~~Discovery revisions~~ owners named in §14.7 (v3.6).
+8. **Bounded passes** (P4b only): shadow regions with height, directional
+   boundaries and volumes. No fallback: the pass matches the cold oracle or P4b is not adopted.
+9. **Actor scan at execution** (PD1b): count every `apply()` entry point (reactions, OA, triggered spells, harness) and decide who builds the scan there without BaseAction importing Entity (§14.3b).
+10. **Retained discovery graphs** (handoff:118): release cost at the operation boundary, measured in P0b, owned by PD2.
+
+## 10. Process and risks
+
+**Process:**
+
+- AGENTS.md plan-adherence sub-agent during implementation.
+- No agent commits.
+- Antislop and antiOOP review of every plan version that adds design (v3.5 reviewed, v3.6 re-reviewed; v3.7 is their fold-in plus human answers).
+
+**Risks:**
+
+- Bounded passes are the hardest part. There is no fallback path: if a bounded pass can't match the cold oracle for a case, the pass is fixed (or P4b is not adopted at all), never branched.
+- Visible rule changes need sign-off: reactions after all targets' damage (inside
+  the spell), one roll, fixed order, §5.6/§5.7 perception and push changes, bug
+  fixes.
+- Client schema gap (PC); the client must also consume the new discovery rows (region descriptors, aim points with hit sets, levels as a field).
+- AI behaviour shifts with discovery: one row per aim point with correct hit sets, and the footprint bugs U1/U2 fixed, so friendly-fire choices change. Listed for sign-off with P0b/PD1 outcomes.
+- Also for sign-off: mechanism areas switched to the one propagation primitive (corner cells, PD1a); stone-escape order (§14.8); the Opulent Revival fix; Cleansing Touch's spell picked as a target facet (client protocol, PC).
+- PD1b is the largest phase: 232 `_validate` + 4 discovery-only overrides, ~33 `apply`/`pre_validate` callers behind `Entity.perform`, ~30 variant + 22 template-name + 29 facet definitions, the selection through 9 consumer sites, and 94 + 35 test files. Plus Q-W6: 5 profile hooks / 106 `actor: Any` / 48 isinstance.
+- All numbers are predictions until P0b.
+
+## 11. Re-based refs
+
+| Item | Location |
+| --- | --- |
+| Terrain loop | AC:1339-1427 |
+| Manual reducer calls | AC:972, 1510; completions AC:616, 731 |
+| Tick | AC:964-974 |
+| Light recompute | GM:5985-6040 |
+| Death | `entity.py:2531-2556`; `base_block.py:572-589` |
+| Destruction | `base_item.py:722-782`; GM:3892 |
+| Object move | GM:3507-3600 |
+| Identity computation | EV:2159-2172, 443-449 |
+| Navigation | SEN:136, 1794; `entity.py:5423-5502` |
+| Values | `values.py:864-919, 1599-1661` |
+| Cache clears | GM:584-641, 4881-4940, 6276-6308 |
+| Area bumps | AC:285, 472, 662, 742, 1572 |
+| Positionless invalidations | `entity.py:848, 881, 891` |
+| Per-entity caches | `entity.py:6103-6113, 6181-6187, 6648-6699` |
+| Fireball re-stage | EVO:1039 |
+| Choices | `session.py:54-68, 344, 454-455` |
+| Per-observer objective inputs | GM:4139-4219, 5383-5450, 5539-5578 |
+| Capture | `capture.py:669-755, 811-850, 952-1058` |
+| Event machinery | EV:1837-1839, 2260-2322, 2040-2052, 2192-2198; `encounter.py:925-940`; EVO:1029, 1036 |
+| Untracked writes | GM:1542, 1663; `base_tiles.py:311`; `entity.py:1951, 1967`; ABJ:2338, 2356 |
+| Tile hint | GM:1629 |
+| Sort key | BA:110-129 (`getattr` at 118-127) |
+| Reducer registration | SEN:677-692 |
+| Illumination gap | SEN:1848 |
+| Discovery entry | `entity.py:7993-8184` (`get_available_actions`) |
+| Discovery collectors | `entity.py` 6335-6497 (entity), 6752-6962 (path/position), 7184-7304 (LOS), 7306-7469 (AoE), 7471-7519 (object), 7562-7991 (use/world) |
+| Variants | `actions.py:5359-5438`; `base_actions.py:1847-1893` |
+| Discovery validation | `base_actions.py:2098-2137`; witness search 2110-2123; `actions_functional.py:281-331, 490-515, 612, 619, 654-656, 700` |
+| Session / worker | `player/session.py:54-68, 334-506, 585`; `player/choice_projection.py:83-134`; `server/worker.py:142-156, 254` |
+| AI discovery | `ai/runtime/decision_epoch.py:148-157, 819-845, 948-971` |
+
+## 12. Changes
+
+**v3 → v3.1:**
+
+- phase A/settle/B;
+- D7b withdrawn;
+- one roll; all bugs fixed;
+- Fireball one group per blast;
+- groups not at every `BaseAction.apply`;
+- eager settlement outside groups;
+- loop rule restored;
+- P0 split;
+- P4a/P5 unconditional;
+- AI, client and P6 items;
+- open study items.
+
+**v3.1 → v3.2** (both v3 re-reviews and the human's worktree instruction):
+
+- Worktree created and recorded.
+- Group mechanism made concrete: own ContextVar, entry-kind stack, nesting joins,
+  phase B after depth 0. Settle via `PreCompletionSystem.settle_group` in the root
+  pre-completion; owners keep pending work; group check inside
+  `recompute_observer`.
+- W narrowed to light publication + subjective pass; objective invalidation and the
+  life-state commit stay immediate.
+- Handler dispatch as a two-value enum on `BaseHandler`, with replay, a no-mutation
+  invariant and non-handler splits; spatial ENTER handled by an entry-kind rule.
+- A complete root/per-application table instead of two hand fixes.
+- Pools stay on their owners ("group-scoped pools" dropped).
+- Sort key moves to `base_block.resolution_order_key` (removes `getattr`);
+  player-selected order exempt.
+- One shared staged loop for Fireball and `payload_blast`, with integrity-based
+  stage results.
+- Objective positions for geometry readers; perception-read outcome list (§5.7);
+  push-ENTER stop change listed.
+- Counts corrected:
+  - wipes remain until P5;
+  - 30·(1+O);
+  - Thunderwave 8 entries;
+  - Ice Storm ~13 s;
+  - barrel term added;
+  - Gust replaces Spirit Guardians for terrain moves;
+  - GC instance values;
+  - P1 residue stated.
+- GC gains P-g1, P-g2, Darkness/Daylight and summon retirement cases.
+- Complete-operation timings at the P1/P2 gates; gates for P6–P8.
+- No checkout needed for the production comparison.
+- D7c and D10 adjusted.
+- AST private-access test widened.
+- SEN:1848 gap rework assigned to P3.
+
+**v3.2 → v3.3** (human: movement must stay step by step):
+
+- Movement is never a group.
+- Forced movement inside a group keeps per-step inline triggers and stops.
+- Spatial ENTER/LEAVE handlers are always INLINE; the entry-kind deferral rule is
+  removed.
+- Push-caused entries and paid retreats moved out of phase B.
+- Thunderwave row corrected.
+
+**v3.3 → v3.4** (human answers 2026-10-17): Q1–Q9 decisions; difficult terrain non-stacking; Globe out of scope (H, X dropped); temp HP pending; Q7 canon/code answer with recommendation; Q8 resolved as stale tests.
+
+**v3.4 → v3.5:** available-actions discovery in scope (§14; PD1 after P0b, PD2 after P5); D5 superseded.
+
+**v3.6 → v3.7** (v3.6 re-reviews: antislop 16, antiOOP 14; human answers; P0a measurements):
+
+- Legality: one non-overridable `_admission_error(scan, selection)` + one additive `rule_error`; checks take the candidate as an argument (this, not moving code, is what deletes the per-candidate copies); rules keep full world access (human: "this could block more complicated spells"); 4 discovery-only overrides and `StructuredAction` included; `Entity.perform` is the only `apply` entry.
+- Footprint: aim parameter; AoEShape a frozen value; spell protection left at its 5 sites (Globe out of scope); call-local dedup, aim-major order (64-entry FOV LRU); zones' `area_propagation` duplicate removed.
+- Scan: target-only `CreatureFacts`; relationship leaf (methods delegate, no 50-caller migration); actor data incl. charges/grants (both Protocols deleted); `contact_ring_cells` named with a GridMap test.
+- One `ActionSelection` in `dnd/core/action_types.py`; `get_variant_facets` deleted; `facet_domain(scan, …)`.
+- Movement branch kept (D13) — v3.6 wrongly listed it for deletion.
+- Counts corrected (232, 22, 29, 11, 76 + 13, 94 + 35); GridMap refs re-based; V/O renamed Vc/Ob; Cleansing Touch and connectors moved to PD1b; owner revisions moved under the conditional gate; Entity cache fates stated.
+- Human: D14 approved; relocation destinations = sight ∩ empty ∩ range; unused faction scans deleted; objects are part of perception. Then Q-W2 and Q-W5 approved, Q-W6 required ("any is bad in general") and resolved as no actor parameter, `Entity.get(self.source_entity_uuid)` in overrides (human: "that is what we did everywhere else"), order left to the plan (§7 header).
+- P0a measured the godmode Choices miss at 392.7 s instrumented (LOS 378.7 s; 148,567 validations; 209,734 emitted targets; 577 rows): the v3.5 static estimates were low.
+
+**v3.5 → v3.6** (§14 antislop 13 + antiOOP 14 findings, whole-world redesign):
+
+- PD1 split into PD1a (one footprint), PD1b (rows, legality, selection together) and PD1c (whole-world scans, after D14 approval), each with correctness gates.
+- Legality is one path: rule bodies move from 221 `_validate` overrides into the non-eventful hooks; G moves to PD1b.
+- One `objective_footprint`, one propagation primitive, `AreaPropagation` for cylinders, `footprint_signature()`, zones' area from `aoe_shape`; no new cache.
+- Scan types in a leaf, built by one Entity method, passed as data; one perceived-creature reader; one relationship function.
+- Selection identity widened to cost source, item, facets; all name/index sites listed.
+- Range/LOS lookups corrected (no distance field; creature LOS = `visual`).
+- Env use reuses `contact_positions` via rings; connectors added to §14.8; objects by uuid on demand.
+- PD2 = costs of kept things; session section cache conditional on measurement; revision owners named; one phase per item.
+- §14.6 per-term table of what remains; 580 hit sets; ms target only after P0b.
+- Open human questions collected in §14.10.
+
+**v3.5 consistency pass** (human request):
+
+- §14 approved.
+- D1/D3/D10 marked approved; D12–D14 added.
+- R7 (discovery) added to the root causes.
+- Discovery baselines added to §1 and P0b.
+- P0a/PB1 progress recorded.
+- Discovery bugs U1–U5 added.
+- Harness design recorded (§9.4).
+- Revision study item added.
+- Risks, refs and the review status updated.
+
+## 13. Reviews
+
+- **v1:** antislop (10) and antiOOP (12), all accepted (§12 history).
+- **v3:** antislop (8 + ref nits) and antiOOP (10), all accepted into v3.2, with
+  one exception. Antislop #1 asked that a §5.2 entry close at its own exit even
+  when nested. The antiOOP nesting rule (join; phase B after depth 0) was chosen
+  instead, because it keeps one settle per spell and still gives each phase-B item
+  a fresh group. Move steps aren't groups at all.
+- **v3.2:** no separate re-review was run. v3.3–v3.5 changes are human decisions, plus §14, which is under review now.
+- **Bug verification:** done (§8.1).
+- **v3.5 §14:** antislop (13) and antiOOP (14), all accepted into v3.6. Where they conflicted, the code decided: `_aoe_origin_fov_cache` and `compute_subjective`/`compute_for_targeting` are dead (antislop); the footprint cache is not a new one (antiOOP; the existing `_propagation_fov_cache` remains).
+- **Whole-world redesign:** its own antislop (9 minor) and antiOOP (2 major) reviews, accepted; its `get_target_variants` hook is replaced by the §14.4 `facet_domain`/`with_selection` pair.
+- **v3.6:** antislop (16) and antiOOP (14) re-reviews, all accepted into v3.7 except: antiOOP #5 (move spell protection into the footprint with provenance) is replaced by antislop #2 (leave it at its 5 sites; Globe is out of scope by human decision); antiOOP #7 (delete four relationship methods, migrate ~50 callers) is narrowed to a leaf function the methods delegate to; antiOOP #8 (106 profile hooks) is a human question (Q-W6); the antiOOP rule "no `Entity.get` in predicates" is dropped after the human's objection (rules keep world access).
+
+## 14. Available actions (discovery) — human-decided model (2026-10-17)
+
+### 14.1 Decisions (human)
+
+| Decision | Detail |
+| --- | --- |
+| Environment **use** actions stay | Open door, pull lever, loot: reach-bounded and few. Move+use already exists as `AvailableWorldInteraction.contact_positions` (`entity.py:7610-7629`). It is recomputed via rings (§14.2 #4), not added as a second structure. |
+| **No object rows; objects are part of perception** | No global object/wall target pools ("you can target any wall in the game"). Objects are "part of the general perception": the client and the AI pick a perceived object (`senses.objects`) by uuid, and it is validated on demand by the same checks (§14.3b). The basic AI policy scores object targets at zero today (`basic.py:530-545, 655-656`), so nothing is lost. |
+| AoE: **finite aim points derived from targets** | One aim point per perceived creature, each with its hit set (enemies / allies / self). There is also a legal-region descriptor: the client free-aims any legal point, validated on demand. |
+| Spells listed **once with allowed levels** | — |
+| **Relocation destinations** (Telekinesis, Dimension Door, EVO:6561/6672) | "Who can be selected … in sight + empty … easy to derive": destinations = sight mask ∩ unoccupied ∩ range, read from the scan. A target is listed when that set is non-empty. No witness search. |
+| **Movement destination list kept** | Reachability needs paths, and it matters for AI; its cost is package size. Only its compute overhead is fixed (PD2). |
+| **Single space scan per actor** | Solves all spells by lookup. |
+| Focus is speed | The schema shape follows the model: "we are not here speaking about schemas". |
+
+### 14.2 The actor scan (PD1b; computed once per discovery call or per performed action)
+
+**Types:** frozen dataclasses in a new leaf `dnd/types/discovery.py` (`ActorScan`, `CreatureFacts`, `ActorScanRecord`), importing neither Entity nor Senses.
+
+**Builder:** `Entity.action_scan(...)`, which produces a per-call local value. It replaces the `_prepare_aoe_caches` contact reads (`entity.py:6194-6215`) and `_visible_hostile_threat_domains`. There is no context class with behaviour and no PrivateAttr cache.
+
+**Use:** the scan is passed as an argument to the admission checks (§14.3b). It is the shared, precomputed input that makes the common checks (range, sight, faction, reach) O(1). It does **not** restrict what a rule may read: a spell's `rule_error` keeps full world access (`Entity.get`, GridMap, occupancy, support/height), as Charm Person's body does today (`enchantment.py:171-186`). Forcecage push-outs, wall placement and Telekinesis objects need exactly that. What is forbidden is a copy of the action, a declaration event, or a mutation.
+
+Contents (each input already has an owner):
+
+1. **Sight:** the caster's `Senses.visible` cell mask (position targets only).
+2. **Perceived creatures:**
+   - **Target facts:** a target-only `CreatureFacts` (creature type, life state, condition summary, `blocks_external_contact`, faction) from `Entity.creature_facts()`. The AI's multi-observer `project_entity_fact` (`dnd/ai/runtime/subjective_projection.py:170-252`) composes only this.
+   - **Observer additions:** the scan record adds this observer's contact (`visual` flag, `spell_utils.py:49-51`) and its relationship.
+   - **Relationship:** a pure leaf function `relationship(src_uuid, src_faction, tgt_uuid, tgt_faction)`, used by BA:1673, 1694-1696 and 1795-1797. `Entity.is_ally` (4420), `is_enemy` (4438) and `is_enemy_of` (4456-4461) become one-line calls to it, and the `isinstance(other, Entity)` goes. Their ~50 callers are not migrated (scope).
+3. **Navigation:** reachable cells, costs and paths per movement mode, from the already materialized navigation. Non-walking modes are bounded by remaining movement (U5, PD2).
+4. **Perceived objects whose contact ring meets R:**
+   - Prefilter: a new `GridMap.contact_ring_cells(object_uuid)`. A GridMap test asserts the ring contains every origin `manual_object_contact` admits (GM:2840-2880, including the boundary neighbour cell).
+   - Exact check: it stays `manual_object_contact(origin=cell)` on ring ∩ reachable, because contact depends on the requester's knowledge and origin tile.
+   - Connectors: they come through the same object reads, not `get_all_connectors()` (`entity.py:7630`).
+5. **Threat domains** for OA exposure. These are computed once per collector call today (5485, 6510, 6881, 7042). The per-destination costs (exposure intersection, hazard steps) are PD2.
+6. **Reach mask** for the caster's neighbour cells: touch/HAND access via `can_reach_between`, ≤ 24 checks.
+7. **Actor data:**
+   - slot capacity, restricted grants and free-cast grants;
+   - held weapons, spellcasting sources and entitlements;
+   - source-item charges (replacing the runtime-checkable `FiniteChargeProvider`, BA:52, 1509, 2302, 2330);
+   - `active_encounter_uuid`.
+
+Lookups:
+
+- range = O(1) `grid_distance_feet` from `get_target_origin()` (BA:1338-1354; the origin varies per action, e.g. a source item);
+- creature line of sight = the `visual` flag; the cell mask is for position targets only;
+- relocation destinations = mask ∩ unoccupied ∩ range;
+- filters = record facts; touch = reach mask;
+- costs once per (spell, level, cost source); Jump is the only target-dependent cost (`actions.py:3463`).
+
+### 14.3 Rules and their one handling each
+
+#### 14.3a One footprint (PD1a)
+
+**Today: four geometry paths and two propagation primitives.**
+
+The geometry paths:
+- `AoEShape.compute_subjective` / `compute_for_targeting` (aoe.py:86-157, 377-420; dead, only aoe.py:387 calls them);
+- `set_subjective_footprint` / `_resolve_subjective_entities` (aoe.py:159-200, caller `entity.py:5986`);
+- `compute_objective` (aoe.py:202-240, 11 execution callers) and `Cylinder.compute_objective` (aoe.py:422-437);
+- `Entity._compute_aoe_propagation_footprint` (`entity.py:6042-6068`, which mutates `computed_origin`).
+
+The primitives:
+- discovery and `spatial/mechanisms.py:159` use `filter_propagation_positions` (supercover rays, GM:6154);
+- execution and senses use `compute_propagation_fov` (shadowcast, GM:6077).
+
+The two primitives can disagree at corners.
+
+**After:**
+
+- **One non-mutating** `objective_footprint(shape, aim, caster_pos, source_pos) -> frozenset` in `dnd/core/aoe.py`. That is the right layer: aoe imports gridmap, and BA imports aoe.
+  - The 11 callers migrate.
+  - All the paths above are deleted.
+- **AoEShape becomes a frozen value**, no longer a `BaseObject` with `source_entity_uuid` and `context`.
+  - Its result fields (`target`, `computed_origin`, `affected_positions`, `affected_entity_uuids`, aoe.py:40-46) are deleted, which also deletes the per-aim copies (BA:1659).
+  - Identity = (shape, `footprint_target_key(aim, caster_pos)`): the existing per-subclass key (aoe.py:69/251/278/307) takes the aim as a parameter.
+  - Deleted: the isinstance chains (aoe.py:466-500, `_get_aoe_radius_ft` in ACT), the `type`+`model_dump_json` key (`entity.py:6130-6143`), and the `Senses` import in aoe.py.
+- **One primitive:** `compute_propagation_fov`.
+  - `filter_propagation_positions` and `_propagation_filter_cache` are deleted.
+  - `connected_propagation_positions` (GM:6115) stays as the "connected" propagation value.
+  - Mechanisms migrate, and their corner changes are listed for sign-off.
+- **Cylinders:** "ignore barriers" becomes a value of `AreaPropagation` (`types/spatial_effects.py:10`), dispatched on that field. Execution semantics are kept (fixes U2).
+- **Caster-origin shapes** (6 cones, 4 lines, Thunderwave) get the propagation filter execution applies (fixes U1).
+- **Spell protection stays at its 5 current sites, untouched** (EVO:974/1175/1325, `spell_payloads.py:87`, AC:1118). Only Globe registers one (ABJ:1149), and Globe is out of scope. Gate (a) fixtures contain no Globe.
+- **Zones:**
+  - `AreaCondition.area: AoEShape` replaces `zone_shape` / `zone_radius_feet` / `zone_width_feet` / `zone_direction` (76 declarations in 14 files, including the non-spell zones in traits, gas_traps, paladin, divine_rewards and summons).
+  - It also replaces `area_propagation` (13 declarations, which overwrite the shape's value at AC:1090) and the string dispatch (AC:1044-1091).
+  - The zone stores its aim relative to the anchor, so `move_zone` moves the anchor.
+  - Daylight's radius is declared once. Discovery never reads condition classes. The 4 contract-less zones stop enumerating reachable cells.
+- **Dedup and cache:**
+  - One call-local dict keyed by footprint identity, dropped on return.
+  - Iteration is aim-major, so the existing `_propagation_fov_cache` (`FOV_CACHE_ORIGINS = 64`, GM:78) never evicts a live key. No persistent cache is added.
+  - Deleted Entity caches: `_aoe_footprint_cache` and its `_aoe_footprint_cache_context` (581); `_aoe_origin_fov_cache` (592-596) and its threaded `fov_cache` parameters (5945, 6045, 6111-6118, 7309, 7576, 8106-8109; U4).
+- **Consumers:** discovery, preview, the P3 shared staged loop (`spell_payloads.py:84`, EVO:963) and AC:1096 all call it. There is no second geometry path.
+
+#### 14.3b Legality: one path (PD1b)
+
+**Today: three rule paths.**
+- 232 eventful `_validate` overrides (44 in EVO), with bespoke rules such as Charm Person (LOS + humanoid, `enchantment.py:171-186`) and Revivify (`necromancy.py:2808-2820`).
+- 4 discovery-only `validate_requirements_for_discovery` overrides that Command never runs: `rage.py:586`, `sorcerer.py:1489`, `environment_interactables.py:691`, `traits.py:1239`.
+- Overridable hooks that read mutable instance fields (`self.target_entity_uuid`, `end_position`, `extra_target_positions`, `get_all_targets()`; BA:1360-1500). These force the per-candidate copies, the shared-template mutation `shape_template.target = position` (`entity.py:6158-6160`), and skip-`super()` bugs such as G (20 `position_placement_error`, 11 `selection_preview_error`, 3 `targeting_error`, 3 `physical_access_error` overrides).
+
+**After:**
+
+- **One non-overridable** `_admission_error(scan, selection)` holds the base checks: range, sight/`visual`, reach, source item, source condition, entitlement, base placement. It then calls **one additive** `rule_error(scan, selection)`, whose base returns None and which subclasses override without `super()`.
+- **Every check reads targets, positions and vertices only from `selection`.** No check reads `self.target_entity_uuid`, `end_position` or `extra_target_positions`. This is what deletes the per-candidate copy: discovery validates against the registered template itself (`self`), with the candidate passed as an argument. Today the copy exists only to carry the candidate (`template.model_copy(deep=True, update={"target_entity_uuid": …})`, `entity.py:5875`).
+- **Conversion per override** is mechanical: read the target from `selection` instead of `self`, and return the message instead of `declaration_event.cancel(...)`. World reads stay.
+- **What moves into `rule_error`:** all 232 override bodies, the 4 discovery-only overrides and the existing hook overrides. The only overrides kept are for handler-based admission, listed by name. The PD1b gate counts the rest.
+- **One caller set:** BA:2098 and its callers (`entity.py:5879, 6307, 6889, 7266, 7494, 7686, 7903, 7957`), preview, Command and execution all call `_admission_error`.
+- **Deleted:** `StructuredAction._validate` (BA:2621, no subclass in `dnd/`).
+- **AST test:** it bans overriding the base checks. Bug G is fixed by construction.
+- **Execution owner:**
+  - `Entity.perform(action, selection, parent_event=None)` in `entity.py` builds the scan for the declared targets and calls `action.apply(scan, selection, parent_event)`. Every direct `.apply(` caller already imports `dnd.entity` and holds the actor: `controller.py:192`, `actions_functional.py:487/807`, `reactions.py:70/127`, `divine.py:222/232/237`, `barbarian.py:1122`, `traits.py:649`, EVO:4134, `necromancy.py:1185/1211`, ACT:342, `spell_summon_actions.py:1442`, `enchantment.py:1906`, `wall_constructions.py:554`, `environment_interactables.py:348`.
+  - `apply` and `pre_validate` (≈33 callers) take the scan.
+  - An AST test allows `.apply(` only in `Entity.perform` and `super().apply` overrides.
+  - The `apply_from_control` PrivateAttr save/restore (BA:2351-2359) becomes the selection's controller uuid.
+  - The convolution loop's `self.target_entity_uuid = …` (BA:2201) goes with P3's per-target isolation.
+- **Protocols deleted:** `FiniteChargeProvider` (BA:52) and `RestrictedActionGrantProvider` (BA:1847-1867, `action_types.py:161`). Charges and grants are scan data, which also deletes the `entity: Any` hooks (9 sites). Where a check in a spell or class needs the actor, it uses `Entity.get(self.source_entity_uuid)`, as Q-W6 does.
+- **Profile hooks** (5 base hooks at BA:1057-1116 taking `actor: Any`, 106 occurrences with overrides, 48 `isinstance(actor, Entity)` checks, called per row at `entity.py:5717-5720`): they lose the actor parameter and resolve `Entity.get(self.source_entity_uuid)` like the rest of the codebase (Q-W6).
+
+| Rule | Handling |
+| --- | --- |
+| Per-target facts (creature type 9, target conditions 8, life state 2, `blocks_external_contact`) | record facts |
+| Physical reach vs optical LOS (~21 touch, 12 physical-access, 4 touch-contact) | reach mask |
+| Source item origin / firing sector (7 sites) | once per spell |
+| Source state, resources | once per (spell, level, cost source) |
+| Allocation count grows with level (Chain Lightning) | per-level field |
+| Placement / support / height / wall vertices (~15–20 spells) | region descriptor (§14.4); on-demand placement rule |
+| Relocation destinations | mask ∩ unoccupied ∩ range (§14.1) |
+| Objects (24 `CREATURE_OR_OBJECT` sites, Chain Lightning objects) | perceived object by uuid, same checks on demand. Continual Flame (touch, owned items, EVO:4479-4481) stays a reach-bounded row. |
+| Handler-based admission | preview / command only |
+
+### 14.4 What is deleted (no old path; PD1b)
+
+- **Variants and facets:**
+  - Deleted: `get_discovery_variants` copies (~30 overrides), the 22 `get_discovery_template_name` overrides, `get_variant_facets` (29 definitions; callers `entity.py:5699, 7621`), `_parse_spell_variant_template_name`, and `_resolve_executable_template` with its name scan and `getattr(template, "_create_variant")` (`actions_functional.py:304-331`).
+  - Each owning class instead has `facet_domain(scan, level, target_record | None)` and `with_selection(selection)`; the generic pipeline calls only these.
+  - Domains depend on level (`available_forms`, `summoning.py:57-66`), on legality (held weapon slot, `transmutation.py:2198-2209`), or on the target (Cleansing Touch: the spells on that ally, computed on demand at preview). This replaces the redesign's `get_target_variants`.
+- **Per-cell candidate enumeration:**
+  - LOS/position rows (`entity.py:7184-7304`);
+  - the 4 contract-less zone templates, which leave `_collect_path_actions`' movement branch (6837-6961). The branch itself stays for Move (D13) and is optimized in PD2;
+  - AoE per-cell candidates and per-target preview enrichment (`entity.py:7306-7469, 6114`), plus `discover_player_actions`' per-target `preview_aoe_target` (`session.py:369-394`);
+  - the continuation-witness and path-witness search (BA:2109-2123), replaced by §14.1 relocation destinations;
+  - next-vertex enumeration (`actions_functional.py:490-515, 654-656`);
+  - wall form variants.
+- **Object candidate pools:** `entity.py:5922-5935, 5885-5893`, global object rows `7471-7519`, and Chain Lightning object secondaries. Secondaries are picked on demand by uuid, which removes the U3 in-place mutation (`entity.py:5740-5745`) and the index rebasing (handoff:119).
+- **Per-candidate deep copies, declaration events and per-target cost checks:** `entity.py:5875, 5882, 7262, 7269, 7489, 7495, 7898, 7904, 7952, 7958`.
+- **World-interaction contact queries** (object × every move cell, `entity.py:7610-7640`): replaced by rings ∩ reachable (§14.2 #4). `getattr(item, 'stack_count')` (7605) goes with them.
+- **Whole-world scans in discovery** (moved here from §14.8):
+  - Cleansing Touch: one row; the targets come from the existing perceived-ally + 3×3 touch pool; the spell is a target-dependent facet. Rows for unseen allies' spells no longer leak.
+  - Connectors: through perceived objects.
+- **Entity caches:** `_aoe_preview_cache*` (586-590), `_aoe_contact_alive` (591), `_visible_position_cache` (607, duplicates the sight mask) and `_aoe_nearby_candidates_cache` (610).
+- **Selection by name / index:** replaced by §14.4b.
+
+**14.4b Selection.** One frozen `ActionSelection` in `dnd/core/action_types.py`. Its fields:
+- registered template uuid;
+- `cast_at_level`;
+- `cost_source: Slot | FreeCast(grant id) | Restricted(grant id)`;
+- source item uuid;
+- facets: `tuple[ActionVariantFacet]`;
+- target uuids, positions or vertices;
+- controller uuid.
+
+It replaces:
+- the index-based `player/commands.py:17` type;
+- `instantiate` (BA:1817), `_create_variant` / `generate_variants` (ACT:5359, 5467) and `_bind_executable_action`;
+- the split cost-source fields (`cast_cost_grant_id` / `cast_cost_label`, ACT:4803-4804; `_restricted_action_grant`, BA:1016);
+- both name separators (`__grant_`, BA:89, 1868-1894; `__item_`, `actions_functional.py:503, 563-574`, `entity.py:7620`);
+- the name facets (`__cage_form`, `wall_constructions.py:920`; `__delivery`, EVO:6752; Cleansing Touch `[condition_uuid]`, `paladin.py:1429-1438`).
+
+`cast_at_level` belongs on the executable instance built by `with_selection`; costs come from `_get_costs_for_level` (ACT:5502).
+
+These sites move together:
+- `action_dispatch.py:59-62` and `server/worker.py:120-132`;
+- `player/commands.py:17-22` and `sdk/python/src/dnd_player/contracts.py:51`;
+- `player/session.py:397-442, 486-521`; `choices.py:118`;
+- AI `execution.py:181-187`;
+- `encounter.py:1665` `execute_by_index`;
+- `actions_functional.py:281-331, 612, 619, 700`.
+
+Test fallout is 94 test files calling `get_available_actions` and 35 using `execute_by_index`, adapted or deleted under the same rule as P0a. The client protocol change is in PC.
+
+**Region descriptors** are a projection of the existing `position_discovery: PositionDiscoveryContract` (BA:151-199, 1009), `position_selection` (`action_types.py:64`), `get_range` and `aoe_shape`. There is no per-spell descriptor class.
+
+### 14.5 Consumers
+
+- **Session/worker** (`dnd/player/session.py`, `choice_projection.py`, `server/worker.py`): rows as above, selection as §14.4b.
+- **AI** (`dnd/ai/runtime/decision_epoch.py`, `action_semantics.py`, `execution.py`) reads exactly the new data: creature targets, aim hit sets, paths, costs and OA exposure (`ai/policies/basic.py:537, 707, 919-921`).
+  - The `include_aoe_preview` per-cell rows are gone; there is one row per aim point.
+  - Objects come from perception (§14.1).
+- **Godot client:** consumes the new rows and the selection (PC, other repo).
+
+### 14.6 Counts (GC caster: Vc≈500 visible cells, C=29 perceived creatures, Ob≈126 objects, R≈150 reachable cells, 47 spells)
+
+**First measurement (P0a, 2026-10-17; counts mode, instrumented, not timing-qualified).** Godmode caster, Choices cache miss = **392.7 s**:
+
+| Term | Measured |
+| --- | --- |
+| LOS collector | 378.7 s |
+| Entity rows | 5.2 s |
+| Path rows | 3.0 s |
+| AoE rows | 2.2 s |
+| Rows | 577 |
+| Eventful validations | 148,567 |
+| Emitted targets | 209,734 |
+| AoE aims and footprints | 7,938 |
+| Response | 2.55 MB |
+
+Cache hit 0.2 ms; Preview 3.6 ms; Command (Fireball) 6.9 s.
+
+The earlier static estimates (≈276 rows, ≈25–30k validations, ≈45,000 emitted targets) were low. P0b re-bases the "Now" column with ordinary timings.
+
+| Term | Now (measured) | After PD1 | Phase |
+| --- | --- | --- | --- |
+| Rows built (`_make_action_info`) | 577 | ≈63 (levels and facets are fields) | PD1b |
+| Eventful validations | 148,567 | 0 (`_admission_error` is non-eventful) | PD1b |
+| Emitted targets | 209,734 | ≤580 AoE aim points + ≈435 creature + ≈350 zone + R | PD1b |
+| AoE footprints | 7,938 | ≤580 computed, ≈230 distinct | PD1a |
+| LOS/wall enumeration | 378.7 s of 392.7 s | 0 | PD1b |
+| Enemy weapon actor | measured in P0b | attacks × perceived enemies; ≈240 ring lookups | PD1b |
+
+What remains after PD1, measured in P0b:
+
+| Term | Ref | Owner |
+| --- | --- | --- |
+| `_make_action_info`: `BaseCost.model_validate` + 4 profile callbacks per row | `entity.py:5731` | PD2 (and Q-W6) |
+| `capture_choices` dump/validate per row and target, double deep copy | `choice_projection.py:87-134` | PD2 |
+| Preview deep copy | `entity.py:6122` | PD2 |
+| Navigation materialization when dirty (every turn start) | `entity.py:5423-5502` | measured; P5 path freshness |
+| `_prepare_position_preview_cache` sorting Ob and collision cells per call | `entity.py:6640-6699` | PD2 |
+| Per-step hazard checks per path | `entity.py:7102-7105` | PD2 |
+| Propagation FOVs per distinct aim | ≈230 | PD1a |
+| Encoding | `worker.py:254` | PD2 |
+| Retained discovery graphs released at the operation boundary | handoff:118 | PD2 |
+
+No ms target is set before P0b measures these terms.
+
+### 14.7 PD2 detail (costs of what is kept)
+
+**Unconditional:**
+
+- **Command** re-runs a full preview to read `can_confirm` (`session.py:494`); it becomes the bare `_admission_error`.
+- **Preview:** `model_dump_json` only to measure size, plus two deep copies (`session.py:435-442`). The projection is cached instead.
+- **Capture:** dump + validate per row and per target, plus a double deep copy (`choice_projection.py:87-134`). This goes away with fresh native rows.
+- **Cache hit:** re-encodes compact choices (`worker.py:254`).
+- **AI:** dumps row profiles every epoch (`decision_epoch.py:819-845`).
+- **Movement list (D13):**
+  - copies at `entity.py:6885-6892`;
+  - its cache key sorts all path costs on every call (`entity.py:7021-7050`);
+  - path tuples are shared;
+  - exposure intersection once per path tree;
+  - hazard steps;
+  - the U5 bound;
+  - kept caches `_fast_move_target_cache` (597) and `_position_preview_cache` (602), keyed by GridMap revisions (`entity.py:6685-6699`).
+
+**Conditional on the post-PD1 measurement (like P4b).** Adopted only if R(S−h) > Um+I+F (handoff:194):
+
+- **Revisions on their owners**, following the `observation_revision` pattern (AC:73): ActionEconomy, Equipment, Inventory, SpellcastingBlock, Entity (`registered_actions` and the conditions container), Health, and Senses (contacts).
+  - Before any of them, route the external writes through owner methods: 11 ActionEconomy writes (e.g. `conditions.py:2426`, `transmutation.py:378`) and the Health writes (`entity.py:2505/2538/2761`, `traits.py:1629/1648/1660`).
+  - `SpellProtectionRegistry` register/unregister (ABJ:1149/1163) bumps `propagation_revision`.
+- **Session cache by sections:**
+
+| Section | Key |
+| --- | --- |
+| Creature rows | actor (position, economy, spellcasting, equipment, conditions, registration revisions) + per perceived creature (uuid, health rev, condition rev), read at request time + force_attack |
+| AoE hit sets | `observer_spatial_revisions` (GM:522) + global `grid.propagation_revision` |
+| Movement | path revision |
+| Env use | position + path revision + object state (doors, levers) |
+| Handlers | handler state |
+
+- **Selection staleness checks** (`worker.py:123-125`, `session.py:403`) move to the same keys.
+
+### 14.8 Whole-world scans at execution (PD1c; **D14 approved** by the human 2026-10-17; design `WHOLE_WORLD_SCAN_REDESIGN_2026-10-17.md`)
+
+**One objective GridMap query:** `get_entities_in_bounds(bounds)` and `get_entities_within(center, radius_feet)`.
+
+- **Walk:** one walk over the existing chunk index `_contact_candidate_cells` (GM:2650-2661).
+- **Metric:** the same as range admission.
+- **Membership:** tile membership ⇔ `is_deployed`, so callers drop `is_deployed`.
+- **Cost:** O(chunks + o_r log o_r). No other proximity helper is added.
+
+The discovery-side scans (Cleansing Touch, connectors) are in PD1b (§14.4).
+
+| Site | Today | After |
+| --- | --- | --- |
+| Revivify (`necromancy.py:2741-2805`) | world scan per level | `get_entities_within(origin, 30)` + companion/ally/life-state filters + caster mask (dead bodies aren't contacts) |
+| Holy Aura count (ABJ:3752-3770) | `len(Entity.get_all_entities())` leaked as `num_projectiles` | declared `BaseAction.any_number_of_targets: bool` (rejected together with `allow_same_target`); count = admitted recipients |
+| Forcecage displacement (`wall_constructions.py:881-902`) | world scan per visible centre | box query on the chosen centre; predicate and `str(uuid)` order kept; the preview checks only perceived creatures, execution real occupancy (Q-W2) |
+| Stone escapes (`wall_constructions.py:509-548`) | world scan, registry order | shell-bbox query; order = `resolution_order_key` (sign-off) |
+| Charm Monster advantage (`enchantment.py:2636-2644`) | world scan | target's encounter roster via `get_alive_combatants()`; the new import `dnd.spells.enchantment → dnd.encounter` is acyclic (`dnd.encounter` reaches `dnd.spells.content_metadata` only through `dnd.actions`, never enchantment) |
+| Turning (`divine.py:275-289`), Preserve Life (`cleric.py:120-131`), Sunder (`divine_intervention.py:133-141`), Opulent Revival (:205-236) | world scans | `within(.., 30/30/50/60)`; Turning keeps the **target's** "can see you" check |
+| `get_entities_by_faction` / `get_alive_by_faction` (`entity.py:4500-4522`) | world scans with no `dnd/` caller | deleted (human, Q-W3) |
+
+- **Bug (D6, sign-off):** Opulent Revival can revive a suspended dead companion off-grid. Grid membership excludes it.
+- **Tests (redesign §4):**
+  - `tests/engine/test_bounded_recipient_discovery.py`: CT1–3, RV1, HA1;
+  - FC1, WS1, CM1, TU1, PL1/SU1/OR1 in the existing suites;
+  - GM1 brute-force equality;
+  - an AST ban on `get_all_entities` / `_entity_registry` iteration in `dnd/`, with the listed exceptions.
+- **Superseded parts of the redesign doc:** §3 `get_target_variants` and §2.1 "Kept: `get_variant_facets`" are replaced by §14.4.
+
+### 14.9 Evidence
+
+| Source | Finding |
+| --- | --- |
+| Production rework plan | Gallery Choices ≈191 ms ordinary after schema 8; deferred AoE preview kept |
+| Held experiment | Wall/LOS enumeration 77.4 s of 90.2 s instrumented. The tile-storage (−17 %) and wall-interval (−8.5 %) wins came almost entirely from that enumeration, so they aren't needed once it's gone. The whole-request shell memo was rejected (155 MB) and must not be revived. |
+| P0a GC measurement | Choices miss 392.7 s instrumented, LOS collector 378.7 s (§14.6) |
+| This study | Three read-only maps (engine core, placement, consumers) at `d13e6ad`; v3.5 reviews (antislop 13, antiOOP 14); v3.6 re-reviews (antislop 16, antiOOP 14); whole-world redesign with its own reviews |
+
+### 14.10 Questions for the human
+
+| Q | Question | Status |
+| --- | --- | --- |
+| D14 | Whole-world scan redesign | **Approved** (2026-10-17) |
+| Q-W1 | Relocation destinations | **Decided:** sight ∩ empty ∩ range from the scan (§14.1) |
+| Q-W2 | Forcecage placement checks every deployed creature, ignoring `subjective`. It refuses ("cannot displace a partially enclosed creature") when any straddling creature, seen or not, has no free reachable cell, and free cells are judged on real occupancy. A refusal therefore reveals an unseen creature; when every straddler can be pushed out, the preview just passes. | **Decided (human 2026-10-17):** preview on perceived contacts; execution refuses on real occupancy |
+| Q-W3 | Unused faction scans | **Decided:** delete |
+| Q-W4 | AI object attacks | **Decided:** objects are part of perception (§14.1) |
+| Q-W5 | Rule bodies of 232 `_validate` + 4 discovery-only overrides move into `rule_error(scan, selection)` behind one non-overridable `_admission_error`; `Entity.perform` becomes the only `apply` entry | **Decided (human 2026-10-17): yes** |
+| Q-W6 | The 5 base profile hooks (`get_outcome_profile`, `get_fixed_healing`, `get_self_setup_profile`, `get_target_effect_profile`, `get_world_effect_profile`) take `actor: Any` (106 occurrences with overrides), and overrides use `isinstance(actor, Entity)` 48 times; `_make_action_info` passes the Entity per row (`entity.py:5717-5720`) | **Required in PD1b** (human: "any is bad in general"; "that is what we did everywhere else"): the hooks lose the actor parameter. Every caller passes exactly `Entity.get(self.source_entity_uuid)` (discovery `entity.py:5717-5737`; ACT:5549; Multiattack sub-attacks built with the same source, `traits.py:587-604`; the summon override, `spell_summon_actions.py:833`). Base hooks return None and never resolve it. Overrides (95 of 114 read the actor, mostly via shared helpers) call `Entity.get(self.source_entity_uuid)`, and the shared helpers in ACT take a typed `Entity`. All `Any` and the 48 `isinstance` checks are deleted. Nothing goes into the scan. |
+| Order | Run P1–P3 before PD1? | **Decided** (human: "whatever the order what make most sense"): §7 order, sensory first, PD1a before P3, PD1b after P3 |

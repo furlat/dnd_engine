@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from dnd.core.base_object import BaseObject
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EmptyLogData, EntitySpottedLogData
 from dnd.core.events import (
     Event,
     EventHandler,
@@ -30,6 +30,7 @@ class LoggableEvent(Event):
             compact=text,
             verbose=text,
             detailed=text,
+            data=EmptyLogData(),
         )
 
 
@@ -431,6 +432,9 @@ def test_eb_04_007_push_combat_log_bypasses_event_storage() -> None:
         compact="Observer spots a hidden foe",
         verbose="Observer spots a hidden foe",
         detailed="Observer spots a hidden foe",
+        data=EntitySpottedLogData(observer_name="Observer", observer_uuid=str(source_uuid),
+            target_name="Hidden foe", target_uuid=str(uuid4()), target_position=None,
+            passive_perception=15, stealth_dc=12),
     )
 
     EventQueue.push_combat_log(entry, source_uuid)

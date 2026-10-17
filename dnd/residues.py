@@ -22,7 +22,7 @@ from dnd.entity import Entity
 from dnd.types.abilities import AbilityName
 from dnd.types.residues import ObjectResidueState, ResidueContribution, ResidueEllipse, TileResidueState
 from dnd.types.material_deposits import MaterialDepositSource
-from dnd.types.world import CardinalDirection, OccupancyLayer, WorldEdgeChannel
+from dnd.types.world import CardinalDirection, OccupancyLayer, SpatialChannel, WorldEdgeChannel
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +106,7 @@ class TileResidueCondition(BaseCondition):
         tile = grid.get_tile_by_uuid(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if tile is None:
             return
-        grid.invalidate_spatial_caches({"movement"}, {tile.position})
+        grid.invalidate_spatial_caches(frozenset({SpatialChannel.MOVEMENT}), {tile.position})
         grid.publish_tile_mechanics_changed(
             tile.position, source_entity_uuid=tile.uuid, parent_event=event.uuid,
         )

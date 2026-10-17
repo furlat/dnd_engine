@@ -36,7 +36,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import ResistanceStatus
 from dnd.entity import Entity
-from dnd.types.world import MovementMode
+from dnd.types.world import MovementMode, WorldEdgeChannel
 
 
 _adjacent_domain_cache_revision: int | None = None
@@ -552,10 +552,10 @@ def project_visible_tile_fact(
         is_hazardous=is_hazardous,
         conditions=list(tile.active_conditions),
         light_level=tile.resolved_light_level.value,
-        directional_blocks_movement=directional["movement"],
-        directional_blocks_vision=directional["optical"],
-        directional_blocks_light=directional["optical"],
-        directional_blocks_propagation=directional["propagation"],
+        directional_blocks_movement=directional[WorldEdgeChannel.MOVEMENT],
+        directional_blocks_vision=directional[WorldEdgeChannel.OPTICAL],
+        directional_blocks_light=directional[WorldEdgeChannel.OPTICAL],
+        directional_blocks_propagation=directional[WorldEdgeChannel.PROPAGATION],
         adjacent_domain=adjacent_domain_knowledge(position),
     )
 

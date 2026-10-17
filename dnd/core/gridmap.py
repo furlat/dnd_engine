@@ -53,7 +53,15 @@ from dnd.core.world_edges import (
     transition_axis,
     world_edge_contribution_allows,
 )
-from dnd.types.world import CardinalDirection, OccupancyLayer, WorldEdgeChannel
+from dnd.types.world import (
+    EDGE_CHANNEL_REVISIONS,
+    CardinalDirection,
+    ObserverRevisions,
+    OccupancyLayer,
+    SpatialChannel,
+    WorldEdgeChannel,
+    edge_revision_channels,
+)
 from dnd.types.senses import OpticalObscurement, PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.spatial_effects import (
@@ -78,11 +86,8 @@ SPATIAL_CHUNK_SIZE = 16
 FOV_CACHE_ORIGINS = 64
 
 DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
-DIRECTIONAL_CHANNELS: Tuple[str, ...] = (
-    "movement",
-    "optical",
-    "propagation",
-)
+# A crossing query asks one structural channel or one physical contact access.
+CrossingChannel = WorldEdgeChannel | PhysicalAccess
 ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "entity.world_presence.absent"
 OBJECT_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "object.world_presence.absent"
 
@@ -96,6 +101,11 @@ class BoundarySnapshot:
     placements: Dict[UUID, Optional[WorldObjectPlacement]]
     coverage_base: frozenset[Tuple[int, int]]
     routes: Dict[Tuple[int, int], Tuple[CardinalDirection, ...]]
+
+
+def revision_edge_channels(channels: AbstractSet[SpatialChannel]) -> Tuple[WorldEdgeChannel, ...]:
+    """Return the structural channels whose revision channel is in ``channels``."""
+    return tuple(edge for edge, revision in EDGE_CHANNEL_REVISIONS.items() if revision in channels)
 
 
 def boundary_snapshot_covers(snapshot: BoundarySnapshot, position: Tuple[int, int]) -> bool:
@@ -169,10 +179,12 @@ class SpatialConditionOwner(Protocol):
     def movement_extra_cost_at(self, position: Tuple[int, int], mode: MovementMode) -> float: ...
 
     def blocks_crossing_between(self, start: Tuple[int, int], end: Tuple[int, int],
-                                channel: str, requester_uuid: Optional[UUID],
+                                channel: CrossingChannel, requester_uuid: Optional[UUID],
                                 mode: MovementMode, terminal_provider_uuid: Optional[UUID] = None) -> bool: ...
 
     def missile_deflection_contact(self, start: Tuple[int, int], end: Tuple[int, int], missile_size: str) -> Optional[Tuple[float, float]]: ...
+
+    def spatial_channels(self) -> frozenset[SpatialChannel]: ...
 
     def snapshot_mechanism_state(self) -> Optional[TrapState]: ...
 
@@ -222,7 +234,7 @@ class GridMap:
         self._next_object_placement_order = 0
         self._spatial_conditions: Dict[UUID, SpatialConditionOwner] = {}
         self._global_crossing_owners: Set[UUID] = set()
-        self._local_crossing_owners: DefaultDict[str, Set[UUID]] = defaultdict(set)
+        self._local_crossing_owners: DefaultDict[CrossingChannel, Set[UUID]] = defaultdict(set)
         self._missing_support_frontier: DefaultDict[Tuple[int, int], Set[Tuple[int, int]]] = defaultdict(set)
         self._spatial_condition_positions: Dict[
             UUID,
@@ -241,7 +253,7 @@ class GridMap:
 
         self._cell_subscribers: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
         self._entity_subscriptions: DefaultDict[UUID, Set[Tuple[int, int]]] = defaultdict(set)
-        self._observer_revisions: Dict[UUID, Tuple[int, int, int, int]] = {}
+        self._observer_revisions: Dict[UUID, ObserverRevisions] = {}
         self._observer_dependency_chunks: Dict[UUID, Set[Tuple[int, int]]] = {}
         self._observer_dependency_cells: Dict[UUID, frozenset[Tuple[int, int]]] = {}
         self._observer_dependency_bounds: Dict[UUID, Optional[Tuple[int, int, int, int]]] = {}
@@ -284,14 +296,14 @@ class GridMap:
             Tuple[Tuple[int, int], ...],
         ] = OrderedDict()
         self._barrier_positions_cache: Optional[frozenset[Tuple[int, int]]] = None
-        self._directional_blockers_cache: Dict[str, bool] = {}
-        self._directional_blocking_owners: Dict[str, Set[UUID]] = {}
+        self._directional_blockers_cache: Dict[WorldEdgeChannel, bool] = {}
+        self._directional_blocking_owners: Dict[WorldEdgeChannel, Set[UUID]] = {}
         self._directional_transition_cache: Dict[
-            Tuple[str, int],
+            Tuple[WorldEdgeChannel, int],
             Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool],
         ] = {}
         self._directional_blocking_cache: Dict[
-            Tuple[str, int],
+            Tuple[WorldEdgeChannel, int],
             Dict[Tuple[int, int], bool],
         ] = {}
         self._propagation_transition_cache: Dict[
@@ -481,7 +493,7 @@ class GridMap:
             self._cell_subscribers[cell].add(entity_uuid)
 
         self._entity_subscriptions[entity_uuid] = cells.copy()
-        self._observer_revisions.setdefault(entity_uuid, (0, 0, 0, 0))
+        self._observer_revisions.setdefault(entity_uuid, ObserverRevisions())
         extra_cells = frozenset(cells if dependency_cells is None else dependency_cells)
         self._observer_dependency_cells[entity_uuid] = extra_cells
         self._observer_dependency_bounds[entity_uuid] = dependency_bounds
@@ -519,24 +531,28 @@ class GridMap:
         """Get all cells an entity is subscribed to."""
         return self._entity_subscriptions.get(entity_uuid, set()).copy()
 
-    def observer_spatial_revisions(self, observer_uuid: UUID) -> Tuple[int, int, int, int]:
+    def observer_spatial_revisions(self, observer_uuid: UUID) -> ObserverRevisions:
         """Return this subscriber's optical, illumination, propagation and occupancy revisions."""
-        return self._observer_revisions.get(observer_uuid, (0, 0, 0, 0))
+        return self._observer_revisions.get(observer_uuid, ObserverRevisions())
 
     def _bump_observer_revisions(
-        self, channels: Set[str], positions: Optional[Collection[Tuple[int, int]]],
+        self, channels: frozenset[SpatialChannel], positions: Optional[Collection[Tuple[int, int]]],
     ) -> None:
-        increments = tuple(int(channel in channels) for channel in
-                           ("optical", "illumination", "propagation", "occupancy"))
-        if not any(increments):
+        optical = int(SpatialChannel.OPTICAL in channels)
+        illumination = int(SpatialChannel.ILLUMINATION in channels)
+        propagation = int(SpatialChannel.PROPAGATION in channels)
+        occupancy = int(SpatialChannel.OCCUPANCY in channels)
+        if not (optical or illumination or propagation or occupancy):
             return
         observers = (self._observer_revisions if positions is None
                      else self.get_dependent_observers_for_cells(positions))
         for observer_uuid in observers:
-            optical, illumination, propagation, occupancy = self._observer_revisions[observer_uuid]
-            self._observer_revisions[observer_uuid] = (
-                optical + increments[0], illumination + increments[1],
-                propagation + increments[2], occupancy + increments[3],
+            current = self._observer_revisions[observer_uuid]
+            self._observer_revisions[observer_uuid] = ObserverRevisions(
+                optical=current.optical + optical,
+                illumination=current.illumination + illumination,
+                propagation=current.propagation + propagation,
+                occupancy=current.occupancy + occupancy,
             )
 
     @property
@@ -570,7 +586,7 @@ class GridMap:
         return self._propagation_revision
 
     def invalidate_spatial_caches(
-        self, channels: Set[str], positions: Optional[Collection[Tuple[int, int]]] = None,
+        self, channels: frozenset[SpatialChannel], positions: Optional[Collection[Tuple[int, int]]] = None,
     ) -> None:
         """Invalidate spatial query caches after authoritative topology changes.
 
@@ -585,9 +601,10 @@ class GridMap:
         self, positions: Optional[Collection[Tuple[int, int]]] = None,
     ) -> None:
         """Invalidate cached paths after entity blocking state changes."""
+        record_action_count("cache.clear.path", 1)
         self._occupancy_revision += 1
         self._path_cache.clear()
-        self._bump_observer_revisions({"occupancy"}, positions)
+        self._bump_observer_revisions(frozenset({SpatialChannel.OCCUPANCY}), positions)
 
     def _on_perceivability_changed(self, event: Event) -> None:
         """Invalidate subjective occupancy paths when a blocker can appear or vanish.
@@ -605,32 +622,35 @@ class GridMap:
             self.invalidate_occupancy_paths(event.get_affected_positions() or None)
 
     def _bump_spatial_revisions(
-        self, channels: Set[str], positions: Optional[Collection[Tuple[int, int]]] = None,
+        self, channels: frozenset[SpatialChannel], positions: Optional[Collection[Tuple[int, int]]] = None,
     ) -> None:
         """Advance channel revisions and clear dependent query caches."""
         if not channels:
             return
         self._bump_observer_revisions(channels, positions)
         self._spatial_revision += 1
-        if "optical" in channels:
+        if SpatialChannel.OPTICAL in channels:
+            record_action_count("cache.clear.fov", 1)
             self._optical_revision += 1
             self._fov_cache.clear()
-        if "movement" in channels:
+        if SpatialChannel.MOVEMENT in channels:
+            record_action_count("cache.clear.path", 1)
             self._movement_revision += 1
             self._path_cache.clear()
-        if "illumination" in channels:
+        if SpatialChannel.ILLUMINATION in channels:
             self._light_revision += 1
-        if "propagation" in channels:
+        if SpatialChannel.PROPAGATION in channels:
+            record_action_count("cache.clear.propagation", 1)
             self._propagation_revision += 1
             self._propagation_fov_cache.clear()
             self._propagation_filter_cache.clear()
             self._barrier_positions_cache = None
             self._propagation_transition_cache.clear()
             self._propagation_blocking_cache.clear()
-        if "optical" in channels:
+        if SpatialChannel.OPTICAL in channels:
             self._directional_transition_cache.clear()
             self._directional_blocking_cache.clear()
-        directional_channels = channels & set(DIRECTIONAL_CHANNELS)
+        directional_channels = revision_edge_channels(channels)
         for channel in directional_channels:
             self._directional_blockers_cache.pop(channel, None)
             if positions is None:
@@ -638,15 +658,16 @@ class GridMap:
         if directional_channels and positions is not None:
             owners = {identity for position in positions
                       for identity in self._boundary_placements_by_position.get(position, ())}
-            self._refresh_directional_blocker_owners(channels, owners)
+            self._refresh_directional_blocker_owners(directional_channels, owners)
 
     def _bump_all_spatial_revisions(
         self, positions: Optional[Collection[Tuple[int, int]]] = None,
     ) -> None:
         """Advance every spatial channel revision and clear query caches."""
-        self._bump_spatial_revisions(
-            {"movement", "optical", "illumination", "propagation"}, positions,
-        )
+        self._bump_spatial_revisions(frozenset({
+            SpatialChannel.MOVEMENT, SpatialChannel.OPTICAL,
+            SpatialChannel.ILLUMINATION, SpatialChannel.PROPAGATION,
+        }), positions)
 
     def _path_requester_perception_signature(
         self,
@@ -861,18 +882,18 @@ class GridMap:
         self._refresh_contact_candidate_cell(position)
         self._bounds_dirty = True
 
-        revision_channels: Set[str] = set()
+        revision_channels: Set[SpatialChannel] = set()
         if movement_changed:
-            revision_channels.add("movement")
+            revision_channels.add(SpatialChannel.MOVEMENT)
         if optics_changed:
-            revision_channels.add("optical")
+            revision_channels.add(SpatialChannel.OPTICAL)
         if propagation_changed:
-            revision_channels.add("propagation")
+            revision_channels.add(SpatialChannel.PROPAGATION)
         if illumination_changed:
-            revision_channels.add("illumination")
-        self._bump_spatial_revisions(revision_channels, {position})
-        if support_changed and "optical" not in revision_channels:
-            self._bump_observer_revisions({"optical"}, {position})
+            revision_channels.add(SpatialChannel.ILLUMINATION)
+        self._bump_spatial_revisions(frozenset(revision_channels), {position})
+        if support_changed and SpatialChannel.OPTICAL not in revision_channels:
+            self._bump_observer_revisions(frozenset({SpatialChannel.OPTICAL}), {position})
 
         if effect is not None:
             self._complete_event_effect(effect)
@@ -1486,8 +1507,8 @@ class GridMap:
         tile.height = height
         tile.elevation_surface_kind = surface_kind
         tile.slope_axis = slope_axis
-        self._bump_spatial_revisions({"movement"}, {position})
-        self._bump_observer_revisions({"optical"}, {position})
+        self._bump_spatial_revisions(frozenset({SpatialChannel.MOVEMENT}), {position})
+        self._bump_observer_revisions(frozenset({SpatialChannel.OPTICAL}), {position})
         if effect is not None:
             self._complete_event_effect(effect)
         return True
@@ -1546,9 +1567,13 @@ class GridMap:
         layer: SpatialEffectLayer,
         occupancy_policy: SpatialEffectOccupancyPolicy,
         positions: Set[Tuple[int, int]],
-        crossing_channels: Optional[frozenset[str]] = None,
+        crossing_channels: Optional[frozenset[CrossingChannel]] = None,
     ) -> None:
-        """Commit one independent condition's complete Tile footprint."""
+        """Commit one independent condition's complete Tile footprint.
+
+        The condition's declared spatial channels are invalidated over the
+        previous and the new cells.
+        """
         normalized = set(positions)
         self.validate_spatial_condition_positions(
             condition=condition,
@@ -1556,6 +1581,7 @@ class GridMap:
             occupancy_policy=occupancy_policy,
             positions=normalized,
         )
+        directional_before = self._propagation_uses_directional_solver()
         previous_layer = self._spatial_condition_layers.get(condition.uuid)
         previous_positions = self._spatial_condition_positions.get(
             condition.uuid,
@@ -1590,6 +1616,8 @@ class GridMap:
                 layer,
             )
         self._refresh_optical_candidate_cells(previous_positions | normalized)
+        self._bump_spatial_revisions(condition.spatial_channels(), previous_positions | normalized)
+        self._bump_propagation_solver_change(directional_before, previous_positions | normalized)
 
     def publish_tile_state_changed(
         self, position: Tuple[int, int], *, source_entity_uuid: UUID,
@@ -1661,7 +1689,8 @@ class GridMap:
                     )
 
     def remove_spatial_condition(self, condition_uuid: UUID) -> None:
-        """Remove one independent condition from GridMap and every Tile."""
+        """Remove one condition from GridMap and every Tile, invalidating its channels there."""
+        directional_before = self._propagation_uses_directional_solver()
         layer = self._spatial_condition_layers.pop(condition_uuid, None)
         positions = self._spatial_condition_positions.pop(
             condition_uuid,
@@ -1675,11 +1704,14 @@ class GridMap:
                         condition_uuid,
                         layer,
                     )
-        self._spatial_conditions.pop(condition_uuid, None)
+        condition = self._spatial_conditions.pop(condition_uuid, None)
         self._global_crossing_owners.discard(condition_uuid)
         for owners in self._local_crossing_owners.values():
             owners.discard(condition_uuid)
         self._refresh_optical_candidate_cells(positions)
+        if condition is not None:
+            self._bump_spatial_revisions(condition.spatial_channels(), positions)
+        self._bump_propagation_solver_change(directional_before, positions)
 
     def get_spatial_condition_positions(
         self,
@@ -1848,11 +1880,11 @@ class GridMap:
             return True
         return False
 
-    def get_directional_block_map(self, position: Tuple[int, int]) -> Dict[str, Dict[str, bool]]:
+    def get_directional_block_map(self, position: Tuple[int, int]) -> Dict[WorldEdgeChannel, Dict[str, bool]]:
         """Derive canonical side blockers from live ordered world edges."""
-        result: Dict[str, Dict[str, bool]] = {
+        result: Dict[WorldEdgeChannel, Dict[str, bool]] = {
             channel: {direction: False for direction in DIRECTIONS}
-            for channel in DIRECTIONAL_CHANNELS
+            for channel in WorldEdgeChannel
         }
         if position not in self._tiles:
             return result
@@ -1865,12 +1897,12 @@ class GridMap:
         for direction, delta in deltas.items():
             neighbor = (position[0] + delta[0], position[1] + delta[1])
             if neighbor not in self._tiles:
-                for channel in DIRECTIONAL_CHANNELS:
+                for channel in WorldEdgeChannel:
                     result[channel][direction] = True
                 continue
             edge = self.get_world_edge(position, neighbor)
             for channel in WorldEdgeChannel:
-                result[channel.value][direction] = not (
+                result[channel][direction] = not (
                     self._world_edge_channel_allows(edge, channel)
                 )
         return result
@@ -1880,7 +1912,7 @@ class GridMap:
         position: Tuple[int, int],
         requesting_entity_uuid: UUID,
         movement_mode: MovementMode = MovementMode.WALKING,
-    ) -> Dict[str, Dict[str, bool]]:
+    ) -> Dict[WorldEdgeChannel, Dict[str, bool]]:
         """Derive observer-known movement sides and physical optical sides."""
         if BaseBlock.get(requesting_entity_uuid) is None:
             raise ValueError("subjective directional projection requires a known observer")
@@ -1895,7 +1927,7 @@ class GridMap:
             neighbor = (position[0] + delta[0], position[1] + delta[1])
             if neighbor not in self._tiles:
                 continue
-            result["movement"][direction] = not self._world_edge_channel_allows(
+            result[WorldEdgeChannel.MOVEMENT][direction] = not self._world_edge_channel_allows(
                 self.get_world_edge(position, neighbor),
                 WorldEdgeChannel.MOVEMENT,
                 movement_mode=movement_mode,
@@ -1916,14 +1948,14 @@ class GridMap:
             return True
         return all((from_pos, direction) not in blocked for direction in directions)
 
-    def _transition_cell_allows(self, position: Tuple[int, int], channel: str,
+    def _transition_cell_allows(self, position: Tuple[int, int], channel: WorldEdgeChannel,
                                 requester_uuid: Optional[UUID] = None,
                                 movement_mode: MovementMode = MovementMode.WALKING,
                                 walk_in_danger: bool = True,
                                 subjective: bool = False,
                                 collision_blocked: Optional[Set[Tuple[int, int]]] = None,
                                 movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> bool:
-        if channel == "movement":
+        if channel is WorldEdgeChannel.MOVEMENT:
             if movement_cell_cache is not None:
                 cached = movement_cell_cache.get(position)
                 if cached is not None:
@@ -1938,14 +1970,14 @@ class GridMap:
             if movement_cell_cache is not None:
                 movement_cell_cache[position] = result
             return result
-        if channel == "propagation":
+        if channel is WorldEdgeChannel.PROPAGATION:
             return not self.is_blocking_propagation(position[0], position[1])
-        if channel == "optical":
+        if channel is WorldEdgeChannel.OPTICAL:
             return not self.is_blocking_optics(position[0], position[1])
         raise ValueError(f"Unsupported transition channel: {channel}")
 
     def _cardinal_transition_sides_allow(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
-                                         channel: str,
+                                         channel: WorldEdgeChannel,
                                          requester_uuid: Optional[UUID] = None,
                                          movement_mode: MovementMode = MovementMode.WALKING,
                                          subjective: bool = False,
@@ -1957,12 +1989,9 @@ class GridMap:
             return False
         if from_pos not in self._tiles or to_pos not in self._tiles:
             return False
-        if channel == "movement" and not self._remembered_transition_allows(from_pos, to_pos, directional_collision_blocked):
+        if (channel is WorldEdgeChannel.MOVEMENT
+                and not self._remembered_transition_allows(from_pos, to_pos, directional_collision_blocked)):
             return False
-        try:
-            world_channel = WorldEdgeChannel(channel)
-        except ValueError as exc:
-            raise ValueError(f"Unsupported world-edge channel: {channel}") from exc
         key = (from_pos, to_pos)
         if side_cache is not None and key in side_cache:
             return side_cache[key]
@@ -1975,7 +2004,7 @@ class GridMap:
         else:
             result = self._world_edge_channel_allows(
                 self.get_world_edge(from_pos, to_pos),
-                world_channel,
+                channel,
                 movement_mode=movement_mode,
                 requester_uuid=requester_uuid,
                 subjective=subjective,
@@ -1996,7 +2025,7 @@ class GridMap:
     ) -> bool:
         """Require both ordered Tile-side layers to transmit one channel."""
         if not self.spatial_crossing_allows(edge.source_position, edge.destination_position,
-                channel.value, requester_uuid, movement_mode, subjective=subjective,
+                channel, requester_uuid, movement_mode, subjective=subjective,
                 terminal_provider_uuid=ignored_provider_uuid):
             return False
         for contribution in (*edge.exit_contributions, *edge.entry_contributions):
@@ -2049,7 +2078,7 @@ class GridMap:
         )
 
     def spatial_crossing_allows(self, start: Tuple[int, int], end: Tuple[int, int],
-                                channel: str, requester_uuid: Optional[UUID] = None,
+                                channel: CrossingChannel, requester_uuid: Optional[UUID] = None,
                                 mode: MovementMode = MovementMode.WALKING, *,
                                 subjective: bool = False, terminal_provider_uuid: Optional[UUID] = None) -> bool:
         requester = BaseBlock.get(requester_uuid) if requester_uuid is not None else None
@@ -2120,7 +2149,7 @@ class GridMap:
         return (base_leg_feet / 5) * terrain_multiplier
 
     def _diagonal_transition_allows(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
-                                    channel: str,
+                                    channel: WorldEdgeChannel,
                                     requester_uuid: Optional[UUID] = None,
                                     movement_mode: MovementMode = MovementMode.WALKING,
                                     walk_in_danger: bool = True,
@@ -2133,7 +2162,7 @@ class GridMap:
         dy = to_pos[1] - from_pos[1]
         if abs(dx) != 1 or abs(dy) != 1:
             return False
-        if channel == "movement" and movement_mode is not MovementMode.FLYING:
+        if channel is WorldEdgeChannel.MOVEMENT and movement_mode is not MovementMode.FLYING:
             from_tile = self._tiles.get(from_pos)
             to_tile = self._tiles.get(to_pos)
             if (
@@ -2155,7 +2184,7 @@ class GridMap:
                 continue
             if (
                 (
-                    channel != "movement"
+                    channel is not WorldEdgeChannel.MOVEMENT
                     or (
                         self._elevation_transition_allows(
                             from_pos,
@@ -2191,8 +2220,8 @@ class GridMap:
                        side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None,
                        movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> bool:
         """Return whether movement can cross from one adjacent tile to another."""
-        if not self.spatial_crossing_allows(from_pos, to_pos, "movement", requesting_entity_uuid,
-            movement_mode, subjective=subjective):
+        if not self.spatial_crossing_allows(from_pos, to_pos, WorldEdgeChannel.MOVEMENT,
+            requesting_entity_uuid, movement_mode, subjective=subjective):
             return False
         if from_pos == to_pos:
             return True
@@ -2202,7 +2231,7 @@ class GridMap:
             return False
         if abs(to_pos[0] - from_pos[0]) == 1 and abs(to_pos[1] - from_pos[1]) == 1:
             if not self._diagonal_transition_allows(
-                from_pos, to_pos, "movement", requesting_entity_uuid, movement_mode,
+                from_pos, to_pos, WorldEdgeChannel.MOVEMENT, requesting_entity_uuid, movement_mode,
                 walk_in_danger, subjective, collision_blocked,
                 directional_collision_blocked, side_cache,
                 movement_cell_cache,
@@ -2210,7 +2239,7 @@ class GridMap:
                 return False
             return self._transition_cell_allows(
                 to_pos,
-                "movement",
+                WorldEdgeChannel.MOVEMENT,
                 requesting_entity_uuid,
                 movement_mode,
                 walk_in_danger,
@@ -2223,7 +2252,7 @@ class GridMap:
         if not self._cardinal_transition_sides_allow(
             from_pos,
             to_pos,
-            "movement",
+            WorldEdgeChannel.MOVEMENT,
             requesting_entity_uuid,
             movement_mode,
             subjective,
@@ -2233,7 +2262,7 @@ class GridMap:
             return False
         return self._transition_cell_allows(
             to_pos,
-            "movement",
+            WorldEdgeChannel.MOVEMENT,
             requesting_entity_uuid,
             movement_mode,
             walk_in_danger,
@@ -2293,23 +2322,24 @@ class GridMap:
             return self._diagonal_transition_allows(
                 from_pos,
                 to_pos,
-                "optical",
+                WorldEdgeChannel.OPTICAL,
             )
         return self._cardinal_transition_sides_allow(
             from_pos,
             to_pos,
-            "optical",
+            WorldEdgeChannel.OPTICAL,
         )
 
     def can_propagate_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
                                  requester_uuid: Optional[UUID] = None,
                                  subjective: bool = False) -> bool:
         if abs(to_pos[0] - from_pos[0]) == 1 and abs(to_pos[1] - from_pos[1]) == 1:
-            return self._diagonal_transition_allows(from_pos, to_pos, "propagation", requester_uuid, subjective=subjective)
+            return self._diagonal_transition_allows(from_pos, to_pos, WorldEdgeChannel.PROPAGATION,
+                requester_uuid, subjective=subjective)
         return self._cardinal_transition_sides_allow(
             from_pos,
             to_pos,
-            "propagation",
+            WorldEdgeChannel.PROPAGATION,
             requester_uuid,
             subjective=subjective,
         )
@@ -2423,6 +2453,11 @@ class GridMap:
             for tx in range(x, x + width):
                 for ty in range(y, y + height):
                     old_tile = self._tiles.get((tx, ty))
+                    old_illuminations, old_caps = (
+                        tile_light_contributions(old_tile)
+                        if old_tile is not None
+                        else ({}, {})
+                    )
                     if old_tile:
                         self._tiles_by_uuid.pop(old_tile.uuid, None)
                         BaseBlock.unregister(old_tile.uuid)
@@ -2439,6 +2474,7 @@ class GridMap:
                         burrowing_cost=burrowing_cost,
                         default_light=default_light,
                     )
+                    self._seed_replacement_tile_light(tile, old_illuminations, old_caps)
                     self._tiles[(tx, ty)] = tile
                     self._tiles_by_uuid[tile.uuid] = (tx, ty)
                     self._index_support_position((tx, ty))
@@ -2740,11 +2776,11 @@ class GridMap:
         """
         if start not in self._tiles or end not in self._tiles:
             return False
-        if not self.spatial_crossing_allows(start, end, "propagation", requester_uuid,
+        if not self.spatial_crossing_allows(start, end, WorldEdgeChannel.PROPAGATION, requester_uuid,
                 subjective=subjective, terminal_provider_uuid=terminal_provider_uuid):
             return False
         if access is not PhysicalAccess.PROJECTILE and not self.spatial_crossing_allows(
-                start, end, f"contact.{access.value}", requester_uuid, subjective=subjective,
+                start, end, access, requester_uuid, subjective=subjective,
                 terminal_provider_uuid=terminal_provider_uuid):
             return False
         requester = BaseBlock.get(knowledge_observer_uuid or requester_uuid)
@@ -3190,42 +3226,28 @@ class GridMap:
             parent_event=effect.uuid,
         )
 
-    @staticmethod
-    def _boundary_revision_channels(
-        channels: Tuple[WorldEdgeChannel, ...],
-    ) -> Set[str]:
-        """Map structural channels onto current spatial cache domains."""
-        revisions: Set[str] = set()
-        if WorldEdgeChannel.MOVEMENT in channels:
-            revisions.add("movement")
-        if WorldEdgeChannel.OPTICAL in channels:
-            revisions.add("optical")
-        if WorldEdgeChannel.PROPAGATION in channels:
-            revisions.add("propagation")
-        return revisions
-
-    def _bump_object_revisions(self, object_uuid: UUID, channels: Set[str], positions: Collection[Tuple[int, int]]) -> None:
+    def _bump_object_revisions(self, object_uuid: UUID, channels: frozenset[SpatialChannel],
+                               positions: Collection[Tuple[int, int]]) -> None:
         """Invalidate physical contacts locally as well as existing blocker caches."""
         self._bump_spatial_revisions(channels, positions)
         # A retained boundary can have no occupied bands. Its placement identity
         # still participates in the native global directional-solver decision.
-        self._refresh_directional_blocker_owners(channels, (object_uuid,))
-        self._bump_observer_revisions({"optical"} - channels, positions)
+        self._refresh_directional_blocker_owners(revision_edge_channels(channels), (object_uuid,))
+        self._bump_observer_revisions(frozenset({SpatialChannel.OPTICAL}) - channels, positions)
 
-    def _object_revision_channels(self, obj: BaseBlock) -> Set[str]:
-        channels: Set[str] = set()
+    def _object_revision_channels(self, obj: BaseBlock) -> frozenset[SpatialChannel]:
+        """Return the revision channels of everything one placed object blocks."""
+        blocked: Set[WorldEdgeChannel] = set()
         if obj.blocks_optics_at_center():
-            channels.add("optical")
+            blocked.add(WorldEdgeChannel.OPTICAL)
         if obj.blocks_propagation():
-            channels.add("propagation")
+            blocked.add(WorldEdgeChannel.PROPAGATION)
         if obj.blocks_walking():
-            channels.add("movement")
+            blocked.add(WorldEdgeChannel.MOVEMENT)
         structure = obj.get_boundary_structure()
         if structure is not None:
-            channels.update(
-                self._boundary_revision_channels(structure.blocked_channels)
-            )
-        return channels
+            blocked.update(structure.blocked_channels)
+        return edge_revision_channels(blocked)
 
     def _boundary_event_metadata(
         self,
@@ -3244,11 +3266,7 @@ class GridMap:
             "directional_directions": [
                 placement.boundary_direction.value
             ],
-            "directional_channels": sorted(
-                self._boundary_revision_channels(
-                    structure.blocked_channels
-                )
-            ),
+            "directional_channels": list(structure.blocked_channels),
         }
 
     def prepare_object_placement(
@@ -3622,15 +3640,16 @@ class GridMap:
         obj = BaseBlock.get(object_uuid)
         if obj is None:
             raise ValueError(f"placed object {object_uuid} is not registered")
-        changed_channels = self._object_revision_channels(obj) if candidate.positions != previous.positions else set()
+        changed_channels = (self._object_revision_channels(obj) if candidate.positions != previous.positions
+                            else frozenset())
         declaration = SpatialChangeEvent.object_changed(
             previous.position,
             object_uuid,
             placement=candidate,
             previous_placement=previous,
-            blocks_optics_changed="optical" in changed_channels,
-            blocks_propagation_changed="propagation" in changed_channels,
-            blocks_walking_changed="movement" in changed_channels,
+            blocks_optics_changed=SpatialChannel.OPTICAL in changed_channels,
+            blocks_propagation_changed=SpatialChannel.PROPAGATION in changed_channels,
+            blocks_walking_changed=SpatialChannel.MOVEMENT in changed_channels,
             parent_event=parent_event,
             object_name=obj.name,
             object_map_char=obj.get_map_char(),
@@ -3816,9 +3835,7 @@ class GridMap:
                 != (channel in structure.blocked_channels)
             )
         )
-        changed_channels = self._boundary_revision_channels(
-            changed_world_channels
-        )
+        changed_channels = edge_revision_channels(changed_world_channels)
         self._bump_object_revisions(object_uuid, changed_channels, placement.positions)
         if not self._events_enabled:
             return
@@ -3827,9 +3844,9 @@ class GridMap:
             SpatialChangeEvent.object_changed(
                 placement.position,
                 object_uuid,
-                blocks_optics_changed="optical" in changed_channels,
-                blocks_propagation_changed="propagation" in changed_channels,
-                blocks_walking_changed="movement" in changed_channels,
+                blocks_optics_changed=SpatialChannel.OPTICAL in changed_channels,
+                blocks_propagation_changed=SpatialChannel.PROPAGATION in changed_channels,
+                blocks_walking_changed=SpatialChannel.MOVEMENT in changed_channels,
                 placement=placement,
                 previous_placement=placement,
                 parent_event=parent_event,
@@ -3842,7 +3859,7 @@ class GridMap:
                 object_boundary_structure=structure,
                 directional_position=placement.position,
                 directional_directions=[placement.boundary_direction.value],
-                directional_channels=sorted(changed_channels),
+                directional_channels=list(changed_world_channels),
             )
         )
 
@@ -3863,9 +3880,9 @@ class GridMap:
         channels = self._object_revision_channels(provider)
         declaration = SpatialChangeEvent.object_changed(previous.position, object_uuid,
             placement=candidate, previous_placement=previous, parent_event=parent_event.uuid,
-            blocks_optics_changed="optical" in channels,
-            blocks_propagation_changed="propagation" in channels,
-            blocks_walking_changed="movement" in channels,
+            blocks_optics_changed=SpatialChannel.OPTICAL in channels,
+            blocks_propagation_changed=SpatialChannel.PROPAGATION in channels,
+            blocks_walking_changed=SpatialChannel.MOVEMENT in channels,
             object_name=provider.name, object_map_char=provider.get_map_char(),
             object_blocks_movement=provider.blocks_walking(),
             object_blocks_optics=provider.blocks_optics_at_center(),
@@ -3907,30 +3924,31 @@ class GridMap:
         self._replace_placement_bands(placement, add=True)
         self._object_placements[identity] = placement
         self.refresh_object_known_source(provider)
-        channels: Set[str] = set()
+        blocked: Set[WorldEdgeChannel] = set()
         for state in (previous, current):
             if state.blocks_movement:
-                channels.add("movement")
+                blocked.add(WorldEdgeChannel.MOVEMENT)
             if state.blocks_optics:
-                channels.add("optical")
+                blocked.add(WorldEdgeChannel.OPTICAL)
             if state.blocks_propagation:
-                channels.add("propagation")
+                blocked.add(WorldEdgeChannel.PROPAGATION)
             if state.boundary_structure is not None:
-                channels.update(self._boundary_revision_channels(state.boundary_structure.blocked_channels))
+                blocked.update(state.boundary_structure.blocked_channels)
+        channels = edge_revision_channels(blocked)
         self._bump_object_revisions(identity, channels, set(old.positions) | set(placement.positions))
         boundary = old.boundary_direction or placement.boundary_direction
         event = SpatialChangeEvent.object_changed(placement.position, identity,
             placement=placement, previous_placement=old, parent_event=parent_event,
-            blocks_optics_changed="optical" in channels,
-            blocks_propagation_changed="propagation" in channels,
-            blocks_walking_changed="movement" in channels,
+            blocks_optics_changed=SpatialChannel.OPTICAL in channels,
+            blocks_propagation_changed=SpatialChannel.PROPAGATION in channels,
+            blocks_walking_changed=SpatialChannel.MOVEMENT in channels,
             object_name=current.name, object_map_char=current.map_char,
             object_blocks_movement=current.blocks_movement, object_blocks_optics=current.blocks_optics,
             object_blocks_propagation=current.blocks_propagation, object_is_open=current.is_open,
             object_boundary_structure=current.boundary_structure,
             directional_position=old.position if boundary is not None else None,
             directional_directions=[boundary.value] if boundary is not None else None,
-            directional_channels=sorted(channels) if boundary is not None else None,
+            directional_channels=sorted(blocked) if boundary is not None else None,
         ).with_updates(object_state=current)
         self._fire_committed_spatial_event(event)
 
@@ -4358,7 +4376,7 @@ class GridMap:
                 result.append(block)
         return result
 
-    def _has_directional_blockers(self, channel: str) -> bool:
+    def _has_directional_blockers(self, channel: WorldEdgeChannel) -> bool:
         """Return whether any placed boundary blocks the canonical channel."""
         cached = self._directional_blockers_cache.get(channel)
         if cached is not None:
@@ -4369,9 +4387,10 @@ class GridMap:
         self._refresh_directional_blocker_owners({channel}, identities)
         return self._directional_blockers_cache[channel]
 
-    def _refresh_directional_blocker_owners(self, channels: Collection[str], identities: Collection[UUID]) -> None:
+    def _refresh_directional_blocker_owners(self, channels: Collection[WorldEdgeChannel],
+                                            identities: Collection[UUID]) -> None:
         """Reconcile settled providers in already-materialized presence sets."""
-        active = [(channel, WorldEdgeChannel(channel), self._directional_blocking_owners[channel])
+        active = [(channel, self._directional_blocking_owners[channel])
                   for channel in channels if channel in self._directional_blocking_owners]
         if not active:
             return
@@ -4380,19 +4399,19 @@ class GridMap:
             provider = (BaseBlock.get(identity) if placement is not None
                         and placement.kind is WorldPlacementKind.BOUNDARY else None)
             structure = provider.get_boundary_structure() if provider is not None else None
-            for _, world_channel, owners in active:
-                if structure is not None and world_channel in structure.blocked_channels:
+            for channel, owners in active:
+                if structure is not None and channel in structure.blocked_channels:
                     owners.add(identity)
                 else:
                     owners.discard(identity)
-        for channel, _, owners in active:
+        for channel, owners in active:
             self._directional_blockers_cache[channel] = bool(owners)
 
     def _transition_clear(
         self,
         start: Tuple[int, int],
         end: Tuple[int, int],
-        channel: str,
+        channel: WorldEdgeChannel,
     ) -> bool:
         path = supercover_line(start, end)
         if not path:
@@ -4400,11 +4419,11 @@ class GridMap:
         for index in range(1, len(path)):
             prev = path[index - 1]
             current = path[index]
-            if channel == "optical":
+            if channel is WorldEdgeChannel.OPTICAL:
                 if not self.can_optical_transition(prev, current):
                     return False
                 blocks_cell = self.is_blocking_optics(current[0], current[1])
-            elif channel == "propagation":
+            elif channel is WorldEdgeChannel.PROPAGATION:
                 if not self.can_propagate_transition(prev, current):
                     return False
                 blocks_cell = self.is_blocking_propagation(current[0], current[1])
@@ -4419,13 +4438,13 @@ class GridMap:
         self,
         start: Tuple[int, int],
         end: Tuple[int, int],
-        channel: str = "optical",
+        channel: WorldEdgeChannel = WorldEdgeChannel.OPTICAL,
     ) -> bool:
         """Public transition-aware line check for physical topology."""
         return self._transition_clear(start, end, channel)
 
     def _sparse_directional_visibility(
-        self, origin: Tuple[int, int], channel: str,
+        self, origin: Tuple[int, int], channel: WorldEdgeChannel,
         targets: List[Tuple[int, int]],
         opaque: Set[Tuple[int, int]],
         bounds: Tuple[int, int, int, int], radius_squared: Optional[float],
@@ -4449,7 +4468,7 @@ class GridMap:
                   CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0)}
         for chunk in chunks:
             candidates.update(self._contact_candidate_cells.get(chunk, ()))
-            if channel == "optical":
+            if channel is WorldEdgeChannel.OPTICAL:
                 candidates.update(self._optical_candidate_cells.get(chunk, ()))
             for position in self._missing_support_frontier.get(chunk, ()):
                 x, y = position
@@ -4474,7 +4493,7 @@ class GridMap:
         for position in (candidates & supported) - opaque:
             blocked = blocking_cache.get(position)
             if blocked is None:
-                blocked = (self.is_blocking_optics(*position) if channel == "optical"
+                blocked = (self.is_blocking_optics(*position) if channel is WorldEdgeChannel.OPTICAL
                     else self.is_blocking_propagation(*position))
                 blocking_cache[position] = blocked
             if blocked:
@@ -4492,7 +4511,7 @@ class GridMap:
             edge = first, second
             allowed = transition_cache.get(edge)
             if allowed is None:
-                allowed = (self.can_optical_transition(*edge) if channel == "optical"
+                allowed = (self.can_optical_transition(*edge) if channel is WorldEdgeChannel.OPTICAL
                     else self.can_propagate_transition(*edge))
                 transition_cache[edge] = allowed
             if allowed:
@@ -4623,7 +4642,7 @@ class GridMap:
         self,
         origin: Tuple[int, int],
         max_distance: Optional[float],
-        channel: str,
+        channel: WorldEdgeChannel,
     ) -> List[Tuple[int, int]]:
         timing = action_timing_enabled()
         total_started = time.perf_counter() if timing else 0.0
@@ -4637,10 +4656,10 @@ class GridMap:
         max_x = min(self._max_x, math.ceil(origin[0] + radius))
         min_y = max(self._min_y, math.floor(origin[1] - radius))
         max_y = min(self._max_y, math.ceil(origin[1] + radius))
-        if channel == "propagation":
+        if channel is WorldEdgeChannel.PROPAGATION:
             transition_cache = self._propagation_transition_cache
             blocking_cache = self._propagation_blocking_cache
-        elif channel == "optical":
+        elif channel is WorldEdgeChannel.OPTICAL:
             cache_key = (channel, self._optical_revision)
             transition_cache = self._directional_transition_cache.setdefault(cache_key, {})
             blocking_cache = self._directional_blocking_cache.setdefault(cache_key, {})
@@ -4680,7 +4699,8 @@ class GridMap:
                 for position in selected:
                     tile = self._tiles[position]
                     targets.append(position)
-                    if sparse and (tile.blocks_optics_at_center() if channel == "optical" else tile.blocks_propagation()):
+                    if sparse and (tile.blocks_optics_at_center() if channel is WorldEdgeChannel.OPTICAL
+                                   else tile.blocks_propagation()):
                         opaque.add(position)
                     if not sparse:
                         dx, dy = x - origin_x, position[1] - origin_y
@@ -4757,7 +4777,7 @@ class GridMap:
                         allowed = transition_cache.get(edge)
                         if allowed is None:
                             native_started = time.perf_counter() if timing else 0.0
-                            allowed = (self.can_optical_transition(*edge) if channel == "optical"
+                            allowed = (self.can_optical_transition(*edge) if channel is WorldEdgeChannel.OPTICAL
                                 else self.can_propagate_transition(*edge))
                             transition_cache[edge] = allowed
                             if timing:
@@ -4785,7 +4805,7 @@ class GridMap:
                         blocked = blocking_cache.get(position)
                         if blocked is None:
                             native_started = time.perf_counter() if timing else 0.0
-                            blocked = (self.is_blocking_optics(*position) if channel == "optical"
+                            blocked = (self.is_blocking_optics(*position) if channel is WorldEdgeChannel.OPTICAL
                                 else self.is_blocking_propagation(*position))
                             blocking_cache[position] = blocked
                             if timing:
@@ -4927,11 +4947,11 @@ class GridMap:
             blocking_cache[position] = blocked
             return blocked
 
-        if self._has_directional_blockers("optical"):
+        if self._has_directional_blockers(WorldEdgeChannel.OPTICAL):
             visible_positions = self._compute_directional_fov(
                 origin,
                 max_distance,
-                "optical",
+                WorldEdgeChannel.OPTICAL,
             )
         else:
             compute_fov(origin, is_blocking_for, mark_visible, max_distance)
@@ -5241,7 +5261,7 @@ class GridMap:
                 return False
         tile.default_light = level
         if preview is not old:
-            self._bump_spatial_revisions({"illumination"}, {position})
+            self._bump_spatial_revisions(frozenset({SpatialChannel.ILLUMINATION}), {position})
         if execution is not None:
             effect = cast(
                 SpatialChangeEvent,
@@ -5298,7 +5318,7 @@ class GridMap:
         if publish:
             self._fire_light_batch_events(list(changed), parent_event=parent_event)
         elif changed:
-            self._bump_spatial_revisions({"illumination"}, changed)
+            self._bump_spatial_revisions(frozenset({SpatialChannel.ILLUMINATION}), changed)
         return changed
 
     def apply_optical_obscurement(
@@ -5458,9 +5478,9 @@ class GridMap:
         """Publish one committed batch fact for a conditional optical change."""
         live = {position for position in positions if position in self._tiles}
         if not live:
-            self._bump_observer_revisions({"optical"}, positions)
+            self._bump_observer_revisions(frozenset({SpatialChannel.OPTICAL}), positions)
             return
-        self._bump_spatial_revisions({"optical"}, positions)
+        self._bump_spatial_revisions(frozenset({SpatialChannel.OPTICAL}), positions)
         representative = min(live)
         event = SpatialChangeEvent.tile_changed(
             representative,
@@ -5765,6 +5785,7 @@ class GridMap:
         Pure computation — does NOT modify any tiles.
         Uses FOV from position so light doesn't go through walls.
         """
+        record_action_count("light.source_fov", 1)
         pos = position or source.position
         total_radius_feet = source.bright_radius_feet + source.dim_radius_feet
         total_radius_tiles = max(total_radius_feet // 5, 1)
@@ -5809,7 +5830,7 @@ class GridMap:
             self._fire_light_batch_events(changed_positions, parent_event=parent_event,
                 source_positions=set(previous) | set(source.affected_tiles) if source_changed else set())
         elif changed_positions:
-            self._bump_spatial_revisions({"illumination"}, set(changed_positions))
+            self._bump_spatial_revisions(frozenset({SpatialChannel.ILLUMINATION}), set(changed_positions))
 
     def _remove_light_source_tiles(self, source: LightSourceData,
                                    parent_event: Optional[UUID] = None,
@@ -5830,7 +5851,7 @@ class GridMap:
             self._fire_light_batch_events(changed_positions, parent_event=parent_event,
                 source_positions=previous)
         elif changed_positions:
-            self._bump_spatial_revisions({"illumination"}, set(changed_positions))
+            self._bump_spatial_revisions(frozenset({SpatialChannel.ILLUMINATION}), set(changed_positions))
 
         return changed_positions
 
@@ -5850,7 +5871,7 @@ class GridMap:
             parent_event: Optional causal parent event UUID.
         """
         if changed_positions:
-            self._bump_spatial_revisions({"illumination"}, set(changed_positions))
+            self._bump_spatial_revisions(frozenset({SpatialChannel.ILLUMINATION}), set(changed_positions))
         event = self.snapshot_light_change(changed_positions, parent_event=parent_event,
             source_positions=source_positions)
         if event is not None:
@@ -6038,7 +6059,7 @@ class GridMap:
                 self._fire_light_batch_events(changed_positions, parent_event=parent_event,
                     source_positions=all_positions if source_changed else set())
             elif changed_positions:
-                self._bump_spatial_revisions({"illumination"}, set(changed_positions))
+                self._bump_spatial_revisions(frozenset({SpatialChannel.ILLUMINATION}), set(changed_positions))
         return all_changed
 
     def get_positions_near_entities(
@@ -6074,6 +6095,17 @@ class GridMap:
                 return True
         return False
 
+    def _propagation_uses_directional_solver(self) -> bool:
+        """Whether propagation FOV is solved directionally rather than by shadowcasting."""
+        return self._has_directional_blockers(WorldEdgeChannel.PROPAGATION) or bool(self._spatial_conditions)
+
+    def _bump_propagation_solver_change(
+        self, directional_before: bool, positions: Collection[Tuple[int, int]],
+    ) -> None:
+        """The two propagation solvers disagree, so switching them is a propagation change."""
+        if self._propagation_uses_directional_solver() != directional_before:
+            self._bump_spatial_revisions(frozenset({SpatialChannel.PROPAGATION}), positions)
+
     def compute_propagation_fov(self, origin: Tuple[int, int],
                                 max_distance: Optional[float] = None) -> List[Tuple[int, int]]:
         """Compute FOV for AoE propagation (physical barriers only).
@@ -6096,8 +6128,8 @@ class GridMap:
         def is_blocking_for(x: int, y: int) -> bool:
             return self.is_blocking_propagation(x, y)
 
-        if self._has_directional_blockers("propagation") or self._spatial_conditions:
-            visible_positions = self._compute_directional_fov(origin, max_distance, "propagation")
+        if self._propagation_uses_directional_solver():
+            visible_positions = self._compute_directional_fov(origin, max_distance, WorldEdgeChannel.PROPAGATION)
         else:
             compute_fov(origin, is_blocking_for, mark_visible, max_distance)
 
@@ -6362,12 +6394,16 @@ class GridMap:
         self._pending_events.clear()
         self._pending_committed_events.clear()
         self._bounds_dirty = True
-        self._spatial_revision = 0
-        self._optical_revision = 0
-        self._movement_revision = 0
-        self._connector_revision = 0
-        self._light_revision = 0
-        self._propagation_revision = 0
+        # Revisions stay monotonic: caches outside GridMap key on them, so a
+        # rebuilt world must never repeat a value the previous world used.
+        self._spatial_revision += 1
+        self._optical_revision += 1
+        self._movement_revision += 1
+        self._occupancy_revision += 1
+        self._connector_revision += 1
+        self._light_revision += 1
+        self._propagation_revision += 1
+        self._path_cache.clear()
         self._fov_cache.clear()
         self._propagation_fov_cache.clear()
         self._propagation_filter_cache.clear()

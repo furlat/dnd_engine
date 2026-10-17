@@ -23,6 +23,7 @@ from dnd.core.base_actions import BaseAction, ActionEvent
 from dnd.spatial.memberships import MembershipAreaCondition, SpatialConditionMembershipSource
 from dnd.core.geometry import bresenham_line
 from dnd.types.physical_access import PhysicalAccess
+from dnd.types.world import WorldEdgeChannel
 from dnd.types.spatial_effects import SpatialEffectAnchorKind, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
 
 from dnd.spells.spell_utils import target_turn_expiry_handler, spell_position_error, spell_valid_positions
@@ -71,7 +72,7 @@ from dnd.core.modifiers import (
 from dnd.core.geometry import bresenham_line
 from dnd.core.elevation import support_distance_feet
 from dnd.core.aoe import Sphere
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.spatial.restraints import SpatialRestraintSource
 from dnd.core.positioning import PositionPublicationError
 from dnd.blocks.equipment import ArmorEquipEvent
@@ -3889,11 +3890,11 @@ class AntilifeShellZone(AreaCondition):
     zone_radius_feet: int = 10
     duration: Duration = Field(default_factory=lambda: Duration(duration=600, duration_type=DurationType.ROUNDS))
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset({"movement"})
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset({WorldEdgeChannel.MOVEMENT})
 
     def blocks_crossing_between(self, start, end, channel, requester_uuid, mode, terminal_provider_uuid=None):
         actor = Entity.get(requester_uuid) if requester_uuid else None
-        if channel != "movement" or actor is None or actor.uuid == self.anchor_uuid or                actor.creature_type in {CreatureType.CONSTRUCT, CreatureType.UNDEAD}: return False
+        if channel is not WorldEdgeChannel.MOVEMENT or actor is None or actor.uuid == self.anchor_uuid or                actor.creature_type in {CreatureType.CONSTRUCT, CreatureType.UNDEAD}: return False
         inside = start in self.affected_positions and self.allows_contribution_at(start)
         return any((cell in self.affected_positions and self.allows_contribution_at(cell)) != inside
                    for cell in bresenham_line(start, end))

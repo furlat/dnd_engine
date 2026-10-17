@@ -415,7 +415,7 @@ def test_eb_11_006_boundary_structures_block_edges_and_emit_exact_facts() -> Non
     assert event is not None
     assert event.directional_position == (1, 0)
     assert event.directional_directions == ["east"]
-    assert event.directional_channels == ["movement"]
+    assert event.directional_channels == [WorldEdgeChannel.MOVEMENT]
     assert event.placement == grid.get_object_placement(wall.uuid)
     assert event.object_boundary_structure == wall.get_boundary_structure()
     assert {(1, 0), (2, 0)} <= event.get_affected_positions()
@@ -592,7 +592,7 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
 
     jump = Jump(source_entity_uuid=actor.uuid, template=True)
     assert (3, 1) in actor.senses.visible
-    assert not grid.raycast_clear((1, 1), (3, 1), channel="propagation")
+    assert not grid.raycast_clear((1, 1), (3, 1), channel=WorldEdgeChannel.PROPAGATION)
     assert (3, 1) not in jump.get_valid_positions()
 
     jump_attempt = Jump(source_entity_uuid=actor.uuid, end_position=(3, 1))

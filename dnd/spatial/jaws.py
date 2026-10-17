@@ -23,7 +23,7 @@ from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.abilities import SkillName
 from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from dnd.types.traps import TrapDamage, TrapPayload, TrapState
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import OccupancyLayer, SpatialChannel
 
 
 JAW_TRAP_CONTENT_REF = ContentRef(
@@ -73,6 +73,9 @@ class JawTrap(SpatialCondition):
         senses = observer.get_senses() if observer is not None else None
         return (senses is not None and self.uuid in senses.spatial_effects
                 or super().is_hazard_perceived_by(requesting_entity_uuid))
+
+    def spatial_channels(self) -> frozenset[SpatialChannel]:
+        return super().spatial_channels() | {SpatialChannel.MOVEMENT}
 
     def is_hazardous_for(self, entity_uuid: UUID | None = None, *,
                          occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:

@@ -19,7 +19,7 @@ from dnd.spells.spell_utils import condition_save
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.events import Event, EventHandler, EventType, Trigger, PortalTransferEvent, EventPhase, EventQueue, ForcedMovementEvent, ItemDestructionEvent, Range, RangeType, SpatialChangeEvent
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.item_types import ItemPresentationState
 from dnd.core.life_types import RemainsDisposition
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
@@ -33,7 +33,7 @@ from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
 from dnd.types.summoning import TerminalOwnerRelease
-from dnd.types.world import MovementMode
+from dnd.types.world import MovementMode, WorldEdgeChannel
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 
 
@@ -169,8 +169,7 @@ class WallSection(WorldItem):
         owner = BaseCondition.get(self.wall_owner_uuid)
         if isinstance(owner, SolidWallZone) and owner.applied:
             owner.sections[self.uuid] = self.geometry
-            get_map().invalidate_spatial_caches(
-                {"movement", "optical", "propagation"}, owner.affected_positions)
+            get_map().invalidate_spatial_caches(owner.spatial_channels(), owner.affected_positions)
             change = owner._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
                 previous_positions=set(owner.affected_positions), affected_positions=set(owner.affected_positions),
                 parent_event=parent_event)
@@ -187,7 +186,8 @@ class WallSection(WorldItem):
 class SolidWallZone(AreaCondition):
     """Ownership links and exact shell crossings, without a filled-volume blocker."""
 
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset({"movement", "optical", "propagation"})
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset({
+        WorldEdgeChannel.MOVEMENT, WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION})
 
     geometry: WallAssemblyPresentationGeometry
     material: Literal["ice", "stone", "force"]
@@ -229,9 +229,9 @@ class SolidWallZone(AreaCondition):
 
     def blocks_crossing_between(self, start, end, channel, requester_uuid, mode,
                                 terminal_provider_uuid=None) -> bool:
-        if channel == "optical" and self.material != "stone":
+        if channel is WorldEdgeChannel.OPTICAL and self.material != "stone":
             return False
-        if channel == "movement" and mode is MovementMode.BURROWING and self.material != "force":
+        if channel is WorldEdgeChannel.MOVEMENT and mode is MovementMode.BURROWING and self.material != "force":
             return False
         return any(identity != terminal_provider_uuid and wall_path_contact(geometry, start, end,
                    {p for p in self.affected_positions if self.allows_contribution_at(p)}) is not None
@@ -253,8 +253,7 @@ class SolidWallZone(AreaCondition):
         geometry = self.sections.pop(identity, None)
         if geometry is None:
             return
-        get_map().invalidate_spatial_caches(
-            {"movement", "optical", "propagation"}, self.affected_positions)
+        get_map().invalidate_spatial_caches(self.spatial_channels(), self.affected_positions)
         change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
             previous_positions=set(self.affected_positions), affected_positions=set(self.affected_positions),
             parent_event=parent_event)
@@ -777,8 +776,9 @@ class ForcecageZone(SolidWallZone):
     center: tuple[int,int]
     side_feet: int
     duration: Duration = Field(default_factory=lambda: Duration(duration=600, duration_type=DurationType.ROUNDS))
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset({"movement", "propagation",
-        "contact.hand", "contact.weapon", "contact.light_weapon", "contact.natural", "contact.body"})
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset({
+        WorldEdgeChannel.MOVEMENT, WorldEdgeChannel.PROPAGATION, PhysicalAccess.HAND, PhysicalAccess.WEAPON,
+        PhysicalAccess.LIGHT_WEAPON, PhysicalAccess.NATURAL, PhysicalAccess.BODY})
 
     def _commit_activation_footprint(self,parent_event):
         admitted=[]
@@ -820,7 +820,7 @@ class ForcecageZone(SolidWallZone):
         return abs(position[0]-self.center[0]) < half and abs(position[1]-self.center[1]) < half
 
     def blocks_crossing_between(self,start,end,channel,requester_uuid,mode,terminal_provider_uuid=None):
-        if channel == "propagation" and self.cage_form == "cage": return False
+        if channel is WorldEdgeChannel.PROPAGATION and self.cage_form == "cage": return False
         # Rays and creature crossings on the supported floor use the remaining
         # ground band. A 10-foot breach need not erase the bars above it.
         return any(identity != terminal_provider_uuid and wall_path_contact(

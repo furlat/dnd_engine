@@ -1,6 +1,8 @@
 """Dependency-neutral grid, lighting, and structural vocabulary."""
 
+from collections.abc import Iterable, Mapping
 from enum import Enum, StrEnum
+from typing import NamedTuple
 
 
 class OccupancyLayer(StrEnum):
@@ -47,12 +49,47 @@ class WorldEdgeChannel(str, Enum):
     PROPAGATION = "propagation"
 
 
+class SpatialChannel(StrEnum):
+    """Objective world channel whose change invalidates derived spatial state."""
+
+    MOVEMENT = "movement"
+    OPTICAL = "optical"
+    ILLUMINATION = "illumination"
+    PROPAGATION = "propagation"
+    OCCUPANCY = "occupancy"
+
+
+EDGE_CHANNEL_REVISIONS: Mapping[WorldEdgeChannel, SpatialChannel] = {
+    WorldEdgeChannel.MOVEMENT: SpatialChannel.MOVEMENT,
+    WorldEdgeChannel.OPTICAL: SpatialChannel.OPTICAL,
+    WorldEdgeChannel.PROPAGATION: SpatialChannel.PROPAGATION,
+}
+
+
+def edge_revision_channels(channels: Iterable[WorldEdgeChannel]) -> frozenset[SpatialChannel]:
+    """Return the revision channels invalidated by changed structural channels."""
+    return frozenset(EDGE_CHANNEL_REVISIONS[channel] for channel in channels)
+
+
+class ObserverRevisions(NamedTuple):
+    """One subscriber's revisions of the channels its sensory field depends on."""
+
+    optical: int = 0
+    illumination: int = 0
+    propagation: int = 0
+    occupancy: int = 0
+
+
 __all__ = [
     "CardinalDirection",
+    "EDGE_CHANNEL_REVISIONS",
     "LightLevel",
     "MovementMode",
+    "ObserverRevisions",
     "OccupancyLayer",
+    "SpatialChannel",
     "WorldEdgeChannel",
+    "edge_revision_channels",
 ]
 
 

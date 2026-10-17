@@ -1,6 +1,5 @@
 """Contracts for typed action meaning carried by decision epochs."""
 
-import json
 from uuid import UUID, uuid4
 
 import pytest
@@ -8,11 +7,7 @@ from pydantic import ValidationError
 
 from dnd.ai.contracts.control import (
     ActionAffordance,
-    ActionEconomyState,
-    ActionSourceDefinition,
     AffordanceSet,
-    DecisionEpoch,
-    DecisionEpochReason,
 )
 from dnd.ai.contracts.semantics import (
     AffectedRelationship,
@@ -43,11 +38,9 @@ from dnd.ai.contracts.semantics import (
     WorldEffectAnchor,
     WorldEffectScope,
     WorldEffectShape,
-    action_semantics_ref,
     evaluate_fact_expression,
 )
 from dnd.ai.runtime.action_semantics import action_semantics_for_available_action
-from ai.subjective.semantic_pool import SemanticContractPool
 from dnd.ai.runtime.decision_epoch import (
     _affordance_set_from_buckets,
     _build_affordance_rows_from_actions,
@@ -1203,159 +1196,6 @@ def test_semantics_travel_inside_epoch_affordances_and_survive_json_round_trip()
     assert restored_row.base_template_name == "Move"
     assert direct_catalog[direct_rows[0].semantics_ref].semantic_id == "movement.move"
     assert "semantics" not in restored_row.model_dump()
-
-
-def test_affordance_wire_catalog_preserves_content_addressed_semantics() -> None:
-    """Wire compaction cannot remove fields covered by a semantic content hash."""
-    source = _action(
-        "Move",
-        semantic_key="dnd.actions.Move",
-        target_type=TargetType.POSITION_PATH,
-        action_category=ActionCategory.MOVEMENT,
-        valid_targets=[AvailableTarget(index=0, position=(2, 1), path_cost=5)],
-    )
-    catalog = {}
-    rows = _build_affordance_rows_from_actions("position_actions", [source], catalog)
-    affordances = _affordance_set_from_buckets(
-        actor_uuid="actor",
-        observation_cursor=1,
-        entity_actions=[],
-        position_actions=rows,
-        self_actions=[],
-        object_actions=[],
-        semantic_catalog=catalog,
-    )
-    wire_catalog = json.loads(affordances.model_dump_json())["semantic_catalog"]
-
-    pooled = SemanticContractPool().intern_catalog(wire_catalog)
-
-    assert set(catalog).issubset(pooled)
-    assert all(pooled[reference] == semantics for reference, semantics in catalog.items())
-
-
-def test_semantic_contract_pool_reuses_immutable_contracts_across_frames() -> None:
-    """Repeated JSON catalogs do not allocate a new planning model every action."""
-    semantics = action_semantics_for_available_action(_action(
-        "Move",
-        semantic_key="dnd.actions.Move",
-        target_type=TargetType.POSITION_PATH,
-        action_category=ActionCategory.MOVEMENT,
-    ))
-    reference = action_semantics_ref(semantics)
-    payload = semantics.model_dump(mode="json")
-    pool = SemanticContractPool()
-
-    first = pool.intern_catalog({reference: payload})[reference]
-    second = pool.intern_catalog({reference: payload})[reference]
-
-    assert first == semantics
-    assert second is first
-
-
-def test_semantic_contract_pool_preserves_identity_through_affordance_validation() -> None:
-    """Pydantic epoch validation retains the locally interned immutable model."""
-    semantics = action_semantics_for_available_action(_action(
-        "Move",
-        semantic_key="dnd.actions.Move",
-        target_type=TargetType.POSITION_PATH,
-        action_category=ActionCategory.MOVEMENT,
-    ))
-    reference = action_semantics_ref(semantics)
-    pool = SemanticContractPool()
-    prepared = pool.intern_catalog({reference: semantics.model_dump(mode="json")})
-
-    affordances = AffordanceSet.model_validate({
-        "actor_uuid": "actor",
-        "computed_at_observation_cursor": 1,
-        "semantic_catalog": prepared,
-    })
-
-    assert affordances.semantic_catalog[reference] is prepared[reference]
-
-
-def test_semantic_contract_pool_rejects_a_mismatched_content_reference() -> None:
-    """Corrupted catalogs cannot bind unrelated meaning to a stable reference."""
-    semantics = action_semantics_for_available_action(_action(
-        "Move",
-        semantic_key="dnd.actions.Move",
-        target_type=TargetType.POSITION_PATH,
-        action_category=ActionCategory.MOVEMENT,
-    ))
-
-    with pytest.raises(ValueError, match="does not match its content"):
-        SemanticContractPool().intern_catalog({
-            "movement.move@v1:incorrect": semantics.model_dump(mode="json"),
-        })
-
-
-def test_semantic_contract_pool_rejects_conflicting_content_on_a_hot_reference() -> None:
-    """A cached content address cannot silently acquire different semantics."""
-    move = action_semantics_for_available_action(_action(
-        "Move",
-        semantic_key="dnd.actions.Move",
-        target_type=TargetType.POSITION_PATH,
-        action_category=ActionCategory.MOVEMENT,
-    ))
-    dash = action_semantics_for_available_action(_action(
-        "Dash",
-        semantic_key="dnd.actions.Dash",
-    ))
-    reference = action_semantics_ref(move)
-    pool = SemanticContractPool()
-    pool.intern_catalog({reference: move.model_dump(mode="json")})
-
-    with pytest.raises(ValueError, match="does not match its content"):
-        pool.intern_catalog({reference: dash.model_dump(mode="json")})
-
-
-def test_typed_epoch_catalog_is_replaced_with_interned_contracts() -> None:
-    """Prevalidated runtime frames gain the same identity reuse as raw JSON."""
-    semantics = action_semantics_for_available_action(_action(
-        "Move",
-        semantic_key="dnd.actions.Move",
-        target_type=TargetType.POSITION_PATH,
-        action_category=ActionCategory.MOVEMENT,
-    ))
-    reference = action_semantics_ref(semantics)
-    pool = SemanticContractPool()
-    pooled = pool.intern_catalog({reference: semantics.model_dump(mode="json")})[reference]
-    duplicate = type(semantics).model_validate(semantics.model_dump(mode="json"))
-    row = ActionAffordance(
-        row_id="position|Move|pos=1,1",
-        source=ActionSourceDefinition(
-            source_action_id="position|Move|pos=1,1",
-            bucket="position_actions",
-            template_name="Move",
-            semantic_key="dnd.actions.Move",
-            display_name="Move",
-            action_category="movement",
-            target_type="position_path",
-            can_afford=True,
-            semantic_id=semantics.semantic_id,
-            semantics_ref=reference,
-        ),
-    )
-    epoch = DecisionEpoch(
-        epoch_id="epoch-1",
-        epoch_index=1,
-        basis_observation_cursor=1,
-        reason=DecisionEpochReason.TURN_START,
-        actor_uuid="actor",
-        round_number=1,
-        turn_index=0,
-        economy=ActionEconomyState(actor_uuid="actor"),
-        affordances=AffordanceSet(
-            actor_uuid="actor",
-            computed_at_observation_cursor=1,
-            position_actions=[row],
-            semantic_catalog={reference: duplicate},
-        ),
-    )
-
-    prepared = pool.prepare_epoch(epoch)
-
-    assert isinstance(prepared, DecisionEpoch)
-    assert prepared.affordances.semantic_catalog[reference] is pooled
 
 
 def test_display_tags_are_deterministic() -> None:

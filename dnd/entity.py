@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from contextlib import contextmanager
 import time
 
-from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
+from dnd.action_timing import action_timing_enabled, record_action_count, record_action_elapsed, record_action_timing
 from dnd.core.values import BaseValue, ModifiableValue, AdvantageStatus, composed_passive_score
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import CreatureType, DamageType, Size
@@ -49,7 +49,7 @@ from dnd.core.equipment_types import (
     WeaponSlot,
 )
 from dnd.core.base_block import BaseBlock, MovementMode, PreparedConditionApplication, PreparedInitialConditions, PreparedConditionRemovals
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import OccupancyLayer, SpatialChannel
 from dnd.types.physical_access import PhysicalAccess
 from dnd.core.events import RangeType
 from dnd.types.actor import EntityStatsState, PendingSpatialReturn, SpatialDisposition
@@ -164,6 +164,11 @@ class PreparedEntityRetirement:
     committed: bool = False
     canceled: bool = False
 
+
+# A suspended or restored presence can carry attached conditions of unknown extent.
+_SPATIAL_PRESENCE_CHANNELS = frozenset({
+    SpatialChannel.MOVEMENT, SpatialChannel.OPTICAL, SpatialChannel.PROPAGATION,
+})
 
 _CONCRETE_EQUIPMENT_SLOTS: Tuple[EquipmentSlot, ...] = (
     *tuple(WeaponSlot),
@@ -845,7 +850,7 @@ class Entity(BaseBlock):
         self.is_spatially_suspended = True
         self.spatial_disposition = SpatialDisposition.ABSENT
         # Rare unknown coverage: attached conditions can extend beyond this anchor.
-        grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
+        grid.invalidate_spatial_caches(_SPATIAL_PRESENCE_CHANNELS)
         spatial_senses_system.unregister_observer(self.uuid)
         try:
             grid._publish_entity_membership(
@@ -878,7 +883,7 @@ class Entity(BaseBlock):
             self.is_deployed = True
             self.is_spatially_suspended = False
             self.spatial_disposition = SpatialDisposition.PRESENT
-            grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
+            grid.invalidate_spatial_caches(_SPATIAL_PRESENCE_CHANNELS)
             self._register_spatial_observer()
         except BaseException as exc:
             spatial_senses_system.unregister_observer(self.uuid)
@@ -888,7 +893,7 @@ class Entity(BaseBlock):
             self.is_deployed = False
             self.is_spatially_suspended = True
             self.spatial_disposition = old_disposition
-            grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
+            grid.invalidate_spatial_caches(_SPATIAL_PRESENCE_CHANNELS)
             if isinstance(exc, PositionCommitError):
                 raise
             raise PositionCommitError(exc) from exc
@@ -5664,6 +5669,8 @@ class Entity(BaseBlock):
             ValueError: If the execution template has no authenticated
                 authored behavior binding.
         """
+        record_action_count("discovery.row", 1)
+        record_action_count("discovery.emitted_target", len(valid_targets))
         behavior_binding = template.behavior_binding
         if not isinstance(behavior_binding, BehaviorBinding):
             raise ValueError(
@@ -5962,6 +5969,7 @@ class Entity(BaseBlock):
         Returns:
             Available target with AoE metadata, or `None` if filtered out.
         """
+        record_action_count("discovery.aoe_aim", 1)
         shape.target = pos
         footprint_key = (
             shape_definition_key,
@@ -6051,6 +6059,7 @@ class Entity(BaseBlock):
         it contains no target facts. Each discovery pass still intersects it
         with the actor's current visible cells before resolving entity UUIDs.
         """
+        record_action_count("discovery.footprint", 1)
         computed_origin = shape.get_origin(self.position)
         shape.computed_origin = computed_origin
         geometric = shape._get_positions_in_shape(computed_origin)

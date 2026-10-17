@@ -26,7 +26,7 @@ from dnd.spatial.ignition import ignite_surface_contacts
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
-from dnd.types.world import MovementMode, OccupancyLayer
+from dnd.types.world import MovementMode, OccupancyLayer, SpatialChannel
 
 
 HotSide = Literal["left", "right", "inside", "outside"]
@@ -101,6 +101,9 @@ class WallOfFireZone(AreaCondition):
             return (event.previous_occupancy_layer is not None
                     and not self.affects_occupancy_layer(event.previous_occupancy_layer))
         return True
+
+    def spatial_channels(self) -> frozenset[SpatialChannel]:
+        return super().spatial_channels() | {SpatialChannel.OPTICAL}
 
     def blocks_physical_optics_at(self, position: tuple[int, int]) -> bool:
         return position in self.flame_positions and position in self.affected_positions

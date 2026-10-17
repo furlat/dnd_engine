@@ -28,7 +28,7 @@ from dnd.types.senses import (
     SensesSnapshot as SensesSnapshot,
     reduce_senses_snapshot as reduce_senses_snapshot,
 )
-from dnd.types.world import CardinalDirection, LightLevel, WorldEdgeChannel
+from dnd.types.world import CardinalDirection, LightLevel, ObserverRevisions, WorldEdgeChannel
 
 
 K = TypeVar("K")
@@ -61,7 +61,7 @@ class ObserverField:
     visible_volumes: Dict[UUID, frozenset[Tuple[int, int]]]
     upper_volume_surfaces: Dict[UUID, Tuple[VolumeSurfaceSight, ...]]
     max_distance: int
-    revisions: Tuple[int, int, int, int]
+    revisions: ObserverRevisions
     visual_modes: Dict[Tuple[int, int], frozenset[SensesType]]
     nonvisual_positions: Dict[SensesType, Set[Tuple[int, int]]]
     optical_routes: Dict[Tuple[int, int], Tuple[bool, frozenset[SensesType]]]
@@ -719,6 +719,7 @@ class SpatialSensesSystem:
         owner = BaseBlock.get(observer_uuid)
         if senses is None or owner is None:
             return set()
+        record_action_count("sensory.full_recompute", 1)
         # Temporary movement investigation; removed with diagnostic tooling.
         diagnostic = action_timing_enabled()
         phase_started = time.perf_counter() if diagnostic else 0.0
@@ -783,9 +784,9 @@ class SpatialSensesSystem:
             and previous_field.max_distance == max_distance and not optics
             and not previous_field.volume_fields
             and all(route[0] for route in previous_field.optical_routes.values())
-            and previous_field.revisions[0] == revisions[0]
-            and previous_field.revisions[2] == revisions[2]
-            and revisions[1] - previous_field.revisions[1] in (0, 1)
+            and previous_field.revisions.optical == revisions.optical
+            and previous_field.revisions.propagation == revisions.propagation
+            and revisions.illumination - previous_field.revisions.illumination in (0, 1)
         )
         if reuse_ordinary_light:
             # The exact new physical field is already resolved. Ordinary sight
@@ -882,8 +883,8 @@ class SpatialSensesSystem:
             phase_started = time.perf_counter()
         previous_boundaries = (previous_field.boundaries
             if light_event is not None and previous_field is not None
-            and previous_field.revisions[0] == revisions[0]
-            and previous_field.revisions[2] == revisions[2] else None)
+            and previous_field.revisions.optical == revisions.optical
+            and previous_field.revisions.propagation == revisions.propagation else None)
         boundary_positions = optical_candidates | set().union(*nonvisual_positions.values())
         boundaries = (grid.capture_boundary_snapshot(boundary_positions) if previous_boundaries is None else
             grid._shift_observer_boundaries(boundary_positions, previous_boundaries))
@@ -1633,6 +1634,7 @@ class SpatialSensesSystem:
 
     def __call__(self, event: Event) -> None:
         """Reduce indexed observers before the causal event completes."""
+        record_action_count("sensory.reducer_call", 1)
         sensory_events: List[SensoryUpdateEvent] = []
         deferred: Set[UUID] = set()
         if event.event_type in (EventType.SPATIAL_LIGHT_CHANGED, EventType.SPATIAL_LIGHT_SOURCES_CHANGED):
@@ -1653,6 +1655,7 @@ class SpatialSensesSystem:
                 continue
             if (event.event_type is EventType.SPATIAL_LIGHT_SOURCES_CHANGED
                     and observer_uuid in self.published_observers):
+                record_action_count("sensory.light_sources_only", 1)
                 before = _capture_senses_transition(senses, set(), positions=set(),
                     entities=set(), objects=set(), effects=set())
                 self._refresh_light_sources(observer_uuid, senses)
@@ -1711,24 +1714,46 @@ class SpatialSensesSystem:
                     and event.entity_uuid == observer_uuid
                 )
             )
+            # Movement topology (costs, support) never needs a full observer
+            # recompute: paths are lazy and marked dirty below, and any change
+            # that moves sight geometry bumps the observer's optical revision,
+            # which `_field_is_current` rejects.
             tile_refresh = (
                 isinstance(event, SpatialChangeEvent)
                 and event.event_type is EventType.SPATIAL_TILE_CHANGED
                 and event.senses_hint is not None
                 and not event.senses_hint.requires_fov
-                and not event.senses_hint.requires_paths
             )
+            # A spatial condition's membership change bumps exactly the channels
+            # its data changes, so a still-current field only needs the hazards
+            # and effect observations of the changed cells refreshed, plus the
+            # contacts of the objects there: a condition can gate their
+            # observability (trap hardware).
+            effect_refresh = isinstance(event, SpatialEffectChangeEvent)
+            gated_objects: Set[UUID] = set()
             field = senses._field
             only_refresh_hazards = (
-                (owner_refresh or residue_tile is not None or tile_refresh)
+                (owner_refresh or residue_tile is not None or tile_refresh or effect_refresh)
                 and observer_uuid in self.published_observers
                 and field is not None
-                and field.revisions[3] == get_map().observer_spatial_revisions(observer_uuid)[3]
+                and field.revisions.occupancy == get_map().observer_spatial_revisions(observer_uuid).occupancy
                 and self._field_is_current(observer_uuid, senses)
             )
             if only_refresh_hazards:
+                record_action_count("sensory.hazard_only", 1)
+                if effect_refresh:
+                    gated_objects = {identity for position in hazard_positions or ()
+                                     for identity in get_map().get_objects_at(position)}
                 before = _capture_senses_transition(senses, set(), positions=set(),
-                    entities=set(), objects=set(), effects=set())
+                    entities=set(), objects=gated_objects, effects=set())
+                for identity in gated_objects:
+                    contact = self._object_contact(observer_uuid, senses, identity)
+                    if contact is None:
+                        senses.objects.pop(identity, None)
+                    else:
+                        senses.objects[identity] = contact
+                if gated_objects:
+                    self.refresh_observer(observer_uuid)
                 # A child light completion can already have refreshed the moving
                 # observer at this committed position. Reuse only a fully current
                 # field; the parent still publishes its own delta/path boundary.
@@ -1755,7 +1780,7 @@ class SpatialSensesSystem:
             after = _capture_senses_transition(senses, senses.seen if initial else newly_seen,
                 positions=set() if only_refresh_hazards else None,
                 entities=set() if only_refresh_hazards else None,
-                objects=set() if only_refresh_hazards else None,
+                objects=gated_objects if only_refresh_hazards else None,
                 effects=None if initial else set(effect_before))
             if hazard_before is not None:
                 after = replace(after, hazardous_cells={position: senses.hazardous_cells[position]
@@ -1828,11 +1853,11 @@ class SpatialSensesSystem:
         owner = BaseBlock.get(observer_uuid)
         if field is None or owner is None or owner.get_position() != senses.position:
             return False
-        grid = get_map()
+        revisions = get_map().observer_spatial_revisions(observer_uuid)
         return (
-            field.revisions[0] == grid.observer_spatial_revisions(observer_uuid)[0]
-            and field.revisions[2] == grid.observer_spatial_revisions(observer_uuid)[2]
-            and (not illumination or field.revisions[1] == grid.observer_spatial_revisions(observer_uuid)[1])
+            field.revisions.optical == revisions.optical
+            and field.revisions.propagation == revisions.propagation
+            and (not illumination or field.revisions.illumination == revisions.illumination)
             and field.max_distance == senses._perception_max_distance
             and field.ordinary_sight == owner.has_ordinary_visual_sight()
             and senses._last_visual_access == senses.visual_access.normalized_score
@@ -1845,12 +1870,12 @@ class SpatialSensesSystem:
         if field is None or not self._field_is_current(observer_uuid, senses, illumination=False):
             return False
         revisions = get_map().observer_spatial_revisions(observer_uuid)
-        if revisions[1] - field.revisions[1] not in (0, 1):
+        if revisions.illumination - field.revisions.illumination not in (0, 1):
             return False  # Buffered changes require a complete current solve.
-        if revisions[3] == field.revisions[3]:
+        if revisions.occupancy == field.revisions.occupancy:
             return True
         parent = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event is not None else None
-        return (revisions[3] == field.revisions[3] + 1
+        return (revisions.occupancy == field.revisions.occupancy + 1
             and isinstance(parent, SpatialChangeEvent)
             and parent.event_type is EventType.SPATIAL_ENTITY_ENTERED
             and self._covers_occupancy(observer_uuid, parent))
@@ -1867,6 +1892,7 @@ class SpatialSensesSystem:
     def _update_light(self, observer_uuid: UUID, senses: Senses,
             event: SpatialChangeEvent) -> Optional[SensoryUpdateEvent]:
         """Refilter the changed optical cells and their contact dependents."""
+        record_action_count("sensory.light_delta", 1)
         grid = get_map()
         field = senses._field
         owner = BaseBlock.get(observer_uuid)
@@ -2011,6 +2037,7 @@ class SpatialSensesSystem:
         self, observer_uuid: UUID, senses: Senses, event: SpatialChangeEvent,
     ) -> Optional[SensoryUpdateEvent]:
         """Apply one membership change using the existing resolved cell evidence."""
+        record_action_count("sensory.contact_delta", 1)
         subject_uuid = cast(UUID, event.entity_uuid)
         owner = cast(BaseBlock, BaseBlock.get(observer_uuid))
         field = cast(ObserverField, senses._field)
@@ -2050,7 +2077,7 @@ class SpatialSensesSystem:
             senses._paths_dirty = True
         paths_changed = senses._paths_dirty and not paths_were_dirty
         revisions = get_map().observer_spatial_revisions(observer_uuid)
-        if revisions[3] == field.revisions[3] + 1 and self._covers_occupancy(observer_uuid, event):
+        if revisions.occupancy == field.revisions.occupancy + 1 and self._covers_occupancy(observer_uuid, event):
             senses._field = replace(field, revisions=revisions)
         if contact_changed:
             self._refresh_light_sources(observer_uuid, senses)

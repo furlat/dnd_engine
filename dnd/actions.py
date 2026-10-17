@@ -88,7 +88,7 @@ from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.naming import normalize_spell_id
 from dnd.core.base_block import BaseBlock, MovementMode, PreparedConditionApplication
 from dnd.types.event_facts import LandingKind
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import OccupancyLayer, WorldEdgeChannel
 from dnd.core.base_block import LightLevel
 from dnd.action_timing import record_action_elapsed, record_action_timing
 from dnd.core.combat_log import JumpMovementLogData, ConnectorMovementLogData, EmptyLogData, ShoveLogData, SpellDamageLogData
@@ -915,7 +915,7 @@ class Move(BaseAction):
                             transition_to=to_pos,
                             directional_position=from_pos if directions else None,
                             directional_directions=directions or None,
-                            directional_channels=["movement"] if directions and not cell_blocked else None,
+                            directional_channels=[WorldEdgeChannel.MOVEMENT] if directions and not cell_blocked else None,
                             )
                         grid._fire_spatial_event(collision_event)
                     termination_reason = MovementTerminationReason.COLLISION
@@ -3536,7 +3536,7 @@ class Jump(BaseAction):
             if not grid.is_walkable_for(pos[0], pos[1], entity.uuid):
                 continue
 
-            if not grid.raycast_clear(entity.position, pos, channel="propagation"):
+            if not grid.raycast_clear(entity.position, pos, channel=WorldEdgeChannel.PROPAGATION):
                 continue
 
             valid.append(pos)
@@ -3647,7 +3647,7 @@ class Jump(BaseAction):
         if not grid.is_walkable_for(end_pos[0], end_pos[1], source_entity.uuid):
             return declaration_event.cancel(status_message=f"Position {end_pos} not walkable or occupied")
 
-        if not grid.raycast_clear(source_entity.position, end_pos, channel="propagation"):
+        if not grid.raycast_clear(source_entity.position, end_pos, channel=WorldEdgeChannel.PROPAGATION):
             return declaration_event.cancel(status_message=f"Path to {end_pos} is blocked")
 
         return declaration_event.phase_to(

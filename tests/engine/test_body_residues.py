@@ -327,7 +327,8 @@ def test_inert_residue_changes_tile_facts_without_rebuilding_routes(world: Game)
     changes = [event for _, event in EventQueue.iter_events_since(cursor)
                if event.phase is EventPhase.COMPLETION]
     assert [event.event_type for event in changes] == [
-        EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL,
+        EventType.CONDITION_MEMBERSHIP_COMMITTED, EventType.CONDITION_APPLICATION,
+        EventType.CONDITION_MEMBERSHIP_COMMITTED, EventType.CONDITION_REMOVAL,
     ]
 
 

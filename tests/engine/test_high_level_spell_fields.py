@@ -38,7 +38,7 @@ from dnd.spells.transmutation import Disintegrate
 from dnd.spells.wall_constructions import Forcecage, ForcecageZone, WallSection
 from dnd.spells.wall_fields import BladeBarrierZone
 from dnd.types.physical_access import PhysicalAccess
-from dnd.types.world import MovementMode
+from dnd.types.world import MovementMode, WorldEdgeChannel
 from tests.engine.test_high_level_spell_controls import (
     cast,
     conditions,
@@ -104,12 +104,12 @@ def test_antilife_shell_creature_boundary_and_permeable_weapon_channel(
     target = high_actor(game, "Target", (11, 4), "foes", creature_type=creature_type)
     cast(AntilifeShell, caster)
     assert get_map().spatial_crossing_allows(
-        (11, 4), (10, 4), "movement", target.uuid
+        (11, 4), (10, 4), WorldEdgeChannel.MOVEMENT, target.uuid
     ) == (not blocked)
     assert get_map().spatial_crossing_allows(
-        (11, 4), (10, 4), "propagation", target.uuid
+        (11, 4), (10, 4), WorldEdgeChannel.PROPAGATION, target.uuid
     )
-    assert get_map().spatial_crossing_allows((9, 4), (10, 4), "movement", target.uuid)
+    assert get_map().spatial_crossing_allows((9, 4), (10, 4), WorldEdgeChannel.MOVEMENT, target.uuid)
 
 
 def test_antilife_shell_committed_caster_movement_ends_on_living_sweep(game):

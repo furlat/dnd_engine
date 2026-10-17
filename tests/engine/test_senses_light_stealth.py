@@ -320,7 +320,7 @@ def test_eb_12_003a_optical_door_recomputes_existing_light_on_commit() -> None:
         for index, event in opened_events
         if event.event_type == EventType.SPATIAL_LIGHT_CHANGED
     )
-    assert topology_event.directional_channels == ["movement", "optical", "propagation"]
+    assert topology_event.directional_channels == list(WorldEdgeChannel)
     assert light_event.parent_event is not None
     light_parent = EventQueue.get_event_by_uuid(light_event.parent_event)
     assert light_parent is not None

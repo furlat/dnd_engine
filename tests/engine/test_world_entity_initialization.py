@@ -342,6 +342,8 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
         "background": entity.character_background,
         "applied_origin_state": entity.applied_origin_state,
         "applied_class_levels": entity.applied_class_levels,
+        "scribed_spell_ids": entity.scribed_spell_ids,
+        "permanent_feature_uses": entity.permanent_feature_uses,
         "ability_scores": tuple(
             (ability.name, ability.ability_score.score)
             for ability in entity.ability_scores.abilities_list

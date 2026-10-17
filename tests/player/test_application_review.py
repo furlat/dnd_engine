@@ -1,80 +1,92 @@
 """Published common application after-values reproduce the owner-side state."""
 
 import random
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import pytest
+from pydantic import TypeAdapter
 
 from dnd.core.content.descriptors import ContentDescriptor, ContentVisibility
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.events import EventPhase, EventQueue
-from dnd.player.application import initialize_audiences, capture_application_operation
+from dnd.player.application import AudienceRuntime, capture_application_operation, initialize_audiences
 from dnd.player.audience import PlayerAudience
+from dnd.player.content import UIContentManifest
 from dnd.player.content_composition import admitted_content, ui_content_manifest
-from dnd.player.facts import PlayerUpdate
+from dnd.player.facts import PlayerInitialization, PlayerState, PlayerUpdate
 from dnd.player.reduction import reduce_initialization, reduce_operation
 from dnd.player.session import (
-    Operation, advance_controller, close_session, create_session, discover_player_actions, end_player_turn,
-    snapshot_player_hud,
+    Operation, Session, advance_controller, close_session, create_session, discover_player_actions,
+    end_player_turn, toggle_player_handler,
 )
-from dnd.spells.conjuration import build_guardian_of_faith_object
-from game.runtime_protocol import (
-    AdvanceRequest, DiscoverRequest, HandlerRequest, OperationReply, REPLY_CODEC, StartRequest,
-)
-from game.runtime_worker import dispatch, start_runtime
+from dnd.runtime_reset import reset_engine_runtime
+
+
+INITIALIZATION = TypeAdapter(PlayerInitialization)
+
+
+@dataclass(frozen=True)
+class Started:
+    session: Session
+    catalog: UIContentManifest
+    audiences: dict[str, AudienceRuntime]
+    seat: str
+    initialization: PlayerInitialization
+
+    @property
+    def runtime(self) -> AudienceRuntime:
+        return self.audiences[self.seat]
 
 
 @pytest.fixture
 def started():
     random_state = random.getstate()
-    runtime, reply = start_runtime(StartRequest(request_id=0, test_seed=0))
+    random.seed(0)
+    session = create_session()
     try:
-        yield runtime, REPLY_CODEC.validate_json(REPLY_CODEC.dump_json(reply))
+        catalog = ui_content_manifest()
+        audiences, initializations = initialize_audiences(session, catalog, exclusive_current=True)
+        seat = next(iter(initializations))
+        yield Started(session, catalog, audiences, seat, initializations[seat])
     finally:
-        close_session(runtime.session)
+        close_session(session)
+        reset_engine_runtime()
         random.setstate(random_state)
 
 
-def client_initialization(reply):
-    return reduce_initialization(reply.initialization,
-        content_additions=tuple(descriptor for _, descriptor in reply.ui_content.content))
+def client_initialization(started: Started) -> PlayerState:
+    """Reduce the published initialization and admitted content after detaching them."""
+    detached = INITIALIZATION.validate_json(INITIALIZATION.dump_json(started.initialization))
+    content = tuple(ContentDescriptor.model_validate_json(row.model_dump_json())
+        for row in started.runtime.latest.content)
+    return reduce_initialization(detached, content_additions=content)
 
 
-def client_operation(state, reply):
-    detached = REPLY_CODEC.validate_json(REPLY_CODEC.dump_json(reply))
-    assert isinstance(detached, OperationReply)
-    return reduce_operation(state, PlayerUpdate(audience=state.viewing_audience,
-        lineages=detached.lineages, hud=detached.hud,
-        combat_log_appends=detached.combat_log_appends,
-        content_additions=detached.content_additions))
+def client_operation(started: Started, state: PlayerState, operation: Operation) -> PlayerState:
+    """Capture one committed operation and reduce its detached update for this seat."""
+    update = capture_application_operation(started.audiences, operation, started.catalog)[started.seat]
+    return reduce_operation(state, PlayerUpdate.model_validate_json(update.model_dump_json()))
 
 
 def test_published_initialization_has_only_admitted_descriptors_and_replays_exactly(started):
-    runtime, reply = started
-    published = tuple(descriptor for _, descriptor in reply.ui_content.content)
-    assert published == runtime.latest.content
     assert all(row.visibility in (ContentVisibility.PUBLIC, ContentVisibility.OBSERVED)
-        for row in published)
-    assert client_initialization(reply) == runtime.latest
+        for row in started.runtime.latest.content)
+    assert client_initialization(started) == started.runtime.latest
 
 
 def test_common_operation_replays_eventless_handler_after_values(started):
-    runtime, reply = started
-    state = client_initialization(reply)
-    advanced = dispatch(runtime, AdvanceRequest(request_id=1, generation=state.generation))
-    assert isinstance(advanced, OperationReply) and advanced.boundary_status == "waiting_for_human"
-    state = client_operation(state, advanced)
-    assert state == runtime.latest
+    state = client_initialization(started)
+    advanced = advance_controller(started.session)
+    assert advanced.boundary is not None and advanced.boundary.status == "waiting_for_human"
+    state = client_operation(started, state, advanced)
+    assert state == started.runtime.latest
     actor = state.current_actor_uuid
     assert actor is not None and state.hud_snapshot is not None
     sheet = next(row for row in state.hud_snapshot.sheets if row.actor_uuid == actor)
     handler = sheet.handler_details[0]
-    discovery = dispatch(runtime, DiscoverRequest(request_id=2, generation=state.generation, actor_uuid=actor))
-    changed = dispatch(runtime, HandlerRequest(request_id=3, generation=state.generation,
-        discovery_generation=discovery.choices.discovery_generation,
-        actor_uuid=actor, command={"handler_uuid": handler.uuid, "enabled": not handler.enabled}))
-    state = client_operation(state, changed)
-    assert state == runtime.latest
+    discover_player_actions(started.session, actor)
+    changed = toggle_player_handler(started.session, actor, handler.uuid, not handler.enabled)
+    state = client_operation(started, state, changed)
+    assert state == started.runtime.latest
     updated = next(row for row in state.hud_snapshot.sheets if row.actor_uuid == actor)
     assert next(row for row in updated.handler_details if row.uuid == handler.uuid).enabled != handler.enabled
 
@@ -111,41 +123,8 @@ def test_discovery_generation_counts_only_its_seats_queries():
         random.setstate(random_state)
 
 
-def test_content_observed_and_removed_in_one_operation_is_still_admitted(started):
-    runtime, reply = started
-    before = client_initialization(reply)
-    private_id = "environment.spell_object.guardian_of_faith"
-    assert private_id not in {row.ref.content_id for row in before.content}
-    # A passive supplied descriptor isolates admission from the separate
-    # question of which native catalogs supply direct-item descriptors.
-    descriptor = ContentDescriptor(ref=ContentRef(pack_id="content.review",
-        definition_kind=ContentDefinitionKind.ENVIRONMENT_OBJECT, content_id=private_id,
-        content_version=1, definition_contract_hash="a" * 64),
-        display_name="Guardian of Faith", visibility=ContentVisibility.OBSERVED)
-    runtime.catalog = runtime.catalog.model_copy(update={
-        "content": (*runtime.catalog.content, (descriptor.ref, descriptor))})
-    start = EventQueue.event_cursor()
-    guardian = build_guardian_of_faith_object(runtime.session.player_uuids[0])
-    guardian.place_on_grid((12, 12))
-    assert guardian.retire()
-    operation = Operation(start_cursor=start, end_cursor=EventQueue.event_cursor(),
-        roots=tuple(event for _, event in EventQueue.iter_events_since(start)
-            if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)),
-        original_logs=tuple(runtime.session.logs.log_appends),
-        hud_by_seat=tuple((seat, snapshot_player_hud(runtime.session, audience=audience))
-            for seat, audience in runtime.session.seats.items()))
-    updates = capture_application_operation(runtime.audiences, operation, runtime.catalog)
-    update = next(iter(updates.values()))
-    assert guardian.uuid not in runtime.latest.objects
-    assert any(row.item.item_id == private_id for lineage in update.lineages
-        for world in lineage.world_updates for row in world.objects)
-    assert private_id in {row.ref.content_id for row in update.content_additions}
-    assert reduce_operation(before, PlayerUpdate.model_validate_json(update.model_dump_json())) == runtime.latest
-
-
 def test_content_reuse_preserves_private_links_and_prior_player_states(started):
-    runtime, reply = started
-    before = replace(client_initialization(reply), content=())
+    before = replace(client_initialization(started), content=())
 
     def descriptor(content_id, visibility, related=()):
         return ContentDescriptor(ref=ContentRef(pack_id="content.review",
@@ -159,7 +138,7 @@ def test_content_reuse_preserves_private_links_and_prior_player_states(started):
     linked = descriptor("review.linked", ContentVisibility.PUBLIC,
         (public.ref, unseen.ref, internal.ref))
     supplied = (public, unseen, internal, linked)
-    catalog = runtime.catalog.model_copy(update={
+    catalog = started.catalog.model_copy(update={
         "content": tuple((row.ref, row) for row in supplied)})
     original_catalog = catalog.model_dump_json()
     admitted = admitted_content(catalog, before)

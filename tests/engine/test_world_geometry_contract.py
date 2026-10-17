@@ -514,11 +514,7 @@ def test_directional_door_changes_structure_without_replacing_placement() -> Non
     assert completion.object_boundary_structure == door.get_boundary_structure()
     assert completion.directional_position == (0, 0)
     assert completion.directional_directions == ["east"]
-    assert completion.directional_channels == [
-        "movement",
-        "optical",
-        "propagation",
-    ]
+    assert completion.directional_channels == list(WorldEdgeChannel)
     assert completion.senses_hint is not None
     assert completion.senses_hint.requires_fov
     assert completion.senses_hint.requires_light_recompute

@@ -4,7 +4,7 @@ import time
 from math import hypot
 
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, computed_field, field_validator, model_validator
-from dnd.action_timing import action_timing_enabled, record_action_timing
+from dnd.action_timing import action_timing_enabled, record_action_count, record_action_timing
 from dnd.core.attack_types import AttackSourceMetadata
 from dnd.core.creature_types import DamageType
 from dnd.core.action_types import (
@@ -2104,6 +2104,7 @@ class BaseAction(BaseObject):
         affordability. Discovery uses it to calculate target legality while
         reporting affordability independently through ``check_costs()``.
         """
+        record_action_count("discovery.validation", 1)
         if self.source_condition_error() is not None:
             return False
         selection = self.get_position_selection()

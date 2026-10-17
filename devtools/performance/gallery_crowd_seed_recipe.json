@@ -1,0 +1,245 @@
+{
+ "encounter_id": null,
+ "recipe": {
+  "encounter_id": "encounter.combat_measurement",
+  "title": "Combat measurement",
+  "roster_slots": [
+   {
+    "roster_slot_id": "amber",
+    "roster": {
+     "roster_id": "roster.combat_measurement_amber",
+     "title": "Amber",
+     "members": [
+      {
+       "member_id": "unit_1",
+       "display_name": "Expedition sorcerer",
+       "deployment_role": "amber_1",
+       "source": {
+        "kind": "premade_character",
+        "premade_id": "hero.sorcerer_l5_standard_torch"
+       },
+       "scenario_setup_effects": [
+        {
+         "kind": "behavior_grant",
+         "behavior_ref": {
+          "pack_id": "content.srd_5_1_cc",
+          "definition_kind": "reaction",
+          "content_id": "reaction.spell.shield",
+          "content_version": 1,
+          "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b"
+         },
+         "configured_display_name": null,
+         "action_cost_variant": "default"
+        }
+       ]
+      }
+     ],
+     "tags": [],
+     "required_battlefield_capabilities": [],
+     "forbidden_battlefield_capabilities": [],
+     "recipe_digest": "3a086b23db8264de942c57a4cee2382fc38056d3584ea78e73e599e9bfb1b2d0"
+    },
+    "faction_id": "amber",
+    "deployment_zone_id": "amber",
+    "controller_defaults": {
+     "controller": "human",
+     "participant_name": "amber",
+     "policy_id": null,
+     "member_overrides": []
+    },
+    "member_presentations": []
+   },
+   {
+    "roster_slot_id": "blue",
+    "roster": {
+     "roster_id": "roster.combat_measurement_blue",
+     "title": "Blue",
+     "members": [
+      {
+       "member_id": "unit_1",
+       "display_name": "Gallery arcanist",
+       "deployment_role": "blue_1",
+       "source": {
+        "kind": "authored_creature",
+        "recipe": {
+         "ref": {
+          "pack_id": "content.neurodragon",
+          "definition_kind": "creature",
+          "content_id": "creature.generic_caster",
+          "content_version": 1,
+          "definition_contract_hash": "d1d32fb568ea5bb5923b978c88b4e6847db869607d71c6cd70145ece1a6604d8"
+         },
+         "parameters": {
+          "level": 5
+         },
+         "recipe_digest": "9c0a4de1ef73cee19178d23d5abf7cc46f29ff5eee899d21111f7f02af24ccdc"
+        }
+       },
+       "scenario_setup_effects": [
+        {
+         "kind": "item_grant",
+         "item_id": "weapon.shortbow",
+         "count": 1,
+         "placement": "equipped",
+         "equipment_slot": "RANGED_MAIN",
+         "replace_existing": true,
+         "on_grant": "none",
+         "heal_amount": null,
+         "cast_level": null,
+         "charges": null
+        }
+       ]
+      },
+      {
+       "member_id": "sentry_1",
+       "display_name": "Gallery sentry 1",
+       "deployment_role": "sentry_1",
+       "source": {
+        "kind": "premade_character",
+        "premade_id": "hero.fighter_l5_shield_torch"
+       },
+       "scenario_setup_effects": []
+      },
+      {
+       "member_id": "sentry_2",
+       "display_name": "Gallery sentry 2",
+       "deployment_role": "sentry_2",
+       "source": {
+        "kind": "premade_character",
+        "premade_id": "hero.fighter_l5_shield_torch"
+       },
+       "scenario_setup_effects": []
+      },
+      {
+       "member_id": "sentry_3",
+       "display_name": "Gallery sentry 3",
+       "deployment_role": "sentry_3",
+       "source": {
+        "kind": "premade_character",
+        "premade_id": "hero.fighter_l5_shield_torch"
+       },
+       "scenario_setup_effects": []
+      },
+      {
+       "member_id": "sentry_4",
+       "display_name": "Gallery sentry 4",
+       "deployment_role": "sentry_4",
+       "source": {
+        "kind": "premade_character",
+        "premade_id": "hero.fighter_l5_shield_torch"
+       },
+       "scenario_setup_effects": []
+      }
+     ],
+     "tags": [],
+     "required_battlefield_capabilities": [],
+     "forbidden_battlefield_capabilities": [],
+     "recipe_digest": "fd475bb1d1d20a02268da3135ab93722933676ad04fd97bb5f892d5001e8cb69"
+    },
+    "faction_id": "blue",
+    "deployment_zone_id": "blue",
+    "controller_defaults": {
+     "controller": "human",
+     "participant_name": "blue",
+     "policy_id": null,
+     "member_overrides": []
+    },
+    "member_presentations": []
+   }
+  ],
+  "battlefield_id": "battlefield.lantern_gallery",
+  "deployment": {
+   "deployment_id": "deployment.combat_measurement",
+   "title": "Combat measurement",
+   "battlefield_id": "battlefield.lantern_gallery",
+   "zones": [
+    {
+     "zone_id": "amber",
+     "ordered_slots": [
+      [
+       23,
+       6
+      ]
+     ],
+     "role_slots": [],
+     "max_members": null
+    },
+    {
+     "zone_id": "blue",
+     "ordered_slots": [
+      [
+       30,
+       6
+      ],
+      [
+       34,
+       6
+      ],
+      [
+       38,
+       10
+      ],
+      [
+       42,
+       10
+      ],
+      [
+       43,
+       6
+      ]
+     ],
+     "role_slots": [],
+     "max_members": null
+    }
+   ],
+   "tags": [],
+   "content_digest": "84738c977bf23212a565437daa617feedb3c4a8e9c9e1c1f84e6bab634536fa4"
+  },
+  "opening_policy": {
+   "kind": "fixed_roster",
+   "roster_slot_id": "amber"
+  },
+  "notable_positions": [],
+  "tags": [],
+  "recipe_digest": "0735f44bb1041159463edd5a30e4f6a6745d01996c77236709ba1cbcde20b314"
+ },
+ "assignments": [
+  {
+   "seat_id": "amber",
+   "controlled": [
+    [
+     "amber",
+     "unit_1"
+    ]
+   ],
+   "observers": null
+  },
+  {
+   "seat_id": "blue",
+   "controlled": [
+    [
+     "blue",
+     "unit_1"
+    ],
+    [
+     "blue",
+     "sentry_1"
+    ],
+    [
+     "blue",
+     "sentry_2"
+    ],
+    [
+     "blue",
+     "sentry_3"
+    ],
+    [
+     "blue",
+     "sentry_4"
+    ]
+   ],
+   "observers": null
+  }
+ ],
+ "test_seed": 3
+}

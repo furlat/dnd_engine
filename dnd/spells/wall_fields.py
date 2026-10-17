@@ -17,7 +17,7 @@ from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import Damage, Event, EventHandler, EventPhase, EventQueue, EventType, SpatialEffectChangeEvent, SpatialEffectInteractionEvent, Range, RangeType, SpatialChangeEvent, Trigger
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, WallPolyline, WallRing, WallSegment
 from dnd.core.wall_geometry import wall_path_contact, wall_shell_cells
 from dnd.entity import Entity
@@ -26,7 +26,7 @@ from dnd.types.abilities import AbilityName
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectChangeOperation, SpatialEffectInteractionIntensity, SpatialEffectInteractionOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
-from dnd.types.world import MovementMode, OccupancyLayer
+from dnd.types.world import MovementMode, OccupancyLayer, WorldEdgeChannel
 
 
 def wall_condition_ref(identity: str) -> ContentRef:
@@ -144,7 +144,7 @@ class WallOfThornsZone(WallFieldZone):
 
 class WindWallZone(WallFieldZone):
 
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset({"movement"})
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset({WorldEdgeChannel.MOVEMENT})
     name: str = "Wind Wall"
     description: str = "Transparent wind keeps gas and small flying bodies back and deflects ordinary missiles."
     content_ref: ContentRef = wall_condition_ref("spatial_effect.spell.wind_wall")
@@ -153,13 +153,14 @@ class WindWallZone(WallFieldZone):
 
 
     def blocks_crossing_between(self, start, end, channel, requester_uuid, mode, terminal_provider_uuid=None) -> bool:
-        if channel != "movement" or wall_path_contact(self.geometry, start, end,
+        if channel is not WorldEdgeChannel.MOVEMENT or wall_path_contact(self.geometry, start, end,
                 {cell for cell in self.affected_positions if self.allows_contribution_at(cell)}) is None:
             return False
         actor = Entity.get(requester_uuid) if requester_uuid is not None else None
         return actor is not None and (actor.gaseous_body
             or mode is MovementMode.FLYING and actor.size in {Size.TINY, Size.SMALL})
 
+    # Read uncached when a ranged attack resolves, so it adds no spatial channel.
     def missile_deflection_contact(self, start, end, missile_size) -> tuple[float, float] | None:
         return wall_path_contact(self.geometry, start, end,
                 {cell for cell in self.affected_positions if self.allows_contribution_at(cell)}) if missile_size == "ordinary" else None

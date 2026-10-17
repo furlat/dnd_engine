@@ -39,7 +39,8 @@ def test_fireball_spreads_around_open_doorway_within_original_radius(opening, ex
         build_directional_wall().place_on_grid((6, y), boundary_direction=CardinalDirection.EAST)
     Entity.update_all_entities_senses(max_distance=120)
     spell = Fireball(source_entity_uuid=caster.uuid, end_position=(5, 8))
-    with fixed_dice_faces(*([1] * 30)):
+    # Every exposed wall rolls its own 8d6; low faces keep the 27 HP walls standing.
+    with fixed_dice_faces(*([1] * 130)):
         result = spell.apply()
     assert isinstance(result, SpellEvent) and not result.canceled
     reached = set(result.resolved_area_positions or ())
@@ -107,7 +108,9 @@ def test_connected_reference_l_wall_and_corridor(layout, count):
          for y in range(3, 14)])
     for position, direction in edges:
         build_directional_wall().place_on_grid(position, boundary_direction=direction)
-    result = Fireball(source_entity_uuid=caster.uuid, end_position=(10, 8)).apply()
+    # Every exposed wall rolls its own 8d6; low faces keep the 27 HP walls standing.
+    with fixed_dice_faces(*([1] * 130)):
+        result = Fireball(source_entity_uuid=caster.uuid, end_position=(10, 8)).apply()
     assert isinstance(result, SpellEvent) and not result.canceled
     assert result.resolved_area_positions is not None
     assert len(result.resolved_area_positions) == count

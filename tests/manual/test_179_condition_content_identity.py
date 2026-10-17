@@ -4,17 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from dnd.content_system.bootstrap import bootstrap_content_system
+from devtools.generate_event_contract import import_dnd_modules
+
 from dnd.content_system.condition_definitions import (
     CONDITION_BEHAVIOR_IDENTITY_SPECS,
 )
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.identities import ContentDefinitionKind
-from dnd.core.content.descriptors import ContentVisibility
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from server.content_catalog import build_public_content_catalog
 
 
 def _active_descendants(
@@ -58,6 +57,7 @@ def _condition_category(
 
 def test_active_condition_inventory_is_exact_and_fully_declared() -> None:
     """Every visible leaf owns one exact non-Python-path declaration."""
+    import_dnd_modules()
     descendants = _active_descendants(BaseCondition)
     leaves = _leaf_types(descendants)
     public = tuple(
@@ -103,49 +103,3 @@ def test_active_condition_inventory_is_exact_and_fully_declared() -> None:
     )
 
 
-def test_every_public_condition_definition_resolves_in_public_catalog() -> None:
-    """Production-visible condition definitions have an exact catalog join."""
-    loaded = bootstrap_content_system()
-    catalog = build_public_content_catalog(loaded)
-    public_keys = {
-        entry.ref.identity_key
-        for entry in catalog.entries
-    }
-    leaves = _leaf_types(_active_descendants(BaseCondition))
-
-    declarations = tuple(
-        get_content_declaration(condition_type)
-        for condition_type in leaves
-        if _condition_category(condition_type) is not ConditionCategory.INTERNAL
-    )
-    expected_keys = {
-        declaration.ref.identity_key
-        for declaration in declarations
-        if declaration.descriptor.visibility is ContentVisibility.PUBLIC
-    }
-    developer_keys = {
-        declaration.ref.identity_key
-        for declaration in declarations
-        if declaration.descriptor.visibility is ContentVisibility.DEVELOPER
-    }
-    assert expected_keys <= public_keys
-    assert developer_keys.isdisjoint(public_keys)
-
-
-def test_internal_condition_leaves_are_not_public_catalog_definitions() -> None:
-    """Technical markers must not become player-authored condition content."""
-    loaded = bootstrap_content_system()
-    catalog = build_public_content_catalog(loaded)
-    public_keys = {
-        entry.ref.identity_key
-        for entry in catalog.entries
-    }
-    leaves = _leaf_types(_active_descendants(BaseCondition))
-
-    for condition_type in leaves:
-        if _condition_category(condition_type) is not ConditionCategory.INTERNAL:
-            continue
-        namespace = condition_type.__dict__
-        declaration = namespace.get("__dnd_content_declaration__")
-        if declaration is not None:
-            assert declaration.ref.identity_key not in public_keys

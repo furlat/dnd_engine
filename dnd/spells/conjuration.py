@@ -84,9 +84,9 @@ from dnd.core.events import SavingThrowEvent
 from dnd.core.aoe import AoEShape, Cylinder
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.presentation_geometry import CubePresentationGeometry
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.entity import Entity
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import OccupancyLayer, SpatialChannel
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
 from dnd.actions import AttackEvent, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
 from dnd.spells.content_metadata import srd_action_identity
@@ -653,7 +653,7 @@ class GreaseZone(AreaCondition):
     Applied to the caster, manages the zone via position-indexed handlers.
     """
     # Terrain/obscurement contributions do not reject crossing segments.
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset()
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
     name: str = Field(default="Grease Zone", description="Display name for the grease zone zone condition.")
     has_visible_presence: bool = True
     description: str = Field(default="Slippery grease - DEX save or fall prone", description="Rules-facing summary for the grease zone zone condition.")
@@ -2285,6 +2285,9 @@ class SpiritGuardiansZone(MembershipAreaCondition):
     def membership_applies_to(self, entity: Entity) -> bool:
         return entity.uuid != self.source_entity_uuid and entity.uuid not in self.excluded_entity_uuids
 
+    def spatial_channels(self) -> frozenset[SpatialChannel]:
+        return super().spatial_channels() | {SpatialChannel.MOVEMENT}
+
     def is_hazardous_for(self, entity_uuid: UUID | None = None, *,
                          occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:
         return (entity_uuid != self.source_entity_uuid and entity_uuid not in self.excluded_entity_uuids
@@ -2599,7 +2602,7 @@ class FogCloudZone(AreaCondition):
     Uses obscurement so darkvision cannot see through it.
     """
     # Terrain/obscurement contributions do not reject crossing segments.
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset()
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
     name: str = Field(default="Fog Cloud Zone", description="Display name for the fog cloud zone zone condition.")
     description: str = Field(default="Heavily obscured fog — blocks vision including darkvision", description="Rules-facing summary for the fog cloud zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the fog cloud zone for cleanup and filtering.")
@@ -4539,6 +4542,9 @@ class GuardianOfFaithZone(AreaCondition):
         return {cell for cell in candidates if any(support_distance_feet(origin,
             grid.get_support_elevation_feet(origin), cell, grid.get_support_elevation_feet(cell)) <= 10
             for origin in occupied)}
+
+    def spatial_channels(self) -> frozenset[SpatialChannel]:
+        return super().spatial_channels() | {SpatialChannel.MOVEMENT}
 
     def is_hazardous_for(self, entity_uuid: UUID | None = None, *,
                          occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:

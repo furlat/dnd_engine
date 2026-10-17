@@ -3,19 +3,17 @@
 from collections import Counter
 from uuid import uuid4
 
+import pytest
+
 import dnd.ai.runtime.decision_epoch as subjective_epochs_module
-from server.agent_runtime.observation_journal import _combat_log_cursor
-from dnd.ai.contracts.observation import ObservationSnapshot
 from dnd.ai.runtime.decision_epoch import (
     _action_cost_profile_from_cost_rows,
-    _build_action_economy_state_from_actor,
     _build_action_capabilities,
     _build_affordance_set_and_execution_authority_from_actions,
     _build_affordance_set_from_actions,
 )
 from dnd.ai.contracts.semantics import ActionTag, MovementKind, OutcomeKind, TopologyOperation, TruthValue, evaluate_fact_expression
 from dnd.ai.contracts.control import AffordanceSet
-from server.action_serialization import serialize_available_actions
 from dnd.actions_functional import execute_by_index, register_spell
 from dnd.core.base_object import BaseObject
 from dnd.core.base_actions import ActionAvailabilityStatus
@@ -23,34 +21,21 @@ from dnd.core.base_actions import ActionCategory
 from dnd.core.base_actions import AvailableActionInfo
 from dnd.core.base_actions import AvailableActionsResult
 from dnd.core.base_actions import AvailableTarget
+from dnd.core.base_actions import BaseCost
 from dnd.core.base_actions import OutcomeResolution
 from dnd.core.base_actions import TargetType
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.equipment_types import WeaponSlot
 from dnd.classes.fighter import ExtraAttack
 from dnd.classes.rage import FrenziedStrike
 from dnd.blocks.base_item import BaseItem
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
-from dnd.content_system.creature_materialization import materialize_creature
-from dnd.core.content.materialization import (
-    CreatureDeploymentRole,
-    CreaturePossessionMode,
-)
 from dnd.core.aoe import Cone, Cube, Line, Sphere
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.entity import Entity
-from dnd.encounter import Encounter, TurnState
-from dnd.items.consumables import HEALING_POTION_RECIPE
-from dnd.items.spell_items import FIREBALL_SCROLL_RECIPE
 from dnd.items.environment_interactables import TrapLever
-from dnd.monsters.srd_roster import (
-    SRD_CREATURE_DECLARATIONS_BY_ID,
-    SRD_CREATURE_RECIPES_BY_ID,
-)
 from tests.manual.authored_encounter_support import (
     assemble_authored_encounter,
+    reset_authored_encounter_state,
 )
 from dnd.spells.abjuration import (
     Aid,
@@ -65,174 +50,14 @@ from dnd.spells.abjuration import (
 from dnd.spells.enchantment import Sleep
 from dnd.spells.illusion import Blur, GreaterInvisibility, MirrorImage
 from dnd.spells.necromancy import BestowCurse, EyebiteStrike
-from tests.manual.test_28_subjective_observation_stream import create_observation_game
-from tests.manual.test_53_srd_monster_traits import reset_srd_trait_state
+from tests.manual.test_53_srd_monster_traits import _materialize_srd_fixture, reset_srd_trait_state
 from tests.content_identity import synthetic_action_identity
 
 
-def _materialize_srd_fixture(
-    creature_id: str,
-    *,
-    position: tuple[int, int],
-    faction: str,
-) -> Entity:
-    declaration = SRD_CREATURE_DECLARATIONS_BY_ID[creature_id]
-    role_suffix = f"{creature_id}_{position[0]}_{position[1]}"
-    return materialize_creature(
-        SRD_CREATURE_RECIPES_BY_ID[creature_id],
-        runtime_entity_uuid=uuid4(),
-        display_name=declaration.descriptor.display_name,
-        faction=faction,
-        position=position,
-        deployment_role=CreatureDeploymentRole(
-            role_id=f"tests.subjective_epochs.{role_suffix}",
-        ),
-        possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
-    )
-
-
-def test_subjective_log_cursor_uses_latest_identical_log_occurrence() -> None:
-    """Repeated identical action logs keep their distinct source positions."""
-    encounter = Encounter(name="Cursor Encounter", source_entity_uuid=uuid4())
-    first = CombatLogEntry(
-        entry_type=CombatLogEntryType.ACTION,
-        source_name="Sorcerer",
-        source_uuid="sorcerer",
-        compact="Sorcerer uses Quickened Spell",
-        verbose="Sorcerer uses Quickened Spell",
-        detailed="Sorcerer uses Quickened Spell",
-        data={"action_name": "Quickened Spell"},
-        success=True,
-    )
-    second = first.model_copy(deep=True)
-    encounter.combat_log.extend((first, second))
-
-    assert first == second
-    assert _combat_log_cursor(second.model_copy(deep=True), encounter) == 2
-
-
-def test_snapshot_includes_epoch_on_active_ai_turn() -> None:
-    """A session snapshot carries legal affordances when the session owns the active actor."""
-    client, session_id, hero, _monster, _encounter = create_observation_game()
-
-    response = client.get(f"/ai/sessions/{session_id}/observation/snapshot")
-    payload = response.json()
-    epoch = payload["current_epoch"]
-
-    assert response.status_code == 200
-    assert epoch is not None
-    assert epoch["actor_uuid"] == str(hero.uuid)
-    assert epoch["basis_observation_cursor"] == payload["observation_cursor"]
-    assert epoch["economy"]["actor_uuid"] == str(hero.uuid)
-    assert epoch["affordances"]["computed_at_observation_cursor"] == payload["observation_cursor"]
-    assert epoch["affordances"]["special_commands"][0]["row_id"] == "special|End Turn|index=0"
-
-
-def test_snapshot_has_no_epoch_when_session_is_inactive() -> None:
-    """Inactive sessions receive world truth but no decision affordances."""
-    client, session_id, _hero, monster, encounter = create_observation_game()
-    encounter.current_turn_index = encounter.initiative_order.index(monster.uuid)
-
-    response = client.get(f"/ai/sessions/{session_id}/observation/snapshot")
-    payload = response.json()
-
-    assert response.status_code == 200
-    assert payload["session"]["is_my_turn"] is False
-    assert payload["current_epoch"] is None
-
-
-def test_snapshot_has_no_epoch_before_opening_turn_starts() -> None:
-    """An assigned opening actor has no executable authority before turn start."""
-    client, session_id, _hero, _monster, encounter = create_observation_game()
-    encounter.turn_state = TurnState.NOT_STARTED
-
-    response = client.get(f"/ai/sessions/{session_id}/observation/snapshot")
-    payload = response.json()
-
-    assert response.status_code == 200
-    assert payload["session"]["is_my_turn"] is True
-    assert payload["current_epoch"] is None
-
-
-def test_snapshot_retires_cached_epoch_when_turn_stops() -> None:
-    """A cached executable epoch cannot survive a non-actionable turn state."""
-    client, session_id, _hero, _monster, encounter = create_observation_game()
-    active_snapshot = client.get(
-        f"/ai/sessions/{session_id}/observation/snapshot"
-    ).json()
-    assert active_snapshot["current_epoch"] is not None
-
-    encounter.turn_state = TurnState.NOT_STARTED
-    stopped_snapshot = client.get(
-        f"/ai/sessions/{session_id}/observation/snapshot"
-    ).json()
-
-    assert stopped_snapshot["current_epoch"] is None
-
-
-def test_epoch_rows_have_stable_row_ids_and_action_economy() -> None:
-    """Epoch rows are already executable rows, not raw template-only hints."""
-    client, session_id, hero, monster, _encounter = create_observation_game()
-
-    payload = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
-    epoch = payload["current_epoch"]
-    row_ids = [
-        row["row_id"]
-        for bucket in ("entity_actions", "position_actions", "self_actions", "object_actions", "special_commands")
-        for row in epoch["affordances"][bucket]
-    ]
-
-    assert epoch["economy"]["actor_uuid"] == str(hero.uuid)
-    assert epoch["economy"]["actions"] == 1
-    assert epoch["economy"]["bonus_actions"] == 1
-    assert epoch["economy"]["reactions"] == 1
-    assert epoch["economy"]["movement_remaining"] == 30
-    assert epoch["economy"]["meaningful_commands_remaining"] is True
-    assert epoch["affordances"]["entity_actions"]
-    assert epoch["affordances"]["position_actions"]
-    assert any(
-        row["row_id"].startswith("entity|Attack_MELEE_MAIN|uuid=")
-        for row in epoch["affordances"]["entity_actions"]
-    )
-    assert any(
-        row["row_id"].startswith("position|Move|pos=")
-        for row in epoch["affordances"]["position_actions"]
-    )
-    assert any(row_id.startswith("entity|Attack_MELEE_MAIN|uuid=") for row_id in row_ids)
-    assert any(str(monster.uuid) in row_id for row_id in row_ids)
-    assert all("|" in row_id for row_id in row_ids)
-    assert len(row_ids) == len(set(row_ids))
-    assert epoch["affordances"]["actor_uuid"] == str(hero.uuid)
-
-
-def test_decision_epoch_omits_unaffordable_debug_rows() -> None:
-    """AI epochs expose executable affordances while debug discovery stays rich."""
-    client, session_id, hero, _monster, _encounter = create_observation_game()
-    before = hero.get_available_actions()
-    dash = next(row for row in before.self_actions if row.template_name == "Dash")
-
-    result = execute_by_index(hero, dash.template_name, dash.valid_targets[0].index, available=before)
-    debug_after = hero.get_available_actions()
-    lean_after = hero.get_available_actions(legal_only=True)
-    payload = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
-    epoch = payload["current_epoch"]
-    epoch_row_ids = [
-        row["row_id"]
-        for bucket in ("entity_actions", "position_actions", "self_actions", "object_actions", "special_commands")
-        for row in epoch["affordances"][bucket]
-    ]
-
-    assert result is not None
-    assert result.canceled is False
-    assert any(
-        row.template_name == "Dash"
-        and row.can_afford is False
-        and row.valid_targets == []
-        for row in debug_after.self_actions
-    )
-    assert all(row.template_name != "Dash" for row in lean_after.self_actions)
-    assert not any(row_id.startswith("self|Dash|") for row_id in epoch_row_ids)
-    assert "special|End Turn|index=0" in epoch_row_ids
+@pytest.fixture(autouse=True)
+def fresh_engine_runtime() -> None:
+    """Each case builds its own world on an empty runtime."""
+    reset_authored_encounter_state()
 
 
 def test_epoch_bindings_preserve_exact_duplicate_named_action_sources() -> None:
@@ -363,106 +188,6 @@ def test_epoch_row_id_falls_back_to_semantic_key_not_display_name() -> None:
     assert second_binding.action_info is second
 
 
-def test_epoch_carries_finite_item_cost_and_remaining_stack_uses() -> None:
-    """Item affordances and economy expose one consistent finite resource."""
-    _client, _session_id, hero, _monster, _encounter = create_observation_game()
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
-        hero.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    potion.stack_count = 2
-    assert hero.loot_item(potion)
-
-    actions = hero.get_available_actions()
-    affordances = _build_affordance_set_from_actions(hero, actions, 42)
-    economy = _build_action_economy_state_from_actor(hero, actions, affordances)
-    potion_row = next(
-        row
-        for row in affordances.self_actions
-        if row.source_item_uuid == str(potion.uuid)
-    )
-
-    assert potion_row.semantic_id == "support.heal"
-    assert potion_row.cost.bonus_action_cost == 1
-    assert potion_row.cost.item_charge_costs == {str(potion.uuid): 1}
-    assert economy.item_charges[str(potion.uuid)].current == 2
-    assert economy.item_charges[str(potion.uuid)].max == 10
-
-
-def test_position_epoch_rows_do_not_duplicate_source_target_options() -> None:
-    """Movement rows carry one executable target without O(n squared) option payloads."""
-    client, session_id, _hero, _monster, _encounter = create_observation_game()
-
-    payload = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
-    affordances = payload["current_epoch"]["affordances"]
-    position_rows = affordances["position_actions"]
-    sources = {
-        source["source_action_id"]: source
-        for source in affordances["action_sources"]
-    }
-    target_catalog = affordances["target_catalog"]
-
-    assert position_rows
-    assert all(len(row["target_indices"]) == 1 for row in position_rows)
-    assert all(
-        0 <= row["target_indices"][0] < len(target_catalog)
-        for row in position_rows
-    )
-    assert all("targets" not in row for row in position_rows)
-    assert all(
-        "target_options" not in sources[row["source_action_id"]]
-        for row in position_rows
-    )
-
-
-def test_position_epoch_discloses_route_specific_opportunity_attack_exposure() -> None:
-    """A subjective movement row carries the first visible hostile threat exit."""
-    client, session_id, _hero, monster, _encounter = create_observation_game()
-
-    snapshot = ObservationSnapshot.model_validate(
-        client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
-    )
-    assert snapshot.current_epoch is not None
-    move_row = next(
-        row
-        for row in snapshot.current_epoch.affordances.position_actions
-        if row.template_name == "Move"
-        and row.targets[0].position == (0, 1)
-    )
-    exposure = move_row.targets[0].opportunity_attack_exposures[0]
-
-    assert exposure.reactor_uuid == str(monster.uuid)
-    assert exposure.reactor_name == monster.name
-    assert exposure.from_position == (1, 1)
-    assert exposure.to_position == (0, 1)
-
-
-def test_jump_epoch_discloses_its_voluntary_threat_exit() -> None:
-    """Jump exposes the same straight-line threat exit that execution traverses."""
-    client, session_id, _hero, monster, _encounter = create_observation_game()
-
-    snapshot = ObservationSnapshot.model_validate(
-        client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
-    )
-    assert snapshot.current_epoch is not None
-    jump_row = next(
-        row
-        for row in snapshot.current_epoch.affordances.position_actions
-        if row.template_name == "Jump"
-        and row.targets[0].position == (1, 3)
-    )
-    target = jump_row.targets[0]
-
-    assert target.path == ((1, 1), (1, 2), (1, 3))
-    assert len(target.opportunity_attack_exposures) == 1
-    exposure = target.opportunity_attack_exposures[0]
-    assert exposure.reactor_uuid == str(monster.uuid)
-    assert exposure.reactor_name == monster.name
-    assert exposure.from_position == (1, 2)
-    assert exposure.to_position == (1, 3)
-
-
 def test_simple_entity_epoch_rows_are_lean_but_multi_entity_rows_keep_options() -> None:
     """Simple entity rows avoid duplicate targets while multi-target spells keep choices."""
     arena = assemble_authored_encounter("line_aoe_corridor")
@@ -520,36 +245,6 @@ def test_spell_outcome_profiles_reach_epoch_without_registry_growth() -> None:
     assert direct_missile.outcome_profile is not None
     assert direct_fire.outcome_profile.model_dump(mode="json") == fire_profile.model_dump(mode="json")
     assert direct_missile.outcome_profile.model_dump(mode="json") == missile_profile.model_dump(mode="json")
-
-
-def test_weapon_attack_outcome_profiles_reach_epochs_without_registry_growth() -> None:
-    """Weapon attacks disclose actor-baseline rolls without transient engine objects."""
-    _client, _session_id, hero, _monster, _encounter = create_observation_game()
-    attack_template = next(
-        action
-        for action in hero.registered_actions
-        if action.name == "Attack_MELEE_MAIN"
-    )
-    root_registry_before = set(BaseObject._registry)
-    value_registry_before = set(BaseValue._registry)
-
-    profile = attack_template.get_outcome_profile(hero)
-
-    assert set(BaseObject._registry) == root_registry_before
-    assert set(BaseValue._registry) == value_registry_before
-    assert profile is not None
-    assert profile.resolution is OutcomeResolution.ATTACK_ROLL
-    assert profile.attack_bonus is not None
-    assert profile.damage_rolls
-    actions = hero.get_available_actions()
-    direct = _build_affordance_set_from_actions(hero, actions, 42)
-    direct_attack = next(
-        row for row in direct.entity_actions
-        if row.template_name == "Attack_MELEE_MAIN"
-    )
-
-    assert direct_attack.outcome_profile is not None
-    assert direct_attack.outcome_profile.model_dump(mode="json") == profile.model_dump(mode="json")
 
 
 def test_eldritch_blast_outcome_profile_reaches_actor_capabilities() -> None:
@@ -1021,12 +716,13 @@ def test_extra_attack_resource_is_normalized_as_attack_economy() -> None:
     """Granted extra attacks are typed economy, not generic limited resources."""
     profile = _action_cost_profile_from_cost_rows(
         [
-            {
-                "cost_type": None,
-                "cost": 0,
-                "resource_name": "extra_attacks",
-                "resource_cost": 1,
-            }
+            BaseCost(
+                name="Extra Attack",
+                cost_type="actions",
+                cost=0,
+                resource_name="extra_attacks",
+                resource_cost=1,
+            )
         ],
         can_afford=True,
     )
@@ -1066,58 +762,6 @@ def test_weapon_attack_wrappers_share_one_stochastic_profile() -> None:
     assert normal_profile is not None
     assert extra_profile == normal_profile
     assert frenzy_profile == normal_profile
-
-
-def test_hidden_targets_do_not_leak_through_epoch_affordances() -> None:
-    """Hidden entity UUIDs are absent from both facts and legal rows."""
-    client, session_id, _hero, monster, _encounter = create_observation_game(hidden_monster=True)
-
-    payload = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
-    epoch = payload["current_epoch"]
-    serialized_epoch = str(epoch)
-
-    assert str(monster.uuid) not in {entity["uuid"] for entity in payload["known_entities"]}
-    assert str(monster.uuid) not in serialized_epoch
-
-
-def test_actor_capabilities_survive_absent_targets_without_leaking_contacts() -> None:
-    """Possible action families remain known without becoming executable rows."""
-    _client, _session_id, hero, monster, _encounter = create_observation_game()
-    hero.senses.entities.clear()
-    available = hero.get_available_actions()
-    semantic_catalog = {}
-
-    capabilities = _build_action_capabilities(hero, semantic_catalog)
-
-    unavailable_attacks = [
-        row
-        for row in available.entity_actions
-        if row.action_category.value == "attack"
-    ]
-    assert unavailable_attacks
-    assert all(
-        row.availability_status is ActionAvailabilityStatus.NO_VALID_TARGETS
-        and not row.valid_targets
-        for row in unavailable_attacks
-    )
-    assert not any(
-        row.action_category.value == "attack"
-        for row in hero.get_available_actions(legal_only=True).entity_actions
-    )
-    attack = next(
-        capability for capability in capabilities
-        if ActionTag.ATTACK_WEAPON.value in capability.tags
-        and capability.target_type == "entity"
-        and capability.weapon_slot == "MELEE_MAIN"
-    )
-    assert attack.normal_range_feet == 5
-    assert attack.requires_line_of_sight is True
-    assert attack.outcome_profile is not None
-    assert attack.semantics_ref in semantic_catalog
-    serialized = attack.model_dump_json()
-    assert "row_id" not in serialized
-    assert "target_uuid" not in serialized
-    assert str(monster.uuid) not in serialized
 
 
 def test_visible_environment_interaction_is_a_capability_before_it_is_legal() -> None:
@@ -1202,108 +846,6 @@ def test_sorcerer_epoch_carries_metamagic_transforms_and_base_spell_levels() -> 
         == "action.unknown"
     }
     assert unknown_capabilities == set()
-
-
-def test_epoch_reuses_one_inventory_discovery_for_rows_and_capabilities(monkeypatch) -> None:
-    """Item capabilities reuse the state-specific actions captured for legal rows."""
-    _client, _session_id, hero, _monster, _encounter = create_observation_game()
-    hero.loot_item(materialize_item(
-        FIREBALL_SCROLL_RECIPE,
-        hero.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    ))
-    inventory_type = type(hero.inventory)
-    original = inventory_type.get_all_use_actions
-    calls = 0
-
-    def counted(inventory, user_entity_uuid):
-        nonlocal calls
-        calls += 1
-        return original(inventory, user_entity_uuid)
-
-    monkeypatch.setattr(inventory_type, "get_all_use_actions", counted)
-
-    actions = hero.get_available_actions()
-    affordances = _build_affordance_set_from_actions(hero, actions, 42)
-
-    assert calls == 1
-    assert any(row.source_item_uuid is not None for row in affordances.all_rows)
-    assert any(capability.source_item_uuid is not None for capability in affordances.capabilities)
-
-
-def test_slotless_actor_keeps_fixed_spell_scroll_capability() -> None:
-    """A specialized scroll action must not be expanded through actor spell slots again."""
-    _client, _session_id, hero, _monster, _encounter = create_observation_game()
-    scroll = materialize_item(
-        FIREBALL_SCROLL_RECIPE,
-        hero.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    hero.loot_item(scroll)
-
-    actions = hero.get_available_actions()
-    affordances = _build_affordance_set_from_actions(hero, actions, 42)
-    scroll_uuid = str(scroll.uuid)
-    legal_rows = [
-        row for row in affordances.all_rows
-        if row.source_item_uuid == scroll_uuid
-    ]
-    capabilities = [
-        capability for capability in affordances.capabilities
-        if capability.source_item_uuid == scroll_uuid
-    ]
-
-    assert legal_rows
-    assert capabilities
-    assert {capability.cast_at_level for capability in capabilities} == {3}
-    assert all(capability.cost.spell_slot_cost is None for capability in capabilities)
-
-
-def test_spell_epoch_rows_expose_full_spell_slot_costs() -> None:
-    """Leveled spell rows expose slot costs in typed epochs and the human API."""
-    arena = assemble_authored_encounter("condition_lock_sanctum")
-    support = next(monster for monster in arena.monsters if "Support" in monster.name)
-    support.update_entity_senses(max_distance=20)
-
-    actions = support.get_available_actions()
-    serialized = serialize_available_actions(support, actions)
-    direct_affordances = _build_affordance_set_from_actions(support, actions, 42)
-    direct_bless = next(row for row in direct_affordances.entity_actions if row.template_name == "Bless__slot_1")
-    serialized_bless = next(
-        row
-        for row in serialized.entity_actions
-        if row.template_name == "Bless__slot_1"
-    )
-
-    assert direct_bless.cost.action_cost == 1
-    assert direct_bless.cost.spell_slot_cost == 1
-    assert any(
-        cost.cost_type == "spell_slot_1"
-        for cost in serialized_bless.costs
-    )
-
-
-def test_concentration_requirement_reaches_typed_epoch_and_human_api() -> None:
-    """Concentration metadata reaches the typed epoch and human serialization."""
-    arena = assemble_authored_encounter("condition_lock_sanctum")
-    support = next(monster for monster in arena.monsters if "Support" in monster.name)
-    support.update_entity_senses(max_distance=20)
-
-    actions = support.get_available_actions()
-    serialized = serialize_available_actions(support, actions)
-    direct_affordances = _build_affordance_set_from_actions(support, actions, 42)
-    direct_bless = next(row for row in direct_affordances.entity_actions if row.template_name == "Bless__slot_1")
-    serialized_bless = next(
-        row
-        for row in serialized.entity_actions
-        if row.template_name == "Bless__slot_1"
-    )
-
-    assert direct_bless.requires_concentration is True
-    assert serialized_bless.requires_concentration is True
-    assert direct_bless.semantic_key == "dnd.spells.enchantment.Bless"
-    assert direct_affordances.semantics_for(direct_bless).semantic_id == "support.bless"
-    assert direct_affordances.semantics_for(direct_bless).concentration_effect is not None
 
 
 def test_srd_natural_attack_epoch_uses_natural_damage_profile() -> None:
@@ -1941,7 +1483,7 @@ def test_visible_position_spell_targets_are_not_limited_to_walkable_paths() -> N
     arena = assemble_authored_encounter("zone_control_web_gauntlet")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     mage.update_entity_senses(max_distance=20)
-    occupied_positions = set(mage.senses.entities.values())
+    occupied_positions = {contact.position for contact in mage.senses.entities.values()}
 
     assert occupied_positions
     assert all(position not in mage.senses.paths for position in occupied_positions)

@@ -30,7 +30,7 @@ from dnd.core.events import (
     TakeDamageEvent,
 )
 from dnd.core.equipment_types import EquipmentSlot
-from dnd.types.world import CardinalDirection
+from dnd.types.world import CardinalDirection, SpatialChannel
 from dnd.types.physical_access import ContactPassage, PhysicalAccess
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement, WorldPlacementSpec
 from dnd.core.item_types import (
@@ -590,14 +590,14 @@ class BaseItem(BaseBlock):
             self.blocks_propagation_field != old_blocks_propagation
         )
         walking_changed = self.blocks_movement != old_blocks_movement
-        revision_channels = set()
+        revision_channels: set[SpatialChannel] = set()
         if optics_changed:
-            revision_channels.add("optical")
+            revision_channels.add(SpatialChannel.OPTICAL)
         if propagation_changed:
-            revision_channels.add("propagation")
+            revision_channels.add(SpatialChannel.PROPAGATION)
         if walking_changed:
-            revision_channels.add("movement")
-        grid.invalidate_spatial_caches(revision_channels, placement.positions)
+            revision_channels.add(SpatialChannel.MOVEMENT)
+        grid.invalidate_spatial_caches(frozenset(revision_channels), placement.positions)
         if optics_changed or propagation_changed or walking_changed:
             event = SpatialChangeEvent.object_changed(
                 position, self.uuid,

@@ -118,6 +118,7 @@ from dnd.spells.spell_utils import (
 from dnd.spells.transmutation import HasteEffect
 from dnd.types.abilities import AbilityName
 from dnd.types.physical_access import PhysicalAccess
+from dnd.types.world import WorldEdgeChannel
 from dnd.types.spatial_effects import (
     SpatialEffectLayer,
     SpatialEffectOccupancyPolicy,
@@ -897,7 +898,7 @@ class SeismicStrike(NativeSaveBurst):
             if not get_map().is_walkable_for(
                 *candidate, requesting_entity_uuid=target.uuid
             ) or not get_map().spatial_crossing_allows(
-                destination, candidate, "movement", target.uuid
+                destination, candidate, WorldEdgeChannel.MOVEMENT, target.uuid
             ):
                 break
             destination = candidate

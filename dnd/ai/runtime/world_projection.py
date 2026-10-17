@@ -39,7 +39,7 @@ def project_tile(
         )
     senses = senses_by_observer.get(UUID(observers[0])) if observers else None
     directional = {
-        channel.value: {direction.value: False for direction in CARDINAL_DELTAS}
+        channel: {direction.value: False for direction in CARDINAL_DELTAS}
         for channel in WorldEdgeChannel
     }
     for direction, (dx, dy) in CARDINAL_DELTAS.items():
@@ -47,7 +47,7 @@ def project_tile(
         neighbor = world.tiles.get(destination)
         if neighbor is None:
             for channel in WorldEdgeChannel:
-                directional[channel.value][direction.value] = True
+                directional[channel][direction.value] = True
             continue
         providers = world.boundaries.get((position, direction), set()) | world.boundaries.get(
             (destination, OPPOSITE_DIRECTION[direction]), set(),
@@ -73,17 +73,17 @@ def project_tile(
                     destination_height=neighbor.elevation_steps,
                     movement_mode=MovementMode.WALKING,
                 ):
-                    directional[channel.value][direction.value] = True
+                    directional[channel][direction.value] = True
     return ObservationTileFact(
         key=f"{position[0]},{position[1]}", position=position,
         knowledge_state=KnowledgeState.VISIBLE, observer_uuids=observers,
         name=tile.name, walkable=tile.walking_cost > 0, walking_cost=tile.walking_cost,
         is_hazardous=senses.hazardous_cells.get(position) if senses is not None else None,
         conditions=list(tile.condition_names), light_level=tile.resolved_light.value,
-        directional_blocks_movement=directional["movement"],
-        directional_blocks_vision=directional["optical"],
-        directional_blocks_light=directional["optical"],
-        directional_blocks_propagation=directional["propagation"],
+        directional_blocks_movement=directional[WorldEdgeChannel.MOVEMENT],
+        directional_blocks_vision=directional[WorldEdgeChannel.OPTICAL],
+        directional_blocks_light=directional[WorldEdgeChannel.OPTICAL],
+        directional_blocks_propagation=directional[WorldEdgeChannel.PROPAGATION],
         adjacent_domain=adjacent_domain(world, position),
     )
 

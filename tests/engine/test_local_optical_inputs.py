@@ -17,7 +17,9 @@ from dnd.core.creature_types import DamageType
 from dnd.core.item_types import ItemDestructionProfile, ItemIntegrity
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalWall
-from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from dnd.types.world import (
+    CardinalDirection, ObserverRevisions, SpatialChannel, WorldEdgeChannel, edge_revision_channels,
+)
 from dnd.types.materials import Material
 from dnd.types.world_placement import (
     BoundaryStructure, BoundaryStructureKind, WorldPlacementKind, WorldPlacementSpec,
@@ -70,7 +72,7 @@ def test_snapshot_keeps_explicit_optics_on_removed_support_and_tracks_removal():
     before = grid.observer_spatial_revisions(observer)
     grid.remove_optical_obscurement(owner)
     assert not grid.capture_optical_obscurements((0, 0), 2)
-    assert grid.observer_spatial_revisions(observer)[0] > before[0]
+    assert grid.observer_spatial_revisions(observer).optical > before.optical
 
 
 def test_subscriber_revisions_follow_local_geometry_light_and_occupancy():
@@ -84,19 +86,20 @@ def test_subscriber_revisions_follow_local_geometry_light_and_occupancy():
     remote_initial = grid.observer_spatial_revisions(far)
     grid.set_tile_base_light((1, 0), LightLevel.DIM_LIGHT)
     after_light = grid.observer_spatial_revisions(near)
-    assert after_light[1] > initial[1]
-    assert (after_light[0], after_light[2], after_light[3]) == (initial[0], initial[2], initial[3])
+    assert after_light.illumination > initial.illumination
+    assert ((after_light.optical, after_light.propagation, after_light.occupancy)
+            == (initial.optical, initial.propagation, initial.occupancy))
     Entity.update_entity_position(mover, (1, 0))
     after_move = grid.observer_spatial_revisions(near)
-    assert after_move[3] > after_light[3]
+    assert after_move.occupancy > after_light.occupancy
     grid.set_tile(-1, 0)
-    assert grid.observer_spatial_revisions(near)[0] > after_move[0]
+    assert grid.observer_spatial_revisions(near).optical > after_move.optical
     assert grid.observer_spatial_revisions(far) == remote_initial
-    grid.invalidate_spatial_caches({"optical"})
-    assert grid.observer_spatial_revisions(far)[0] > remote_initial[0]
+    grid.invalidate_spatial_caches(frozenset({SpatialChannel.OPTICAL}))
+    assert grid.observer_spatial_revisions(far).optical > remote_initial.optical
     grid.unsubscribe_entity(near)
     grid.subscribe_to_cells(near, {(0, 0)})
-    assert grid.observer_spatial_revisions(near) == (0, 0, 0, 0)
+    assert grid.observer_spatial_revisions(near) == ObserverRevisions()
 
 
 def test_area_move_and_footprint_change_commit_optics_before_light_children():
@@ -106,13 +109,13 @@ def test_area_move_and_footprint_change_commit_optics_before_light_children():
     darkness = DarknessZone(source_entity_uuid=source, position=(1, 0), zone_radius_feet=0)
     darkness.activate(parent_event=None)
     grid.subscribe_to_cells(observer, {(1, 0), (3, 0)})
-    initial = grid.observer_spatial_revisions(observer)[0]
+    initial = grid.observer_spatial_revisions(observer).optical
     observations = []
 
     def observe_light(event, _source_uuid):
         observations.append((set(darkness.affected_positions),
             grid.get_optical_obscurements_at((3, 0)),
-            grid.observer_spatial_revisions(observer)[0]))
+            grid.observer_spatial_revisions(observer).optical))
         return None
 
     EventQueue.add_event_handler(EventHandler(source_entity_uuid=source,
@@ -124,7 +127,7 @@ def test_area_move_and_footprint_change_commit_optics_before_light_children():
     assert added and all(row[1] == {OpticalObscurement.MAGICAL_DARKNESS} and row[2] > initial
                          for row in added)
     observations.clear()
-    initial = grid.observer_spatial_revisions(observer)[0]
+    initial = grid.observer_spatial_revisions(observer).optical
     darkness.change_footprint({(4, 0)}, parent_event=cause(source))
     assert observations and all(not row[1] and row[2] > initial for row in observations)
     assert not grid.capture_optical_obscurements((3, 0), 0)
@@ -160,7 +163,7 @@ def test_creator_candidates_follow_placement_source_and_reset_without_granting_k
     reset_senses_state(width=4, height=1)
     grid = get_map()
     assert grid.get_known_object_candidates(second) == ()
-    assert grid.observer_spatial_revisions(first) == (0, 0, 0, 0)
+    assert grid.observer_spatial_revisions(first) == ObserverRevisions()
     assert not grid.capture_optical_obscurements((1, 0), 1)
 
 
@@ -293,7 +296,7 @@ def test_fov_queries_remain_detached_across_ranges_origins_and_topology_changes(
     assert grid.compute_fov(origin, 2) == current_nearby
 
 
-@pytest.mark.parametrize("channel", ["optical", "propagation"])
+@pytest.mark.parametrize("channel", [WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION])
 def test_batched_fov_matches_native_rays_for_each_target_path(channel):
     reset_senses_state(width=1, height=1)
     grid = get_map()
@@ -310,7 +313,7 @@ def test_batched_fov_matches_native_rays_for_each_target_path(channel):
         wall = DirectionalWall(source_entity_uuid=uuid4(), item_id="test.ray_parity_wall",
                                blocked_channels=channels)
         wall.place_on_grid(position, boundary_direction=direction)
-    query = grid.compute_fov if channel == "optical" else grid.compute_propagation_fov
+    query = grid.compute_fov if channel is WorldEdgeChannel.OPTICAL else grid.compute_propagation_fov
     for origin in ((0, 0), (-3, -2), (3, 2), (1, 0), (0, -1)):
         for radius in (2.5, 6, 0, 1.41, 1.42, None, 3, 1_000_000, 1e200):
             expected = [position for position in sorted(cells)
@@ -318,13 +321,13 @@ def test_batched_fov_matches_native_rays_for_each_target_path(channel):
                 and grid.raycast_clear(origin, position, channel)]
             assert query(origin, radius) == expected, (channel, origin, radius)
     visible = query((0, 0), 4)
-    terminal = (1, 0) if channel == "optical" else (0, -1)
-    descendant = (2, 0) if channel == "optical" else (0, -2)
+    terminal = (1, 0) if channel is WorldEdgeChannel.OPTICAL else (0, -1)
+    descendant = (2, 0) if channel is WorldEdgeChannel.OPTICAL else (0, -2)
     assert terminal in visible
     assert descendant not in visible
 
 
-@pytest.mark.parametrize("channel", ["optical", "propagation"])
+@pytest.mark.parametrize("channel", [WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION])
 @pytest.mark.parametrize("holes", [(), ((1, 0),), ((1, 0), (0, 1))])
 def test_directional_visibility_matches_every_small_scene_native_ray(channel, holes):
     reset_senses_state(width=1, height=1)
@@ -341,7 +344,7 @@ def test_directional_visibility_matches_every_small_scene_native_ray(channel, ho
         wall = DirectionalWall(source_entity_uuid=uuid4(), item_id="test.all_rays_wall",
                                blocked_channels=channels)
         wall.place_on_grid(position, boundary_direction=side)
-    query = grid.compute_fov if channel == "optical" else grid.compute_propagation_fov
+    query = grid.compute_fov if channel is WorldEdgeChannel.OPTICAL else grid.compute_propagation_fov
     for origin in cells:
         expected = [position for position in cells if grid.raycast_clear(origin, position, channel)]
         assert query(origin) == expected, (channel, holes, origin)
@@ -364,14 +367,14 @@ def zero_band_boundary():
                 structure=BoundaryStructureKind.WALL, material=Material.STONE, blocked_channels=())))
 
 
-@pytest.mark.parametrize("channel", ["optical", "propagation"])
+@pytest.mark.parametrize("channel", [WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION])
 @pytest.mark.parametrize("clear_structure", [False, True])
 def test_zero_band_boundary_lifecycle_preserves_native_visibility_choice(channel, clear_structure):
     reset_senses_state(width=7, height=7)
     grid = get_map()
     grid.set_tile(2, 3, blocks_optics=True, blocks_propagation=True)
     origin, radius, witness = (1, 3), 5, (3, 2)
-    query = grid.compute_fov if channel == "optical" else grid.compute_propagation_fov
+    query = grid.compute_fov if channel is WorldEdgeChannel.OPTICAL else grid.compute_propagation_fov
     before = set(query(origin, radius))
     assert witness in before
     expected = {position for position in grid.get_all_tiles()
@@ -387,7 +390,7 @@ def test_zero_band_boundary_lifecycle_preserves_native_visibility_choice(channel
     assert set(query(origin, radius)) == expected
     # A cold query must discover retained structural ownership without requiring
     # any surviving tile band, just as the warm placement update does.
-    grid.invalidate_spatial_caches({channel})
+    grid.invalidate_spatial_caches(edge_revision_channels({channel}))
     assert set(query(origin, radius)) == expected
 
     if clear_structure:
@@ -399,11 +402,11 @@ def test_zero_band_boundary_lifecycle_preserves_native_visibility_choice(channel
         grid.remove_object(boundary.uuid)
         assert grid.get_object_placement(boundary.uuid) is None
     assert set(query(origin, radius)) == before
-    grid.invalidate_spatial_caches({channel})
+    grid.invalidate_spatial_caches(edge_revision_channels({channel}))
     assert set(query(origin, radius)) == before
 
 
-@pytest.mark.parametrize("channel", ["optical", "propagation"])
+@pytest.mark.parametrize("channel", [WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION])
 @pytest.mark.parametrize("offset", [(0, 0), (-16, -16)])
 def test_directional_visibility_tracks_hole_creation_fill_and_rectangle_fill(channel, offset):
     reset_senses_state(width=1, height=1)
@@ -413,7 +416,7 @@ def test_directional_visibility_tracks_hole_creation_fill_and_rectangle_fill(cha
     wall = DirectionalWall(source_entity_uuid=uuid4(), item_id="test.frontier_wall",
         blocked_channels=(WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION))
     wall.place_on_grid((ox + 3, oy + 3), boundary_direction=CardinalDirection.NORTH)
-    query = grid.compute_fov if channel == "optical" else grid.compute_propagation_fov
+    query = grid.compute_fov if channel is WorldEdgeChannel.OPTICAL else grid.compute_propagation_fov
     cells = {(ox + x, oy + y) for x in range(-3, 4) for y in range(-3, 4)}
 
     def check():
@@ -436,7 +439,7 @@ def test_directional_visibility_tracks_hole_creation_fill_and_rectangle_fill(cha
     check()
 
 
-@pytest.mark.parametrize("channel", ["optical", "propagation"])
+@pytest.mark.parametrize("channel", [WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION])
 def test_visibility_follows_support_committed_after_acceptance_callbacks(channel):
     """Nested accepted Tile edits and cancellation leave exact current support."""
     reset_senses_state(width=3, height=1)
@@ -444,7 +447,7 @@ def test_visibility_follows_support_committed_after_acceptance_callbacks(channel
     wall = DirectionalWall(source_entity_uuid=uuid4(), item_id="test.support_commit",
         blocked_channels=(WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION))
     wall.place_on_grid((2, 0), boundary_direction=CardinalDirection.NORTH)
-    query = grid.compute_fov if channel == "optical" else grid.compute_propagation_fov
+    query = grid.compute_fov if channel is WorldEdgeChannel.OPTICAL else grid.compute_propagation_fov
     grid.remove_tile(1, 0, fire_event=False)
     operation = "add"
 
