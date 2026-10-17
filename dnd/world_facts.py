@@ -331,7 +331,12 @@ def apply_world_fact(
                 "surface_kind": event.new_surface_kind, "slope_axis": event.new_slope_axis,
             })
         case SpatialChangeEvent():
-            if event.change_type is SpatialChangeType.TILE_CHANGED:
+            if event.change_type is SpatialChangeType.TILES_CHANGED:
+                if not event.tile_states:
+                    return False
+                for row in event.tile_states:
+                    world.tiles[row.position] = row
+            elif event.change_type is SpatialChangeType.TILE_CHANGED:
                 if event.tile_present is False:
                     world.tiles.pop(event.position, None)
                 elif event.tile_state is not None:

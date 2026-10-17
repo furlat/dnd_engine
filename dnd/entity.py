@@ -166,9 +166,6 @@ class PreparedEntityRetirement:
 
 
 # A suspended or restored presence can carry attached conditions of unknown extent.
-_SPATIAL_PRESENCE_CHANNELS = frozenset({
-    SpatialChannel.MOVEMENT, SpatialChannel.OPTICAL, SpatialChannel.PROPAGATION,
-})
 
 _CONCRETE_EQUIPMENT_SLOTS: Tuple[EquipmentSlot, ...] = (
     *tuple(WeaponSlot),
@@ -790,13 +787,13 @@ class Entity(BaseBlock):
         old_position = self.position
         self._set_position(position)
         try:
-            grid._commit_entity_membership(self.uuid, None, position)
+            grid.commit_entity_membership(self.uuid, None, position)
             self.is_deployed = True
             self._register_spatial_observer()
         except BaseException as exc:
             spatial_senses_system.unregister_observer(self.uuid)
             if grid.get_entity_position(self.uuid) == position:
-                grid._commit_entity_membership(self.uuid, position, None)
+                grid.commit_entity_membership(self.uuid, position, None)
             self._set_position(old_position)
             self.is_deployed = False
             if isinstance(exc, PositionCommitError):
@@ -804,7 +801,7 @@ class Entity(BaseBlock):
             raise PositionCommitError(exc) from exc
     def _publish_world_attachment(self, position: Tuple[int, int], *, parent_event: Event | None = None) -> None:
         try:
-            get_map()._publish_entity_membership(self.uuid, None, position,
+            get_map().publish_entity_membership(self.uuid, None, position,
                 parent_event=parent_event.uuid if parent_event is not None else None)
         except PositionPublicationError:
             raise
@@ -820,11 +817,11 @@ class Entity(BaseBlock):
         if not self.is_deployed:
             return
         grid = get_map()
-        grid._commit_entity_membership(self.uuid, self.position, None)
+        grid.commit_entity_membership(self.uuid, self.position, None)
         self.is_deployed = False
         spatial_senses_system.unregister_observer(self.uuid)
         try:
-            grid._publish_entity_membership(self.uuid, self.position, None)
+            grid.publish_entity_membership(self.uuid, self.position, None)
         except PositionPublicationError:
             raise
         except BaseException as exc:
@@ -844,16 +841,14 @@ class Entity(BaseBlock):
                 ValueError("Entity membership does not match its objective position")
             )
         elevation = grid.get_support_elevation_feet(self.position)
-        grid._commit_entity_membership(self.uuid, self.position, None)
+        grid.commit_entity_presence(self.uuid, self.position, None)
         self.suspended_support_elevation_feet = elevation
         self.is_deployed = False
         self.is_spatially_suspended = True
         self.spatial_disposition = SpatialDisposition.ABSENT
-        # Rare unknown coverage: attached conditions can extend beyond this anchor.
-        grid.invalidate_spatial_caches(_SPATIAL_PRESENCE_CHANNELS)
         spatial_senses_system.unregister_observer(self.uuid)
         try:
-            grid._publish_entity_membership(
+            grid.publish_entity_membership(
                 self.uuid,
                 self.position,
                 None,
@@ -879,28 +874,26 @@ class Entity(BaseBlock):
         old_disposition = self.spatial_disposition
         self._set_position(position)
         try:
-            grid._commit_entity_membership(self.uuid, None, position)
+            grid.commit_entity_presence(self.uuid, None, position)
             self.is_deployed = True
             self.is_spatially_suspended = False
             self.spatial_disposition = SpatialDisposition.PRESENT
-            grid.invalidate_spatial_caches(_SPATIAL_PRESENCE_CHANNELS)
             self._register_spatial_observer()
         except BaseException as exc:
             spatial_senses_system.unregister_observer(self.uuid)
             if grid.get_entity_position(self.uuid) == position:
-                grid._commit_entity_membership(self.uuid, position, None)
+                grid.commit_entity_presence(self.uuid, position, None)
             self._set_position(old_position)
             self.is_deployed = False
             self.is_spatially_suspended = True
             self.spatial_disposition = old_disposition
-            grid.invalidate_spatial_caches(_SPATIAL_PRESENCE_CHANNELS)
             if isinstance(exc, PositionCommitError):
                 raise
             raise PositionCommitError(exc) from exc
         if not publish:
             return
         try:
-            grid._publish_entity_membership(
+            grid.publish_entity_membership(
                 self.uuid,
                 None,
                 position,
@@ -943,7 +936,7 @@ class Entity(BaseBlock):
         entity._set_position(new_position)
         entity.occupancy_layer = new_layer
         try:
-            grid._commit_entity_membership(entity.uuid, old_position, new_position)
+            grid.commit_entity_membership(entity.uuid, old_position, new_position)
         except BaseException as exc:
             entity._set_position(old_position)
             entity.occupancy_layer = old_layer
@@ -955,7 +948,7 @@ class Entity(BaseBlock):
         if not publish:
             return
         try:
-            grid._publish_entity_membership(
+            grid.publish_entity_membership(
                 entity.uuid,
                 old_position,
                 new_position,
@@ -992,7 +985,7 @@ class Entity(BaseBlock):
             if source == position and layer is OccupancyLayer.GROUND:
                 continue
             try:
-                get_map()._publish_entity_membership(actor.uuid, source, position,
+                get_map().publish_entity_membership(actor.uuid, source, position,
                     parent_event=parent, previous_occupancy_layer=layer,
                     occupancy_layer=OccupancyLayer.GROUND)
             except BaseException as error:
@@ -1038,7 +1031,7 @@ class Entity(BaseBlock):
             return
         prepared.published = True
         try:
-            get_map()._publish_entity_membership(self.uuid, None, prepared.position,
+            get_map().publish_entity_membership(self.uuid, None, prepared.position,
                                                 parent_event=prepared.parent_event)
         except BaseException as error:
             raise PositionPublicationError(error) from error
@@ -1431,7 +1424,7 @@ class Entity(BaseBlock):
             )
         spatial_senses_system.unregister_observer(self.uuid)
         if grid.get_entity_position(self.uuid) is not None:
-            grid._commit_entity_membership(self.uuid, self.position, None)
+            grid.commit_entity_membership(self.uuid, self.position, None)
         self.__class__._entity_registry.pop(self.uuid, None)
         for obj in tuple(BaseObject._registry.values()):
             if isinstance(obj, BaseObject) and obj.source_entity_uuid in owned_source_uuids:
@@ -1612,14 +1605,14 @@ class Entity(BaseBlock):
             self.turn_duration_interval = None
             was_deployed = self.is_deployed
             if was_deployed:
-                grid._commit_entity_membership(self.uuid, self.position, None)
+                grid.commit_entity_membership(self.uuid, self.position, None)
             self.is_deployed = False
             self.is_spatially_suspended = False
             spatial_senses_system.unregister_observer(self.uuid)
             # The observer receives terminal membership while identity/position exists.
             if was_deployed:
                 try:
-                    grid._publish_entity_membership(self.uuid, self.position, None,
+                    grid.publish_entity_membership(self.uuid, self.position, None,
                         parent_event=parent_uuid, terminal_release=prepared.release)
                 except BaseException as error:
                     errors.append(error)

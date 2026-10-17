@@ -1320,7 +1320,7 @@ class Frightened(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if origin is None or target is None or not self._own_source_active():
             return event
-        if (isinstance(event, SpatialChangeEvent) and event.position == target.position
+        if (isinstance(event, SpatialChangeEvent) and target.position in event.get_affected_positions()
                 and not ground_has_residue(target.position, origin.residue_id)):
             self._end_own_source(event)
         return event
@@ -3041,7 +3041,7 @@ class Revealed(BaseCondition):
 
     def on_membership_changed(self,event: Event) -> None:
         if self._removed_light is not None:
-            get_map()._fire_committed_spatial_event(self._removed_light)
+            get_map().publish_committed_spatial_event(self._removed_light)
             self._removed_light=None
         target=BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is not None:

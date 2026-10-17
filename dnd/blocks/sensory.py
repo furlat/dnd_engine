@@ -887,7 +887,7 @@ class SpatialSensesSystem:
             and previous_field.revisions.propagation == revisions.propagation else None)
         boundary_positions = optical_candidates | set().union(*nonvisual_positions.values())
         boundaries = (grid.capture_boundary_snapshot(boundary_positions) if previous_boundaries is None else
-            grid._shift_observer_boundaries(boundary_positions, previous_boundaries))
+            grid.shift_observer_boundaries(boundary_positions, previous_boundaries))
         if diagnostic:
             record_action_timing("sensory.recompute.boundary_snapshot_ms", phase_started)
             phase_started = time.perf_counter()

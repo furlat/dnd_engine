@@ -136,6 +136,7 @@ class SpatialChangeType(str, Enum):
     ENTITY_ENTERED = "entity_entered"
     ENTITY_LEFT = "entity_left"
     TILE_CHANGED = "tile_changed"
+    TILES_CHANGED = "tiles_changed"
     TILE_CREATED = "tile_created"
     TILE_REMOVED = "tile_removed"
     OBJECT_PLACED = "object_placed"

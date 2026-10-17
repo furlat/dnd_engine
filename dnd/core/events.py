@@ -3598,6 +3598,9 @@ class SpatialChangeEvent(Event):
     tile_state: Optional[WorldTileState] = Field(
         default=None, description="Complete Tile after-value at an actual commit.",
     )
+    tile_states: Tuple[WorldTileState, ...] = Field(
+        default=(), description="Complete after-values of every Tile in one committed mechanics change.",
+    )
     tile_present: Optional[bool] = Field(
         default=None, description="Whether the addressed Tile exists after this commit.",
     )
@@ -3780,6 +3783,30 @@ class SpatialChangeEvent(Event):
             directional_position=directional_position,
             directional_directions=directional_directions,
             directional_channels=directional_channels,
+        )
+
+    @classmethod
+    def tiles_changed(cls, rows: Tuple[WorldTileState, ...], *,
+                      source_entity_uuid: UUID,
+                      parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
+        """One committed traversal change covering every changed Tile (plan §5.5).
+
+        The rows are complete after-values; observers and world folds read them
+        as one fact instead of one fact per cell.
+        """
+        if not rows:
+            raise ValueError("A tile mechanics change needs at least one Tile")
+        return cls(
+            source_entity_uuid=source_entity_uuid,
+            event_type=EventType.SPATIAL_TILE_CHANGED,
+            change_type=SpatialChangeType.TILES_CHANGED,
+            position=rows[0].position,
+            tile_states=rows,
+            tile_present=True,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+            parent_event=parent_event,
+            senses_hint=SensesUpdateHint(requires_paths=True),
         )
 
     @classmethod
@@ -4139,6 +4166,7 @@ class SpatialChangeEvent(Event):
             positions.add(self.transition_from)
         if self.transition_to:
             positions.add(self.transition_to)
+        positions.update(row.position for row in self.tile_states)
         if self.senses_hint:
             if self.senses_hint.directional_positions:
                 positions.update(self.senses_hint.directional_positions)

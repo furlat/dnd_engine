@@ -344,7 +344,7 @@ class GridMap:
         """Reset the GridMap (for testing)."""
         cls._instance = None
 
-    def _fire_spatial_event(self, event: 'SpatialChangeEvent') -> Optional['SpatialChangeEvent']:
+    def publish_spatial_event(self, event: 'SpatialChangeEvent') -> Optional['SpatialChangeEvent']:
         """Fire a spatial change event through the full phase lifecycle.
 
         Progresses: DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
@@ -379,7 +379,7 @@ class GridMap:
 
         return current_event
 
-    def _fire_committed_spatial_event(
+    def publish_committed_spatial_event(
         self,
         event: 'SpatialChangeEvent',
     ) -> Optional['SpatialChangeEvent']:
@@ -430,9 +430,9 @@ class GridMap:
         if not flush_pending:
             return
         for event in pending:
-            self._fire_spatial_event(event)
+            self.publish_spatial_event(event)
         for event in pending_committed:
-            self._fire_committed_spatial_event(event)
+            self.publish_committed_spatial_event(event)
 
     def disable_events(self) -> None:
         """Disable event firing (for batch operations)."""
@@ -585,17 +585,35 @@ class GridMap:
         """Return the current physical-propagation topology revision."""
         return self._propagation_revision
 
-    def invalidate_spatial_caches(
-        self, channels: frozenset[SpatialChannel], positions: Optional[Collection[Tuple[int, int]]] = None,
+    def commit_entity_presence(
+        self,
+        entity_uuid: UUID,
+        old_position: Optional[Tuple[int, int]],
+        new_position: Optional[Tuple[int, int]],
     ) -> None:
-        """Invalidate spatial query caches after authoritative topology changes.
+        """Commit one Entity's suspension (new is None) or restoration (old is None).
 
-        Args:
-            channels: Changed spatial channels: movement, optical,
-                illumination, or propagation.
-            positions: Authoritative changed cells; unknown coverage invalidates all subscribers.
+        Attached spatial contributions can extend beyond the anchor, so a
+        presence change invalidates movement, optics and propagation everywhere.
         """
-        self._bump_spatial_revisions(channels, positions)
+        self.commit_entity_membership(entity_uuid, old_position, new_position)
+        self._bump_spatial_revisions(frozenset({
+            SpatialChannel.MOVEMENT, SpatialChannel.OPTICAL, SpatialChannel.PROPAGATION}))
+
+    def spatial_condition_changed(self, condition: SpatialConditionOwner) -> None:
+        """Invalidate a condition's own channels after a state change that kept its footprint."""
+        self._bump_spatial_revisions(condition.spatial_channels(),
+            set(self._spatial_condition_positions.get(condition.uuid, set())))
+
+    def commit_object_blocking(
+        self,
+        event: 'SpatialChangeEvent',
+        channels: frozenset[SpatialChannel],
+        positions: Collection[Tuple[int, int]],
+    ) -> Optional['SpatialChangeEvent']:
+        """Invalidate an object's changed blocking channels, then publish its change."""
+        self._bump_spatial_revisions(channels, set(positions))
+        return self.publish_spatial_event(event)
 
     def invalidate_occupancy_paths(
         self, positions: Optional[Collection[Tuple[int, int]]] = None,
@@ -1624,38 +1642,33 @@ class GridMap:
         parent_event: Optional[UUID] = None,
     ) -> Optional[SpatialChangeEvent]:
         """Publish an inert tile after-value without invalidating traversal."""
-        return self._fire_committed_spatial_event(SpatialChangeEvent.tile_changed(
+        return self.publish_committed_spatial_event(SpatialChangeEvent.tile_changed(
             position, source_entity_uuid=source_entity_uuid, parent_event=parent_event,
             senses_hint=SensesUpdateHint(),
         ))
 
-    def publish_tile_mechanics_changed(
+    def commit_tile_mechanics(
         self,
-        position: Tuple[int, int],
+        positions: Collection[Tuple[int, int]],
         *,
         source_entity_uuid: UUID,
         parent_event: Optional[UUID] = None,
+        publish: bool = True,
     ) -> Optional[SpatialChangeEvent]:
-        """Publish one committed complete traversal tuple for a Tile."""
-        return self._fire_committed_spatial_event(self.snapshot_tile_mechanics_change(
-            position, source_entity_uuid=source_entity_uuid, parent_event=parent_event))
+        """Invalidate traversal at the write and return one fact for every changed Tile.
 
-    def snapshot_tile_mechanics_change(self, position: Tuple[int, int], *,
-            source_entity_uuid: UUID, parent_event: Optional[UUID] = None) -> SpatialChangeEvent:
-        """Retain the exact traversal after-value before observer publication."""
-        tile = self._tiles.get(position)
-        if tile is None:
-            raise ValueError(f"tile mechanics position is absent: {position}")
-        return SpatialChangeEvent.tile_changed(
-                position,
-                tile_walking_cost=tile.get_movement_cost(MovementMode.WALKING),
-                tile_flying_cost=tile.get_movement_cost(MovementMode.FLYING),
-                tile_swimming_cost=tile.get_movement_cost(MovementMode.SWIMMING),
-                tile_burrowing_cost=tile.get_movement_cost(MovementMode.BURROWING),
-                source_entity_uuid=source_entity_uuid,
-                parent_event=parent_event,
-                senses_hint=SensesUpdateHint(requires_paths=True),
-        )
+        Owners of Tile movement contributions call this once per batch, right
+        after their writes. With ``publish=False`` the caller publishes the
+        returned fact later (removal publications keep their committed order).
+        """
+        changed = sorted(position for position in set(positions) if position in self._tiles)
+        if not changed:
+            return None
+        self._bump_spatial_revisions(frozenset({SpatialChannel.MOVEMENT}), set(changed))
+        fact = SpatialChangeEvent.tiles_changed(
+            tuple(self._tiles[position].to_world_tile_state() for position in changed),
+            source_entity_uuid=source_entity_uuid, parent_event=parent_event)
+        return self.publish_committed_spatial_event(fact) if publish else fact
 
     def validate_spatial_condition_positions(
         self,
@@ -2502,7 +2515,7 @@ class GridMap:
             ])
 
     @staticmethod
-    def _validate_entity_position(
+    def validate_entity_position(
         position: Optional[Tuple[int, int]],
         *,
         allow_none: bool = True,
@@ -2519,7 +2532,7 @@ class GridMap:
         ):
             raise ValueError("entity position must be an exact tuple[int, int]")
 
-    def _commit_entity_membership(
+    def commit_entity_membership(
         self,
         entity_uuid: UUID,
         expected_old_position: Optional[Tuple[int, int]],
@@ -2531,8 +2544,8 @@ class GridMap:
                 ValueError("Entity occupancy requires enabled GridMap events")
             )
         try:
-            self._validate_entity_position(expected_old_position)
-            self._validate_entity_position(new_position)
+            self.validate_entity_position(expected_old_position)
+            self.validate_entity_position(new_position)
         except ValueError as exc:
             raise PositionCommitError(exc) from exc
         block = BaseBlock.get(entity_uuid)
@@ -2606,7 +2619,7 @@ class GridMap:
                     self._refresh_contact_candidate_cell(position)
             raise PositionCommitError(exc) from exc
 
-    def _publish_entity_membership(
+    def publish_entity_membership(
         self,
         entity_uuid: UUID,
         old_position: Optional[Tuple[int, int]],
@@ -2638,7 +2651,7 @@ class GridMap:
             if tile is None or entity_uuid not in tile.get_entity_uuids():
                 raise ValueError("destination membership is not committed")
         if old_position is not None:
-            self._fire_committed_spatial_event(
+            self.publish_committed_spatial_event(
                 SpatialChangeEvent.entity_left(
                     old_position,
                     entity_uuid,
@@ -2650,7 +2663,7 @@ class GridMap:
                 )
             )
         if new_position is not None:
-            self._fire_committed_spatial_event(
+            self.publish_committed_spatial_event(
                 SpatialChangeEvent.entity_entered(
                     new_position,
                     entity_uuid,
@@ -2668,7 +2681,7 @@ class GridMap:
             return None
         position = block.get_position()
         try:
-            self._validate_entity_position(position, allow_none=False)
+            self.validate_entity_position(position, allow_none=False)
         except ValueError:
             return None
         tile = self._tiles.get(position)
@@ -2698,7 +2711,7 @@ class GridMap:
 
     def get_entities_at(self, position: Tuple[int, int]) -> Set[UUID]:
         """Return a defensive UUID snapshot from one authoritative Tile."""
-        self._validate_entity_position(position, allow_none=False)
+        self.validate_entity_position(position, allow_none=False)
         tile = self._tiles.get(position)
         if tile is None:
             return set()
@@ -2717,7 +2730,7 @@ class GridMap:
 
     def get_ordered_entities_at(self, position: Tuple[int, int]) -> Tuple[UUID, ...]:
         """Read settled entity membership, authenticating it before any consumer."""
-        self._validate_entity_position(position, allow_none=False)
+        self.validate_entity_position(position, allow_none=False)
         rows = self._contact_candidate_cells.get(self._spatial_chunk(position))
         row = rows.get(position) if rows is not None else None
         entities = row[0] if row is not None else ()
@@ -3198,6 +3211,9 @@ class GridMap:
         """Capture existing cold owners only after their world mutation commits."""
         if not isinstance(event, SpatialChangeEvent):
             return {}
+        if event.change_type is SpatialChangeType.TILES_CHANGED:
+            return {"tile_states": tuple(self._tiles[row.position].to_world_tile_state()
+                for row in event.tile_states if row.position in self._tiles)}
         if event.change_type is SpatialChangeType.TILE_CHANGED:
             tile = self._tiles.get(event.position)
             if tile is None:
@@ -3778,7 +3794,7 @@ class GridMap:
         errors: list[BaseException] = []
         for change in committed.light_changes:
             try:
-                self._fire_committed_spatial_event(change)
+                self.publish_committed_spatial_event(change)
             except BaseException as error:
                 errors.append(error)
         for effect in committed.effects:
@@ -3840,7 +3856,7 @@ class GridMap:
         if not self._events_enabled:
             return
         assert placement.boundary_direction is not None
-        self._fire_spatial_event(
+        self.publish_spatial_event(
             SpatialChangeEvent.object_changed(
                 placement.position,
                 object_uuid,
@@ -3950,7 +3966,7 @@ class GridMap:
             directional_directions=[boundary.value] if boundary is not None else None,
             directional_channels=sorted(blocked) if boundary is not None else None,
         ).with_updates(object_state=current)
-        self._fire_committed_spatial_event(event)
+        self.publish_committed_spatial_event(event)
 
     def get_objects_at(self, position: Tuple[int, int]) -> Set[UUID]:
         """Return objects from the exact Tile's local center and side bands."""
@@ -4235,7 +4251,7 @@ class GridMap:
             record_action_count("grid.boundary_snapshot.reused_providers", len(structures) - resolved_providers)
         return snapshot
 
-    def _shift_observer_boundaries(self, positions: Collection[Tuple[int, int]],
+    def shift_observer_boundaries(self, positions: Collection[Tuple[int, int]],
                                    previous: BoundarySnapshot) -> BoundarySnapshot:
         """Reconcile a private observer field after unchanged native geometry.
 
@@ -5491,7 +5507,7 @@ class GridMap:
             ),
             parent_event=parent_event,
         )
-        self._fire_committed_spatial_event(event)
+        self.publish_committed_spatial_event(event)
 
     def add_light_source(self, position: Tuple[int, int], bright_radius_feet: int,
                          dim_radius_feet: int, anchor_uuid: Optional[UUID] = None,
@@ -5875,7 +5891,7 @@ class GridMap:
         event = self.snapshot_light_change(changed_positions, parent_event=parent_event,
             source_positions=source_positions)
         if event is not None:
-            self._fire_committed_spatial_event(event)
+            self.publish_committed_spatial_event(event)
 
     def snapshot_light_change(self, changed_positions: List[Tuple[int, int]], *,
                               parent_event: Optional[UUID] = None,
@@ -6007,8 +6023,9 @@ class GridMap:
         self, positions: Set[Tuple[int, int]], parent_event: Optional[UUID] = None,
         *, publish: bool = True,
     ) -> set[Tuple[int, int]]:
-        """Recompute each in-range source once, applying only illumination deltas."""
+        """Recompute each in-range source once and publish one light fact for the cause."""
         all_changed: set[Tuple[int, int]] = set()
+        moved_lit_areas: set[Tuple[int, int]] = set()
         for source in self._light_sources.values():
             if not self._is_light_effectively_active(source):
                 continue
@@ -6055,11 +6072,14 @@ class GridMap:
             if source_changed:
                 self._revise_light_source(source)
             all_changed.update(changed_positions)
-            if publish:
-                self._fire_light_batch_events(changed_positions, parent_event=parent_event,
-                    source_positions=all_positions if source_changed else set())
-            elif changed_positions:
-                self._bump_spatial_revisions(frozenset({SpatialChannel.ILLUMINATION}), set(changed_positions))
+            if source_changed:
+                moved_lit_areas.update(all_positions)
+        # One cause, one light fact: every re-lit source settles together (plan §5.5).
+        if publish:
+            self._fire_light_batch_events(sorted(all_changed), parent_event=parent_event,
+                source_positions=moved_lit_areas)
+        elif all_changed:
+            self._bump_spatial_revisions(frozenset({SpatialChannel.ILLUMINATION}), set(all_changed))
         return all_changed
 
     def get_positions_near_entities(

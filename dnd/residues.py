@@ -106,10 +106,7 @@ class TileResidueCondition(BaseCondition):
         tile = grid.get_tile_by_uuid(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if tile is None:
             return
-        grid.invalidate_spatial_caches(frozenset({SpatialChannel.MOVEMENT}), {tile.position})
-        grid.publish_tile_mechanics_changed(
-            tile.position, source_entity_uuid=tile.uuid, parent_event=event.uuid,
-        )
+        grid.commit_tile_mechanics({tile.position}, source_entity_uuid=tile.uuid, parent_event=event.uuid)
 
     def _apply(self, execution_event: Event):
         tile = get_map().get_tile_by_uuid(self.target_entity_uuid) if self.target_entity_uuid is not None else None

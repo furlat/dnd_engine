@@ -917,7 +917,7 @@ class Move(BaseAction):
                             directional_directions=directions or None,
                             directional_channels=[WorldEdgeChannel.MOVEMENT] if directions and not cell_blocked else None,
                             )
-                        grid._fire_spatial_event(collision_event)
+                        grid.publish_spatial_event(collision_event)
                     termination_reason = MovementTerminationReason.COLLISION
                     break
                 transition_check_seconds += time.perf_counter() - phase_started

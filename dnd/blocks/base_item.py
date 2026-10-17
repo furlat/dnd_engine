@@ -597,7 +597,6 @@ class BaseItem(BaseBlock):
             revision_channels.add(SpatialChannel.PROPAGATION)
         if walking_changed:
             revision_channels.add(SpatialChannel.MOVEMENT)
-        grid.invalidate_spatial_caches(frozenset(revision_channels), placement.positions)
         if optics_changed or propagation_changed or walking_changed:
             event = SpatialChangeEvent.object_changed(
                 position, self.uuid,
@@ -612,7 +611,7 @@ class BaseItem(BaseBlock):
                 object_blocks_propagation=self.blocks_propagation_field,
                 object_is_open=self.get_spatial_open_state(),
             )
-            grid._fire_spatial_event(event)
+            grid.commit_object_blocking(event, frozenset(revision_channels), placement.positions)
 
     def get_position(self) -> Optional[Tuple[int, int]]:
         """Get effective position of this item.
@@ -958,7 +957,7 @@ class BaseItem(BaseBlock):
                 errors.append(error)
         for change in publication.light_changes:
             try:
-                get_map()._fire_committed_spatial_event(change)
+                get_map().publish_committed_spatial_event(change)
             except BaseException as error:
                 errors.append(error)
         if publication.location is not None:

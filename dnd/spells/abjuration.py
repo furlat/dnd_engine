@@ -3746,7 +3746,7 @@ class HolyAuraEffect(BaseCondition):
 
     def on_membership_changed(self, event: Event):
         if self._removed_light is not None:
-            get_map()._fire_committed_spatial_event(self._removed_light)
+            get_map().publish_committed_spatial_event(self._removed_light)
             self._removed_light = None
 
 

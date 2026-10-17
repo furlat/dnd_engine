@@ -29,6 +29,19 @@ from dnd.types.senses import OpticalObscurement
 from tests.engine.test_senses_light_stealth import create_skeleton, reset_senses_state
 
 
+
+def _force_cold_queries(grid, channel: WorldEdgeChannel) -> None:
+    """Drop warm query caches through a public write: toggle an empty Tile's matching blocker."""
+    corner = next(position for position in sorted(grid.get_all_tiles())
+        if not grid.get_objects_at(position) and not grid.get_entities_at(position))
+    tile = grid.get_tile(*corner)
+    assert tile is not None
+    optics = channel is WorldEdgeChannel.OPTICAL
+    for blocked in (True, False):
+        grid.set_tile(*corner, blocks_optics=blocked if optics else tile.blocks_optics,
+            blocks_propagation=tile.blocks_propagation_field if optics else blocked,
+            default_light=tile.default_light)
+
 def cause(source_uuid):
     return Event(event_type=EventType.BASE_ACTION, source_entity_uuid=source_uuid,
                  phase=EventPhase.EFFECT)
@@ -95,7 +108,9 @@ def test_subscriber_revisions_follow_local_geometry_light_and_occupancy():
     grid.set_tile(-1, 0)
     assert grid.observer_spatial_revisions(near).optical > after_move.optical
     assert grid.observer_spatial_revisions(far) == remote_initial
-    grid.invalidate_spatial_caches(frozenset({SpatialChannel.OPTICAL}))
+    # A presence change has unknown coverage (attached contributions), so it
+    # reaches subscribers far from the anchor.
+    mover.suspend_spatial_presence()
     assert grid.observer_spatial_revisions(far).optical > remote_initial.optical
     grid.unsubscribe_entity(near)
     grid.subscribe_to_cells(near, {(0, 0)})
@@ -390,7 +405,7 @@ def test_zero_band_boundary_lifecycle_preserves_native_visibility_choice(channel
     assert set(query(origin, radius)) == expected
     # A cold query must discover retained structural ownership without requiring
     # any surviving tile band, just as the warm placement update does.
-    grid.invalidate_spatial_caches(edge_revision_channels({channel}))
+    _force_cold_queries(grid, channel)
     assert set(query(origin, radius)) == expected
 
     if clear_structure:
@@ -402,7 +417,7 @@ def test_zero_band_boundary_lifecycle_preserves_native_visibility_choice(channel
         grid.remove_object(boundary.uuid)
         assert grid.get_object_placement(boundary.uuid) is None
     assert set(query(origin, radius)) == before
-    grid.invalidate_spatial_caches(edge_revision_channels({channel}))
+    _force_cold_queries(grid, channel)
     assert set(query(origin, radius)) == before
 
 

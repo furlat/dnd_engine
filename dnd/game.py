@@ -62,7 +62,7 @@ class Game:
                 or Entity.get(entity.uuid) is not entity):
             raise ValueError("deployment requires an unowned, absent live identity")
         grid = get_map()
-        grid._validate_entity_position(prepared.position, allow_none=False)
+        grid.validate_entity_position(prepared.position, allow_none=False)
         if not grid.is_walkable_for(*prepared.position, requesting_entity_uuid=entity.uuid):
             raise ValueError("deployment destination is unavailable")
 

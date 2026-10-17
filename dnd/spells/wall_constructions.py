@@ -169,7 +169,7 @@ class WallSection(WorldItem):
         owner = BaseCondition.get(self.wall_owner_uuid)
         if isinstance(owner, SolidWallZone) and owner.applied:
             owner.sections[self.uuid] = self.geometry
-            get_map().invalidate_spatial_caches(owner.spatial_channels(), owner.affected_positions)
+            get_map().spatial_condition_changed(owner)
             change = owner._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
                 previous_positions=set(owner.affected_positions), affected_positions=set(owner.affected_positions),
                 parent_event=parent_event)
@@ -253,7 +253,7 @@ class SolidWallZone(AreaCondition):
         geometry = self.sections.pop(identity, None)
         if geometry is None:
             return
-        get_map().invalidate_spatial_caches(self.spatial_channels(), self.affected_positions)
+        get_map().spatial_condition_changed(self)
         change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
             previous_positions=set(self.affected_positions), affected_positions=set(self.affected_positions),
             parent_event=parent_event)

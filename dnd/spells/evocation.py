@@ -3517,7 +3517,7 @@ class SunbeamEffect(ConcentrationActionMarker):
     def on_membership_changed(self, event: Event) -> None:
         removed, self._removed_light = self._removed_light, None
         if removed is not None:
-            get_map()._fire_committed_spatial_event(removed)
+            get_map().publish_committed_spatial_event(removed)
 
 
 def _sunbeam_direction_error(spell: SpellAction) -> str | None:
@@ -4322,7 +4322,7 @@ class LightEffect(BaseCondition):
     def on_membership_changed(self, event: Event) -> None:
         removed, self._removed_light = self._removed_light, None
         if removed is not None:
-            get_map()._fire_committed_spatial_event(removed)
+            get_map().publish_committed_spatial_event(removed)
 
 
 class Light(SpellAction):
@@ -4465,7 +4465,7 @@ class ContinualFlameCondition(BaseCondition):
     def on_membership_changed(self, event: Event) -> None:
         removed, self._removed_light = self._removed_light, None
         if removed is not None:
-            get_map()._fire_committed_spatial_event(removed)
+            get_map().publish_committed_spatial_event(removed)
 
 
 class ContinualFlame(SpellAction):
@@ -5384,7 +5384,7 @@ class FireShieldEffect(BaseCondition):
     def on_membership_changed(self, event: Event) -> None:
         removed, self._removed_light = self._removed_light, None
         if removed is not None:
-            get_map()._fire_committed_spatial_event(removed)
+            get_map().publish_committed_spatial_event(removed)
 
 
 class FireShield(SpellAction):
@@ -5751,7 +5751,7 @@ class DancingLightsEffect(ConcentrationActionMarker):
 
     def on_membership_changed(self,event: Event) -> None:
         if self._removed_light is not None:
-            get_map()._fire_committed_spatial_event(self._removed_light)
+            get_map().publish_committed_spatial_event(self._removed_light)
             self._removed_light=None
 
 

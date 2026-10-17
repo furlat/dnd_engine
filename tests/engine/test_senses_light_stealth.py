@@ -1339,7 +1339,7 @@ def test_eb_12_026_batched_light_positions_reveal_hidden_entities() -> None:
         ),
     )
 
-    grid._fire_spatial_event(event)
+    grid.publish_spatial_event(event)
 
     assert "Hidden" not in hidden.active_conditions
     assert hidden.stealth_dc is None

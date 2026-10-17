@@ -29,7 +29,6 @@ from dnd.core.aoe import AoEShape, Cone, Cube, Cylinder, Line, Sphere, snapshot_
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
-from dnd.blocks.sensory import spatial_senses_system
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.traps import TrapState
@@ -878,7 +877,7 @@ class SpatialCondition(BaseCondition):
         grid = get_map()
         for change in (*publication.tile_changes, *publication.light_changes):
             try:
-                grid._fire_committed_spatial_event(change)
+                grid.publish_committed_spatial_event(change)
             except BaseException as error:
                 errors.append(error)
         try:
@@ -1004,7 +1003,6 @@ class SpatialCondition(BaseCondition):
             change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
                 previous_positions=set(self.affected_positions), affected_positions=set(self.affected_positions),
                 parent_event=parent_event)
-            spatial_senses_system(change)
             self._complete_change(change)
         return expired
 
@@ -1382,6 +1380,7 @@ class AreaCondition(SpatialCondition):
             return []
         grid = get_map()
         owned: List[Tuple[UUID, UUID]] = []
+        changed: Set[Tuple[int, int]] = set()
         for position in sorted(positions):
             if position in self._terrain_modifiers:
                 continue
@@ -1405,14 +1404,10 @@ class AreaCondition(SpatialCondition):
             self._terrain_modifiers[position] = row
             owned.append(row)
             if tile.get_movement_cost(MovementMode.WALKING) != before:
-                grid.invalidate_spatial_caches(frozenset({SpatialChannel.MOVEMENT}), {position})
-                grid.publish_tile_mechanics_changed(
-                    position,
-                    source_entity_uuid=self.source_entity_uuid,
-                    parent_event=(
-                        parent_event.uuid if parent_event is not None else None
-                    ),
-                )
+                changed.add(position)
+        # One committed traversal fact for the whole install (plan §5.5).
+        grid.commit_tile_mechanics(changed, source_entity_uuid=self.source_entity_uuid,
+            parent_event=parent_event.uuid if parent_event is not None else None)
         return owned
 
     def _remove_terrain_positions(
@@ -1423,6 +1418,7 @@ class AreaCondition(SpatialCondition):
     ) -> None:
         """Remove exactly this condition's walking-cost modifiers."""
         grid = get_map()
+        changed: Set[Tuple[int, int]] = set()
         for position in sorted(positions):
             row = self._terrain_modifiers.pop(position, None)
             if row is None:
@@ -1448,18 +1444,15 @@ class AreaCondition(SpatialCondition):
                 tile is not None
                 and before != tile.get_movement_cost(MovementMode.WALKING)
             ):
-                grid.invalidate_spatial_caches(frozenset({SpatialChannel.MOVEMENT}), {position})
-                change = grid.snapshot_tile_mechanics_change(
-                    position,
-                    source_entity_uuid=self.source_entity_uuid,
-                    parent_event=(
-                        parent_event.uuid if parent_event is not None else None
-                    ),
-                )
-                if self._removal_publication is not None:
-                    self._removal_publication.tile_changes.append(change)
-                else:
-                    grid._fire_committed_spatial_event(change)
+                changed.add(position)
+        # One committed traversal fact for the whole release; a removal
+        # publication keeps it until the removal itself is published.
+        deferred = self._removal_publication is not None
+        change = grid.commit_tile_mechanics(changed, source_entity_uuid=self.source_entity_uuid,
+            parent_event=parent_event.uuid if parent_event is not None else None, publish=not deferred)
+        if deferred and change is not None:
+            assert self._removal_publication is not None
+            self._removal_publication.tile_changes.append(change)
 
     def _apply_light_positions(
         self,
@@ -1539,10 +1532,6 @@ class AreaCondition(SpatialCondition):
             set(self.affected_positions),
             parent_event=effect,
         )
-        # The installed field is a committed spatial change before its separate
-        # appearance callbacks. Publish that observation while this cause is exact;
-        # later injury/visibility changes keep their own native refresh boundary.
-        spatial_senses_system(effect)
         if SpatialEffectTriggerKind.APPEAR in self.trigger_kinds:
             for entity in self._occupants_at(set(self.affected_positions)):
                 if self._admit_trigger(

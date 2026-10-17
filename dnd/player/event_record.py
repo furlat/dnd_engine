@@ -105,7 +105,7 @@ ADDITIVE_FIELDS = {
     HealEvent: {"source_condition_uuid"},
     EntityCreatedEvent: {"healing_blocked", "occupancy_layer", "temporary_hit_points_grant", "summon_origin", "initial_condition_states", "scribed_spell_ids", "permanent_feature_uses"},
     SensoryUpdateEvent: {"observed_changes", "hazardous_cells_changed", "spatial_effects_changed", "spatial_effects_removed"},
-    SpatialChangeEvent: {"commit_event_uuid", "tile_state", "tile_present", "object_state", "previous_occupancy_layer", "occupancy_layer", "terminal_release"},
+    SpatialChangeEvent: {"commit_event_uuid", "tile_state", "tile_states", "tile_present", "object_state", "previous_occupancy_layer", "occupancy_layer", "terminal_release"},
     MovementEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
     JumpEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
     StepMovementEvent: {"movement_mode", "from_layer", "to_layer", "resolved_speed_feet"},
