@@ -138,6 +138,12 @@ def supercover_line_relative(dx: int, dy: int) -> Tuple[Tuple[int, int], ...]:
     return _supercover_line_relative_cached(dx, dy)
 
 
+@lru_cache(maxsize=32768)
+def supercover_cells_relative(dx: int, dy: int) -> frozenset[Tuple[int, int]]:
+    """The cells of `supercover_line_relative(dx, dy)`, for set intersection."""
+    return frozenset(_supercover_line_relative_cached(dx, dy))
+
+
 @lru_cache(maxsize=8192)
 def _supercover_line_cached(
     start: Tuple[int, int],

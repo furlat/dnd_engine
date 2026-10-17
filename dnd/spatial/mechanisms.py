@@ -1,6 +1,6 @@
 """Finite physical trap activations, authored independently of trigger fixtures."""
 
-from typing import Annotated, Literal
+from typing import ClassVar, Annotated, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -12,7 +12,7 @@ from dnd.core.condition_types import DurationType
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.creature_types import DamageType
 from dnd.core.events import Event, EventPhase, EventQueue, EventType, MechanismActivationEvent
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import SpatialCondition
@@ -66,6 +66,7 @@ class TrapSave(BaseModel):
 
 class FiniteTrap(SpatialCondition):
     """One pulse owner; darts, blade strokes and crushers differ through data."""
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Trap mechanism"
     content_ref: ContentRef = DART_LAUNCHER_CONTENT_REF

@@ -13,7 +13,9 @@ from dnd.core.events import (
     Event, EventHandler, EventPhase, EventQueue, EventType, PortalTransferEvent,
     SpatialChangeEvent, Trigger,
 )
-from dnd.core.gridmap import get_map
+from typing import ClassVar
+
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.types.event_facts import GroupEntryKind
@@ -44,6 +46,7 @@ class Portal(SpatialCondition):
     Content identity selects its appearance. State and ground contact select
     its behavior; neither the sprite nor a spell/caster is a gameplay owner.
     """
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Portal"
     description: str = "A magical passage to another location."

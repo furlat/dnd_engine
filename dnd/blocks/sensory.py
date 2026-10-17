@@ -881,6 +881,7 @@ class SpatialSensesSystem:
             and previous_field.revisions.propagation == revisions.propagation
             and revisions.illumination - previous_field.revisions.illumination in (0, 1)
         )
+        surface_candidates: List[Tuple[Tuple[int, int], int, Set[OpticalObscurement]]] = []
         if reuse_ordinary_light:
             # The exact new physical field is already resolved. Ordinary sight
             # has no origin-dependent range class, and this single committed
@@ -938,24 +939,26 @@ class SpatialSensesSystem:
                     # contents. Physical wall FOV, range and light still constrain it.
                     at_surface = grid.get_optical_obscurements_at(position, snapshot=optics) if optics else set()
                     if at_surface:
-                        prefix = supercover_line(origin, position)[:-1]
-                        before_surface: Set[OpticalObscurement] = set()
-                        for cell in prefix:
-                            before_surface.update(grid.get_optical_obscurements_at(cell, snapshot=optics))
-                        potential_normal, potential_special = self._visual_route_modes(
-                            modes, ordinary_sight, distance, before_surface, LightLevel.BRIGHT_LIGHT,
-                        )
-                        light_position = position
-                        if OpticalObscurement.MAGICAL_DARKNESS in at_surface and prefix:
-                            near = grid.get_tile(*prefix[-1])
-                            if near is not None:
-                                light_position = prefix[-1]
-                        if potential_normal or potential_special:
-                            surface_routes[position] = VolumeRay(light_position, potential_normal, bool(potential_special))
+                        # Resolved after the loop, all routes before their surfaces in one batch.
+                        surface_candidates.append((position, distance, at_surface))
                     continue
                 visible[position] = True
                 visual_modes_by_position[position] = establishing_modes
                 effective_light[position] = resolved
+        if surface_candidates:
+            before_surfaces = grid.get_optical_obscurements_on_routes(
+                origin, [position for position, _, _ in surface_candidates], optics, exclude_end=True)
+            for position, distance, at_surface in surface_candidates:
+                potential_normal, potential_special = self._visual_route_modes(
+                    modes, ordinary_sight, distance, before_surfaces[position], LightLevel.BRIGHT_LIGHT,
+                )
+                light_position = position
+                if OpticalObscurement.MAGICAL_DARKNESS in at_surface and position != origin:
+                    near_position = supercover_line(origin, position)[-2]
+                    if grid.get_tile(*near_position) is not None:
+                        light_position = near_position
+                if potential_normal or potential_special:
+                    surface_routes[position] = VolumeRay(light_position, potential_normal, bool(potential_special))
         if diagnostic:
             record_action_timing("sensory.recompute.optical_filtering_ms", phase_started)
             phase_started = time.perf_counter()

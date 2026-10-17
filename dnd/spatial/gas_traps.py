@@ -17,7 +17,9 @@ from dnd.core.events import (
     Damage, Event, EventHandler, EventPhase, EventQueue, EventType,
     MechanismActivationEvent, SpatialChangeEvent, TurnEvent, Trigger,
 )
-from dnd.core.gridmap import get_map
+from typing import ClassVar
+
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
@@ -144,6 +146,7 @@ class GasCloud(AreaCondition):
 
 class GasVent(SpatialCondition):
     """A control-driven emitter; released clouds are independent world owners."""
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Gas vent"
     content_ref: ContentRef = GAS_VENT_CONTENT_REF

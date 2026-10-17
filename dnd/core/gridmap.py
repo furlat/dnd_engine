@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel, Field
 
 from dnd.types.event_facts import LandingKind
-from dnd.core.geometry import (circle_positions, supercover_line, supercover_line_relative,
+from dnd.core.geometry import (circle_positions, supercover_line, supercover_cells_relative,
     supercover_slope_order, supercover_incoming_ranges, supercover_incoming_rank_ranges)
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
@@ -5526,18 +5526,25 @@ class GridMap:
         origin: Tuple[int, int],
         positions: Iterable[Tuple[int, int]],
         snapshot: OpticalSnapshot,
+        *, exclude_end: bool = False,
     ) -> Dict[Tuple[int, int], Set[OpticalObscurement]]:
         """`get_optical_obscurements_on_route` from one origin to many cells.
 
         The snapshot moves into the origin's frame once, so each route is its
         cached relative line checked against it without translating any cell.
+        ``exclude_end`` leaves out the target cell itself (the route before it).
         """
         ox, oy = origin
         relative = {(x - ox, y - oy): owners for (x, y), owners in snapshot.items()}
+        obscured = set(relative)  # a set: `line & obscured` iterates the shorter side in C
         result: Dict[Tuple[int, int], Set[OpticalObscurement]] = {}
         for position in positions:
-            result[position] = {value for offset in supercover_line_relative(position[0] - ox, position[1] - oy)
-                                if offset in relative for values in relative[offset].values() for value in values}
+            dx, dy = position[0] - ox, position[1] - oy
+            crossed = supercover_cells_relative(dx, dy) & obscured
+            if exclude_end and crossed:
+                crossed = crossed - {(dx, dy)}
+            result[position] = ({value for offset in crossed for values in relative[offset].values() for value in values}
+                                if crossed else set())
         return result
 
     def _publish_optical_obscurement_change(

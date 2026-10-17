@@ -4692,6 +4692,7 @@ def build_heroes_feast_object(
 
 class HeroesFeastLifetime(SpatialCondition):
     """Existing world round clock owns this finite prop independently of its caster."""
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
     has_visible_presence: bool = True
     name: str = "Heroes' Feast Lifetime"
     condition_category: ConditionCategory = ConditionCategory.INTERNAL

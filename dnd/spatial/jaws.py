@@ -13,7 +13,9 @@ from dnd.core.events import (
     Event, EventHandler, EventPhase, EventQueue, EventType, MechanismActivationEvent,
     SpatialChangeEvent, Trigger,
 )
-from dnd.core.gridmap import get_map
+from typing import ClassVar
+
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import SpatialCondition
@@ -53,6 +55,7 @@ class JawRestrained(SpatialRestraintSource):
 
 class JawTrap(SpatialCondition):
     """An armed jaw closes once; reset and removal release its exact source."""
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Jaw trap"
     content_ref: ContentRef = JAW_TRAP_CONTENT_REF

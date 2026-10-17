@@ -8,7 +8,9 @@ from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, SpatialChangeEvent, StepMovementEvent, ForcedMovementEvent, MechanismActivationEvent, Trigger
-from dnd.core.gridmap import get_map
+from typing import ClassVar
+
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_controls import linked_item, request_control
@@ -35,6 +37,7 @@ PRESSURE_PLATE_CONTENT_REF = ContentRef(
 
 class PressurePlate(SpatialCondition):
     """Local grounded occupancy produces edges, not a second occupant registry."""
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Pressure Plate"
     description: str = "A pressure-operated floor plate."
@@ -161,6 +164,7 @@ TRIPWIRE_CONTENT_REF = PRESSURE_PLATE_CONTENT_REF.model_copy(update={
 
 class Tripwire(SpatialCondition):
     """A grounded crossing of one authored grid boundary emits one pulse."""
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Tripwire"
     content_ref: ContentRef = TRIPWIRE_CONTENT_REF
