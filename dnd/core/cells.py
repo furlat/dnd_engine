@@ -102,11 +102,12 @@ def _embed(own: Box, box: Box, grid: np.ndarray, layers: list[np.ndarray]) -> tu
 
 
 def cell_layers(mask: CellMask, layers: tuple[CellValues, ...], box: Box) -> tuple[np.ndarray, list[np.ndarray]]:
-    """A set and per-cell values over another box, unpacking the set once for the values that share its cells."""
+    """A set and per-cell values at its cells over another box (zero elsewhere), unpacking the set once
+    for the values that share its cells."""
     own = mask_box(mask)
     if own is None:
         shape = (box[2] - box[0] + 1, box[3] - box[1] + 1)
-        return np.zeros(shape, dtype=bool), [values_array(layer, box)[1] for layer in layers]
+        return np.zeros(shape, dtype=bool), [np.zeros(shape, dtype=np.uint8) for _ in layers]
     grid = _grid(mask)
     full = []
     for layer in layers:
@@ -115,7 +116,7 @@ def cell_layers(mask: CellMask, layers: tuple[CellValues, ...], box: Box) -> tup
             values[grid] = np.frombuffer(layer.values, dtype=np.uint8)
             full.append(values)
         else:
-            full.append(values_array(layer, own)[1])
+            full.append(values_array(layer, own)[1] * grid)
     return _embed(own, box, grid, full)
 
 

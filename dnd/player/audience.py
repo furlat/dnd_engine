@@ -297,9 +297,6 @@ def _stack(members: Iterable[SensesSnapshot], box: Box) -> tuple[np.ndarray, np.
     """Each member's visible cells, light and hazard over a box, one layer per member."""
     rows = [(seen, *layers) for seen, layers in (cell_layers(senses.visible, (senses.effective_light_levels,
         senses.hazardous_cells), box) for senses in members)]
-    shape = (len(rows), box[2] - box[0] + 1, box[3] - box[1] + 1)
-    if not rows:
-        return np.zeros(shape, dtype=bool), np.zeros(shape, dtype=np.uint8), np.zeros(shape, dtype=np.uint8)
     seen, lights, hazards = (np.stack(layer) for layer in zip(*rows))
     return seen, lights, hazards
 
@@ -317,7 +314,7 @@ def _ranked(seen: np.ndarray, lights: np.ndarray, hazards: np.ndarray
     owner = rank.argmax(axis=0)[None]
     visible = np.take_along_axis(rank, owner, axis=0)[0] >= 0
     return (visible, np.take_along_axis(lights, owner, axis=0)[0] * visible,
-            np.take_along_axis(hazards, owner, axis=0)[0] * visible, owner[0].astype(np.uint8))
+            np.take_along_axis(hazards, owner, axis=0)[0] * visible, owner[0].astype(np.uint16))
 
 
 def _composed_view_cells(perception: AudiencePerception) -> tuple[CellMask, CellValues, CellValues]:
@@ -340,7 +337,7 @@ def _cover(current: "AudienceComposition", box: Box) -> None:
     shape = (count, grown[2] - grown[0] + 1, grown[3] - grown[1] + 1)
     seen, lights, hazards = np.zeros(shape, dtype=bool), np.zeros(shape, dtype=np.uint8), np.zeros(shape, dtype=np.uint8)
     shown, shown_light, shown_hazard, shown_owner = (np.zeros(shape[1:], dtype=bool), np.zeros(shape[1:], dtype=np.uint8),
-                                                     np.zeros(shape[1:], dtype=np.uint8), np.zeros(shape[1:], dtype=np.uint8))
+                                                     np.zeros(shape[1:], dtype=np.uint8), np.zeros(shape[1:], dtype=np.uint16))
     if window is not None:
         part = (slice(window[0] - grown[0], window[2] - grown[0] + 1), slice(window[1] - grown[1], window[3] - grown[1] + 1))
         seen[:, part[0], part[1]], lights[:, part[0], part[1]], hazards[:, part[0], part[1]] = (
@@ -447,7 +444,7 @@ class AudienceComposition:
     shown: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=bool))
     shown_light: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=np.uint8))
     shown_hazard: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=np.uint8))
-    shown_owner: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=np.uint8))
+    shown_owner: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=np.uint16))
     entity_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     object_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     effect_members: dict[UUID, set[UUID]] = field(default_factory=dict)

@@ -93,6 +93,27 @@ def test_owner_handover_matches_the_cold_composition():
     assert cells(current.view.visible) == {(0, 0)}
 
 
+def test_hazards_follow_owners_and_a_moving_member_match_the_cold_composition():
+    """A hazard changes no cell's owner; a member's view can move past every cell the seat held."""
+    dim, bright = LightLevel.DIM_LIGHT.value, LightLevel.BRIGHT_LIGHT.value
+    current = check([
+        (0, delta(FIRST, initial=True, visible_cells_added=[(0, 0), (1, 0)],
+            effective_light_levels_changed={(0, 0): dim, (1, 0): dim},
+            hazardous_cells_changed={(0, 0): False, (1, 0): False})),
+        (1, delta(SECOND, initial=True, visible_cells_added=[(1, 0)],
+            effective_light_levels_changed={(1, 0): bright}, hazardous_cells_changed={(1, 0): False})),
+        (2, delta(FIRST, hazardous_cells_changed={(0, 0): True, (1, 0): True})),
+        (3, delta(SECOND, hazardous_cells_changed={(1, 0): True})),
+        (4, delta(FIRST, visible_cells_removed=[(0, 0), (1, 0)], visible_cells_added=[(8, 3), (9, 3)],
+            effective_light_levels_changed={(8, 3): dim, (9, 3): bright},
+            hazardous_cells_changed={(8, 3): True, (9, 3): False})),
+        (5, delta(FIRST, hazardous_cells_changed={(9, 3): True})),
+    ])
+    assert cells(current.view.visible) == {(1, 0), (8, 3), (9, 3)}
+    assert {position: value_at(current.view.hazardous_cells, position) for position in ((1, 0), (8, 3), (9, 3))} == {
+        (1, 0): 1, (8, 3): 1, (9, 3): 1}
+
+
 def test_empty_delta_renews_absence_against_older_positive_evidence():
     current = check([
         (0, delta(FIRST, initial=True, visible_cells_added=[(0, 0)],
