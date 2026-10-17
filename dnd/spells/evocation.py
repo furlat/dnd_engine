@@ -86,6 +86,7 @@ from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.item_types import ItemEffectPresentationState, ItemIntegrity
 from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, SpatialEffectInteractionEvent
 from dnd.spatial.area_reach import ReachStage, resolve_staged_area
+from dnd.spatial.environmental_conditions import IceSurface
 from dnd.spatial.ignition import ignite_surface_contacts, apply_elemental_surface_contacts, resolve_interaction
 from dnd.types.world import OccupancyLayer
 from dnd.types.abilities import AbilityName
@@ -2599,7 +2600,6 @@ from dnd.types.spatial_effects import (
     SpatialEffectOccupancyPolicy,
     SpatialEffectTriggerKind,
 )
-from dnd.spatial.environmental_conditions import IceSurface
 
 
 GUST_OF_WIND_ZONE_CONTENT_REF = ContentRef(

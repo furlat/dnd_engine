@@ -35,6 +35,8 @@ def build_creatable_models(model: type[CreatesModels]) -> None:
     `creates` here, so the products it makes later in a gameplay operation are
     already built.
     """
+    if not model.creates:
+        return
     pending = list(model.creates)
     seen: set[type[CreatesModels]] = set()
     while pending:
