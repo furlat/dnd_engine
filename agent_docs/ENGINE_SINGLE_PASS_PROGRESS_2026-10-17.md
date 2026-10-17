@@ -202,3 +202,23 @@ Hard rules:
     - Publication: casts much faster (Fireball 443 → 165 ms); drops and walks 10–20 % slower (PV1b investigates).
   - **PV1a-2 item −1:** the cold identity-grant memo (cleared at every perception write); contacts in evidence order; `test_eb_09_008` now expects the evidence order (the old expectation was set iteration order).
   - **PV1a-2 item 0:** the view split into sight and light stages by declared inputs, and passive perception read before the settlement's world (fixes a stale contact table under nested placement). Sight solves per move: Gust 90 → 1, Spirit Guardians 270 → 3. Move ms are not yet improved: contacts, fixtures and emit still run per observer.
+- 2026-10-17: **Fully merged head bea589ae9** (PR, PV1a-2 move work, PS schema builds merged).
+  - One loaded run per case. Baseline values are 7f836e17b medians.
+
+    | Row | Baseline ms | Now ms | Without the gen-2 pass |
+    | --- | --- | --- | --- |
+    | Sleet cast | 513 | 577 | ~370 |
+    | Sleet drop | 769 | 314 | 314 |
+    | Fireball | 323 | 514 | ~300 |
+    | Circle of Death | 334 | 496 | ~274 |
+    | Ice Storm | 203 | 364 | ~162 |
+    | Gust move | ~95 | ~136 | ~136 |
+    | Spirit Guardians move | 233–308 | 355–394 | 355–394 |
+    | Choices miss | 252 | 173 | 173 |
+    | Caster Command | 668 | 313 | 313 |
+    | AI first step | ~300 | 152 | 152 |
+
+  - Every run carries one gen-2 pass (202–222 ms) in one of the first sizeable ops after Start. The worker's `gc.collect(); gc.freeze()` runs at boot, before Start creates ~540K objects.
+  - Moves are still slower than baseline (PV1a-2: one settlement per step, approved).
+  - Publication is now 130–280 ms on casts (PV1b).
+  - Nothing is under the 100 ms ceiling yet.
