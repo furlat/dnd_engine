@@ -36,6 +36,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.subjective_combat_log import project_combat_log
 from dnd.entity import Entity
+from dnd.blocks.sensory import spatial_senses_system
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.controller import (
     Controller,
@@ -96,7 +97,11 @@ def _compute_perceivers(event: Event) -> Set[str]:
 
 
 def _compute_identified_entity_observers(event: Event) -> Dict[str, Set[str]]:
-    """Capture which observers identify each entity participating in an event."""
+    """Capture which observers identify each entity participating in an event.
+
+    A participant identifies itself; an observer subscribed to its cell
+    identifies it when the participant is among that observer's contacts.
+    """
     grid = get_map()
     grants: Dict[str, Set[str]] = {}
     participant_uuids = {
@@ -106,19 +111,11 @@ def _compute_identified_entity_observers(event: Event) -> Dict[str, Set[str]]:
     }
 
     for participant_uuid in participant_uuids:
-        observer_uuids = {participant_uuid}
         position = grid.get_entity_position(participant_uuid)
-        if position is not None:
-            observer_uuids.update(grid.get_subscribers_at(position))
-
-        identified_by: Set[str] = set()
-        for observer_uuid in observer_uuids:
-            observer = Entity.get(observer_uuid)
-            if observer is None:
-                continue
-            if observer_uuid == participant_uuid or participant_uuid in observer.senses.entities:
-                identified_by.add(str(observer_uuid))
-        grants[str(participant_uuid)] = identified_by
+        holders = (spatial_senses_system.contact_holders(participant_uuid, grid.subscribers_view_at(position))
+                   if position is not None else set())
+        holders.add(participant_uuid)
+        grants[str(participant_uuid)] = {str(observer) for observer in holders if Entity.get(observer) is not None}
 
     return grants
 

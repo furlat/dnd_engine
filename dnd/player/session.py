@@ -466,8 +466,8 @@ def _operation(session: Session, start_cursor: int, boundary: AdvanceResult | No
     appends = tuple(CombatLogAppend(generation=EventQueue.generation_id(), observer_uuid=audience.observers[0],
         encounter_log_index=index, operation_end_cursor=end_cursor, entry=projected)
         for index, entry in originals if (projected := project_combat_log(entry,
-            controlled_entity_uuids=frozenset(map(str, audience.controlled)),
-            observer_entity_uuids=frozenset(map(str, audience.observers)))) is not None)
+            controlled_entity_uuids=audience.controlled_ids,
+            observer_entity_uuids=audience.observer_ids)) is not None)
     sheets = _snapshot_sheets(session, session.player_uuids)
     hud = tuple((key, snapshot_player_hud(session, audience=value, evaluated_sheets=sheets))
                 for key, value in session.seats.items())

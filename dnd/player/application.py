@@ -99,8 +99,8 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
         appends = tuple(CombatLogAppend(generation=prior.generation, observer_uuid=prior.observer_uuid,
             encounter_log_index=index, operation_end_cursor=operation.end_cursor, entry=entry)
             for index, original in operation.original_logs if (entry := project_combat_log(original,
-                controlled_entity_uuids=frozenset(map(str, audience.controlled)),
-                observer_entity_uuids=frozenset(map(str, audience.observers)), known_entity_names=names,
+                controlled_entity_uuids=audience.controlled_ids,
+                observer_entity_uuids=audience.observer_ids, known_entity_names=names,
                 known_content_ids=known_content)) is not None)
         hud, appends = project_after_values(runtime.projection, hud_by_seat[seat], appends)
         if not catalog_changed:

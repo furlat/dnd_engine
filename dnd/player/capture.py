@@ -331,8 +331,8 @@ def capture_interval(
         dispositions.append((index, disposition))
         projected = project_combat_log(
             event.combat_log,
-            controlled_entity_uuids=frozenset(map(str, audience.controlled)),
-            observer_entity_uuids=frozenset(map(str, audience.observers)),
+            controlled_entity_uuids=audience.controlled_ids,
+            observer_entity_uuids=audience.observer_ids,
         )
         if projected is not None:
             subjective.append(SubjectiveTextRow(index, projected.compact))
@@ -685,8 +685,8 @@ def _retained_event(event: Event, audience: PlayerAudience,
     projected_log = project_combat_log(
         event.combat_log, known_entity_names=known_entity_names, retained_entries=retained_entries,
         known_connector_uuids=known_connector_uuids, known_content_ids=known_content_ids,
-        controlled_entity_uuids=frozenset(map(str, audience.controlled)),
-        observer_entity_uuids=frozenset(map(str, audience.observers)),
+        controlled_entity_uuids=audience.controlled_ids,
+        observer_entity_uuids=audience.observer_ids,
     )
     controls = _controller_redaction(event, audience)
     key = (event.uuid, omit_sensory_payload, controls)

@@ -21,6 +21,9 @@ class PlayerAudience:
     # Membership views of the two tuples: one hash per check instead of a tuple scan.
     _controlled_set: frozenset[UUID] = field(init=False, repr=False, compare=False)
     _observer_set: frozenset[UUID] = field(init=False, repr=False, compare=False)
+    # The same members as the string identities combat logs carry.
+    _controlled_ids: frozenset[str] = field(init=False, repr=False, compare=False)
+    _observer_ids: frozenset[str] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if (not self.observers or len(set(self.observers)) != len(self.observers)
@@ -28,6 +31,16 @@ class PlayerAudience:
             raise ValueError("Audience requires unique observers/controlled actors and a nonnegative revision")
         object.__setattr__(self, "_controlled_set", frozenset(self.controlled))
         object.__setattr__(self, "_observer_set", frozenset(self.observers))
+        object.__setattr__(self, "_controlled_ids", frozenset(map(str, self.controlled)))
+        object.__setattr__(self, "_observer_ids", frozenset(map(str, self.observers)))
+
+    @property
+    def controlled_ids(self) -> frozenset[str]:
+        return self._controlled_ids
+
+    @property
+    def observer_ids(self) -> frozenset[str]:
+        return self._observer_ids
 
     def controls(self, identity: UUID | None) -> bool:
         return identity in self._controlled_set
@@ -36,7 +49,7 @@ class PlayerAudience:
         return identity in self._observer_set
 
     def granted(self, observers: set[str]) -> bool:
-        return any(str(identity) in observers for identity in self.observers)
+        return not self.observer_ids.isdisjoint(observers)
 
 
 def resolve_audience(observer_uuid: UUID, audience: PlayerAudience | None) -> PlayerAudience:
