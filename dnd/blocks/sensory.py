@@ -144,6 +144,7 @@ class Senses(BaseBlock):
     _field: Optional[ObserverField] = PrivateAttr(default=None)
     _effects_by_position: Optional[Dict[Tuple[int, int], Set[UUID]]] = PrivateAttr(default=None)
     _active_effects: Set[UUID] = PrivateAttr(default_factory=set)
+    _light_epoch: Optional[int] = PrivateAttr(default=None)
 
     @property
     def path_revision(self) -> int:
@@ -634,13 +635,13 @@ def emit_sensory_update_delta(
     return sensory_event
 
 
-@dataclass(frozen=True)
+@dataclass
 class ObserverFootprint:
-    """Indexed facts used only to select candidate observers."""
+    """Indexed facts used only to select candidate observers, kept in step with the reverse indexes."""
 
-    known_path_positions: frozenset[Tuple[int, int]]
-    entity_uuids: frozenset[UUID]
-    object_uuids: frozenset[UUID]
+    known_path_positions: Set[Tuple[int, int]]
+    entity_uuids: Set[UUID]
+    object_uuids: Set[UUID]
 
 
 @dataclass
@@ -739,6 +740,17 @@ class SpatialSensesSystem:
             self._absorbing_light = False
         pending, self._pending = self._pending, {}
         self._covered_facts, self._covered_observers = frozenset(group.completes_after), frozenset(pending)
+        # A zone change opened in the group completes right after it and its
+        # covered observers skip it then: they settle its cells now, with the
+        # group's own facts.
+        for lineage in group.completes_after:
+            versions = EventQueue.get_events_by_lineage(lineage)
+            if not versions:
+                continue
+            for observer_uuid in self.candidate_observer_uuids(versions[-1]):
+                settlement = pending.get(observer_uuid)
+                if settlement is not None:
+                    settlement.events.insert(0, versions[-1])
         if not pending:
             return
         root = EventQueue.get_event_by_uuid(root_uuid) if root_uuid is not None else None
@@ -1632,13 +1644,9 @@ class SpatialSensesSystem:
         if senses is None:
             return
         new = ObserverFootprint(
-            known_path_positions=frozenset(
-                set(senses.visible)
-                | set(senses.paths)
-                | set(senses.safe_paths)
-            ),
-            entity_uuids=frozenset(senses.entities),
-            object_uuids=frozenset(senses.objects),
+            known_path_positions=set(senses.visible) | senses.paths.keys() | senses.safe_paths.keys(),
+            entity_uuids=set(senses.entities),
+            object_uuids=set(senses.objects),
         )
         old = self.footprints_by_observer.get(observer_uuid)
         if old == new:
@@ -1647,6 +1655,33 @@ class SpatialSensesSystem:
             self._remove_footprint(observer_uuid, old, retained=new)
         self._add_footprint(observer_uuid, new, previous=old)
         self.footprints_by_observer[observer_uuid] = new
+
+    def _refresh_footprint_scope(self, observer_uuid: UUID, senses: Senses, positions: Iterable[Tuple[int, int]],
+                                 entities: Iterable[UUID], objects: Iterable[UUID]) -> None:
+        """Synchronize the reverse indexes over the only cells and contacts a delta changed."""
+        footprint = self.footprints_by_observer.get(observer_uuid)
+        if footprint is None:
+            self.refresh_observer(observer_uuid)
+            return
+        for position in positions:
+            self._sync_footprint(self.observers_by_known_position, footprint.known_path_positions, position,
+                observer_uuid, position in senses.visible or position in senses.paths or position in senses.safe_paths)
+        for identity in entities:
+            self._sync_footprint(self.observers_by_entity, footprint.entity_uuids, identity, observer_uuid,
+                identity in senses.entities)
+        for identity in objects:
+            self._sync_footprint(self.observers_by_object, footprint.object_uuids, identity, observer_uuid,
+                identity in senses.objects)
+
+    def _sync_footprint(self, index: DefaultDict[K, Set[UUID]], members: Set[K], key: K,
+                        observer_uuid: UUID, present: bool) -> None:
+        if present:
+            if key not in members:
+                members.add(key)
+                index[key].add(observer_uuid)
+        elif key in members:
+            members.discard(key)
+            self._discard_reverse(index, key, observer_uuid)
 
     def candidate_observer_uuids(self, event: Event) -> Set[UUID]:
         """Return a conservative indexed observer set for one completion."""
@@ -1844,7 +1879,7 @@ class SpatialSensesSystem:
                 else:
                     senses.objects[identity] = contact
             if gated_objects:
-                self.refresh_observer(observer_uuid)
+                self._refresh_footprint_scope(observer_uuid, senses, (), (), gated_objects)
             # A child light completion can already have refreshed the moving
             # observer at this committed position. Reuse only a fully current
             # field; the parent still publishes its own delta/path boundary.
@@ -1985,16 +2020,36 @@ class SpatialSensesSystem:
         return False
 
     @staticmethod
-    def _refresh_light_sources(observer_uuid: UUID, senses: Senses) -> None:
-        """Retain compact emitter descriptors; cell illumination has its native events."""
+    def _refresh_light_sources(
+        observer_uuid: UUID, senses: Senses,
+        scope: Optional[Tuple[Iterable[Tuple[int, int]], Iterable[UUID], Iterable[UUID]]] = None,
+    ) -> None:
+        """Retain compact emitter descriptors; cell illumination has its native events.
+
+        With a delta's scope (the only cells and contacts it changed), only
+        emitters revised since this observer's last refresh, lighting those
+        cells, or attached to those contacts can change their descriptor.
+        """
         grid = get_map()
-        visible = {position for position, value in senses.visible.items() if value}
-        sources = grid.observe_light_sources(observer_uuid, visible, senses.entities, senses.objects,
-            senses.light_sources)
-        for identity, previous in senses.light_sources.items():
+        candidates = None
+        if scope is not None and senses._light_epoch is not None:
+            candidates = grid.light_sources_changed_since(senses._light_epoch)
+            if candidates is not None:
+                positions, entities, objects = scope
+                candidates |= grid.light_sources_at(positions)
+                for identity in (*entities, *objects):
+                    block = BaseBlock.get(identity)
+                    if block is not None:
+                        candidates |= block.get_attached_light_sources()
+        senses._light_epoch = grid.light_epoch
+        previous = senses.light_sources
+        sources = grid.observe_light_sources(observer_uuid, senses.visible.keys(), senses.entities, senses.objects,
+            previous, candidates=candidates)
+        for identity in (previous if candidates is None else candidates & previous.keys()):
             if identity not in sources:
-                senses.light_source_removals[identity] = max(previous.revision, grid.light_source_revision(identity))
-        for identity in sources:
+                senses.light_source_removals[identity] = max(previous[identity].revision,
+                    grid.light_source_revision(identity))
+        for identity in (sources if candidates is None else candidates & sources.keys()):
             senses.light_source_removals.pop(identity, None)
         senses.light_sources = sources
 
@@ -2189,7 +2244,7 @@ class SpatialSensesSystem:
         before = replace(before, spatial_effects={identity: value for identity, value in effect_before.items()
             if value is not None}, hazardous_cells={position: value
             for position, value in hazard_before.items() if value is not None})
-        self._refresh_light_sources(observer_uuid, senses)
+        self._refresh_light_sources(observer_uuid, senses, (positions, entities, objects))
         after = _capture_senses_transition(senses, positions & senses.seen,
             positions=positions, entities=entities, objects=objects, effects=set(effect_before))
         after = replace(after, hazardous_cells={position: senses.hazardous_cells[position]
@@ -2198,7 +2253,7 @@ class SpatialSensesSystem:
         # paths: the observer's footprint can change only if they did.
         if (before.visible != after.visible or before.entities.keys() != after.entities.keys()
                 or before.objects.keys() != after.objects.keys()):
-            self.refresh_observer(observer_uuid)
+            self._refresh_footprint_scope(observer_uuid, senses, positions, entities, objects)
         if (before.visible != after.visible or before.seen != after.seen
                 or before.entities != after.entities or before.objects != after.objects
                 or before.hazardous_cells != after.hazardous_cells or before.spatial_effects != after.spatial_effects
@@ -2280,17 +2335,9 @@ class SpatialSensesSystem:
         if contact_changed:
             if contact is None:
                 senses.entities.pop(subject_uuid, None)
-                self._discard_reverse(self.observers_by_entity, subject_uuid, observer_uuid)
             else:
                 senses.entities[subject_uuid] = contact
-                self.observers_by_entity[subject_uuid].add(observer_uuid)
-            if (before is None) != (contact is None):
-                footprint = self.footprints_by_observer[observer_uuid]
-                self.footprints_by_observer[observer_uuid] = ObserverFootprint(
-                    known_path_positions=footprint.known_path_positions,
-                    entity_uuids=frozenset(senses.entities),
-                    object_uuids=footprint.object_uuids,
-                )
+            self._refresh_footprint_scope(observer_uuid, senses, (), (subject_uuid,), ())
         paths_were_dirty = senses._paths_dirty
         if contact_changed or (
             event.senses_hint is not None and event.senses_hint.requires_paths
@@ -2302,7 +2349,7 @@ class SpatialSensesSystem:
         if revisions.occupancy == field.revisions.occupancy + 1 and self._covers_occupancy(observer_uuid, event):
             senses._field = replace(field, revisions=revisions)
         if contact_changed:
-            self._refresh_light_sources(observer_uuid, senses)
+            self._refresh_light_sources(observer_uuid, senses, ((), (subject_uuid,), ()))
         lights = {identity: value for identity, value in senses.light_sources.items()
             if lights_before.get(identity) != value}
         removals = {identity: revision for identity, revision in senses.light_source_removals.items()

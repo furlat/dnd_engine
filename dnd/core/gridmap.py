@@ -271,6 +271,11 @@ class GridMap:
 
         self._light_sources: Dict[UUID, LightSourceData] = {}
         self._light_source_revisions: Dict[UUID, int] = {}
+        # Every emitter revision in order (epoch, emitter); never reset, so an
+        # observer's last epoch names exactly the emitters changed since.
+        self._light_epoch = 0
+        self._light_changes: List[Tuple[int, UUID]] = []
+        self._light_changes_floor = 0
         self._block_light_suppressions: DefaultDict[UUID, Set[str]] = defaultdict(set)
         self._optical_obscurements_by_position: DefaultDict[
             Tuple[int, int], Dict[UUID, OpticalObscurement]
@@ -5660,29 +5665,57 @@ class GridMap:
         source.revision += 1
         source.base_height_steps = self._light_height(source)
         self._light_source_revisions[source.uuid] = source.revision
+        self._light_epoch += 1
+        self._light_changes.append((self._light_epoch, source.uuid))
+        if len(self._light_changes) > 4096:
+            del self._light_changes[:2048]
+            self._light_changes_floor = self._light_changes[0][0] - 1
+
+    @property
+    def light_epoch(self) -> int:
+        """The latest emitter revision's position in the change order."""
+        return self._light_epoch
+
+    def light_sources_changed_since(self, epoch: int) -> Optional[Set[UUID]]:
+        """Emitters revised after this epoch; None when the retained order no longer reaches it."""
+        if epoch < self._light_changes_floor:
+            return None
+        start = bisect_right(self._light_changes, epoch, key=lambda row: row[0])
+        return {identity for _, identity in self._light_changes[start:]}
+
+    def light_sources_at(self, positions: Iterable[Tuple[int, int]]) -> Set[UUID]:
+        """Emitters currently contributing illumination at these cells."""
+        tiles = self._tiles
+        return {identity for position in positions if (tile := tiles.get(position)) is not None
+                for identity in tile._light.illuminations}
 
     def light_source_revision(self, identity: UUID) -> int:
         """Current optical version, retained after an emitter is extinguished."""
         return self._light_source_revisions.get(identity, 0)
 
-    def observe_light_sources(self, observer_uuid: UUID, visible: set[Tuple[int, int]],
+    def observe_light_sources(self, observer_uuid: UUID, visible: AbstractSet[Tuple[int, int]],
             entities: Dict[UUID, PerceivedContact], objects: Dict[UUID, PerceivedContact],
             previous: Optional[Dict[UUID, PerceivedLightSource]] = None,
+            *, candidates: Optional[Set[UUID]] = None,
             ) -> Dict[UUID, PerceivedLightSource]:
         """Expose contributing emitter descriptors, never hidden inventory IDs.
 
         The renderer needs an emitter, not another per-cell illumination map.
         Existing tile contributions bound discovery when remote sources grow.
+        With ``candidates``, only those emitters are re-observed: every other
+        previous descriptor is kept, its inputs unchanged.
         """
-        if len(self._light_sources) <= len(visible):
-            candidates = self._light_sources.keys()
+        result = {}
+        if candidates is not None:
+            result = {identity: source for identity, source in (previous or {}).items() if identity not in candidates}
+        elif len(self._light_sources) <= len(visible):
+            candidates = set(self._light_sources)
         else:
             candidates = set()
             for position in visible:
                 tile = self._tiles.get(position)
                 if tile is not None:
                     candidates.update(tile._light.illuminations)
-        result = {}
         for identity in candidates:
             source = self._light_sources.get(identity)
             if source is None or not self._is_light_effectively_active(source):
@@ -6350,6 +6383,8 @@ class GridMap:
         self._contact_candidate_cells.clear()
         self._light_sources.clear()
         self._light_source_revisions.clear()
+        self._light_changes.clear()
+        self._light_changes_floor = self._light_epoch
         self._block_light_suppressions.clear()
         self._optical_obscurements_by_position.clear()
         self._optical_obscurement_positions_by_source.clear()
