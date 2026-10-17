@@ -86,8 +86,8 @@ def test_a_group_settles_each_affected_observer_once_and_matches_a_cold_recomput
     with _counting() as counts:
         with EventQueue.group(GroupEntryKind.AREA_APPLICATION):
             _changes(observers[0])
-            assert counts["sensory.full_recompute"] == 0
-    assert counts["sensory.full_recompute"] <= len(observers)
+            assert counts["sensory.observer_settled"] == 0
+    assert counts["sensory.observer_settled"] <= len(observers)
     light_facts = [event for _, event in EventQueue.iter_events_since(cursor)
         if event.event_type in (EventType.SPATIAL_LIGHT_CHANGED, EventType.SPATIAL_LIGHT_SOURCES_CHANGED)
         and event.phase is EventPhase.COMPLETION]
@@ -101,8 +101,8 @@ def test_nested_entries_join_the_open_group_and_settle_at_the_outermost_close() 
         with EventQueue.group(GroupEntryKind.AREA_APPLICATION):
             with EventQueue.group(GroupEntryKind.ZONE_INSTALL):
                 _changes(observers[0])
-            assert counts["sensory.full_recompute"] == 0
-    assert counts["sensory.full_recompute"] <= len(observers)
+            assert counts["sensory.observer_settled"] == 0
+    assert counts["sensory.observer_settled"] <= len(observers)
     assert_matches_cold_recompute(*observers)
 
 
@@ -111,7 +111,7 @@ def test_the_same_changes_outside_a_group_settle_per_fact_and_agree() -> None:
     observers = _world()
     with _counting() as counts:
         _changes(observers[0])
-    assert counts["sensory.full_recompute"] > len(observers)
+    assert counts["sensory.observer_settled"] > len(observers)
     assert_matches_cold_recompute(*observers)
 
 
