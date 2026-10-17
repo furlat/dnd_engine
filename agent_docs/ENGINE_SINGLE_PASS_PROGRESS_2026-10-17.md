@@ -137,3 +137,7 @@ Hard rules:
     - GC alarm: a ~300 ms gen-2 pause still lands inside the Fireball and Circle of Death publication.
   - **Conflict resolution (P5 × PD2, `entity.py` `_position_preview_facts`):** PD2's per-call snapshot was kept. Its context still keys `movement_revision`, which P5 had dropped: correct, possibly over-invalidating.
   - **Earlier sign-off items (PD1c).** Stone-escape order; Opulent Revival no longer revives off-grid; Turning, Preserve Life, Sunder and Opulent now process targets in (position, uuid) order; the Forcecage preview no longer checks `is_deployed` on perceived contacts.
+- 2026-10-17: **Pre-existing perception bugs found by P5, assigned to PV1a.**
+  1. Removing a non-wall optical zone (Wall of Fire, Wall of Thorns) does not re-light, so the light stays stale and observer views are wrong.
+  2. `commit_entity_presence`'s anchor scan assumes that no entity-anchored zone blocks optics, and nothing checks it.
+  Both get failing-first tests.
