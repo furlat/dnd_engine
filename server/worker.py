@@ -22,9 +22,8 @@ from dnd.player.commands import ActionSelection, CommandRejected
 from dnd.player.content import UIContentManifest
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.selection import selection_target_pool
-from dnd.player.choice_projection import project_selection_preview
 from dnd.player.session import (Session, advance_controller, close_session, create_authored_session, create_session,
-    _player_choices_for_transport, end_player_turn, equip_player_item, execute_player_action,
+    _player_choices_for_transport, encoded_player_choices, end_player_turn, equip_player_item, execute_player_action,
     preview_player_selection, toggle_player_handler, unequip_player_item, prepare_player_spells, study_player_spell_mastery)
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_catalog import encounter_recipe
@@ -158,8 +157,8 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
             query.discovery_generation, query.selection)
         response = PreviewResponse(**runtime.publications[request.seat_id].cursor.model_dump(exclude={'sequence'}),
             state_revision=query.state_revision, request=query,
-            preview=project_selection_preview(preview_player_selection(session, query.actor_uuid, row, selected, extra_positions,
-                prefer_safe=query.selection.prefer_safe, cast_at_level=query.selection.cast_at_level)))
+            preview=preview_player_selection(session, query.actor_uuid, row, selected, extra_positions,
+                prefer_safe=query.selection.prefer_safe, cast_at_level=query.selection.cast_at_level))
         return Reply(has_response=True), (), response
     previous_hud = {seat: view.latest.hud_snapshot for seat, view in runtime.audiences.items()}
     if isinstance(request, Advance):
@@ -220,6 +219,18 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
     return Reply(publications=tuple(publications), needs_advance=needs_advance(session)), tuple(records), None
 
 
+def response_bytes(session: Session, response: BaseModel) -> bytes:
+    """One response's wire bytes. Choices reuses the encoding of its retained choices (plan PD2).
+
+    `choices` is the response's last field, so the envelope without it, reopened,
+    followed by that encoding is byte-identical to encoding the whole.
+    """
+    if isinstance(response, ChoicesResponse):
+        envelope = response.model_dump_json(exclude={'choices'}).encode()
+        return envelope[:-1] + b',"choices":' + encoded_player_choices(session, response.choices) + b'}'
+    return response.model_dump_json().encode()
+
+
 def main() -> None:
     output = sys.stdout.buffer
     runtime = None
@@ -229,7 +240,7 @@ def main() -> None:
                 request = REQUEST_CODEC.validate_json(payload)
                 before = EventQueue.event_cursor()
                 started = perf_counter()
-                response = None
+                response = encoded = None
                 try:
                     if isinstance(request, Close):
                         break
@@ -246,11 +257,12 @@ def main() -> None:
                         if not isinstance(request, Start):
                             raise ValueError('Native owner has not started')
                         runtime, reply, records = start(request)
-                        response = ContentResponse(revision=next(iter(runtime.publications.values())).content_revision,
+                        encoded = ContentResponse(revision=next(iter(runtime.publications.values())).content_revision,
                             descriptors=tuple(descriptor for _, descriptor in runtime.catalog.content
-                                if descriptor.visibility is ContentVisibility.PUBLIC))
+                                if descriptor.visibility is ContentVisibility.PUBLIC)).model_dump_json().encode()
                     else:
                         reply, records, response = dispatch(runtime, request)
+                        encoded = None if response is None else response_bytes(runtime.session, response)
                 except CommandRejected as error:
                     if EventQueue.event_cursor() != before:
                         raise RuntimeError('A command rejected after mutating native state') from error
@@ -258,19 +270,18 @@ def main() -> None:
                     reason = code if code in ('stale_state', 'stale_discovery', 'not_your_turn') else 'invalid_selection'
                     reply = Reply(rejection=reason, needs_advance=needs_advance(runtime.session) if runtime is not None else False)
                     records = ()
-                response_bytes = response.model_dump_json().encode() if response is not None else None
-                if response_bytes is not None and len(response_bytes) > MAX_PACKET_BYTES and isinstance(request, (Choices, Preview)):
+                if encoded is not None and len(encoded) > MAX_PACKET_BYTES and isinstance(request, (Choices, Preview)):
                     reply = Reply(query_error='response_too_large')
-                    response_bytes = None
+                    encoded = None
                 reply = reply.model_copy(update={'elapsed_ms': (perf_counter() - started) * 1000})
                 write_packet(output, reply.model_dump_json().encode())
                 for record in records:
                     write_packet(output, record.model_dump_json().encode())
-                if response_bytes is not None:
-                    write_packet(output, response_bytes)
+                if encoded is not None:
+                    write_packet(output, encoded)
                 # Do not hold the preceding game's decoded command/results at
                 # the next EndGame boundary. Loop variables also retain values.
-                request = response = response_bytes = reply = records = None
+                request = response = encoded = reply = records = None
                 record = None
         finally:
             if runtime is not None:
