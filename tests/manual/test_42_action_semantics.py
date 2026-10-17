@@ -516,7 +516,7 @@ def test_light_and_sense_spell_profiles_declare_guaranteed_information_with_cond
 ) -> None:
     """Positive information spells separate certain setup from possible discoveries."""
     action = action_type(source_entity_uuid=uuid4())
-    profile = action.get_world_effect_profile(None)
+    profile = action.get_world_effect_profile()
 
     assert profile is not None
     assert profile.semantic_id == semantic_id
@@ -562,7 +562,7 @@ def test_concealment_spell_profiles_create_vision_blockers_without_positive_reve
 ) -> None:
     """Darkness and fog advertise concealment, never a positive reveal effect."""
     action = action_type(source_entity_uuid=uuid4())
-    profile = action.get_world_effect_profile(None)
+    profile = action.get_world_effect_profile()
 
     assert profile is not None
     assert profile.semantic_id == semantic_id
@@ -602,9 +602,9 @@ def test_concealment_spell_profiles_create_vision_blockers_without_positive_reve
 
 def test_daylight_removes_only_overlapping_magical_darkness_blockers() -> None:
     """Daylight's conditional topology effect does not promise to remove fog."""
-    daylight = Daylight(source_entity_uuid=uuid4()).get_world_effect_profile(None)
-    darkness = Darkness(source_entity_uuid=uuid4()).get_world_effect_profile(None)
-    fog = FogCloud(source_entity_uuid=uuid4()).get_world_effect_profile(None)
+    daylight = Daylight(source_entity_uuid=uuid4()).get_world_effect_profile()
+    darkness = Darkness(source_entity_uuid=uuid4()).get_world_effect_profile()
+    fog = FogCloud(source_entity_uuid=uuid4()).get_world_effect_profile()
 
     assert daylight is not None
     assert darkness is not None
@@ -625,8 +625,8 @@ def test_daylight_removes_only_overlapping_magical_darkness_blockers() -> None:
 
 def test_fog_cloud_world_effect_radius_tracks_cast_slot() -> None:
     """Fog Cloud's disclosed region follows its runtime upcast radius formula."""
-    base = FogCloud(source_entity_uuid=uuid4(), cast_at_level=1).get_world_effect_profile(None)
-    upcast = FogCloud(source_entity_uuid=uuid4(), cast_at_level=3).get_world_effect_profile(None)
+    base = FogCloud(source_entity_uuid=uuid4(), cast_at_level=1).get_world_effect_profile()
+    upcast = FogCloud(source_entity_uuid=uuid4(), cast_at_level=3).get_world_effect_profile()
 
     assert base is not None
     assert upcast is not None

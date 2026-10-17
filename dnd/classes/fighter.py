@@ -15,7 +15,8 @@ Level 18: Champion - Survivor (DEFERRED)
 
 from typing import Any, ClassVar, Dict
 from dnd.core.geometry import grid_distance_feet
-from dnd.core.action_types import RestrictedActionKind
+from dnd.core.action_types import ActionSelection, RestrictedActionKind
+from dnd.types.discovery import ActorScan
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.class_features import IndomitableReroll
 from dnd.core.condition_types import ConditionCategory, DurationType
@@ -751,18 +752,11 @@ class SecondWind(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if entity is None:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if entity.health.damage_taken == 0:
-            return declaration_event.cancel(status_message="Already at full health")
-
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Second Wind ready"
-        )
+        if entity is None or entity.health.damage_taken == 0:
+            return "Already at full health"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -979,19 +973,11 @@ class ActionSurge(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        """Validate Action Surge can be used."""
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if "ActionSurging" in entity.active_conditions:
-            return declaration_event.cancel(status_message="Already used Action Surge this turn")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        if entity is None or "ActionSurging" in entity.active_conditions:
+            return "Already used Action Surge this turn"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply Action Surge - grant extra action."""
@@ -1206,20 +1192,12 @@ class ExtraAttack(Attack):
         return [candidate for variant in variants
             for candidate in Attack.get_discovery_variants(variant, entity)]
 
-    def validate_source_requirements_for_discovery(self) -> bool:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Require a committed ordinary Attack before exposing the earned batch."""
         entity = Entity.get(self.source_entity_uuid)
-        return (
-            entity is not None
-            and "ExtraAttacksGranted" in entity.active_conditions
-            and super().validate_source_requirements_for_discovery()
-        )
-
-    def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
-        entity = Entity.get(self.source_entity_uuid)
         if entity is None or "ExtraAttacksGranted" not in entity.active_conditions:
-            return declaration_event.cancel(status_message="Must attack first before using Extra Attack")
-        return super()._validate(declaration_event)
+            return "Must attack first before using Extra Attack"
+        return Attack.rule_error(self, scan, selection)
 
 
 class ExtraAttackFeature(BaseCondition):

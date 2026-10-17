@@ -26,6 +26,7 @@ from dnd.conditions import (
     Stunned,
 )
 from dnd.core.aoe import AoEShape, Cone, Sphere, objective_footprint
+from dnd.core.action_types import ActionSelection
 from dnd.core.attack_types import DamageDieValue
 from dnd.core.base_actions import (
     ActionCategory,
@@ -117,6 +118,7 @@ from dnd.spells.spell_utils import (
 )
 from dnd.spells.transmutation import HasteEffect
 from dnd.types.abilities import AbilityName
+from dnd.types.discovery import ActorScan
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.world import WorldEdgeChannel
 from dnd.types.spatial_effects import (
@@ -554,17 +556,18 @@ class NativeSaveBurst(BaseAction):
             else super().get_valid_positions()
         )
 
-    def position_placement_error(self, *, subjective=False):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
         actor = Entity.get(self.source_entity_uuid)
+        destination = selection.positions[0] if selection.positions else None
         if self.self_centered and (
-            actor is None or self.end_position != actor.position
+            actor is None or destination != actor.position
         ):
             return "This technique is centered on its actor"
         return technique_destination_error(
-            self, self.cone_feet or self.range_feet, subjective=subjective
+            self, destination, self.cone_feet or self.range_feet
         )
 
-    def get_outcome_profile(self, actor):
+    def get_outcome_profile(self):
         return ActionOutcomeProfile(
             resolution=OutcomeResolution.SAVING_THROW,
             save_dc=self.save_dc,
@@ -738,17 +741,18 @@ class ElementalWarp(BaseAction):
     def get_range(self):
         return Range(type=RangeType.RANGE, normal=self.range_feet)
 
-    def position_placement_error(self, *, subjective=False):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
         actor = Entity.get(self.source_entity_uuid)
-        if actor is None or self.end_position is None:
+        if actor is None or not selection.positions:
             return "Choose a destination"
+        destination = selection.positions[0]
         if (
-            not actor.senses.visible.get(self.end_position, False)
-            or grid_distance_feet(actor.position, self.end_position) > self.range_feet
+            destination not in scan.visible
+            or grid_distance_feet(actor.position, destination) > self.range_feet
         ):
             return "Choose a visible destination in range"
         if not get_map().is_walkable_for(
-            *self.end_position, requesting_entity_uuid=actor.uuid
+            *destination, requesting_entity_uuid=actor.uuid
         ):
             return "Destination is occupied or blocked"
         return None
@@ -818,10 +822,13 @@ class GushingAir(NativeSaveBurst):
         targets = super().get_all_targets()
         return targets if len(targets) > 1 else targets * 2
 
-    def get_outcome_profile(self, actor):
+    def get_outcome_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         return (
             super()
-            .get_outcome_profile(actor)
+            .get_outcome_profile()
             .model_copy(
                 update={
                     "applications": 2,
@@ -837,28 +844,22 @@ class GushingAir(NativeSaveBurst):
         ),
     )
 
-    def position_placement_error(self, *, subjective=False):
-        return None
-
-    def _validate(self, event):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
         actor = Entity.get(self.source_entity_uuid)
-        if (
-            actor is None
-            or not self.get_all_targets()
-            or len(self.get_all_targets()) > 2
-        ):
-            return event.cancel(status_message="Choose one or two jet recipients")
+        targets = selection.target_uuids
+        if actor is None or not targets or len(targets) > 2:
+            return "Choose one or two jet recipients"
         if any(
             (target := Entity.get(identity)) is None
             or grid_distance_feet(actor.position, target.position) > 60
-            or not actor.senses.entities.get(identity)
+            or identity not in scan.creatures
             or not get_map().can_reach_between(
                 actor.position, target.position, PhysicalAccess.PROJECTILE, actor.uuid
             )
-            for identity in self.get_all_targets()
+            for identity in targets
         ):
-            return event.cancel(status_message="Jet recipient is unreachable")
-        return event.phase_to(EventPhase.EXECUTION)
+            return "Jet recipient is unreachable"
+        return None
 
 
 class SeismicStrike(NativeSaveBurst):
@@ -1021,8 +1022,10 @@ class ElementalContactBurst(BaseAction):
     def get_range(self):
         return Range(type=RangeType.RANGE, normal=self.range_feet)
 
-    def position_placement_error(self, *, subjective=False):
-        return technique_destination_error(self, self.range_feet, subjective=subjective)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        return technique_destination_error(
+            self, selection.positions[0] if selection.positions else None, self.range_feet
+        )
 
     def _resolve_execution_targets(self):
         return technique_area(self)
@@ -1030,7 +1033,10 @@ class ElementalContactBurst(BaseAction):
     def _apply_costs(self, event):
         return entity_action_economy_cost_applier(event, self.source_entity_uuid)
 
-    def get_outcome_profile(self, actor):
+    def get_outcome_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         ability = "intelligence" if self.technique == "icicle" else "strength"
         baseline = actor.spell_attack_outcome_baseline(casting_ability=ability)
         advantage = baseline.advantage
@@ -1255,19 +1261,19 @@ class ExplosiveIcicle(ElementalContactBurst):
 
 
 def technique_destination_error(
-    action: BaseAction, range_feet: int, *, subjective=False
+    action: BaseAction, destination: tuple[int, int] | None, range_feet: int, *, subjective=False
 ):
     actor = Entity.get(action.source_entity_uuid)
-    if actor is None or action.end_position is None:
+    if actor is None or destination is None:
         return "Choose an impact position"
     if (
-        not actor.senses.visible.get(action.end_position, False)
-        or grid_distance_feet(actor.position, action.end_position) > range_feet
+        not actor.senses.visible.get(destination, False)
+        or grid_distance_feet(actor.position, destination) > range_feet
     ):
         return "Choose a visible impact in range"
     if not get_map().can_reach_between(
         actor.position,
-        action.end_position,
+        destination,
         PhysicalAccess.PROJECTILE,
         actor.uuid,
         subjective=subjective,
@@ -1482,7 +1488,7 @@ class HealingVapours(NativeSaveBurst):
     harmful: bool = False
     packets: tuple[DamageRollProfile, ...] = ()
 
-    def get_outcome_profile(self, actor):
+    def get_outcome_profile(self):
         return None
 
     def _apply(self, event):
@@ -1609,8 +1615,8 @@ class RagingVortex(ElementalWarp):
         ]
     )
 
-    def position_placement_error(self, *, subjective=False):
-        return technique_destination_error(self, 60, subjective=subjective)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        return technique_destination_error(self, selection.positions[0] if selection.positions else None, 60)
 
     def _apply(self, event):
         if self.end_position is None:
@@ -1752,8 +1758,8 @@ class SweetplumGales(ElementalWarp):
         ]
     )
 
-    def position_placement_error(self, *, subjective=False):
-        return technique_destination_error(self, 60, subjective=subjective)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        return technique_destination_error(self, selection.positions[0] if selection.positions else None, 60)
 
     def _apply(self, event):
         if self.end_position is None:
@@ -1889,7 +1895,7 @@ class DrainingKiss(BaseAction):
     def get_range(self):
         return Range(type=RangeType.RANGE, normal=30)
 
-    def get_outcome_profile(self, actor):
+    def get_outcome_profile(self):
         return ActionOutcomeProfile(
             resolution=OutcomeResolution.SAVING_THROW,
             save_ability="wisdom",
@@ -1916,22 +1922,16 @@ class DrainingKiss(BaseAction):
             None,
         )
 
-    def _validate(self, event):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
         actor = Entity.get(self.source_entity_uuid)
-        target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid is not None
-            else None
-        )
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if actor is None or target is None or self.charm(target) is None:
-            return event.cancel(
-                status_message="This Cambion must have charmed the target"
-            )
+            return "This Cambion must have charmed the target"
         if grid_distance_feet(
             actor.position, target.position
-        ) > 30 or not actor.senses.entities.get(target.uuid):
-            return event.cancel(status_message="Kiss target out of range or unseen")
-        return event.phase_to(EventPhase.EXECUTION)
+        ) > 30 or target.uuid not in scan.creatures:
+            return "Kiss target out of range or unseen"
+        return None
 
     def _apply_costs(self, event):
         return entity_action_economy_cost_applier(event, self.source_entity_uuid)
@@ -2148,16 +2148,16 @@ class DragonBreath(NativeSaveBurst):
     cone_feet: int = 30
     allowance_uuid: UUID | None = None
 
-    def _validate(self, event):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
         if self.allowance_uuid is not None:
             owner = BaseCondition.get(self.allowance_uuid)
             if (
                 not isinstance(owner, DraconicBreathCadence)
-                or owner.free_action_uuid != self.registered_template_uuid
+                or owner.free_action_uuid != selection.template_uuid
                 or not owner.contributions_active()
             ):
-                return event.cancel(status_message="Free Breath allowance is absent")
-        return super()._validate(event)
+                return "Free Breath allowance is absent"
+        return NativeSaveBurst.rule_error(self, scan, selection)
 
     def _apply_costs(self, event):
         result = super()._apply_costs(event)

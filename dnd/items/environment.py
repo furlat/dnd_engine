@@ -6,11 +6,13 @@ from uuid import UUID
 from pydantic import Field, PrivateAttr
 
 from dnd.blocks.base_item import BaseItem, UsableItem
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import BaseAction, ActionEvent, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.item_types import DoorMechanism, DoorSwing, ItemDestructionProfile, ItemIntegrity
 from dnd.core.events import Event, EventPhase, EventQueue, EventType, SpatialHandler
 from dnd.core.gridmap import get_map
+from dnd.types.discovery import ActorScan
 from dnd.types.materials import Material
 from dnd.types.physical_access import ContactPassage
 from dnd.types.world import WorldEdgeChannel
@@ -140,23 +142,16 @@ class OpenDirectionalDoorAction(BaseAction):
         description="UUID of the directional door opened by this action.",
     )
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        """Validate that the linked door exists and is closed.
-
-        Args:
-            declaration_event: Declaration event to advance or cancel.
-
-        Returns:
-            Execution event for a closed linked door, otherwise a canceled event.
-        """
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """The linked door exists and is closed."""
         if self.source_item_uuid is None:
-            return declaration_event.cancel(status_message="No door linked")
+            return "No door linked"
         door = BaseBlock.get(self.source_item_uuid)
         if not isinstance(door, DirectionalDoor) or not door.is_active:
-            return declaration_event.cancel(status_message="Door not found")
+            return "Door not found"
         if door.is_open:
-            return declaration_event.cancel(status_message="Door already open")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+            return "Door already open"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Open the linked door and complete the action.
@@ -191,26 +186,18 @@ class CloseDirectionalDoorAction(BaseAction):
         description="UUID of the directional door closed by this action.",
     )
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        """Validate that the linked door exists, is open, and is unoccupied.
-
-        Args:
-            declaration_event: Declaration event to advance or cancel.
-
-        Returns:
-            Execution event for a closeable linked door, otherwise a canceled
-            event.
-        """
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """The linked door exists, is open, and its doorway is unoccupied."""
         if self.source_item_uuid is None:
-            return declaration_event.cancel(status_message="No door linked")
+            return "No door linked"
         door = BaseBlock.get(self.source_item_uuid)
         if not isinstance(door, DirectionalDoor) or not door.is_active:
-            return declaration_event.cancel(status_message="Door not found")
+            return "Door not found"
         if not door.is_open:
-            return declaration_event.cancel(status_message="Door already closed")
+            return "Door already closed"
         if door._doorway_occupied():
-            return declaration_event.cancel(status_message="Can't close door - someone is standing in the doorway")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+            return "Can't close door - someone is standing in the doorway"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Close the linked door and complete the action.

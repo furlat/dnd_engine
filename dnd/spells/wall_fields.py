@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
-from dnd.core.action_types import ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
@@ -24,6 +24,7 @@ from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.ignition import resolve_interaction
 from dnd.types.abilities import AbilityName
+from dnd.types.discovery import ActorScan
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectChangeOperation, SpatialEffectInteractionIntensity, SpatialEffectInteractionOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
@@ -197,14 +198,21 @@ class WindWallZone(WallFieldZone):
 
 
 def field_geometry(action: SpellAction, *, form: str, height: int, width: int) -> WallAssemblyPresentationGeometry | None:
-    if action.end_position is None:
+    return selection_field_geometry(action, action.current_selection(), form=form, height=height, width=width)
+
+
+def selection_field_geometry(action: SpellAction, selection: ActionSelection, *, form: str, height: int,
+                             width: int) -> WallAssemblyPresentationGeometry | None:
+    """The field wall one selection places: a ring at its point, or a segment or path through its vertices."""
+    if not selection.positions:
         return None
-    points = action.get_selected_position_path()
+    end_position = selection.positions[0]
+    points = action._selected_position_path(selection)
     if points is not None and any(a == b for a, b in zip(points, points[1:])):
         return None
     if form == "ring":
-        path = WallRing(center=action.end_position, radius_feet=10)
-        anchor = action.end_position
+        path = WallRing(center=end_position, radius_feet=10)
+        anchor = end_position
     elif points is not None and len(points) >= 2:
         path = WallPolyline(points=tuple(points)) if form == "path" else WallSegment(start=points[0], end=points[-1])
         anchor = points[0]
@@ -217,10 +225,16 @@ def field_geometry(action: SpellAction, *, form: str, height: int, width: int) -
 
 def wall_support_error(action: SpellAction, geometry: WallAssemblyPresentationGeometry | None,
                        *, subjective: bool) -> str | None:
+    return selection_wall_support_error(action, action.current_selection(), geometry, subjective=subjective)
+
+
+def selection_wall_support_error(action: SpellAction, selection: ActionSelection,
+                                 geometry: WallAssemblyPresentationGeometry | None, *, subjective: bool) -> str | None:
+    """Range, one-level support and unbroken propagation of the wall one selection places."""
     caster = Entity.get(action.source_entity_uuid)
-    if caster is None or geometry is None or action.end_position is None:
+    if caster is None or geometry is None or not selection.positions:
         return "Select complete wall placement"
-    error = action.target_position_error(action.end_position)
+    error = action.target_position_error(selection.positions[0])
     if error is not None:
         return error
     grid = get_map()
@@ -230,7 +244,7 @@ def wall_support_error(action: SpellAction, geometry: WallAssemblyPresentationGe
             return "Wall requires a supported footprint on one level"
         if grid.is_blocking_propagation(*position, observer_uuid=caster.uuid if subjective else None):
             return "Existing solid geometry obstructs the wall"
-    points = action.get_selected_position_path()
+    points = action._selected_position_path(selection)
     if not isinstance(geometry.path, WallRing) and points is not None:
         for first, second in zip(points, points[1:]):
             if not grid.can_reach_between(first, second, PhysicalAccess.PROJECTILE,
@@ -263,7 +277,10 @@ class WallOfThorns(SpellAction):
         cost=1, evaluator=entity_action_economy_cost_evaluator)])
 
     def wall_geometry(self) -> WallAssemblyPresentationGeometry | None:
-        return field_geometry(self, form=self.wall_form, height=10, width=5)
+        return self._wall_geometry(self.current_selection())
+
+    def _wall_geometry(self, selection: ActionSelection) -> WallAssemblyPresentationGeometry | None:
+        return selection_field_geometry(self, selection, form=self.wall_form, height=10, width=5)
 
     def get_position_selection(self) -> PositionSelection:
         return (SinglePositionSelection() if self.wall_form == "ring" else PositionPathSelection(
@@ -274,16 +291,16 @@ class WallOfThorns(SpellAction):
         return event.with_updates(area_geometry=self.wall_geometry()) if isinstance(event, SpellEvent) else event
 
     def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self.position_placement_error(subjective=True)
+        return self.position_selection_error() or self._placement_error(self.current_selection(), subjective=True)
 
     def get_selection_geometry(self):
         return self.wall_geometry()
 
-    def position_placement_error(self, *, subjective=False) -> str | None:
-        return wall_support_error(self, self.wall_geometry(), subjective=subjective)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        return self._placement_error(selection, subjective=False)
 
-    def _validate(self, declaration_event: SpellEvent) -> SpellEvent | None:
-        return declaration_event.phase_to(EventPhase.EXECUTION)
+    def _placement_error(self, selection: ActionSelection, *, subjective: bool) -> str | None:
+        return selection_wall_support_error(self, selection, self._wall_geometry(selection), subjective=subjective)
 
     def _apply(self, execution_event: SpellEvent) -> SpellEvent | None:
         caster = Entity.get(self.source_entity_uuid)
@@ -335,7 +352,10 @@ class WindWall(SpellAction):
         cost=1, evaluator=entity_action_economy_cost_evaluator)])
 
     def wall_geometry(self) -> WallAssemblyPresentationGeometry | None:
-        return field_geometry(self, form="path", height=15, width=1)
+        return self._wall_geometry(self.current_selection())
+
+    def _wall_geometry(self, selection: ActionSelection) -> WallAssemblyPresentationGeometry | None:
+        return selection_field_geometry(self, selection, form="path", height=15, width=1)
 
     def get_position_selection(self) -> PositionSelection:
         return PositionPathSelection(max_length_feet=50, max_segments=10,
@@ -346,16 +366,16 @@ class WindWall(SpellAction):
         return event.with_updates(area_geometry=self.wall_geometry()) if isinstance(event, SpellEvent) else event
 
     def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self.position_placement_error(subjective=True)
+        return self.position_selection_error() or self._placement_error(self.current_selection(), subjective=True)
 
     def get_selection_geometry(self):
         return self.wall_geometry()
 
-    def position_placement_error(self, *, subjective=False) -> str | None:
-        return wall_support_error(self, self.wall_geometry(), subjective=subjective)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        return self._placement_error(selection, subjective=False)
 
-    def _validate(self, declaration_event: SpellEvent) -> SpellEvent | None:
-        return declaration_event.phase_to(EventPhase.EXECUTION)
+    def _placement_error(self, selection: ActionSelection, *, subjective: bool) -> str | None:
+        return selection_wall_support_error(self, selection, self._wall_geometry(selection), subjective=subjective)
 
     def _apply(self, execution_event: SpellEvent) -> SpellEvent | None:
         caster = Entity.get(self.source_entity_uuid)

@@ -22,9 +22,10 @@ class _SourceSaveSpell(SpellAction):
     name: str = "Source Save Spell"
     spell_level: int = 1
 
-    def get_outcome_profile(self, actor: object) -> ActionOutcomeProfile | None:
+    def get_outcome_profile(self) -> ActionOutcomeProfile | None:
         """Expose the shared save outcome profile through a concrete spell."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return self.saving_throw_damage_outcome_profile(
             actor,
@@ -91,7 +92,7 @@ def test_same_registered_spell_uses_its_exact_casting_source() -> None:
         charisma_source,
         wisdom_source,
     ]
-    profiles = [spell.get_outcome_profile(caster) for spell in spells]
+    profiles = [spell.get_outcome_profile() for spell in spells]
     assert all(profile is not None for profile in profiles)
     assert [profile.attack_bonus for profile in profiles if profile is not None] == [
         2,
@@ -118,7 +119,7 @@ def test_same_save_spell_uses_distinct_source_owned_dcs() -> None:
         if isinstance(action, _SourceSaveSpell)
     ]
 
-    profiles = [spell.get_outcome_profile(caster) for spell in spells]
+    profiles = [spell.get_outcome_profile() for spell in spells]
     assert [profile.save_dc for profile in profiles if profile is not None] == [
         10,
         15,
@@ -170,7 +171,7 @@ def test_legacy_spell_action_without_source_uses_default_ability() -> None:
     caster, _, _ = _multiclass_caster()
     spell = FireBolt(source_entity_uuid=caster.uuid, caster_level=5)
 
-    profile = spell.get_outcome_profile(caster)
+    profile = spell.get_outcome_profile()
 
     assert profile is not None
     assert spell.spellcasting_source_id is None

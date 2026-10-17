@@ -5,7 +5,7 @@ spell school. Payload power and source are retained data, independent of holder.
 """
 
 from collections.abc import Mapping
-from typing import Literal
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
@@ -18,7 +18,7 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
 )
 from dnd.blocks.base_item import BaseItem, PreparedItemRetirement, UsableItem
-from dnd.core.action_types import ActionVariantFacet
+from dnd.core.action_types import ActionSelection, ActionVariantFacet
 from dnd.core.aoe import Sphere, objective_footprint
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock, PreparedConditionApplication
@@ -51,6 +51,7 @@ from dnd.spatial.area_reach import ReachStage, resolve_staged_area
 from dnd.spatial.environmental_conditions import IceSurface
 from dnd.spatial.ignition import apply_elemental_surface_contacts
 from dnd.spells.content_metadata import srd_action_identity
+from dnd.types.discovery import ActorScan
 from dnd.types.physical_access import PhysicalAccess
 
 
@@ -372,22 +373,15 @@ class ThrowSpellPayload(BaseAction):
             else 40,
         )
 
-    def _validate(self, event):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         actor = Entity.get(self.source_entity_uuid)
         item = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
         if actor is None or not isinstance(item, SpellPayloadItem):
-            return event.cancel(status_message="Sphere absent")
+            return "Sphere absent"
         if item.payload_kind == "delayed_fire" and item.owner_uuid != actor.uuid:
-            return event.cancel(
-                status_message="Touch the floor bead before throwing it"
-            )
-        error = payload_destination_error(
-            actor, self.end_position, self.get_range().normal
-        )
-        return (
-            event.cancel(status_message=error)
-            if error
-            else event.phase_to(EventPhase.EXECUTION)
+            return "Touch the floor bead before throwing it"
+        return payload_destination_error(
+            actor, selection.positions[0] if selection.positions else None, self.get_range().normal
         )
 
     def _apply_costs(self, event):
@@ -463,7 +457,7 @@ class TouchDelayedFireball(BaseAction):
             "__throw" if self.throw_after_touch else "__pickup"
         )
 
-    def _validate(self, event):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         actor = Entity.get(self.source_entity_uuid)
         item = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
         center = item.payload_position() if isinstance(item, SpellPayloadItem) else None
@@ -474,22 +468,21 @@ class TouchDelayedFireball(BaseAction):
             or item.payload_kind != "delayed_fire"
             or item.owner_uuid is not None
         ):
-            return event.cancel(status_message="Touch requires a floor bead")
+            return "Touch requires a floor bead"
         if (
             grid_distance_feet(actor.position, center) > 5
-            or not actor.senses.visible.get(center, False)
+            or center not in scan.visible
             or not get_map().can_reach_between(
                 actor.position, center, PhysicalAccess.HAND, actor.uuid
             )
         ):
-            return event.cancel(status_message="Bead is outside visible hand reach")
+            return "Bead is outside visible hand reach"
+        destination = selection.positions[0] if selection.positions else None
         if self.throw_after_touch:
-            error = payload_destination_error(actor, self.end_position, 40)
-            if error:
-                return event.cancel(status_message=error)
-        elif self.end_position is not None:
-            return event.cancel(status_message="Choose the touch-and-throw form")
-        return event.phase_to(EventPhase.EXECUTION)
+            return payload_destination_error(actor, destination, 40)
+        if destination is not None:
+            return "Choose the touch-and-throw form"
+        return None
 
     def _apply_costs(self, event):
         return entity_action_economy_cost_applier(event, self.source_entity_uuid)

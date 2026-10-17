@@ -7,6 +7,7 @@ from pydantic import Field
 
 from dnd.core.effect_types import ApplicationMembership
 from dnd.actions import SpellAction, SpellEvent
+from dnd.core.action_types import ActionSelection
 from dnd.core.aoe import Sphere, objective_footprint
 from dnd.core.base_actions import TargetType, target_resolution_sort_key
 from dnd.core.content.descriptors import ContentDescriptorSpec, ContentOrdering, ContentPresentation, ContentVisibility
@@ -21,7 +22,8 @@ from dnd.types.event_facts import GroupEntryKind
 from dnd.core.gridmap import get_map
 from dnd.core.spell_execution import bind_spell_execution_lineage, spell_execution_scope
 from dnd.entity import Entity
-from dnd.spells.spell_utils import validate_line_of_sight
+from dnd.spells.spell_utils import line_of_sight_error
+from dnd.types.discovery import ActorScan
 
 
 ICE_KNIFE_BURST = "spell.ice_knife.burst"
@@ -66,14 +68,13 @@ class IceKnife(SpellAction):
     spell_damage_type: DamageType | None = DamageType.PIERCING
     saving_throw_effect_id: str | None = ICE_KNIFE_BURST
 
-    def _validate(self, declaration_event: SpellEvent) -> SpellEvent | None:
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
-        if caster is None or target is None:
-            return declaration_event.cancel(status_message="Caster or target not found")
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
+        if target is None:
+            return "Caster or target not found"
         if self.get_target_distance(target.position) > self.effective_range:
-            return declaration_event.cancel(status_message="Target out of range")
-        return validate_line_of_sight(declaration_event, self.source_entity_uuid)
+            return "Target out of range"
+        return line_of_sight_error(scan, target.uuid)
 
     def _apply(self, execution_event: SpellEvent) -> SpellEvent | None:
         caster = Entity.get(self.source_entity_uuid)

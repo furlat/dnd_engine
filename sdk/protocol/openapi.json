@@ -13454,6 +13454,18 @@
             "description": "Position input required after choosing a discovery target.",
             "title": "Position Selection"
           },
+          "position_region": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PositionRegion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Free-aim region of a position action; its aims are validated on demand."
+          },
           "availability_status": {
             "$ref": "#/components/schemas/ActionAvailabilityStatus",
             "description": "Closed reason this authored row is executable or unavailable; clients never infer the reason from an empty target list."
@@ -15831,6 +15843,57 @@
           "max_length_feet"
         ],
         "title": "PositionPathSelection",
+        "type": "object"
+      },
+      "PositionRegion": {
+        "additionalProperties": false,
+        "description": "Where a position action may aim (plan \u00a714.4 region descriptors).\n\nDiscovery lists no cells for it: the client or the AI aims anywhere in the\nregion and preview validates that one aim on demand.",
+        "properties": {
+          "range_feet": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Range Feet"
+          },
+          "candidate_source": {
+            "default": "visible",
+            "enum": [
+              "visible",
+              "reachable"
+            ],
+            "title": "Candidate Source",
+            "type": "string"
+          },
+          "requires_unoccupied": {
+            "default": false,
+            "title": "Requires Unoccupied",
+            "type": "boolean"
+          },
+          "requires_walkable": {
+            "default": false,
+            "title": "Requires Walkable",
+            "type": "boolean"
+          },
+          "requires_axis_or_diagonal_alignment": {
+            "default": false,
+            "title": "Requires Axis Or Diagonal Alignment",
+            "type": "boolean"
+          },
+          "exclude_source_position": {
+            "default": true,
+            "title": "Exclude Source Position",
+            "type": "boolean"
+          }
+        },
+        "title": "PositionRegion",
         "type": "object"
       },
       "PrepareSpellsIntent": {

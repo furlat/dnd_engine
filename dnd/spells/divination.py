@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.core.action_types import EntityTargetPerception
+from dnd.core.action_types import ActionSelection, EntityTargetPerception
 from dnd.core.dice import roll_die_face
 from dnd.spells.hit_effects import QuarrySustain, ReapplyQuarry, install_hit_rider
 from dnd.core.base_actions import (
@@ -22,14 +22,52 @@ from dnd.core.base_actions import (
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.base_block import SensesType, SenseMode
+from dnd.core.life_types import LifeState
+from dnd.types.discovery import ActorScan
 from dnd.core.events import Event, EventPhase, Range, RangeType, EventType, EventHandler, Trigger, D20RollResultEvent
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
 from dnd.spells.content_metadata import srd_action_identity
-from dnd.spells.spell_utils import validate_spell_recipients, spell_condition_profile
+from dnd.spells.spell_utils import spell_condition_profile
 from dnd.core.base_conditions import Duration
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.blocks.skills import all_skills
+
+
+def _seen_recipient_error(action: SpellAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+    """The one selected creature: the caster when allowed, otherwise seen and within spell range."""
+    if not selection.target_uuids:
+        return "Caster or target not found"
+    identity = selection.target_uuids[0]
+    if identity == scan.actor_uuid:
+        return None if action.include_self else "This spell does not allow self targeting"
+    record = scan.creatures.get(identity)
+    if record is None or not record.visual:
+        return f"Target entity not in line of sight for {action.name}"
+    if action.get_target_distance(record.facts.position) > action.effective_range:
+        return "Target is out of spell range"
+    return None
+
+
+def _living_recipients_error(action: SpellAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+    """Every selected recipient alive, passing the relationship filter, seen (or the caster) and in range."""
+    if not selection.target_uuids:
+        return "Recipient absent"
+    error = action._target_filter_error(scan, list(selection.target_uuids))
+    if error is not None:
+        return error
+    for identity in selection.target_uuids:
+        target = Entity.get(identity)
+        if target is None or target.health.life_state is LifeState.DEAD:
+            return "Living recipient required"
+        if identity == scan.actor_uuid:
+            if not action.include_self:
+                return "Self targeting is not allowed"
+        elif (record := scan.creatures.get(identity)) is None or not record.visual:
+            return "Recipient must be visible"
+        if (error := action.target_position_error(target.position)) is not None:
+            return error
+    return None
 
 
 class SeeInvisibilityEffect(BaseCondition):
@@ -80,7 +118,7 @@ class SeeInvisibility(SpellAction):
     target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Spell range.")
 
-    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+    def get_world_effect_profile(self) -> ActionWorldEffectProfile:
         """Declare the granted see-invisible sense and possible discoveries.
 
         Args:
@@ -199,7 +237,7 @@ class TrueSeeing(SpellAction):
 
     entity_target_perception: EntityTargetPerception = EntityTargetPerception.TOUCH_CONTACT
 
-    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+    def get_world_effect_profile(self) -> ActionWorldEffectProfile:
         """Declare the granted truesight sense and possible discoveries.
 
         Args:
@@ -464,9 +502,8 @@ class HuntersMark(SpellAction):
     costs: list[Cost] = Field(default_factory=lambda:[Cost(name="Hunter's Mark",cost_type="bonus_actions",cost=1,
         evaluator=entity_action_economy_cost_evaluator)])
 
-    def _validate(self,event: SpellEvent):
-        checked=self.validate_single_recipient(event)
-        return checked if checked is None or checked.canceled else checked.phase_to(EventPhase.EXECUTION)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return _seen_recipient_error(self, scan, selection)
 
     def _apply(self,event: SpellEvent):
         if self.target_entity_uuid is None:
@@ -532,11 +569,14 @@ class Foresight(SpellAction):
     include_self: bool = True
     valid_target_filter: str = "self_or_allies"
 
-    def get_target_effect_profile(self, actor: Any):
+    def get_target_effect_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         return spell_condition_profile(self, actor, key="foresight", condition_type=ForesightEffect, beneficial=True)
 
-    def _validate(self, event: SpellEvent):
-        return validate_spell_recipients(self, event)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return _living_recipients_error(self, scan, selection)
 
     def _apply(self, event: SpellEvent):
         if self.target_entity_uuid is None: return event.cancel(status_message="Recipient absent")

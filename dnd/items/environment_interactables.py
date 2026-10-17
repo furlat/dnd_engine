@@ -12,6 +12,7 @@ from dnd.core.base_actions import (
     Cost,
     ActionDiscoveryDescription,
 )
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import Event, EventPhase
@@ -31,6 +32,7 @@ from dnd.spatial.mechanisms import FiniteTrap
 from dnd.spatial.jaws import JawTrap
 from dnd.spatial.gas_traps import GasVent
 from dnd.types.traps import TrapState
+from dnd.types.discovery import ActorScan
 
 
 class OpenDoorAction(BaseAction):
@@ -50,15 +52,15 @@ class OpenDoorAction(BaseAction):
         description="UUID of the door item this action opens.",
     )
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         if self.source_item_uuid is None:
-            return declaration_event.cancel(status_message="No door linked")
+            return "No door linked"
         door = BaseBlock.get(self.source_item_uuid)
         if not isinstance(door, DoorObject) or not door.is_active:
-            return declaration_event.cancel(status_message="Door not found")
+            return "Door not found"
         if door.is_open:
-            return declaration_event.cancel(status_message="Door already open")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+            return "Door already open"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         if self.source_item_uuid is None:
@@ -100,19 +102,19 @@ class CloseDoorAction(BaseAction):
         description="UUID of the door item this action closes.",
     )
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         if self.source_item_uuid is None:
-            return declaration_event.cancel(status_message="No door linked")
+            return "No door linked"
         door = BaseBlock.get(self.source_item_uuid)
         if not isinstance(door, DoorObject) or not door.is_active:
-            return declaration_event.cancel(status_message="Door not found")
+            return "Door not found"
         if not door.is_open:
-            return declaration_event.cancel(status_message="Door already closed")
+            return "Door already closed"
         grid = get_map()
         door_pos = grid.get_object_position(door.uuid)
         if door_pos and grid.get_entities_at(door_pos):
-            return declaration_event.cancel(status_message="Can't close door — someone is standing in the doorway")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+            return "Can't close door — someone is standing in the doorway"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         if self.source_item_uuid is None:
@@ -212,16 +214,16 @@ class PullLeverAction(BaseAction):
     )
     desired_state: TrapState = TrapState.DEACTIVATED
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         lever = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
         if self.source_item_uuid is not None and (not isinstance(lever, TrapLever) or not lever.is_active):
-            return declaration_event.cancel(status_message="Lever is unavailable")
+            return "Lever is unavailable"
         if self.trap_condition_uuid is None:
-            return declaration_event.cancel(status_message="No trap linked")
+            return "No trap linked"
         condition = BaseCondition.get(self.trap_condition_uuid)
         if not isinstance(condition, (SpikeTrap, Portal, FiniteTrap, JawTrap, GasVent)) or not condition.applied:
-            return declaration_event.cancel(status_message="Linked trap is unavailable")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+            return "Linked trap is unavailable"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         lever = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
@@ -314,17 +316,17 @@ class ToggleLeverAction(BaseAction):
     target_type: TargetType = TargetType.SELF
     costs: List[Cost] = Field(default_factory=list)
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         lever = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
         if not isinstance(lever, ControlLever) or not lever.is_active:
-            return declaration_event.cancel(status_message="Lever not found")
+            return "Lever not found"
         target = lever.get_linked_item()
         if target is None:
-            return declaration_event.cancel(status_message="Linked item not found")
+            return "Linked item not found"
         desired_value = lever.link.engaged_value if not lever.is_engaged else not lever.link.engaged_value
         if control_value(target) != desired_value and not target.get_use_actions(self.source_entity_uuid):
-            return declaration_event.cancel(status_message="Linked item cannot change state")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+            return "Linked item cannot change state"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         lever = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
@@ -390,11 +392,11 @@ class OpenChestAction(BaseAction):
     target_type: TargetType = TargetType.SELF
     costs: List[Cost] = Field(default_factory=list)
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
         if not isinstance(chest, StorageChest) or not chest.is_active or chest.is_open:
-            return declaration_event.cancel(status_message="Chest cannot open")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+            return "Chest cannot open"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
@@ -413,11 +415,11 @@ class CloseChestAction(BaseAction):
     target_type: TargetType = TargetType.SELF
     costs: List[Cost] = Field(default_factory=list)
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
         if not isinstance(chest, StorageChest) or not chest.is_active or not chest.is_open:
-            return declaration_event.cancel(status_message="Chest cannot close")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+            return "Chest cannot close"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
@@ -446,17 +448,17 @@ class LootAllAction(BaseAction):
         description="UUID of the chest item this action loots.",
     )
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         if self.source_item_uuid is None:
-            return declaration_event.cancel(status_message="No chest linked")
+            return "No chest linked"
         chest = BaseBlock.get(self.source_item_uuid)
         if not isinstance(chest, StorageChest):
-            return declaration_event.cancel(status_message="Chest not found")
+            return "Chest not found"
         if chest.is_active and not chest.is_open:
-            return declaration_event.cancel(status_message="Chest is closed")
+            return "Chest is closed"
         if not chest.chest_inventory.items:
-            return declaration_event.cancel(status_message="Chest is empty")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+            return "Chest is empty"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -512,12 +514,6 @@ class LootItemAction(BaseAction):
         if subjective and not chest.contents_visible_to(self.source_entity_uuid):
             return "Chest contents are not visible"
         return self.source_item_contact_error(subjective=subjective)
-
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        error = self.source_item_error()
-        if error is not None:
-            return declaration_event.cancel(status_message=error)
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         error = self.source_item_error()
@@ -632,12 +628,6 @@ class RestAction(BaseAction):
     costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for campfire rest.")
     source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the campfire item used for rest.")
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
-
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
@@ -662,12 +652,6 @@ class CookAction(BaseAction):
     costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for campfire cooking.")
     source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the campfire item used for cooking.")
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
-
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
@@ -688,22 +672,12 @@ class ActivateDeviceAction(BaseAction):
     source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the arcane device item being used.")
     heal_amount: int = Field(default=5, description="Hit points restored by the arcane device.")
 
-    def validate_requirements_for_discovery(self) -> bool:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Require Arcana proficiency independently of action affordability."""
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return False
-        skill = entity.skill_set.get_skill(type_cast(SkillName, "arcana"))
-        return (
-            skill.proficiency
-            and super().validate_requirements_for_discovery()
-        )
-
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Device activated")
+        if entity is None or not entity.skill_set.get_skill(type_cast(SkillName, "arcana")).proficiency:
+            return "Activating this device requires Arcana proficiency"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)

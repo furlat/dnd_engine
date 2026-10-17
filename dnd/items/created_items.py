@@ -35,9 +35,6 @@ class EatGoodberry(BaseAction):
     costs: list[Cost] = Field(default_factory=lambda:[Cost(name="Eat Goodberry",cost_type="bonus_actions",cost=1,
         evaluator=entity_action_economy_cost_evaluator)])
 
-    def _validate(self,event):
-        return event.phase_to(EventPhase.EXECUTION) if Entity.get(self.source_entity_uuid) else event.cancel(status_message="Berry user is absent")
-
     def _apply_costs(self,event):
         return entity_action_economy_cost_applier(event,self.source_entity_uuid)
 

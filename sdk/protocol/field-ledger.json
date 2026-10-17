@@ -483,7 +483,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 284
+        "line": 305
       }
     ],
     "required": false,
@@ -511,7 +511,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 288
+        "line": 309
       }
     ],
     "required": true,
@@ -530,7 +530,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 289
+        "line": 310
       }
     ],
     "required": false,
@@ -553,7 +553,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 290
+        "line": 311
       }
     ],
     "required": false,
@@ -573,7 +573,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 294
+        "line": 315
       }
     ],
     "required": false,
@@ -596,7 +596,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 298
+        "line": 319
       }
     ],
     "required": false,
@@ -626,7 +626,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 299
+        "line": 320
       }
     ],
     "required": false,
@@ -646,7 +646,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 303
+        "line": 324
       }
     ],
     "required": false,
@@ -669,7 +669,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 304
+        "line": 325
       }
     ],
     "required": false,
@@ -692,7 +692,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 305
+        "line": 326
       }
     ],
     "required": false,
@@ -722,7 +722,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 306
+        "line": 327
       }
     ],
     "required": false,
@@ -750,7 +750,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 307
+        "line": 328
       }
     ],
     "required": false,
@@ -771,7 +771,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 308
+        "line": 329
       }
     ],
     "required": false,
@@ -928,7 +928,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 364
+        "line": 385
       }
     ],
     "required": true,
@@ -944,7 +944,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 365
+        "line": 386
       }
     ],
     "required": true,
@@ -959,7 +959,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 366
+        "line": 387
       }
     ],
     "required": false,
@@ -986,7 +986,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 371
+        "line": 392
       }
     ],
     "required": false,
@@ -1005,7 +1005,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 375
+        "line": 396
       }
     ],
     "required": false,
@@ -1025,7 +1025,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 379
+        "line": 400
       }
     ],
     "required": false,
@@ -1042,7 +1042,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 380
+        "line": 401
       }
     ],
     "required": false,
@@ -1062,7 +1062,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 384
+        "line": 405
       }
     ],
     "required": false,
@@ -1079,7 +1079,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 385
+        "line": 406
       }
     ],
     "required": false,
@@ -1096,7 +1096,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 386
+        "line": 407
       }
     ],
     "required": false,
@@ -1113,7 +1113,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 387
+        "line": 408
       }
     ],
     "required": false,
@@ -1130,7 +1130,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 388
+        "line": 409
       }
     ],
     "required": false,
@@ -1149,7 +1149,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 389
+        "line": 410
       }
     ],
     "required": false,
@@ -1167,7 +1167,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 390
+        "line": 411
       }
     ],
     "required": false,
@@ -1186,7 +1186,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 391
+        "line": 412
       }
     ],
     "required": false,
@@ -1203,7 +1203,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 392
+        "line": 413
       }
     ],
     "required": false,
@@ -1220,7 +1220,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 393
+        "line": 414
       }
     ],
     "required": false,
@@ -1243,7 +1243,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 343
+        "line": 364
       }
     ],
     "required": true,
@@ -1258,7 +1258,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 344
+        "line": 365
       }
     ],
     "required": true,
@@ -1274,7 +1274,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 345
+        "line": 366
       }
     ],
     "required": true,
@@ -1292,7 +1292,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 346
+        "line": 367
       }
     ],
     "required": false,
@@ -1311,7 +1311,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 351
+        "line": 372
       }
     ],
     "required": true,
@@ -1329,7 +1329,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 352
+        "line": 373
       }
     ],
     "required": false,
@@ -1345,7 +1345,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 356
+        "line": 377
       }
     ],
     "required": true,
@@ -1360,7 +1360,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 412
+        "line": 433
       }
     ],
     "required": true,
@@ -1376,7 +1376,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 413
+        "line": 434
       }
     ],
     "required": true,
@@ -1391,7 +1391,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 414
+        "line": 435
       }
     ],
     "required": false,
@@ -1411,7 +1411,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 418
+        "line": 439
       }
     ],
     "required": false,
@@ -1431,7 +1431,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 422
+        "line": 443
       }
     ],
     "required": true,
@@ -1446,7 +1446,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 423
+        "line": 444
       }
     ],
     "required": false,
@@ -1472,7 +1472,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 424
+        "line": 445
       }
     ],
     "required": false,
@@ -1496,7 +1496,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 425
+        "line": 446
       }
     ],
     "required": false,
@@ -1515,7 +1515,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 429
+        "line": 450
       }
     ],
     "required": false,
@@ -1535,7 +1535,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 453
+        "line": 474
       }
     ],
     "required": true,
@@ -1551,7 +1551,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 454
+        "line": 475
       }
     ],
     "required": true,
@@ -1627,7 +1627,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 570
+        "line": 591
       }
     ],
     "required": true,
@@ -1643,7 +1643,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 571
+        "line": 592
       }
     ],
     "required": false,
@@ -1662,7 +1662,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 575
+        "line": 596
       }
     ],
     "required": false,
@@ -3403,7 +3403,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3000
+        "line": 3195
       }
     ],
     "required": true,
@@ -3419,7 +3419,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3001
+        "line": 3196
       }
     ],
     "required": true,
@@ -3434,7 +3434,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3002
+        "line": 3197
       }
     ],
     "required": true,
@@ -3449,7 +3449,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3003
+        "line": 3198
       }
     ],
     "required": false,
@@ -3465,7 +3465,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3004
+        "line": 3199
       }
     ],
     "required": false,
@@ -3483,7 +3483,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3005
+        "line": 3200
       }
     ],
     "required": false,
@@ -3516,7 +3516,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3006
+        "line": 3201
       }
     ],
     "required": false,
@@ -3540,7 +3540,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3007
+        "line": 3202
       }
     ],
     "required": false,
@@ -3563,7 +3563,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3008
+        "line": 3203
       }
     ],
     "required": false,
@@ -3585,7 +3585,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3009
+        "line": 3204
       }
     ],
     "required": false,
@@ -3604,7 +3604,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3010
+        "line": 3205
       }
     ],
     "required": false,
@@ -3627,7 +3627,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 606
+        "line": 627
       }
     ],
     "required": false,
@@ -3644,7 +3644,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 607
+        "line": 628
       }
     ],
     "required": true,
@@ -3675,7 +3675,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 608
+        "line": 629
       }
     ],
     "required": true,
@@ -3693,7 +3693,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 609
+        "line": 630
       }
     ],
     "required": false,
@@ -3717,7 +3717,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 613
+        "line": 634
       }
     ],
     "required": false,
@@ -6023,7 +6023,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 616
+        "line": 637
       }
     ],
     "required": false,
@@ -6040,7 +6040,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 616
+        "line": 637
       }
     ],
     "required": true,
@@ -6071,7 +6071,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 616
+        "line": 637
       }
     ],
     "required": true,
@@ -6089,7 +6089,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 616
+        "line": 637
       }
     ],
     "required": false,
@@ -6113,7 +6113,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 616
+        "line": 637
       }
     ],
     "required": false,
@@ -6132,7 +6132,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 618
+        "line": 639
       }
     ],
     "required": false,
@@ -8351,7 +8351,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 242
+        "line": 263
       }
     ],
     "required": true,
@@ -8373,7 +8373,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 243
+        "line": 264
       }
     ],
     "required": true,
@@ -8395,7 +8395,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 244
+        "line": 265
       }
     ],
     "required": false,
@@ -8418,7 +8418,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 245
+        "line": 266
       }
     ],
     "required": true,
@@ -8438,7 +8438,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 246
+        "line": 267
       }
     ],
     "required": false,
@@ -8468,7 +8468,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 247
+        "line": 268
       }
     ],
     "required": false,
@@ -8495,7 +8495,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 248
+        "line": 269
       }
     ],
     "required": false,
@@ -14549,7 +14549,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 521
+        "line": 542
       }
     ],
     "required": true,
@@ -14564,7 +14564,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 522
+        "line": 543
       }
     ],
     "required": true,
@@ -14579,7 +14579,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 523
+        "line": 544
       }
     ],
     "required": true,
@@ -14594,7 +14594,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 524
+        "line": 545
       }
     ],
     "required": true,
@@ -14609,7 +14609,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 525
+        "line": 546
       }
     ],
     "required": false,
@@ -14632,7 +14632,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 526
+        "line": 547
       }
     ],
     "required": false,
@@ -14658,7 +14658,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 527
+        "line": 548
       }
     ],
     "required": false,
@@ -19153,7 +19153,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2732
+        "line": 2925
       }
     ],
     "required": true,
@@ -19174,7 +19174,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2733
+        "line": 2926
       }
     ],
     "required": true,
@@ -19194,7 +19194,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2734
+        "line": 2927
       }
     ],
     "required": true,
@@ -19228,7 +19228,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2735
+        "line": 2928
       }
     ],
     "required": true,
@@ -20645,6 +20645,29 @@
       "default": null,
       "description": "Position input required after choosing a discovery target.",
       "title": "Position Selection"
+    }
+  },
+  {
+    "field": "PlayerAction.position_region",
+    "schema_pointer": "/$defs/PlayerAction/properties/position_region",
+    "owners": [
+      {
+        "file": "dnd/player/choices.py",
+        "line": 90
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PositionRegion"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Free-aim region of a position action; its aims are validated on demand."
     }
   },
   {
@@ -25062,6 +25085,115 @@
     }
   },
   {
+    "field": "PositionRegion.range_feet",
+    "schema_pointer": "/$defs/PositionRegion/properties/range_feet",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 220
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Range Feet"
+    }
+  },
+  {
+    "field": "PositionRegion.candidate_source",
+    "schema_pointer": "/$defs/PositionRegion/properties/candidate_source",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 221
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": "visible",
+      "enum": [
+        "visible",
+        "reachable"
+      ],
+      "title": "Candidate Source",
+      "type": "string"
+    }
+  },
+  {
+    "field": "PositionRegion.requires_unoccupied",
+    "schema_pointer": "/$defs/PositionRegion/properties/requires_unoccupied",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 222
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": false,
+      "title": "Requires Unoccupied",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "PositionRegion.requires_walkable",
+    "schema_pointer": "/$defs/PositionRegion/properties/requires_walkable",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 223
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": false,
+      "title": "Requires Walkable",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "PositionRegion.requires_axis_or_diagonal_alignment",
+    "schema_pointer": "/$defs/PositionRegion/properties/requires_axis_or_diagonal_alignment",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 224
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": false,
+      "title": "Requires Axis Or Diagonal Alignment",
+      "type": "boolean"
+    }
+  },
+  {
+    "field": "PositionRegion.exclude_source_position",
+    "schema_pointer": "/$defs/PositionRegion/properties/exclude_source_position",
+    "owners": [
+      {
+        "file": "dnd/core/base_actions.py",
+        "line": 225
+      }
+    ],
+    "required": false,
+    "schema": {
+      "default": true,
+      "title": "Exclude Source Position",
+      "type": "boolean"
+    }
+  },
+  {
     "field": "PrepareSpellsIntent.kind",
     "schema_pointer": "/$defs/PrepareSpellsIntent/properties/kind",
     "owners": [
@@ -26234,7 +26366,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2971
+        "line": 3166
       }
     ],
     "required": true,
@@ -26267,7 +26399,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2972
+        "line": 3167
       }
     ],
     "required": true,
@@ -26282,7 +26414,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2973
+        "line": 3168
       }
     ],
     "required": true,
@@ -26311,7 +26443,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2974
+        "line": 3169
       }
     ],
     "required": true,
@@ -26330,7 +26462,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2975
+        "line": 3170
       }
     ],
     "required": true,
@@ -26348,7 +26480,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2976
+        "line": 3171
       }
     ],
     "required": true,
@@ -31594,7 +31726,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 547
+        "line": 568
       }
     ],
     "required": true,
@@ -31609,7 +31741,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 548
+        "line": 569
       }
     ],
     "required": true,
@@ -31624,7 +31756,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 549
+        "line": 570
       }
     ],
     "required": true,
@@ -31639,7 +31771,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 550
+        "line": 571
       }
     ],
     "required": true,
@@ -31654,7 +31786,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 551
+        "line": 572
       }
     ],
     "required": false,
@@ -31677,7 +31809,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 552
+        "line": 573
       }
     ],
     "required": false,
@@ -31703,7 +31835,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 553
+        "line": 574
       }
     ],
     "required": false,
@@ -31720,7 +31852,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 554
+        "line": 575
       }
     ],
     "required": false,
@@ -31737,7 +31869,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 555
+        "line": 576
       }
     ],
     "required": false,

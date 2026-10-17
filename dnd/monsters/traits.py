@@ -8,6 +8,7 @@ from dnd.conditions import Concentrating, InvisibilityEffect
 from dnd.core.base_conditions import ConditionStateChangedEvent
 from dnd.core.condition_types import ConditionTag
 from dnd.core.saving_throw_types import SAVING_THROW_CONTEXT_KEY, SavingThrowContext
+from dnd.types.discovery import ActorScan, Relationship
 from dnd.types.world import MovementMode
 from typing import Callable, Literal, Optional, Tuple, List
 from uuid import UUID, uuid4
@@ -16,6 +17,7 @@ from dnd.types.physical_access import PhysicalAccess
 from pydantic import BaseModel, Field, model_validator
 from pydantic_core import PydanticUndefined
 
+from dnd.core.action_types import ActionSelection
 from dnd.core.attack_types import NaturalWeaponSpec
 from dnd.blocks.base_item import BaseItem
 from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, Move, entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
@@ -507,23 +509,20 @@ class AggressiveMoveAction(Move):
     description: str = Field(default="Move up to speed toward a visible hostile as a bonus action.", description="Rules summary.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Aggressive Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="Bonus action cost.")
 
-    def _validate(self, declaration_event):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         actor = Entity.get(self.source_entity_uuid)
-        if actor is None or self.end_position is None:
-            return declaration_event.cancel(status_message="Aggressive requires actor and destination")
-        enemies = [
-            entity
-            for entity_uuid, contact in actor.senses.entities.items()
-            if contact.visual
-            if (entity := Entity.get(entity_uuid)) is not None and actor.is_enemy(entity)
-        ]
+        if actor is None or not selection.positions:
+            return "Aggressive requires actor and destination"
+        destination = selection.positions[0]
+        enemies = [record.facts.position for record in scan.creatures.values()
+                   if record.visual and record.relationship is Relationship.ENEMY]
         if not enemies:
-            return declaration_event.cancel(status_message="No visible enemy for Aggressive")
-        before = min(actor.senses.get_feet_distance(enemy.position) for enemy in enemies)
-        after = min((abs(self.end_position[0] - enemy.position[0]) + abs(self.end_position[1] - enemy.position[1])) * 5 for enemy in enemies)
+            return "No visible enemy for Aggressive"
+        before = min(actor.senses.get_feet_distance(enemy) for enemy in enemies)
+        after = min((abs(destination[0] - enemy[0]) + abs(destination[1] - enemy[1])) * 5 for enemy in enemies)
         if after >= before:
-            return declaration_event.cancel(status_message="Aggressive destination must move closer to a visible enemy")
-        return super()._validate(declaration_event)
+            return "Aggressive destination must move closer to a visible enemy"
+        return Move.rule_error(self, scan, selection)
 
 
 class AttackReplacement(BaseModel):
@@ -596,13 +595,14 @@ class MultiattackAction(BaseAction):
         return result
 
 
-    def get_outcome_profile(self, actor: object) -> Optional[ActionOutcomeProfile]:
+    def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return a repeated-attack profile when every attack shares one shape."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         profiles: list[ActionOutcomeProfile] = []
         for attack in self._selected_attacks():
-            profile = attack.get_outcome_profile(actor)
+            profile = attack.get_outcome_profile()
             if profile is None:
                 return None
             profiles.append(profile)
@@ -628,13 +628,13 @@ class MultiattackAction(BaseAction):
                 return None
         return "No legal attacks for Multiattack"
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         actor = Entity.get(self.source_entity_uuid)
         if actor is None:
-            return declaration_event.cancel(status_message="Multiattack actor missing")
+            return "Multiattack actor missing"
         if self.use_attack_substitution and not self._substitution_available(actor):
-            return declaration_event.cancel(status_message="Selected Multiattack substitution unavailable")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Multiattack validated")
+            return "Selected Multiattack substitution unavailable"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         actor = Entity.get(self.source_entity_uuid)
@@ -676,8 +676,11 @@ class NaturalAttack(Attack):
             range=self.natural_range, magical=self.magical, fixed_attack_bonus=self.fixed_attack_bonus,
             fixed_damage_bonus=self.fixed_damage_bonus)
 
-    def get_outcome_profile(self, actor: object) -> Optional[ActionOutcomeProfile]:
-        profile = super().get_outcome_profile(actor)
+    def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        profile = super().get_outcome_profile()
         return profile.model_copy(update={"effect_id": f"natural_attack.{self.name.lower().replace(' ', '_')}"}) if profile is not None else None
 
     def get_range(self) -> Range:
@@ -1169,9 +1172,10 @@ class DivineEminenceAction(BaseAction):
             )
         ]
 
-    def get_self_setup_profile(self, actor: object) -> Optional[ActionSelfSetupProfile]:
+    def get_self_setup_profile(self) -> Optional[ActionSelfSetupProfile]:
         """Describe the short-lived radiant weapon setup for AI policy."""
-        if not isinstance(actor, Entity) or actor.get_lowest_spell_slot(1) is None:
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None or actor.get_lowest_spell_slot(1) is None:
             return None
         return ActionSelfSetupProfile(
             semantic_id="setup.divine_eminence",
@@ -1237,18 +1241,17 @@ class LeadershipAction(BaseAction):
     target_type: TargetType = Field(default=TargetType.SELF, description="Self action.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Leadership Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="Action cost.")
 
-    def validate_requirements_for_discovery(self) -> bool:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Require Leadership to remain unused, independently of its cost."""
         actor = Entity.get(self.source_entity_uuid)
-        return bool(
-            actor
-            and "Leadership Used" not in actor.active_conditions
-            and super().validate_requirements_for_discovery()
-        )
+        if actor is None or "Leadership Used" in actor.active_conditions:
+            return "Leadership was already used"
+        return None
 
-    def get_self_setup_profile(self, actor: object) -> Optional[ActionSelfSetupProfile]:
+    def get_self_setup_profile(self) -> Optional[ActionSelfSetupProfile]:
         """Describe the ally-support aura as a typed setup action."""
-        if not isinstance(actor, Entity) or "Leadership Used" in actor.active_conditions:
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None or "Leadership Used" in actor.active_conditions:
             return None
         return ActionSelfSetupProfile(
             semantic_id="support.leadership",

@@ -54,12 +54,6 @@ class TurnUndead(BaseAction):
         ]
     )
 
-    def _validate(self, event):
-        actor = Entity.get(self.source_entity_uuid)
-        if actor is None:
-            return event.cancel(status_message="Actor absent")
-        return super()._validate(event)
-
     def _apply(self, event):
         effect = event.phase_to(EventPhase.EFFECT)
         if not effect.canceled:
@@ -107,12 +101,6 @@ class PreserveLife(BaseAction):
             )
         ]
     )
-
-    def _validate(self, event):
-        actor = Entity.get(self.source_entity_uuid)
-        if actor is None:
-            return event.cancel(status_message="Actor absent")
-        return super()._validate(event)
 
     def _apply(self, event):
         effect = event.phase_to(EventPhase.EFFECT)

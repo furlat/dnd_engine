@@ -48,17 +48,18 @@ from typing import Any, Dict
 from dnd.entity import Entity
 from dnd.actions import Dash, Move, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.spells.hit_effects import install_hit_rider
-from dnd.spells.spell_utils import source_turn_expiry_handler, target_turn_expiry_handler, deliver_spell_damage, validate_line_of_sight
+from dnd.spells.spell_utils import source_turn_expiry_handler, target_turn_expiry_handler, deliver_spell_damage
 from dnd.core.base_actions import Cost, BaseCost, BaseAction, ActionCategory, ActionEvent
 from dnd.conditions import Blinded, Deafened, Frightened, Concentrating, ConcentrationActionMarker, apply_shared_sensory_condition, apply_frightened_disadvantage
 from dnd.creature_transforms import apply_unconscious_transform
-from dnd.spells.enchantment import BaneEffect, BlessEffect
+from dnd.spells.enchantment import BaneEffect, BlessEffect, seen_primary_record, selected_cast_level, target_count_error
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.blocks.skills import SKILL_TO_ABILITY
 
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.damage import DamageResolution
-from dnd.core.action_types import ActionVariantFacet, EntityDestinationSelection
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, EntityDestinationSelection
+from dnd.types.discovery import ActorScan
 from dnd.core.life_types import RemainsDisposition
 from dnd.core.events import ReviveEvent, PortalTransferEvent
 from dnd.spells.spell_utils import spell_valid_positions
@@ -90,17 +91,6 @@ class FalseLife(SpellAction):
         """Return the flat temporary hit point bonus before the d4 roll."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level) * 5
         return 4 + upcast_bonus
-
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate that the caster exists before the self spell executes."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Casting {self.name}"
-        )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Roll and apply False Life's temporary hit points."""
@@ -244,9 +234,10 @@ class ChillTouch(SpellAction):
             return 2
         return 1
 
-    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+    def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return Chill Touch's execution-honest actor-baseline attack model."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         profile = self.spell_attack_outcome_profile(
             actor,
@@ -256,28 +247,12 @@ class ChillTouch(SpellAction):
         )
         return profile
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range and line of sight for the spell attack."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source or not target:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        distance = self.get_target_distance(target.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen creature within range."""
+        record = seen_primary_record(scan, selection)
+        if record is None:
+            return f"Target entity not in line of sight for {self.name}"
+        return self.target_position_error(record.facts.position)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Execute the spell attack, damage roll, and hit debuffs."""
@@ -374,9 +349,10 @@ class Blight(SpellAction):
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
         return self.base_damage_dice + upcast_bonus
 
-    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+    def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return Blight's save-for-half necrotic damage model."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return self.saving_throw_damage_outcome_profile(
             actor,
@@ -387,37 +363,16 @@ class Blight(SpellAction):
             half_damage_on_save=True,
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate line of sight, range, and invalid creature types."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        if target_entity.creature_type == CreatureType.UNDEAD:
-            return declaration_event.cancel(
-                status_message="Blight has no effect on undead"
-            )
-        if target_entity.creature_type == CreatureType.CONSTRUCT:
-            return declaration_event.cancel(
-                status_message="Blight has no effect on constructs"
-            )
-
-        distance = self.get_target_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen creature within range that is neither undead nor a construct."""
+        record = seen_primary_record(scan, selection)
+        if record is None:
+            return f"Target entity not in line of sight for {self.name}"
+        if record.facts.creature_type == CreatureType.UNDEAD:
+            return "Blight has no effect on undead"
+        if record.facts.creature_type == CreatureType.CONSTRUCT:
+            return "Blight has no effect on constructs"
+        return self.target_position_error(record.facts.position)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the saving throw and apply necrotic damage."""
@@ -630,9 +585,10 @@ class BlindnessDeafness(SpellAction):
         """Return the action discovery multi-target count."""
         return self.get_num_projectiles()
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare the selected blindness/deafness save effect."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         effect_type = self.effect_type.lower()
         condition_keys = (
@@ -664,39 +620,22 @@ class BlindnessDeafness(SpellAction):
         targets.extend(self.extra_target_entity_uuids)
         return targets[:self.get_num_projectiles()]
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate effect choice, range, and line of sight for all targets."""
-        source = Entity.get(self.source_entity_uuid)
-        if not source:
-            return declaration_event.cancel(status_message="Caster not found")
-
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """The effect choice, then at most the slot's targets, each seen and within range."""
         if self.effect_type not in ["blinded", "deafened"]:
-            return declaration_event.cancel(status_message="Effect type must be 'blinded' or 'deafened'")
-
-        all_targets = self.get_all_targets()
-        validated_targets = set()
-
-        for target_uuid in all_targets:
-            if target_uuid in validated_targets:
-                continue
-            validated_targets.add(target_uuid)
-
-            target = Entity.get(target_uuid)
-            if not target:
-                return declaration_event.cancel(status_message="Target not found")
-
-            contact = source.senses.entities.get(target_uuid)
-            if contact is None or not contact.visual:
-                return declaration_event.cancel(status_message=f"{target.name} not in line of sight")
-
+            return "Effect type must be 'blinded' or 'deafened'"
+        error = target_count_error(self, selection, 1 + max(0, selected_cast_level(self, selection) - self.spell_level))
+        if error is not None:
+            return error
+        for identity in selection.target_uuids:
+            record = scan.creatures.get(identity)
+            target = Entity.get(identity)
+            if record is None or not record.visual or target is None:
+                return f"{target.name if target is not None else identity} not in line of sight"
             distance = self.get_target_distance(target.position)
             if distance > self.effective_range:
-                return declaration_event.cancel(
-                    status_message=f"{target.name} out of range ({distance}ft > {self.effective_range}ft)"
-                )
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+                return f"{target.name} out of range ({distance}ft > {self.effective_range}ft)"
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the save and apply the chosen effect on failure."""
@@ -780,7 +719,7 @@ class NecroticBless(SpellAction):
         """Return the fixed maximum number of targets."""
         return 4
 
-    def get_target_effect_profile(self, actor: Any) -> ActionTargetEffectProfile:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare the creature-type branches used for target allocation.
 
         Args:
@@ -789,6 +728,9 @@ class NecroticBless(SpellAction):
         Returns:
             Conditional Bless and Bane effects with the actor's current save DC.
         """
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         return ActionTargetEffectProfile(
             semantic_id="spell.necrotic_bless",
             branches=(
@@ -826,6 +768,10 @@ class NecroticBless(SpellAction):
             if extra not in targets:
                 targets.append(extra)
         return targets[:4]
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """At most four creatures."""
+        return target_count_error(self, selection, 4)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve one target during multi-target convolution."""
@@ -1278,9 +1224,10 @@ class EyebiteStrike(BaseAction):
         description="Eyebite casting-state condition that tracks successful saves.",
     )
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare the selected Eyebite strike condition."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         effect_choice = self.effect_choice.lower()
         condition_fact, condition_keys = {
@@ -1347,41 +1294,29 @@ class EyebiteStrike(BaseAction):
             save_ability="wisdom", save_dc=self.spell_dc,
             range_type="ranged", range_ft=60, projectile_type="ray")
 
-    def _validate(self, declaration_event: Event) -> Optional[Event]:
-        """Validate active Eyebite concentration and target range."""
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Active Eyebite concentration, and a seen creature within 60 feet that has not already saved."""
         caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        if "Concentrating" not in caster.active_conditions:
-            return declaration_event.cancel(status_message="Not concentrating on Eyebite")
-
+        if caster is None:
+            return "Caster not found"
         conc = caster.active_conditions.get("Concentrating")
         if not isinstance(conc, Concentrating) or conc.get_slot_by_spell_name("Eyebite") is None:
-            return declaration_event.cancel(status_message="Not concentrating on Eyebite")
-
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not target:
-            return declaration_event.cancel(status_message="No target specified")
-
+            return "Not concentrating on Eyebite"
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
+        if target is None:
+            return "No target specified"
         distance = caster.senses.get_feet_distance(target.position)
         if distance > 60:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
-
-        contact = caster.senses.entities.get(target.uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not visible")
-
+            return f"Target out of range ({distance}ft)"
+        record = scan.creatures.get(target.uuid)
+        if record is None or not record.visual:
+            return "Target not visible"
         casting_state = self._get_casting_state(caster)
         if casting_state is None:
-            return declaration_event.cancel(status_message="Eyebite casting owner is no longer active")
+            return "Eyebite casting owner is no longer active"
         if target.uuid in casting_state.successful_save_target_uuids:
-            return declaration_event.cancel(status_message="Target already succeeded against this Eyebite")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+            return "Target already succeeded against this Eyebite"
+        return None
 
     def _apply(self, execution_event: Event) -> Optional[Event]:
         """Resolve the Wisdom save and apply the chosen Eyebite effect."""
@@ -1491,18 +1426,17 @@ class Eyebite(SpellAction):
     effect_choice: Literal["asleep", "panicked", "sickened"] = Field(default="sickened", description="Initial and repeat strike effect choice.")
     harmful: Optional[bool] = True
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Admit the first visible target before spending the action or slot."""
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if caster is None or target is None:
-            return declaration_event.cancel(status_message="Eyebite requires a creature target")
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
+        if target is None:
+            return "Eyebite requires a creature target"
         if self.get_target_distance(target.position) > self.effective_range:
-            return declaration_event.cancel(status_message="Eyebite target out of range")
-        contact = caster.senses.entities.get(target.uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Eyebite target not visible")
-        return declaration_event.phase_to(EventPhase.EXECUTION)
+            return "Eyebite target out of range"
+        record = scan.creatures.get(target.uuid)
+        if record is None or not record.visual:
+            return "Eyebite target not visible"
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Register the granted action and resolve the first strike within this cast."""
@@ -1589,9 +1523,10 @@ class FingerOfDeath(SpellAction):
         """Return the fixed seven damage dice at every eligible slot level."""
         return self.base_damage_dice
 
-    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+    def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return Finger of Death's fixed save-for-half damage model."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return self.saving_throw_damage_outcome_profile(
             actor,
@@ -1603,28 +1538,12 @@ class FingerOfDeath(SpellAction):
             half_damage_on_save=True,
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate line of sight and range for the target."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        distance = self.get_target_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen creature within range."""
+        record = seen_primary_record(scan, selection)
+        if record is None:
+            return f"Target entity not in line of sight for {self.name}"
+        return self.target_position_error(record.facts.position)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the save and apply necrotic damage."""
@@ -1715,9 +1634,10 @@ class InflictWounds(SpellAction):
         """Return the number of d10 damage dice after upcasting."""
         return 2 + self.cast_at_level
 
-    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+    def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return Inflict Wounds' melee spell attack damage model."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return self.spell_attack_outcome_profile(
             actor,
@@ -1726,27 +1646,15 @@ class InflictWounds(SpellAction):
             damage_type=DamageType.NECROTIC,
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate line of sight and melee reach."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not source or not target:
-            return declaration_event.cancel(status_message="Source or target not found")
-
-        distance = self.get_target_distance(target.position)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen creature within melee reach."""
+        record = seen_primary_record(scan, selection)
+        if record is None:
+            return f"Target entity not in line of sight for {self.name}"
+        distance = self.get_target_distance(record.facts.position)
         if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of melee range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+            return f"Target out of melee range ({distance}ft > {self.effective_range}ft)"
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the spell attack and apply necrotic damage on hit."""
@@ -1946,9 +1854,10 @@ class Harm(SpellAction):
     projectile_type: Optional[str] = Field(default="touch", description="VFX projectile metadata.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
 
-    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+    def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return Harm's save-for-half necrotic damage model."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return self.saving_throw_damage_outcome_profile(
             actor,
@@ -1960,14 +1869,14 @@ class Harm(SpellAction):
             half_damage_on_save=True,
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target is None or self.get_target_distance(target.position) > self.effective_range:
-            return declaration_event.cancel(status_message="Harm target missing or out of range")
-        return los_event.phase_to(EventPhase.EXECUTION)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen creature within range."""
+        record = seen_primary_record(scan, selection)
+        if record is None:
+            return f"Target entity not in line of sight for {self.name}"
+        if self.get_target_distance(record.facts.position) > self.effective_range:
+            return "Harm target missing or out of range"
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the save, roll damage, and preserve at least 1 HP."""
@@ -2367,9 +2276,10 @@ class BestowCurse(SpellAction):
     curse_option: int = Field(default=1, description="Selected curse option from 1 through 4.")
     cursed_ability: AbilityName = Field(default="strength", description="Ability affected when option 1 is used.")
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare the selected Bestow Curse branch."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         option = max(1, min(4, self.curse_option))
         condition_fact, condition_keys = {
@@ -2531,19 +2441,18 @@ class SpareTheDying(SpellAction):
     include_dead: bool = True
     harmful: bool = False
 
-    def get_target_effect_profile(self,actor: Any):
+    def get_target_effect_profile(self):
         return ActionTargetEffectProfile(semantic_id="support.spare_the_dying",branches=(ActionTargetEffectBranchProfile(
             effect_id="support.spare_the_dying.life_state",disposition=TargetEffectDisposition.BENEFICIAL,
             resolution=OutcomeResolution.AUTOMATIC,condition_fact_ids=("selected_target.life_state.stable",)),))
 
-    def _validate(self, event: SpellEvent) -> Optional[SpellEvent]:
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if target is None or target.creature_type in (CreatureType.UNDEAD, CreatureType.CONSTRUCT):
-            return event.cancel(status_message="A living creature is required")
+            return "A living creature is required"
         if target.health.life_state not in (LifeState.DYING, LifeState.STABLE) or target.get_normal_hp() != 0:
-            return event.cancel(status_message="Target must be dying or stable at 0 HP")
-        checked = self.validate_single_recipient(event)
-        return checked if checked is None or checked.canceled else checked.phase_to(EventPhase.EXECUTION)
+            return "Target must be dying or stable at 0 HP"
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self, event: SpellEvent) -> Optional[SpellEvent]:
         effect = event.phase_to(EventPhase.EFFECT)
@@ -2566,8 +2475,9 @@ class RayOfSickness(SpellAction):
     spell_damage_type: DamageType = DamageType.POISON
     saving_throw_effect_tags: Tuple[SavingThrowEffectTag,...] = (SavingThrowEffectTag.POISON,)
 
-    def get_outcome_profile(self,actor: Any):
-        if not isinstance(actor,Entity):
+    def get_outcome_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return self.spell_attack_outcome_profile(actor,dice_count=2+self.get_upcast_bonus(),die_size=8,damage_type=DamageType.POISON)
 
@@ -2575,9 +2485,8 @@ class RayOfSickness(SpellAction):
     def performs_attack(self) -> bool:
         return True
 
-    def _validate(self, event: SpellEvent) -> Optional[SpellEvent]:
-        checked = self.validate_single_recipient(event)
-        return checked if checked is None or checked.canceled else checked.phase_to(EventPhase.EXECUTION)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self, event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2674,26 +2583,28 @@ class VampiricTouchStrike(SpellAction):
     def performs_attack(self) -> bool:
         return True
 
-    def get_outcome_profile(self,actor: Any):
+    def get_outcome_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         return self.spell_attack_outcome_profile(actor,dice_count=self.cast_at_level,die_size=6,damage_type=DamageType.NECROTIC)
 
     def _create_declaration_event(self,parent_event: Event | None=None,use_register: bool=True):
         event=super()._create_declaration_event(parent_event,use_register)
         return event.with_updates(retained_effect_origin=self.effect_origin) if isinstance(event,SpellEvent) else event
 
-    def validate_source_requirements_for_discovery(self) -> bool:
+    def _grant_owner_active(self) -> bool:
         caster=Entity.get(self.source_entity_uuid)
         owner=caster.active_conditions_by_uuid.get(self.grant_condition_uuid) if caster else None
         return owner is not None and owner.applied and owner.contributions_active()
 
-    def _validate(self,event: SpellEvent):
-        if not self.validate_source_requirements_for_discovery():
-            return event.cancel(status_message="Vampiric Touch concentration has ended")
-        checked=self.validate_single_recipient(event)
-        return checked.phase_to(EventPhase.EXECUTION) if checked is not None and not checked.canceled else checked
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        if not self._grant_owner_active():
+            return "Vampiric Touch concentration has ended"
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self,event: SpellEvent):
-        if not self.validate_source_requirements_for_discovery():
+        if not self._grant_owner_active():
             return event.cancel(status_message="Vampiric Touch concentration has ended")
         return _vampiric_touch(self,event)
 
@@ -2713,12 +2624,14 @@ class VampiricTouch(SpellAction):
     def performs_attack(self) -> bool:
         return True
 
-    def get_outcome_profile(self,actor: Any):
+    def get_outcome_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         return self.spell_attack_outcome_profile(actor,dice_count=self.cast_at_level,die_size=6,damage_type=DamageType.NECROTIC)
 
-    def _validate(self,event: SpellEvent):
-        checked=self.validate_single_recipient(event)
-        return checked.phase_to(EventPhase.EXECUTION) if checked is not None and not checked.canceled else checked
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self,event: SpellEvent):
         marker=VampiricTouchEffect(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.source_entity_uuid,
@@ -2753,7 +2666,7 @@ class Revivify(SpellAction):
     _revival: ReviveEvent | None = PrivateAttr(default=None)
     _transfer: PortalTransferEvent | None = PrivateAttr(default=None)
 
-    def get_target_effect_profile(self,actor: Any):
+    def get_target_effect_profile(self):
         return ActionTargetEffectProfile(semantic_id="support.revivify",branches=(ActionTargetEffectBranchProfile(
             effect_id="support.revivify.life_state",disposition=TargetEffectDisposition.BENEFICIAL,
             resolution=OutcomeResolution.AUTOMATIC,condition_fact_ids=("selected_target.life_state.alive",)),))
@@ -2772,9 +2685,9 @@ class Revivify(SpellAction):
     def get_valid_positions(self):
         return spell_valid_positions(self)
 
-    def _selection_error(self):
+    def _selection_error(self, selection: ActionSelection):
         caster=Entity.get(self.source_entity_uuid)
-        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target=Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if caster is None or target is None or not target.is_player_companion or not caster.is_ally(target):
             return "Choose an allied player companion"
         if target.health.life_state not in (LifeState.DEAD,LifeState.DYING,LifeState.STABLE):
@@ -2784,7 +2697,7 @@ class Revivify(SpellAction):
         if target.health.life_state is not LifeState.DEAD and target.health.is_healing_blocked():
             return "Companion cannot receive healing"
         if self.relocate:
-            destination=self.end_position
+            destination=selection.positions[0] if selection.positions else None
             grid=get_map()
             if (destination is None or self.target_position_error(destination) is not None
                     or not grid.has_tile(*destination) or not grid.is_walkable_for(*destination,target.uuid)
@@ -2794,7 +2707,7 @@ class Revivify(SpellAction):
         return None
 
     def selection_preview_error(self):
-        return self._selection_error()
+        return self._selection_error(self.current_selection())
 
     def get_additional_target_candidates(self):
         caster=Entity.get(self.source_entity_uuid)
@@ -2805,22 +2718,17 @@ class Revivify(SpellAction):
             and target.health.life_state in (LifeState.DEAD,LifeState.DYING,LifeState.STABLE)
             and caster.senses.visible.get(target.position,False)}
 
-    def _validate(self,event: SpellEvent):
-        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        caster=Entity.get(self.source_entity_uuid)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        target=Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if target is not None and target.health.life_state is LifeState.DEAD:
-            checked=event
-            if caster is None or not caster.senses.visible.get(target.position,False) or self.get_target_distance(target.position)>30:
-                return event.cancel(status_message="Companion remains are not visible within thirty feet")
-        else:
-            checked=self.validate_single_recipient(event)
-        if checked is None or checked.canceled:
-            return checked
-        error=self._selection_error()
-        return checked.cancel(status_message=error) if error else checked.phase_to(EventPhase.EXECUTION)
+            if target.position not in scan.visible or self.get_target_distance(target.position)>30:
+                return "Companion remains are not visible within thirty feet"
+        elif (error:=self.single_recipient_error(scan, selection)) is not None:
+            return error
+        return self._selection_error(selection)
 
     def _apply_costs(self,event: SpellEvent):
-        error=self._selection_error()
+        error=self._selection_error(self.current_selection())
         if error:
             return event.cancel(status_message=error)
         target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -2839,12 +2747,12 @@ class Revivify(SpellAction):
                     self._transfer=self._transfer.phase_to(phase)
             if self._transfer.canceled:
                 return event.cancel(status_message="Companion relocation was prevented")
-        error=self._selection_error()
+        error=self._selection_error(self.current_selection())
         return event.cancel(status_message=error) if error else super()._apply_costs(event)
 
     def _apply(self,event: SpellEvent):
         effect=event.phase_to(EventPhase.EFFECT)
-        error=self._selection_error()
+        error=self._selection_error(self.current_selection())
         if effect.canceled or error:
             return effect if effect.canceled else effect.cancel(status_message=error)
         target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None

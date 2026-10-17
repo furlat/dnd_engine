@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+from typing import Any, Literal
 from pydantic import Field
 
 from dnd.actions import (
@@ -22,12 +22,14 @@ from dnd.core.base_actions import (
     OutcomeResolution,
     TargetType,
 )
+from dnd.core.action_types import ActionSelection
 from dnd.core.dice import AttackOutcome, DiceRoll
 from dnd.core.events import Damage, Event, EventPhase
 from dnd.core.creature_types import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.types.abilities import AbilityName
+from dnd.types.discovery import ActorScan
 
 
 DRAGONBORN_BREATH_RESOURCE = "dragonborn_breath_weapon"
@@ -94,12 +96,10 @@ class DragonbornBreathWeapon(BaseAction):
             ),
         ]
 
-    def get_outcome_profile(
-        self,
-        actor: Any,
-    ) -> ActionOutcomeProfile | None:
+    def get_outcome_profile(self) -> ActionOutcomeProfile | None:
         """Expose the actor-known save and damage rule to policy consumers."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         save_dc = (
             8
@@ -158,23 +158,10 @@ class DragonbornBreathWeapon(BaseAction):
         )
         return event
 
-    def _validate(
-        self,
-        declaration_event: DragonbornBreathWeaponEvent,
-    ) -> DragonbornBreathWeaponEvent:
-        source = Entity.get(self.source_entity_uuid)
-        if not isinstance(source, Entity):
-            return declaration_event.cancel(
-                status_message="Dragonborn Breath Weapon source not found",
-            )
-        if self.end_position is None or self.end_position == source.position:
-            return declaration_event.cancel(
-                status_message="Dragonborn Breath Weapon requires a direction",
-            )
-        return cast(
-            DragonbornBreathWeaponEvent,
-            super()._validate(declaration_event),
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        if not selection.positions or selection.positions[0] == scan.position:
+            return "Dragonborn Breath Weapon requires a direction"
+        return None
 
     def _apply(
         self,

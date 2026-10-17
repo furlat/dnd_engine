@@ -49,7 +49,7 @@ def test_natural_profile_and_hit_keep_held_weapon_and_unarmed_stats_unchanged():
         attack = NaturalAttack(source_entity_uuid=source.uuid, target_entity_uuid=target.uuid,
             name="Bite", natural_damage_dice=6, natural_dice_numbers=1,
             natural_damage_type=DamageType.PIERCING)
-        profile = attack.get_outcome_profile(source)
+        profile = attack.get_outcome_profile()
         assert profile is not None
         assert profile.damage_rolls[0].die_size == 6
         assert profile.damage_rolls[0].damage_type == DamageType.PIERCING.value

@@ -220,8 +220,8 @@ def test_spell_outcome_profiles_reach_epoch_without_registry_growth() -> None:
     root_registry_before = set(BaseObject._registry)
     value_registry_before = set(BaseValue._registry)
 
-    fire_profile = fire_template.get_outcome_profile(mage)
-    missile_profile = missile_template.get_outcome_profile(mage)
+    fire_profile = fire_template.get_outcome_profile()
+    missile_profile = missile_template.get_outcome_profile()
 
     assert set(BaseObject._registry) == root_registry_before
     assert set(BaseValue._registry) == value_registry_before
@@ -256,7 +256,7 @@ def test_eldritch_blast_outcome_profile_reaches_actor_capabilities() -> None:
         for action in warlock.registered_actions
         if action.name == "Eldritch Blast"
     )
-    expected_profile = blast_template.get_outcome_profile(warlock)
+    expected_profile = blast_template.get_outcome_profile()
     before = warlock.get_available_actions()
 
     blast_row = next(
@@ -629,7 +629,7 @@ def test_defensive_spell_profile_hooks_are_valid_contracts() -> None:
 
     for spell_cls, semantic_id, condition_key in expected:
         spell = spell_cls(source_entity_uuid=caster.uuid, template=True)
-        profile = spell.get_target_effect_profile(caster)
+        profile = spell.get_target_effect_profile()
 
         assert profile is not None
         assert profile.semantic_id == semantic_id
@@ -695,7 +695,7 @@ def test_bestow_curse_and_eyebite_strike_expose_selected_condition_branches() ->
         template=True,
         spell_dc=15,
         effect_choice="asleep",
-    ).get_target_effect_profile(caster)
+    ).get_target_effect_profile()
 
     assert bestow_semantics.semantic_id == "control.bestow_curse.option_3"
     assert bestow_semantics.target_effects
@@ -753,9 +753,9 @@ def test_weapon_attack_wrappers_share_one_stochastic_profile() -> None:
     root_registry_before = set(BaseObject._registry)
     value_registry_before = set(BaseValue._registry)
 
-    normal_profile = normal.get_outcome_profile(barbarian)
-    extra_profile = extra.get_outcome_profile(barbarian)
-    frenzy_profile = frenzy.get_outcome_profile(barbarian)
+    normal_profile = normal.get_outcome_profile()
+    extra_profile = extra.get_outcome_profile()
+    frenzy_profile = frenzy.get_outcome_profile()
 
     assert set(BaseObject._registry) == root_registry_before
     assert set(BaseValue._registry) == value_registry_before

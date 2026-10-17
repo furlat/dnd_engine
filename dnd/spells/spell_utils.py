@@ -29,6 +29,7 @@ from dnd.core.events import Damage, DamageRollPacket, DamageRollResultEvent
 from dnd.core.dice import AttackOutcome
 from dnd.core.base_block import BaseBlock
 from dnd.core.damage import DamageResolution
+from dnd.types.discovery import ActorScan
 
 
 def validate_line_of_sight(declaration_event: SpellEvent, source_entity_uuid: UUID) -> Optional[SpellEvent]:
@@ -53,6 +54,18 @@ def validate_line_of_sight(declaration_event: SpellEvent, source_entity_uuid: UU
         new_phase=EventPhase.EXECUTION,
         status_message=f"Validated line of sight for {declaration_event.name}"
     )
+
+
+def line_of_sight_error(scan: ActorScan, target_uuid: Optional[UUID]) -> Optional[str]:
+    """The rule-error twin of `validate_line_of_sight`: a creature target the actor sees."""
+    if target_uuid is None:
+        return "Target entity uuid not present"
+    if Entity.get(target_uuid) is None:
+        return "Target entity not found"
+    record = scan.creatures.get(target_uuid)
+    if record is None or not record.visual:
+        return "Target entity not in line of sight"
+    return None
 
 
 def fire_heal_roll_result(

@@ -43,13 +43,16 @@ def test_worker_discovers_previews_executes_and_records_new_spell_shapes(world,s
     register_spell(actor,spell,caster_level=7)
     choices=request_choices(world).choices
     candidates=[row for row in rows(choices) if row.behavior_id=='spell.'+behavior and row.can_afford
-        and choices.target_sets[row.target_set]]
+        and (choices.target_sets[row.target_set] or row.position_region is not None)]
     if behavior=='chromatic_orb':
         candidates=[row for row in candidates if any(facet.key=='side' and facet.value=='ground' for facet in row.variant_facets)]
     assert candidates,behavior
     action=candidates[0]
-    target=choices.target_sets[action.target_set][0]
-    selection=ActionSelection(action_index=action.discovery_index,target_indices=(target.index,))
+    listed=choices.target_sets[action.target_set]
+    # A free-aim row lists no cells: aim at a seen point two cells away (plan §14.4).
+    aim=(actor.position[0]+2,actor.position[1])
+    selection=(ActionSelection(action_index=action.discovery_index,target_indices=(listed[0].index,)) if listed
+        else ActionSelection(action_index=action.discovery_index,target_indices=(),extra_target_positions=(aim,)))
     before=EventQueue.event_cursor()
     _,_,preview=dispatch(runtime,Preview(seat_id=seat,request=PreviewRequest(actor_uuid=actor.uuid,
         state_revision=publication.state_revision,discovery_generation=choices.discovery_generation,
@@ -142,9 +145,25 @@ def test_worker_mixed_spell_encounter_returns_to_human_with_owned_effects_cleane
                 if position is not None and (binding.position is None or choices.positions[binding.position]!=position):continue
                 chosen=(row,binding);break
             if chosen is not None:break
-        assert chosen is not None,(behavior,[(row.template_name,len(choices.target_sets[row.target_set])) for row in options])
-        row,binding=chosen
-        selection=ActionSelection(action_index=row.discovery_index,target_indices=(binding.index,))
+        if chosen is None and position is None and near is not None:
+            # A free-aim row lists no cells: aim at a seen, empty cell beside the creature.
+            position=next(cell for cell in sorted((near.position[0]+dx,near.position[1]+dy)
+                for dx in (-1,0,1) for dy in (-1,0,1) if (dx,dy)!=(0,0))
+                if actor.senses.visible.get(cell) and not get_map().get_entities_at(cell))
+        if chosen is None and position is None and near is None:
+            # Any seen, empty point two to three cells from the actor.
+            position=next(cell for cell in sorted(actor.senses.visible)
+                if actor.senses.visible[cell] and 2<=max(abs(cell[0]-actor.position[0]),abs(cell[1]-actor.position[1]))<=3
+                and not get_map().get_entities_at(cell))
+        if chosen is None and position is not None:
+            # A free-aim row lists no cells: aim at the requested point (plan §14.4).
+            free=next((row for row in options if row.position_region is not None),None)
+            assert free is not None,(behavior,[(row.template_name,len(choices.target_sets[row.target_set])) for row in options])
+            selection=ActionSelection(action_index=free.discovery_index,target_indices=(),extra_target_positions=(position,))
+        else:
+            assert chosen is not None,(behavior,[(row.template_name,len(choices.target_sets[row.target_set])) for row in options])
+            row,binding=chosen
+            selection=ActionSelection(action_index=row.discovery_index,target_indices=(binding.index,))
         _,_,preview=dispatch(runtime,Preview(seat_id=seat,request=PreviewRequest(actor_uuid=actor.uuid,
             state_revision=publication.state_revision,discovery_generation=choices.discovery_generation,
             correlation_id=uuid4(),selection=selection)))

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
+from dnd.actions_functional import free_aim_target
 from dnd.controller import HumanController
 from dnd.core.events import EventQueue
 from dnd.core.content.descriptors import ContentVisibility
@@ -126,10 +127,15 @@ def retained_selection(runtime: Runtime, seat: str, actor: UUID, generation: int
     if not 0 <= selection.action_index < len(choices.all_actions):
         raise CommandRejected('invalid_selection')
     row = choices.all_actions[selection.action_index]
+    if row.position_region is not None and not selection.target_indices:
+        # A free aim: the first position is the aim, validated when previewed or executed.
+        if not selection.extra_target_positions:
+            raise CommandRejected('invalid_selection')
+        return row, (free_aim_target(row, selection.extra_target_positions[0]),), selection.extra_target_positions[1:]
     pool = {target.index: target for target in selection_target_pool(row, selection.target_indices)}
     if any(index < 0 or index not in pool for index in selection.target_indices):
         raise CommandRejected('invalid_selection')
-    return row, tuple(pool[index] for index in selection.target_indices)
+    return row, tuple(pool[index] for index in selection.target_indices), selection.extra_target_positions
 
 
 def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel, ...], BaseModel | None]:
@@ -148,10 +154,11 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
         return Reply(has_response=True), (), response
     if isinstance(request, Preview):
         query = request.request
-        row, selected = retained_selection(runtime, request.seat_id, query.actor_uuid, query.discovery_generation, query.selection)
+        row, selected, extra_positions = retained_selection(runtime, request.seat_id, query.actor_uuid,
+            query.discovery_generation, query.selection)
         response = PreviewResponse(**runtime.publications[request.seat_id].cursor.model_dump(exclude={'sequence'}),
             state_revision=query.state_revision, request=query,
-            preview=project_selection_preview(preview_player_selection(session, query.actor_uuid, row, selected, query.selection.extra_target_positions,
+            preview=project_selection_preview(preview_player_selection(session, query.actor_uuid, row, selected, extra_positions,
                 prefer_safe=query.selection.prefer_safe)))
         return Reply(has_response=True), (), response
     previous_hud = {seat: view.latest.hud_snapshot for seat, view in runtime.audiences.items()}
@@ -163,13 +170,13 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
         command = request.request
         match command.intent:
             case intent if intent.kind == 'execute_selection':
-                row, selected = retained_selection(runtime, request.seat_id, command.actor_uuid,
+                row, selected, extra_positions = retained_selection(runtime, request.seat_id, command.actor_uuid,
                     intent.discovery_generation, intent.selection)
                 if not selected or any(target.target_uuid is None for target in selected[1:]):
                     raise CommandRejected('invalid_selection')
                 operation = execute_player_action(session, command.actor_uuid, row, selected[0],
                     extra_target_uuids=tuple(target.target_uuid for target in selected[1:]),
-                    extra_target_positions=intent.selection.extra_target_positions,
+                    extra_target_positions=extra_positions,
                     prefer_safe=intent.selection.prefer_safe)
             case intent if intent.kind == 'prepare_spells':
                 operation = prepare_player_spells(session, command.actor_uuid, intent.selection)

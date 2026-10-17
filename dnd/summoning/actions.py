@@ -1,12 +1,17 @@
 """Ordinary action for ending one's still-controlled temporary creature."""
 
+from typing import Optional
+from uuid import UUID
+
 from pydantic import Field
 
 from dnd.actions import entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
 from dnd.core.events import EventPhase
 from dnd.entity import Entity
 from dnd.summoning.conditions import SummonControl, Summoned
+from dnd.types.discovery import ActorScan
 from dnd.types.summoning import SummonDepartureCause
 
 
@@ -18,8 +23,8 @@ class DismissSummon(BaseAction):
     costs: list[Cost] = Field(default_factory=lambda: [Cost(name="Dismiss Summon",
         cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)])
 
-    def _existence(self) -> Summoned | None:
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+    def _existence(self, target_uuid: Optional[UUID]) -> Summoned | None:
+        target = Entity.get(target_uuid) if target_uuid else None
         if target is None or not target.is_deployed or not target.has_runtime_agency():
             return None
         existence = target.active_conditions.get("Summoned")
@@ -32,13 +37,13 @@ class DismissSummon(BaseAction):
                 return None
         return existence
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        if self._existence() is None:
-            return declaration_event.cancel(status_message="This creature is not your controlled summon")
-        return declaration_event.phase_to(EventPhase.EXECUTION)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        if self._existence(selection.target_uuids[0] if selection.target_uuids else None) is None:
+            return "This creature is not your controlled summon"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
-        existence = self._existence()
+        existence = self._existence(self.target_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if existence is None or target is None:
             return execution_event.cancel(status_message="Summon control has ended")

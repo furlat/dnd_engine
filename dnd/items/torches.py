@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.blocks.base_item import UsableItem
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.content.descriptors import (
@@ -28,6 +29,7 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import Event, EventPhase, EventQueue, ExposedFlameEvent
+from dnd.types.discovery import ActorScan
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemLocation, ItemPresentationState
 from dnd.entity import Entity
@@ -110,23 +112,15 @@ class IgniteTorchAction(BaseAction):
         description="UUID of the torch item this action ignites.",
     )
 
-    def _validate(
-        self,
-        declaration_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         if self.source_item_uuid is None:
-            return declaration_event.cancel(status_message="No torch linked")
+            return "No torch linked"
         torch = BaseBlock.get(self.source_item_uuid)
         if not isinstance(torch, Torch):
-            return declaration_event.cancel(status_message="Torch not found")
+            return "Torch not found"
         if torch.is_lit:
-            return declaration_event.cancel(
-                status_message="Torch already lit",
-            )
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Validated",
-        )
+            return "Torch already lit"
+        return None
 
     def _apply(
         self,
@@ -183,21 +177,15 @@ class ExtinguishTorchAction(BaseAction):
         description="UUID of the torch item this action extinguishes.",
     )
 
-    def _validate(
-        self,
-        declaration_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         if self.source_item_uuid is None:
-            return declaration_event.cancel(status_message="No torch linked")
+            return "No torch linked"
         torch = BaseBlock.get(self.source_item_uuid)
         if not isinstance(torch, Torch):
-            return declaration_event.cancel(status_message="Torch not found")
+            return "Torch not found"
         if not torch.is_lit:
-            return declaration_event.cancel(status_message="Torch not lit")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Validated",
-        )
+            return "Torch not lit"
+        return None
 
     def _apply(
         self,
@@ -420,21 +408,13 @@ class IgniteWallTorchAction(BaseAction):
         description="UUID of the wall torch item being lit.",
     )
 
-    def _validate(
-        self,
-        declaration_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         if self.source_item_uuid is None:
-            return declaration_event.cancel(
-                status_message="No wall torch linked",
-            )
+            return "No wall torch linked"
         torch = BaseBlock.get(self.source_item_uuid)
         if not isinstance(torch, WallTorch) or not torch.is_active or torch.is_lit:
-            return declaration_event.cancel(status_message="Cannot light")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Validated",
-        )
+            return "Cannot light"
+        return None
 
     def _apply(
         self,
@@ -481,23 +461,13 @@ class ExtinguishWallTorchAction(BaseAction):
         description="UUID of the wall torch item being extinguished.",
     )
 
-    def _validate(
-        self,
-        declaration_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         if self.source_item_uuid is None:
-            return declaration_event.cancel(
-                status_message="No wall torch linked",
-            )
+            return "No wall torch linked"
         torch = BaseBlock.get(self.source_item_uuid)
         if not isinstance(torch, WallTorch) or not torch.is_active or not torch.is_lit:
-            return declaration_event.cancel(
-                status_message="Cannot extinguish",
-            )
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Validated",
-        )
+            return "Cannot extinguish"
+        return None
 
     def _apply(
         self,

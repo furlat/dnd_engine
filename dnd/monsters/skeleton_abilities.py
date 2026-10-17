@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import Field
 
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import BaseAction, ActionEvent, TargetType, Cost
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory
@@ -14,6 +15,7 @@ from dnd.core.events import (
 )
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.entity import Entity
+from dnd.types.discovery import ActorScan
 from dnd.actions import entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.conditions import Concentrating
 
@@ -198,41 +200,26 @@ class MarkTargetAction(BaseAction):
         """
         return self.spell_range
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        """Validate Mark Target range and line of sight.
-
-        Args:
-            declaration_event: Action declaration event to advance or cancel.
-
-        Returns:
-            Execution event when the target is visible and in range, otherwise a
-            canceled event.
-        """
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Mark Target's cooldown, line of sight and range."""
         source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
 
         if not source or not target:
-            return declaration_event.cancel(status_message="Source or target not found")
+            return "Source or target not found"
 
         if "Mark Cooldown" in source.active_conditions:
-            return declaration_event.cancel(
-                status_message="Mark Target is unavailable until the cooldown ends"
-            )
+            return "Mark Target is unavailable until the cooldown ends"
 
-        contact = source.senses.entities.get(target.uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not in line of sight")
+        record = scan.creatures.get(target.uuid)
+        if record is None or not record.visual:
+            return "Target not in line of sight"
 
         distance = source.senses.get_feet_distance(target.position)
         if distance > self.spell_range.normal:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
-            )
+            return f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
 
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}",
-        )
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply Mark Target's concentration, linked mark, and cooldown.

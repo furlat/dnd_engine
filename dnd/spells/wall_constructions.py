@@ -8,7 +8,7 @@ from pydantic import Field, PrivateAttr
 
 from dnd.actions import Move, SpellAction, SpellEvent, commit_forced_movement, entity_action_economy_cost_evaluator
 from dnd.blocks.base_item import BaseItem, WorldItem, PreparedItemRetirement
-from dnd.core.action_types import ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
@@ -27,7 +27,8 @@ from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, Wal
 from dnd.core.wall_geometry import wall_crosses_path, wall_path_contact, wall_shell_cells
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
-from dnd.spells.wall_fields import WallDamageSpec, WallFieldZone, apply_wall_damage, wall_condition_ref, wall_support_error
+from dnd.spells.wall_fields import WallDamageSpec, WallFieldZone, apply_wall_damage, selection_wall_support_error, wall_condition_ref
+from dnd.types.discovery import ActorScan
 from dnd.types.event_facts import GroupEntryKind
 from dnd.types.materials import Material
 from dnd.types.physical_access import PhysicalAccess
@@ -577,14 +578,18 @@ class ConstructWall(SpellAction):
             allow_origin_start=True, origin_start_offset_cells=1))
 
     def wall_geometry(self) -> WallAssemblyPresentationGeometry | None:
-        if self.end_position is None:
+        return self._wall_geometry(self.current_selection())
+
+    def _wall_geometry(self, selection: ActionSelection) -> WallAssemblyPresentationGeometry | None:
+        if not selection.positions:
             return None
-        points = self.get_selected_position_path()
+        end_position = selection.positions[0]
+        points = self._selected_position_path(selection)
         if points is not None and any(a == b for a, b in zip(points, points[1:])):
             return None
         if self.wall_form == "dome":
-            path = WallDome(center=self.end_position, radius_feet=self.dome_radius_feet)
-            anchor = self.end_position
+            path = WallDome(center=end_position, radius_feet=self.dome_radius_feet)
+            anchor = end_position
         elif points is not None and len(points) >= 2:
             path = WallPolyline(points=tuple(points)) if self.construction_material == "stone" else WallSegment(start=points[0], end=points[-1])
             anchor = points[0]
@@ -596,14 +601,17 @@ class ConstructWall(SpellAction):
             width_feet=width, height_feet=self.dome_radius_feet if self.wall_form == "dome" else 10) if tile is not None else None
 
     def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self.position_placement_error(subjective=True)
+        return self.position_selection_error() or self._placement_error(self.current_selection(), subjective=True)
 
     def get_selection_geometry(self):
         return self.wall_geometry()
 
-    def position_placement_error(self, *, subjective=False) -> str | None:
-        geometry = self.wall_geometry()
-        error = wall_support_error(self, geometry, subjective=subjective)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        return self._placement_error(selection, subjective=False)
+
+    def _placement_error(self, selection: ActionSelection, *, subjective: bool) -> str | None:
+        geometry = self._wall_geometry(selection)
+        error = selection_wall_support_error(self, selection, geometry, subjective=subjective)
         if error is not None or geometry is None:
             return error
         if self.construction_material == "stone" and self.wall_form == "dome":
@@ -634,9 +642,6 @@ class ConstructWall(SpellAction):
     def _create_declaration_event(self, parent_event=None, use_register=True) -> Event | None:
         event = super()._create_declaration_event(parent_event, use_register)
         return event.with_updates(area_geometry=self.wall_geometry()) if isinstance(event, SpellEvent) else event
-
-    def _validate(self, declaration_event: SpellEvent) -> SpellEvent | None:
-        return declaration_event.phase_to(EventPhase.EXECUTION)
 
     def _apply(self, execution_event: SpellEvent) -> SpellEvent | None:
         caster = Entity.get(self.source_entity_uuid)
@@ -929,12 +934,13 @@ class Forcecage(SpellAction):
     def get_discovery_variants(self,entity):
         return [slot.model_copy(update={"cage_form":form}) for slot in super().get_discovery_variants(entity) for form in ("cage","box")]
 
-    def position_placement_error(self,*,subjective=False):
-        geometry=self.get_selection_geometry()
-        error=wall_support_error(self,geometry,subjective=subjective)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        side=20 if self.cage_form=="cage" else 10
+        center=selection.positions[0] if selection.positions else None
+        error=selection_wall_support_error(self,selection,forcecage_geometry(center,side) if center else None,subjective=False)
         if error is not None:return error
         caster=Entity.get(self.source_entity_uuid)
-        if caster is None or self.end_position is None or forcecage_displacements(caster,self.end_position,20 if self.cage_form=="cage" else 10) is None:
+        if caster is None or center is None or forcecage_displacements(caster,center,side) is None:
             return "Forcecage cannot displace a partially enclosed creature"
         return None
 

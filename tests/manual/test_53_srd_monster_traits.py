@@ -179,7 +179,7 @@ def test_natural_bite_discloses_natural_attack_outcome_profile() -> None:
 
     bite = gnoll.get_action_template("Bite")
     assert bite is not None
-    profile = bite.get_outcome_profile(gnoll)
+    profile = bite.get_outcome_profile()
 
     assert profile is not None
     assert profile.effect_id == "natural_attack.bite"
@@ -458,7 +458,7 @@ def test_active_monster_actions_apply_their_marker_conditions() -> None:
     priest = _materialize_srd_fixture("priest", position=(1, 1), faction="monsters")
     action = priest.get_action_template("Divine Eminence")
     assert action is not None
-    setup = action.get_self_setup_profile(priest)
+    setup = action.get_self_setup_profile()
     assert setup is not None
     assert setup.semantic_id == "setup.divine_eminence"
     assert setup.increases_weapon_damage is True
@@ -489,7 +489,7 @@ def test_active_monster_actions_apply_their_marker_conditions() -> None:
     knight = _materialize_srd_fixture("knight", position=(1, 1), faction="monsters")
     leadership = knight.get_action_template("Leadership")
     assert leadership is not None
-    setup = leadership.get_self_setup_profile(knight)
+    setup = leadership.get_self_setup_profile()
     assert setup is not None
     assert setup.semantic_id == "support.leadership"
     assert setup.maximum_duration_rounds == 10

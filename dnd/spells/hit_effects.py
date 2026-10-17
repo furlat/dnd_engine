@@ -1,12 +1,12 @@
 """Native attack components and caster-owned quarry state for Mark and Hex."""
-from typing import Callable, ClassVar, Literal
+from typing import Callable, ClassVar, Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import Field, PrivateAttr
 
-from dnd.actions import Attack, AttackEvent, SpellAction, SpellEvent, create_weapon_attack_declaration_event, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, grant_weapon_attack_batch
+from dnd.actions import Attack, AttackEvent, SpellAction, SpellEvent, create_weapon_attack_declaration_event, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, grant_weapon_attack_batch, weapon_attack_error
 from dnd.conditions import ConcentrationActionMarker
-from dnd.core.action_types import ActionVariantFacet
+from dnd.core.action_types import ActionSelection, ActionVariantFacet
 from dnd.core.base_block import BaseBlock, PreparedConditionApplication, PreparedConditionRemovals
 from dnd.core.action_types import RestrictedActionKind
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType, spell_slot_cost_type
@@ -19,6 +19,7 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.life_types import LifeState
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
+from dnd.types.discovery import ActorScan
 
 
 def spell_component_allowed(owner: BaseCondition, target_uuid: UUID) -> bool:
@@ -114,23 +115,18 @@ class ReapplyQuarry(BaseAction):
     def get_range(self) -> Range:
         return Range(type=RangeType.RANGE,normal=60)
 
-    def targeting_error(self) -> str | None:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
         sustain=BaseCondition.get(self.sustain_uuid)
         if not isinstance(sustain,QuarrySustain) or not sustain.applied or not sustain.contributions_active() or not sustain.reapply_available():
             return "The current quarry must first be defeated"
-        return super().targeting_error()
-
-    def _validate(self,event: ActionEvent) -> ActionEvent:
-        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target=Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         caster=Entity.get(self.source_entity_uuid)
         if target is None or caster is None or caster.senses.get_feet_distance(target.position)>60:
-            return event.cancel(status_message="Quarry is outside mark range")
-        contact=caster.senses.entities.get(target.uuid)
-        if contact is None or not contact.visual:
-            return event.cancel(status_message="Quarry must be visible")
-        if (error:=self.targeting_error() or self._validate_target_filter([target.uuid])) is not None:
-            return event.cancel(status_message=error)
-        return event.phase_to(EventPhase.EXECUTION)
+            return "Quarry is outside mark range"
+        record=scan.creatures.get(target.uuid)
+        if record is None or not record.visual:
+            return "Quarry must be visible"
+        return self._target_filter_error(scan,[target.uuid])
 
     def _cancel_quarry_admission(self) -> None:
         application=self._quarry_application
@@ -237,21 +233,22 @@ class AttackBackedSpell(SpellAction):
         caster=Entity.get(self.source_entity_uuid)
         return caster.get_weapon_range(self.weapon_slot) if caster is not None else self.spell_range
 
-    def _validate(self,event: SpellEvent) -> SpellEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        """An equipped weapon whose ordinary attack would be admitted against the target."""
         caster=Entity.get(self.source_entity_uuid)
         weapon=caster.equipment.get_weapon(self.weapon_slot) if caster is not None else None
-        if weapon is None or weapon.is_body_attack or weapon.spell_attack_profile is not None or (not self.ranged_allowed and self.weapon_slot is WeaponSlot.RANGED_MAIN):
-            return event.cancel(status_message="An equipped weapon is required")
-        self.selected_weapon_uuid=weapon.uuid
-        attack=Attack(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid,
-            weapon_slot=self.weapon_slot,costs=[])
-        declaration=attack._create_declaration_event(parent_event=event,use_register=False)
-        if not isinstance(declaration,AttackEvent):
-            return event.cancel(status_message="Weapon attempt could not be declared")
-        checked=attack._validate(declaration)
-        if checked is None or checked.canceled:
-            return event.cancel(status_message=checked.status_message if checked is not None else "Weapon attempt rejected")
-        return event.phase_to(EventPhase.EXECUTION)
+        if caster is None or weapon is None or weapon.is_body_attack or weapon.spell_attack_profile is not None or (not self.ranged_allowed and self.weapon_slot is WeaponSlot.RANGED_MAIN):
+            return "An equipped weapon is required"
+        return weapon_attack_error(scan,caster,self.weapon_slot,None,
+            selection.target_uuids[0] if selection.target_uuids else None,"Attack")
+
+    def _validate(self,event: SpellEvent) -> SpellEvent | None:
+        """Remember the exact weapon this declaration admits; the hit payload refuses a swapped one."""
+        caster=Entity.get(self.source_entity_uuid)
+        weapon=caster.equipment.get_weapon(self.weapon_slot) if caster is not None else None
+        if weapon is not None:
+            self.selected_weapon_uuid=weapon.uuid
+        return cast(SpellEvent | None,super()._validate(event))
 
     def _on_costs_committed(self,declaration: ActionEvent,execution: ActionEvent) -> None:
         super()._on_costs_committed(declaration,execution)

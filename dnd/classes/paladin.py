@@ -45,7 +45,8 @@ from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock, PreparedConditionRemovals
 from dnd.core.base_conditions import BaseCondition, Duration, ConditionApplicationEvent
 from dnd.core.condition_types import ConditionTag, DurationType
-from dnd.core.action_types import ActionVariantFacet, EntityTargetPerception
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, EntityTargetPerception
+from dnd.types.discovery import ActorScan
 from dnd.types.physical_access import PhysicalAccess
 from dnd.core.events import Range, RangeType, SpatialChangeEvent
 from dnd.core.modifiers import (
@@ -589,16 +590,14 @@ class LayOnHands(BaseAction):
     def get_source_dynamic_costs(self):
         return feature_cost("lay_on_hands", 1 if self.mode == "lesser" else 2)
 
-    def _validate(self, event):
-        target = Entity.get(self.target_entity_uuid)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if target is None or target.creature_type in (
             CreatureType.UNDEAD,
             CreatureType.CONSTRUCT,
         ):
-            return event.cancel(
-                status_message="Lay on Hands requires a living eligible creature"
-            )
-        return super()._validate(event)
+            return "Lay on Hands requires a living eligible creature"
+        return None
 
     def _apply_costs(self, event):
         if self.mode == "cure":
@@ -1270,12 +1269,19 @@ class SacredWeapon(BaseAction):
             ),
         )
 
-    def _validate(self, event):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         actor = Entity.get(self.source_entity_uuid)
-        weapon = actor.equipment.get_weapon(self.weapon_slot)
+        weapon = actor.equipment.get_weapon(self.weapon_slot) if actor is not None else None
         if weapon is None or weapon.is_body_attack:
-            return event.cancel(status_message="Sacred Weapon requires a held weapon")
-        self.selected_weapon_uuid = weapon.uuid
+            return "Sacred Weapon requires a held weapon"
+        return None
+
+    def _validate(self, event):
+        """Remember the exact weapon this declaration admits; `_apply` refuses a swapped one."""
+        actor = Entity.get(self.source_entity_uuid)
+        weapon = actor.equipment.get_weapon(self.weapon_slot) if actor is not None else None
+        if weapon is not None:
+            self.selected_weapon_uuid = weapon.uuid
         return super()._validate(event)
 
     def _apply_costs(self, event):
@@ -1451,16 +1457,14 @@ class CleansingTouch(BaseAction):
             ),
         )
 
-    def _validate(self, event):
-        target = Entity.get(self.target_entity_uuid)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if target is None or not any(
             condition.uuid == self.condition_uuid
             for condition in cleansing_candidates(target)
         ):
-            return event.cancel(
-                status_message="Selected recipient-local spell is absent or unsupported"
-            )
-        return super()._validate(event)
+            return "Selected recipient-local spell is absent or unsupported"
+        return None
 
     def _apply_costs(self, event):
         target = Entity.get(self.target_entity_uuid)

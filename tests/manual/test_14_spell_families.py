@@ -145,7 +145,7 @@ def test_ranged_spell_attacks_are_disadvantaged_while_threatened() -> None:
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,
     )
-    profile = spell.get_outcome_profile(caster)
+    profile = spell.get_outcome_profile()
 
     assert caster.is_threatened() is True
     assert profile is not None

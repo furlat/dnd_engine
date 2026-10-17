@@ -1,6 +1,7 @@
 """Action templates, cost models, execution events, and discovery DTOs."""
 
 import time
+from dataclasses import replace
 from math import hypot
 
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, computed_field, field_validator, model_validator
@@ -8,6 +9,9 @@ from dnd.action_timing import action_timing_enabled, record_action_count, record
 from dnd.core.attack_types import AttackSourceMetadata
 from dnd.core.creature_types import DamageType
 from dnd.core.action_types import (
+    ActionSelection,
+    CostSource,
+    CostSourceKind,
     AvailableHandlerInfo,
     ActionPresentationKind,
     ActionAffordance,
@@ -20,6 +24,7 @@ from dnd.core.action_types import (
     RestrictedActionKind,
 )
 from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRef, EventResolutionRef, EffectPropagationLink, EffectOrigin, EffectOriginKind
+from dnd.types.discovery import ActorScan, Relationship, ScanRecord, relationship
 from dnd.types.event_facts import GroupEntryKind
 from dnd.core.events import ActionApplicationCommittedEvent, ActionCostsCommittedEvent, Event, EventType, EventPhase, EventProcessor, Range, EventQueue
 from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
@@ -45,7 +50,7 @@ from dnd.core.item_types import (
 )
 from dnd.core.modifiers import AdvantageStatus
 from dnd.blocks.sensory import Senses
-from typing import Any, Optional, Callable, ClassVar, OrderedDict, List, Dict, Iterator, Literal, Protocol, Sequence, Set, Tuple, cast, runtime_checkable
+from typing import Any, Optional, Callable, ClassVar, OrderedDict, List, Dict, Iterator, Literal, Protocol, Sequence, Set, Tuple, cast, final, runtime_checkable
 from uuid import UUID, uuid4, uuid5
 from enum import Enum
 
@@ -202,6 +207,22 @@ class PositionDiscoveryContract(BaseModel):
         default=False,
         description="Whether target distance is exposed as its movement cost.",
     )
+
+
+class PositionRegion(BaseModel):
+    """Where a position action may aim (plan §14.4 region descriptors).
+
+    Discovery lists no cells for it: the client or the AI aims anywhere in the
+    region and preview validates that one aim on demand.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    range_feet: Optional[int] = None
+    candidate_source: Literal["visible", "reachable"] = "visible"
+    requires_unoccupied: bool = False
+    requires_walkable: bool = False
+    requires_axis_or_diagonal_alignment: bool = False
+    exclude_source_position: bool = True
 
 
 class TargetType(str, Enum):
@@ -1011,6 +1032,9 @@ class BaseAction(BaseObject):
         default=False,
         description="Whether this action can be used while the source cannot take actions.",
     )
+    # Only an action whose costs depend on its selected target (Jump) needs
+    # its costs checked per discovery candidate.
+    target_dependent_costs: ClassVar[bool] = False
     position_discovery: Optional[PositionDiscoveryContract] = Field(
         default=None,
         description="Typed subjective candidate contract for plain position actions.",
@@ -1059,7 +1083,7 @@ class BaseAction(BaseObject):
         action_class = type(self)
         return f"{action_class.__module__}.{action_class.__qualname__}"
 
-    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+    def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return actor-known stochastic action data when the rule defines it.
 
         Args:
@@ -1092,7 +1116,7 @@ class BaseAction(BaseObject):
         """
         return None
 
-    def get_self_setup_profile(self, actor: Any) -> Optional[ActionSelfSetupProfile]:
+    def get_self_setup_profile(self) -> Optional[ActionSelfSetupProfile]:
         """Return the action's dependency-neutral self-setup annotation.
 
         Args:
@@ -1105,7 +1129,7 @@ class BaseAction(BaseObject):
         """
         return None
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Return conditional effects the rule applies to selected targets.
 
         Args:
@@ -1118,7 +1142,7 @@ class BaseAction(BaseObject):
         """
         return None
 
-    def get_world_effect_profile(self, actor: Any) -> Optional[ActionWorldEffectProfile]:
+    def get_world_effect_profile(self) -> Optional[ActionWorldEffectProfile]:
         """Return information or topology effects declared by the action rule.
 
         Args:
@@ -1363,6 +1387,9 @@ class BaseAction(BaseObject):
         return None
 
     def physical_access_error(self, *, subjective: bool = False) -> Optional[str]:
+        return self._physical_access_error(self.current_selection(), subjective=subjective)
+
+    def _physical_access_error(self, selection: ActionSelection, *, subjective: bool = False) -> Optional[str]:
         access = self.get_physical_access()
         if access is None:
             return None
@@ -1370,15 +1397,16 @@ class BaseAction(BaseObject):
         if origin is None:
             return "Action origin is not placed"
         grid = get_map()
+        primary = selection.target_uuids[0] if selection.target_uuids else None
         if self.effective_target_type is TargetType.OBJECT:
-            if self.target_entity_uuid is not None and grid.manual_object_contact(
-                self.source_entity_uuid, self.target_entity_uuid,
+            if primary is not None and grid.manual_object_contact(
+                self.source_entity_uuid, primary,
                 access=access, subjective=subjective,
             ) is None:
                 return "Object is out of physical reach"
             return None
         if self.effective_target_type is TargetType.CREATURE_OR_OBJECT:
-            identity = self.target_entity_uuid
+            identity = primary
             if identity is not None and grid.get_object_placement(identity) is not None:
                 action_range = self.get_range()
                 limit = (action_range.long or action_range.normal) if action_range else 5
@@ -1388,7 +1416,7 @@ class BaseAction(BaseObject):
                     return "Object is out of physical reach"
                 return None
         if self.effective_target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY, TargetType.CREATURE_OR_OBJECT):
-            targets = [target for identity in self.get_all_targets()
+            targets = [target for identity in self._selection_targets(selection)
                        if (target := BaseBlock.get(identity)) is not None]
             if not self.is_spell and any(target.uuid != self.source_entity_uuid and any(
                     condition.blocks_external_contact and condition.contributions_active()
@@ -1397,8 +1425,7 @@ class BaseAction(BaseObject):
             positions = [target.position for target in targets]
         elif self.effective_target_type in (TargetType.POSITION, TargetType.POSITION_LOS,
                                            TargetType.POSITION_PATH, TargetType.POSITION_AOE):
-            positions = [self.end_position] if self.end_position is not None else []
-            positions.extend(self.extra_target_positions)
+            positions = list(selection.positions)
         else:
             positions = []
         for position in positions:
@@ -1417,35 +1444,43 @@ class BaseAction(BaseObject):
 
     def get_selected_position_path(self) -> Optional[List[Tuple[int, int]]]:
         """Resolve explicit vertices, or one point measured from the targeting origin."""
+        return self._selected_position_path(self.current_selection())
+
+    def _selected_position_path(self, chosen: ActionSelection) -> Optional[List[Tuple[int, int]]]:
         selection = self.get_position_selection()
-        if selection is None or selection.kind != "path" or self.end_position is None:
+        if selection is None or selection.kind != "path" or not chosen.positions:
             return None
-        if self.extra_target_positions:
-            return [self.end_position, *self.extra_target_positions]
+        end_position, *extra = chosen.positions
+        if extra:
+            return [end_position, *extra]
         origin = self.get_target_origin()
         if selection.allow_origin_start and origin is not None:
-            ray = bresenham_line(origin, self.end_position)
+            ray = bresenham_line(origin, end_position)
             if len(ray) <= selection.origin_start_offset_cells:
                 return None
-            return [ray[selection.origin_start_offset_cells], self.end_position]
+            return [ray[selection.origin_start_offset_cells], end_position]
         return None
 
     def position_selection_error(self) -> Optional[str]:
         """Validate actual submitted positions before action-specific rules or costs."""
+        return self._position_selection_error(self.current_selection())
+
+    def _position_selection_error(self, chosen: ActionSelection) -> Optional[str]:
         selection = self.get_position_selection()
+        extra_positions = chosen.positions[1:]
         if selection is None or selection.kind == "single":
-            return "This action does not select additional positions" if self.extra_target_positions else None
+            return "This action does not select additional positions" if extra_positions else None
         if selection.kind == "entity_destination":
             if self.effective_target_type is not TargetType.ENTITY:
                 return "Creature and destination selection requires entity targeting"
-            if self.target_entity_uuid is None or self.end_position is None:
+            if not chosen.target_uuids or not chosen.positions:
                 return "Choose a creature and a destination"
-            if self.extra_target_positions:
+            if extra_positions:
                 return "Choose exactly one destination"
-            return self.target_position_error(self.end_position)
+            return self.target_position_error(chosen.positions[0])
         if self.effective_target_type != TargetType.POSITION_LOS:
             return "Path selection requires position targeting"
-        path = self.get_selected_position_path()
+        path = self._selected_position_path(chosen)
         if path is None:
             return "Select the path endpoints"
         if len(path) - 1 > selection.max_segments:
@@ -1656,12 +1691,18 @@ class BaseAction(BaseObject):
 
     def _resolve_area_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         """Resolve one native area and its eligible occupants from the same shape."""
-        if self.aoe_shape is None or self.end_position is None:
+        if self.end_position is None:
+            return [], None
+        return self._area_targets_at(self.end_position)
+
+    def _area_targets_at(self, aim: Tuple[int, int]) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        """The area's eligible occupants and footprint at one aim."""
+        if self.aoe_shape is None:
             return [], None
         source_block = BaseBlock.get(self.source_entity_uuid)
         if source_block is None:
             return [], None
-        footprint = objective_footprint(self.aoe_shape, self.end_position, source_block.position)
+        footprint = objective_footprint(self.aoe_shape, aim, source_block.position)
         grid = get_map()
         targets = sorted({identity for cell in footprint for identity in grid.get_entities_at(cell)},
             key=target_resolution_sort_key)
@@ -1767,6 +1808,35 @@ class BaseAction(BaseObject):
                         candidates[target_uuid] = position
         return candidates
 
+    def _target_filter_error(self, scan: ActorScan, targets: List[UUID]) -> Optional[str]:
+        """Perception and the relationship filter, read from the actor scan."""
+        if self.effective_target_type == TargetType.POSITION_AOE:
+            return None
+        admits_objects = (self.effective_target_type is TargetType.CREATURE_OR_OBJECT
+                          or (self.effective_target_type is TargetType.MULTI_ENTITY and self.multi_target_objects))
+        for target_uuid in targets:
+            if (target_uuid != self.source_entity_uuid and target_uuid not in scan.creatures
+                    and not (admits_objects and target_uuid in scan.objects)
+                    and not (self.entity_target_perception is EntityTargetPerception.TOUCH_CONTACT
+                             and self.admits_touch_target(target_uuid))):
+                target = BaseBlock.get(target_uuid)
+                return f"{target.name if target else target_uuid} is not visible"
+        source = BaseBlock.get(self.source_entity_uuid)
+        if source is None:
+            return "Source entity not found"
+        for target_uuid in targets:
+            target = BaseBlock.get(target_uuid)
+            if target is None:
+                return f"Target {target_uuid} not found"
+            kind = relationship(source.uuid, source.faction, target_uuid, target.faction)
+            if self.valid_target_filter == "enemies" and kind is not Relationship.ENEMY:
+                return f"{target.name} is not an enemy"
+            if self.valid_target_filter == "allies" and kind is not Relationship.ALLY:
+                return f"{target.name} is not an ally"
+            if self.valid_target_filter == "self_or_allies" and kind is Relationship.ENEMY:
+                return f"{target.name} is not self or an ally"
+        return None
+
     def _validate_target_filter(self, all_targets: List[UUID]) -> Optional[str]:
         """Validate that all targets match the valid_target_filter.
 
@@ -1820,6 +1890,155 @@ class BaseAction(BaseObject):
                     return f"{target.name} is not self or an ally"
 
         return None
+
+    def with_selection(self, selection: ActionSelection) -> "BaseAction":
+        """The executable instance of this registered action for one exact selection (plan §14.4b)."""
+        instance = self.instantiate(**self._selection_overrides(selection))
+        if selection.cost_source.kind is CostSourceKind.RESTRICTED:
+            source = BaseBlock.get(self.source_entity_uuid)
+            grant = next((grant for grant in source.get_restricted_action_grants()
+                          if grant.grant_id == selection.cost_source.restricted_grant_id), None) if source else None
+            if grant is None:
+                raise ValueError("The selected restricted action grant is not available")
+            instance._restricted_action_grant = grant
+        return instance
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        """The executable fields one selection sets; spells add their level and casting cost."""
+        targets, positions = selection.target_uuids, selection.positions
+        overrides: dict = {
+            "target_entity_uuid": targets[0] if targets else None,
+            "extra_target_entity_uuids": list(targets[1:]),
+            "end_position": positions[0] if positions else None,
+            "extra_target_positions": list(positions[1:]),
+        }
+        if selection.source_item_uuid is not None:
+            overrides["source_item_uuid"] = selection.source_item_uuid
+        return overrides
+
+    @final
+    def _admission_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """The checks every action shares, then the action's own rule (plan §14.3b).
+
+        Targets and positions come only from ``selection``: discovery checks a
+        candidate against the registered template itself, without a copy, and
+        nothing here declares an event.
+        """
+        if not self.contributions_active():
+            return "This granted action's owner is suppressed or absent"
+        targets = self._selection_targets(selection)
+        position = selection.positions[0] if selection.positions else None
+        error = (self._family_admission_error(scan, selection)
+            or self._source_condition_error(targets, position)
+            or self._position_selection_error(selection)
+            or self.source_item_error()
+            or self._recipient_error(scan, targets))
+        return error if error is not None else self.rule_error(scan, selection)
+
+    def _family_admission_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A check one action family shares (a spell's entitlement, origin and firing sector).
+
+        Only family base classes override it; a concrete action states its own
+        rule in `rule_error`.
+        """
+        return None
+
+    def discovery_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Discovery's admission of one candidate: the shared path plus physical access, without a copy or an event.
+
+        A creature-and-destination action lists a creature when one of its
+        destinations (plan §14.1) passes the rule; the first that does ends the
+        check.
+        """
+        position_selection = self.get_position_selection()
+        if (position_selection is not None and position_selection.kind == "entity_destination"
+                and not selection.positions):
+            error: Optional[str] = "No open destination"
+            for destination in self.relocation_destinations(scan, selection):
+                error = self._requirements_error(scan, replace(selection, positions=(destination,)), subjective=True)
+                if error is None:
+                    break
+            return error
+        return self._requirements_error(scan, selection, subjective=True)
+
+    def _requirements_error(self, scan: ActorScan, selection: ActionSelection, *, subjective: bool) -> Optional[str]:
+        """Every non-cost requirement of one selection: shared admission, the action's rule, physical access."""
+        return self._admission_error(scan, selection) or self._physical_access_error(selection, subjective=subjective)
+
+    def relocation_destinations(self, scan: ActorScan, selection: ActionSelection) -> Tuple[Tuple[int, int], ...]:
+        """Destinations a relocation may choose: seen, unoccupied and in range (plan §14.1).
+
+        An action measuring its destination from somewhere else than its own
+        origin (Telekinesis: from the moved creature) narrows this domain.
+        """
+        occupied = {record.position for record in scan.creatures.values()} | {scan.position}
+        return tuple(sorted(cell for cell in scan.visible
+                            if cell not in occupied and self.target_position_error(cell) is None))
+
+    def _selection_targets(self, selection: ActionSelection) -> List[UUID]:
+        """The recipients a selection names; an area's come from its footprint at the aim."""
+        if self.effective_target_type is TargetType.SELF:
+            return [self.source_entity_uuid]
+        if self.effective_target_type is TargetType.POSITION_AOE:
+            return self._area_targets_at(selection.positions[0])[0] if selection.positions else []
+        return list(selection.target_uuids)
+
+    def _recipient_error(self, scan: ActorScan, targets: Sequence[UUID]) -> Optional[str]:
+        """Touch contact, duplicates, perception and the relationship filter for named recipients."""
+        effective_tt = self.effective_target_type
+        if self.entity_target_perception is EntityTargetPerception.TOUCH_CONTACT:
+            if effective_tt not in (TargetType.SELF, TargetType.ENTITY, TargetType.MULTI_ENTITY) or not targets:
+                return "Touch contact requires entity targets"
+            if any(not self.admits_touch_target(target) for target in targets):
+                return "Target is not within physical touch contact"
+        elif effective_tt is TargetType.MULTI_ENTITY and not targets:
+            return "No targets specified"
+        if effective_tt is TargetType.MULTI_ENTITY and not self.allow_same_target and len(set(targets)) != len(targets):
+            return "This action cannot target the same entity multiple times"
+        if effective_tt in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE) or (
+                self.entity_target_perception is EntityTargetPerception.TOUCH_CONTACT):
+            return self._target_filter_error(scan, list(targets))
+        return None
+
+    def current_selection(self) -> ActionSelection:
+        """This executable instance's own choice, read from the fields `with_selection` set."""
+        targets = ((self.target_entity_uuid,) if self.target_entity_uuid is not None else ()) + tuple(
+            self.extra_target_entity_uuids)
+        positions = ((self.end_position,) if self.end_position is not None else ()) + tuple(self.extra_target_positions)
+        grant = self._restricted_action_grant
+        return ActionSelection(template_uuid=self.registered_template_uuid or self.uuid, target_uuids=targets,
+            positions=positions, source_item_uuid=self.source_item_uuid,
+            cost_source=(CostSource(kind=CostSourceKind.RESTRICTED, restricted_grant_id=grant.grant_id)
+                         if grant is not None else CostSource()))
+
+    def position_region(self) -> Optional[PositionRegion]:
+        """The free-aim region of a position action, from its discovery contract and range."""
+        if self.effective_target_type not in (TargetType.POSITION, TargetType.POSITION_LOS, TargetType.POSITION_AOE):
+            return None
+        contract = self.position_discovery or PositionDiscoveryContract()
+        action_range = self.get_range()
+        return PositionRegion(
+            range_feet=action_range.normal if action_range is not None and action_range.normal > 0 else None,
+            candidate_source=contract.candidate_source,
+            requires_unoccupied=contract.requires_subjective_unoccupied,
+            requires_walkable=contract.requires_subjective_walkable,
+            requires_axis_or_diagonal_alignment=contract.requires_axis_or_diagonal_alignment,
+            exclude_source_position=contract.exclude_source_position,
+        )
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """This action's own admission rule, after the shared checks (plan §14.3b).
+
+        Overrides read targets and positions only from ``selection`` and keep
+        full world access; they never copy the action, declare an event or
+        mutate anything, and they do not call ``super()``.
+        """
+        return None
+
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[ActionVariantFacet, ...]:
+        """The authored choices open at one level, for one target when they depend on it."""
+        return ()
 
     def instantiate(self, **overrides) -> "BaseAction":
         """Create an executable instance from this template.
@@ -2052,11 +2271,7 @@ class BaseAction(BaseObject):
         return [self.target_entity_uuid] if self.target_entity_uuid is not None else []
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        """Validate whether this action can be performed.
-
-        Multi-entity actions require explicit targets and may forbid duplicate
-        targets. Multi-entity and position-AoE actions both apply the configured
-        relationship target filter.
+        """Admit this executable instance's own selection through the one shared path (plan §14.3b).
 
         Args:
             declaration_event: Declaration-phase event to advance or cancel.
@@ -2065,37 +2280,12 @@ class BaseAction(BaseObject):
             Execution event on success, canceled event on validation failure, or
             `None` if a subclass declines validation.
         """
-        if not self.contributions_active():
-            return declaration_event.cancel(status_message="This granted action's owner is suppressed or absent")
-        effective_tt = self.effective_target_type
-        if self.entity_target_perception is EntityTargetPerception.TOUCH_CONTACT:
-            targets = ([self.source_entity_uuid] if effective_tt == TargetType.SELF else
-                       self.get_all_targets() if effective_tt == TargetType.MULTI_ENTITY else
-                       [self.target_entity_uuid] if self.target_entity_uuid is not None else [])
-            if effective_tt not in (TargetType.SELF, TargetType.ENTITY, TargetType.MULTI_ENTITY) or not targets:
-                return declaration_event.cancel(status_message="Touch contact requires entity targets")
-            if any(not self.admits_touch_target(target) for target in targets):
-                return declaration_event.cancel(status_message="Target is not within physical touch contact")
-            filter_error = self._validate_target_filter(targets)
-            if filter_error:
-                return declaration_event.cancel(status_message=filter_error)
-        if effective_tt in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
-            all_targets = self.get_all_targets()
-
-            if not all_targets:
-                if effective_tt == TargetType.MULTI_ENTITY:
-                    return declaration_event.cancel(status_message="No targets specified")
-
-            if effective_tt == TargetType.MULTI_ENTITY and not self.allow_same_target:
-                if len(set(all_targets)) != len(all_targets):
-                    return declaration_event.cancel(
-                        status_message="This action cannot target the same entity multiple times"
-                    )
-
-            filter_error = self._validate_target_filter(all_targets)
-            if filter_error:
-                return declaration_event.cancel(status_message=filter_error)
-
+        source = BaseBlock.get(self.source_entity_uuid)
+        if source is None:
+            return declaration_event.cancel(status_message="Source entity not found")
+        error = self._admission_error(source.action_scan(), self.current_selection())
+        if error is not None:
+            return declaration_event.cancel(status_message=error)
         return declaration_event.phase_to(
             EventPhase.EXECUTION,
             status_message=f"Succesfully validated action{self.name} for {declaration_event.source_entity_uuid}"
@@ -2144,12 +2334,14 @@ class BaseAction(BaseObject):
         return True
 
     def source_condition_error(self) -> str | None:
+        return self._source_condition_error(self.get_all_targets(), self.end_position)
+
+    def _source_condition_error(self, targets: Sequence[UUID], position: Optional[Tuple[int, int]]) -> str | None:
         source = BaseBlock.get(self.source_entity_uuid)
         if source is not None and not self.is_movement and any(condition.blocks_outward_actions
                 and condition.contributions_active() for condition in source.active_conditions_by_uuid.values()):
-            targets = self.get_all_targets()
             if self.is_attack or self.harmful or any(identity != source.uuid for identity in targets) or (
-                    self.end_position is not None and self.effective_target_type != TargetType.SELF):
+                    position is not None and self.effective_target_type != TargetType.SELF):
                 return "An active boundary prevents outward actions"
         if self.is_spell and source is not None and source.is_spellcasting_blocked():
             return "Spellcasting is prevented by an active condition"
@@ -2167,10 +2359,11 @@ class BaseAction(BaseObject):
         return self.source_condition_error() is None
 
     def pre_validate(self) -> bool:
-        """Validate affordability and non-cost requirements without execution."""
+        """Validate affordability and non-cost requirements without execution or events."""
+        source = BaseBlock.get(self.source_entity_uuid)
         return (
-            self.contributions_active() and self.check_costs()
-            and self.validate_requirements_for_discovery(subjective=False)
+            source is not None and self.contributions_active() and self.check_costs()
+            and self._requirements_error(source.action_scan(), self.current_selection(), subjective=False) is None
         )
 
     def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
@@ -2818,6 +3011,9 @@ class AvailableActionMetadata(BaseModel):
     position_selection: Optional[PositionSelection] = Field(
         default=None, description="Position input required after choosing a discovery target.",
     )
+    position_region: Optional[PositionRegion] = Field(
+        default=None, description="Free-aim region of a position action; its aims are validated on demand.",
+    )
     availability_status: ActionAvailabilityStatus = Field(
         description=(
             "Closed reason this authored row is executable or unavailable; "
@@ -2947,11 +3143,10 @@ class AvailableActionInfo(AvailableActionMetadata):
         available = (
             self.availability_status is ActionAvailabilityStatus.AVAILABLE
         )
-        if available != bool(self.valid_targets):
-            raise ValueError(
-                "available requires at least one executable target, while "
-                "every unavailable status requires an empty target list"
-            )
+        if not available and self.valid_targets:
+            raise ValueError("every unavailable status requires an empty target list")
+        if available and not self.valid_targets and self.position_region is None:
+            raise ValueError("available requires an executable target or a free-aim region")
         return self
 
     @property

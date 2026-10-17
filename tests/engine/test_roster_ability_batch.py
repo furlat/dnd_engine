@@ -135,7 +135,7 @@ def test_fixed_life_drain_baseline_keeps_independent_buffs_and_reductions_accumu
     owner.equipment.attack_bonus.self_static.add_value_modifier(NumericalModifier(value=3,name='Attack buff',source_entity_uuid=owner.uuid))
     owner.equipment.damage_bonus.self_static.add_value_modifier(NumericalModifier(value=2,name='Damage buff',source_entity_uuid=owner.uuid))
     action=WightLifeDrain(source_entity_uuid=owner.uuid,target_entity_uuid=target.uuid)
-    profile=action.get_outcome_profile(owner)
+    profile=action.get_outcome_profile()
     assert profile.attack_bonus==7 and profile.damage_rolls[0].flat_bonus==4
     before=target.get_max_hp()
     for _ in range(2):

@@ -5,7 +5,7 @@ from typing import cast, Callable, AbstractSet, DefaultDict, Dict, FrozenSet, Ma
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from contextlib import contextmanager
 import time
 
@@ -17,7 +17,7 @@ from dnd.core.elevation import support_distance_feet
 from dnd.core.modifiers import NumericalModifier, ResistanceStatus
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.action_types import ActionEconomyCostType, RestrictedActionGrant
+from dnd.core.action_types import ActionEconomyCostType, ActionSelection, RestrictedActionGrant
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import (
     BehaviorBinding,
@@ -54,6 +54,7 @@ from dnd.types.physical_access import PhysicalAccess
 from dnd.core.events import RangeType
 from dnd.types.actor import EntityStatsState, PendingSpatialReturn, SpatialDisposition
 from dnd.types.summoning import SummonOrigin, TerminalOwnerRelease
+from dnd.types.discovery import ActorScan, CreatureFacts, ObjectRecord, Relationship, ScanRecord, relationship
 from dnd.types.spatial_effects import SpatialDamageSource
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores, ability_score_normalizer
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
@@ -4406,48 +4407,71 @@ class Entity(BaseBlock):
             return True
         return False
 
-    def is_ally(self, other: 'Entity') -> bool:
-        """Check if another entity is an ally (same faction).
+    def creature_facts(self) -> CreatureFacts:
+        """Target-only facts the rules read about this creature (plan §14.2)."""
+        return CreatureFacts(uuid=self.uuid, position=self.position, creature_type=self.creature_type,
+            life_state=self.health.life_state, condition_names=frozenset(self.active_conditions),
+            blocks_external_contact=any(condition.blocks_external_contact and condition.contributions_active()
+                for condition in self.active_conditions_by_uuid.values()),
+            faction=self.faction, size=self.size)
 
-        Same faction = ally. None faction = no allies (except self).
-        An entity is always its own ally.
+    def action_scan(self, *, with_navigation: bool = False) -> ActorScan:
+        """Everything the admission checks read, built once per discovery call or action (plan §14.2).
 
-        Args:
-            other: The entity to check
-
-        Returns:
-            True if same entity, or same faction and neither has None faction
+        Admission reads perception, grants and charges. Navigation (reachable
+        costs, the reach mask, threat domains) is built only when discovery
+        asks for it: an executed action never pays for it.
         """
-        if other.uuid == self.uuid:
-            return True
-        if self.faction is None or other.faction is None:
-            return False
-        return self.faction == other.faction
+        record_action_count("discovery.action_scan", 1)
+        grid = get_map()
+        creatures: Dict[UUID, ScanRecord] = {}
+        for identity, contact in self.senses.entities.items():
+            other = Entity.get(identity)
+            if other is not None:
+                creatures[identity] = ScanRecord(facts=other.creature_facts(), position=contact.position,
+                    visual=contact.visual, relationship=relationship(self.uuid, self.faction, identity, other.faction))
+        x, y = self.position
+        reach_cells = frozenset(cell for cell in ((x + dx, y + dy) for dx in range(-2, 3) for dy in range(-2, 3))
+            if cell != self.position and grid.has_tile(*cell)
+            and grid.can_reach_between(self.position, cell, PhysicalAccess.HAND, self.uuid)) if with_navigation else frozenset()
+        carried = (*self.inventory.items.values(), *self.equipment.get_all_equipped_items())
+        return ActorScan(
+            actor_uuid=self.uuid,
+            position=self.position,
+            visible=frozenset(position for position, visible in self.senses.visible.items() if visible),
+            creatures=creatures,
+            objects={identity: ObjectRecord(uuid=identity, position=contact.position)
+                     for identity, contact in self.senses.objects.items()},
+            reachable_costs=dict(self.senses.path_costs) if with_navigation else {},
+            reach_cells=reach_cells,
+            threat_domains=({reactor.uuid: frozenset(cells) for reactor, cells in self._visible_hostile_threat_domains()}
+                            if with_navigation else {}),
+            slot_capacity={level: self.action_economy.spell_slot_value(level).normalized_score for level in range(1, 10)},
+            restricted_grants=frozenset(grant.grant_id for grant in self.get_restricted_action_grants()),
+            free_cast_grants=frozenset(self.spellcasting.free_cast_grants),
+            source_item_charges={item.uuid: item.charges for item in carried if isinstance(item, UsableItem)},
+            active_encounter_uuid=self.active_encounter_uuid,
+        )
+
+    def perform(self, action: BaseAction, selection: ActionSelection,
+                parent_event: Optional[Event] = None) -> Optional[Event]:
+        """Execute one registered action for one exact selection; the only `.apply(` entry in the engine."""
+        if action.source_entity_uuid != self.uuid:
+            raise ValueError(f"{action.name} does not belong to {self.name}")
+        return action.with_selection(selection).apply(parent_event)
+
+    def is_ally(self, other: 'Entity') -> bool:
+        """Same faction, or itself; a missing faction has no allies."""
+        return relationship(self.uuid, self.faction, other.uuid, other.faction) is not Relationship.ENEMY
 
     def is_enemy(self, other: 'Entity') -> bool:
-        """Check if another entity is an enemy (different faction).
-
-        Different faction = enemy. None faction = enemy to all (backward compatible).
-        An entity is not its own enemy.
-
-        Args:
-            other: The entity to check
-
-        Returns:
-            True if different faction or either has None faction
-        """
-        if other.uuid == self.uuid:
-            return False
-        if self.faction is None or other.faction is None:
-            return True
-        return self.faction != other.faction
+        """A different or missing faction; never itself."""
+        return relationship(self.uuid, self.faction, other.uuid, other.faction) is Relationship.ENEMY
 
     def is_enemy_of(self, other_uuid: UUID) -> bool:
-        """Faction-based enemy check (BaseBlock override)."""
+        """Faction-based enemy check (BaseBlock override); an absent creature counts as an enemy."""
         other = Entity.get(other_uuid)
-        if not other or not isinstance(other, Entity):
-            return True
-        return self.is_enemy(other)
+        return other is None or self.is_enemy(other)
 
     def get_visible_enemies(self, include_dead: bool = False) -> Dict[UUID, Tuple[int, int]]:
         """Get visible entities that are enemies.
@@ -5685,6 +5709,7 @@ class Entity(BaseBlock):
             configured_action_ref=template.configured_action_ref,
             target_type=target_type,
             position_selection=template.get_position_selection(),
+            position_region=template.position_region(),
             conditional_costs=template.get_conditional_costs(),
             allocation_completion=template.get_allocation_completion(),
             variant_facets=template.get_variant_facets(),
@@ -5705,10 +5730,10 @@ class Entity(BaseBlock):
             weapon_slot=weapon_slot,
             weapon_name=weapon_name,
             damage_types=row_damage_types,
-            outcome_profile=template.get_outcome_profile(self),
-            self_setup_profile=template.get_self_setup_profile(self),
-            target_effect_profile=template.get_target_effect_profile(self),
-            world_effect_profile=template.get_world_effect_profile(self),
+            outcome_profile=template.get_outcome_profile(),
+            self_setup_profile=template.get_self_setup_profile(),
+            target_effect_profile=template.get_target_effect_profile(),
+            world_effect_profile=template.get_world_effect_profile(),
             action_category=template.action_category,
             performs_attack=template.performs_attack,
             base_template_name=base_template_name,
@@ -5849,12 +5874,17 @@ class Entity(BaseBlock):
         self,
         template: BaseAction,
         target_pool: Dict[UUID, Tuple[int, int]],
+        scan: ActorScan,
     ) -> Tuple[List[AvailableTarget], int]:
-        """Validate candidate entity targets against a template.
+        """Admit candidate targets against the registered template itself (plan §14.3b).
+
+        Each candidate is a selection checked by `discovery_error`: no copy of
+        the action and no declaration event.
 
         Args:
             template: Action template being discovered.
             target_pool: Candidate positions keyed by target UUID.
+            scan: This discovery call's actor scan.
 
         Returns:
             Affordable valid targets with stable indexes, plus the count of
@@ -5862,24 +5892,23 @@ class Entity(BaseBlock):
         """
         valid_targets: List[AvailableTarget] = []
         rules_valid_count = 0
+        base = template.current_selection()
         for target_uuid, target_pos in target_pool.items():
-            targeted_template = template.model_copy(
-                deep=True,
-                update={"target_entity_uuid": target_uuid},
-            )
-            if not targeted_template.validate_requirements_for_discovery():
+            selection = replace(base, target_uuids=(target_uuid,))
+            record_action_count("discovery.validation", 1)
+            if template.discovery_error(scan, selection) is not None:
                 continue
             rules_valid_count += 1
-            if not targeted_template.check_costs():
+            if template.target_dependent_costs and not template.with_selection(selection).check_costs():
                 continue
             target_entity = BaseBlock.get(target_uuid)
             if isinstance(target_entity, BaseItem):
-                action_range = targeted_template.get_range()
-                access = targeted_template.get_physical_access()
+                action_range = template.get_range()
+                access = template.get_physical_access()
                 if action_range is not None and access is not None:
                     contact = get_map().attack_object_contact(self.uuid, target_uuid,
                         range_feet=action_range.long or action_range.normal, access=access,
-                        subjective=True, origin=targeted_template.get_target_origin())
+                        subjective=True, origin=template.get_target_origin())
                     if contact is not None:
                         target_pos = contact
             valid_targets.append(AvailableTarget(
@@ -5939,6 +5968,17 @@ class Entity(BaseBlock):
             footprint = objective_footprint(shape, aim, self.position)
             footprints[identity] = footprint
         return footprint
+
+    def _aoe_aim_points(self, admitted: Sequence[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        """One aim point per perceived creature, the actor included (plan §14.1).
+
+        Free aims anywhere in the row's region are validated on demand.
+        """
+        allowed = set(admitted)
+        aims = {contact.position for contact in self.senses.entities.values() if contact.position in allowed}
+        if self.position in allowed:
+            aims.add(self.position)
+        return sorted(aims)
 
     def _compute_aoe_at_position(
         self,
@@ -6069,20 +6109,6 @@ class Entity(BaseBlock):
             "affected_positions": result.affected_positions,
         })
 
-    def _compact_aoe_candidate_positions(
-        self,
-        shape: AoEShape,
-        valid_positions: Sequence[Tuple[int, int]],
-    ) -> List[Tuple[int, int]]:
-        """Collapse target cells that resolve to the same AoE footprint."""
-        if len(valid_positions) < 2:
-            return list(valid_positions)
-
-        positions_by_footprint: Dict[Tuple[object, ...], Tuple[int, int]] = {}
-        for position in sorted(valid_positions):
-            positions_by_footprint.setdefault(shape.footprint_target_key(position, self.position), position)
-        return list(positions_by_footprint.values())
-
     def _prepare_aoe_caches(
         self,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
@@ -6200,6 +6226,7 @@ class Entity(BaseBlock):
 
     def _collect_self_actions(
         self,
+        scan: ActorScan,
         discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
@@ -6222,7 +6249,7 @@ class Entity(BaseBlock):
                     continue
                 requirements_met = (
                     can_afford
-                    and template.validate_requirements_for_discovery()
+                    and template.discovery_error(scan, template.current_selection()) is None
                 )
                 if legal_only and not requirements_met:
                     continue
@@ -6254,6 +6281,7 @@ class Entity(BaseBlock):
         self,
         potential_targets: Dict[UUID, Tuple[int, int]],
         include_dead: bool,
+        scan: ActorScan,
         discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
@@ -6339,7 +6367,7 @@ class Entity(BaseBlock):
 
                 started = time.perf_counter() if timing else 0.0
                 valid_targets, rules_valid_count = (
-                    self._validate_entity_targets(template, target_pool)
+                    self._validate_entity_targets(template, target_pool, scan)
                     if source_requirements_met
                     else ([], 0)
                 )
@@ -6670,6 +6698,7 @@ class Entity(BaseBlock):
     def _collect_path_actions(
         self,
         remaining_movement: int,
+        scan: ActorScan,
         discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
@@ -6723,11 +6752,24 @@ class Entity(BaseBlock):
                         template.position_discovery,
                         caster_visible_positions,
                     )
-                    valid_positions = self._filter_targets_by_selected_cost(
+                    # Only movement lists its destinations (D13); any other
+                    # declared position is a free-aim region (plan §14.4).
+                    valid_positions = (self._filter_targets_by_selected_cost(
                         template,
                         template.position_discovery,
                         candidates,
-                    )
+                    ) if template.is_movement else [])
+                    if not template.is_movement and candidates:
+                        actions.append(self._make_action_info(
+                            template_name=template_name,
+                            target_type=target_type,
+                            valid_targets=[],
+                            can_afford=True,
+                            availability_status=ActionAvailabilityStatus.AVAILABLE,
+                            template=template,
+                            display_name=display_name,
+                        ))
+                        continue
                     availability_status = (
                         ActionAvailabilityStatus.AVAILABLE
                         if valid_positions
@@ -6797,21 +6839,22 @@ class Entity(BaseBlock):
                         )
                     else:
                         threat_domains = self._visible_hostile_threat_domains()
+                        base = template.current_selection()
                         for position, normal_path in paths_by_position.items():
                             if position == self.senses.position:
                                 continue
-                            targeted_template = template.model_copy(
-                                deep=True,
-                                update={"end_position": position},
-                            )
-                            if not targeted_template.validate_requirements_for_discovery():
+                            selection = replace(base, positions=(position,))
+                            record_action_count("discovery.validation", 1)
+                            if template.discovery_error(scan, selection) is not None:
                                 continue
                             rules_valid_count += 1
-                            if not targeted_template.check_costs():
+                            executable = (template.with_selection(selection) if template.target_dependent_costs
+                                          else template)
+                            if not executable.check_costs():
                                 continue
                             path_cost = sum(
                                 cost.cost
-                                for cost in targeted_template.effective_costs
+                                for cost in executable.effective_costs
                                 if cost.cost_type == "movement"
                             )
                             is_hazardous = any(
@@ -7173,38 +7216,13 @@ class Entity(BaseBlock):
                     ))
                     continue
 
-                valid_pos_list = template.get_valid_positions()
-                valid_positions: List[AvailableTarget] = []
-                rules_valid_count = 0
-                for pos in valid_pos_list:
-                    targeted_template = template.model_copy(
-                        deep=True,
-                        update={"end_position": pos},
-                    )
-                    if not targeted_template.validate_requirements_for_discovery(allow_partial_position=True):
-                        continue
-                    rules_valid_count += 1
-                    if not targeted_template.check_costs():
-                        continue
-                    valid_positions.append(AvailableTarget(
-                        index=len(valid_positions),
-                        position=pos,
-                        distance=self.senses.get_feet_distance(pos),
-                        path_cost=sum(
-                            cost.cost
-                            for cost in targeted_template.effective_costs
-                            if cost.cost_type == "movement"
-                        ) or None,
-                    ))
-
+                # A free-aim region, not a list of cells (plan §14.4): the row
+                # carries `position_region`; preview validates the chosen aim.
                 availability_status = (
-                    ActionAvailabilityStatus.AVAILABLE
-                    if valid_positions
-                    else (
-                        ActionAvailabilityStatus.TARGET_COST_UNAFFORDABLE
-                        if rules_valid_count
-                        else ActionAvailabilityStatus.NO_VALID_TARGETS
-                    )
+                    ActionAvailabilityStatus.REQUIREMENTS_UNMET
+                    if not (template.contributions_active() and template.validate_source_requirements_for_discovery())
+                    else ActionAvailabilityStatus.AVAILABLE if template.get_valid_positions()
+                    else ActionAvailabilityStatus.NO_VALID_TARGETS
                 )
                 if legal_only and (
                     availability_status is not ActionAvailabilityStatus.AVAILABLE
@@ -7213,7 +7231,7 @@ class Entity(BaseBlock):
                 actions.append(self._make_action_info(
                     template_name=template_name,
                     target_type=TargetType.POSITION_LOS,
-                    valid_targets=valid_positions,
+                    valid_targets=[],
                     can_afford=True,
                     availability_status=availability_status,
                     template=template,
@@ -7325,10 +7343,7 @@ class Entity(BaseBlock):
                             ))
                         continue
 
-                valid_pos_list = self._compact_aoe_candidate_positions(
-                    shape,
-                    valid_pos_list,
-                )
+                valid_pos_list = self._aoe_aim_points(valid_pos_list)
                 cache_key = self._aoe_discovery_cache_key(
                     template,
                     valid_pos_list,
@@ -7379,8 +7394,8 @@ class Entity(BaseBlock):
                 ))
         return actions
 
-    def _collect_object_actions(self, legal_only: bool = False) -> List[AvailableActionInfo]:
-        """Collect object-targeting actions."""
+    def _collect_object_actions(self, scan: ActorScan, legal_only: bool = False) -> List[AvailableActionInfo]:
+        """Collect object-targeting actions over perceived and carried objects."""
         actions: List[AvailableActionInfo] = []
         for template in self.object_actions:
             valid_targets: List[AvailableTarget] = []
@@ -7393,18 +7408,15 @@ class Entity(BaseBlock):
             if template.include_owned_item_targets:
                 for item in (*self.inventory.items.values(), *self.equipment.get_all_equipped_items()):
                     candidates[item.uuid] = self.position
+            base = template.current_selection()
             for obj_uuid, obj_pos in candidates.items():
                 obj_block = BaseBlock.get(obj_uuid)
                 if obj_block is not None and not obj_block.should_include_in_available_object_actions():
                     continue
-                targeted_template = template.model_copy(
-                    deep=True,
-                    update={"target_entity_uuid": obj_uuid},
-                )
-                if (
-                    targeted_template.validate_requirements_for_discovery()
-                    and targeted_template.check_costs()
-                ):
+                selection = replace(base, target_uuids=(obj_uuid,))
+                record_action_count("discovery.validation", 1)
+                if template.discovery_error(scan, selection) is None and (
+                        not template.target_dependent_costs or template.with_selection(selection).check_costs()):
                     obj_name = obj_block.name if obj_block else "Object"
                     distance = self.senses.get_feet_distance(obj_pos)
                     valid_targets.append(AvailableTarget(
@@ -7484,6 +7496,7 @@ class Entity(BaseBlock):
         result: AvailableActionsResult,
         potential_targets: Dict[UUID, Tuple[int, int]],
         include_dead: bool,
+        scan: ActorScan,
         footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
@@ -7592,7 +7605,7 @@ class Entity(BaseBlock):
                 continue
 
             if use_template.target_type == TargetType.SELF:
-                if not use_template.validate_requirements_for_discovery():
+                if use_template.discovery_error(scan, use_template.current_selection()) is not None:
                     if is_inventory_source and not legal_only:
                         self._append_unavailable_item_use_action(
                             result,
@@ -7630,6 +7643,7 @@ class Entity(BaseBlock):
                 valid_targets, rules_valid_count = self._validate_entity_targets(
                     use_template,
                     target_pool,
+                    scan,
                 )
                 if valid_targets:
                     result.entity_actions.append(self._make_action_info(
@@ -7701,10 +7715,7 @@ class Entity(BaseBlock):
                             )
                         continue
 
-                valid_pos_list = self._compact_aoe_candidate_positions(
-                    use_shape_template,
-                    valid_pos_list,
-                )
+                valid_pos_list = self._aoe_aim_points(valid_pos_list)
                 cache_key = self._aoe_discovery_cache_key(
                     use_template,
                     valid_pos_list,
@@ -7793,29 +7804,13 @@ class Entity(BaseBlock):
                     )
 
             elif use_template.target_type == TargetType.POSITION_LOS:
-                use_valid_pos_list = use_template.get_valid_positions()
-                use_valid_positions_los: List[AvailableTarget] = []
-                use_idx = 0
-                for pos in use_valid_pos_list:
-                    targeted_template = use_template.model_copy(
-                        deep=True,
-                        update={"end_position": pos},
-                    )
-                    if (
-                        targeted_template.validate_requirements_for_discovery(allow_partial_position=True)
-                        and targeted_template.check_costs()
-                    ):
-                        use_valid_positions_los.append(AvailableTarget(
-                            index=use_idx,
-                            position=pos,
-                            distance=use_template.get_target_distance(pos),
-                        ))
-                        use_idx += 1
-                if use_valid_positions_los:
+                # A free-aim region, as for spells (plan §14.4).
+                if (use_template.validate_source_requirements_for_discovery()
+                        and use_template.get_valid_positions()):
                     result.position_actions.append(self._make_action_info(
                         template_name=template_name,
                         target_type=TargetType.POSITION_LOS,
-                        valid_targets=use_valid_positions_los,
+                        valid_targets=[],
                         can_afford=can_afford,
                         availability_status=ActionAvailabilityStatus.AVAILABLE,
                         template=use_template,
@@ -7841,6 +7836,7 @@ class Entity(BaseBlock):
             elif use_template.target_type in (TargetType.POSITION, TargetType.POSITION_PATH):
                 use_valid_positions_pos: List[AvailableTarget] = []
                 use_idx = 0
+                use_base = use_template.current_selection()
                 action_range = use_template.get_range()
                 max_range = action_range.normal if action_range else 0
                 for pos, is_visible in self.senses.visible.items():
@@ -7851,14 +7847,11 @@ class Entity(BaseBlock):
                     dist = use_template.get_target_distance(pos)
                     if max_range > 0 and dist > max_range:
                         continue
-                    targeted_template = use_template.model_copy(
-                        deep=True,
-                        update={"end_position": pos},
-                    )
-                    if (
-                        targeted_template.validate_requirements_for_discovery()
-                        and targeted_template.check_costs()
-                    ):
+                    selection = replace(use_base, positions=(pos,))
+                    record_action_count("discovery.validation", 1)
+                    if use_template.discovery_error(scan, selection) is None and (
+                            not use_template.target_dependent_costs
+                            or use_template.with_selection(selection).check_costs()):
                         use_valid_positions_pos.append(AvailableTarget(
                             index=use_idx,
                             position=pos,
@@ -7967,8 +7960,11 @@ class Entity(BaseBlock):
         if timing:
             record_action_timing("available_actions.potential_targets_ms", started)
 
+        # One actor scan for this call; every candidate is checked against it.
+        scan = self.action_scan()
+
         started = time.perf_counter() if timing else 0.0
-        result.self_actions = self._collect_self_actions(discovery_variants, legal_only)
+        result.self_actions = self._collect_self_actions(scan, discovery_variants, legal_only)
         if timing:
             record_action_timing("available_actions.collect_self_actions_ms", started)
 
@@ -7976,6 +7972,7 @@ class Entity(BaseBlock):
         result.entity_actions = self._collect_entity_actions(
             potential_targets,
             include_dead,
+            scan,
             discovery_variants,
             legal_only,
         )
@@ -8017,6 +8014,7 @@ class Entity(BaseBlock):
         started = time.perf_counter() if timing else 0.0
         result.position_actions = self._collect_path_actions(
             result.remaining_movement,
+            scan,
             discovery_variants,
             caster_visible_positions,
             legal_only,
@@ -8050,7 +8048,7 @@ class Entity(BaseBlock):
             record_action_timing("available_actions.collect_aoe_actions_ms", started)
 
         started = time.perf_counter() if timing else 0.0
-        result.object_actions = self._collect_object_actions(legal_only)
+        result.object_actions = self._collect_object_actions(scan, legal_only)
         if timing:
             record_action_timing("available_actions.collect_object_actions_ms", started)
 
@@ -8059,6 +8057,7 @@ class Entity(BaseBlock):
             result,
             potential_targets,
             include_dead,
+            scan,
             footprints,
             caster_visible_positions,
             legal_only,

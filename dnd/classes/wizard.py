@@ -1,5 +1,6 @@
 """Wizard native recovery and source-owned Evocation event processors."""
 
+from typing import Optional
 from uuid import uuid4
 from pydantic import Field
 
@@ -9,6 +10,7 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
 )
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import BaseAction, Cost, TargetType, spell_slot_cost_type
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import DurationType, ConditionCategory
@@ -28,6 +30,7 @@ from dnd.core.events import (
 )
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
+from dnd.types.discovery import ActorScan
 
 
 class WizardRecoveryState(BaseCondition):
@@ -186,19 +189,17 @@ class ArcaneRecovery(BaseAction):
             )
         ]
 
-    def _validate(self, event):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         actor = Entity.get(self.source_entity_uuid)
-        if actor is None or actor.active_encounter_uuid is not None:
-            return event.cancel(
-                status_message="Arcane Recovery requires being outside an encounter"
-            )
+        if actor is None or scan.active_encounter_uuid is not None:
+            return "Arcane Recovery requires being outside an encounter"
         if not actor.has_spell_slot_capacity(
             self.slot_rank
         ) or not actor.action_economy.get_cost_modifiers(
             spell_slot_cost_type(self.slot_rank)
         ):
-            return event.cancel(status_message="There is no spent slot of this rank")
-        return super()._validate(event)
+            return "There is no spent slot of this rank"
+        return None
 
     def _apply(self, event):
         effect = event.phase_to(EventPhase.EFFECT)

@@ -110,7 +110,7 @@ def test_each_body_attack_matches_ai_formula_and_spends_an_action(game, key, slo
     weapon = owner.equipment.get_weapon(slot)
     assert weapon is not None
     action = Attack(source_entity_uuid=owner.uuid, target_entity_uuid=victim.uuid, weapon_slot=slot)
-    profile = action.get_outcome_profile(owner)
+    profile = action.get_outcome_profile()
     assert profile is not None
     assert profile.damage_rolls[0].flat_bonus == owner.ability_scores.strength.modifier
     before = victim.get_hp()
@@ -200,7 +200,7 @@ def test_knockdown_uses_item_identity_even_when_display_names_change(game):
     bite.name = "Claws"
     # Matching the old display name cannot put the Claw rider on Bite.
     bite_attack = Attack(source_entity_uuid=owner.uuid,target_entity_uuid=victim.uuid,weapon_slot=WeaponSlot.MELEE_OFF)
-    assert bite_attack.get_target_effect_profile(owner) is None
+    assert bite_attack.get_target_effect_profile() is None
     with fixed_dice_faces(15,2,1):
         result = bite_attack.apply()
     assert result is not None and not result.canceled
@@ -215,12 +215,12 @@ def test_knockdown_uses_item_identity_even_when_display_names_change(game):
 
 def test_large_body_dice_already_include_natural_size_and_enlarge_adds_only_the_change(game):
     owner = creature(game,"mammoth"); victim = target(game)
-    before_profile = Attack(source_entity_uuid=owner.uuid,target_entity_uuid=victim.uuid,weapon_slot=WeaponSlot.MELEE_MAIN).get_outcome_profile(owner)
+    before_profile = Attack(source_entity_uuid=owner.uuid,target_entity_uuid=victim.uuid,weapon_slot=WeaponSlot.MELEE_MAIN).get_outcome_profile()
     assert before_profile is not None
     assert [(row.dice_count,row.die_size,row.flat_bonus) for row in before_profile.damage_rolls] == [(4,8,7)]
     owner.add_condition(EnlargeReduceEffect(source_entity_uuid=owner.uuid,target_entity_uuid=owner.uuid,mode="enlarge"))
     attack = Attack(source_entity_uuid=owner.uuid,target_entity_uuid=victim.uuid,weapon_slot=WeaponSlot.MELEE_MAIN)
-    profile = attack.get_outcome_profile(owner)
+    profile = attack.get_outcome_profile()
     assert profile is not None
     assert [(row.dice_count,row.die_size,row.flat_bonus) for row in profile.damage_rolls] == [(4,8,7),(1,4,0)]
     before = victim.get_hp()

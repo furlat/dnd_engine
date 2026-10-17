@@ -1,5 +1,6 @@
 """Permanent Devotee's Mace reward, composed from native weapon/item owners."""
 
+from typing import Optional
 from uuid import UUID, uuid4
 from pydantic import Field
 
@@ -10,6 +11,7 @@ from dnd.actions import (
 )
 from dnd.blocks.base_item import UsableItem
 from dnd.blocks.equipment import Weapon
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import Duration
@@ -30,6 +32,7 @@ from dnd.core.events import (
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
+from dnd.types.discovery import ActorScan
 from dnd.spatial.area_conditions import AreaCondition
 from dnd.spells.spell_utils import fire_heal_roll_result
 from dnd.types.spatial_effects import (
@@ -133,15 +136,15 @@ class HealingIncense(BaseAction):
         ]
     )
 
-    def _validate(self, event):
-        item = BaseBlock.get(self.source_item_uuid)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        item = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid is not None else None
         if (
             not isinstance(item, DevoteesMace)
             or not item.is_equipped
             or item.owner_uuid != self.source_entity_uuid
         ):
-            return event.cancel(status_message="The exact mace must be equipped")
-        return super()._validate(event)
+            return "The exact mace must be equipped"
+        return None
 
     def _apply_costs(self, event):
         return entity_action_economy_cost_applier(event, self.source_entity_uuid)

@@ -16,7 +16,8 @@ from dnd.actions import (
 from dnd.blocks.base_item import UsableItem
 from dnd.blocks.equipment import Weapon
 from dnd.conditions import Concentrating, GreaterInvisibilityEffect
-from dnd.core.action_types import ActionPresentationKind
+from dnd.core.action_types import ActionPresentationKind, ActionSelection
+from dnd.types.discovery import ActorScan
 from dnd.core.base_actions import (
     ActionEvent,
     ActionSelfSetupProfile,
@@ -307,18 +308,6 @@ class _DrinkHealingPotionAction(_PotionDrinkAction):
         """Return the potion's deterministic restoration amount."""
         _ = actor
         return self.heal_amount if self.healing_dice_count == 0 else None
-
-    def _validate(
-        self,
-        declaration_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Validated",
-        )
 
     def _apply(
         self,
@@ -713,21 +702,14 @@ class _ApplyWeaponCoatAction(BaseAction):
     def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
-    def _validate(
-        self,
-        declaration_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-        slot = WeaponSlot(self.weapon_slot)
-        weapon = entity.equipment._get_weapon_by_slot(slot)
+            return "Entity not found"
+        weapon = entity.equipment._get_weapon_by_slot(WeaponSlot(self.weapon_slot))
         if not weapon or not isinstance(weapon, Weapon):
-            return declaration_event.cancel(status_message="No weapon in slot")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Validated",
-        )
+            return "No weapon in slot"
+        return None
 
     def _apply(
         self,
@@ -869,8 +851,11 @@ class _DrinkGreaterInvisibilityPotionAction(_PotionDrinkAction):
         description="UUID of the potion item being consumed.",
     )
 
-    def get_self_setup_profile(self, actor: Any) -> ActionSelfSetupProfile:
+    def get_self_setup_profile(self) -> ActionSelfSetupProfile:
         """Return the typed combat consequences of greater invisibility."""
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         stealth_bonus = actor.skill_bonus(
             target_entity_uuid=None,
             skill_name="stealth",
@@ -894,18 +879,6 @@ class _DrinkGreaterInvisibilityPotionAction(_PotionDrinkAction):
                 check_advantage=stealth_bonus.advantage,
                 failure=ActionSetupMaintenanceFailure.REMOVE_SETUP,
             ),
-        )
-
-    def _validate(
-        self,
-        declaration_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Validated",
         )
 
     def _apply(
@@ -955,11 +928,6 @@ class _DrinkTrueSeeingPotionAction(_PotionDrinkAction):
     description: str = Field(default="Gain truesight 120ft for ten rounds", description="Potion effect.")
     target_type: TargetType = Field(default=TargetType.SELF, description="The drinker receives the effect.")
     source_item_uuid: Optional[UUID] = Field(default=None, description="Consumed potion identity.")
-
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        if Entity.get(self.source_entity_uuid) is None:
-            return declaration_event.cancel(status_message="Entity not found")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -1036,8 +1004,11 @@ class _DrinkHastePotionAction(_PotionDrinkAction):
         description="UUID of the potion item being consumed.",
     )
 
-    def get_self_setup_profile(self, actor: Any) -> ActionSelfSetupProfile:
+    def get_self_setup_profile(self) -> ActionSelfSetupProfile:
         """Return the typed combat consequences of the current Haste effect."""
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         _ = actor
         return ActionSelfSetupProfile(
             semantic_id="setup.haste",
@@ -1051,18 +1022,6 @@ class _DrinkHastePotionAction(_PotionDrinkAction):
             movement_speed_multiplier=2.0,
             extra_actions_per_turn=1,
             incapacitates_on_removal=True,
-        )
-
-    def _validate(
-        self,
-        declaration_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Validated",
         )
 
     def _apply(

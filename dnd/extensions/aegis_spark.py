@@ -5,12 +5,14 @@ from typing import Optional
 from pydantic import Field
 
 from dnd.actions import SpellAction, SpellEvent
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import Event, EventPhase, Range, RangeType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity
+from dnd.types.discovery import ActorScan
 
 
 class AegisSparkEffect(BaseCondition):
@@ -77,30 +79,20 @@ class AegisSpark(SpellAction):
         description="Range contract for the ward.",
     )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range, visibility, and ally targeting.
-
-        Args:
-            declaration_event: Spell declaration event.
-
-        Returns:
-            Execution event when valid, or a canceled declaration event.
-        """
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Range, visibility, and ally targeting."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if caster is None or target is None:
-            return declaration_event.cancel(status_message="Aegis Spark caster or target not found")
-        contact = caster.senses.entities.get(target.uuid)
-        if target.uuid != caster.uuid and (contact is None or not contact.visual):
-            return declaration_event.cancel(status_message="Aegis Spark target is not visible")
+            return "Aegis Spark caster or target not found"
+        record = scan.creatures.get(target.uuid)
+        if target.uuid != caster.uuid and (record is None or not record.visual):
+            return "Aegis Spark target is not visible"
         if caster.senses.get_feet_distance(target.position) > self.effective_range:
-            return declaration_event.cancel(status_message="Aegis Spark target is out of range")
+            return "Aegis Spark target is out of range"
         if not caster.is_ally(target):
-            return declaration_event.cancel(status_message="Aegis Spark can only target allies")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}",
-        )
+            return "Aegis Spark can only target allies"
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply the Aegis Spark condition to the selected target.

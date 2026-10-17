@@ -2,7 +2,7 @@
 
 from types import MappingProxyType
 
-from typing import Any, Optional, cast as type_cast
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from pydantic import Field
@@ -22,6 +22,7 @@ from dnd.items.scroll_learning import LearnSpellFromScroll
 from dnd.characters.spellbook import scroll_learning_error
 from dnd.items.consumables import TimedFireWeaponCoatCondition
 from dnd.core.aoe import AoEShape, Cube
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -51,6 +52,7 @@ from dnd.core.events import (
 from dnd.core.creature_types import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
+from dnd.types.discovery import ActorScan
 from dnd.spells.abjuration import MageArmor
 from dnd.spells.enchantment import HoldPerson
 from dnd.spells.evocation import (
@@ -194,13 +196,13 @@ class EmberQuiverActivation(SpellAction):
         self.selected_weapon_uuid = weapon.uuid if weapon else None
         return super()._create_declaration_event(parent_event, use_register=use_register)
 
-    def _validate(self,event: SpellEvent):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         actor = Entity.get(self.source_entity_uuid)
         weapon = actor.equipment.get_weapon(WeaponSlot.RANGED_MAIN) if actor else None
         if weapon is None or weapon.weapon_kind not in (WeaponKind.LONGBOW, WeaponKind.SHORTBOW,
                     WeaponKind.LIGHT_CROSSBOW, WeaponKind.HEAVY_CROSSBOW, WeaponKind.HAND_CROSSBOW):
-            return event.cancel(status_message="Ember Quiver requires an equipped bow or crossbow")
-        return super()._validate(event)
+            return "Ember Quiver requires an equipped bow or crossbow"
+        return None
 
     def _apply(self,event: SpellEvent):
         actor = Entity.get(self.source_entity_uuid)
@@ -308,41 +310,21 @@ class _AcidFlaskSpell(SpellAction):
     def get_range(self) -> Range:
         return self.spell_range
 
-    def _validate(
-        self,
-        declaration_event: SpellEvent,
-    ) -> Optional[SpellEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
+            return "Caster not found"
 
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(
-                status_message="No target position specified",
-            )
-        if (
-            target_pos not in caster.senses.visible
-            or not caster.senses.visible[target_pos]
-        ):
-            return declaration_event.cancel(
-                status_message=(
-                    f"Target position {target_pos} not in line of sight"
-                ),
-            )
+        if not selection.positions:
+            return "No target position specified"
+        target_pos = selection.positions[0]
+        if target_pos not in scan.visible:
+            return f"Target position {target_pos} not in line of sight"
 
         distance = caster.senses.get_feet_distance(target_pos)
         if distance > self.spell_range.normal:
-            return declaration_event.cancel(
-                status_message=(
-                    f"Target out of range "
-                    f"({distance}ft > {self.spell_range.normal}ft)"
-                ),
-            )
-        return type_cast(
-            Optional[SpellEvent],
-            super()._validate(declaration_event),
-        )
+            return f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+        return None
 
     def _apply(
         self,

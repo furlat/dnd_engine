@@ -22,6 +22,8 @@ from dnd.core.base_actions import (
     BaseAction, ActionCategory, TargetType, Cost, CostType,
     ActionEvent, ActionVariantFacet, spell_slot_cost_type,
 )
+from dnd.core.action_types import ActionSelection
+from dnd.types.discovery import ActorScan
 from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger,
     RangeType,
@@ -304,14 +306,6 @@ class ElementalAffinityResistanceAction(BaseAction):
             f"Elemental Affinity ({self.damage_type.value} Resistance)"
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        if Entity.get(self.source_entity_uuid) is None:
-            return declaration_event.cancel(status_message="Entity not found")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Elemental Affinity resistance validated",
-        )
-
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
@@ -470,14 +464,6 @@ class DragonWings(BaseAction):
         exclude=True,
         description="Exact manifested-wings root owned by this template.",
     )
-
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        if Entity.get(self.source_entity_uuid) is None:
-            return declaration_event.cancel(status_message="Entity not found")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Dragon Wings toggle validated",
-        )
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -891,14 +877,6 @@ class DraconicPresence(BaseAction):
         super().model_post_init(__context)
         self.name = f"Draconic Presence ({self.mode.title()})"
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        if Entity.get(self.source_entity_uuid) is None:
-            return declaration_event.cancel(status_message="Entity not found")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message=f"Draconic Presence ({self.mode}) validated",
-        )
-
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         caster = Entity.get(self.source_entity_uuid)
         if caster is None:
@@ -1180,13 +1158,11 @@ class QuickenedSpell(BaseAction):
         description="Exact pending metamagic root owned by this template.",
     )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-        if "MetamagicActive" in entity.active_conditions:
-            return declaration_event.cancel(status_message="Metamagic already active")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Quickened Spell validated")
+        if entity is None or "MetamagicActive" in entity.active_conditions:
+            return "Metamagic already active"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -1249,13 +1225,11 @@ class TwinnedSpell(BaseAction):
         description="Exact pending metamagic root owned by this template.",
     )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-        if "MetamagicActive" in entity.active_conditions:
-            return declaration_event.cancel(status_message="Metamagic already active")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Twinned Spell validated")
+        if entity is None or "MetamagicActive" in entity.active_conditions:
+            return "Metamagic already active"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -1318,13 +1292,11 @@ class DistantSpell(BaseAction):
         description="Exact pending metamagic root owned by this template.",
     )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-        if "MetamagicActive" in entity.active_conditions:
-            return declaration_event.cancel(status_message="Metamagic already active")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Distant Spell validated")
+        if entity is None or "MetamagicActive" in entity.active_conditions:
+            return "Metamagic already active"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -1421,9 +1393,6 @@ class ConvertSlotToSP(BaseAction):
             ),
         ]
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Slot\u2192SP L{self.slot_level} validated")
-
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
@@ -1486,17 +1455,12 @@ class ConvertSPToSlot(BaseAction):
             ),
         ]
 
-    def validate_requirements_for_discovery(self) -> bool:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Require a class-owned slot family independently of current costs."""
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return False
-        if not entity.has_spell_slot_capacity(self.slot_level):
-            return False
-        return super().validate_requirements_for_discovery()
-
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"{SP_TO_SLOT_COST.get(self.slot_level, 2)}SP\u2192Slot L{self.slot_level} validated")
+        if entity is None or not entity.has_spell_slot_capacity(self.slot_level):
+            return f"No class-owned level {self.slot_level} spell slot to create"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)

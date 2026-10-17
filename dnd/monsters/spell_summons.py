@@ -1,6 +1,6 @@
 """Concrete spell-created creatures, composed from native actions and areas."""
 from uuid import UUID
-from typing import Literal
+from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from dnd.core.aoe import AoEShape, Sphere
 from dnd.actions import Move, Dash, Disengage, SpellAction, SpellEvent, entity_action_economy_cost_evaluator
@@ -11,6 +11,7 @@ from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig
 from dnd.monsters.traits import NaturalAttack
 from pydantic_core import PydanticUndefined
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import ActionCategory, ActionOutcomeProfile, Cost, DamageRollProfile, OutcomeResolution, TargetType
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
@@ -33,6 +34,7 @@ from dnd.spatial.area_conditions import AreaCondition
 from dnd.spatial.environmental_conditions import FireSurface
 from dnd.spatial.ignition import apply_elemental_surface_contacts
 from dnd.spells.content_metadata import srd_action_identity, srd_condition_identity
+from dnd.types.discovery import ActorScan
 from dnd.types.spatial_effects import SpatialEffectAnchorKind, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
 from dnd.types.world import MovementMode
 
@@ -191,11 +193,11 @@ class FlamingSphereRam(SpellAction):
     dice_count: int = 2
     effect_origin: EffectOrigin | None = None
 
-    def get_outcome_profile(self,actor):
+    def get_outcome_profile(self):
         return ActionOutcomeProfile(resolution=OutcomeResolution.SAVING_THROW,save_dc=self.spell_dc,save_ability="dexterity",
             half_damage_on_save=True,damage_rolls=(DamageRollProfile(dice_count=self.dice_count,die_size=6,damage_type="Fire"),))
 
-    def validate_source_requirements_for_discovery(self):
+    def _sphere_is_present(self) -> bool:
         actor=Entity.get(self.source_entity_uuid)
         return actor is not None and actor.has_runtime_agency() and any(condition.get_display_name()=="Summoned"
             and condition.contributions_active() for condition in actor.active_conditions_by_uuid.values())
@@ -204,16 +206,15 @@ class FlamingSphereRam(SpellAction):
         event=super()._create_declaration_event(parent_event,use_register)
         return event.with_updates(retained_effect_origin=self.effect_origin) if isinstance(event,SpellEvent) else event
 
-    def _validate(self,event):
-        if not self.validate_source_requirements_for_discovery():
-            return event.cancel(status_message="Sphere existence is absent or suppressed")
-        checked=self.validate_single_recipient(event)
-        return checked.phase_to(EventPhase.EXECUTION) if checked is not None and not checked.canceled else checked
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        if not self._sphere_is_present():
+            return "Sphere existence is absent or suppressed"
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self,event):
         effect=event.phase_to(EventPhase.EFFECT)
         target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not effect.canceled and target is not None and self.validate_source_requirements_for_discovery():
+        if not effect.canceled and target is not None and self._sphere_is_present():
             _sphere_damage(self.original_caster_uuid,target,dc=self.spell_dc,dice_count=self.dice_count,event=effect,origin=self.effect_origin)
         return effect
 

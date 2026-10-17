@@ -349,7 +349,7 @@ def test_mockery_deadline_expires_after_target_movement(game):
 
 def test_heroism_forecast_uses_the_applied_condition_semantic_key(game):
     caster=combatant(game)
-    profile=Heroism(source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid).get_target_effect_profile(caster)
+    profile=Heroism(source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid).get_target_effect_profile()
     paid(Heroism,caster,caster)
     effect=next(row for row in caster.active_conditions_by_uuid.values() if row.get_display_name()=='Heroism')
     assert effect.snapshot_state().semantic_key in profile.branches[0].condition_semantic_keys

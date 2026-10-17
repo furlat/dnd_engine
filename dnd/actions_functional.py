@@ -547,6 +547,19 @@ def _validated_extra_target_uuids(
     return selected
 
 
+def free_aim_target(action_info: AvailableActionInfo, position: Tuple[int, int]) -> AvailableTarget:
+    """One aim a client chose inside a row's free-aim region (plan §14.4); execution validates it."""
+    if action_info.position_region is None:
+        raise ValueError("This action has no free-aim region")
+    return AvailableTarget(index=len(action_info.valid_targets), position=position)
+
+
+def is_free_aim(action_info: AvailableActionInfo, target: AvailableTarget) -> bool:
+    """A position chosen in the row's region rather than one of its listed targets."""
+    return (action_info.position_region is not None and target.target_uuid is None
+            and target.position is not None and target not in action_info.valid_targets)
+
+
 def execute_available_action(
     entity: Entity,
     action_info: AvailableActionInfo,
@@ -608,14 +621,16 @@ def preview_available_selection(
     second discovery/preflight; compound selections use shared pure predicates.
     Execution still performs ordinary native validation at submission.
     """
-    if not action_info.valid_targets:
+    if not action_info.valid_targets and action_info.position_region is None:
         return AvailableSelectionPreview(can_confirm=False,
             reason=action_info.availability_status.value.replace("_", " "))
     if not selected_targets:
-        return AvailableSelectionPreview(can_confirm=False, reason="Choose a target",
+        return AvailableSelectionPreview(can_confirm=False,
+            reason="Choose a target" if action_info.valid_targets else "Choose a point",
             next_targets=tuple(action_info.valid_targets))
     primary = selected_targets[0]
-    if primary not in action_info.valid_targets:
+    free_aim = is_free_aim(action_info, primary)
+    if primary not in action_info.valid_targets and not free_aim:
         return AvailableSelectionPreview(can_confirm=False, reason="Target is no longer admitted")
     template = action_info.execution_template
     if template is None:
@@ -637,6 +652,9 @@ def preview_available_selection(
                           extra_target_positions=[])
         bound = template.model_copy(deep=False, update=update)
         reason = bound.selection_preview_error()
+        if reason is None and free_aim:
+            # A free aim was never listed: preview checks it through the one admission path.
+            reason = template.discovery_error(entity.action_scan(), bound.current_selection())
         pool = (primary.secondary_targets if primary.secondary_targets is not None
                 else action_info.valid_targets)
         next_targets: list[AvailableTarget] = []

@@ -50,6 +50,8 @@ from dnd.actions import (
 from dnd.conditions import Frightened
 from pydantic import Field
 from typing import Any, Optional, List, Tuple, cast
+from dnd.core.action_types import ActionSelection
+from dnd.types.discovery import ActorScan
 from uuid import UUID, uuid4
 from functools import partial
 
@@ -277,18 +279,11 @@ class RecklessAttack(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if entity is None:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if "Reckless Attacking" in entity.active_conditions:
-            return declaration_event.cancel(status_message="Already attacking recklessly")
-
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Reckless Attack ready"
-        )
+        if entity is None or "Reckless Attacking" in entity.active_conditions:
+            return "Already attacking recklessly"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
         entity = Entity.get(self.source_entity_uuid)
@@ -1366,30 +1361,30 @@ class IntimidatingPresence(BaseAction):
                 return True
         return False
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
+            return "Entity not found"
 
-        if not self.target_entity_uuid:
-            return declaration_event.cancel(status_message="No target specified")
+        if not selection.target_uuids:
+            return "No target specified"
 
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(selection.target_uuids[0])
         if not target:
-            return declaration_event.cancel(status_message="Target not found")
+            return "Target not found"
 
         distance = grid_distance_feet(entity.position, target.position)
         if distance > 30:
-            return declaration_event.cancel(status_message="Target beyond 30ft")
+            return "Target beyond 30ft"
 
-        contact = entity.senses.entities.get(self.target_entity_uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not visible")
+        record = scan.creatures.get(target.uuid)
+        if record is None or not record.visual:
+            return "Target not visible"
 
         if self._is_target_immune(target):
-            return declaration_event.cancel(status_message="Target is immune (saved within 24h)")
+            return "Target is immune (saved within 24h)"
 
-        return declaration_event.phase_to(EventPhase.EXECUTION)
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -1509,30 +1504,30 @@ class ExtendIntimidatingPresence(BaseAction):
             return False
         return frightened.source_entity_uuid == self.source_entity_uuid
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
+            return "Entity not found"
 
-        if not self.target_entity_uuid:
-            return declaration_event.cancel(status_message="No target specified")
+        if not selection.target_uuids:
+            return "No target specified"
 
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(selection.target_uuids[0])
         if not target:
-            return declaration_event.cancel(status_message="Target not found")
+            return "Target not found"
 
         distance = grid_distance_feet(entity.position, target.position)
         if distance > 30:
-            return declaration_event.cancel(status_message="Target beyond 30ft")
+            return "Target beyond 30ft"
 
-        contact = entity.senses.entities.get(self.target_entity_uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not visible")
+        record = scan.creatures.get(target.uuid)
+        if record is None or not record.visual:
+            return "Target not visible"
 
         if not self._is_frightened_by_me(target):
-            return declaration_event.cancel(status_message="Target not frightened by you")
+            return "Target not frightened by you"
 
-        return declaration_event.phase_to(EventPhase.EXECUTION)
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)

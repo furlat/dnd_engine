@@ -10,7 +10,7 @@ from collections import OrderedDict
 from uuid import UUID, uuid4
 
 from dnd.action_dispatch import dispatch_available_action
-from dnd.actions_functional import get_available_actions, get_extra_position_options, preview_available_selection
+from dnd.actions_functional import get_available_actions, get_extra_position_options, is_free_aim, preview_available_selection
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.ai.runtime.decision_epoch import clear_epoch_value_caches
 from dnd.ai.runtime.subjective_projection import clear_subjective_projection_fact_cache
@@ -418,7 +418,8 @@ def preview_player_selection(session: Session, actor_uuid: UUID, action: Availab
            tuple(target.index for target in selected), positions, prefer_safe, include_aoe_effects)
     cache = session.discovery.previews
     if key not in cache:
-        primary = next((target for target in original.valid_targets if selected and target.index == selected[0].index), None)
+        primary = next((target for target in original.valid_targets if selected and target.index == selected[0].index),
+                       selected[0] if selected and is_free_aim(original, selected[0]) else None)
         pool = (primary.secondary_targets if primary is not None and primary.secondary_targets is not None
                 else original.valid_targets)
         by_index = {target.index: target for target in pool}
@@ -483,7 +484,8 @@ def execute_player_action(
     """Submit the current human's exact discovered choice to the rules engine."""
     actor = _current_player(session, actor_uuid)
     original = _retained_row(session, action)
-    retained = next((candidate for candidate in original.valid_targets if candidate.index == target.index), None)
+    retained = next((candidate for candidate in original.valid_targets if candidate.index == target.index),
+                    target if is_free_aim(original, target) else None)
     if retained is None:
         raise CommandRejected("selected target does not belong to the discovered action")
     pool = retained.secondary_targets if retained.secondary_targets is not None else original.valid_targets

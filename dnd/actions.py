@@ -27,10 +27,12 @@ from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.spatial_effects import AreaPropagation
 from dnd.spells.content_metadata import get_spell_catalog_metadata
 from dnd.types.summoning import SummonApplication
+from dnd.types.discovery import ActorScan
 from dnd.core.elevation import support_distance_feet
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.effect_types import EffectOrigin
-from dnd.core.action_types import ActionAffordance, ActionVariantFacet, RestrictedActionKind
+from dnd.core.action_types import ActionAffordance, ActionSelection, ActionVariantFacet, CostSourceKind, RestrictedActionKind
+from dnd.blocks.spellcasting import FreeSpellCastGrant
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -650,22 +652,24 @@ class Move(BaseAction):
     def _setup_path(self) -> None:
         """Resolve the movement path from current senses data."""
         if self.path is None and self.end_position is not None:
-            source_entity = Entity.get(self.source_entity_uuid)
-            if source_entity is None or not isinstance(source_entity, Entity):
-                return None
-            if self.movement_mode == MovementMode.WALKING and self.prefer_safe and self.end_position in source_entity.senses.safe_paths:
-                self.path = source_entity.senses.safe_paths[self.end_position]
-            elif self.movement_mode == MovementMode.WALKING and self.end_position in source_entity.senses.paths:
-                self.path = source_entity.senses.paths[self.end_position]
-            elif self.movement_mode != MovementMode.WALKING:
-                grid = get_map()
-                _, paths = grid.compute_paths(
-                    source_entity.position,
-                    requesting_entity_uuid=source_entity.uuid,
-                    movement_mode=self.movement_mode,
-                    subjective=True,
-                )
-                self.path = paths.get(self.end_position)
+            self.path = self._path_to(self.end_position)
+
+    def _path_to(self, end_position: Tuple[int, int]) -> Optional[List[Tuple[int, int]]]:
+        """The mover's known path to one destination, without binding it."""
+        source_entity = Entity.get(self.source_entity_uuid)
+        if source_entity is None:
+            return None
+        if self.movement_mode == MovementMode.WALKING and self.prefer_safe and end_position in source_entity.senses.safe_paths:
+            return source_entity.senses.safe_paths[end_position]
+        if self.movement_mode == MovementMode.WALKING:
+            return source_entity.senses.paths.get(end_position)
+        _, paths = get_map().compute_paths(
+            source_entity.position,
+            requesting_entity_uuid=source_entity.uuid,
+            movement_mode=self.movement_mode,
+            subjective=True,
+        )
+        return paths.get(end_position)
 
     def set_target_position(self, position: Tuple[int, int]) -> None:
         """Set target position and compute path/costs for validation.
@@ -710,44 +714,42 @@ class Move(BaseAction):
         return instance
 
     @staticmethod
-    def validate_path(
-        declaration_event: MovementEvent,
+    def path_error(
+        path: Optional[List[Tuple[int, int]]],
+        end_position: Tuple[int, int],
         source_entity_uuid: UUID,
         movement_mode: MovementMode = MovementMode.WALKING,
-    ) -> MovementEvent:
-        """Validate that a movement event carries a usable path.
+    ) -> Optional[str]:
+        """Why a path cannot carry the mover to one destination, or None when it can.
 
         Args:
-            declaration_event: Movement declaration event to validate.
+            path: Cells from the mover's position to the destination.
+            end_position: Selected destination.
             source_entity_uuid: Moving entity UUID.
             movement_mode: Movement mode required for each transition.
-
-        Returns:
-            Posted declaration event or canceled event.
         """
         source_entity = Entity.get(source_entity_uuid)
-        if not source_entity or not isinstance(source_entity, Entity):
-            return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
-        if declaration_event.path is None or len(declaration_event.path) == 0:
-            return declaration_event.cancel(status_message=f"No valid path found for {declaration_event.name}")
-
+        if source_entity is None:
+            return "Source entity not found"
+        if not path:
+            return "No valid path found"
         grid = get_map()
         if movement_mode is MovementMode.FLYING:
             if source_entity.action_economy.current_speed(movement_mode) <= 0:
-                return declaration_event.cancel(status_message="Flying movement is unavailable")
-            if any(grid.get_tile(*position) is None for position in declaration_event.path):
-                return declaration_event.cancel(status_message="Flight requires supported positions")
-        if declaration_event.path[0] != source_entity.position:
-            return declaration_event.cancel(status_message=f"Invalid path start for {declaration_event.name}")
-        if declaration_event.path[-1] != declaration_event.end_position:
-            return declaration_event.cancel(status_message=f"Invalid path end for {declaration_event.name}")
-        if not source_entity.can_end_movement_at(declaration_event.end_position, subjective=True):
-            return declaration_event.cancel(status_message="Movement destination is occupied")
-        for from_pos, to_pos in zip(declaration_event.path, declaration_event.path[1:]):
+                return "Flying movement is unavailable"
+            if any(grid.get_tile(*position) is None for position in path):
+                return "Flight requires supported positions"
+        if path[0] != source_entity.position:
+            return "Invalid path start"
+        if path[-1] != end_position:
+            return "Invalid path end"
+        if not source_entity.can_end_movement_at(end_position, subjective=True):
+            return "Movement destination is occupied"
+        for from_pos, to_pos in zip(path, path[1:]):
             if (max(abs(from_pos[0] - to_pos[0]), abs(from_pos[1] - to_pos[1])) != 1
                     or not grid.can_transition(from_pos, to_pos, source_entity.uuid, movement_mode, subjective=True)):
-                return declaration_event.cancel(status_message=f"Invalid {movement_mode.value} transition for {declaration_event.name} at position {to_pos}")
-        return declaration_event.post(status_message=f"Validated path for {declaration_event.name}")
+                return f"Invalid {movement_mode.value} transition at position {to_pos}"
+        return None
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the movement action.
@@ -815,16 +817,13 @@ class Move(BaseAction):
             source_entity_name=source_entity.name,
         )
 
-    def _validate(self, declaration_event: MovementEvent) -> MovementEvent:
-        """Validate the movement action."""
-        validated_event = Move.validate_path(declaration_event, self.source_entity_uuid, self.movement_mode)
-        if not validated_event.canceled:
-            return validated_event.phase_to(
-                new_phase=EventPhase.EXECUTION,
-                status_message=f"Validated  {declaration_event.name}"
-            )
-        else:
-            return validated_event
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A usable path from the mover to the selected destination."""
+        if not selection.positions:
+            return "Choose a destination"
+        end_position = selection.positions[0]
+        path = self.path if self.path is not None else self._path_to(end_position)
+        return Move.path_error(path, end_position, self.source_entity_uuid, self.movement_mode)
 
     def _apply(self, execution_event: MovementEvent) -> MovementEvent:
         """Apply the movement action using cell-by-cell movement.
@@ -1398,40 +1397,44 @@ class TraverseConnector(BaseAction):
 
     def _current_connector(
         self,
-        event: TraverseConnectorEvent,
         source: Entity,
         *, check_passage: bool = True,
     ) -> Optional[TraversalConnector]:
+        """The connector exactly as this traversal declared it, or None once it changed."""
+        discovery = self.connector_traversal
+        if discovery is None:
+            return None
+        command = discovery.command
         grid = get_map()
-        connector = grid.get_connector(event.connector_uuid)
+        connector = grid.get_connector(command.connector_uuid)
         if (
             connector is None
             or not grid.connector_supports_are_current(connector)
             or not connector.enabled
-            or connector.authored_id != event.connector_authored_id
-            or connector.kind is not event.connector_kind
-            or connector.presentation_key != event.connector_presentation_key
-            or connector.revision != event.connector_revision
-            or connector.objective_digest != event.connector_digest
+            or connector.authored_id != discovery.authored_id
+            or connector.kind is not discovery.kind
+            or connector.presentation_key != discovery.presentation_key
+            or connector.revision != command.connector_revision
+            or connector.objective_digest != command.connector_digest
             or check_passage and grid.connector_movement_cost(
                 connector, source.position, source.uuid, source.size,
-                ignore_difficult_terrain=source.ignore_difficult_terrain) != event.movement_cost_feet
-            or connector.action_cost_type is not event.action_cost_type
-            or connector.action_cost_amount != event.action_cost_amount
-            or connector.provocation_policy is not event.connector_provocation_policy
-            or connector.bidirectional is not event.connector_bidirectional
-            or source.position != event.start_position
+                ignore_difficult_terrain=source.ignore_difficult_terrain) != discovery.movement_cost_feet
+            or connector.action_cost_type is not discovery.action_cost_type
+            or connector.action_cost_amount != discovery.action_cost_amount
+            or connector.provocation_policy is not discovery.provocation_policy
+            or connector.bidirectional is not discovery.bidirectional
+            or source.position != command.source_position
         ):
             return None
-        oriented = self._oriented_connector(connector, event.start_position)
+        oriented = self._oriented_connector(connector, command.source_position)
         if oriented is None:
             return None
         source_endpoint, destination_endpoint = oriented
         if (
-            destination_endpoint.position != event.requested_end_position
-            or source_endpoint.elevation_feet != event.start_elevation_feet
+            destination_endpoint.position != command.destination_position
+            or source_endpoint.elevation_feet != discovery.source_elevation_feet
             or destination_endpoint.elevation_feet
-            != event.requested_end_elevation_feet
+            != discovery.destination_elevation_feet
         ):
             return None
         return connector
@@ -1474,24 +1477,17 @@ class TraverseConnector(BaseAction):
             use_register=use_register,
         )
 
-    def _validate(
-        self,
-        declaration_event: TraverseConnectorEvent,
-    ) -> TraverseConnectorEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A living, acting traverser at the declared connector endpoint."""
         source = Entity.get(self.source_entity_uuid)
         if (
             source is None
             or source.health.life_state is not LifeState.ALIVE
             or not source.can_take_actions()
-            or self._current_connector(declaration_event, source, check_passage=False) is None
+            or self._current_connector(source, check_passage=False) is None
         ):
-            return declaration_event.cancel(
-                status_message="Connector traversal is no longer valid"
-            )
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Connector traversal validated",
-        )
+            return "Connector traversal is no longer valid"
+        return None
 
     def _apply_costs(
         self,
@@ -1528,7 +1524,7 @@ class TraverseConnector(BaseAction):
         )
         if effect.canceled:
             return effect
-        connector = self._current_connector(effect, source)
+        connector = self._current_connector(source)
         destination = effect.requested_end_position
         grid = get_map()
         if connector is None:
@@ -1595,7 +1591,7 @@ class TraverseConnector(BaseAction):
                 effect, source, MovementTerminationReason.STEP_CANCELED
             )
         if (
-            self._current_connector(effect, source) is None
+            self._current_connector(source) is None
             or not grid.is_walkable_for(
                 destination[0], destination[1], source.uuid
             )
@@ -1950,6 +1946,75 @@ def create_weapon_attack_declaration_event(
 
 
 
+def weapon_slot_is_eligible(source: Entity, weapon_slot: WeaponSlot, target_uuid: Optional[UUID]) -> bool:
+    """The weapon in one slot may attack one target with the actor's hands."""
+    weapon = source.equipment.get_weapon(weapon_slot)
+    if weapon is not None and weapon.spell_attack_profile is not None:
+        if weapon.spell_attack_profile.wielder_uuid!=source.uuid or not weapon.contributions_active():
+            return False
+        target=BaseBlock.get(target_uuid) if target_uuid else None
+        if target is not None and SpellProtectionRegistry.is_protected(target.position,source.position,weapon.spell_attack_profile.effect_origin.base_spell_level or 2):
+            return False
+    return weapon is None or weapon_slot in source.equipment.compatible_slots_for_actor(weapon)
+
+
+def weapon_reach(
+    source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec],
+    target_uuid: Optional[UUID], name: str,
+) -> Tuple[Optional[str], Optional[Range], Optional[Tuple[int, int]], bool]:
+    """One weapon's reach to one target: (error, weapon range, attacked position, long range).
+
+    Ranged attacks inside normal range are allowed; between normal and long
+    range they are long-range attacks. Melee attacks require distance within
+    weapon reach. An object is attacked at its physical contact position.
+    """
+    creature = Entity.get(target_uuid) if target_uuid is not None else None
+    target = BaseBlock.get(target_uuid) if target_uuid is not None else None
+    weapon_range = natural.range if natural is not None else source.get_weapon_range(weapon_slot)
+    if weapon_range is None:
+        return f"Weapon range not found for {name}", None, None, False
+    if creature is not None:
+        target_position = creature.position
+    elif isinstance(target, BaseItem):
+        if not target.is_active or not target.is_targetable:
+            return "Object cannot be attacked", weapon_range, None, False
+        access = ((PhysicalAccess.PROJECTILE if weapon_range.type is RangeType.RANGE else PhysicalAccess.NATURAL)
+                  if natural is not None else source.get_weapon_physical_access(weapon_slot))
+        contact = get_map().attack_object_contact(source.uuid, target.uuid,
+            range_feet=weapon_range.long or weapon_range.normal, access=access, subjective=True)
+        if contact is None:
+            return "Object is out of physical reach", weapon_range, None, False
+        target_position = contact
+    else:
+        return f"Target entity not found for {name}", weapon_range, None, False
+    distance_feet = source.senses.get_feet_distance(target_position)
+    if weapon_range.type == RangeType.RANGE:
+        if distance_feet <= weapon_range.normal:
+            return None, weapon_range, target_position, False
+        if weapon_range.long is not None and distance_feet <= weapon_range.long:
+            return None, weapon_range, target_position, True
+        return f"Target entity not in range for {name}", weapon_range, target_position, False
+    if weapon_range.type == RangeType.REACH and distance_feet > weapon_range.normal:
+        return f"Target entity not in reach for {name}", weapon_range, target_position, False
+    return None, weapon_range, target_position, False
+
+
+def weapon_attack_error(
+    scan: ActorScan, source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec],
+    target_uuid: Optional[UUID], name: str,
+) -> Optional[str]:
+    """Hand permission, range or reach, and sight of a creature target for one weapon attack."""
+    if natural is None and not weapon_slot_is_eligible(source, weapon_slot, target_uuid):
+        return "Declared weapon or hand permission is unavailable"
+    error = weapon_reach(source, weapon_slot, natural, target_uuid, name)[0]
+    if error is not None or target_uuid is None or Entity.get(target_uuid) is None:
+        return error
+    record = scan.creatures.get(target_uuid)
+    if record is None or not record.visual:
+        return f"Target entity not in line of sight for {name}"
+    return None
+
+
 def grant_weapon_attack_batch(source_uuid: UUID,declaration: ActionEvent,execution: ActionEvent) -> None:
     """Grant native Extra Attack credit for one paid weapon-attempt action."""
     source=Entity.get(source_uuid)
@@ -2051,15 +2116,16 @@ class Attack(BaseAction):
                 self.costs = [Cost(name="Off-Hand Attack Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)]
         return self
 
-    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+    def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return the actor-baseline stochastic profile for this weapon attack."""
+        actor = Entity.get(self.source_entity_uuid)
         profile = build_weapon_attack_outcome_profile(
             actor,
             self.weapon_slot,
             self.override_ability,
             natural_weapon=self.get_natural_weapon(),
         )
-        if profile is None or not isinstance(actor, Entity):
+        if profile is None or actor is None:
             return profile
         extra_damage_rolls: list[DamageRollProfile] = []
         for condition in actor.active_conditions.values():
@@ -2074,9 +2140,10 @@ class Attack(BaseAction):
             "damage_rolls": tuple(profile.damage_rolls) + tuple(extra_damage_rolls),
         })
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Return target-effect riders contributed by active actor traits."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         profiles: list[ActionTargetEffectProfile] = []
         for condition in actor.active_conditions.values():
@@ -2101,96 +2168,6 @@ class Attack(BaseAction):
         )
 
     @staticmethod
-    def validate_range(declaration_event: AttackEvent, source_entity_uuid: UUID) -> Optional[AttackEvent]:
-        """Validate if the source entity and target entity are in range.
-
-        Ranged attacks inside normal range are allowed without the long-range
-        flag. Ranged attacks between normal and long range are allowed with
-        `is_long_range=True`. Melee attacks require distance within weapon reach.
-
-        Args:
-            declaration_event: Attack declaration event to validate.
-            source_entity_uuid: Attacking entity UUID.
-
-        Returns:
-            Updated declaration event, canceled event, or `None`.
-        """
-        source_entity = Entity.get(source_entity_uuid)
-        if not source_entity:
-            return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
-        if not isinstance(source_entity, Entity):
-            return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
-        if not declaration_event.target_entity_uuid:
-            return declaration_event.cancel(status_message=f"Target entity uuid not present for {declaration_event.name}")
-        target_entity = BaseBlock.get(declaration_event.target_entity_uuid)
-        if not isinstance(target_entity, (Entity, BaseItem)):
-            return declaration_event.cancel(status_message=f"Target entity not found for {declaration_event.name}")
-
-        weapon_range = declaration_event.range or source_entity.get_weapon_range(declaration_event.weapon_slot)
-        if weapon_range is None:
-            return declaration_event.cancel(status_message=f"Weapon range not found for {declaration_event.name}")
-
-        target_position = target_entity.position
-        if isinstance(target_entity, BaseItem):
-            if not target_entity.is_active or not target_entity.is_targetable:
-                return declaration_event.cancel(status_message="Object cannot be attacked")
-            contact = get_map().attack_object_contact(source_entity_uuid, target_entity.uuid,
-                range_feet=weapon_range.long or weapon_range.normal,
-                access=(PhysicalAccess.PROJECTILE if weapon_range.type is RangeType.RANGE else PhysicalAccess.NATURAL) if declaration_event.natural_weapon else source_entity.get_weapon_physical_access(declaration_event.weapon_slot), subjective=True)
-            if contact is None:
-                return declaration_event.cancel(status_message="Object is out of physical reach")
-            target_position = contact
-        distance_feet = source_entity.senses.get_feet_distance(target_position)
-        is_long_range = False
-
-        if weapon_range.type == RangeType.RANGE:
-            if distance_feet <= weapon_range.normal:
-                pass
-            elif weapon_range.long is not None and distance_feet <= weapon_range.long:
-                is_long_range = True
-            else:
-                return declaration_event.cancel(status_message=f"Target entity not in range for {declaration_event.name}")
-
-        elif weapon_range.type == RangeType.REACH:
-            if distance_feet > weapon_range.normal:
-                return declaration_event.cancel(status_message=f"Target entity not in reach for {declaration_event.name}")
-
-        return declaration_event.with_updates(
-            status_message=f"Validated range for {declaration_event.name}",
-            target_position=target_position,
-            range=weapon_range,
-            is_long_range=is_long_range
-        )
-
-    @staticmethod
-    def check_ranged_conditions(declaration_event: AttackEvent, source_entity_uuid: UUID) -> Optional[AttackEvent]:
-        """Check conditions that affect ranged attacks.
-
-        Sets `is_threatened=True` for ranged attacks made while an enemy
-        threatens the attacker.
-
-        Args:
-            declaration_event: Attack declaration event to inspect.
-            source_entity_uuid: Attacking entity UUID.
-
-        Returns:
-            Updated declaration event, canceled event, or `None`.
-        """
-        source_entity = Entity.get(source_entity_uuid)
-        if not source_entity or not isinstance(source_entity, Entity):
-            return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
-
-        is_threatened = False
-
-        if declaration_event.range and declaration_event.range.type == RangeType.RANGE:
-            is_threatened = source_entity.is_threatened()
-
-        return declaration_event.with_updates(
-            status_message=f"Checked ranged conditions for {declaration_event.name}",
-            is_threatened=is_threatened
-        )
-
-    @staticmethod
     def equipped_source_is_eligible(event: AttackEvent, source: Entity) -> bool:
         """Recheck the declared physical weapon and actor-owned hand permission."""
         if event.natural_weapon is not None:
@@ -2198,13 +2175,7 @@ class Attack(BaseAction):
         weapon = source.equipment.get_weapon(event.weapon_slot)
         if event.source_item_uuid is not None and (weapon is None or weapon.uuid != event.source_item_uuid):
             return False
-        if weapon is not None and weapon.spell_attack_profile is not None:
-            if weapon.spell_attack_profile.wielder_uuid!=source.uuid or not weapon.contributions_active():
-                return False
-            target=BaseBlock.get(event.target_entity_uuid) if event.target_entity_uuid else None
-            if target is not None and SpellProtectionRegistry.is_protected(target.position,source.position,weapon.spell_attack_profile.effect_origin.base_spell_level or 2):
-                return False
-        return weapon is None or event.weapon_slot in source.equipment.compatible_slots_for_actor(weapon)
+        return weapon_slot_is_eligible(source, event.weapon_slot, event.target_entity_uuid)
 
     @staticmethod
     def attack_consequences(execution_event: AttackEvent, source_entity_uuid: UUID, *,
@@ -2567,34 +2538,29 @@ class Attack(BaseAction):
             "additional_damages": list(self.additional_damages),
             "damage_types": list(dict.fromkeys([*event.damage_types, *(damage.damage_type for damage in self.additional_damages)]))})
 
-    def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
-        """Validate range, line of sight, and ranged-attack conditions."""
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Weapon and hand permission, range or reach, and sight of a creature target."""
         source = Entity.get(self.source_entity_uuid)
-        if source is None or not Attack.equipped_source_is_eligible(declaration_event, source):
-            return declaration_event.cancel(status_message="Declared weapon or hand permission is unavailable")
-        range_validated_event = Attack.validate_range(declaration_event, self.source_entity_uuid)
-        if range_validated_event is None:
-            return declaration_event.cancel(status_message=f"Range validation returned None for {self.name}")
-        elif range_validated_event.canceled:
-            return range_validated_event
+        if source is None:
+            return "Declared weapon or hand permission is unavailable"
+        return weapon_attack_error(scan, source, self.weapon_slot, self.get_natural_weapon(),
+            selection.target_uuids[0] if selection.target_uuids else None, self.declaration_name or self.name)
 
-        line_of_sight_validated_event = (range_validated_event
-            if range_validated_event.target_kind == "object"
-            else validate_line_of_sight(range_validated_event, self.source_entity_uuid))
-        if line_of_sight_validated_event is None:
-            return declaration_event.cancel(status_message=f"Line of sight validation returned None for {self.name}")
-        elif line_of_sight_validated_event.canceled:
-            return line_of_sight_validated_event
+    def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
+        """Admit through the shared path, then record the weapon's range facts and ranged conditions.
 
-        ranged_conditions_event = Attack.check_ranged_conditions(line_of_sight_validated_event, self.source_entity_uuid)
-        if ranged_conditions_event is None:
-            return declaration_event.cancel(status_message=f"Ranged conditions check returned None for {self.name}")
-        elif ranged_conditions_event.canceled:
-            return ranged_conditions_event
-
-        return ranged_conditions_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Attack validated for {self.name}"
+        The attack roll reads `range`, `is_long_range`, `target_position` and
+        `is_threatened` from the execution event, so this enrichment stays here.
+        """
+        admitted = cast(Optional[AttackEvent], super()._validate(declaration_event))
+        source = Entity.get(self.source_entity_uuid)
+        if admitted is None or admitted.canceled or source is None:
+            return admitted
+        _, weapon_range, target_position, is_long_range = weapon_reach(source, self.weapon_slot, self.get_natural_weapon(),
+            declaration_event.target_entity_uuid, self.declaration_name or self.name)
+        return admitted.with_updates(
+            target_position=target_position, range=weapon_range, is_long_range=is_long_range,
+            is_threatened=weapon_range is not None and weapon_range.type == RangeType.RANGE and source.is_threatened(),
         )
 
     def _apply(self, execution_event: AttackEvent) -> Optional[AttackEvent]:
@@ -2655,17 +2621,6 @@ class Dash(BaseAction):
             costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
             source_entity_name=source_name,
-        )
-
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        """Validate that the acting entity exists."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
         )
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
@@ -2733,17 +2688,6 @@ class Dodge(BaseAction):
             costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
             source_entity_name=source_name,
-        )
-
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        """Validate that the acting entity exists."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
         )
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
@@ -2814,17 +2758,6 @@ class Disengage(BaseAction):
             costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
             source_entity_name=source_name,
-        )
-
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        """Validate that the acting entity exists."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
         )
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
@@ -2903,18 +2836,11 @@ class DropConcentration(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if "Concentrating" not in entity.active_conditions:
-            return declaration_event.cancel(status_message="Not concentrating on any spell")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        if entity is None or "Concentrating" not in entity.active_conditions:
+            return "Not concentrating on any spell"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         """Remove the requested concentration slot or the whole condition."""
@@ -2995,24 +2921,19 @@ class ShakeAwake(BaseAction):
             )
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        """Validate an adjacent other creature with a wakeable condition."""
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """An adjacent other creature with a wakeable condition."""
         source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if not source or not target:
-            return declaration_event.cancel(status_message="Source or target not found")
+            return "Source or target not found"
         if source.uuid == target.uuid:
-            return declaration_event.cancel(status_message="Cannot shake yourself awake")
+            return "Cannot shake yourself awake"
         if source.senses.get_feet_distance(target.position) > 5:
-            return declaration_event.cancel(status_message="Target is not adjacent")
+            return "Target is not adjacent"
         if not self._wakeable_condition_uuids(target):
-            return declaration_event.cancel(
-                status_message="Target has no condition that can be shaken off"
-            )
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+            return "Target has no condition that can be shaken off"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply external assistance to every condition that declares support."""
@@ -3056,14 +2977,14 @@ class AllyHelp(ShakeAwake):
         return tuple(condition.uuid for condition in target.active_conditions_by_uuid.values()
             if ConditionRemovalTrigger.ALLY_HELP in condition.removal_triggers)
 
-    def _validate(self,event: ActionEvent) -> ActionEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         caster=Entity.get(self.source_entity_uuid)
-        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target=Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if caster is None or target is None or caster.uuid==target.uuid or not caster.is_ally(target):
-            return event.cancel(status_message="Help requires another allied creature")
+            return "Help requires another allied creature"
         if caster.senses.get_feet_distance(target.position)>7 or not self._wakeable_condition_uuids(target):
-            return event.cancel(status_message="No eligible effect within Help reach")
-        return event.phase_to(EventPhase.EXECUTION)
+            return "No eligible effect within Help reach"
+        return None
 
 
 @_core_action_identity(
@@ -3109,44 +3030,33 @@ class Hide(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
+            return "Entity not found"
 
         grid = get_map()
         tile = grid.get_tile(*entity.position)
         if tile:
             light = tile.resolved_light_level
             if light == LightLevel.VERY_BRIGHT:
-                return declaration_event.cancel(
-                    status_message="Cannot hide in very bright light"
-                )
+                return "Cannot hide in very bright light"
             if light.value <= LightLevel.DIM_LIGHT.value:
-                return declaration_event.phase_to(
-                    new_phase=EventPhase.EXECUTION,
-                    status_message=f"Validated {self.name}"
-                )
+                return None
 
         subscribers = grid.get_subscribers_at(entity.position)
         for sub_uuid in subscribers:
             if sub_uuid == entity.uuid:
                 continue
             sub = Entity.get(sub_uuid)
-            if sub and isinstance(sub, Entity) and entity.is_enemy(sub):
+            if sub and entity.is_enemy(sub):
                 if (
                     (contact := sub.senses.entities.get(entity.uuid)) is not None
                     and contact.visual
                     and not entity.is_obscured_by_larger_creature_from(sub)
                 ):
-                    return declaration_event.cancel(
-                        status_message="Cannot hide - visible to enemies"
-                    )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+                    return "Cannot hide - visible to enemies"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -3243,18 +3153,11 @@ class StandUp(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if "Prone" not in entity.active_conditions:
-            return declaration_event.cancel(status_message="Not prone - cannot stand up")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        if entity is None or "Prone" not in entity.active_conditions:
+            return "Not prone - cannot stand up"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -3300,18 +3203,11 @@ class DropProne(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if "Prone" in entity.active_conditions:
-            return declaration_event.cancel(status_message="Already prone")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        if entity is None or "Prone" in entity.active_conditions:
+            return "Already prone"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -3616,37 +3512,36 @@ class Jump(BaseAction):
             source_entity_name=source_entity.name
         )
 
-    def _validate(self, declaration_event: JumpEvent) -> JumpEvent:
-        """Validate the jump action."""
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A visible, walkable landing within jump range with a clear line from the jumper."""
         source_entity = Entity.get(self.source_entity_uuid)
         if not source_entity:
-            return declaration_event.cancel(status_message="Entity not found")
+            return "Entity not found"
 
         if source_entity.occupancy_layer is not OccupancyLayer.GROUND:
-            return declaration_event.cancel(status_message="Jump requires ground contact")
+            return "Jump requires ground contact"
 
-        end_pos = declaration_event.end_position
+        if not selection.positions:
+            return "Choose a landing position"
+        end_pos = selection.positions[0]
         grid = get_map()
 
-        if end_pos not in source_entity.senses.visible or not source_entity.senses.visible[end_pos]:
-            return declaration_event.cancel(status_message=f"Position {end_pos} not visible")
+        if end_pos not in scan.visible:
+            return f"Position {end_pos} not visible"
 
         action_range = self.get_range()
         max_range = action_range.normal if action_range else 15
         distance = source_entity.senses.get_feet_distance(end_pos)
         if distance > max_range:
-            return declaration_event.cancel(status_message=f"Position {end_pos} out of jump range ({distance}ft > {max_range}ft)")
+            return f"Position {end_pos} out of jump range ({distance}ft > {max_range}ft)"
 
         if not grid.is_walkable_for(end_pos[0], end_pos[1], source_entity.uuid):
-            return declaration_event.cancel(status_message=f"Position {end_pos} not walkable or occupied")
+            return f"Position {end_pos} not walkable or occupied"
 
         if not grid.raycast_clear(source_entity.position, end_pos, channel=WorldEdgeChannel.PROPAGATION):
-            return declaration_event.cancel(status_message=f"Path to {end_pos} is blocked")
+            return f"Path to {end_pos} is blocked"
 
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated jump to {end_pos}"
-        )
+        return None
 
     def _apply(self, execution_event: JumpEvent) -> JumpEvent:
         """Apply the jump - step through path cells firing StepMovementEvents.
@@ -4104,33 +3999,29 @@ class Shove(BaseAction):
             is_ally=source.is_ally(target)
         )
 
-    def _validate(self, declaration_event: ShoveEvent) -> ShoveEvent:
-        """Validate the shove action."""
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """An adjacent, visible body light enough to shove."""
         source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(declaration_event.target_entity_uuid) if declaration_event.target_entity_uuid else None
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
 
         if not source or not target:
-            return declaration_event.cancel(status_message="Entity not found")
+            return "Entity not found"
 
         if source.cannot_manipulate_bodies or target.cannot_manipulate_bodies:
-            return declaration_event.cancel(status_message="This body cannot shove or be shoved")
+            return "This body cannot shove or be shoved"
         distance = source.senses.get_feet_distance(target.position)
         if distance > 5:
-            return declaration_event.cancel(status_message=f"Target not adjacent ({distance}ft)")
+            return f"Target not adjacent ({distance}ft)"
 
-        if target.weight > declaration_event.max_shove_weight:
-            return declaration_event.cancel(
-                status_message=f"Target too heavy ({target.weight}lbs > {declaration_event.max_shove_weight}lbs)"
-            )
+        max_shove_weight = self.get_max_shove_weight(source)
+        if target.weight > max_shove_weight:
+            return f"Target too heavy ({target.weight}lbs > {max_shove_weight}lbs)"
 
-        contact = source.senses.entities.get(target.uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not visible")
+        record = scan.creatures.get(target.uuid)
+        if record is None or not record.visual:
+            return "Target not visible"
 
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message="Shove validated"
-        )
+        return None
 
     def _apply(self, execution_event: ShoveEvent) -> ShoveEvent:
         """Resolve the shove contest and apply push or prone effects."""
@@ -4920,21 +4811,49 @@ class SpellAction(BaseAction):
             return self.alt_range
         return self.spell_range.normal
 
+    def _object_recipient_contact(self, source: Entity, target: BaseItem) -> Tuple[Optional[str], Optional[Tuple[int, int]]]:
+        """(error, contact position) of one object this spell would target."""
+        if (self.effective_target_type is not TargetType.CREATURE_OR_OBJECT or not target.is_active
+                or self.object_target_policy == "damageable" and (not target.is_targetable or not target.is_breakable())):
+            return "This spell cannot target this object", None
+        contact = get_map().attack_object_contact(source.uuid, target.uuid,
+            range_feet=self.effective_range, access=self.get_physical_access() or PhysicalAccess.PROJECTILE,
+            subjective=True, origin=self.get_target_origin())
+        return (None, contact) if contact is not None else ("Object is out of spell reach", None)
+
+    def single_recipient_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """The rule-error twin of `validate_single_recipient`: one creature or object, read from the selection.
+
+        It omits the declaration's object contact position, which
+        `validate_single_recipient` also records on the event.
+        """
+        source = Entity.get(self.source_entity_uuid)
+        target_uuid = selection.target_uuids[0] if selection.target_uuids else None
+        target = BaseBlock.get(target_uuid) if target_uuid is not None else None
+        if source is None or target is None:
+            return "Caster or target not found"
+        if isinstance(target, BaseItem):
+            return self._object_recipient_contact(source, target)[0]
+        if target.uuid == source.uuid:
+            return None if self.include_self else "This spell does not allow self targeting"
+        if Entity.get(target.uuid) is None:
+            return f"Target entity not found for {self.name}"
+        record = scan.creatures.get(target.uuid)
+        if record is None or not record.visual:
+            return f"Target entity not in line of sight for {self.name}"
+        if self.get_target_distance(target.position) > self.effective_range:
+            return "Target is out of spell range"
+        return None
+
     def validate_single_recipient(self, declaration: SpellEvent) -> Optional[SpellEvent]:
         source = Entity.get(self.source_entity_uuid)
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if source is None or target is None:
             return declaration.cancel(status_message="Caster or target not found")
         if isinstance(target, BaseItem):
-            if (self.effective_target_type is not TargetType.CREATURE_OR_OBJECT or not target.is_active
-                    or self.object_target_policy == "damageable" and (not target.is_targetable or not target.is_breakable())):
-                return declaration.cancel(status_message="This spell cannot target this object")
-            access = self.get_physical_access()
-            contact = get_map().attack_object_contact(source.uuid, target.uuid,
-                range_feet=self.effective_range, access=access or PhysicalAccess.PROJECTILE,
-                subjective=True, origin=self.get_target_origin())
-            if contact is None:
-                return declaration.cancel(status_message="Object is out of spell reach")
+            error, contact = self._object_recipient_contact(source, target)
+            if error is not None:
+                return declaration.cancel(status_message=error)
             return declaration.with_updates(target_kind="object", target_position=contact)
         if target.uuid==source.uuid:
             return declaration if self.include_self else declaration.cancel(status_message="This spell does not allow self targeting")
@@ -4980,22 +4899,27 @@ class SpellAction(BaseAction):
             return "Target is outside the device firing sector"
         return None
 
-    def targeting_error(self) -> Optional[str]:
-        if (error := self._concentration_capacity_error()) is not None:
-            return error
+    def _family_admission_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Casting entitlement, device concentration capacity, the source-item origin and its firing sector."""
+        return (self.casting_entitlement_error() or self._concentration_capacity_error()
+                or self._source_item_targeting_error() or self.spell_targeting_error(selection))
+
+    def spell_targeting_error(self, selection: ActionSelection) -> Optional[str]:
+        """Range and firing sector of the selected center or recipients from a source-item origin.
+
+        Every spell shares it, so it is not this family's `rule_error`: a
+        spell's own rule never has to compose it.
+        """
         if self.cast_origin == "actor" and self.target_sector_degrees is None:
             return None
-        error = self._source_item_targeting_error()
-        if error is not None:
-            return error
         # Test selected centers/recipients, never secondary area occupants.
         if self.effective_target_type in (TargetType.POSITION, TargetType.POSITION_LOS,
                                           TargetType.POSITION_PATH, TargetType.POSITION_AOE):
-            positions = [self.end_position] if self.end_position is not None else []
+            positions = list(selection.positions[:1])
         elif self.effective_target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY,
                                            TargetType.CREATURE_OR_OBJECT):
             positions = []
-            for identity in self.get_all_targets():
+            for identity in selection.target_uuids:
                 target = BaseBlock.get(identity)
                 if isinstance(target, BaseItem):
                     contact = get_map().attack_object_contact(self.source_entity_uuid,
@@ -5364,13 +5288,34 @@ class SpellAction(BaseAction):
             if (grant.source_id == self.spellcasting_source_id and grant.spell_id == self.get_authored_spell_id()
                     and grant.cast_rank == self.spell_level
                     and (not grant.outside_encounter_only or entity.active_encounter_uuid is None)):
-                costs = [cost for cost in self._get_costs_for_level(self.spell_level) if not cost.cost_type.startswith("spell_slot")]
-                if grant.resource_name is not None:
-                    costs.append(Cost(name=grant.label, cost_type="actions", cost=0, resource_name=grant.resource_name,
-                        resource_cost=1, resource_evaluator=entity_resource_cost_evaluator))
-                variants.append(self._create_variant(cast_at_level=self.spell_level, costs=costs,
+                variants.append(self._create_variant(cast_at_level=self.spell_level, costs=self._free_cast_costs(grant),
                     cast_cost_grant_id=grant.grant_id, cast_cost_label=grant.label))
         return variants
+
+    def _free_cast_costs(self, grant: FreeSpellCastGrant) -> List[Cost]:
+        """The base-rank cast's costs when one free-cast grant pays instead of a slot."""
+        costs = [cost for cost in self._get_costs_for_level(self.spell_level) if not cost.cost_type.startswith("spell_slot")]
+        if grant.resource_name is not None:
+            costs.append(Cost(name=grant.label, cost_type="actions", cost=0, resource_name=grant.resource_name,
+                resource_cost=1, resource_evaluator=entity_resource_cost_evaluator))
+        return costs
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        """A spell's level and casting cost come from the selection too."""
+        overrides = super()._selection_overrides(selection)
+        level = selection.cast_at_level if selection.cast_at_level is not None else self.cast_at_level
+        overrides["cast_at_level"] = level
+        if selection.cost_source.kind is CostSourceKind.FREE_CAST:
+            caster = Entity.get(self.source_entity_uuid)
+            grant = (caster.spellcasting.free_cast_grants.get(selection.cost_source.free_cast_grant_uuid)
+                     if caster is not None and selection.cost_source.free_cast_grant_uuid is not None else None)
+            if grant is None:
+                raise ValueError("The selected free cast is not available")
+            overrides.update(costs=self._free_cast_costs(grant), cast_cost_grant_id=grant.grant_id,
+                cast_cost_label=grant.label)
+        else:
+            overrides["costs"] = self._get_costs_for_level(level)
+        return overrides
 
     def casting_entitlement_error(self) -> str | None:
         caster = Entity.get(self.source_entity_uuid)
@@ -5391,9 +5336,6 @@ class SpellAction(BaseAction):
                 return "The selected casting cost is no longer available"
         return None
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        error = self.casting_entitlement_error()
-        return declaration_event.cancel(status_message=error) if error else super()._validate(declaration_event)
 
     def get_discovery_variants(self, entity: Any) -> List[BaseAction]:
         """Return spell forms that should appear in action discovery.
@@ -5528,7 +5470,7 @@ class SpellAction(BaseAction):
             return self.harmful, list(dict.fromkeys(targets)) if self.harmful else []
         if self.spell_damage_type is not None:
             return True, list(dict.fromkeys(targets))
-        profile = self.get_target_effect_profile(caster)
+        profile = self.get_target_effect_profile()
         branches = tuple(
             branch for branch in profile.branches
             if branch.disposition is TargetEffectDisposition.HARMFUL
@@ -5697,26 +5639,22 @@ class PickUp(BaseAction):
     def get_physical_access(self) -> Optional[PhysicalAccess]:
         return PhysicalAccess.HAND
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
+            return "Entity not found"
 
-        item = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        item = BaseBlock.get(selection.target_uuids[0]) if selection.target_uuids else None
         if not isinstance(item, BaseItem) or not item.is_pickable:
-            return declaration_event.cancel(status_message="Cannot pick up this object")
+            return "Cannot pick up this object"
 
         if not entity.inventory.can_add(item):
-            return declaration_event.cancel(status_message="Inventory full")
+            return "Inventory full"
 
-        item_pos = get_map().get_object_position(item.uuid)
-        if item_pos is None:
-            return declaration_event.cancel(status_message="Item not on the ground")
+        if get_map().get_object_position(item.uuid) is None:
+            return "Item not on the ground"
 
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated Pick Up {item.name}"
-        )
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -5800,28 +5738,24 @@ class Drop(BaseAction):
                 valid.append(pos)
         return valid
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
+            return "Entity not found"
 
         if self.item_uuid is None:
-            return declaration_event.cancel(status_message="No item specified")
+            return "No item specified"
         if not entity.inventory.has_item(self.item_uuid):
-            return declaration_event.cancel(status_message="Item not in inventory")
+            return "Item not in inventory"
 
-        if self.end_position is None:
-            return declaration_event.cancel(status_message="No drop position specified")
+        if not selection.positions:
+            return "No drop position specified"
+        drop_position = selection.positions[0]
 
-        dx = abs(self.end_position[0] - entity.position[0])
-        dy = abs(self.end_position[1] - entity.position[1])
-        if dx > 1 or dy > 1:
-            return declaration_event.cancel(status_message="Drop position too far (max 5ft)")
+        if abs(drop_position[0] - entity.position[0]) > 1 or abs(drop_position[1] - entity.position[1]) > 1:
+            return "Drop position too far (max 5ft)"
 
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message="Validated Drop"
-        )
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)

@@ -1384,6 +1384,15 @@ class PositionPathSelection(TypedDict):
     origin_start_offset_cells: NotRequired[int]
 
 
+class PositionRegion(TypedDict):
+    range_feet: NotRequired[int | None]
+    candidate_source: NotRequired[Literal['visible', 'reachable']]
+    requires_unoccupied: NotRequired[bool]
+    requires_walkable: NotRequired[bool]
+    requires_axis_or_diagonal_alignment: NotRequired[bool]
+    exclude_source_position: NotRequired[bool]
+
+
 class PreparedSpellSelection(TypedDict):
     source_id: str
     spell_ids: list[str]
@@ -2853,6 +2862,7 @@ class PlayerAction(TypedDict):
         | EntityDestinationSelection
         | None
     ]
+    position_region: NotRequired[PositionRegion | None]
     availability_status: ActionAvailabilityStatus
     can_afford: bool
     display_name: str

@@ -8,7 +8,7 @@ from pydantic import Field
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
 from dnd.core.base_actions import BaseAction, Cost, TargetType
-from dnd.core.action_types import ActionVariantFacet, PositionSelection, PositionPathSelection, SinglePositionSelection
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionSelection, PositionPathSelection, SinglePositionSelection
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
@@ -23,6 +23,7 @@ from dnd.core.wall_geometry import wall_shell_cells, wall_side_cells
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.ignition import ignite_surface_contacts
+from dnd.types.discovery import ActorScan
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
@@ -202,13 +203,17 @@ class WallOfFire(SpellAction):
     )])
 
     def wall_geometry(self) -> WallPresentationGeometry | None:
-        if self.end_position is None:
+        return self._wall_geometry(self.current_selection())
+
+    def _wall_geometry(self, selection: ActionSelection) -> WallPresentationGeometry | None:
+        if not selection.positions:
             return None
+        end_position = selection.positions[0]
         if self.wall_form == "ring":
-            path = WallRing(center=self.end_position, radius_feet=self.wall_radius_feet)
-            anchor = self.end_position
+            path = WallRing(center=end_position, radius_feet=self.wall_radius_feet)
+            anchor = end_position
         else:
-            selected = self.get_selected_position_path()
+            selected = self._selected_position_path(selection)
             if selected is None or len(selected) != 2 or selected[0] == selected[1]:
                 return None
             path = WallSegment(start=selected[0], end=selected[1])
@@ -230,22 +235,24 @@ class WallOfFire(SpellAction):
         return event
 
     def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self.position_placement_error(subjective=True)
+        return self.position_selection_error() or self._placement_error(self.current_selection(), subjective=True)
 
     def get_selection_geometry(self):
         return self.wall_geometry()
 
-    def position_placement_error(self, *, subjective: bool = False) -> str | None:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        return self._placement_error(selection, subjective=False)
+
+    def _placement_error(self, selection: ActionSelection, *, subjective: bool) -> str | None:
         caster = Entity.get(self.source_entity_uuid)
-        geometry = self.wall_geometry()
+        geometry = self._wall_geometry(selection)
         if caster is None or geometry is None:
             return "Wall needs a caster and complete placement"
-        if self.end_position is None:
-            return "Select a wall position"
-        range_error = self.target_position_error(self.end_position)
+        end_position = selection.positions[0]
+        range_error = self.target_position_error(end_position)
         if range_error is not None:
             return range_error
-        if not caster.senses.visible.get(self.end_position, False):
+        if not caster.senses.visible.get(end_position, False):
             return "Wall origin is not visible"
         allowed_sides = {"left", "right"} if self.wall_form == "segment" else {"inside", "outside"}
         if self.hot_side not in allowed_sides:
@@ -259,7 +266,7 @@ class WallOfFire(SpellAction):
             if grid.is_blocking_propagation(*position, observer_uuid=self.source_entity_uuid if subjective else None):
                 return "Solid geometry obstructs the wall"
         if isinstance(geometry.path, WallSegment):
-            selected = self.get_selected_position_path()
+            selected = self._selected_position_path(selection)
             if selected is None:
                 return "Select wall endpoints"
             if not grid.can_reach_between(selected[0], selected[1],
@@ -273,9 +280,6 @@ class WallOfFire(SpellAction):
                             PhysicalAccess.PROJECTILE, self.source_entity_uuid, subjective=subjective):
                         return "A solid boundary crosses the wall"
         return None
-
-    def _validate(self, declaration_event: SpellEvent) -> SpellEvent | None:
-        return declaration_event.phase_to(EventPhase.EXECUTION)
 
     def _apply(self, execution_event: SpellEvent) -> SpellEvent | None:
         caster = Entity.get(self.source_entity_uuid)
