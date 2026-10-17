@@ -5777,7 +5777,7 @@ class Entity(BaseBlock):
             source_item_uuid=source_item_uuid or template.source_item_uuid,
             item_stack_count=item_stack_count,
             item_charge_cost=item_charge_cost,
-            fixed_healing=template.get_fixed_healing(self),
+            fixed_healing=template.get_fixed_healing(),
             loot_item_uuid=description_facts.loot_item_uuid,
         )
         # Secondary recipients are perceived creatures and objects picked by uuid and admitted

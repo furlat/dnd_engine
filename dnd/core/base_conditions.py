@@ -681,12 +681,11 @@ class BaseCondition(BaseObject):
                 payload[field_name] = sorted(values)
         return payload
 
-    def get_action_target_effect_profile(self, action: Any, actor: Any) -> Optional[Any]:
+    def get_action_target_effect_profile(self, action: Any) -> Optional[Any]:
         """Return target-effect metadata this condition adds to an action.
 
         Args:
-            action: Action template being discovered.
-            actor: Entity discovering that action.
+            action: Action template being discovered; its source is this condition's bearer.
 
         Returns:
             A dependency-neutral target-effect profile, or `None` when this
@@ -694,12 +693,11 @@ class BaseCondition(BaseObject):
         """
         return None
 
-    def get_action_damage_roll_profiles(self, action: Any, actor: Any) -> Tuple[Any, ...]:
+    def get_action_damage_roll_profiles(self, action: Any) -> Tuple[Any, ...]:
         """Return extra damage profiles this condition adds to an action.
 
         Args:
-            action: Action template being discovered.
-            actor: Entity discovering that action.
+            action: Action template being discovered; its source is this condition's bearer.
 
         Returns:
             Dependency-neutral damage-profile metadata. The action layer

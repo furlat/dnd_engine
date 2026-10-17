@@ -205,7 +205,7 @@ class Tripwire(SpatialCondition):
             if not isinstance(parent, (StepMovementEvent, ForcedMovementEvent)):
                 return None  # Relocation, deployment and removal are not crossings.
             actor = Entity.get(event.entity_uuid) if event.entity_uuid else None
-            if not isinstance(actor, Entity) or actor.position != event.position:
+            if actor is None or actor.position != event.position:
                 return None
             pulse = EventQueue.publish_declaration(MechanismActivationEvent(
                 name="Tripwire Crossing", source_entity_uuid=self.uuid, target_entity_uuid=actor.uuid,

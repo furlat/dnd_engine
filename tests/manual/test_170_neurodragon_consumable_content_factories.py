@@ -27,7 +27,7 @@ def test_healing_potion_keeps_healing_cost_and_consumption_behavior() -> None:
 
     action = potion.get_use_actions(actor.uuid)[0]
     assert action.get_semantic_key() == HEALING_POTION_DRINK_SEMANTIC_KEY
-    assert action.get_fixed_healing(actor) == 4
+    assert action.get_fixed_healing() == 4
     assert tuple(
         (cost.cost_type, cost.cost)
         for cost in action.costs

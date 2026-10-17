@@ -189,7 +189,7 @@ def entity_action_economy_cost_evaluator(source_entity_uuid: UUID, cost_type: Co
 
 
 def build_weapon_attack_outcome_profile(
-    actor: Any,
+    actor: Entity,
     weapon_slot: WeaponSlot,
     override_ability: Optional[AbilityName] = None,
     natural_weapon: Optional[NaturalWeaponSpec] = None,
@@ -202,10 +202,8 @@ def build_weapon_attack_outcome_profile(
         override_ability: Optional ability selected by the action rule.
 
     Returns:
-        Actor-owned stochastic data, or ``None`` for an invalid actor or slot.
+        Actor-owned stochastic data, or ``None`` for a slot without damage.
     """
-    if not isinstance(actor, Entity):
-        return None
     baseline = actor.weapon_attack_outcome_baseline(
         weapon_slot,
         override_ability,
@@ -2106,19 +2104,21 @@ class Attack(BaseAction):
     def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return the actor-baseline stochastic profile for this weapon attack."""
         actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         profile = build_weapon_attack_outcome_profile(
             actor,
             self.weapon_slot,
             self.override_ability,
             natural_weapon=self.get_natural_weapon(),
         )
-        if profile is None or actor is None:
+        if profile is None:
             return profile
         extra_damage_rolls: list[DamageRollProfile] = []
         for condition in actor.active_conditions.values():
             if not condition.contributions_active():
                 continue
-            for damage_profile in condition.get_action_damage_roll_profiles(self, actor):
+            for damage_profile in condition.get_action_damage_roll_profiles(self):
                 if isinstance(damage_profile, DamageRollProfile):
                     extra_damage_rolls.append(damage_profile)
         if not extra_damage_rolls:
@@ -2134,7 +2134,7 @@ class Attack(BaseAction):
             return None
         profiles: list[ActionTargetEffectProfile] = []
         for condition in actor.active_conditions.values():
-            profile = condition.get_action_target_effect_profile(self, actor)
+            profile = condition.get_action_target_effect_profile(self)
             if isinstance(profile, ActionTargetEffectProfile):
                 profiles.append(profile)
         if not profiles:

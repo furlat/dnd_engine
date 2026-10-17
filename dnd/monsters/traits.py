@@ -699,9 +699,12 @@ class BonusDamageFeature(BaseCondition):
     melee_only: bool = Field(default=False, description="Whether only reach attacks qualify.")
     weapon_only: bool = Field(default=True, description="Whether only weapon damage events qualify.")
 
-    def get_action_damage_roll_profiles(self, action: object, actor: object) -> tuple[DamageRollProfile, ...]:
+    def get_action_damage_roll_profiles(self, action: object) -> tuple[DamageRollProfile, ...]:
         """Declare actor-known bonus damage when it is not target-dependent."""
-        if not isinstance(actor, Entity) or not isinstance(action, Attack):
+        if not isinstance(action, Attack):
+            return ()
+        actor = Entity.get(action.source_entity_uuid)
+        if actor is None:
             return ()
         if self.once_per_turn and f"{self.name} Used" in actor.active_conditions:
             return ()
@@ -887,9 +890,12 @@ class HitSaveRiderFeature(BaseCondition):
     condition_name: str = Field(default="Prone", description="Condition to apply.")
     excluded_creature_types: tuple[str, ...] = Field(default_factory=tuple, description="Creature types excluded from the rider.")
 
-    def get_action_target_effect_profile(self, action: object, actor: object) -> Optional[ActionTargetEffectProfile]:
+    def get_action_target_effect_profile(self, action: object) -> Optional[ActionTargetEffectProfile]:
         """Declare the save-based rider carried by matching attack actions."""
-        if not isinstance(actor, Entity) or not isinstance(action, Attack):
+        if not isinstance(action, Attack):
+            return None
+        actor = Entity.get(action.source_entity_uuid)
+        if actor is None:
             return None
         metadata = action.get_attack_source_metadata()
         weapon = actor.equipment.get_weapon(action.weapon_slot)

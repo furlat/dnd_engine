@@ -2438,7 +2438,7 @@ class MyrmidonStrikeDice(BaseCondition):
     damage_type: DamageType
     action_id: str
 
-    def get_action_damage_roll_profiles(self, action, actor):
+    def get_action_damage_roll_profiles(self, action):
         if (
             action.behavior_binding is not None
             and action.behavior_binding.behavior_id == self.action_id

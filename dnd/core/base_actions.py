@@ -1096,10 +1096,6 @@ class BaseAction(BaseObject):
     def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return actor-known stochastic action data when the rule defines it.
 
-        Args:
-            actor: Entity discovering this action. The base layer intentionally
-                accepts an opaque owner to preserve dependency direction.
-
         Returns:
             Actor-baseline outcome profile, or ``None`` when the action has not
             declared enough rule data for quantitative policy reasoning.
@@ -1113,12 +1109,8 @@ class BaseAction(BaseObject):
     def get_conditional_costs(self) -> tuple[ConditionalCost,...]:
         return tuple(ConditionalCost.model_validate(cost.model_dump()) for cost in self.get_conditional_runtime_costs())
 
-    def get_fixed_healing(self, actor: Any) -> Optional[int]:
+    def get_fixed_healing(self) -> Optional[int]:
         """Return deterministic healing disclosed by this action rule.
-
-        Args:
-            actor: Entity discovering this action. The base contract remains
-                owner-agnostic to preserve dependency direction.
 
         Returns:
             Fixed hit points restored per execution, or ``None`` when healing
@@ -1129,10 +1121,6 @@ class BaseAction(BaseObject):
     def get_self_setup_profile(self) -> Optional[ActionSelfSetupProfile]:
         """Return the action's dependency-neutral self-setup annotation.
 
-        Args:
-            actor: Entity discovering the action. The base contract keeps the
-                owner opaque to preserve dependency direction.
-
         Returns:
             Logical setup profile, or ``None`` when the action declares no
             self-directed combat setup.
@@ -1142,10 +1130,6 @@ class BaseAction(BaseObject):
     def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Return conditional effects the rule applies to selected targets.
 
-        Args:
-            actor: Entity discovering the action. The core action layer keeps
-                the owner opaque to preserve dependency direction.
-
         Returns:
             Typed target-effect profile, or ``None`` when the action has not
             declared target-conditional rule effects.
@@ -1154,10 +1138,6 @@ class BaseAction(BaseObject):
 
     def get_world_effect_profile(self) -> Optional[ActionWorldEffectProfile]:
         """Return information or topology effects declared by the action rule.
-
-        Args:
-            actor: Entity discovering the action. The core action layer keeps
-                the owner opaque to preserve dependency direction.
 
         Returns:
             Typed world-effect profile, or ``None`` when the action does not
