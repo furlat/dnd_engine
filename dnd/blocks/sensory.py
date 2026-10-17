@@ -699,6 +699,8 @@ class SpatialSensesSystem:
         self.contact_epoch = 0
         self._identity_grants: Dict[Tuple[UUID, Tuple[int, int]], Tuple[Tuple[UUID, str], ...]] = {}
         self._identity_grants_key: Optional[Tuple[int, int]] = None
+        # Objects on a zone change's cells, for the observers settling that fact now.
+        self._zone_objects_by_fact: Dict[UUID, FrozenSet[UUID]] = {}
         # The last settled group's late-completing facts and its observers. A
         # zone change opened in that group completes right after it (its
         # completion reads settled senses); those observers already settled it.
@@ -729,6 +731,7 @@ class SpatialSensesSystem:
         self.contact_epoch = 0
         self._identity_grants.clear()
         self._identity_grants_key = None
+        self._zone_objects_by_fact.clear()
 
     def _recording(self) -> bool:
         """Whether facts are recorded for the open group instead of settled now.
@@ -750,6 +753,7 @@ class SpatialSensesSystem:
         finally:
             self._absorbing_light = False
         pending, self._pending = self._pending, {}
+        self._zone_objects_by_fact.clear()
         self._covered_facts, self._covered_observers = frozenset(group.completes_after), frozenset(pending)
         # A zone change opened in the group completes right after it and its
         # covered observers skip it then: they settle its cells now, with the
@@ -1847,6 +1851,7 @@ class SpatialSensesSystem:
     def __call__(self, event: Event) -> None:
         """Reduce indexed observers before the causal event completes."""
         record_action_count("sensory.reducer_call", 1)
+        self._zone_objects_by_fact.clear()
         if self._recording():
             for observer_uuid in self.candidate_observer_uuids(event):
                 self._pending.setdefault(observer_uuid, _GroupSettlement()).events.append(event)
@@ -1966,9 +1971,8 @@ class SpatialSensesSystem:
         if only_refresh_hazards:
             record_action_count("sensory.hazard_only", 1)
             if any(isinstance(event, SpatialEffectChangeEvent) for event in events):
-                gated_objects = {identity for event in events if isinstance(event, SpatialEffectChangeEvent)
-                                 for position in event.get_affected_positions()
-                                 for identity in get_map().get_objects_at(position)}
+                gated_objects = set().union(*(self._zone_objects(event) for event in events
+                                              if isinstance(event, SpatialEffectChangeEvent)))
             before = _capture_senses_transition(senses, set(), positions=set(),
                 entities=set(), objects=gated_objects, effects=set())
             for identity in gated_objects:
@@ -2035,6 +2039,15 @@ class SpatialSensesSystem:
             register_event=False,
             initial=initial,
         )
+
+    def _zone_objects(self, event: SpatialEffectChangeEvent) -> FrozenSet[UUID]:
+        """Objects on a zone change's cells, once per fact for every observer settling it."""
+        objects = self._zone_objects_by_fact.get(event.uuid)
+        if objects is None:
+            grid = get_map()
+            objects = self._zone_objects_by_fact[event.uuid] = frozenset(
+                identity for position in event.get_affected_positions() for identity in grid.get_objects_at(position))
+        return objects
 
     @staticmethod
     def _residue_tile(event: Event) -> Optional[Tile]:
