@@ -803,23 +803,24 @@ def long_game_case(turns):
         operations = []
 
         def request(kind, call):
+            """(accepted, response); an Advance is accepted with no response body."""
             round_before = encounter.round_number
             try:
                 response, row = measured_request(mode, kind, call)
             except AssertionError as error:
                 operations.append({'kind': 'rejected', 'request': kind, 'error': str(error)[:200]})
-                return None
+                return False, None
             operations.append(row)
             if encounter.round_number != round_before:
                 started = perf_counter()
                 found, cycles = worker.collect_frozen_cycles()
                 operations.append(memory_census('round_check', round_before, found, cycles,
                     (perf_counter() - started) * 1000))
-            return response
+            return True, response
 
         for _ in range(turns):
             while worker.needs_advance(runtime.session):
-                if request('advance', lambda: driver.dispatch(Advance())) is None:
+                if not request('advance', lambda: driver.dispatch(Advance()))[0]:
                     break
             holders = [(seat, publication.boundary.input_actor_uuid) for seat, publication in runtime.publications.items()
                 if publication.boundary.input_actor_uuid is not None]
@@ -827,8 +828,8 @@ def long_game_case(turns):
                 break
             seat, actor_uuid = holders[0]
             for _ in range(3):
-                response = request('choices', lambda: driver.choices(seat, actor_uuid))
-                if response is None:
+                accepted, response = request('choices', lambda: driver.choices(seat, actor_uuid))
+                if not accepted:
                     break
                 choices = response.choices
                 rows = [row for row in (*choices.self_actions, *choices.entity_actions, *choices.position_actions,
@@ -839,9 +840,9 @@ def long_game_case(turns):
                 target = rng.choice(choices.target_sets[action.target_set])
                 selection = ActionSelection(action_index=action.discovery_index, target_indices=(target.index,),
                     extra_target_positions=(), prefer_safe=False)
-                preview = request('preview', lambda: driver.preview(seat, actor_uuid, choices.discovery_generation,
-                    selection))
-                if preview is None or not preview.preview.can_confirm:
+                accepted, preview = request('preview', lambda: driver.preview(seat, actor_uuid,
+                    choices.discovery_generation, selection))
+                if not accepted or not preview.preview.can_confirm:
                     continue
                 request(f'command {action.behavior_id}', lambda: driver.command(seat, actor_uuid,
                     ExecuteSelectionIntent(discovery_generation=choices.discovery_generation, selection=selection)))
