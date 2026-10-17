@@ -52,6 +52,7 @@ def dispatch_available_action(
     prefer_safe: bool = True,
     movement_guard: Optional[MovementContinuationGuard] = None,
     record_timing: Optional[ActionDispatchTimingRecorder] = None,
+    cast_at_level: Optional[int] = None,
 ) -> ActionDispatchResult:
     """Execute one exact discovery row and target without rediscovery."""
     if not action_info.can_afford:
@@ -85,6 +86,7 @@ def dispatch_available_action(
                 extra_target_uuids=list(extra_target_uuids) or None,
                 extra_target_positions=list(extra_target_positions) or None,
                 prefer_safe=prefer_safe,
+                cast_at_level=cast_at_level,
             )
     finally:
         if timing_token is not None:

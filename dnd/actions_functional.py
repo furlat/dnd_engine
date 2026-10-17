@@ -318,13 +318,7 @@ def _resolve_executable_template(entity: Entity, template_name: str) -> BaseActi
     base_name, cast_at_level = _parse_spell_variant_template_name(template_name)
     template = entity.get_action_template(base_name)
     if template is not None:
-        if cast_at_level is None:
-            return template
-        create_variant = getattr(template, "_create_variant", None)
-        if not template.is_spell or not callable(create_variant):
-            raise ValueError(f"Action {template_name} is not a spell variant")
-        variant_factory = cast(Callable[..., BaseAction], create_variant)
-        return variant_factory(cast_at_level=cast_at_level)
+        return template if cast_at_level is None else template.at_cast_level(cast_at_level)
 
     for registered_template in entity.registered_actions:
         for variant in registered_template.get_discovery_variants(entity):
@@ -521,17 +515,22 @@ def validated_extra_target_uuids(
     primary_target: AvailableTarget,
     extra_target_uuids: Optional[List[str]],
     scan: ActorScan,
+    template: Optional[BaseAction] = None,
 ) -> List[UUID]:
     """Validate additional targets against one exact engine discovery row.
 
     Membership in the row's pool is the shape check; the complete allocation
     then passes the action's own admission on the actor's perceived scan.
+    ``template`` is the row's action at the selected level (plan D17): its
+    allocation count and rule decide, not the listed level's.
     """
     if not extra_target_uuids:
         return []
-    if action_info.target_type != TargetType.MULTI_ENTITY or action_info.num_projectiles is None:
+    template = template if template is not None else action_info.execution_template
+    limit = template.get_multi_target_count() if template is not None else action_info.num_projectiles
+    if action_info.target_type != TargetType.MULTI_ENTITY or limit is None:
         raise ValueError("Additional targets require a multi-entity action")
-    if len(extra_target_uuids) + 1 > action_info.num_projectiles:
+    if len(extra_target_uuids) + 1 > limit:
         raise ValueError("Additional targets exceed the action allocation count")
     try:
         selected = [UUID(target_uuid) for target_uuid in extra_target_uuids]
@@ -549,7 +548,6 @@ def validated_extra_target_uuids(
     ]
     if action_info.allow_same_target is False and len(set(allocation)) != len(allocation):
         raise ValueError("Action requires unique target allocation")
-    template = action_info.execution_template
     if template is not None:
         reason = template.discovery_error(scan, replace(template.current_selection(), target_uuids=tuple(allocation)))
         if reason is not None:
@@ -586,6 +584,16 @@ def is_free_aim(action_info: AvailableActionInfo, target: AvailableTarget) -> bo
             and target.position is not None and target not in action_info.valid_targets)
 
 
+def row_template_at_level(action_info: AvailableActionInfo, cast_at_level: Optional[int]) -> Optional[BaseAction]:
+    """The row's executable template at the selected level: one of the row's `cast_levels` (plan D17)."""
+    template = action_info.execution_template
+    if cast_at_level is None or template is None or cast_at_level == action_info.cast_at_level:
+        return template
+    if cast_at_level not in action_info.cast_levels:
+        raise ValueError("This spell cannot be cast at that level now")
+    return template.at_cast_level(cast_at_level)
+
+
 def execute_available_action(
     entity: Entity,
     action_info: AvailableActionInfo,
@@ -594,13 +602,16 @@ def execute_available_action(
     extra_target_uuids: Optional[List[str]] = None,
     prefer_safe: bool = True,
     extra_target_positions: Optional[List[Tuple[int, int]]] = None,
+    cast_at_level: Optional[int] = None,
 ) -> Optional[Event]:
     """Execute one exact discovery row without name lookup or target mutation."""
+    leveled = row_template_at_level(action_info, cast_at_level)
     validated_extras = validated_extra_target_uuids(
         action_info,
         target,
         extra_target_uuids,
         entity.action_scan(subjective=True),
+        leveled,
     ) if extra_target_uuids else []
     bound_target = target.model_copy(
         deep=True,
@@ -623,7 +634,7 @@ def execute_available_action(
             extra_target_positions=extra_target_positions,
             discovered_template=action_info.execution_template,
         )
-    template = action_info.execution_template
+    template = leveled
     if template is None:
         template = _resolve_executable_template(entity, action_info.template_name)
     return _execute_bound_action(
@@ -641,6 +652,7 @@ def preview_available_selection(
     extra_target_positions: tuple[Tuple[int, int], ...] = (), *,
     prefer_safe: bool = True,
     include_aoe_effects: bool = True,
+    cast_at_level: Optional[int] = None,
 ) -> AvailableSelectionPreview:
     """Inspect an ordered discovery prefix without instantiation or events.
 
@@ -659,13 +671,16 @@ def preview_available_selection(
     free_aim = is_free_aim(action_info, primary)
     if primary not in action_info.valid_targets and not free_aim:
         return AvailableSelectionPreview(can_confirm=False, reason="Target is no longer admitted")
-    template = action_info.execution_template
+    try:
+        template = row_template_at_level(action_info, cast_at_level)
+    except ValueError as error:
+        return AvailableSelectionPreview(can_confirm=False, reason=str(error))
     if template is None:
         raise ValueError("Selection preview requires the original discovery row")
     try:
         scan = entity.action_scan(subjective=True)
         extras = validated_extra_target_uuids(action_info, primary,
-            [str(target.target_uuid) for target in selected_targets[1:]], scan)
+            [str(target.target_uuid) for target in selected_targets[1:]], scan, template)
         if action_info.target_type is not TargetType.MULTI_ENTITY and len(selected_targets) != 1:
             raise ValueError("This action selects one target")
         selection = template.get_position_selection()
@@ -683,11 +698,11 @@ def preview_available_selection(
         reason = bound.selection_preview_error() or template.discovery_error(scan, bound.current_selection())
         pool = secondary_candidates(entity, action_info, scan)
         next_targets: list[AvailableTarget] = []
-        if action_info.target_type is TargetType.MULTI_ENTITY and len(selected_targets) < (action_info.num_projectiles or 1):
+        if action_info.target_type is TargetType.MULTI_ENTITY and len(selected_targets) < (template.get_multi_target_count() or 1):
             for candidate in pool:
                 try:
                     candidate_extras = validated_extra_target_uuids(action_info, primary,
-                        [str(target.target_uuid) for target in (*selected_targets[1:], candidate)], scan)
+                        [str(target.target_uuid) for target in (*selected_targets[1:], candidate)], scan, template)
                 except ValueError:
                     continue
                 proposal = bound.model_copy(deep=False, update={"extra_target_entity_uuids": candidate_extras})

@@ -41,9 +41,10 @@ def admitted(caster, row, *targets):
     return template.discovery_error(caster.action_scan(subjective=True), selection) is None
 
 
-def choice(caster, target, slot=6):
+def choice(caster, target):
+    """The spell's one row (plan D17); the level is chosen at execution."""
     row = next(row for row in get_available_actions(caster).entity_actions
-               if row.behavior_id == 'spell.chain_lightning' and row.cast_at_level == slot)
+               if row.behavior_id == 'spell.chain_lightning')
     option = next(option for option in row.valid_targets if option.target_uuid == target.uuid)
     return row, option
 
@@ -51,14 +52,16 @@ def choice(caster, target, slot=6):
 @pytest.mark.parametrize('slot', [6, 7, 8, 9])
 def test_upcast_adds_selected_recipients_not_damage_or_extra_casts(scene, slot):
     caster, (primary, secondary, distant, other) = scene
-    row, option = choice(caster, primary, slot)
-    assert row.num_projectiles == slot - 2 and row.allow_same_target is False
+    row, option = choice(caster, primary)
+    assert row.cast_levels == (6, 7, 8, 9) and row.allow_same_target is False
+    assert row.execution_template.at_cast_level(slot).get_multi_target_count() == slot - 2
     assert admitted(caster, row, primary, secondary) and admitted(caster, row, primary, other)
     assert not admitted(caster, row, primary, distant) and not admitted(caster, row, primary, primary)
     hp = {entity.uuid: entity.get_normal_hp() for entity in (primary, secondary, distant, other)}
     cursor = EventQueue.event_cursor()
     with fixed_dice_faces(*([2] * 100)):
-        result = execute_available_action(caster, row, option, extra_target_uuids=[str(secondary.uuid), str(other.uuid)])
+        result = execute_available_action(caster, row, option, extra_target_uuids=[str(secondary.uuid), str(other.uuid)],
+                                          cast_at_level=slot)
     assert isinstance(result, SpellEvent) and result.phase is EventPhase.COMPLETION
     assert caster.action_economy.actions.normalized_score == 0
     assert caster.action_economy.spell_slot_value(slot).normalized_score == 1

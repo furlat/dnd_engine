@@ -20,6 +20,8 @@ class ActionSelection:
     target_indices: tuple[Annotated[int, Field(strict=True, ge=0)], ...]
     extra_target_positions: tuple[tuple[Annotated[int, Field(strict=True)], Annotated[int, Field(strict=True)]], ...] = ()
     prefer_safe: Annotated[bool, Field(strict=True)] = True
+    # One of the row's cast_levels; omitted casts at the row's level (plan D17).
+    cast_at_level: Annotated[int, Field(strict=True, ge=0, le=9)] | None = None
 
 
 @dataclass(frozen=True, slots=True)

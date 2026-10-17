@@ -412,11 +412,12 @@ def _retained_row(session: Session, action: AvailableActionInfo) -> AvailableAct
 def preview_player_selection(session: Session, actor_uuid: UUID, action: AvailableActionInfo,
                              selected: tuple[AvailableTarget, ...] = (),
                              positions: tuple[tuple[int, int], ...] = (), *,
-                             prefer_safe: bool = True, include_aoe_effects: bool = True) -> AvailableSelectionPreview:
+                             prefer_safe: bool = True, include_aoe_effects: bool = True,
+                             cast_at_level: int | None = None) -> AvailableSelectionPreview:
     actor = _current_player(session, actor_uuid)
     original = _retained_row(session, action)
     key = (original.discovery_index,
-           tuple(target.index for target in selected), positions, prefer_safe, include_aoe_effects)
+           tuple(target.index for target in selected), positions, prefer_safe, include_aoe_effects, cast_at_level)
     cache = session.discovery.previews
     if key not in cache:
         primary = next((target for target in original.valid_targets if selected and target.index == selected[0].index),
@@ -434,7 +435,7 @@ def preview_player_selection(session: Session, actor_uuid: UUID, action: Availab
         if positions and original.position_selection is None:
             raise CommandRejected("This action does not select additional positions")
         value = preview_available_selection(actor, original, retained, positions, prefer_safe=prefer_safe,
-            include_aoe_effects=include_aoe_effects)
+            include_aoe_effects=include_aoe_effects, cast_at_level=cast_at_level)
         size = len(value.model_dump_json().encode())
         if size > 8 * 1024 * 1024:
             return value.model_copy(deep=True)
@@ -482,6 +483,7 @@ def execute_player_action(
     extra_target_uuids: tuple[UUID, ...] = (),
     extra_target_positions: tuple[tuple[int, int], ...] = (),
     prefer_safe: bool = True,
+    cast_at_level: int | None = None,
 ) -> Operation:
     """Submit the current human's exact discovered choice to the rules engine."""
     actor = _current_player(session, actor_uuid)
@@ -496,7 +498,7 @@ def execute_player_action(
         raise CommandRejected("This allocation is not admitted")
     selected = (retained, *(by_uuid[identity] for identity in extra_target_uuids))
     preview = preview_player_selection(session, actor_uuid, original, selected, extra_target_positions,
-        prefer_safe=prefer_safe, include_aoe_effects=False)
+        prefer_safe=prefer_safe, include_aoe_effects=False, cast_at_level=cast_at_level)
     if not preview.can_confirm:
         raise CommandRejected(preview.reason or "This selection is incomplete")
     start = EventQueue.event_cursor()
@@ -505,6 +507,7 @@ def execute_player_action(
         extra_target_uuids=tuple(str(identity) for identity in extra_target_uuids),
         extra_target_positions=extra_target_positions,
         prefer_safe=prefer_safe,
+        cast_at_level=cast_at_level,
     )
     session.encounter.check_deaths()
     return _operation(session, start)

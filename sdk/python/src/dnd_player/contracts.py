@@ -53,6 +53,7 @@ class ActionSelection(TypedDict):
     target_indices: list[int]
     extra_target_positions: NotRequired[list[list[ExtraTargetPosition]]]
     prefer_safe: NotRequired[bool]
+    cast_at_level: NotRequired[int | None]
 
 
 type ActionSetupDuration = Literal['current_turn', 'until_next_turn', 'until_removed']
@@ -2897,6 +2898,7 @@ class PlayerAction(TypedDict):
     base_template_name: NotRequired[str | None]
     spell_level: NotRequired[int | None]
     cast_at_level: NotRequired[int | None]
+    cast_levels: NotRequired[list[int]]
     is_spell_variant: NotRequired[bool]
     requires_concentration: NotRequired[bool]
     num_projectiles: NotRequired[int | None]

@@ -506,6 +506,20 @@
           "default": true,
           "title": "Prefer Safe",
           "type": "boolean"
+        },
+        "cast_at_level": {
+          "anyOf": [
+            {
+              "maximum": 9,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cast At Level"
         }
       },
       "required": [
@@ -11927,6 +11941,17 @@
           "default": null,
           "description": "Spell slot level used by this action row.",
           "title": "Cast At Level"
+        },
+        "cast_levels": {
+          "default": [],
+          "description": "Slot levels this spell can be cast at now; the selection names one (plan D17). The row's targets are those of cast_at_level, the lowest.",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "title": "Cast Levels",
+          "type": "array"
         },
         "is_spell_variant": {
           "default": false,

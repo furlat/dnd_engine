@@ -283,6 +283,7 @@ class ActionDiscoveryDescription(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     spell_level: int | None = None
     cast_at_level: int | None = None
+    cast_levels: tuple[int, ...] = ()
     is_spell_variant: bool = False
     damage_types: tuple[DamageType, ...] = ()
     loot_item_uuid: UUID | None = None
@@ -2085,6 +2086,10 @@ class BaseAction(BaseObject):
     def describe_discovery(self) -> ActionDiscoveryDescription:
         return ActionDiscoveryDescription()
 
+    def at_cast_level(self, level: int) -> "BaseAction":
+        """This action cast at another of its listed levels; only spells have levels."""
+        raise ValueError(f"{self.name} has no cast levels")
+
     def get_discovery_template_name(self) -> str:
         """Return the machine-facing action name used for execution."""
         base_name = self.name or "Unknown"
@@ -2979,6 +2984,9 @@ class AvailableActionMetadata(BaseModel):
     )
     spell_level: Optional[int] = Field(default=None, description="Base spell level for spell actions.")
     cast_at_level: Optional[int] = Field(default=None, description="Spell slot level used by this action row.")
+    cast_levels: Tuple[int, ...] = Field(default=(), description=(
+        "Slot levels this spell can be cast at now; the selection names one (plan D17). "
+        "The row's targets are those of cast_at_level, the lowest."))
     is_spell_variant: bool = Field(default=False, description="Whether this row represents a generated spell variant.")
     requires_concentration: bool = Field(default=False, description="Whether executing this action starts or maintains concentration.")
 

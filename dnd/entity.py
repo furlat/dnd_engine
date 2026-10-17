@@ -5744,6 +5744,7 @@ class Entity(BaseBlock):
             spellcasting_provider_id=description_facts.spellcasting_provider_id,
             spellcasting_ability=description_facts.spellcasting_ability,
             cast_at_level=description_facts.cast_at_level,
+            cast_levels=description_facts.cast_levels,
             is_spell_variant=description_facts.is_spell_variant,
             requires_concentration=template.requires_concentration,
             num_projectiles=template.get_multi_target_count() if target_type == TargetType.MULTI_ENTITY else None,

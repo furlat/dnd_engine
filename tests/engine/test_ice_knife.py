@@ -55,12 +55,13 @@ def actor(world: Game, name: str, position: tuple[int, int], faction: str, *, ca
 def cast(caster: Entity, target: Entity, dice: tuple[int, ...], *, level: int = 1):
     Entity.update_all_entities_senses()
     available = get_available_actions(caster)
-    offered = next(row for row in available.all_actions
-                   if row.behavior_id == "spell.ice_knife" and row.cast_at_level == level)
+    # The spell's one row (plan D17); the slot level is chosen at execution.
+    offered = next(row for row in available.all_actions if row.behavior_id == "spell.ice_knife")
+    assert level in offered.cast_levels
     selected = next(row for row in offered.valid_targets if row.target_uuid == target.uuid)
     cursor = EventQueue.event_cursor()
     with fixed_dice_faces(*dice):
-        result = execute_available_action(caster, offered, selected)
+        result = execute_available_action(caster, offered, selected, cast_at_level=level)
     assert isinstance(result, SpellEvent)
     return result, [event for _, event in EventQueue.iter_events_since(cursor)]
 

@@ -159,7 +159,7 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
         response = PreviewResponse(**runtime.publications[request.seat_id].cursor.model_dump(exclude={'sequence'}),
             state_revision=query.state_revision, request=query,
             preview=project_selection_preview(preview_player_selection(session, query.actor_uuid, row, selected, extra_positions,
-                prefer_safe=query.selection.prefer_safe)))
+                prefer_safe=query.selection.prefer_safe, cast_at_level=query.selection.cast_at_level)))
         return Reply(has_response=True), (), response
     previous_hud = {seat: view.latest.hud_snapshot for seat, view in runtime.audiences.items()}
     if isinstance(request, Advance):
@@ -177,7 +177,7 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
                 operation = execute_player_action(session, command.actor_uuid, row, selected[0],
                     extra_target_uuids=tuple(target.target_uuid for target in selected[1:]),
                     extra_target_positions=extra_positions,
-                    prefer_safe=intent.selection.prefer_safe)
+                    prefer_safe=intent.selection.prefer_safe, cast_at_level=intent.selection.cast_at_level)
             case intent if intent.kind == 'prepare_spells':
                 operation = prepare_player_spells(session, command.actor_uuid, intent.selection)
             case intent if intent.kind == 'study_spell_mastery':

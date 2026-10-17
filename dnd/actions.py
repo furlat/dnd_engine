@@ -4665,6 +4665,8 @@ class SpellAction(BaseAction):
 
     cast_at_level: int = Field(default=0, description="Actual slot level used (0 = cantrip)")
     is_variant: bool = Field(default=False, description="Whether this is an upcast variant")
+    castable_levels: tuple[int, ...] = Field(default=(), description=(
+        "Slot levels a discovery row of this spell can be cast at (plan D17); empty outside discovery."))
 
     caster_level: int = Field(default=1, description="Level of the caster (for cantrip scaling)")
     cast_cost_grant_id: UUID | None = Field(default=None, description="Exact native grant paying this base-rank cast instead of a spell slot.")
@@ -5082,7 +5084,7 @@ class SpellAction(BaseAction):
         actor = Entity.get(self.source_entity_uuid)
         source = actor.spellcasting.sources.get(self.spellcasting_source_id) if actor is not None else None
         return ActionDiscoveryDescription(spell_level=self.spell_level, cast_at_level=self.cast_at_level,
-            is_spell_variant=self.is_variant,
+            cast_levels=self.castable_levels, is_spell_variant=self.is_variant,
             spellcasting_source_id=self.spellcasting_source_id,
             spellcasting_provider_id=source.provider_id if source is not None else None,
             spellcasting_ability=source.ability if source is not None else None,
@@ -5263,9 +5265,14 @@ class SpellAction(BaseAction):
         if self.spell_level == 0:
             variants.append(self._create_variant(cast_at_level=0))
         else:
-            for slot_level in range(self.spell_level, 10):
-                if entity.has_spell_slot_capacity(slot_level):
-                    variants.append(self._create_variant(cast_at_level=slot_level))
+            # One row per spell (plan D17), listed at the lowest level with a slot available now and
+            # carrying every such level; with slot capacity but none available, one unaffordable row.
+            capacity = [level for level in range(self.spell_level, 10) if entity.has_spell_slot_capacity(level)]
+            available = tuple(level for level in capacity if entity.has_spell_slot(level))
+            if available:
+                variants.append(self._create_variant(cast_at_level=available[0], castable_levels=available))
+            elif capacity:
+                variants.append(self._create_variant(cast_at_level=capacity[0]))
 
         for grant in entity.spellcasting.free_cast_grants.values():
             if (grant.source_id == self.spellcasting_source_id and grant.spell_id == self.get_authored_spell_id()
@@ -5370,6 +5377,10 @@ class SpellAction(BaseAction):
         if self.is_variant and self.spell_level > 0:
             return f"{base_name} (Level {self.cast_at_level})"
         return base_name
+
+    def at_cast_level(self, level: int) -> 'SpellAction':
+        """This spell cast at one slot level, with that level's costs (a row checks its own cast_levels)."""
+        return self._create_variant(cast_at_level=level, castable_levels=self.castable_levels)
 
     def _create_variant(self, cast_at_level: int, **overrides) -> 'SpellAction':
         """Create a lightweight read-only discovery variant for one slot level.

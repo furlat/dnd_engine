@@ -430,15 +430,17 @@ def test_eb_14_006_generate_variants_uses_available_slots() -> None:
     assert cantrip_variants[0].use_register is False
     assert [cost.cost_type for cost in cantrip_variants[0].costs] == ["actions"]
 
-    assert [variant.cast_at_level for variant in missile_variants] == [1, 3]
-    assert all(variant.template is False for variant in missile_variants)
-    assert all(variant.is_variant for variant in missile_variants)
-    assert [cost.cost_type for cost in missile_variants[1].costs] == [
+    # One cast choice per spell with its castable levels (plan D17), listed at the lowest.
+    missile, = missile_variants
+    assert missile.cast_at_level == 1 and missile.castable_levels == (1, 3)
+    assert missile.template is False and missile.is_variant
+    upcast = missile.at_cast_level(3)
+    assert [cost.cost_type for cost in upcast.costs] == [
         "actions",
         "spell_slot_3",
     ]
-    assert missile_variants[1].get_upcast_bonus() == 2
-    assert missile_variants[1].get_multi_target_count() == 5
+    assert upcast.get_upcast_bonus() == 2
+    assert upcast.get_multi_target_count() == 5
 
 
 def test_eb_14_007_registered_spells_surface_executable_slot_variants() -> None:
@@ -458,19 +460,16 @@ def test_eb_14_007_registered_spells_surface_executable_slot_variants() -> None:
         info for info in available.entity_actions if info.template_name == "Fire Bolt"
     ]
 
-    assert [info.template_name for info in missile_actions] == [
-        "Magic Missile__slot_1",
-        "Magic Missile__slot_3",
-    ]
-    assert [info.display_name for info in missile_actions] == [
-        "Magic Missile (Level 1)",
-        "Magic Missile (Level 3)",
-    ]
-    assert [info.cast_at_level for info in missile_actions] == [1, 3]
-    assert [info.num_projectiles for info in missile_actions] == [3, 5]
-    assert all(info.can_afford for info in missile_actions)
-    assert all(info.is_spell_variant for info in missile_actions)
-    assert all(target.uuid in [target_info.target_uuid for target_info in info.valid_targets] for info in missile_actions)
+    # Spells are listed once with the levels they can be cast at (plan D17).
+    missile, = missile_actions
+    assert missile.template_name == "Magic Missile__slot_1"
+    assert missile.display_name == "Magic Missile (Level 1)"
+    assert missile.cast_at_level == 1 and missile.cast_levels == (1, 3)
+    assert missile.num_projectiles == 3
+    assert missile.can_afford and missile.is_spell_variant
+    assert target.uuid in [target_info.target_uuid for target_info in missile.valid_targets]
+    assert missile.execution_template is not None
+    assert missile.execution_template.at_cast_level(3).get_multi_target_count() == 5
     assert len(fire_bolt_actions) == 1
 
     caster.action_economy.consume("spell_slot_1", 1)
@@ -481,10 +480,10 @@ def test_eb_14_007_registered_spells_surface_executable_slot_variants() -> None:
         info for info in exhausted.entity_actions if info.base_template_name == "Magic Missile"
     ]
 
-    assert [info.template_name for info in remaining_missile_actions] == [
-        "Magic Missile__slot_1", "Magic Missile__slot_3"]
-    assert not remaining_missile_actions[0].can_afford and not remaining_missile_actions[0].valid_targets
-    assert remaining_missile_actions[1].can_afford and remaining_missile_actions[1].valid_targets
+    # The one row moves to the lowest level with a slot left (plan D17).
+    remaining, = remaining_missile_actions
+    assert remaining.template_name == "Magic Missile__slot_3" and remaining.cast_levels == (3,)
+    assert remaining.can_afford and remaining.valid_targets
     assert any(info.template_name == "Fire Bolt" for info in exhausted.all_actions)
     assert caster.has_spell_slot(3)
 
@@ -508,8 +507,8 @@ def test_eb_14_019_generated_upcast_variant_executes_with_higher_slot() -> None:
     Entity.update_all_entities_senses()
 
     template = MagicMissile(source_entity_uuid=caster.uuid, template=True)
-    variants = template.generate_variants(caster)
-    level_three = next(variant for variant in variants if variant.cast_at_level == 3)
+    variant, = template.generate_variants(caster)
+    level_three = variant.at_cast_level(3)
     level_three.target_entity_uuid = target.uuid
 
     hp_before = target.get_hp()

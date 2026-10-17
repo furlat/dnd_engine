@@ -98,7 +98,7 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
         for row in rows(choices)
         if row.behavior_id == behavior
         and row.can_afford
-        and (spell is not CharmMonster or row.cast_at_level == 5)
+        and (spell is not CharmMonster or 5 in row.cast_levels)
         and choices.target_sets[row.target_set]
         and all(
             any(
@@ -124,14 +124,17 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
     bindings = choices.target_sets[row.target_set]
     cursor = EventQueue.event_cursor()
     births = set(runtime.session.game.entities)
+    # Charm Monster is cast at level 5 (two targets): the selection names the level (plan D17).
+    level = 5 if spell is CharmMonster else row.cast_at_level
     costs = (
         actor.action_economy.actions.normalized_score,
-        actor.action_economy.spell_slot_value(row.cast_at_level).normalized_score,
+        actor.action_economy.spell_slot_value(level).normalized_score,
     )
     selected = None
     for binding in bindings:
         selection = ActionSelection(
             action_index=row.discovery_index,
+            cast_at_level=level if level != row.cast_at_level else None,
             target_indices=(
                 binding.index,
                 next(other.index for other in bindings if other.index != binding.index),
@@ -178,7 +181,7 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
     )
     assert costs == (
         actor.action_economy.actions.normalized_score,
-        actor.action_economy.spell_slot_value(row.cast_at_level).normalized_score,
+        actor.action_economy.spell_slot_value(level).normalized_score,
     )
     before_public = deepcopy(runtime.audiences[seat].latest)
     with fixed_dice_faces(15, *([2] * 400)):
