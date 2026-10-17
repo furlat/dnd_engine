@@ -6,7 +6,7 @@ from bisect import bisect_left, bisect_right
 from heapq import heappop, heappush
 from dnd.core.condition_types import ConditionDurationSummary
 
-from typing import Literal, AbstractSet, Collection, Any, Dict, Iterable, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
+from typing import Literal, AbstractSet, Collection, Any, Dict, Iterable, List, Optional, Sequence, Tuple, Set, DefaultDict, Protocol, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
@@ -65,7 +65,8 @@ from dnd.types.world import (
     WorldEdgeChannel,
     edge_revision_channels,
 )
-from dnd.types.senses import OpticalObscurement, PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect
+from dnd.types.senses import (OBSCUREMENT_BITS, OBSCUREMENT_SETS, OpticalObscurement, PerceivedContact,
+    PerceivedLightSource, PerceivedSpatialEffect)
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.residues import ResidueFieldState
 from dnd.types.spatial_effects import (
@@ -85,10 +86,6 @@ from dnd.types.world_placement import (
 from dnd.action_timing import action_timing_enabled, record_action_count, record_action_elapsed, record_action_timing
 
 OpticalSnapshot = Dict[Tuple[int, int], Dict[UUID, frozenset[OpticalObscurement]]]
-# One bit per obscurement value, and the value set of every bit mask, for vectorized routes.
-_OBSCUREMENT_BITS = {value: 1 << index for index, value in enumerate(OpticalObscurement)}
-_OBSCUREMENT_SETS = tuple(frozenset(value for value, bit in _OBSCUREMENT_BITS.items() if mask & bit)
-                          for mask in range(1 << len(_OBSCUREMENT_BITS)))
 
 SPATIAL_CHUNK_SIZE = 16
 FOV_CACHE_ORIGINS = 64
@@ -5606,51 +5603,64 @@ class GridMap:
     ) -> Dict[Tuple[int, int], Set[OpticalObscurement]]:
         """`get_optical_obscurements_on_route` from one origin to many cells.
 
-        The snapshot moves into the origin's frame once, so each route is its
-        cached relative line checked against it without translating any cell.
         ``exclude_end`` leaves out the target cell itself (the route before it).
+        """
+        positions = list(positions)
+        masks = self.get_optical_route_masks(origin, positions, snapshot,
+            exclude_end=exclude_end, excluded_owner_uuid=excluded_owner_uuid)
+        return {position: set(OBSCUREMENT_SETS[mask]) for position, mask in zip(positions, masks)}
+
+    def get_optical_route_masks(
+        self,
+        origin: Tuple[int, int],
+        positions: Sequence[Tuple[int, int]],
+        snapshot: OpticalSnapshot,
+        *, exclude_end: bool = False, excluded_owner_uuid: Optional[UUID] = None,
+    ) -> List[int]:
+        """Each route's obscurement values as `OBSCUREMENT_BITS`, aligned with the positions.
+
+        Tabled routes are resolved together: each cell's values as bits,
+        gathered along the routes and OR-reduced (the endpoint dropped first
+        when excluded). Longer routes check their cached relative line.
         """
         ox, oy = origin
         radius = ROUTE_TABLE_RADIUS
-        result: Dict[Tuple[int, int], Set[OpticalObscurement]] = {}
-        tabled: List[Tuple[int, int]] = []
         relative = {(x - ox, y - oy): owners for (x, y), owners in snapshot.items()}
         if excluded_owner_uuid is not None:
             relative = {offset: kept for offset, owners in relative.items()
                         if (kept := {owner: values for owner, values in owners.items() if owner != excluded_owner_uuid})}
+        result = [0] * len(positions)
+        tabled: List[int] = []
         obscured = set(relative)  # a set: `line & obscured` iterates the shorter side in C
-        for position in positions:
-            dx, dy = position[0] - ox, position[1] - oy
+        for index, (x, y) in enumerate(positions):
+            dx, dy = x - ox, y - oy
             if -radius <= dx <= radius and -radius <= dy <= radius:
-                tabled.append(position)
+                tabled.append(index)
                 continue
             crossed = supercover_cells_relative(dx, dy) & obscured
             if exclude_end and crossed:
                 crossed = crossed - {(dx, dy)}
-            result[position] = ({value for offset in crossed for values in relative[offset].values() for value in values}
-                                if crossed else set())
-        if not tabled:
+            result[index] = sum({OBSCUREMENT_BITS[value] for offset in crossed
+                                 for values in relative[offset].values() for value in values})
+        if not tabled or not relative:
             return result
-        # Every tabled route at once: each cell's obscurement values as bits,
-        # gathered along the routes and OR-reduced (the endpoint dropped first
-        # when excluded).
         side = 2 * radius + 1
         cells, lengths = supercover_route_table()
         indices, masks = [], []
         for (dx, dy), owners in relative.items():
             if -radius <= dx <= radius and -radius <= dy <= radius:
                 indices.append((dx + radius) * side + dy + radius)
-                masks.append(sum({_OBSCUREMENT_BITS[value] for values in owners.values() for value in values}))
+                masks.append(sum({OBSCUREMENT_BITS[value] for values in owners.values() for value in values}))
         grid = np.zeros(side * side + 1, dtype=np.uint8)
         grid[indices] = masks
-        offsets = np.array(tabled, dtype=np.int64) - (ox, oy)
+        offsets = np.array([positions[index] for index in tabled], dtype=np.int64) - (ox, oy)
         rows = (offsets[:, 0] + radius) * side + offsets[:, 1] + radius
         row_lengths = lengths[rows]
         crossed = grid[cells[rows, :int(row_lengths.max())]]
         if exclude_end:
             crossed[np.arange(rows.size), row_lengths - 1] = 0
-        for position, mask in zip(tabled, np.bitwise_or.reduce(crossed, axis=1).tolist()):
-            result[position] = set(_OBSCUREMENT_SETS[mask])
+        for index, mask in zip(tabled, np.bitwise_or.reduce(crossed, axis=1).tolist()):
+            result[index] = mask
         return result
 
     def _publish_optical_obscurement_change(

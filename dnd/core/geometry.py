@@ -26,6 +26,15 @@ def grid_distance_feet(
     return grid_distance_cells(origin, target) * 5
 
 
+def grid_distances_feet(origin: Tuple[int, int], positions: List[Tuple[int, int]]) -> List[int]:
+    """`grid_distance_feet` from one origin to each position (IEEE sqrt, as `math.sqrt`)."""
+    if not positions:
+        return []
+    offsets = np.array(positions, dtype=np.int64) - origin
+    squared = (offsets * offsets).sum(axis=1).astype(np.float64)
+    return (np.sqrt(squared).astype(np.int64) * 5).tolist()
+
+
 def position_in_sector(
     origin: Tuple[int, int],
     forward: Tuple[int, int],

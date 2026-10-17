@@ -47,6 +47,12 @@ class OpticalObscurement(str, Enum):
     MAGICAL_DARKNESS = "magical_darkness"
 
 
+# One bit per obscurement value, and the value set of every bit mask (vectorized routes).
+OBSCUREMENT_BITS = {value: 1 << index for index, value in enumerate(OpticalObscurement)}
+OBSCUREMENT_SETS = tuple(frozenset(value for value, bit in OBSCUREMENT_BITS.items() if mask & bit)
+                         for mask in range(1 << len(OBSCUREMENT_BITS)))
+
+
 class PerceivedContact(BaseModel):
     """One identified entity or object perceived by an observer."""
 

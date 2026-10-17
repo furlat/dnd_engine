@@ -18,7 +18,8 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_tiles import Tile
 from dnd.core.gridmap import BoundarySnapshot, OpticalSnapshot, SpatialConditionOwner, boundary_snapshot_covers, get_map
-from dnd.core.geometry import ROUTE_TABLE_RADIUS, grid_distance_feet, supercover_line, supercover_route_table
+from dnd.core.geometry import (ROUTE_TABLE_RADIUS, grid_distance_feet, grid_distances_feet, supercover_line,
+    supercover_route_table)
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
 from dnd.core.events import (
@@ -27,7 +28,7 @@ from dnd.core.events import (
     SensoryUpdateReason,
 )
 from dnd.types.senses import (
-    OpticalObscurement, PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesType, VolumeSurfaceSight,
+    OBSCUREMENT_SETS, OpticalObscurement, PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesType, VolumeSurfaceSight,
     SensesSnapshot as SensesSnapshot,
     reduce_senses_snapshot as reduce_senses_snapshot,
 )
@@ -867,10 +868,6 @@ class SpatialSensesSystem:
             phase_started = time.perf_counter()
         optical_routes: Dict[Tuple[int, int], Tuple[bool, frozenset[SensesType]]] = {}
         surface_routes: Dict[Tuple[int, int], VolumeRay] = {}
-        # Route eligibility has only range and obscurement inputs within this
-        # observer solve. Keep the shared mode value immutable across cells.
-        mode_results: Dict[Tuple[int, frozenset[OpticalObscurement]], Tuple[bool, frozenset[SensesType]]] = {}
-        no_obscurements: frozenset[OpticalObscurement] = frozenset()
         range_affects_modes = any(sense in modes for sense in (
             SensesType.DARKVISION, SensesType.DEVILS_SIGHT, SensesType.TRUESIGHT))
         light_results: Dict[Tuple[bool, frozenset[SensesType]], Dict[LightLevel, Optional[LightLevel]]] = {}
@@ -918,28 +915,32 @@ class SpatialSensesSystem:
                 record_action_count("sensory.recompute.reused_optical_cells", len(optical_candidates) - len(refresh))
                 record_action_count("sensory.recompute.refreshed_optical_cells", len(refresh))
         else:
-            # Every route from this origin against the one obscurement snapshot, in the origin's frame.
-            route_obscurements = grid.get_optical_obscurements_on_routes(origin, optical_candidates, optics) if optics else {}
-            for position in optical_candidates:
+            # Every route from this origin against the one obscurement snapshot, in the origin's frame,
+            # as obscurement bits aligned with the cells; a route's modes depend on (range, bits) only.
+            positions = list(optical_candidates)
+            route_masks = grid.get_optical_route_masks(origin, positions, optics) if optics else None
+            distances = grid_distances_feet(origin, positions) if range_affects_modes else None
+            routes_by_key: Dict[Tuple[int, int], Tuple[Tuple[bool, frozenset[SensesType]], Dict[LightLevel, Optional[LightLevel]]]] = {}
+            for index, position in enumerate(positions):
                 tile = grid.get_tile(*position)
                 if tile is None:
                     continue
-                distance = grid_distance_feet(origin, position) if range_affects_modes else 0
-                obscurements = route_obscurements[position] if optics else set()
-                route_key = distance, frozenset(obscurements) if obscurements else no_obscurements
-                route_modes = mode_results.get(route_key)
-                if route_modes is None:
+                distance = distances[index] if distances is not None else 0
+                route_key = distance, route_masks[index] if route_masks is not None else 0
+                resolved_route = routes_by_key.get(route_key)
+                if resolved_route is None:
                     ordinary_eligible, special = self._visual_route_modes(
-                        modes, ordinary_sight, distance, obscurements, LightLevel.BRIGHT_LIGHT,
+                        modes, ordinary_sight, distance, OBSCUREMENT_SETS[route_key[1]], LightLevel.BRIGHT_LIGHT,
                     )
                     route_modes = ordinary_eligible, frozenset(special)
-                    mode_results[route_key] = route_modes
-                ordinary_eligible, establishing_modes = route_modes
+                    levels = light_results.get(route_modes)
+                    if levels is None:
+                        levels = self._route_light_levels(ordinary_eligible, frozenset(special))
+                        light_results[route_modes] = levels
+                    resolved_route = routes_by_key[route_key] = route_modes, levels
+                route_modes, levels = resolved_route
+                establishing_modes = route_modes[1]
                 optical_routes[position] = route_modes
-                levels = light_results.get(route_modes)
-                if levels is None:
-                    levels = self._route_light_levels(ordinary_eligible, establishing_modes)
-                    light_results[route_modes] = levels
                 resolved = levels[tile.resolved_light_level]
                 if resolved is None:
                     # Seeing the first opaque volume surface is not seeing its
