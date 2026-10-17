@@ -432,17 +432,18 @@
     "ActionReaction": {
       "description": "Disclosed reaction result and its native triggering lineage.",
       "properties": {
-        "triggered_lineage_uuid": {
+        "triggered_lineage": {
           "anyOf": [
             {
-              "format": "uuid",
-              "type": "string"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             {
               "type": "null"
             }
           ],
-          "title": "Triggered Lineage Uuid"
+          "title": "Triggered Lineage"
         },
         "succeeded": {
           "title": "Succeeded",
@@ -454,7 +455,7 @@
         }
       },
       "required": [
-        "triggered_lineage_uuid",
+        "triggered_lineage",
         "succeeded",
         "automatic"
       ],
@@ -982,6 +983,191 @@
       "title": "ActionWorldEffectShape",
       "type": "string"
     },
+    "ActorChanges": {
+      "additionalProperties": false,
+      "description": "Present fields replace the seat's known body values; omitted fields are unchanged.\n\nAgainst an absent body (first acquisition) every field is present.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "character_body_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Character Body Id"
+        },
+        "creature_content_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Creature Content Ref"
+        },
+        "appearance": {
+          "$ref": "#/$defs/AppearanceConfig"
+        },
+        "visual_loadout": {
+          "$ref": "#/$defs/VisualLoadout"
+        },
+        "normal_hp": {
+          "title": "Normal Hp",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "maximum_hp": {
+          "title": "Maximum Hp",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "temporary_hp": {
+          "title": "Temporary Hp",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "life_state": {
+          "$ref": "#/$defs/LifeState"
+        },
+        "armor_class": {
+          "title": "Armor Class",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/ConditionFact"
+          },
+          "title": "Conditions",
+          "type": "array"
+        },
+        "last_visual_position": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Visual Position"
+        },
+        "controlled_items": {
+          "anyOf": [
+            {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Controlled Items"
+        },
+        "occupancy_layer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OccupancyLayer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "temporary_hp_grant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TemporaryHitPointsGrant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resolved_size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "structural_base_size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "manifestation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SummonManifestation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "faction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Faction"
+        },
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        },
+        "remains_disposition": {
+          "$ref": "#/$defs/RemainsDisposition"
+        },
+        "spatial_disposition": {
+          "$ref": "#/$defs/SpatialDisposition"
+        }
+      },
+      "title": "ActorChanges",
+      "type": "object"
+    },
     "AdvantageStatus": {
       "enum": [
         "None",
@@ -1410,22 +1596,24 @@
           "title": "Newly Reached Positions",
           "type": "array"
         },
-        "previous_reach_lineage_uuid": {
+        "previous_reach_lineage": {
           "anyOf": [
             {
-              "format": "uuid",
-              "type": "string"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             {
               "type": "null"
             }
           ],
-          "title": "Previous Reach Lineage Uuid"
+          "title": "Previous Reach Lineage"
         },
         "prerequisite_destruction_lineages": {
           "items": {
-            "format": "uuid",
-            "type": "string"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "title": "Prerequisite Destruction Lineages",
           "type": "array"
@@ -1434,7 +1622,7 @@
       "required": [
         "stage_index",
         "newly_reached_positions",
-        "previous_reach_lineage_uuid",
+        "previous_reach_lineage",
         "prerequisite_destruction_lineages"
       ],
       "title": "AreaReachFact",
@@ -2724,7 +2912,7 @@
           "maximum": 9007199254740991
         },
         "entry": {
-          "$ref": "#/$defs/CombatLogEntry"
+          "$ref": "#/$defs/PlayerLogEntry"
         }
       },
       "required": [
@@ -2737,226 +2925,6 @@
       "title": "CombatLogAppend",
       "type": "object",
       "additionalProperties": false
-    },
-    "CombatLogEntry": {
-      "additionalProperties": false,
-      "description": "A single combat-log entry generated by an event.\n\nContains human-readable text at three verbosity levels and structured data\nfor programmatic access. Text fields support Rich-style markdown such as\nbold spans and `{color:text}` color tags.\n\nAttributes:\n    entry_type: Category of combat-log entry.\n    source_name: Display name of the acting entity or source.\n    source_uuid: UUID string of the acting entity or source.\n    target_name: Display name of the target, if any.\n    target_uuid: UUID string of the target, if any.\n    compact: One-line markdown summary.\n    verbose: Summary plus key details.\n    detailed: Full breakdown text.\n    data: Type-specific structured payload.\n    success: Success indicator for attacks, saves, and checks.\n    sub_entries: Nested combat-log entries from child events.\n    perceiver_uuids: Entity UUID strings that could perceive the event.\n    revealed_entity_uuids: Entity UUID strings revealed during the event chain.\n    identified_entity_observer_uuids: Internal event-time identity grants,\n        keyed by participant UUID.\n    located_entity_observer_uuids: Internal event-time exact-location grants,\n        keyed by participant UUID.\n    located_position_observer_uuids: Internal event-time coordinate grants,\n        keyed by canonical ``x,y`` position.",
-      "properties": {
-        "entry_type": {
-          "$ref": "#/$defs/CombatLogEntryType",
-          "description": "Category of combat-log entry."
-        },
-        "source_name": {
-          "description": "Display name of the acting entity or source.",
-          "title": "Source Name",
-          "type": "string"
-        },
-        "source_uuid": {
-          "description": "UUID string of the acting entity or source.",
-          "title": "Source Uuid",
-          "type": "string"
-        },
-        "target_name": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Display name of the target, if any.",
-          "title": "Target Name"
-        },
-        "target_uuid": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "UUID string of the target, if any.",
-          "title": "Target Uuid"
-        },
-        "compact": {
-          "description": "One-line summary with markdown (e.g., '{cyan:Hero} hits {yellow:Skeleton}')",
-          "title": "Compact",
-          "type": "string"
-        },
-        "verbose": {
-          "description": "Summary plus key details with markdown.",
-          "title": "Verbose",
-          "type": "string"
-        },
-        "detailed": {
-          "description": "Full breakdown with all modifiers.",
-          "title": "Detailed",
-          "type": "string"
-        },
-        "data": {
-          "description": "Recorded finite log payload; no arbitrary dictionary fallback.",
-          "discriminator": {
-            "mapping": {
-              "action": "#/$defs/ActionLogData",
-              "attack": "#/$defs/AttackLogData",
-              "condition_removed": "#/$defs/ConditionRemovedLogData",
-              "connector_movement": "#/$defs/ConnectorMovementLogData",
-              "damage_taken": "#/$defs/DamageTakenLogData",
-              "death": "#/$defs/DeathLogData",
-              "death_save": "#/$defs/DeathSaveLogData",
-              "empty": "#/$defs/EmptyLogData",
-              "entity_spotted": "#/$defs/EntitySpottedLogData",
-              "forced_movement": "#/$defs/ForcedMovementLogData",
-              "hazard_detected": "#/$defs/HazardDetectedLogData",
-              "heal": "#/$defs/HealLogData",
-              "jump_movement": "#/$defs/JumpMovementLogData",
-              "movement": "#/$defs/MovementLogData",
-              "multi_entity_action": "#/$defs/MultiEntityLogData",
-              "observed_movement": "#/$defs/ObservedMovementLogData",
-              "roll_modification": "#/$defs/RollModificationLogData",
-              "saving_throw": "#/$defs/SavingThrowLogData",
-              "shove": "#/$defs/ShoveLogData",
-              "skill_check": "#/$defs/SkillCheckLogData",
-              "spatial_change": "#/$defs/SpatialChangeLogData",
-              "spatial_interaction": "#/$defs/SpatialInteractionLogData",
-              "spell_damage": "#/$defs/SpellDamageLogData",
-              "spell_interruption": "#/$defs/SpellInterruptionLogData",
-              "spell_save": "#/$defs/SpellSaveLogData",
-              "step_movement": "#/$defs/StepMovementLogData",
-              "turn": "#/$defs/TurnLogData",
-              "unknown_movement": "#/$defs/UnknownMovementLogData",
-              "unlocated_movement": "#/$defs/UnlocatedMovementLogData"
-            },
-            "propertyName": "kind"
-          },
-          "oneOf": [
-            {
-              "$ref": "#/$defs/AttackLogData"
-            },
-            {
-              "$ref": "#/$defs/MovementLogData"
-            },
-            {
-              "$ref": "#/$defs/JumpMovementLogData"
-            },
-            {
-              "$ref": "#/$defs/ConnectorMovementLogData"
-            },
-            {
-              "$ref": "#/$defs/SavingThrowLogData"
-            },
-            {
-              "$ref": "#/$defs/SpellSaveLogData"
-            },
-            {
-              "$ref": "#/$defs/SpellInterruptionLogData"
-            },
-            {
-              "$ref": "#/$defs/SkillCheckLogData"
-            },
-            {
-              "$ref": "#/$defs/EntitySpottedLogData"
-            },
-            {
-              "$ref": "#/$defs/HazardDetectedLogData"
-            },
-            {
-              "$ref": "#/$defs/DamageTakenLogData"
-            },
-            {
-              "$ref": "#/$defs/HealLogData"
-            },
-            {
-              "$ref": "#/$defs/ActionLogData"
-            },
-            {
-              "$ref": "#/$defs/TurnLogData"
-            },
-            {
-              "$ref": "#/$defs/MultiEntityLogData"
-            },
-            {
-              "$ref": "#/$defs/RollModificationLogData"
-            },
-            {
-              "$ref": "#/$defs/EmptyLogData"
-            },
-            {
-              "$ref": "#/$defs/ConditionRemovedLogData"
-            },
-            {
-              "$ref": "#/$defs/DeathLogData"
-            },
-            {
-              "$ref": "#/$defs/SpellDamageLogData"
-            },
-            {
-              "$ref": "#/$defs/DeathSaveLogData"
-            },
-            {
-              "$ref": "#/$defs/ShoveLogData"
-            },
-            {
-              "$ref": "#/$defs/StepMovementLogData"
-            },
-            {
-              "$ref": "#/$defs/ForcedMovementLogData"
-            },
-            {
-              "$ref": "#/$defs/ObservedMovementLogData"
-            },
-            {
-              "$ref": "#/$defs/UnlocatedMovementLogData"
-            },
-            {
-              "$ref": "#/$defs/UnknownMovementLogData"
-            },
-            {
-              "$ref": "#/$defs/SpatialChangeLogData"
-            },
-            {
-              "$ref": "#/$defs/SpatialInteractionLogData"
-            }
-          ],
-          "title": "Data"
-        },
-        "success": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Success indicator for attacks, saves, and checks.",
-          "title": "Success"
-        },
-        "sub_entries": {
-          "description": "Combat-log entries from child events, in order.",
-          "items": {
-            "$ref": "#/$defs/CombatLogEntry"
-          },
-          "title": "Sub Entries",
-          "type": "array"
-        }
-      },
-      "required": [
-        "entry_type",
-        "source_name",
-        "source_uuid",
-        "compact",
-        "verbose",
-        "detailed",
-        "data"
-      ],
-      "title": "CombatLogEntry",
-      "type": "object"
     },
     "CombatLogEntryType": {
       "description": "Combat-log entry categories emitted by engine events.",
@@ -4092,39 +4060,42 @@
           "default": null,
           "title": "Source Entity Uuid"
         },
-        "triggering_event_uuid": {
+        "triggering_occurrence": {
           "anyOf": [
             {
-              "format": "uuid",
-              "type": "string"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Triggering Event Uuid"
+          "title": "Triggering Occurrence"
         },
-        "triggering_lineage_uuid": {
+        "triggering_lineage": {
           "anyOf": [
             {
-              "format": "uuid",
-              "type": "string"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Triggering Lineage Uuid"
+          "title": "Triggering Lineage"
         },
-        "emitted_lineage_uuids": {
+        "emitted_lineages": {
           "default": [],
           "items": {
-            "format": "uuid",
-            "type": "string"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
-          "title": "Emitted Lineage Uuids",
+          "title": "Emitted Lineages",
           "type": "array"
         },
         "handler_name": {
@@ -4466,17 +4437,18 @@
     "CreationWitness": {
       "description": "Observed first placement tied to its exact recorded native birth.",
       "properties": {
-        "birth_event_uuid": {
-          "format": "uuid",
-          "title": "Birth Event Uuid",
-          "type": "string"
+        "birth_occurrence": {
+          "title": "Birth Occurrence",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         },
         "manifestation": {
           "$ref": "#/$defs/SummonManifestation"
         }
       },
       "required": [
-        "birth_event_uuid",
+        "birth_occurrence",
         "manifestation"
       ],
       "title": "CreationWitness",
@@ -5637,6 +5609,7 @@
       "type": "object"
     },
     "EquipmentFact": {
+      "description": "A holder's equipment change: its body patch (loadout, armor class, inventory) and its items' patches.",
       "properties": {
         "kind": {
           "const": "equipment",
@@ -5649,35 +5622,21 @@
           "title": "Source Entity Uuid",
           "type": "string"
         },
-        "visual_loadout": {
-          "$ref": "#/$defs/VisualLoadout"
+        "changes": {
+          "$ref": "#/$defs/ActorChanges"
         },
-        "armor_class": {
-          "title": "Armor Class",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "controlled_items": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/ItemPresentationState"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Controlled Items"
+        "items": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ItemPatch"
+          },
+          "title": "Items",
+          "type": "array"
         }
       },
       "required": [
         "source_entity_uuid",
-        "visual_loadout",
-        "armor_class"
+        "changes"
       ],
       "title": "EquipmentFact",
       "type": "object",
@@ -8585,6 +8544,146 @@
       "title": "ItemIntegrity",
       "type": "string"
     },
+    "ItemLook": {
+      "description": "What any viewer of an equipped item sees of it; `is_lit` travels in its layer.",
+      "properties": {
+        "item_id": {
+          "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "item_kind": {
+          "$ref": "#/$defs/ItemPresentationKind"
+        },
+        "visual_item_name": {
+          "title": "Visual Item Name",
+          "type": "string"
+        },
+        "visual_variant_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Visual Variant Id"
+        },
+        "equipped_visual_policy": {
+          "$ref": "#/$defs/EquippedVisualPolicy"
+        },
+        "item_effects": {
+          "items": {
+            "$ref": "#/$defs/ItemEffectPresentationState"
+          },
+          "title": "Item Effects",
+          "type": "array"
+        },
+        "very_bright_radius_feet": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Very Bright Radius Feet"
+        },
+        "bright_radius_feet": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Bright Radius Feet"
+        },
+        "dim_radius_feet": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dim Radius Feet"
+        }
+      },
+      "required": [
+        "item_id",
+        "item_kind",
+        "visual_item_name",
+        "visual_variant_id",
+        "equipped_visual_policy",
+        "item_effects",
+        "very_bright_radius_feet",
+        "bright_radius_feet",
+        "dim_radius_feet"
+      ],
+      "title": "ItemLook",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "ItemPatch": {
+      "description": "One item's components new to the seat: all it may know the first time, then the components that changed.",
+      "properties": {
+        "item_uuid": {
+          "format": "uuid",
+          "title": "Item Uuid",
+          "type": "string"
+        },
+        "look": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemLook"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "item_uuid"
+      ],
+      "title": "ItemPatch",
+      "type": "object",
+      "additionalProperties": false
+    },
     "ItemPresentationKind": {
       "description": "Small renderer/UI-facing item family classification.",
       "enum": [
@@ -9194,6 +9293,261 @@
       "type": "object",
       "additionalProperties": false
     },
+    "ItemProfile": {
+      "description": "What a controlled item is: the fields its use does not change.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        },
+        "rarity": {
+          "$ref": "#/$defs/ItemRarity"
+        },
+        "weight": {
+          "title": "Weight",
+          "type": "number"
+        },
+        "value": {
+          "title": "Value",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "is_pickable": {
+          "title": "Is Pickable",
+          "type": "boolean"
+        },
+        "is_equippable": {
+          "title": "Is Equippable",
+          "type": "boolean"
+        },
+        "is_usable": {
+          "title": "Is Usable",
+          "type": "boolean"
+        },
+        "is_targetable": {
+          "title": "Is Targetable",
+          "type": "boolean"
+        },
+        "door_mechanism": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DoorMechanism"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "door_swing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DoorSwing"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stack_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stack Id"
+        },
+        "damage_dice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Damage Dice"
+        },
+        "damage_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Damage Type"
+        },
+        "weapon_properties": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Weapon Properties",
+          "type": "array"
+        },
+        "armor_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Armor Type"
+        },
+        "armor_ac": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Armor Ac"
+        },
+        "shield_ac_bonus": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Shield Ac Bonus"
+        },
+        "max_charges": {
+          "anyOf": [
+            {
+              "minimum": -1,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Charges"
+        },
+        "max_stack": {
+          "minimum": 1,
+          "title": "Max Stack",
+          "type": "integer",
+          "maximum": 9007199254740991
+        },
+        "is_consumable": {
+          "title": "Is Consumable",
+          "type": "boolean"
+        },
+        "map_char": {
+          "title": "Map Char",
+          "type": "string"
+        },
+        "include_in_senses_objects": {
+          "title": "Include In Senses Objects",
+          "type": "boolean"
+        },
+        "include_in_adjacent_senses_objects": {
+          "title": "Include In Adjacent Senses Objects",
+          "type": "boolean"
+        },
+        "include_in_available_object_actions": {
+          "title": "Include In Available Object Actions",
+          "type": "boolean"
+        },
+        "maximum_hit_points": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Maximum Hit Points"
+        },
+        "concentration_capacity": {
+          "minimum": 0,
+          "title": "Concentration Capacity",
+          "type": "integer",
+          "maximum": 9007199254740991
+        },
+        "boundary_structure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoundaryStructure"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "rarity",
+        "weight",
+        "value",
+        "tags",
+        "is_pickable",
+        "is_equippable",
+        "is_usable",
+        "is_targetable",
+        "door_mechanism",
+        "door_swing",
+        "stack_id",
+        "damage_dice",
+        "damage_type",
+        "weapon_properties",
+        "armor_type",
+        "armor_ac",
+        "shield_ac_bonus",
+        "max_charges",
+        "max_stack",
+        "is_consumable",
+        "map_char",
+        "include_in_senses_objects",
+        "include_in_adjacent_senses_objects",
+        "include_in_available_object_actions",
+        "maximum_hit_points",
+        "concentration_capacity",
+        "boundary_structure"
+      ],
+      "title": "ItemProfile",
+      "type": "object",
+      "additionalProperties": false
+    },
     "ItemRarity": {
       "description": "Stable rarity labels carried by item definitions and presentation facts.",
       "enum": [
@@ -9265,6 +9619,247 @@
       ],
       "title": "ItemResourceChange",
       "type": "string"
+    },
+    "ItemState": {
+      "description": "What a controlled item's use and the world change.",
+      "properties": {
+        "stack_count": {
+          "minimum": 0,
+          "title": "Stack Count",
+          "type": "integer",
+          "maximum": 9007199254740991
+        },
+        "charges": {
+          "anyOf": [
+            {
+              "minimum": -1,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Charges"
+        },
+        "integrity": {
+          "$ref": "#/$defs/ItemIntegrity"
+        },
+        "destruction_outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Destruction Outcome"
+        },
+        "remnant_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemRemnantState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "current_hit_points": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Current Hit Points"
+        },
+        "concentration_slots": {
+          "items": {
+            "$ref": "#/$defs/ItemConcentrationSlot"
+          },
+          "title": "Concentration Slots",
+          "type": "array"
+        },
+        "construction_owner_uuid": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Construction Owner Uuid"
+        },
+        "construction_geometry": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "cone": "#/$defs/ConePresentationGeometry",
+                  "cube": "#/$defs/CubePresentationGeometry",
+                  "cylinder": "#/$defs/CylinderPresentationGeometry",
+                  "line": "#/$defs/LinePresentationGeometry",
+                  "sphere": "#/$defs/SpherePresentationGeometry",
+                  "wall": "#/$defs/WallPresentationGeometry",
+                  "wall_assembly": "#/$defs/WallAssemblyPresentationGeometry"
+                },
+                "propertyName": "shape"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SpherePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/ConePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/LinePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/CubePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/CylinderPresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/WallPresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/WallAssemblyPresentationGeometry"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Construction Geometry"
+        },
+        "construction_suppressions": {
+          "items": {
+            "$ref": "#/$defs/SpellSuppression"
+          },
+          "title": "Construction Suppressions",
+          "type": "array"
+        },
+        "known_to_creator": {
+          "title": "Known To Creator",
+          "type": "boolean"
+        },
+        "supported_by_uuid": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supported By Uuid"
+        },
+        "contact_passage": {
+          "$ref": "#/$defs/ContactPassage"
+        },
+        "surface_residues": {
+          "items": {
+            "$ref": "#/$defs/ObjectResidueState"
+          },
+          "title": "Surface Residues",
+          "type": "array"
+        },
+        "linked_spatial_condition_uuid": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Linked Spatial Condition Uuid"
+        },
+        "is_open": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Is Open"
+        },
+        "is_engaged": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Is Engaged"
+        },
+        "blocks_movement": {
+          "title": "Blocks Movement",
+          "type": "boolean"
+        },
+        "blocks_optics": {
+          "title": "Blocks Optics",
+          "type": "boolean"
+        },
+        "blocks_propagation": {
+          "title": "Blocks Propagation",
+          "type": "boolean"
+        },
+        "is_lit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Is Lit"
+        }
+      },
+      "required": [
+        "stack_count",
+        "charges",
+        "integrity",
+        "destruction_outcome",
+        "remnant_state",
+        "current_hit_points",
+        "concentration_slots",
+        "construction_owner_uuid",
+        "construction_geometry",
+        "construction_suppressions",
+        "known_to_creator",
+        "supported_by_uuid",
+        "contact_passage",
+        "surface_residues",
+        "linked_spatial_condition_uuid",
+        "is_open",
+        "is_engaged",
+        "blocks_movement",
+        "blocks_optics",
+        "blocks_propagation",
+        "is_lit"
+      ],
+      "title": "ItemState",
+      "type": "object",
+      "additionalProperties": false
     },
     "JumpMovementLogData": {
       "additionalProperties": false,
@@ -10613,77 +11208,6 @@
       "title": "ObjectSectionVolume",
       "type": "object"
     },
-    "ObservedChangeRef": {
-      "additionalProperties": false,
-      "description": "One observed field at an actual native refresh/commit boundary.\n\nFields sharing a source event and cursor belong to the same indivisible\nobservation. This reference supplies provenance, never a second after-value.",
-      "properties": {
-        "source_event_uuid": {
-          "format": "uuid",
-          "title": "Source Event Uuid",
-          "type": "string"
-        },
-        "source_index": {
-          "minimum": 0,
-          "title": "Source Index",
-          "type": "integer",
-          "maximum": 9007199254740991
-        },
-        "resolution_ref": {
-          "anyOf": [
-            {
-              "discriminator": {
-                "mapping": {
-                  "application": "#/$defs/ApplicationResolutionRef",
-                  "event": "#/$defs/EventResolutionRef"
-                },
-                "propertyName": "kind"
-              },
-              "oneOf": [
-                {
-                  "$ref": "#/$defs/EventResolutionRef"
-                },
-                {
-                  "$ref": "#/$defs/ApplicationResolutionRef"
-                }
-              ]
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Resolution Ref"
-        },
-        "field": {
-          "enum": [
-            "position",
-            "visibility",
-            "light",
-            "hazards",
-            "senses",
-            "paths",
-            "entity_contact",
-            "object_contact",
-            "spatial_effect"
-          ],
-          "title": "Field",
-          "type": "string"
-        },
-        "owner_uuid": {
-          "format": "uuid",
-          "title": "Owner Uuid",
-          "type": "string"
-        }
-      },
-      "required": [
-        "source_event_uuid",
-        "source_index",
-        "field",
-        "owner_uuid"
-      ],
-      "title": "ObservedChangeRef",
-      "type": "object"
-    },
     "ObservedMovementLogData": {
       "additionalProperties": false,
       "properties": {
@@ -11198,370 +11722,6 @@
         "dim_radius_feet"
       ],
       "title": "PerceivedLightSource",
-      "type": "object",
-      "additionalProperties": false
-    },
-    "PerceivedSpatialEffect": {
-      "description": "Last observed spatial effect and only its discovered footprint cells.",
-      "properties": {
-        "duration": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ConditionDurationSummary"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "content_ref": {
-          "$ref": "#/$defs/ContentRef"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "description": {
-          "title": "Description",
-          "type": "string"
-        },
-        "positions": {
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "type": "array"
-          },
-          "title": "Positions",
-          "type": "array"
-        },
-        "owner_revision": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer",
-              "maximum": 9007199254740991
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Owner Revision"
-        },
-        "apparent_presence": {
-          "default": false,
-          "title": "Apparent Presence",
-          "type": "boolean"
-        },
-        "trap_state": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TrapState"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "pressed": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Pressed"
-        },
-        "direction": {
-          "anyOf": [
-            {
-              "maxItems": 2,
-              "minItems": 2,
-              "prefixItems": [
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                }
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Direction"
-        },
-        "anchor_item_uuid": {
-          "anyOf": [
-            {
-              "format": "uuid",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Anchor Item Uuid"
-        },
-        "anchor_entity_uuid": {
-          "anyOf": [
-            {
-              "format": "uuid",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Anchor Entity Uuid"
-        },
-        "energy_type": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DamageType"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "presence_mode": {
-          "anyOf": [
-            {
-              "enum": [
-                "awe",
-                "fear"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Presence Mode"
-        },
-        "sustainer_item_uuid": {
-          "anyOf": [
-            {
-              "format": "uuid",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Sustainer Item Uuid"
-        },
-        "concentration_slot_uuid": {
-          "anyOf": [
-            {
-              "format": "uuid",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Concentration Slot Uuid"
-        },
-        "anchor_position": {
-          "anyOf": [
-            {
-              "maxItems": 2,
-              "minItems": 2,
-              "prefixItems": [
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                }
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Anchor Position"
-        },
-        "anchor_elevation_steps": {
-          "anyOf": [
-            {
-              "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Anchor Elevation Steps"
-        },
-        "area_geometry": {
-          "anyOf": [
-            {
-              "discriminator": {
-                "mapping": {
-                  "cone": "#/$defs/ConePresentationGeometry",
-                  "cube": "#/$defs/CubePresentationGeometry",
-                  "cylinder": "#/$defs/CylinderPresentationGeometry",
-                  "line": "#/$defs/LinePresentationGeometry",
-                  "sphere": "#/$defs/SpherePresentationGeometry",
-                  "wall": "#/$defs/WallPresentationGeometry",
-                  "wall_assembly": "#/$defs/WallAssemblyPresentationGeometry"
-                },
-                "propertyName": "shape"
-              },
-              "oneOf": [
-                {
-                  "$ref": "#/$defs/SpherePresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/ConePresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/LinePresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/CubePresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/CylinderPresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/WallPresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/WallAssemblyPresentationGeometry"
-                }
-              ]
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Area Geometry"
-        },
-        "construction_sections": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/WallAssemblyPresentationGeometry"
-          },
-          "title": "Construction Sections",
-          "type": "array"
-        },
-        "area_propagation": {
-          "anyOf": [
-            {
-              "enum": [
-                "line_of_effect",
-                "connected",
-                "ignore_barriers"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Area Propagation"
-        },
-        "deposit_source": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/MaterialDepositSource"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "visible_volume_positions": {
-          "default": [],
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "type": "array"
-          },
-          "title": "Visible Volume Positions",
-          "type": "array"
-        },
-        "upper_volume_surfaces": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/VolumeSurfaceSight"
-          },
-          "title": "Upper Volume Surfaces",
-          "type": "array"
-        },
-        "suppressions": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/SpellSuppression"
-          },
-          "title": "Suppressions",
-          "type": "array"
-        }
-      },
-      "required": [
-        "content_ref",
-        "name",
-        "description",
-        "positions"
-      ],
-      "title": "PerceivedSpatialEffect",
       "type": "object",
       "additionalProperties": false
     },
@@ -12213,219 +12373,6 @@
       "title": "PlayerAction",
       "type": "object"
     },
-    "PlayerActor": {
-      "properties": {
-        "uuid": {
-          "format": "uuid",
-          "title": "Uuid",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "character_body_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Character Body Id"
-        },
-        "creature_content_ref": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Creature Content Ref"
-        },
-        "appearance": {
-          "$ref": "#/$defs/AppearanceConfig"
-        },
-        "visual_loadout": {
-          "$ref": "#/$defs/VisualLoadout"
-        },
-        "normal_hp": {
-          "title": "Normal Hp",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "maximum_hp": {
-          "title": "Maximum Hp",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "temporary_hp": {
-          "title": "Temporary Hp",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "life_state": {
-          "$ref": "#/$defs/LifeState"
-        },
-        "armor_class": {
-          "title": "Armor Class",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "conditions": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/ConditionFact"
-          },
-          "title": "Conditions",
-          "type": "array"
-        },
-        "last_visual_position": {
-          "anyOf": [
-            {
-              "maxItems": 2,
-              "minItems": 2,
-              "prefixItems": [
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                }
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Last Visual Position"
-        },
-        "controlled_items": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/ItemPresentationState"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Controlled Items"
-        },
-        "occupancy_layer": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/OccupancyLayer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "temporary_hp_grant": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TemporaryHitPointsGrant"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "resolved_size": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Size"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "structural_base_size": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Size"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "manifestation": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SummonManifestation"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "faction": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Faction"
-        },
-        "present": {
-          "default": true,
-          "title": "Present",
-          "type": "boolean"
-        },
-        "remains_disposition": {
-          "$ref": "#/$defs/RemainsDisposition",
-          "default": "intact"
-        },
-        "spatial_disposition": {
-          "$ref": "#/$defs/SpatialDisposition",
-          "default": "present"
-        }
-      },
-      "required": [
-        "uuid",
-        "name",
-        "character_body_id",
-        "creature_content_ref",
-        "appearance",
-        "visual_loadout",
-        "normal_hp",
-        "maximum_hp",
-        "temporary_hp",
-        "life_state",
-        "armor_class"
-      ],
-      "title": "PlayerActor",
-      "type": "object",
-      "additionalProperties": false
-    },
     "PlayerAudience": {
       "properties": {
         "controlled": {
@@ -12457,226 +12404,6 @@
         "observers"
       ],
       "title": "PlayerAudience",
-      "type": "object",
-      "additionalProperties": false
-    },
-    "PlayerCharacterSheet": {
-      "description": "Evaluated controlled-character data, without executable owners.",
-      "properties": {
-        "actor_uuid": {
-          "format": "uuid",
-          "title": "Actor Uuid",
-          "type": "string"
-        },
-        "species": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Species"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "species_variant": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SpeciesVariant"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "background": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Background"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "origin": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AppliedOriginState"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "class_levels": {
-          "items": {
-            "$ref": "#/$defs/AppliedClassLevel"
-          },
-          "title": "Class Levels",
-          "type": "array"
-        },
-        "abilities": {
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "enum": [
-                  "strength",
-                  "dexterity",
-                  "constitution",
-                  "intelligence",
-                  "wisdom",
-                  "charisma"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "type": "array"
-          },
-          "title": "Abilities",
-          "type": "array"
-        },
-        "skills": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Skills",
-          "type": "array"
-        },
-        "expertise": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Expertise",
-          "type": "array"
-        },
-        "saves": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Saves",
-          "type": "array"
-        },
-        "proficiency_bonus": {
-          "title": "Proficiency Bonus",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "resources": {
-          "items": {
-            "$ref": "#/$defs/PlayerResource"
-          },
-          "title": "Resources",
-          "type": "array"
-        },
-        "name": {
-          "default": "",
-          "title": "Name",
-          "type": "string"
-        },
-        "portrait_key": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Portrait Key"
-        },
-        "normal_hp": {
-          "default": 0,
-          "title": "Normal Hp",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "maximum_hp": {
-          "default": 0,
-          "title": "Maximum Hp",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "compatible_item_slots": {
-          "default": [],
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              }
-            ],
-            "type": "array"
-          },
-          "title": "Compatible Item Slots",
-          "type": "array"
-        },
-        "handler_details": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/AvailableHandlerInfo"
-          },
-          "title": "Handler Details",
-          "type": "array"
-        },
-        "scribed_spell_ids": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "title": "Scribed Spell Ids",
-          "type": "array"
-        },
-        "permanent_feature_uses": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "title": "Permanent Feature Uses",
-          "type": "array"
-        },
-        "prepared_spell_selections": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/PreparedSpellSelection"
-          },
-          "title": "Prepared Spell Selections",
-          "type": "array"
-        }
-      },
-      "required": [
-        "actor_uuid",
-        "species",
-        "species_variant",
-        "background",
-        "origin",
-        "class_levels",
-        "abilities",
-        "skills",
-        "expertise",
-        "saves",
-        "proficiency_bonus",
-        "resources"
-      ],
-      "title": "PlayerCharacterSheet",
       "type": "object",
       "additionalProperties": false
     },
@@ -12851,8 +12578,8 @@
       "title": "PlayerCursor",
       "type": "object"
     },
-    "PlayerHUDSnapshot": {
-      "description": "Authorized operation-end display; its revision is a conservative gate.",
+    "PlayerHUDPatch": {
+      "description": "The seat's operation-end display as a patch against its last one.\n\nIt always carries the revision; the initiative and the sheet order only\nwhen they changed, and the sheets that changed. Against no display it\ncarries all of them.",
       "properties": {
         "generation": {
           "format": "uuid",
@@ -12871,16 +12598,41 @@
           "maximum": 9007199254740991
         },
         "initiative": {
-          "items": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "title": "Initiative",
-          "type": "array"
+          "anyOf": [
+            {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initiative"
+        },
+        "sheet_order": {
+          "anyOf": [
+            {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sheet Order"
         },
         "sheets": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/PlayerCharacterSheet"
+            "$ref": "#/$defs/SheetPatch"
           },
           "title": "Sheets",
           "type": "array"
@@ -12889,11 +12641,9 @@
       "required": [
         "generation",
         "observer_uuid",
-        "revision",
-        "initiative",
-        "sheets"
+        "revision"
       ],
-      "title": "PlayerHUDSnapshot",
+      "title": "PlayerHUDPatch",
       "type": "object",
       "additionalProperties": false
     },
@@ -12946,10 +12696,10 @@
           "title": "World Updates",
           "type": "array"
         },
-        "hud_snapshot": {
+        "hud": {
           "anyOf": [
             {
-              "$ref": "#/$defs/PlayerHUDSnapshot"
+              "$ref": "#/$defs/PlayerHUDPatch"
             },
             {
               "type": "null"
@@ -12995,20 +12745,24 @@
           "title": "Observer Uuid",
           "type": "string"
         },
-        "lineage_uuid": {
-          "format": "uuid",
-          "title": "Lineage Uuid",
-          "type": "string"
+        "lineage": {
+          "title": "Lineage",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         },
         "root": {
           "anyOf": [
             {
-              "$ref": "#/$defs/PlayerNode"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "title": "Root"
         },
         "events": {
           "items": {
@@ -13052,17 +12806,6 @@
           "title": "World Updates",
           "type": "array"
         },
-        "hud_snapshot": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PlayerHUDSnapshot"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "audience": {
           "anyOf": [
             {
@@ -13078,7 +12821,7 @@
       "required": [
         "generation",
         "observer_uuid",
-        "lineage_uuid",
+        "lineage",
         "root",
         "events",
         "version_rows",
@@ -13089,23 +12832,229 @@
       "type": "object",
       "additionalProperties": false
     },
-    "PlayerNode": {
+    "PlayerLogEntry": {
+      "description": "One disclosed combat-log entry, rendered for its seat, without nested copies.\n\nAn entry's children are composed from its node's lineage: in\n`children_lineages` order, each child lineage's own entry, or, for a child\nwithout one, that child's children (the native collection rule). A\nmulti-entity entry's `target_entry_indices` index those children.",
       "properties": {
-        "uuid": {
-          "format": "uuid",
-          "title": "Uuid",
+        "entry_type": {
+          "$ref": "#/$defs/CombatLogEntryType"
+        },
+        "source_name": {
+          "title": "Source Name",
           "type": "string"
         },
-        "lineage_uuid": {
-          "format": "uuid",
-          "title": "Lineage Uuid",
+        "source_uuid": {
+          "title": "Source Uuid",
           "type": "string"
+        },
+        "target_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Name"
+        },
+        "target_uuid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Uuid"
+        },
+        "compact": {
+          "title": "Compact",
+          "type": "string"
+        },
+        "verbose": {
+          "title": "Verbose",
+          "type": "string"
+        },
+        "detailed": {
+          "title": "Detailed",
+          "type": "string"
+        },
+        "data": {
+          "discriminator": {
+            "mapping": {
+              "action": "#/$defs/ActionLogData",
+              "attack": "#/$defs/AttackLogData",
+              "condition_removed": "#/$defs/ConditionRemovedLogData",
+              "connector_movement": "#/$defs/ConnectorMovementLogData",
+              "damage_taken": "#/$defs/DamageTakenLogData",
+              "death": "#/$defs/DeathLogData",
+              "death_save": "#/$defs/DeathSaveLogData",
+              "empty": "#/$defs/EmptyLogData",
+              "entity_spotted": "#/$defs/EntitySpottedLogData",
+              "forced_movement": "#/$defs/ForcedMovementLogData",
+              "hazard_detected": "#/$defs/HazardDetectedLogData",
+              "heal": "#/$defs/HealLogData",
+              "jump_movement": "#/$defs/JumpMovementLogData",
+              "movement": "#/$defs/MovementLogData",
+              "multi_entity_action": "#/$defs/MultiEntityLogData",
+              "observed_movement": "#/$defs/ObservedMovementLogData",
+              "roll_modification": "#/$defs/RollModificationLogData",
+              "saving_throw": "#/$defs/SavingThrowLogData",
+              "shove": "#/$defs/ShoveLogData",
+              "skill_check": "#/$defs/SkillCheckLogData",
+              "spatial_change": "#/$defs/SpatialChangeLogData",
+              "spatial_interaction": "#/$defs/SpatialInteractionLogData",
+              "spell_damage": "#/$defs/SpellDamageLogData",
+              "spell_interruption": "#/$defs/SpellInterruptionLogData",
+              "spell_save": "#/$defs/SpellSaveLogData",
+              "step_movement": "#/$defs/StepMovementLogData",
+              "turn": "#/$defs/TurnLogData",
+              "unknown_movement": "#/$defs/UnknownMovementLogData",
+              "unlocated_movement": "#/$defs/UnlocatedMovementLogData"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AttackLogData"
+            },
+            {
+              "$ref": "#/$defs/MovementLogData"
+            },
+            {
+              "$ref": "#/$defs/JumpMovementLogData"
+            },
+            {
+              "$ref": "#/$defs/ConnectorMovementLogData"
+            },
+            {
+              "$ref": "#/$defs/SavingThrowLogData"
+            },
+            {
+              "$ref": "#/$defs/SpellSaveLogData"
+            },
+            {
+              "$ref": "#/$defs/SpellInterruptionLogData"
+            },
+            {
+              "$ref": "#/$defs/SkillCheckLogData"
+            },
+            {
+              "$ref": "#/$defs/EntitySpottedLogData"
+            },
+            {
+              "$ref": "#/$defs/HazardDetectedLogData"
+            },
+            {
+              "$ref": "#/$defs/DamageTakenLogData"
+            },
+            {
+              "$ref": "#/$defs/HealLogData"
+            },
+            {
+              "$ref": "#/$defs/ActionLogData"
+            },
+            {
+              "$ref": "#/$defs/TurnLogData"
+            },
+            {
+              "$ref": "#/$defs/MultiEntityLogData"
+            },
+            {
+              "$ref": "#/$defs/RollModificationLogData"
+            },
+            {
+              "$ref": "#/$defs/EmptyLogData"
+            },
+            {
+              "$ref": "#/$defs/ConditionRemovedLogData"
+            },
+            {
+              "$ref": "#/$defs/DeathLogData"
+            },
+            {
+              "$ref": "#/$defs/SpellDamageLogData"
+            },
+            {
+              "$ref": "#/$defs/DeathSaveLogData"
+            },
+            {
+              "$ref": "#/$defs/ShoveLogData"
+            },
+            {
+              "$ref": "#/$defs/StepMovementLogData"
+            },
+            {
+              "$ref": "#/$defs/ForcedMovementLogData"
+            },
+            {
+              "$ref": "#/$defs/ObservedMovementLogData"
+            },
+            {
+              "$ref": "#/$defs/UnlocatedMovementLogData"
+            },
+            {
+              "$ref": "#/$defs/UnknownMovementLogData"
+            },
+            {
+              "$ref": "#/$defs/SpatialChangeLogData"
+            },
+            {
+              "$ref": "#/$defs/SpatialInteractionLogData"
+            }
+          ],
+          "title": "Data"
+        },
+        "success": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Success"
+        }
+      },
+      "required": [
+        "entry_type",
+        "source_name",
+        "source_uuid",
+        "target_name",
+        "target_uuid",
+        "compact",
+        "verbose",
+        "detailed",
+        "data",
+        "success"
+      ],
+      "title": "PlayerLogEntry",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "PlayerNode": {
+      "description": "One disclosed event version.\n\nVersions are identified by the seat's occurrence index (the version\nrow's `source_index`), lineages by the occurrence index of their first\nversion the seat received.",
+      "properties": {
+        "occurrence": {
+          "title": "Occurrence",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "lineage": {
+          "title": "Lineage",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         },
         "parent_event": {
           "anyOf": [
             {
-              "format": "uuid",
-              "type": "string"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             {
               "type": "null"
@@ -13116,8 +13065,9 @@
         "parent_lineage": {
           "anyOf": [
             {
-              "format": "uuid",
-              "type": "string"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             {
               "type": "null"
@@ -13127,8 +13077,9 @@
         },
         "children_lineages": {
           "items": {
-            "format": "uuid",
-            "type": "string"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "title": "Children Lineages",
           "type": "array"
@@ -13335,7 +13286,7 @@
         "combat_log": {
           "anyOf": [
             {
-              "$ref": "#/$defs/CombatLogEntry"
+              "$ref": "#/$defs/PlayerLogEntry"
             },
             {
               "type": "null"
@@ -13366,8 +13317,8 @@
         }
       },
       "required": [
-        "uuid",
-        "lineage_uuid",
+        "occurrence",
+        "lineage",
         "parent_event",
         "parent_lineage",
         "children_lineages",
@@ -13412,14 +13363,21 @@
       "additionalProperties": false
     },
     "PlayerObservation": {
+      "description": "One actor's observed body at an event, as a patch against what the seat holds,\nwith the patches of the items that body discloses.",
       "properties": {
-        "event_uuid": {
+        "occurrence": {
+          "title": "Occurrence",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "actor_uuid": {
           "format": "uuid",
-          "title": "Event Uuid",
+          "title": "Actor Uuid",
           "type": "string"
         },
-        "actor": {
-          "$ref": "#/$defs/PlayerActor"
+        "changes": {
+          "$ref": "#/$defs/ActorChanges"
         },
         "contact": {
           "anyOf": [
@@ -13430,11 +13388,20 @@
               "type": "null"
             }
           ]
+        },
+        "items": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ItemPatch"
+          },
+          "title": "Items",
+          "type": "array"
         }
       },
       "required": [
-        "event_uuid",
-        "actor",
+        "occurrence",
+        "actor_uuid",
+        "changes",
         "contact"
       ],
       "title": "PlayerObservation",
@@ -13457,7 +13424,7 @@
         "hud": {
           "anyOf": [
             {
-              "$ref": "#/$defs/PlayerHUDSnapshot"
+              "$ref": "#/$defs/PlayerHUDPatch"
             },
             {
               "type": "null"
@@ -14321,8 +14288,8 @@
           "maximum": 9007199254740991
         },
         "player_schema_version": {
-          "const": 11,
-          "default": 11,
+          "const": 12,
+          "default": 12,
           "title": "Player Schema Version",
           "type": "integer",
           "minimum": -9007199254740991,
@@ -15118,14 +15085,6 @@
           "title": "Kind",
           "type": "string"
         },
-        "observed_changes": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/ObservedChangeRef"
-          },
-          "title": "Observed Changes",
-          "type": "array"
-        },
         "observer_uuid": {
           "format": "uuid",
           "title": "Observer Uuid",
@@ -15166,17 +15125,18 @@
           "title": "Effective Light Levels Changed",
           "type": "object"
         },
-        "cause_event_uuid": {
+        "cause_occurrence": {
           "anyOf": [
             {
-              "format": "uuid",
-              "type": "string"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             {
               "type": "null"
             }
           ],
-          "title": "Cause Event Uuid"
+          "title": "Cause Occurrence"
         },
         "visible_cells_added": {
           "items": {
@@ -15342,14 +15302,24 @@
           "title": "Hazardous Cells Changed",
           "type": "object"
         },
-        "spatial_effects_changed": {
+        "spatial_effect_sightings": {
           "additionalProperties": {
-            "$ref": "#/$defs/PerceivedSpatialEffect"
+            "$ref": "#/$defs/SpatialEffectSighting"
           },
           "propertyNames": {
             "format": "uuid"
           },
-          "title": "Spatial Effects Changed",
+          "title": "Spatial Effect Sightings",
+          "type": "object"
+        },
+        "spatial_effect_content": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SpatialEffectContent"
+          },
+          "propertyNames": {
+            "format": "uuid"
+          },
+          "title": "Spatial Effect Content",
           "type": "object"
         },
         "spatial_effects_removed": {
@@ -15391,7 +15361,7 @@
         "observer_position",
         "observer_position_changed",
         "effective_light_levels_changed",
-        "cause_event_uuid",
+        "cause_occurrence",
         "visible_cells_added",
         "visible_cells_removed",
         "seen_cells_added",
@@ -15408,6 +15378,217 @@
         "paths_dirty"
       ],
       "title": "SensoryFact",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "SheetChanges": {
+      "additionalProperties": false,
+      "description": "Present fields replace the seat's sheet values; against no sheet every field is present.",
+      "properties": {
+        "species": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Species"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "species_variant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpeciesVariant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "background": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Background"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AppliedOriginState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "class_levels": {
+          "items": {
+            "$ref": "#/$defs/AppliedClassLevel"
+          },
+          "title": "Class Levels",
+          "type": "array"
+        },
+        "abilities": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "enum": [
+                  "strength",
+                  "dexterity",
+                  "constitution",
+                  "intelligence",
+                  "wisdom",
+                  "charisma"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Abilities",
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Skills",
+          "type": "array"
+        },
+        "expertise": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Expertise",
+          "type": "array"
+        },
+        "saves": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Saves",
+          "type": "array"
+        },
+        "proficiency_bonus": {
+          "title": "Proficiency Bonus",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "resources": {
+          "items": {
+            "$ref": "#/$defs/PlayerResource"
+          },
+          "title": "Resources",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "portrait_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Portrait Key"
+        },
+        "normal_hp": {
+          "title": "Normal Hp",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "maximum_hp": {
+          "title": "Maximum Hp",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "compatible_item_slots": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Compatible Item Slots",
+          "type": "array"
+        },
+        "handler_details": {
+          "items": {
+            "$ref": "#/$defs/AvailableHandlerInfo"
+          },
+          "title": "Handler Details",
+          "type": "array"
+        },
+        "scribed_spell_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scribed Spell Ids",
+          "type": "array"
+        },
+        "permanent_feature_uses": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Permanent Feature Uses",
+          "type": "array"
+        },
+        "prepared_spell_selections": {
+          "items": {
+            "$ref": "#/$defs/PreparedSpellSelection"
+          },
+          "title": "Prepared Spell Selections",
+          "type": "array"
+        }
+      },
+      "title": "SheetChanges",
+      "type": "object"
+    },
+    "SheetPatch": {
+      "properties": {
+        "actor_uuid": {
+          "format": "uuid",
+          "title": "Actor Uuid",
+          "type": "string"
+        },
+        "changes": {
+          "$ref": "#/$defs/SheetChanges"
+        }
+      },
+      "required": [
+        "actor_uuid",
+        "changes"
+      ],
+      "title": "SheetPatch",
       "type": "object",
       "additionalProperties": false
     },
@@ -15877,6 +16058,30 @@
       "title": "SpatialEffectChangeOperation",
       "type": "string"
     },
+    "SpatialEffectContent": {
+      "description": "A spatial effect's static content; a seat receives it once per effect.",
+      "properties": {
+        "content_ref": {
+          "$ref": "#/$defs/ContentRef"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content_ref",
+        "name",
+        "description"
+      ],
+      "title": "SpatialEffectContent",
+      "type": "object",
+      "additionalProperties": false
+    },
     "SpatialEffectInteractionOperation": {
       "description": "Environmental operations which may affect spatial conditions.",
       "enum": [
@@ -15900,6 +16105,356 @@
       ],
       "title": "SpatialEffectLayer",
       "type": "string"
+    },
+    "SpatialEffectSighting": {
+      "description": "One observation of a spatial effect without its static content (`PerceivedSpatialEffect`'s other fields).",
+      "properties": {
+        "duration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConditionDurationSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "positions": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Positions",
+          "type": "array"
+        },
+        "owner_revision": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner Revision"
+        },
+        "apparent_presence": {
+          "default": false,
+          "title": "Apparent Presence",
+          "type": "boolean"
+        },
+        "trap_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrapState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pressed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pressed"
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Direction"
+        },
+        "anchor_item_uuid": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Anchor Item Uuid"
+        },
+        "anchor_entity_uuid": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Anchor Entity Uuid"
+        },
+        "energy_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DamageType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "presence_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "awe",
+                "fear"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Presence Mode"
+        },
+        "sustainer_item_uuid": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sustainer Item Uuid"
+        },
+        "concentration_slot_uuid": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Concentration Slot Uuid"
+        },
+        "anchor_position": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Anchor Position"
+        },
+        "anchor_elevation_steps": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Anchor Elevation Steps"
+        },
+        "area_geometry": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "cone": "#/$defs/ConePresentationGeometry",
+                  "cube": "#/$defs/CubePresentationGeometry",
+                  "cylinder": "#/$defs/CylinderPresentationGeometry",
+                  "line": "#/$defs/LinePresentationGeometry",
+                  "sphere": "#/$defs/SpherePresentationGeometry",
+                  "wall": "#/$defs/WallPresentationGeometry",
+                  "wall_assembly": "#/$defs/WallAssemblyPresentationGeometry"
+                },
+                "propertyName": "shape"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SpherePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/ConePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/LinePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/CubePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/CylinderPresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/WallPresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/WallAssemblyPresentationGeometry"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Area Geometry"
+        },
+        "construction_sections": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/WallAssemblyPresentationGeometry"
+          },
+          "title": "Construction Sections",
+          "type": "array"
+        },
+        "area_propagation": {
+          "anyOf": [
+            {
+              "enum": [
+                "line_of_effect",
+                "connected",
+                "ignore_barriers"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Area Propagation"
+        },
+        "deposit_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaterialDepositSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "visible_volume_positions": {
+          "default": [],
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Visible Volume Positions",
+          "type": "array"
+        },
+        "upper_volume_surfaces": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/VolumeSurfaceSight"
+          },
+          "title": "Upper Volume Surfaces",
+          "type": "array"
+        },
+        "suppressions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SpellSuppression"
+          },
+          "title": "Suppressions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "positions"
+      ],
+      "title": "SpatialEffectSighting",
+      "type": "object",
+      "additionalProperties": false
     },
     "SpatialEffectStateFact": {
       "description": "A witnessed mechanical transition, restricted to disclosed fixture cells.",
@@ -16082,18 +16637,19 @@
           "default": null,
           "title": "Object Uuid"
         },
-        "commit_event_uuid": {
+        "commit_occurrence": {
           "anyOf": [
             {
-              "format": "uuid",
-              "type": "string"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Commit Event Uuid"
+          "title": "Commit Occurrence"
         },
         "previous_occupancy_layer": {
           "anyOf": [
@@ -18363,27 +18919,23 @@
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
         },
-        "event_uuid": {
-          "format": "uuid",
-          "title": "Event Uuid",
-          "type": "string"
-        },
-        "lineage_uuid": {
-          "format": "uuid",
-          "title": "Lineage Uuid",
-          "type": "string"
+        "lineage": {
+          "title": "Lineage",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         }
       },
       "required": [
         "source_index",
-        "event_uuid",
-        "lineage_uuid"
+        "lineage"
       ],
       "title": "VersionRow",
       "type": "object",
       "additionalProperties": false
     },
     "VisualItem": {
+      "description": "One equipped layer; the item's look is in the seat's record of `item_uuid`.",
       "properties": {
         "slot": {
           "title": "Slot",
@@ -18398,35 +18950,6 @@
           "title": "Item Id",
           "type": "string"
         },
-        "item_kind": {
-          "$ref": "#/$defs/ItemPresentationKind"
-        },
-        "visual_item_name": {
-          "title": "Visual Item Name",
-          "type": "string"
-        },
-        "visual_variant_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Visual Variant Id"
-        },
-        "equipped_visual_policy": {
-          "$ref": "#/$defs/EquippedVisualPolicy"
-        },
-        "item_effects": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/ItemEffectPresentationState"
-          },
-          "title": "Item Effects",
-          "type": "array"
-        },
         "is_lit": {
           "anyOf": [
             {
@@ -18438,58 +18961,12 @@
           ],
           "default": null,
           "title": "Is Lit"
-        },
-        "very_bright_radius_feet": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer",
-              "maximum": 9007199254740991
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Very Bright Radius Feet"
-        },
-        "bright_radius_feet": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer",
-              "maximum": 9007199254740991
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Bright Radius Feet"
-        },
-        "dim_radius_feet": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer",
-              "maximum": 9007199254740991
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Dim Radius Feet"
         }
       },
       "required": [
         "slot",
         "item_uuid",
-        "item_id",
-        "item_kind",
-        "visual_item_name",
-        "visual_variant_id",
-        "equipped_visual_policy"
+        "item_id"
       ],
       "title": "VisualItem",
       "type": "object",
@@ -19447,10 +19924,11 @@
     },
     "WorldUpdate": {
       "properties": {
-        "event_uuid": {
-          "format": "uuid",
-          "title": "Event Uuid",
-          "type": "string"
+        "occurrence": {
+          "title": "Occurrence",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         },
         "tiles": {
           "items": {
@@ -19491,7 +19969,7 @@
         }
       },
       "required": [
-        "event_uuid",
+        "occurrence",
         "tiles",
         "objects",
         "objects_removed",

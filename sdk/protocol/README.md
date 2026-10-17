@@ -2,13 +2,45 @@
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
 owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
-325 shared definitions and 1,716 object-field rows. `protocol-identity.json` binds
-protocol 1 and player schema 11 to the exact canonical schema digest.
+331 shared definitions and 1,774 object-field rows. `protocol-identity.json` binds
+protocol 1 and player schema 12 to the exact canonical schema digest.
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
 - `field-ledger.json`: each reachable field, required/default shape and source owner.
 - The Python and TypeScript packages carry the same schema and digest.
+
+## Patches and occurrence identities (schema 12)
+
+A seat receives what it does not hold yet, as patches against its own fold
+(`dnd/player/reduction.py` is the reference reducer):
+
+- `PlayerObservation` carries `changes` (`ActorChanges`) against the seat's body
+  of `actor_uuid`; against an absent body every field is present. An unchanged
+  re-acquisition carries no body fields.
+- Items: `VisualItem` is a loadout layer `(slot, item_uuid, item_id, is_lit)` and
+  `controlled_items` are item uuids. `ItemPatch` rows (on observations and on
+  `EquipmentFact`) carry the components the seat lacks or holds otherwise:
+  `ItemLook` for an item equipped on any observed body, `ItemProfile` and
+  `ItemState` for a controlled inventory. `EquipmentFact.changes` is a body patch.
+- The HUD is a `PlayerHUDPatch` against the seat's last display: its revision,
+  the initiative and sheet order when they changed, and `SheetPatch` rows.
+- `SensoryFact` carries `spatial_effect_sightings` and, once per effect and seat
+  (again only when it changed), `spatial_effect_content` (content_ref, name,
+  description). `observed_changes` is no longer sent.
+- Combat-log entries (`PlayerLogEntry`) have no nested copies; an entry's
+  children are composed from its node's `children_lineages` (a child lineage
+  without its own entry contributes its children's), and a multi-entity entry's
+  `target_entry_indices` index those children. `PlayerLineage.root` is an index
+  into `events`.
+- Versions are identified by the seat's occurrence index (`VersionRow.source_index`)
+  and lineages by the occurrence index of their first version the seat received;
+  nodes, version rows, observations, world updates and fact references carry
+  these integers instead of uuids. Uuids inside shared values (a condition's
+  `event_uuid`, concentration slots, application and resolution references)
+  remain opaque attributes.
+
+Saved `PlayerSequence` packets are schema 6.
 
 ## Antimagic removal (schema 11)
 
