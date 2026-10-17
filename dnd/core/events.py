@@ -684,7 +684,18 @@ class Event(BaseModel):
         self,
     ) -> tuple[EffectiveHandlerPresentation, ...]:
         """Return exact reaction evidence retained across this event lineage."""
-        return self._effective_handler_presentations
+        return EventQueue.handler_presentations(self)
+
+    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+        """A copy carries this version's reaction evidence as of now.
+
+        A stored version is frozen: reactions dispatched on it after its store are
+        held by the queue (`EventQueue.handler_presentations`), and every copy takes
+        the evidence current at copy time.
+        """
+        copied = super().model_copy(update=update, deep=deep)
+        copied._effective_handler_presentations = EventQueue.handler_presentations(self)
+        return copied
 
     def post(self, **updates) -> Self:
         """Create a modified version of this event and rebroadcast it.
@@ -1299,6 +1310,8 @@ class EventQueue:
     # Child links are the queue's (P7b): per lineage, the UUIDs of stored versions whose parent
     # version belongs to it, in store order. A stored version is never edited when a child arrives.
     _lineage_children: Dict[UUID, List[UUID]] = defaultdict(list)
+    # Reaction evidence dispatched on an already-stored version, by version UUID (P7b).
+    _dispatched_presentations: Dict[UUID, Tuple[EffectiveHandlerPresentation, ...]] = {}
     _events_by_uuid: Dict[UUID, Event] = {}
     _event_indexes_by_uuid: Dict[UUID, int] = {}
     _events_by_type: Dict[EventType, List[Event]] = defaultdict(list)
@@ -1607,7 +1620,7 @@ class EventQueue:
                 emitted.lineage_uuid
                 for emitted in cls._all_events[before_event_index:]
             ))
-            result._effective_handler_presentations = (
+            presentations = (
                 *result.effective_handler_presentations,
                 EffectiveHandlerPresentation(
                     dispatch_index=evidence.dispatch_index,
@@ -1622,6 +1635,11 @@ class EventQueue:
                     outcome=evidence.outcome,
                 ),
             )
+            if cls._events_by_uuid.get(result.uuid) is result:
+                # The dispatched version is stored and frozen: the queue holds its evidence.
+                cls._dispatched_presentations[result.uuid] = presentations
+            else:
+                result._effective_handler_presentations = presentations
         cls._handler_dispatch_cursor += 1
         for callback in tuple(cls._on_handler_dispatch_callbacks):
             try:
@@ -2292,6 +2310,18 @@ class EventQueue:
         return cls._events_by_uuid.get(uuid)
 
     @classmethod
+    def handler_presentations(cls, event: Event) -> Tuple[EffectiveHandlerPresentation, ...]:
+        """One version's reaction evidence as of now.
+
+        The stored version itself: the evidence it was stored with, extended by the
+        reactions dispatched on it since. Any other value (a copy, an unstored
+        version): the evidence it carries.
+        """
+        if cls._events_by_uuid.get(event.uuid) is event:
+            return cls._dispatched_presentations.get(event.uuid, event._effective_handler_presentations)
+        return event._effective_handler_presentations
+
+    @classmethod
     def child_links(cls, event: Event) -> Tuple[List[UUID], List[UUID]]:
         """One version's (children_events, lineage_children_events) as of now.
 
@@ -2812,6 +2842,7 @@ class EventQueue:
         cls._events_by_target.clear()
         cls._events_by_lineage.clear()
         cls._lineage_children.clear()
+        cls._dispatched_presentations.clear()
         cls._event_handlers.clear()
         cls._event_handler_order.clear()
         cls._next_event_handler_order = 0

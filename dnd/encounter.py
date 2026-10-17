@@ -73,9 +73,10 @@ def _compute_revealed_entities(event: Event, child_logs: List[CombatLogEntry]) -
     return revealed
 
 
-# The encounter's one string per entity id (observers and participants), so event-time grants and
-# log perceivers share their strings instead of stringifying an id per version. Cleared whenever
-# the encounter installs or removes its event computers; bounded by the encounter's entities.
+# Owned by the Encounter system, whose event computers are this module's functions: one string per
+# entity id (observers and participants), so event-time grants and log perceivers share their
+# strings instead of stringifying an id per version. Cleared whenever the encounter installs or
+# removes its computers; bounded by the encounter's entities. A pure UUID-to-text table.
 _ID_STRINGS: Dict[UUID, str] = {}
 
 
@@ -112,8 +113,9 @@ def _compute_identified_entity_observers(
     A participant identifies itself; an observer subscribed to its cell
     identifies it when the participant is among that observer's contacts.
     `previous` is the grants mapping the version carries from its predecessor:
-    when every participant's grant is unchanged it is returned itself (grants are
-    shared frozen values), so a distinct mapping is built once per distinct input.
+    the grants are computed for every version, and when every participant's grant
+    is unchanged the carried mapping is returned itself (grants are shared frozen
+    values), so versions share one mapping while it holds.
     """
     grid = get_map()
     participant_uuids = {
