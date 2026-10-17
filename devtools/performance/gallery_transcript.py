@@ -18,9 +18,9 @@ byte for byte after uuid normalization. The engine on PYTHONPATH is imported but
 
 The `value-read` representation (value read context as data, PR 2026-10-17) projects the d20, attack and
 contest bonus fields that became evaluated readings onto their normalized score, advantage, critical and
-auto-hit states, drops the per-value target, context and imported channels from value dumps, moves a
-damage bonus's context onto its damage packet, and drops the target of damage and healing rolls (now the
-packet's target, formerly the bonus value's own target).
+auto-hit states, drops the per-value target, context and imported channels from value dumps, and moves a
+damage bonus's context onto its damage packet. It does not hide the target of damage packets and of damage
+and healing rolls: those now carry the read's target where the base left the value's unset target (None).
 """
 
 import argparse
@@ -128,10 +128,7 @@ def _project_value_read(value):
     projected = {}
     is_value = 'self_static' in value and 'to_target_static' in value
     is_damage = 'damage_dice' in value and 'damage_bonus' in value
-    is_packet_roll = 'roll_uuid' in value and value.get('roll_type') in ('Damage', 'Heal')
     for key, item in value.items():
-        if is_packet_roll and key == 'target_entity_uuid':
-            continue
         if key in READING_FIELDS and isinstance(item, dict):
             projected[key] = {field: item.get(field) for field in READING_PROJECTION}
             continue

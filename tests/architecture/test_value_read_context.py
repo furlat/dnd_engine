@@ -1,10 +1,13 @@
 """Architecture: a value read takes its situation as one frozen argument (plan §6b PR).
 
-Values and blocks hold no read state. Who reads a value, against whom, in which
-context and with which opponent rows is the `ValueRead` passed to the read; the
+Values hold no read state. Who reads a value, against whom, in which context
+and with which opponent rows is the `ValueRead` passed to the read; the
 evaluated result is a frozen `ValueReading`. The stateful forms are gone: no
-target or context set and cleared on value trees, no imported opponent
+target or context set and cleared on value or block trees, no imported opponent
 channels stored on a value, no lineage-keyed breakdown cache.
+
+Blocks still declare target and context fields because the sensory blocks are
+constructed with them (outside this change); no setter writes them on a read.
 """
 
 import ast

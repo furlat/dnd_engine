@@ -143,8 +143,8 @@ def test_passive_rechecks_contextual_advantage_after_neutral_result(actor):
     assert actor.passive_skill("perception") == 7
 
 
-@pytest.mark.parametrize("factored,expected", [(False, 20), (True, 20)])
-def test_passive_keeps_separate_channel_clamps_and_loose_global_bounds(actor, factored, expected):
+def clamped_perception(actor):
+    """Owner channels with their own bounds: static 3+2 in [8, 10], contextual 4 in [6, 7]."""
     skill = actor.skill_set.get_skill("perception").skill_bonus
     skill.get_base_modifier().value = 3
     skill.self_static.add_min_constraint(number(actor, 8))
@@ -156,9 +156,31 @@ def test_passive_keeps_separate_channel_clamps_and_loose_global_bounds(actor, fa
         source_entity_uuid=actor.uuid, callable=lambda *_: minimum))
     skill.self_contextual.add_max_constraint(ContextualNumericalModifier(
         source_entity_uuid=actor.uuid, callable=lambda *_: maximum))
+    return skill
+
+
+@pytest.mark.parametrize("factored", [False, True])
+def test_passive_keeps_separate_channel_clamps_inside_owner_global_bounds(actor, factored):
+    skill = clamped_perception(actor)
     if factored:
         skill.self_static.add_factor(ArithmeticFactor(source_entity_uuid=actor.uuid, numerator=2))
-    check_passive(actor, expected)
+    check_passive(actor, 20)
+
+
+@pytest.mark.parametrize("factored,expected", [(False, 28), (True, 30)])
+def test_opposed_read_keeps_separate_channel_clamps_and_loose_global_bounds(actor, factored, expected):
+    """The opponent's outgoing rows clamp in their own channel and widen the global bounds."""
+    skill = clamped_perception(actor)
+    opponent = Entity.create(uuid4(), "Passive opponent", config=EntityConfig())
+    opponent.compose_entity()
+    outgoing = opponent.skill_set.get_skill("perception").skill_bonus.to_target_static
+    outgoing.add_value_modifier(NumericalModifier(source_entity_uuid=opponent.uuid, value=3))
+    outgoing.add_min_constraint(NumericalModifier(source_entity_uuid=opponent.uuid, value=4))
+    outgoing.add_max_constraint(NumericalModifier(source_entity_uuid=opponent.uuid, value=20))
+    if factored:
+        skill.self_static.add_factor(ArithmeticFactor(source_entity_uuid=actor.uuid, numerator=2))
+    assert 10 + actor.skill_bonus(opponent.uuid, "perception").normalized_score == expected
+    assert actor.passive_skill("perception") == 20
 
 
 def test_passive_reads_each_contextual_constraint_once_per_read(actor):
