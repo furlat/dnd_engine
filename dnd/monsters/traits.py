@@ -536,6 +536,7 @@ class AttackReplacement(BaseModel):
 
 class MultiattackAction(BaseAction):
     """Monster stat-block action that composes existing weapon attacks."""
+    creates = (Attack,)
 
     name: str = Field(default="Multiattack", description="Action name.")
     description: str = Field(default="Make multiple stat-block weapon attacks.", description="Rules summary.")
@@ -876,6 +877,9 @@ class SimpleMarkerCondition(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         return [], [], [], [], declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{self.name} applied")
 
+# BonusDamageFeature (defined above) creates SimpleMarkerCondition.
+BonusDamageFeature.creates = (*BonusDamageFeature.creates, SimpleMarkerCondition)
+
 
 class HitSaveRiderFeature(BaseCondition):
     """Feature that applies a save-based condition rider after an exact authored item hit."""
@@ -1023,6 +1027,7 @@ class GhoulClawsParalysisFeature(HitSaveRiderFeature):
 
 class GhoulParalysisEffect(BaseCondition):
     """Ghoul paralysis effect with end-of-turn repeat save."""
+    creates = (Paralyzed,)
 
     name: str = Field(default="Ghoul Paralysis", description="Condition name.")
     description: str = Field(default="Paralyzed by ghoul claws; repeat CON save at end of turn.", description="Rules summary.")
@@ -1054,6 +1059,9 @@ class GhoulParalysisEffect(BaseCondition):
         if success and self.name in target.active_conditions:
             target.remove_condition(self.name, parent_event=event)
         return event
+
+# HitSaveRiderFeature (defined above) creates GhoulParalysisEffect.
+HitSaveRiderFeature.creates = (*HitSaveRiderFeature.creates, GhoulParalysisEffect)
 
 
 class UndeadFortitudeFeature(BaseCondition):
@@ -1240,9 +1248,13 @@ class DivineEminenceActive(BonusDamageFeature):
         self.dice_numbers = 3 + max(0, self.slot_level - 1)
         self.damage_dice = 6
 
+# DivineEminenceAction (defined above) creates DivineEminenceActive.
+DivineEminenceAction.creates = (*DivineEminenceAction.creates, DivineEminenceActive)
+
 
 class LeadershipAction(BaseAction):
     """Knight leadership action that grants nearby allies attack/save d4."""
+    creates = (SimpleMarkerCondition,)
 
     name: str = Field(default="Leadership", description="Action name.")
     description: str = Field(default="For 1 minute, nearby allies add 1d4 to attack rolls and saves.", description="Rules summary.")
@@ -1389,6 +1401,9 @@ class LeadershipAura(AreaCondition):
             f"+{d4.total} (1d4)",
         )
 
+# LeadershipAction (defined above) creates LeadershipAura.
+LeadershipAction.creates = (*LeadershipAction.creates, LeadershipAura)
+
 
 class RampageFeature(BaseCondition):
     """Gnoll feature that grants a bonus bite after a melee kill."""
@@ -1432,6 +1447,7 @@ class RampageFeature(BaseCondition):
 
 class RampageAvailable(BaseCondition):
     """Temporary condition that grants Rampage Bite."""
+    creates = (NaturalAttack,)
 
     name: str = Field(default="Rampage Available", description="Condition name.")
     description: str = Field(
@@ -1467,6 +1483,9 @@ class RampageAvailable(BaseCondition):
         if owner:
             owner.unregister_action("Rampage Bite")
         return super()._remove(event)
+
+# RampageFeature (defined above) creates RampageAvailable.
+RampageFeature.creates = (*RampageFeature.creates, RampageAvailable)
 
 
 def _has_adjacent_ally(source: Entity, target: Entity) -> bool:
@@ -1589,6 +1608,7 @@ class InnateFlight(BaseCondition):
 
 
 class InnateInvisibility(BaseAction):
+    creates = (Concentrating, InvisibilityEffect)
     name: str = "Innate Invisibility"
     target_type: TargetType = TargetType.SELF
     costs: list[Cost] = Field(default_factory=lambda: [Cost(name="Innate Invisibility", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)])
@@ -1673,6 +1693,7 @@ class LifeDrainReduction(BaseCondition):
 
 
 class WightLifeDrain(NaturalAttack):
+    creates = (*NaturalAttack.creates, LifeDrainReduction)
     name: str = "Life Drain"
     description: str = "Melee +4, 1d6+2 necrotic; DC 13 Constitution gates lost maximum HP."
     natural_damage_dice: Literal[4,6,8,10,12,20] = 6

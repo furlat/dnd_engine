@@ -72,6 +72,7 @@ class SeeInvisibilityEffect(BaseCondition):
 
 class SeeInvisibility(SpellAction):
     """Second-level divination spell that grants see-invisible sense."""
+    creates = (*SpellAction.creates, SeeInvisibilityEffect)
 
     name: str = Field(default="See Invisibility", description="Spell name.")
     description: str = Field(default="See invisible creatures and objects", description="Spell description.")
@@ -187,6 +188,7 @@ class TrueSeeingEffect(BaseCondition):
 
 class TrueSeeing(SpellAction):
     """Sixth-level divination spell that grants 120-foot truesight."""
+    creates = (*SpellAction.creates, TrueSeeingEffect)
 
     name: str = Field(default="True Seeing", description="Spell name.")
     description: str = Field(default="Grant truesight 120ft", description="Spell description.")
@@ -364,6 +366,7 @@ class Guidance(SpellAction):
 
     Duration: Concentration, up to 1 minute (10 rounds).
     """
+    creates = (*SpellAction.creates, GuidanceEffect)
     name: str = Field(default="Guidance", description="Spell name.")
     description: str = Field(default="Touch: +1d4 to one ability check (concentration)", description="Spell description.")
     spell_level: int = Field(default=0, description="Cantrip spell level.")
@@ -435,6 +438,7 @@ class ReapplyHuntersMark(ReapplyQuarry):
 
 
 class HuntersMarkEffect(QuarrySustain):
+    creates = (HuntersMarkQuarry, ReapplyHuntersMark)
     name: str = "Hunter's Mark Sustain"
     description: str = "Retains the caster's mark and free reapplication until rest."
 
@@ -454,6 +458,7 @@ class HuntersMarkEffect(QuarrySustain):
 
 
 class HuntersMark(SpellAction):
+    creates = (*SpellAction.creates, HuntersMarkEffect)
     name: str = "Hunter's Mark"
     description: str = "Mark a quarry: weapon hits add 1d6 matching weapon damage; reapply after defeat."
     spell_level: int = 1
@@ -504,6 +509,7 @@ class ForesightEffect(BaseCondition):
 
 
 class ForesightOwner(BaseCondition):
+    creates = (ForesightEffect,)
     name: str = "Foresight Owner"
     description: str = "One same-caster Foresight lease, retained across target changes."
     recipient_uuid: UUID
@@ -523,6 +529,7 @@ class ForesightOwner(BaseCondition):
 
 
 class Foresight(SpellAction):
+    creates = (*SpellAction.creates, ForesightOwner)
     name: str = "Foresight"
     description: str = "Touch a willing creature for eight hours of foresight; tactical Action casting adaptation."
     spell_level: int = 9

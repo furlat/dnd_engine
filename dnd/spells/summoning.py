@@ -4,7 +4,28 @@ from typing import Optional, Tuple, cast
 
 from pydantic import Field
 
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
+from dnd.actions import (
+    AllyHelp,
+    Attack,
+    Dash,
+    Disengage,
+    Dodge,
+    Drop,
+    DropConcentration,
+    Hide,
+    Jump,
+    Move,
+    PickUp,
+    ShakeAwake,
+    Shove,
+    SpellAction,
+    SpellEvent,
+    StandUp,
+    Swim,
+    TraverseConnector,
+    entity_action_economy_cost_evaluator,
+)
+from dnd.conditions import HasAttackedTracker, HasTakenDamageTracker
 from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
 from dnd.core.creature_types import DamageType
 from dnd.core.base_actions import Cost, PositionDiscoveryContract, TargetType
@@ -12,15 +33,73 @@ from dnd.core.events import EventPhase, EventQueue, Range, RangeType, SummonAdmi
 from dnd.summoning.forms import available_forms, selected_form
 from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.types.summoning import SummonApplication, SummonFamily, SummonSelection
+from dnd.summoning.actions import DismissSummon
 from dnd.summoning.conditions import Summoned
-from dnd.monsters.traits import (
-    KeenPerceptionFeature,
-    KeenHearingAndSmellFeature,
-    PackTacticsFeature,
-    HitSaveRiderFeature,
-    WolfBiteProneRiderFeature,
-    MultiattackAction,
+from dnd.monsters.spell_summon_actions import (
+    CinderousSwipe,
+    ConcussiveSmash,
+    DraconicBreathCadence,
+    DragonBreath,
+    DrainingKiss,
+    ElectrifiedFlail,
+    ElementalMultiattackBonus,
+    ElementalWarp,
+    ExplosiveIcicle,
+    GroundedThunder,
+    GushingAir,
+    HealingVapours,
+    HiemalStrike,
+    Immolation,
+    MuckToMetal,
+    MyrmidonBurrow,
+    MyrmidonCinderousSwipe,
+    MyrmidonStrikeDice,
+    MyrmidonTenacity,
+    PrimordialGales,
+    RagingVortex,
+    ScorchingStrike,
+    SeismicStrike,
+    SludgySling,
+    SmoulderingTouch,
+    SoilCloggedSlam,
+    SweetplumGales,
+    WaterSlam,
+    WintersBreath,
 )
+from dnd.monsters.spell_summons import FlamingSphereRam, SpiritualWeaponStrike
+from dnd.monsters.traits import (
+    HitSaveRiderFeature,
+    InnateFlight,
+    KeenHearingAndSmellFeature,
+    KeenPerceptionFeature,
+    MagicResistance,
+    MultiattackAction,
+    PackTacticsFeature,
+    WolfBiteProneRiderFeature,
+)
+from dnd.spells.conjuration import MistyStep
+from dnd.spells.enchantment import CharmPerson
+from dnd.spells.evocation import ScorchingRay, Thunderwave
+from dnd.spells.illusion import Invisibility
+from dnd.spells.necromancy import Revivify
+
+
+# What a summoned creature is composed with (its form's factory and the creature composer). The
+# creature is created in the cast, so its content is built with the spell, at the caster's creation.
+_CREATURE_CORE = (AllyHelp, Attack, Dash, Disengage, Dodge, Drop, DropConcentration, Hide, Jump, Move, PickUp,
+    ShakeAwake, Shove, Swim, TraverseConnector, HasAttackedTracker, HasTakenDamageTracker, DismissSummon)
+_BEAST_FORMS = (*_CREATURE_CORE, HitSaveRiderFeature, KeenHearingAndSmellFeature, KeenPerceptionFeature,
+    MultiattackAction, PackTacticsFeature, WolfBiteProneRiderFeature)
+_FIEND_FORMS = (*_CREATURE_CORE, InnateFlight, MagicResistance, MultiattackAction)
+_SPELL_CONSTRUCT_FORMS = (Dash, Disengage, Move, FlamingSphereRam, SpiritualWeaponStrike)
+# Elementals, Myrmidons, Planar Allies and the Draconic Spirit share one builder.
+_GREATER_SPIRIT_FORMS = (AllyHelp, Attack, Dash, Disengage, Dodge, Move, StandUp, Swim, CinderousSwipe,
+    ConcussiveSmash, DraconicBreathCadence, DragonBreath, DrainingKiss, ElectrifiedFlail, ElementalMultiattackBonus,
+    ElementalWarp, ExplosiveIcicle, GroundedThunder, GushingAir, HealingVapours, HiemalStrike, Immolation,
+    MuckToMetal, MyrmidonBurrow, MyrmidonCinderousSwipe, MyrmidonStrikeDice, MyrmidonTenacity, PrimordialGales,
+    RagingVortex, ScorchingStrike, SeismicStrike, SludgySling, SmoulderingTouch, SoilCloggedSlam, SweetplumGales,
+    WaterSlam, WintersBreath, InnateFlight, MultiattackAction, MistyStep, CharmPerson, ScorchingRay, Thunderwave,
+    Invisibility, Revivify)
 
 
 class SummonSpell(SpellAction):
@@ -104,9 +183,7 @@ class SummonSpell(SpellAction):
 
 
 class ConjureAnimals(SummonSpell):
-    # The features its beast forms install (dnd.monsters.beasts and the SRD wolf).
-    creates = (*SummonSpell.creates, KeenPerceptionFeature, KeenHearingAndSmellFeature, PackTacticsFeature,
-        HitSaveRiderFeature, WolfBiteProneRiderFeature, MultiattackAction)
+    creates = (*SummonSpell.creates, *_BEAST_FORMS)
     name: str = "Conjure Animals"
     description: str = "Summon one beast. Higher slots unlock stronger available creatures."
     family: SummonFamily = SummonFamily.ANIMALS
@@ -114,6 +191,7 @@ class ConjureAnimals(SummonSpell):
 
 
 class ConjureFey(SummonSpell):
+    creates = (*SummonSpell.creates, *_BEAST_FORMS)
     name: str = "Conjure Fey"
     description: str = "Summon a beast-shaped Fey spirit. Losing concentration makes it hostile."
     family: SummonFamily = SummonFamily.FEY
@@ -121,6 +199,7 @@ class ConjureFey(SummonSpell):
 
 
 class ConjureFiend(SummonSpell):
+    creates = (*SummonSpell.creates, *_FIEND_FORMS)
     name: str = "Conjure Fiend"
     description: str = "Summon one fiend while concentration holds. Higher slots unlock stronger forms."
     family: SummonFamily = SummonFamily.FIEND
@@ -128,6 +207,7 @@ class ConjureFiend(SummonSpell):
 
 
 class SpiritualWeapon(SummonSpell):
+    creates = (*SummonSpell.creates, *_SPELL_CONSTRUCT_FORMS)
     name: str = "Spiritual Weapon"
     description: str = "Summon a ten-turn autonomous allied spectral weapon; bonus action, no concentration."
     family: SummonFamily = SummonFamily.SPIRITUAL_WEAPON
@@ -139,6 +219,7 @@ class SpiritualWeapon(SummonSpell):
 
 
 class FlamingSphere(SummonSpell):
+    creates = (*SummonSpell.creates, *_SPELL_CONSTRUCT_FORMS)
     name: str = "Flaming Sphere"
     description: str = "Summon a ten-turn autonomous allied sphere with saved Ram, enemy end-turn aura and native fire trail."
     family: SummonFamily = SummonFamily.FLAMING_SPHERE
@@ -148,6 +229,7 @@ class FlamingSphere(SummonSpell):
 
 
 class ConjureElemental(SummonSpell):
+    creates = (*SummonSpell.creates, *_GREATER_SPIRIT_FORMS)
     name:str="Conjure Elemental"
     description:str="Summon an allied elemental until long rest; slot six unlocks Myrmidons."
     family:SummonFamily=SummonFamily.ELEMENTAL
@@ -155,6 +237,7 @@ class ConjureElemental(SummonSpell):
     concentration:bool=False
 
 class PlanarAlly(SummonSpell):
+    creates = (*SummonSpell.creates, *_GREATER_SPIRIT_FORMS)
     name:str="Planar Ally"
     description:str="Summon an allied Deva, Djinni or Cambion until long rest."
     family:SummonFamily=SummonFamily.PLANAR_ALLY
@@ -162,6 +245,7 @@ class PlanarAlly(SummonSpell):
     concentration:bool=False
 
 class SummonDragon(SummonSpell):
+    creates = (*SummonSpell.creates, *_GREATER_SPIRIT_FORMS)
     name:str="Summon Dragon"
     description:str="Summon a Draconic Spirit with independently chosen Breath and shared resistance."
     family:SummonFamily=SummonFamily.DRAGON

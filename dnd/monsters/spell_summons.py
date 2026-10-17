@@ -113,6 +113,7 @@ class FlamingSphereZone(AreaCondition):
 
 
 class FlamingSphereAura(BaseCondition):
+    creates = (FireSurface, FlamingSphereZone)
     name: str = "Flaming Sphere Fire"
     description: str = "Owns the moving fire aura, light and native fire-trail handler."
     duration: Duration = Field(default_factory=lambda:Duration(duration_type=DurationType.PERMANENT))

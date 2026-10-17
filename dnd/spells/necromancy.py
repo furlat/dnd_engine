@@ -205,6 +205,7 @@ class ChillTouch(SpellAction):
     Damage scales to 2d8 at 5th level, 3d8 at 11th level, and 4d8 at 17th
     level. Undead targets also gain disadvantage on attacks against the caster.
     """
+    creates = (*SpellAction.creates, ChillTouchEffect)
     @property
     def performs_attack(self) -> bool:
         return True
@@ -457,6 +458,7 @@ class Blight(SpellAction):
 
 class BlindnessDeafnessEffect(BaseCondition):
     """Apply Blindness/Deafness and manage its repeat save handler."""
+    creates = (Blinded, Deafened)
     name: str = Field(default="Blindness/Deafness", description="Condition name.")
     description: str = Field(default="Blinded or Deafened by magic", description="Rules-facing condition summary.")
     tags: Set[ConditionTag] = Field(
@@ -551,6 +553,7 @@ class BlindnessDeafness(SpellAction):
     The spell is not concentration. Upcasting targets one additional creature
     for each slot level above 2nd.
     """
+    creates = (*SpellAction.creates, BlindnessDeafnessEffect)
     name: str = Field(default="Blindness/Deafness", description="Spell name.")
     description: str = Field(
         default="CON save or Blinded/Deafened. Repeat save each turn.",
@@ -686,6 +689,7 @@ class NecroticBless(SpellAction):
     BlessEffect without a save. Other targets must pass a Charisma save or
     receive BaneEffect.
     """
+    creates = (*SpellAction.creates, BaneEffect, BlessEffect)
     name: str = Field(default="Necrotic Bless", description="Spell name.")
     description: str = Field(
         default="4 targets: undead get +1d4, others CHA save or -1d4",
@@ -988,6 +992,7 @@ class EyebiteAsleepEffect(BaseCondition):
 
 class EyebitePanickedEffect(BaseCondition):
     """Apply Eyebite's panicked option and forced flee behavior."""
+    creates = (Dash, Frightened, Move)
     name: str = Field(default="Eyebite Panicked", description="Condition name.")
     description: str = Field(
         default="Panicked - Frightened, must Dash away from caster",
@@ -1192,6 +1197,7 @@ class EyebiteCastingState(ConcentrationActionMarker):
 )
 class EyebiteStrike(BaseAction):
     """Resolve the action granted while concentrating on Eyebite."""
+    creates = (EyebiteAsleepEffect, EyebitePanickedEffect, SickenedCondition)
     name: str = Field(default="Eyebite Strike", description="Action name.")
     description: str = Field(
         default="Choose a creature: Asleep, Panicked, or Sickened (WIS save)",
@@ -1399,6 +1405,7 @@ class Eyebite(SpellAction):
     caster also receives Eyebite Strike for later turns, and the marker
     condition links that action to concentration cleanup.
     """
+    creates = (*SpellAction.creates, EyebiteCastingState, EyebiteStrike)
     name: str = Field(default="Eyebite", description="Spell name.")
     description: str = Field(
         default="WIS save or Asleep/Panicked/Sickened, repeatable each turn",
@@ -1756,6 +1763,7 @@ class HarmEffect(BaseCondition):
 
 class HarmSource(BaseCondition):
     """One Harm cast's source, accepted damage contribution and one-hour clock."""
+    creates = (HarmEffect,)
     name: str = "Harm Source"
     condition_category: ConditionCategory = ConditionCategory.INTERNAL
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
@@ -1811,6 +1819,7 @@ class HarmSource(BaseCondition):
 
 class Harm(SpellAction):
     """Resolve Harm's Constitution save and minimum-HP damage cap."""
+    creates = (*SpellAction.creates, HarmSource)
     name: str = Field(default="Harm", description="Spell name.")
     description: str = Field(
         default="CON save, 14d6 necrotic, half on save, min 1 HP",
@@ -2227,6 +2236,7 @@ class BestowCurse(SpellAction):
     the caster, turn-start action denial, and bonus necrotic damage from the
     caster's attacks.
     """
+    creates = (*SpellAction.creates, AbilityCurseEffect, AttackCurseEffect, DamageCurseEffect, InactionCurseEffect)
     name: str = Field(default="Bestow Curse", description="Spell name.")
     description: str = Field(
         default="Touch: WIS save or be cursed (concentration)",
@@ -2482,6 +2492,9 @@ class RayOfSicknessPoison(Poisoned):
             handlers.append(expiry.uuid)
         return modifiers,handlers,children,spatial,effect
 
+# RayOfSickness (defined above) creates RayOfSicknessPoison.
+RayOfSickness.creates = (*RayOfSickness.creates, RayOfSicknessPoison)
+
 
 class VampiricTouchEffect(ConcentrationActionMarker):
     name: str = "Vampiric Touch"
@@ -2566,6 +2579,7 @@ class VampiricTouchStrike(SpellAction):
 
 
 class VampiricTouch(SpellAction):
+    creates = (*SpellAction.creates, VampiricTouchEffect, VampiricTouchStrike)
     name: str = "Vampiric Touch"
     description: str = "Ten-turn concentration melee spell attack; heal half own necrotic damage and repeat as an action."
     spell_level: int = 3

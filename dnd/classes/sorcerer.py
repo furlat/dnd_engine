@@ -256,6 +256,7 @@ class ElementalAffinityResistanceAction(BaseAction):
         active_resistance_condition_uuid: Exact active root owned by this template.
         costs: One sorcery point and no action-economy cost.
     """
+    creates = (ElementalAffinityResistance,)
 
     name: str = Field(
         default="Elemental Affinity Resistance",
@@ -431,6 +432,7 @@ class DragonWingsActive(BaseCondition):
 
 class DragonWings(BaseAction):
     """Manifest or dismiss the Draconic Bloodline's wings."""
+    creates = (DragonWingsActive,)
 
     name: str = Field(
         default="Dragon Wings",
@@ -604,6 +606,7 @@ DRACONIC_PRESENCE_AURA_CONTENT_REF = ContentRef(
 
 class DraconicPresenceAura(AreaCondition):
     """Concentration-owned 60-foot aura of awe or fear."""
+    creates = (DraconicPresenceImmunity, Charmed, Frightened)
 
     name: str = Field(
         default="Draconic Presence",
@@ -824,6 +827,7 @@ class DraconicPresenceConcentrating(Concentrating):
 
 class DraconicPresence(BaseAction):
     """Spend sorcery points to begin a concentration aura of awe or fear."""
+    creates = (DraconicPresenceAura, DraconicPresenceConcentrating)
 
     name: str = Field(
         default="Draconic Presence",
@@ -1504,6 +1508,7 @@ class SorceryPointsFeature(BaseCondition):
         sorcery_points: Maximum sorcery points granted by this feature.
         metamagic_choices: Metamagic option keys registered as actions.
     """
+    creates = (ConvertSPToSlot, ConvertSlotToSP, DistantSpell, QuickenedSpell, TwinnedSpell)
     name: str = Field(default="Sorcery Points Feature", description="Display name for the Sorcery Points class feature.")
     description: str = Field(default="Sorcery points for metamagic and Font of Magic", description="Rules summary for sorcery point resources and granted actions.")
     sorcery_points: int = Field(default=2, description="Maximum sorcery points granted by this feature.")

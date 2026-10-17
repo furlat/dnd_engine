@@ -63,6 +63,7 @@ class AegisSparkEffect(BaseCondition):
 
 class AegisSpark(SpellAction):
     """Cantrip that wards the caster or a visible ally."""
+    creates = (*SpellAction.creates, AegisSparkEffect)
 
     name: str = Field(default="Aegis Spark", description="Action discovery label.")
     description: str = Field(
@@ -116,6 +117,7 @@ class AegisSpark(SpellAction):
 
 class AegisTrainingFeature(BaseCondition):
     """Feature-like condition that grants and cleans up Aegis Spark."""
+    creates = (AegisSpark,)
 
     name: str = Field(default="Aegis Training", description="Feature condition registry key.")
     description: str = Field(

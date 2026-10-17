@@ -523,6 +523,7 @@ class Rage(BaseAction):
         active_raging_condition_uuid: Exact active root owned by this template.
         costs: Bonus-action and rage-resource costs rebuilt after model initialization.
     """
+    creates = (Raging,)
     name: str = Field(default="Rage", description="Action name displayed for entering rage.")
     description: str = Field(
         default="Enter a primal rage",
@@ -732,6 +733,7 @@ class RageFeature(BaseCondition):
         rage_uses: Maximum rage resource uses granted by the feature.
         rage_damage: Rage damage bonus wired into registered Rage actions.
     """
+    creates = (EndRage, Rage)
     name: str = Field(default="Rage Feature", description="Feature condition name for Barbarian rage.")
     description: str = Field(
         default="Can enter a primal rage as a bonus action",
@@ -941,6 +943,9 @@ class FrenziedStrike(Attack):
             return "Frenzied Strike requires a melee weapon"
         return Attack.rule_error(self, scan, selection)
 
+# Frenzied (defined above) creates FrenziedStrike.
+Frenzied.creates = (*Frenzied.creates, FrenziedStrike)
+
 
 class Frenzy(BaseAction):
     """Action that enters a Berserker frenzy as a bonus action.
@@ -955,6 +960,7 @@ class Frenzy(BaseAction):
         active_raging_condition_uuid: Exact active root owned by this template.
         costs: Bonus-action and rage-resource costs rebuilt after model initialization.
     """
+    creates = (Frenzied, Raging)
     name: str = Field(default="Frenzy", description="Action name displayed for entering Berserker frenzy.")
     description: str = Field(
         default="Enter a frenzied rage",
@@ -1115,6 +1121,7 @@ class FrenzyFeature(BaseCondition):
         description: Short rules-facing summary of the Frenzy feature.
         rage_damage: Rage damage bonus wired into registered Frenzy actions.
     """
+    creates = (Frenzy,)
     name: str = Field(default="Frenzy Feature", description="Feature condition name for Berserker Frenzy.")
     description: str = Field(
         default="Can enter a frenzied rage for bonus action attacks",

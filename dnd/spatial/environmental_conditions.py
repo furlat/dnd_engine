@@ -1015,6 +1015,7 @@ def build_environmental_replacement(
 
 class SpikeTrap(SpatialCondition):
     """One persistent spike mechanism, its footprint and authored payload."""
+    creates = (Poisoned,)
 
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
 

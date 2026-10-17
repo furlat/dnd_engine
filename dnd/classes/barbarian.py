@@ -246,6 +246,7 @@ class RecklessAttack(BaseAction):
         costs: Reckless Attack has no action or resource costs.
         active_reckless_condition_uuid: Exact active root owned by this template.
     """
+    creates = (RecklessAttacking,)
     name: str = Field(default="Reckless Attack", description="Action name displayed for Reckless Attack.")
     description: str = Field(
         default="Attack recklessly - advantage on attacks, but exposed to counter-attacks",
@@ -339,6 +340,7 @@ class RecklessAttackFeature(BaseCondition):
         name: Feature condition name for Reckless Attack lookup and cleanup.
         description: Short rules-facing summary of the Reckless Attack feature.
     """
+    creates = (RecklessAttack,)
     name: str = Field(
         default="Reckless Attack Feature",
         description="Feature condition name for Reckless Attack lookup and cleanup.",
@@ -1307,6 +1309,7 @@ class IntimidatingPresence(BaseAction):
         target_type: Intimidating Presence targets one visible entity within range.
         costs: Action cost rebuilt after model initialization.
     """
+    creates = (Frightened, IntimidatingPresenceImmunity)
     name: str = Field(
         default="Intimidating Presence",
         description="Action name displayed for the Berserker frighten action.",
@@ -1533,6 +1536,7 @@ class IntimidatingPresenceFeature(BaseCondition):
         name: Feature condition name for Intimidating Presence action registration.
         description: Short rules-facing summary of the Intimidating Presence feature.
     """
+    creates = (ExtendIntimidatingPresence, IntimidatingPresence)
     name: str = Field(
         default="Intimidating Presence Feature",
         description="Feature condition name for Intimidating Presence action registration.",

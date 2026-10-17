@@ -89,7 +89,15 @@ from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.entity import Entity
 from dnd.types.world import OccupancyLayer, SpatialChannel
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
-from dnd.actions import AttackEvent, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
+from dnd.actions import (
+    AttackEvent,
+    SpellAction,
+    SpellEvent,
+    entity_action_economy_cost_evaluator,
+    entity_action_economy_cost_applier,
+    resolve_paid_entry_retreats,
+    Move,
+)
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.ignition import resolve_interaction
@@ -475,6 +483,7 @@ class AcidSplash(SpellAction):
 
 
 class MistyStep(SpellAction):
+    creates = (*SpellAction.creates, Move)
     magical_transfer: bool = True
     """Misty Step - 2nd level Conjuration
 
@@ -1372,6 +1381,7 @@ class EscapeBlackTentaclesDexterityAction(EscapeSpatialRestraintAction):
 
 class BlackTentaclesRestrained(SpatialRestraintSource):
     """Independent restraint lease and both authored escape choices."""
+    creates = (*SpatialRestraintSource.creates, EscapeBlackTentaclesDexterityAction, EscapeBlackTentaclesStrengthAction)
 
     description: str = Field(
         default="Restrained by one exact Evard's Black Tentacles field.",
@@ -1396,6 +1406,7 @@ BLACK_TENTACLES_ZONE_CONTENT_REF = ContentRef(
 
 class BlackTentaclesZone(RestrainingAreaCondition):
     """Damaging and restraining field for Evard's Black Tentacles."""
+    creates = (BlackTentaclesRestrained,)
 
     name: str = Field(default="Evard's Black Tentacles Zone")
     description: str = Field(
@@ -1545,6 +1556,7 @@ class BlackTentaclesZone(RestrainingAreaCondition):
 
 class EvardsBlackTentacles(SpellAction):
     """Create a concentration field of grasping tentacles."""
+    creates = (*SpellAction.creates, BlackTentaclesZone)
 
     name: str = Field(default="Evard's Black Tentacles")
     description: str = Field(
@@ -2478,6 +2490,7 @@ class FogCloud(SpellAction):
 
     Duration: Concentration, up to 1 hour
     """
+    creates = (*SpellAction.creates, FogCloudZone)
     name: str = Field(default="Fog Cloud", description="Display name for the fog cloud spell.")
     description: str = Field(default="20ft sphere heavily obscured fog (blocks darkvision)", description="Rules-facing summary for the fog cloud spell.")
     spell_level: int = Field(default=1, description="Spell slot level required to cast fog cloud; cantrips use 0.")
@@ -3098,6 +3111,7 @@ class InsectPlague(SpellAction):
     Damages when the area appears, on entry, and at turn end. At Higher
     Levels: +1d10 per level above 5th.
     """
+    creates = (*SpellAction.creates, InsectPlagueZone)
     name: str = Field(default="Insect Plague", description="Display name for the insect plague spell.")
     description: str = Field(default="20ft sphere swarming locusts, 4d10 piercing (CON half)", description="Rules-facing summary for the insect plague spell.")
     spell_level: int = Field(default=5, description="Spell slot level required to cast insect plague; cantrips use 0.")
@@ -3373,6 +3387,7 @@ class IncendiaryCloud(SpellAction):
     Damages on entry and turn start. Cloud moves 10ft away from caster each turn.
     Heavily obscured area.
     """
+    creates = (*SpellAction.creates, IncendiaryCloudZone)
     name: str = Field(default="Incendiary Cloud", description="Display name for the incendiary cloud spell.")
     description: str = Field(default="20ft sphere fire cloud, 10d8 fire (DEX half), heavily obscured", description="Rules-facing summary for the incendiary cloud spell.")
     spell_level: int = Field(default=8, description="Spell slot level required to cast incendiary cloud; cantrips use 0.")
@@ -3513,6 +3528,7 @@ class StinkingCloudZone(AreaCondition):
     20ft radius sphere of heavily obscured noxious gas.
     Turn start: CON save or spend action retching.
     """
+    creates = (NauseatedCondition,)
     name: str = Field(default="Stinking Cloud Zone", description="Display name for the stinking cloud zone zone condition.")
     description: str = Field(default="Nauseating gas - CON save or spend action", description="Rules-facing summary for the stinking cloud zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the stinking cloud zone for cleanup and filtering.")
@@ -3616,6 +3632,7 @@ class StinkingCloud(SpellAction):
 
     Duration: Concentration, up to 1 minute
     """
+    creates = (*SpellAction.creates, StinkingCloudZone)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Stinking Cloud", description="Display name for the stinking cloud spell.")
     description: str = Field(default="20ft sphere nauseating fog, CON save or spend action", description="Rules-facing summary for the stinking cloud spell.")
@@ -4021,6 +4038,7 @@ class SleetStorm(SpellAction):
 
 
 class DimensionDoor(SpellAction):
+    creates = (*SpellAction.creates, Move)
     magical_transfer: bool = True
     """A paid teleport with an optional nearby willing companion."""
     name: str = "Dimension Door"
@@ -4352,6 +4370,7 @@ class GuardianOfFaith(SpellAction):
 
     Duration: 8 hours (NOT concentration).
     """
+    creates = (*SpellAction.creates, GuardianOfFaithZone)
     name: str = Field(default="Guardian of Faith", description="Display name for the guardian of faith spell.")
     description: str = Field(default="Summon spectral guardian: 20 radiant (DEX half), 60 damage budget", description="Rules-facing summary for the guardian of faith spell.")
     spell_level: int = Field(default=4, description="Spell slot level required to cast guardian of faith; cantrips use 0.")
@@ -4516,6 +4535,7 @@ class HeroesFeastBuff(BaseCondition):
 
 class HeroesFeastSource(BaseCondition):
     """One accepted feast serving, retaining its exact source and ten-turn clock."""
+    creates = (HeroesFeastBuff,)
     name: str = "Heroes' Feast Source"
     condition_category: ConditionCategory = ConditionCategory.INTERNAL
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
@@ -4598,6 +4618,7 @@ class HeroesFeastSource(BaseCondition):
 )
 class EatFromFeast(BaseAction):
     """Action to eat from the Heroes' Feast and gain the buff."""
+    creates = (HeroesFeastSource,)
     name: str = Field(default="Eat from Feast", description="Display name for the eat from feast action.")
     description: str = Field(default="Eat from the Heroes' Feast to gain its buff", description="Rules-facing summary for the eat from feast action.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode used by action discovery and validation for eat from feast.")
@@ -4654,6 +4675,7 @@ class HeroesFeastObject(UsableItem):
     """A magnificent feast that appears on the ground.
     Creatures can eat from it to gain the Heroes' Feast buff.
     """
+    creates = (EatFromFeast,)
     name: str = Field(default="Heroes' Feast", description="Display name for the heroes feast object item.")
     description: str = Field(default="A magnificent feast — eat to gain immunity to poison/frightened and +HP", description="Rules-facing summary for the heroes feast object item.")
     is_pickable: bool = Field(default=False, description="Whether heroes feast object can be picked up as an item.")
@@ -4728,6 +4750,7 @@ class HeroesFeast(SpellAction):
     - Advantage on WIS saves
     - +2d10 max HP
     """
+    creates = (*SpellAction.creates, HeroesFeastLifetime, HeroesFeastObject)
     name: str = Field(default="Heroes' Feast", description="Display name for the heroes feast spell.")
     description: str = Field(default="Summon feast: eat for poison/fear immunity, WIS save advantage, +HP", description="Rules-facing summary for the heroes feast spell.")
     spell_level: int = Field(default=6, description="Spell slot level required to cast heroes feast; cantrips use 0.")
@@ -4841,6 +4864,7 @@ class EnsnaringStrikeEffect(Restrained):
 
 
 class EnsnaringStrike(AttackBackedSpell):
+    creates = (*AttackBackedSpell.creates, EnsnaringStrikeEffect)
     name: str = "Ensnaring Strike"
     description: str = "Weapon attempt; on hit pay bonus action/slot, STR save or ensnared."
     spell_level: int = 1

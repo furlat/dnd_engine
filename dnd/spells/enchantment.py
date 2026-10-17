@@ -75,6 +75,7 @@ from dnd.core.dice import AttackOutcome, roll_die_face
 
 class CharmPersonEffect(BaseCondition):
     """One caster's finite spell owner and shared exact-charmer relationship."""
+    creates = (Charmed,)
     name: str = "Charm Person"
     description: str = "Charmed by this caster; their or their allies' damage ends this ten-turn charm."
     duration: Duration = Field(default_factory=lambda: Duration(duration=10, duration_type=DurationType.ROUNDS))
@@ -127,6 +128,7 @@ class CharmPerson(SpellAction):
     Upcasting increases the target count, and targets that are fighting the
     caster receive advantage on the save.
     """
+    creates = (*SpellAction.creates, CharmPersonEffect)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Charm Person", description="Spell name.")
     description: str = Field(
@@ -260,6 +262,7 @@ class CharmPerson(SpellAction):
 
 class HoldPersonEffect(BaseCondition):
     """Apply Hold Person's spell-specific parent condition."""
+    creates = (Paralyzed,)
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
     name: str = Field(default="Hold Person", description="Condition name.")
     description: str = Field(default="Magically held in place", description="Rules-facing condition summary.")
@@ -379,6 +382,7 @@ class HoldPersonEffect(BaseCondition):
 )
 class HoldPerson(SpellAction):
     """Paralyze a humanoid after a failed Wisdom save."""
+    creates = (*SpellAction.creates, HoldPersonEffect)
     name: str = Field(default="Hold Person", description="Spell name.")
     description: str = Field(
         default="Target must succeed on WIS save or be paralyzed",
@@ -469,6 +473,7 @@ class HoldPerson(SpellAction):
 
 class HoldMonsterEffect(BaseCondition):
     """Apply Hold Monster's spell-specific parent condition."""
+    creates = (Paralyzed,)
     name: str = Field(default="Hold Monster", description="Condition name.")
     description: str = Field(default="Magically held in place", description="Rules-facing condition summary.")
     tags: Set[ConditionTag] = Field(
@@ -570,6 +575,7 @@ class HoldMonsterEffect(BaseCondition):
 
 class HoldMonster(SpellAction):
     """Paralyze one or more non-undead creatures after Wisdom saves."""
+    creates = (*SpellAction.creates, HoldMonsterEffect)
     name: str = Field(default="Hold Monster", description="Spell name.")
     description: str = Field(
         default="Target must succeed on WIS save or be paralyzed (not undead)",
@@ -874,6 +880,7 @@ class SleepEffect(BaseCondition):
 
 class Sleep(SpellAction):
     """Select creatures in an HP pool and apply magical sleep."""
+    creates = (*SpellAction.creates, SleepEffect)
     name: str = Field(default="Sleep", description="Spell name.")
     description: str = Field(
         default="Roll 5d8 HP pool. Affects creatures in order of lowest HP.",
@@ -1065,6 +1072,7 @@ class Sleep(SpellAction):
 
 class PowerWordStunEffect(BaseCondition):
     """Apply Power Word Stun's condition tree and repeat save."""
+    creates = (Stunned,)
     name: str = Field(default="Power Word Stun", description="Condition name.")
     description: str = Field(default="Stunned by power word", description="Rules-facing condition summary.")
     tags: Set[ConditionTag] = Field(
@@ -1167,6 +1175,7 @@ class PowerWordStunEffect(BaseCondition):
 
 class PowerWordStun(SpellAction):
     """Stun a target whose current hit points are at or below the threshold."""
+    creates = (*SpellAction.creates, PowerWordStunEffect)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Power Word Stun", description="Spell name.")
     description: str = Field(
@@ -1364,6 +1373,7 @@ class BlessEffect(BaseCondition):
 
 class Bane(SpellAction):
     """Apply Bane to failed Charisma saves across multiple targets."""
+    creates = (*SpellAction.creates, BaneEffect)
     name: str = Field(default="Bane", description="Spell name.")
     description: str = Field(
         default="Up to 3 enemies: CHA save or -1d4 on attacks and saves",
@@ -1470,6 +1480,7 @@ class Bane(SpellAction):
 
 class Bless(SpellAction):
     """Apply Bless across multiple allies without a saving throw."""
+    creates = (*SpellAction.creates, BlessEffect)
     name: str = Field(default="Bless", description="Spell name.")
     description: str = Field(
         default="Up to 3 allies: +1d4 on attacks and saves",
@@ -1720,6 +1731,7 @@ class CommandNextTurnEffect(BaseCondition):
 
 class CommandGrovelEffect(CommandNextTurnEffect):
     """Make the target fall prone and spend its next turn."""
+    creates = (Prone,)
     name: str = Field(default="Command: Grovel", description="Condition name.")
     description: str = Field(default="Commanded to grovel - falls prone", description="Rules-facing condition summary.")
     tags: Set[ConditionTag] = Field(
@@ -1762,6 +1774,7 @@ class CommandHaltEffect(CommandNextTurnEffect):
 
 class CommandFleeEffect(CommandNextTurnEffect):
     """Move away voluntarily and spend the rest of the target's next turn."""
+    creates = (Move,)
     name: str = Field(default="Command: Flee", description="Condition name.")
     description: str = Field(
         default="Commanded to flee - must move away from caster",
@@ -1826,6 +1839,7 @@ class CommandFleeEffect(CommandNextTurnEffect):
 
 class Command(SpellAction):
     """Force a creature to follow a one-word command after a failed save."""
+    creates = (*SpellAction.creates, CommandFleeEffect, CommandGrovelEffect, CommandHaltEffect)
     name: str = Field(default="Command", description="Spell name.")
     description: str = Field(
         default="WIS save or follow a one-word command (Grovel/Flee/Halt)",
@@ -1979,6 +1993,7 @@ class MockedEffect(BaseCondition):
 
 
 class ViciousMockery(SpellAction):
+    creates = (*SpellAction.creates, MockedEffect)
     name: str = "Vicious Mockery"
     description: str = "WIS save or psychic damage and disadvantage on the next attack."
     spell_level: int = 0
@@ -2059,6 +2074,7 @@ class AnimalFriendshipEffect(Charmed):
 
 
 class AnimalFriendship(SpellAction):
+    creates = (*SpellAction.creates, AnimalFriendshipEffect)
     name: str = "Animal Friendship"
     description: str = "Charm a beast of Intelligence 3 or less; caster-allied damage ends the charm."
     spell_level: int = 1
@@ -2133,6 +2149,7 @@ class DissonantFearEffect(BaseCondition):
 
 
 class DissonantWhispers(SpellAction):
+    creates = (*SpellAction.creates, DissonantFearEffect)
     name: str = "Dissonant Whispers"
     description: str = "WIS save for half psychic damage; failure gives two-turn fear."
     spell_level: int = 1
@@ -2235,6 +2252,7 @@ class HideousLaughterEffect(BaseCondition):
 
 
 class HideousLaughter(SpellAction):
+    creates = (*SpellAction.creates, HideousLaughterEffect)
     name: str = "Hideous Laughter"
     description: str = "WIS save or persistent prone and inability to act; requires Intelligence 5+."
     spell_level: int = 1
@@ -2318,6 +2336,7 @@ class HeroismEffect(BaseCondition):
 
 
 class Heroism(SpellAction):
+    creates = (*SpellAction.creates, HeroismEffect)
     name: str = "Heroism"
     description: str = "Clear and prevent fear; refresh five temporary HP each turn."
     spell_level: int = 1
@@ -2453,6 +2472,7 @@ class ReapplyHex(ReapplyQuarry):
 
 
 class HexEffect(QuarrySustain):
+    creates = (HexQuarry, ReapplyHex)
     name: str = "Hex Sustain"
     description: str = "Retains the caster's Hex and free reapplication until rest."
     ability: AbilityName = "strength"
@@ -2473,6 +2493,7 @@ class HexEffect(QuarrySustain):
 
 
 class Hex(SpellAction):
+    creates = (*SpellAction.creates, HexEffect)
     name: str = "Hex"
     description: str = "Attack-roll hits add 1d6 necrotic; chosen ability CHECKS have disadvantage."
     spell_level: int = 1
@@ -2517,6 +2538,7 @@ class CharmMonsterEffect(AnimalFriendshipEffect):
 
 
 class CharmMonster(SpellAction):
+    creates = (*SpellAction.creates, CharmMonsterEffect)
     name: str = "Charm Monster"
     description: str = "Charm visible creatures; combat grants save advantage and allied damage ends the charm."
     spell_level: int = 4
@@ -2607,6 +2629,7 @@ class IrresistibleDanceEffect(BaseCondition):
 
 
 class IrresistibleDance(SpellAction):
+    creates = (*SpellAction.creates, IrresistibleDanceEffect)
     name: str = "Irresistible Dance"
     description: str = "No initial save; dancing blocks Actions/movement until a later Wisdom save."
     spell_level: int = 6
@@ -2675,6 +2698,7 @@ class FeeblemindEffect(BaseCondition):
 
 
 class Feeblemind(SpellAction):
+    creates = (*SpellAction.creates, FeeblemindEffect)
     name: str = "Feeblemind"
     description: str = "4d6 psychic damage; failed INT save reduces INT/CHA to 1 and prevents casting or magic item activation."
     spell_level: int = 8

@@ -88,7 +88,16 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.conditions import Dashing, ConcentrationActionMarker, Prone
 from dnd.creature_transforms import apply_incapacitated_transform, remove_modifier_ownership
-from dnd.actions import AttackEvent, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, commit_forced_movement, resolve_fall_damage
+from dnd.actions import (
+    AttackEvent,
+    SpellAction,
+    SpellEvent,
+    entity_action_economy_cost_evaluator,
+    entity_action_economy_cost_applier,
+    commit_forced_movement,
+    resolve_fall_damage,
+    Move,
+)
 from dnd.spatial.area_conditions import AreaCondition
 from dnd.spatial.ignition import apply_elemental_surface_contacts, resolve_interaction
 from dnd.core.content.registration import get_content_declaration
@@ -96,7 +105,7 @@ from dnd.core.content.spatial_effect_definitions import SpatialEffectTransitionD
 from dnd.spatial.transitions import bind_spatial_interactions
 from dnd.spatial.environmental_conditions import WetSurface, WetSurfaceMembership, IceSurface, ElectrifiedWater, SteamCloud
 from dnd.spells.surfaces import SimpleToxinSurface
-from dnd.items.created_items import CreatedItemsLifetime, build_goodberry
+from dnd.items.created_items import CreatedItemsLifetime, build_goodberry, EatGoodberry
 from dnd.blocks.base_item import BaseItem
 from dnd.core.events import SpatialEffectInteractionEvent
 from dnd.core.aoe import Sphere
@@ -460,6 +469,7 @@ class Slow(SpellAction):
     `SlowedEffect`, allowing concentration cleanup to remove all affected
     targets.
     """
+    creates = (*SpellAction.creates, SlowedEffect)
     name: str = Field(default="Slow", description="Spell name.")
     description: str = Field(default="40ft cube, WIS save or Slowed", description="Rules-facing spell summary.")
     spell_level: int = Field(default=3, description="Base spell level.")
@@ -613,6 +623,7 @@ class HasteEffect(BaseCondition):
     The budget never mutates ordinary actions or Extra Attack. Removal can apply
     one round of directly owned lethargy.
     """
+    creates = (HasteLethargyEffect,)
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
     name: str = Field(default="Haste", description="Condition name.")
     description: str = Field(
@@ -835,6 +846,7 @@ class DarkvisionEffect(BaseCondition):
 
 class DarkvisionSpell(SpellAction):
     """Second-level transmutation spell that grants 60-foot darkvision."""
+    creates = (*SpellAction.creates, DarkvisionEffect)
 
     name: str = Field(default="Darkvision", description="Spell name.")
     description: str = Field(default="Grant 60ft darkvision to a willing creature", description="Spell description.")
@@ -1066,6 +1078,7 @@ class JumpEffect(BaseCondition):
 
 class JumpSpell(SpellAction):
     """Triple one creature's jump distance while concentration lasts."""
+    creates = (*SpellAction.creates, JumpEffect)
     name: str = Field(default="Jump", description="Spell name.")
     description: str = Field(default="Triple a creature's jump distance", description="Rules-facing spell summary.")
     spell_level: int = Field(default=1, description="Base spell level.")
@@ -1112,6 +1125,7 @@ class JumpSpell(SpellAction):
 
 class BonusDash(BaseAction):
     """Bonus action Dash granted by Expeditious Retreat."""
+    creates = (Dashing,)
     name: str = Field(default="Dash (Bonus)", description="Action name.")
     description: str = Field(default="Dash as a bonus action", description="Action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode.")
@@ -1159,6 +1173,7 @@ class BonusDash(BaseAction):
 
 class ExpeditiousRetreatEffect(BaseCondition):
     """Grants a bonus action Dash each turn."""
+    creates = (BonusDash,)
     name: str = Field(default="Expeditious Retreat", description="Condition name.")
     description: str = Field(default="You can Dash as a bonus action", description="Rules-facing condition summary.")
     _action_uuid: UUID | None = PrivateAttr(default=None)
@@ -1184,6 +1199,7 @@ class ExpeditiousRetreatEffect(BaseCondition):
 
 class ExpeditiousRetreat(SpellAction):
     """Grant the caster a concentration-linked bonus-action Dash template."""
+    creates = (*SpellAction.creates, ExpeditiousRetreatEffect)
     name: str = Field(default="Expeditious Retreat", description="Spell name.")
     description: str = Field(default="Bonus action Dash each turn", description="Rules-facing spell summary.")
     spell_level: int = Field(default=1, description="Base spell level.")
@@ -1281,6 +1297,7 @@ class EnhanceAbility(SpellAction):
     This implementation stores the selected ability on the action instance and
     applies the corresponding `EnhanceAbilityEffect` to the target.
     """
+    creates = (*SpellAction.creates, EnhanceAbilityEffect)
     name: str = Field(default="Enhance Ability", description="Spell name.")
     description: str = Field(default="Advantage on one ability's checks (concentration)", description="Rules-facing spell summary.")
     spell_level: int = Field(default=2, description="Base spell level.")
@@ -1423,6 +1440,7 @@ class EnlargeReduce(SpellAction):
     Enemy targets receive a Constitution save before the size effect is applied.
     Willing targets and the caster are affected directly.
     """
+    creates = (*SpellAction.creates, EnlargeReduceEffect)
     name: str = Field(default="Enlarge/Reduce", description="Spell name.")
     description: str = Field(
         default="Change creature size, STR advantage/disadvantage, +/-1d4 weapon damage",
@@ -1623,6 +1641,7 @@ def _resolve_telekinetic_transfer(caster: Entity, target: Entity,
 )
 class TelekinesisMove(BaseAction):
     """One paid repeat, authorized by the exact active concentration marker."""
+    creates = (Move, Prone)
     name: str = "Telekinesis: Move"
     description: str = "Move a creature up to 30ft; STR negates hostile movement"
     target_type: TargetType = TargetType.ENTITY
@@ -1693,7 +1712,7 @@ class TelekinesisMove(BaseAction):
 
 class Telekinesis(SpellAction):
     """Cast and move once; concentration grants paid, finite repeats for ten minutes."""
-    creates = (*SpellAction.creates, ConcentrationActionMarker, Prone)
+    creates = (*SpellAction.creates, ConcentrationActionMarker, Prone, TelekinesisMove, Move)
     harmful: Optional[bool] = True
     name: str = "Telekinesis"
     description: str = "Move a creature up to 30ft; hostile landing deals 4d8 force + 2d6 bludgeoning"
@@ -1820,6 +1839,7 @@ class Regenerate(SpellAction):
     `RegeneratingEffect` then heals one hit point at the start of the target's
     turns for the combat-duration approximation used by the engine.
     """
+    creates = (*SpellAction.creates, RegeneratingEffect)
     name: str = Field(default="Regenerate", description="Spell name.")
     description: str = Field(default="Heal 4d8+15 instantly, then 1 HP/round for 10 rounds", description="Rules-facing healing summary.")
     spell_level: int = Field(default=7, description="Base spell level.")
@@ -1903,6 +1923,7 @@ class LongstriderEffect(BaseCondition):
 
 
 class Longstrider(SpellAction):
+    creates = (*SpellAction.creates, LongstriderEffect)
     name: str = "Longstrider"
     description: str = "Touch: speed increases by 10 feet for one hour; additional recipients when upcast."
     spell_level: int = 1
@@ -1943,6 +1964,7 @@ class BarkskinEffect(BaseCondition):
 
 
 class Barkskin(SpellAction):
+    creates = (*SpellAction.creates, BarkskinEffect)
     name: str = "Barkskin"
     description: str = "Touch: Armor Class cannot be below 16; concentration up to one hour."
     spell_level: int = 2
@@ -1986,6 +2008,7 @@ class FlyEffect(BaseCondition):
 
 
 class Fly(SpellAction):
+    creates = (*SpellAction.creates, FlyEffect)
     name: str = "Fly"
     description: str = "Touch: 60-foot flying speed, concentration for 10 minutes; supported endpoints only."
     spell_level: int = 3
@@ -2052,6 +2075,7 @@ class ShillelaghEffect(BaseCondition):
 
 
 class Shillelagh(SpellAction):
+    creates = (*SpellAction.creates, ShillelaghEffect)
     name: str = "Shillelagh"
     description: str = "Held wooden club/staff: magical, d8; optionally use spellcasting ability for one minute."
     spell_school: str = "transmutation"
@@ -2151,6 +2175,7 @@ class MagicWeaponEffect(BaseCondition):
 
 
 class MagicWeapon(SpellAction):
+    creates = (*SpellAction.creates, MagicWeaponEffect)
     name: str = "Magic Weapon"
     description: str = "Enchant a held weapon until rest: +1 attack/damage, +2 at slot4, +3 at slot6."
     spell_level: int = 2
@@ -2228,6 +2253,7 @@ class PlantGrowthZone(AreaCondition):
 
 
 class PlantGrowth(SpellAction):
+    creates = (*SpellAction.creates, PlantGrowthZone)
     name: str = "Plant Growth"
     description: str = "Create ten-turn vegetation in a twenty-foot radius: walking costs four feet per foot."
     spell_level: int = 3
@@ -2415,6 +2441,7 @@ class ExhaleDragonsBreath(SpellAction):
 
 
 class DragonsBreath(SpellAction):
+    creates = (*SpellAction.creates, DragonsBreathEffect, ExhaleDragonsBreath)
     name: str = "Dragon's Breath"
     description: str = "Grant yourself or an ally a repeatable elemental breath action; ten-turn concentration."
     spell_level: int = 2
@@ -2475,6 +2502,7 @@ class GoodberryBatch(CreatedItemsLifetime):
 
 
 class Goodberry(SpellAction):
+    creates = (*SpellAction.creates, GoodberryBatch, EatGoodberry)
     name: str = "Goodberry"
     description: str = "Create four real berries in an ally's inventory; bonus-action 1d4 healing, until caster long rest."
     spell_level: int = 1
@@ -2535,6 +2563,7 @@ class FleshToStonePetrified(Petrified):
 
 
 class FleshToStoneEffect(Restrained):
+    creates = (FleshToStonePetrified,)
     name: str = "Flesh to Stone"
     description: str = "Restrained stages; four failed CON saves complete petrification, a success clears stages."
     immunity_names: tuple[str, ...] = ("Restrained", "Petrified")
@@ -2575,6 +2604,7 @@ class FleshToStoneEffect(Restrained):
 
 
 class FleshToStone(SpellAction):
+    creates = (*SpellAction.creates, FleshToStoneEffect)
     name: str = "Flesh to Stone"
     description: str = "CON save or restrained stages; four failures petrify until cured."
     spell_level: int = 6

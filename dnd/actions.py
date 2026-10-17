@@ -3015,6 +3015,7 @@ class Hide(BaseAction):
     Hidden is removed automatically when the entity attacks, takes damage,
     or becomes incapacitated.
     """
+    creates = (Hidden,)
     name: str = Field(default="Hide", description="Human-readable hide action name.")
     description: str = Field(default="Attempt to hide (Stealth check)", description="Player-facing hide action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Hide targets self")
@@ -3344,7 +3345,7 @@ class Jump(BaseAction):
     When used as a template (template=True), end_position should be set via set_target_position()
     before pre_validate() or instantiate().
     """
-    creates = (Prone,)
+    creates = (Prone, Move)
 
     name: str = Field(default="Jump", description="Human-readable jump action name.")
     description: str = Field(default="Jump to a visible position", description="Jump action description.")
@@ -3862,7 +3863,7 @@ class Shove(BaseAction):
 
     Forced movement does NOT trigger opportunity attacks.
     """
-    creates = (Prone,)
+    creates = (Prone, Move)
 
     name: str = Field(default="Shove", description="Human-readable shove action name.")
     description: str = Field(default="Push an adjacent enemy", description="Shove action description.")

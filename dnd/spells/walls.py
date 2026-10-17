@@ -184,6 +184,7 @@ class WallOfFireZone(AreaCondition):
 
 class WallOfFire(SpellAction):
     """Create an opaque, permeable straight or ring wall with one heated side."""
+    creates = (*SpellAction.creates, WallOfFireZone)
 
     name: str = "Wall of Fire"
     description: str = "Create an opaque wall of flame. A straight wall radiates to the left of its ordered endpoints; reverse the endpoints to reverse the hot side. A ring burns inside or outside."

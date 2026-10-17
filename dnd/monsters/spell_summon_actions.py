@@ -16,6 +16,7 @@ from dnd.actions import (
     entity_action_economy_cost_applier,
     entity_action_economy_cost_evaluator,
     resolve_spell_attack_values,
+    Move,
 )
 from dnd.blocks.skills import SKILL_TO_ABILITY
 from dnd.conditions import (
@@ -778,6 +779,7 @@ class ElementalWarp(BaseAction):
 
 
 class PrimordialGales(NativeSaveBurst):
+    creates = (Shocked,)
     name: str = "Primordial Gales"
     self_centered: bool = True
     radius_feet: int = 13
@@ -855,6 +857,7 @@ class GushingAir(NativeSaveBurst):
 
 
 class SeismicStrike(NativeSaveBurst):
+    creates = (TremblingLegs, Move, Prone)
     name: str = "Seismic Strike"
     self_centered: bool = True
     radius_feet: int = 13
@@ -934,6 +937,7 @@ class CinderousSwipe(NativeSaveBurst):
 
 
 class WintersBreath(NativeSaveBurst):
+    creates = (IceSurface, Brittle)
     name: str = "Winter's Breath"
     cone_feet: int = 20
     save_dc: int = 16
@@ -983,8 +987,12 @@ class ElementalFire(FireSurface):
             self, entity, event, count=1, die=4, damage_type=DamageType.FIRE
         )
 
+# CinderousSwipe (defined above) creates ElementalFire.
+CinderousSwipe.creates = (*CinderousSwipe.creates, ElementalFire)
+
 
 class ElementalContactBurst(BaseAction):
+    creates = (NaturalAttack, Burning, Chilled, ElementalFire, ElementalMud, IceSurface, Prone, WetSurface)
     action_category: ActionCategory = ActionCategory.ATTACK
     """Slam/touch composition: one native attack per creature in the impact."""
     target_type: TargetType = TargetType.POSITION_AOE
@@ -1268,6 +1276,7 @@ def technique_destination_error(
 
 
 class MyrmidonStrike(Attack):
+    creates = (*Attack.creates, Burning, Chilled, Dazed, Prone, Stunned)
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
     rider: Literal["stun", "prone", "burn", "chill", "daze"] = "stun"
     rider_dc: int = 13
@@ -1361,6 +1370,7 @@ class ConcussiveSmash(MyrmidonStrike):
 
 
 class SludgySling(NativeSaveBurst):
+    creates = (ElementalMud,)
     name: str = "Sludgy Sling"
     self_centered: bool = True
     radius_feet: int = 10
@@ -1430,8 +1440,12 @@ class MyrmidonLanding(NativeSaveBurst):
         DamageRollProfile(dice_count=2, die_size=8, damage_type="Bludgeoning"),
     )
 
+# MyrmidonBurrow (defined above) creates MyrmidonLanding.
+MyrmidonBurrow.creates = (*MyrmidonBurrow.creates, MyrmidonLanding)
+
 
 class MuckToMetal(BaseAction):
+    creates = (TransmutedToSteel,)
     name: str = "Muck to Metal"
     target_type: TargetType = TargetType.SELF
     costs: list[Cost] = Field(
@@ -1464,6 +1478,7 @@ class MuckToMetal(BaseAction):
 
 
 class HealingVapours(NativeSaveBurst):
+    creates = (BaseCondition, WetSurface)
     action_category: ActionCategory = ActionCategory.ABILITY
     name: str = "Healing Vapours"
     self_centered: bool = True
@@ -1587,6 +1602,7 @@ class RagingVortexOwner(BaseCondition):
 
 
 class RagingVortex(ElementalWarp):
+    creates = (RagingVortexOwner, RagingVortexZone)
     name: str = "Raging Vortex"
     costs: list[Cost] = Field(
         default_factory=lambda: [
@@ -1663,6 +1679,7 @@ class SweetplumFieldOwner(BaseCondition):
 
 
 class SweetplumMembership(SpatialConditionMembershipSource):
+    creates = (SweetplumRestrained,)
     description: str = "Owns restraint from one exact Gales field."
 
     def create_manifestation(self, target):
@@ -1674,6 +1691,7 @@ class SweetplumMembership(SpatialConditionMembershipSource):
 
 
 class SweetplumGalesZone(MembershipAreaCondition):
+    creates = (SweetplumMembership,)
     description: str = (
         "Independent three-turn enemy restraint field with STR15 entry/start saves."
     )
@@ -1730,6 +1748,7 @@ class SweetplumGalesZone(MembershipAreaCondition):
 
 
 class SweetplumGales(ElementalWarp):
+    creates = (SweetplumFieldOwner, SweetplumGalesZone)
     name: str = "Sweetplum Gales"
     costs: list[Cost] = Field(
         default_factory=lambda: [
@@ -1784,6 +1803,7 @@ class SweetplumGales(ElementalWarp):
 
 
 class Immolation(BaseAction):
+    creates = (Concentrating, HasteEffect)
     name: str = "Immolation"
     target_type: TargetType = TargetType.SELF
     costs: list[Cost] = Field(
@@ -2157,6 +2177,7 @@ class DragonBreath(NativeSaveBurst):
 
 
 class DraconicBreathCadence(BaseCondition):
+    creates = (DragonBreath,)
     description: str = (
         "After the first paid Multiattack grants one free Breath until own turn end."
     )

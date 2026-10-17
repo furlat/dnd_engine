@@ -806,6 +806,7 @@ class SecondWindFeature(BaseCondition):
         description: Short rules-facing summary of the Second Wind feature.
         fighter_level: Fighter level passed into the registered Second Wind action.
     """
+    creates = (SecondWind,)
     name: str = Field(
         default="Second Wind Feature",
         description="Feature condition name for Second Wind lookup and cleanup.",
@@ -1010,6 +1011,7 @@ class ActionSurgeFeature(BaseCondition):
         description: Short rules-facing summary of the Action Surge feature.
         num_uses: Maximum Action Surge resource uses granted by this feature.
     """
+    creates = (ActionSurge,)
     name: str = Field(
         default="Action Surge Feature",
         description="Feature condition name for Action Surge lookup and cleanup.",
@@ -1194,6 +1196,7 @@ class ExtraAttackFeature(BaseCondition):
         description: Short rules-facing summary of the Extra Attack feature.
         extra_attacks: Number of extra attacks granted after each action-cost Attack action.
     """
+    creates = (ExtraAttack,)
     name: str = Field(default="Extra Attack", description="Feature condition name for Fighter Extra Attack.")
     description: str = Field(
         default="Can make additional attacks when taking the Attack action",

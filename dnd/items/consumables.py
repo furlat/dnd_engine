@@ -660,6 +660,7 @@ if any(
 )
 class _ApplyWeaponCoatAction(BaseAction):
     """Apply weapon coat to a specific weapon slot."""
+    creates = (Concentrating, _ConcentrationFireWeaponCoatCondition, _BasicPoisonWeaponCoatCondition, _LightningWeaponCoatCondition, TimedFireWeaponCoatCondition, _FireWeaponCoatCondition)
 
     name: str = Field(
         default="Coat Main Hand",
@@ -826,6 +827,7 @@ class _WeaponCoat(UsableItem):
 )
 class _DrinkGreaterInvisibilityPotionAction(_PotionDrinkAction):
     """Drink a potion to gain Greater Invisibility."""
+    creates = (GreaterInvisibilityEffect,)
 
     name: str = Field(
         default="Drink Greater Invisibility Potion",
@@ -922,6 +924,7 @@ class _DrinkGreaterInvisibilityPotionAction(_PotionDrinkAction):
 )
 class _DrinkTrueSeeingPotionAction(_PotionDrinkAction):
     """Drink a new recovery potion through the established True Seeing effect."""
+    creates = (TrueSeeingEffect,)
 
     name: str = Field(default="Drink True Seeing Potion", description="Potion action name.")
     description: str = Field(default="Gain truesight 120ft for ten rounds", description="Potion effect.")

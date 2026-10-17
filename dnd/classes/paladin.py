@@ -504,6 +504,7 @@ class DivineSenseEffect(BaseCondition):
 
 
 class DivineSense(BaseAction):
+    creates = (DivineSenseEffect,)
     name: str = "Divine Sense"
     target_type: TargetType = TargetType.SELF
     feature_owner_uuid: UUID
@@ -860,6 +861,7 @@ class PaladinAuraBenefit(BaseCondition):
 
 
 class PaladinAuraMembership(SpatialConditionMembershipSource):
+    creates = (PaladinAuraBenefit,)
     description: str = "One exact Paladin aura lease."
     aura_kind: Literal["protection", "devotion", "courage"]
 
@@ -873,6 +875,7 @@ class PaladinAuraMembership(SpatialConditionMembershipSource):
 
 
 class PaladinAuraZone(MembershipAreaCondition):
+    creates = (PaladinAuraMembership,)
     description: str = "Moving Paladin aura with ordinary native occupant memberships."
     name: str = "Paladin Aura"
     aura_kind: Literal["protection", "devotion", "courage"]
@@ -948,6 +951,7 @@ class PaladinAuraZone(MembershipAreaCondition):
 
 
 class PaladinAuraRoot(BaseCondition):
+    creates = (PaladinAuraZone,)
     description: str = "Owns one moving passive Paladin aura and its memberships."
     name: str = "Paladin Aura Owner"
     zone_uuid: UUID | None = None
@@ -1231,6 +1235,7 @@ class SacredWeaponEffect(BaseCondition):
 
 
 class SacredWeapon(BaseAction):
+    creates = (SacredWeaponEffect,)
     name: str = "Sacred Weapon"
     target_type: TargetType = TargetType.SELF
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
@@ -1563,6 +1568,7 @@ class HolyNimbusEffect(BaseCondition):
 
 
 class HolyNimbus(BaseAction):
+    creates = (HolyNimbusEffect,)
     name: str = "Holy Nimbus"
     target_type: TargetType = TargetType.SELF
     feature_owner_uuid: UUID

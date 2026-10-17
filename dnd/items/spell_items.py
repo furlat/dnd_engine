@@ -72,6 +72,7 @@ class SpellGrantingItem(UsableItem):
     This structural class intentionally has no content declaration and is not
     materializable by itself. Direct item builders provide authored identity.
     """
+    creates = (LearnSpellFromScroll,)
 
     is_magical: bool = True
     name: str = Field(
@@ -188,6 +189,7 @@ class SpellGrantingWearable(SpellGrantingItem, Armor):
 
 
 class EmberQuiverActivation(SpellAction):
+    creates = (*SpellAction.creates, TimedFireWeaponCoatCondition)
     name: str = "Ember Quiver"
     target_type: TargetType = TargetType.SELF
     alt_skip_slot: bool = True

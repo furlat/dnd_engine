@@ -12,7 +12,7 @@ from dnd.spells.spell_utils import (spell_condition_profile, condition_damage, t
     selected_cast_level, target_count_error)
 
 from typing import cast
-from dnd.actions import AttackEvent
+from dnd.actions import AttackEvent, Move
 from dnd.core.elevation import support_distance_feet
 from dnd.types.actor import ConditionState
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
@@ -42,7 +42,7 @@ from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.modifiers import ArithmeticFactor
 from dnd.core.creature_types import Size
 from dnd.types.spell_suppression import SpellSuppression
-from dnd.conditions import prepare_control_removals
+from dnd.conditions import prepare_control_removals, Prone
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
 
@@ -86,7 +86,7 @@ from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.item_types import ItemEffectPresentationState, ItemIntegrity
 from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, SpatialEffectInteractionEvent
 from dnd.spatial.area_reach import ReachStage, resolve_staged_area
-from dnd.spatial.environmental_conditions import IceSurface
+from dnd.spatial.environmental_conditions import IceSurface, FireSurface, ElectrifiedWater
 from dnd.spatial.ignition import ignite_surface_contacts, apply_elemental_surface_contacts, resolve_interaction
 from dnd.types.world import OccupancyLayer
 from dnd.types.abilities import AbilityName
@@ -120,7 +120,7 @@ from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity,
 from dnd.core.content.registration import get_content_declaration
 from dnd.types.spatial_effects import SpatialEffectAnchorKind, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
 from dnd.spells.spell_utils import spell_valid_positions, deliver_spell_damage, fire_heal_roll_result, source_turn_expiry_handler as _source_turn_expiry_handler
-from dnd.spells.surfaces import place_spell_surface
+from dnd.spells.surfaces import place_spell_surface, SimpleToxinSurface, SpellAcidSurface
 from dnd.spells.hit_effects import install_hit_rider, AttackBackedSpell, hit_spell_payload_allowed
 from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
 from dnd.types.spatial_effects import (
@@ -1302,6 +1302,7 @@ class Thunderwave(SpellAction):
 
     At Higher Levels: +1d8 damage per slot level above 1st.
     """
+    creates = (*SpellAction.creates, Move, Prone)
     name: str = Field(default="Thunderwave", description="Display name for the thunderwave spell.")
     description: str = Field(default="15ft cube dealing 2d8 thunder + 10ft push on fail (CON save)", description="Rules-facing summary for the thunderwave spell.")
     spell_level: int = Field(default=1, description="Spell slot level required to cast thunderwave; cantrips use 0.")
@@ -2130,6 +2131,7 @@ class ShockingGrasp(SpellAction):
 
     Damage scales: 2d8 at 5th, 3d8 at 11th, 4d8 at 17th.
     """
+    creates = (*SpellAction.creates, NoReactions)
     @property
     def performs_attack(self) -> bool:
         return True
@@ -2376,6 +2378,7 @@ class GuidingBolt(SpellAction):
 
     At Higher Levels: +1d6 damage per slot level above 1st.
     """
+    creates = (*SpellAction.creates, GuidingBoltMarked)
     @property
     def performs_attack(self) -> bool:
         return True
@@ -2616,6 +2619,7 @@ GUST_OF_WIND_ZONE_CONTENT_REF = ContentRef(
 
 class GustOfWindZone(AreaCondition):
     """Zone for Gust of Wind - 60ft line of wind that pushes creatures."""
+    creates = (Move, Prone)
     name: str = Field(default="Gust of Wind Zone", description="Display name for the gust of wind zone zone condition.")
     description: str = Field(default="Strong wind pushes creatures and costs extra movement", description="Rules-facing summary for the gust of wind zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the gust of wind zone for cleanup and filtering.")
@@ -2849,7 +2853,7 @@ class GustOfWind(SpellAction):
     A line of strong wind 60ft long and 10ft wide blasts from you.
     STR save or pushed 15ft away. Difficult terrain toward caster.
     """
-    creates = (*SpellAction.creates, GustOfWindZone)
+    creates = (*SpellAction.creates, GustOfWindZone, Move, Prone)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Gust of Wind", description="Display name for the gust of wind spell.")
     description: str = Field(default="60ft line of wind, STR save or pushed 15ft, difficult terrain", description="Rules-facing summary for the gust of wind spell.")
@@ -3238,6 +3242,7 @@ def _apply_sunbeam(spell: SpellAction, event: SpellEvent, *, dc: int,
 )
 class SunbeamStrike(SpellAction):
     """One ordinary paid activation of an exact retained Sunbeam owner."""
+    creates = (*SpellAction.creates, SunbeamBlindedEffect)
     name: str = "Sunbeam Strike"
     description: str = "60 by 5ft beam, 6d8 radiant and blindness; CON half."
     action_category: ActionCategory = ActionCategory.ABILITY
@@ -3285,7 +3290,7 @@ class SunbeamStrike(SpellAction):
 
 class Sunbeam(SpellAction):
     """One initial beam plus a one-minute, concentration-owned light and repeat."""
-    creates = (*SpellAction.creates, SunbeamEffect, SunbeamStrike)
+    creates = (*SpellAction.creates, SunbeamEffect, SunbeamStrike, SunbeamBlindedEffect)
     name: str = "Sunbeam"
     description: str = "60 by 5ft beam, 6d8 radiant and blindness; CON half; repeat as an action."
     spell_level: int = 6
@@ -3461,6 +3466,7 @@ class ChainLightning(SpellAction):
 
 class PrismaticRestrained(BaseCondition):
     """Prismatic Spray Indigo effect - Restrained with repeat CON save at turn end."""
+    creates = (Restrained,)
     name: str = Field(default="Prismatic Restrained", description="Display name for the prismatic restrained condition.")
     description: str = Field(default="Restrained by prismatic energy, CON save to end", description="Rules-facing summary for the prismatic restrained condition.")
     caster_uuid: Optional[UUID] = Field(default=None, description="Caster UUID used for ownership and effect attribution by prismatic restrained.")
@@ -3547,6 +3553,7 @@ class PrismaticSpray(SpellAction):
 
     Duration: Instantaneous
     """
+    creates = (*SpellAction.creates, Blinded, PrismaticRestrained)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Prismatic Spray", description="Display name for the prismatic spray spell.")
     description: str = Field(default="60ft cone, random color effect per target", description="Rules-facing summary for the prismatic spray spell.")
@@ -3690,6 +3697,7 @@ class TrueStrike(SpellAction):
     Register two variants per caster: TrueStrike(Melee) and TrueStrike(Ranged)
     using weapon_slot field. Each variant uses the weapon's range for targeting.
     """
+    creates = (*SpellAction.creates, Attack)
     @property
     def performs_attack(self) -> bool:
         return True
@@ -4095,6 +4103,7 @@ class ContinualFlameCondition(BaseCondition):
 
 class ContinualFlame(SpellAction):
     """Touch one real item to give it permanent, coverable, heatless light."""
+    creates = (*SpellAction.creates, ContinualFlameCondition)
 
     name: str = "Continual Flame"
     description: str = "Touch: permanent 20ft bright + 20ft dim light on object"
@@ -4602,6 +4611,7 @@ class MassHeal(SpellAction):
 
 class DivineWordEffect(BaseCondition):
     """Divine Word effect — applies tier-based conditions with duration handler for auto-removal."""
+    creates = (Deafened, Blinded, Stunned)
     name: str = Field(default="Divine Word", description="Display name for the divine word effect condition.")
     description: str = Field(default="Affected by Divine Word", description="Rules-facing summary for the divine word effect condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the divine word effect for cleanup and filtering.")
@@ -4746,6 +4756,7 @@ class DivineWord(SpellAction):
     - 21-30 HP: Blinded, Deafened, and Stunned for 1 hour
     - 20 or fewer HP: Killed outright
     """
+    creates = (*SpellAction.creates, DivineWordEffect)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Divine Word", description="Display name for the divine word spell.")
     description: str = Field(default="HP-threshold effects: deafen/blind/stun/kill", description="Rules-facing summary for the divine word spell.")
@@ -4897,6 +4908,7 @@ class FireShieldEffect(BaseCondition):
 
 
 class FireShield(SpellAction):
+    creates = (*SpellAction.creates, FireShieldEffect)
     name: str = "Fire Shield"
     description: str = "Warm/cold ward: resistance, 10-foot light and 2d8 retaliation against melee hits within 5 feet."
     spell_level: int = 4
@@ -4935,6 +4947,9 @@ class DismissFireShield(BaseAction):
             return event.cancel(status_message="Shield could not be dismissed")
         return event.phase_to(EventPhase.EFFECT)
 
+# FireShieldEffect (defined above) creates DismissFireShield.
+FireShieldEffect.creates = (*FireShieldEffect.creates, DismissFireShield)
+
 
 class StarryWispEffect(Revealed):
     name: str = "Starry Wisp"
@@ -4955,6 +4970,7 @@ class StarryWispEffect(Revealed):
 
 
 class StarryWisp(SpellAction):
+    creates = (*SpellAction.creates, StarryWispEffect)
     name: str = "Starry Wisp"
     description: str = "Radiant spell attack; hit reveals and sheds ten-foot dim light."
     spell_level: int = 0
@@ -5078,6 +5094,7 @@ class FaerieFireEffect(Revealed):
 
 
 class FaerieFire(SpellAction):
+    creates = (*SpellAction.creates, FaerieFireEffect)
     name: str = "Faerie Fire"
     description: str = "DEX save or reveal and incoming attack advantage, concentration ten turns."
     spell_level: int = 1
@@ -5128,6 +5145,7 @@ class DivineFavorEffect(BaseCondition):
 
 
 class DivineFavor(SpellAction):
+    creates = (*SpellAction.creates, DivineFavorEffect)
     name: str = "Divine Favor"
     description: str = "Concentrate for three turns: weapon hits add 1d4 radiant."
     spell_level: int = 1
@@ -5191,6 +5209,7 @@ class SearingSmiteEffect(BaseCondition):
 
 
 class SearingSmite(AttackBackedSpell):
+    creates = (*AttackBackedSpell.creates, SearingSmiteEffect)
     ranged_allowed: ClassVar[bool] = False
     name: str = "Searing Smite"
     description: str = "Melee weapon attempt; on hit pay bonus action/slot, add fire and retain a saveable burn."
@@ -5216,6 +5235,7 @@ class BrandingSmiteEffect(Revealed):
 
 
 class BrandingSmite(AttackBackedSpell):
+    creates = (*AttackBackedSpell.creates, BrandingSmiteEffect)
     name: str = "Branding Smite"
     description: str = "Weapon attempt; on hit pay bonus action/slot, add radiant damage and reveal."
     spell_level: int = 2
@@ -5302,6 +5322,7 @@ class MoveDancingLights(BaseAction):
 
 
 class DancingLights(SpellAction):
+    creates = (*SpellAction.creates, DancingLightsEffect, MoveDancingLights)
     name: str = "Dancing Lights"
     description: str = "Place a movable thirty-foot bright light; bonus-action relocation, ten-turn concentration."
     spell_school: str = "evocation"
@@ -5399,6 +5420,7 @@ class MoonbeamZone(AreaCondition):
 
 
 class MoonbeamEffect(ConcentrationActionMarker):
+    creates = (MoonbeamZone,)
     name: str = "Moonbeam Sustain"
     description: str = "Owns the retained beam and its relocation action."
     position: Tuple[int,int]
@@ -5470,6 +5492,7 @@ class MoveMoonbeam(BaseAction):
 
 
 class Moonbeam(SpellAction):
+    creates = (*SpellAction.creates, MoonbeamEffect, MoveMoonbeam)
     name: str = "Moonbeam"
     description: str = "Three-foot radiant field: CON half 2d10, one exposure per target per turn; action to move."
     spell_level: int = 2
@@ -5514,6 +5537,7 @@ class Moonbeam(SpellAction):
 
 
 class ChromaticOrb(SpellAction):
+    creates = (*SpellAction.creates, IceSurface, SimpleToxinSurface, FireSurface, ElectrifiedWater, SpellAcidSurface)
     discovery_target_types: tuple[TargetType,...] = (TargetType.ENTITY,TargetType.POSITION_LOS)
     name: str = "Chromatic Orb"
     description: str = "Thunder 3d8 or another element 2d8 with a seven-foot surface; ground targeting creates only the patch."
@@ -5625,6 +5649,7 @@ class AcidArrowEffect(BaseCondition):
 
 
 class AcidArrow(SpellAction):
+    creates = (*SpellAction.creates, AcidArrowEffect, IceSurface, SimpleToxinSurface, FireSurface, ElectrifiedWater, SpellAcidSurface)
     discovery_target_types: tuple[TargetType,...] = (TargetType.ENTITY,TargetType.POSITION_LOS)
     name: str = "Acid Arrow"
     description: str = "4d4 acid on hit, half on miss; hit adds 2d4 at next turn end; seven-foot acid patch."
@@ -5697,6 +5722,7 @@ class AcidArrow(SpellAction):
 
 
 class FlameBlade(SpellAction):
+    creates = (*SpellAction.creates, FlameBladeLifetime)
     name: str = "Flame Blade"
     description: str = "Create and equip a ten-turn 3d6 fire scimitar making melee spell attacks; no concentration."
     spell_level: int = 2
@@ -5853,6 +5879,7 @@ class PowerWordHeal(SpellAction):
 
 
 class BladeBarrier(SpellAction):
+    creates = (*SpellAction.creates, BladeBarrierZone)
     name: str = "Blade Barrier"
     description: str = "Create up to 120 feet of permeable whirling blades and difficult terrain."
     spell_level: int = 6
@@ -5960,6 +5987,7 @@ class ResilientSphereEffect(BaseCondition):
 
 
 class ResilientSphere(SpellAction):
+    creates = (*SpellAction.creates, ResilientSphereEffect)
     name: str = "Resilient Sphere"
     description: str = "Enclose a Large-or-smaller creature for three turns; hostile creatures save DEX, allies bypass."
     spell_level: int = 4
@@ -6179,8 +6207,12 @@ class MoveArcaneSword(BaseAction):
         if not effect.canceled:owner.position=self.end_position
         return effect
 
+# ArcaneSwordEffect (defined above) creates ArcaneSwordStrike, MoveArcaneSword.
+ArcaneSwordEffect.creates = (*ArcaneSwordEffect.creates, ArcaneSwordStrike, MoveArcaneSword)
+
 
 class ArcaneSword(SpellAction):
+    creates = (*SpellAction.creates, ArcaneSwordEffect)
     name: str = "Arcane Sword"
     description: str = "Create a concentrating force sword within sixty feet and make one 3d10 melee spell attack."
     spell_level: int = 7
@@ -6240,7 +6272,7 @@ class ArcaneSword(SpellAction):
 
 
 class FreezingSphere(SpellAction):
-    creates = (*SpellAction.creates, SpellPayloadItem, ThrowSpellPayload, SpellPayloadLifetime, IceSurface)
+    creates = (*SpellAction.creates, SpellPayloadItem, ThrowSpellPayload, SpellPayloadLifetime, IceSurface, TouchDelayedFireball)
     name: str = "Freezing Sphere"
     description: str = "Immediate 10d6 cold explosion or one real portable sphere on a nearby ally."
     spell_level: int = 6

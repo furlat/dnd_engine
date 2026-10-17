@@ -26,16 +26,21 @@ class CreatesModels(Protocol):
     def model_rebuild(cls) -> bool | None: ...
 
 
+# Classes whose creatable closure is built. A built schema stays built for the
+# process, so creating another instance of one of them builds nothing.
+_CLOSURES_BUILT: set[type] = set()
+
+
 def build_creatable_models(model: type[CreatesModels]) -> None:
     """Build every model class `model`'s content can create, transitively.
 
     Conditions and actions defer their validation schema to first use
     (`defer_build`). Creating an object (a character, creature, item, placed
     object, action template or condition) builds the closure of its declared
-    `creates` here, so the products it makes later in a gameplay operation are
-    already built.
+    `creates` here, once per class, so the products it makes later in a
+    gameplay operation are already built.
     """
-    if not model.creates:
+    if model in _CLOSURES_BUILT:
         return
     pending = list(model.creates)
     seen: set[type[CreatesModels]] = set()
@@ -47,6 +52,9 @@ def build_creatable_models(model: type[CreatesModels]) -> None:
         if not product.__pydantic_complete__:
             product.model_rebuild()
         pending.extend(product.creates)
+    # Every product's own closure was walked here too.
+    _CLOSURES_BUILT.update(seen)
+    _CLOSURES_BUILT.add(model)
 
 
 def read_private_attribute(model: BaseModel, item: str) -> Any:

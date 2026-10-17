@@ -262,6 +262,7 @@ def selection_wall_support_error(action: SpellAction, selection: ActionSelection
 
 
 class WallOfThorns(SpellAction):
+    creates = (*SpellAction.creates, WallOfThornsZone)
     name: str = "Wall of Thorns"
     description: str = "Create an opaque, permeable straight or circular wall of cutting thorns."
     spell_level: int = 6
@@ -332,6 +333,7 @@ class WallOfThorns(SpellAction):
 
 
 class WindWall(SpellAction):
+    creates = (*SpellAction.creates, WindWallZone)
     name: str = "Wind Wall"
     description: str = "Create a continuous ground path of wind, up to fifty feet long."
     spell_level: int = 3
