@@ -32,6 +32,7 @@ from devtools.player_server_acceptance.http_performance import summary
 from devtools.player_server_acceptance.movement_scaling_fixture import (
     END, LEVELS, MOVER, SIZES, START, configuration, mutate_remote, prepare)
 from dnd.blocks.sensory import SpatialSensesSystem, spatial_senses_system
+from dnd.core.view import visible_count
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, DiceRoll
@@ -61,6 +62,7 @@ def census(runtime):
         'current_indexes': {
             'support_column_chunks': len(grid._support_columns),
             'contact_chunks': len(grid._contact_candidate_cells),
+            'observer_fields': len(spatial_senses_system.fields),
             'fov_origins': len(grid._fov_cache),
             'path_queries': len(grid._path_cache),
         },
@@ -70,11 +72,11 @@ def census(runtime):
             'seen': len(owner.projection.remembered.senses.seen) if owner.projection.remembered.senses else 0,
             'visible': len(owner.projection.remembered.senses.visible) if owner.projection.remembered.senses else 0,
             'fields': {runtime.session.game.entities[identity].name: {
-                'max_distance': senses._field.max_distance if senses._field else None,
-                'optical_route_cells': len(senses._field.optical_routes) if senses._field else 0,
-                'visible_cells': len(senses.visible)}
+                'optical_route_cells': int(field.routes.rows.size) if field is not None else 0,
+                'visible_cells': visible_count(senses.cells)}
                 for identity in runtime.session.seats[seat].observers
-                if (senses := spatial_senses_system.senses_by_observer.get(identity)) is not None}}
+                if (senses := spatial_senses_system.senses_by_observer.get(identity)) is not None
+                for field in (spatial_senses_system.fields.get(identity),)}}
             for seat, owner in runtime.audiences.items()}}
 
 
@@ -231,8 +233,8 @@ def run_worker(args):
         return result
 
     original_candidates = EventQueue._event_trigger_candidates
-    original_observers = SpatialSensesSystem.candidate_observer_uuids
-    original_optics = GridMap.capture_optical_obscurements
+    original_observers = SpatialSensesSystem.selected_observers
+    original_optics = GridMap.obscurement_layers
 
     def candidates(cls, event, *, include_simple):
         result = original_candidates(event, include_simple=include_simple)
@@ -246,11 +248,11 @@ def run_worker(args):
             work_counts['candidate_observers'] += len(result)
         return result
 
-    def optics(owner, origin, radius):
-        result = original_optics(owner, origin, radius)
+    def optics(owner):
+        result = original_optics(owner)
         if profile is not None:
-            work_counts['optical_contributing_cells'] += len(result)
-            work_counts['optical_contributing_owners'] += sum(map(len, result.values()))
+            work_counts['optical_contributing_owners'] += len(result)
+            work_counts['optical_contributing_cells'] += sum(int(layer.values.astype(bool).sum()) for _, layer in result)
         return result
 
     def create(*arguments, **keywords):
@@ -324,8 +326,8 @@ def run_worker(args):
             patches.enter_context(patch.object(Encounter, 'advance_one_controller_action_boundary', advance_boundary))
         if args.diagnostic:
             patches.enter_context(patch.object(EventQueue, '_event_trigger_candidates', classmethod(candidates)))
-            patches.enter_context(patch.object(SpatialSensesSystem, 'candidate_observer_uuids', observers))
-            patches.enter_context(patch.object(GridMap, 'capture_optical_obscurements', optics))
+            patches.enter_context(patch.object(SpatialSensesSystem, 'selected_observers', observers))
+            patches.enter_context(patch.object(GridMap, 'obscurement_layers', optics))
         if args.gc_timing:
             gc.callbacks.append(gc_timing)
         try:

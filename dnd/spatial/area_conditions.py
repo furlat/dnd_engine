@@ -154,6 +154,9 @@ class SpatialCondition(BaseCondition):
             raise ValueError(
                 "Attached spatial conditions require exactly one anchor UUID",
             )
+        if self.blocks_physical_optics and self.anchor_kind is SpatialEffectAnchorKind.ENTITY:
+            # A creature's presence changes do not re-light (GridMap.commit_entity_presence).
+            raise ValueError("An Entity-anchored spatial condition cannot block physical optics")
         if not self.first_per_turn_trigger_kinds.issubset(self.trigger_kinds):
             raise ValueError(
                 "first-per-turn triggers must be declared trigger kinds",
@@ -784,10 +787,20 @@ class SpatialCondition(BaseCondition):
         *,
         parent_event: Optional[Event] = None,
     ) -> None:
-        """Release the authoritative footprint during cleanup or rollback."""
-        del parent_event
-        if get_map().has_spatial_condition(self.uuid):
-            get_map().remove_spatial_condition(self.uuid)
+        """Release the authoritative footprint during cleanup or rollback.
+
+        Light it shadowed is re-lit by the map; a removal publishes that light
+        fact with its own facts, after the observers settled them.
+        """
+        grid = get_map()
+        if not grid.has_spatial_condition(self.uuid):
+            return
+        publication = self._removal_publication
+        light = grid.remove_spatial_condition(
+            self.uuid, parent_event=parent_event.uuid if parent_event is not None else None,
+            publish_light=publication is None)
+        if light is not None and publication is not None:
+            publication.light_changes.append(light)
 
     def discard_from_runtime_owner(self) -> bool:
         """Discard an uncommitted independently owned condition."""

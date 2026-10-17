@@ -3,7 +3,6 @@
 from collections.abc import Iterable, Mapping
 from enum import Enum, StrEnum
 from functools import lru_cache
-from typing import NamedTuple
 
 
 class OccupancyLayer(StrEnum):
@@ -75,15 +74,6 @@ def edge_revision_channels(channels: Iterable[WorldEdgeChannel]) -> frozenset[Sp
     return frozenset(EDGE_CHANNEL_REVISIONS[channel] for channel in channels)
 
 
-class ObserverRevisions(NamedTuple):
-    """One subscriber's revisions of the channels its sensory field depends on."""
-
-    optical: int = 0
-    illumination: int = 0
-    propagation: int = 0
-    occupancy: int = 0
-    obscurement: int = 0
-
 
 @lru_cache(maxsize=65536)
 def cell_key(position: tuple[int, int]) -> str:
@@ -105,7 +95,6 @@ __all__ = [
     "EDGE_CHANNEL_REVISIONS",
     "LightLevel",
     "MovementMode",
-    "ObserverRevisions",
     "OccupancyLayer",
     "SpatialChannel",
     "WorldEdgeChannel",

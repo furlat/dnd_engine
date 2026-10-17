@@ -686,8 +686,8 @@ class GridMap:
         (`AreaCondition.contributions_active`), and that is the only way a
         presence change reaches beyond the anchor, so each such condition's own
         channels are invalidated over its footprint. Its lit-area effect is not
-        re-lit here: the caller flips presence only after this commit, and no
-        Entity-anchored condition blocks physical optics (only unanchored walls do).
+        re-lit here: no Entity-anchored condition blocks physical optics, which
+        `SpatialCondition.validate_spatial_identity` rejects at construction.
         """
         self.commit_entity_membership(entity_uuid, old_position, new_position)
         for condition in tuple(self._spatial_conditions.values()):
@@ -1853,8 +1853,15 @@ class GridMap:
                         f"{layer.value} cell {position} already has a condition"
                     )
 
-    def remove_spatial_condition(self, condition_uuid: UUID) -> None:
-        """Remove one condition from GridMap and every Tile, invalidating its channels there."""
+    def remove_spatial_condition(self, condition_uuid: UUID, *, parent_event: Optional[UUID] = None,
+                                 publish_light: bool = True) -> Optional[SpatialChangeEvent]:
+        """Remove one condition from GridMap and every Tile, invalidating its channels there.
+
+        A condition that blocked physical optics shadowed light: the sources whose
+        lit-area solve read its cells are re-lit here, as at its commit. Their
+        light fact is published (or held by the open group); with
+        ``publish_light=False`` it is returned for the caller's own publication.
+        """
         layer = self._spatial_condition_layers.pop(condition_uuid, None)
         positions = self._spatial_condition_positions.pop(
             condition_uuid,
@@ -1875,8 +1882,17 @@ class GridMap:
         for owners in self._local_crossing_owners.values():
             owners.discard(condition_uuid)
         self._refresh_optical_candidate_cells(positions)
-        if condition is not None:
-            self._bump_spatial_revisions(condition.spatial_channels(), positions)
+        if condition is None:
+            return None
+        channels = condition.spatial_channels()
+        self._bump_spatial_revisions(channels, positions)
+        if SpatialChannel.OPTICAL not in channels:
+            return None
+        if publish_light:
+            self.recompute_lights_at_positions(positions, parent_event=parent_event)
+            return None
+        changed = self.recompute_lights_at_positions(positions, parent_event=parent_event, publish=False)
+        return self.snapshot_light_change(sorted(changed), parent_event=parent_event)
 
     def get_spatial_condition_positions(
         self,
@@ -1958,26 +1974,6 @@ class GridMap:
                 return True
 
         return False
-
-    def hazard_capable_cells(self, positions: Iterable[Tuple[int, int]]) -> Set[Tuple[int, int]]:
-        """Cells where a tile condition, residue, object or spatial condition lies.
-
-        `is_position_hazardous_for` reads only those owners, so every other cell
-        is hazard-free for every entity.
-        """
-        tiles = self._tiles
-        conditions, contacts, boundaries = (self._optical_candidate_cells, self._contact_candidate_cells,
-                                            self._boundary_candidate_cells)
-        residues = set().union(*(field.cells for field in self._residue_fields.values()
-                                 if field.entry_handler_uuid is not None))
-        capable: Set[Tuple[int, int]] = set()
-        for position in positions:
-            chunk = (position[0] // SPATIAL_CHUNK_SIZE, position[1] // SPATIAL_CHUNK_SIZE)
-            tile = tiles.get(position)
-            if (position in residues or position in conditions.get(chunk, ()) or position in contacts.get(chunk, ())
-                    or position in boundaries.get(chunk, ()) or (tile is not None and tile.active_conditions)):
-                capable.add(position)
-        return capable
 
     def has_any_hazards(self) -> bool:
         """Return whether any tile or placed object currently declares a hazard."""
@@ -2885,12 +2881,6 @@ class GridMap:
             self._contact_candidate_cells[chunk].pop(position, None)
             if not self._contact_candidate_cells[chunk]:
                 del self._contact_candidate_cells[chunk]
-
-    def get_contact_candidate_cells(self, positions: Collection[Tuple[int, int]]) -> Set[Tuple[int, int]]:
-        """Return current entity/center-object cells inside a queried field."""
-        chunks = {self._spatial_chunk(position) for position in positions}
-        return {position for chunk in chunks
-                for position in self._contact_candidate_cells.get(chunk, ()) if position in positions}
 
     def _entity_cells_in_bounds(
         self, bounds: Tuple[int, int, int, int],
