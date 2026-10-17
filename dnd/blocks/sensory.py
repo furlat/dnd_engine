@@ -652,11 +652,17 @@ class SightInputs:
                                      # optical and propagation revisions, window
     exists: np.ndarray               # Tile presence over the window
     obscurement: np.ndarray          # combined OBSCUREMENT_BITS over the window
+    version: int                     # the settlement's grid version these were read at
 
 
 def _same_sight_inputs(first: SightInputs, second: SightInputs) -> bool:
     return (first.scalars == second.scalars and np.array_equal(first.exists, second.exists)
             and np.array_equal(first.obscurement, second.obscurement))
+
+
+def _held_values(kept: np.ndarray, kept_version: int, version: int, layer: CellLayer, window: Box) -> np.ndarray:
+    """A grid's window values: the kept ones while the settlement's grid version holds."""
+    return kept if kept_version == version else _window_values(layer, window)
 
 
 @dataclass(frozen=True)
@@ -680,6 +686,7 @@ class ObserverField:
     sight_inputs: SightInputs
     sight: RouteSight
     light: np.ndarray                # the objective light over the window the optical view was lit with
+    light_version: int               # the settlement's light-grid version it was read at
     optical: OpticalView
     exists_frame: np.ndarray
     felt_frame: np.ndarray
@@ -737,6 +744,8 @@ class SettlementWorld:
     light_sources: LightSourceTable
     optical_revision: int
     propagation_revision: int
+    sight_version: int               # advances when the Tile or obscurement grid differs from the last settlement's
+    light_version: int               # advances when the light grid differs from the last settlement's
 
 
 STEALTH_NONE = np.iinfo(np.int64).min
@@ -895,6 +904,9 @@ class SpatialSensesSystem:
         self._target_ids: Dict[UUID, int] = {}
         # The last settlement's emitter table, kept while every row holds (compared by value).
         self._light_table: Optional[LightSourceTable] = None
+        # The last settlement's Tile, obscurement and light grids with their versions: an observer
+        # that read the current versions reads the same grids over its window.
+        self._grids: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, int, int]] = None
         # The last settled group's late-completing facts and its observers. A
         # zone change opened in that group completes right after it (its
         # completion reads settled senses); those observers already settled it.
@@ -922,6 +934,7 @@ class SpatialSensesSystem:
         self._identity_grants.clear()
         self._target_ids.clear()
         self._light_table = None
+        self._grids = None
 
     def _recording(self) -> bool:
         """Whether facts are recorded for the open group instead of settled now.
@@ -1256,9 +1269,20 @@ class SpatialSensesSystem:
                 np.array([self._target_key(anchor, False) if anchor is not None else -1
                           for _, anchor, _, _ in light_rows], dtype=np.int64),
                 light_rows)
-        return SettlementWorld(exists, grid.cell_light, grid.obscurement_layers(), grid.cell_obscurement,
+        kept = self._grids
+        obscurement, light = grid.cell_obscurement, grid.cell_light
+        sight_version = light_version = 0
+        if kept is not None:
+            same_shape = kept[0].shape == exists.values.shape
+            sight_version = kept[3] + (0 if same_shape and np.array_equal(kept[0], exists.values)
+                                       and np.array_equal(kept[1], obscurement.values) else 1)
+            light_version = kept[4] + (0 if same_shape and np.array_equal(kept[2], light.values) else 1)
+        if kept is None or (sight_version, light_version) != kept[3:]:
+            self._grids = (exists.values.copy(), obscurement.values.copy(), light.values.copy(),
+                           sight_version, light_version)
+        return SettlementWorld(exists, light, grid.obscurement_layers(), obscurement,
                                hazard_owners, hazard_x, hazard_y, hazard_owner, lights,
-                               grid.optical_revision, grid.propagation_revision)
+                               grid.optical_revision, grid.propagation_revision, sight_version, light_version)
 
     def _recompute(self, observers: Sequence[UUID], affected: Mapping[UUID, Optional[Set[Position]]],
                    shared: SharedValues) -> Dict[UUID, Dict[UUID, Optional[PerceivedSpatialEffect]]]:
@@ -1348,18 +1372,25 @@ class SpatialSensesSystem:
         window = (max(origin[0] - reach, cell_box[0]), max(origin[1] - reach, cell_box[1]),
                   min(origin[0] + reach, cell_box[2]), min(origin[1] + reach, cell_box[3]))
         selection = (origin[0] - reach - 1, origin[1] - reach - 1, origin[0] + reach + 1, origin[1] + reach + 1)
-        inputs = SightInputs(
-            (origin, max_distance, tuple(sorted(modes.items())), ordinary_sight, visual_access,
-             world.optical_revision, world.propagation_revision, window),
-            _window_values(world.exists, window), _window_values(world.obscurement, window))
-        light = _window_values(world.light, window)
+        scalars = (origin, max_distance, tuple(sorted(modes.items())), ordinary_sight, visual_access,
+                   world.optical_revision, world.propagation_revision, window)
         previous = self.fields.get(observer_uuid)
+        if previous is not None and previous.sight_inputs.scalars == scalars:
+            held = previous.sight_inputs
+            inputs = held if held.version == world.sight_version else SightInputs(
+                scalars, _window_values(world.exists, window), _window_values(world.obscurement, window),
+                world.sight_version)
+            light = _held_values(previous.light, previous.light_version, world.light_version, world.light, window)
+        else:
+            inputs = SightInputs(scalars, _window_values(world.exists, window),
+                                 _window_values(world.obscurement, window), world.sight_version)
+            light = _window_values(world.light, window)
         optical_key = (origin, optical_radius if visual_access else 0, world.optical_revision)
-        if previous is not None and _same_sight_inputs(previous.sight_inputs, inputs):
+        if previous is not None and (inputs is previous.sight_inputs or _same_sight_inputs(previous.sight_inputs, inputs)):
             routes, sight = previous.routes, previous.sight
             felt_keys, felt_rows, felt_frame = previous.felt_keys, previous.felt_rows, previous.felt_frame
             exists = previous.exists_frame
-            lit_kept = np.array_equal(previous.light, light)
+            lit_kept = light is previous.light or np.array_equal(previous.light, light)
             sight_kept = True
         else:
             record_action_count("sensory.full_recompute", 1)
@@ -1402,7 +1433,7 @@ class SpatialSensesSystem:
                 senses_frame = np.zeros(OFF + 1, dtype=np.uint8)
                 senses_frame[optical.rows] = ELIGIBLE_SENSE_BITS[optical.eligibility]
         field = ObserverField(origin, window, selection, optical_key, routes, felt_keys, felt_rows, inputs, sight,
-                              light, optical, exists, felt_frame, seen_frame, senses_frame,
+                              light, world.light_version, optical, exists, felt_frame, seen_frame, senses_frame,
                               CellLayer(window[0], window[1], np.zeros((0, 0), dtype=bool)),
                               previous.contact_rows if previous is not None else NO_CONTACT_ROWS,
                               previous.contact_uuids if previous is not None else NO_UUIDS, None,
@@ -1591,7 +1622,8 @@ class SpatialSensesSystem:
             started = time.perf_counter()
         self.fields[observer_uuid] = ObserverField(
             field.origin, window, field.selection, field.optical_key, field.routes, field.felt_keys, field.felt_rows,
-            field.sight_inputs, field.sight, field.light, field.optical, field.exists_frame, field.felt_frame,
+            field.sight_inputs, field.sight, field.light, field.light_version, field.optical, field.exists_frame,
+            field.felt_frame,
             field.seen_frame, field.senses_frame, CellLayer(window[0], window[1], window_of(grants, origin, window)),
             contact_rows, contact_uuids, contact_changes, table, passive, light_values, light_inputs, volumes, upper)
         if diagnostic:
