@@ -1,6 +1,6 @@
 from dnd.core.events import ConditionMembershipCommittedEvent
 from dnd.core.action_types import ActionEconomyCostType, RestrictedActionGrant
-from typing import AbstractSet, Dict, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
+from typing import AbstractSet, Dict, Hashable, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
@@ -596,6 +596,14 @@ class BaseBlock(BaseModel):
     def get_passive_perception(self) -> int:
         """Return passive perception for this block as an observer."""
         return 0
+
+    def traversal_rule_inputs(self) -> Tuple[Hashable, ...]:
+        """This block's own values that path rules read when it requests a path.
+
+        Allegiance decides who it may pass and which hazards threaten it;
+        passive perception decides which concealed hazards it knows.
+        """
+        return (self.faction, self.get_passive_perception())
 
     def has_ordinary_visual_sight(self) -> bool:
         """Return whether this block has ordinary visual sight."""

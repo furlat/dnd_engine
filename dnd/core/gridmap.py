@@ -6,7 +6,7 @@ from bisect import bisect_left, bisect_right
 from heapq import heappop, heappush
 from dnd.core.condition_types import ConditionDurationSummary
 
-from typing import Literal, AbstractSet, Collection, Any, Dict, Iterable, List, Optional, Sequence, Tuple, Set, DefaultDict, Protocol, cast
+from typing import Literal, AbstractSet, Collection, Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Set, DefaultDict, Protocol, Union, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
@@ -89,6 +89,120 @@ OpticalSnapshot = Dict[Tuple[int, int], Dict[UUID, frozenset[OpticalObscurement]
 
 SPATIAL_CHUNK_SIZE = 16
 FOV_CACHE_ORIGINS = 64
+PATH_CACHE_QUERIES = 128
+
+# Inclusive (min_x, min_y, max_x, max_y) cell box; None stands for an unbounded read.
+CellBox = Tuple[int, int, int, int]
+# A transition between adjacent cells reads cells within this distance of its first cell:
+# its diagonal bridges and every crossing candidate next to the legs (`spatial_crossing_allows`).
+TRANSITION_READ_REACH = 2
+
+
+def sight_read_box(origin: Tuple[int, int], radius: Optional[float]) -> Optional[CellBox]:
+    """Every cell an optical/propagation solve from ``origin`` within ``radius`` can read.
+
+    Both solvers only visit cells in the radius' bounding box (the shadowcast's
+    rows, the directional sweep's targets and the edges between them); each
+    visited transition reads up to ``TRANSITION_READ_REACH`` cells further out.
+    """
+    if radius is None or radius == math.inf:
+        return None
+    return (math.floor(origin[0] - radius) - TRANSITION_READ_REACH,
+            math.floor(origin[1] - radius) - TRANSITION_READ_REACH,
+            math.ceil(origin[0] + radius) + TRANSITION_READ_REACH,
+            math.ceil(origin[1] + radius) + TRANSITION_READ_REACH)
+
+
+def path_read_box(start: Tuple[int, int], max_distance: Optional[int]) -> Optional[CellBox]:
+    """Every cell a path search from ``start`` within ``max_distance`` units can read.
+
+    Every admitted step costs at least one unit, so an expanded cell lies within
+    ``floor(max_distance)`` steps; its neighbours and their transitions read up
+    to ``TRANSITION_READ_REACH`` cells further out.
+    """
+    if max_distance is None:
+        return None
+    reach = math.floor(max_distance) + TRANSITION_READ_REACH
+    return (start[0] - reach, start[1] - reach, start[0] + reach, start[1] + reach)
+
+
+def union_box(first: CellBox, second: Optional[CellBox]) -> CellBox:
+    """The smallest box holding both boxes (the second may be absent)."""
+    if second is None:
+        return first
+    return (min(first[0], second[0]), min(first[1], second[1]), max(first[2], second[2]), max(first[3], second[3]))
+
+
+def cells_box(positions: Iterable[Tuple[int, int]]) -> Optional[CellBox]:
+    """The bounding box of some cells; None for no cell."""
+    xs, ys = [], []
+    for x, y in positions:
+        xs.append(x)
+        ys.append(y)
+    return (min(xs), min(ys), max(xs), max(ys)) if xs else None
+
+
+def box_reads_any(box: Optional[CellBox], changed: CellBox, positions: Collection[Tuple[int, int]]) -> bool:
+    """Whether a read box (None: unbounded) holds one of the changed cells bounded by ``changed``."""
+    if box is None:
+        return True
+    min_x, min_y, max_x, max_y = box
+    if min_x > changed[2] or max_x < changed[0] or min_y > changed[3] or max_y < changed[1]:
+        return False
+    return any(min_x <= x <= max_x and min_y <= y <= max_y for x, y in positions)
+
+
+class SightEntry(NamedTuple):
+    """One kept sight answer and the cells its solve can read."""
+
+    box: Optional[CellBox]
+    distance: Optional[float]
+    positions: Tuple[Tuple[int, int], ...]
+
+
+class PropagationEntry(NamedTuple):
+    """One kept line-of-effect answer and the cells its solve can read."""
+
+    box: Optional[CellBox]
+    positions: Tuple[Tuple[int, int], ...]
+
+
+class PathEntry(NamedTuple):
+    """One kept path search and the cells it can read."""
+
+    box: Optional[CellBox]
+    distances: Dict[Tuple[int, int], int]
+    paths: Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]]
+
+
+def drop_reading_entries(cache: Union[Dict[Any, SightEntry], Dict[Any, PropagationEntry], Dict[Any, PathEntry]],
+                         positions: Collection[Tuple[int, int]], counter: str) -> None:
+    """Drop the cache entries whose read box holds a changed cell."""
+    changed = cells_box(positions)
+    if changed is None:
+        return
+    stale = [key for key, entry in cache.items() if box_reads_any(entry.box, changed, positions)]
+    for key in stale:
+        del cache[key]
+    if stale:
+        record_action_count(counter, len(stale))
+
+
+def drop_transitions_reading(cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool],
+                             positions: Collection[Tuple[int, int]]) -> None:
+    """Drop every cached adjacent transition whose first cell is within reach of a changed cell."""
+    reach = TRANSITION_READ_REACH
+    firsts = {(x + dx, y + dy) for x, y in positions
+              for dx in range(-reach, reach + 1) for dy in range(-reach, reach + 1)}
+    if len(cache) < 8 * len(firsts):
+        for edge in [edge for edge in cache if edge[0] in firsts]:
+            del cache[edge]
+        return
+    for x, y in firsts:
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                if dx or dy:
+                    cache.pop(((x, y), (x + dx, y + dy)), None)
 
 DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
 # A crossing query asks one structural channel or one physical contact access.
@@ -147,6 +261,9 @@ class SpatialConditionOwner(Protocol):
 
     @property
     def name(self) -> Optional[str]: ...
+
+    @property
+    def anchor_uuid(self) -> Optional[UUID]: ...
 
     @property
     def hazard_filter(self) -> Optional[HazardFilter]: ...
@@ -291,51 +408,42 @@ class GridMap:
         self._pending_events: List['SpatialChangeEvent'] = []
         self._pending_committed_events: List['SpatialChangeEvent'] = []
 
-        self._spatial_revision: int = 0
+        # Monotonic per-channel world revisions (diagnostics: no cache keys on them).
         self._optical_revision: int = 0
-        # Center optical blocking per cell, valid for one optical revision (like the FOV caches).
-        self._optics_blocking: Dict[Tuple[int, int], bool] = {}
-        self._optics_blocking_revision: int = -1
         self._movement_revision: int = 0
         self._connector_revision: int = 0
         self._occupancy_revision: int = 0
         self._light_revision: int = 0
         self._propagation_revision: int = 0
-        self._fov_cache: OrderedDict[
-            Tuple[Tuple[int, int], int],
-            Tuple[Optional[float], Tuple[Tuple[int, int], ...]],
-        ] = OrderedDict()
+        # Query caches (plan P5). Every entry keeps the box of cells its solve
+        # can read; a write drops exactly the entries whose box holds a changed
+        # cell (`_bump_spatial_revisions`, `invalidate_occupancy_paths`).
+        # Per-cell and per-edge caches drop the changed cells' own entries.
+        self._optics_blocking: Dict[Tuple[int, int], bool] = {}
+        self._fov_cache: OrderedDict[Tuple[Tuple[int, int], Tuple[bool, bool]], SightEntry] = OrderedDict()
         self._propagation_fov_cache: OrderedDict[
-            Tuple[Tuple[int, int], Optional[float]],
-            Tuple[Tuple[int, int], ...],
+            Tuple[Tuple[int, int], Optional[float], bool], PropagationEntry,
         ] = OrderedDict()
-        self._directional_blockers_cache: Dict[WorldEdgeChannel, bool] = {}
-        self._directional_blocking_owners: Dict[WorldEdgeChannel, Set[UUID]] = {}
-        self._directional_transition_cache: Dict[
-            Tuple[WorldEdgeChannel, int],
-            Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool],
-        ] = {}
-        self._directional_blocking_cache: Dict[
-            Tuple[WorldEdgeChannel, int],
-            Dict[Tuple[int, int], bool],
-        ] = {}
+        # Placed boundaries blocking each structural channel, kept at every placement write.
+        self._directional_blocking_owners: Dict[WorldEdgeChannel, Set[UUID]] = {
+            channel: set() for channel in WorldEdgeChannel}
+        self._directional_transition_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool] = {}
         self._propagation_transition_cache: Dict[
             Tuple[Tuple[int, int], Tuple[int, int]],
             bool,
         ] = {}
         self._propagation_blocking_cache: Dict[Tuple[int, int], bool] = {}
+        # Built once, then kept per cell: a write marks its cells, the next read re-resolves them.
         self._obscurement_index: Dict[Tuple[int, int], Dict[UUID, frozenset[OpticalObscurement]]] = {}
-        self._obscurement_index_key: Optional[Tuple[int, int]] = None
+        self._obscurement_index_built: bool = False
+        self._obscurement_index_stale: Set[Tuple[int, int]] = set()
+        # Monotonic traversal (movement topology and occupancy) counters per spatial chunk,
+        # never reset (`traversal_stamp`).
+        self._traversal_chunk_revisions: DefaultDict[Tuple[int, int], int] = defaultdict(int)
         self._pending_light_positions: Set[Tuple[int, int]] = set()
         self._pending_light_sources: Set[Tuple[int, int]] = set()
         self._pending_light_parent: Optional[UUID] = None
-        self._path_cache: OrderedDict[
-            Tuple[Any, ...],
-            Tuple[
-                Dict[Tuple[int, int], int],
-                Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]],
-            ],
-        ] = OrderedDict()
+        self._path_cache: OrderedDict[Tuple[Any, ...], PathEntry] = OrderedDict()
         EventQueue.add_on_event_callback(
             self._on_perceivability_changed,
             event_types={EventType.SPATIAL_PERCEIVABILITY_CHANGED},
@@ -568,7 +676,7 @@ class GridMap:
         return self._observer_revisions.get(observer_uuid, ObserverRevisions())
 
     def _bump_observer_revisions(
-        self, channels: frozenset[SpatialChannel], positions: Optional[Collection[Tuple[int, int]]],
+        self, channels: frozenset[SpatialChannel], positions: Collection[Tuple[int, int]],
     ) -> None:
         optical = int(SpatialChannel.OPTICAL in channels)
         illumination = int(SpatialChannel.ILLUMINATION in channels)
@@ -577,9 +685,7 @@ class GridMap:
         obscurement = int(SpatialChannel.OBSCUREMENT in channels)
         if not (optical or illumination or propagation or occupancy or obscurement):
             return
-        observers = (self._observer_revisions if positions is None
-                     else self.get_dependent_observers_for_cells(positions))
-        for observer_uuid in observers:
+        for observer_uuid in self.get_dependent_observers_for_cells(positions):
             current = self._observer_revisions[observer_uuid]
             self._observer_revisions[observer_uuid] = ObserverRevisions(
                 optical=current.optical + optical,
@@ -627,12 +733,20 @@ class GridMap:
     ) -> None:
         """Commit one Entity's suspension (new is None) or restoration (old is None).
 
-        Attached spatial contributions can extend beyond the anchor, so a
-        presence change invalidates movement, optics and propagation everywhere.
+        Membership invalidates occupancy at the anchor cell. A spatial condition
+        anchored to the Entity contributes only while it is present
+        (`AreaCondition.contributions_active`), and that is the only way a
+        presence change reaches beyond the anchor, so each such condition's own
+        channels are invalidated over its footprint. Its lit-area effect is not
+        re-lit here: the caller flips presence only after this commit, and no
+        Entity-anchored condition blocks physical optics (only unanchored walls do).
         """
         self.commit_entity_membership(entity_uuid, old_position, new_position)
-        self._bump_spatial_revisions(frozenset({
-            SpatialChannel.MOVEMENT, SpatialChannel.OPTICAL, SpatialChannel.PROPAGATION}))
+        for condition in tuple(self._spatial_conditions.values()):
+            if condition.anchor_uuid == entity_uuid:
+                footprint = set(self._spatial_condition_positions.get(condition.uuid, set()))
+                self._refresh_optical_candidate_cells(footprint)
+                self._bump_spatial_revisions(condition.spatial_channels(), footprint)
 
     def spatial_condition_changed(self, condition: SpatialConditionOwner) -> None:
         """Invalidate a condition's own channels after a state change that kept its footprint."""
@@ -649,14 +763,42 @@ class GridMap:
         self._bump_spatial_revisions(channels, set(positions))
         return self.publish_spatial_event(event)
 
-    def invalidate_occupancy_paths(
-        self, positions: Optional[Collection[Tuple[int, int]]] = None,
-    ) -> None:
-        """Invalidate cached paths after entity blocking state changes."""
-        record_action_count("cache.clear.path", 1)
+    def traversal_stamp(self, box: CellBox) -> int:
+        """A value that changes whenever movement topology or occupancy changes at a cell of ``box``.
+
+        It sums the monotonic traversal counters of the chunks covering the box,
+        so an equal stamp means no traversal write touched those chunks since.
+        """
+        counters = self._traversal_chunk_revisions
+        return sum(counters.get((chunk_x, chunk_y), 0)
+                   for chunk_x in range(box[0] // SPATIAL_CHUNK_SIZE, box[2] // SPATIAL_CHUNK_SIZE + 1)
+                   for chunk_y in range(box[1] // SPATIAL_CHUNK_SIZE, box[3] // SPATIAL_CHUNK_SIZE + 1))
+
+    def _advance_traversal(self, positions: Collection[Tuple[int, int]]) -> None:
+        for chunk in {self._spatial_chunk(position) for position in positions}:
+            self._traversal_chunk_revisions[chunk] += 1
+
+    def invalidate_occupancy_paths(self, positions: Collection[Tuple[int, int]]) -> None:
+        """Invalidate the paths and observers reading cells whose entity blocking changed."""
+        if not positions:
+            return
         self._occupancy_revision += 1
-        self._path_cache.clear()
+        self._advance_traversal(positions)
+        drop_reading_entries(self._path_cache, positions, "cache.drop.path")
         self._bump_observer_revisions(frozenset({SpatialChannel.OCCUPANCY}), positions)
+
+    def invalidate_allegiance(self, position: Optional[Tuple[int, int]]) -> None:
+        """One creature changed faction.
+
+        Its own searches key its faction; other searches read it at its cell
+        and through every hazard it is the source of (enemy-only zones, tile and
+        object conditions), which can lie anywhere, so every kept search goes.
+        """
+        if self._path_cache:
+            record_action_count("cache.drop.path", len(self._path_cache))
+            self._path_cache.clear()
+        if position is not None:
+            self.invalidate_occupancy_paths({position})
 
     def _on_perceivability_changed(self, event: Event) -> None:
         """Invalidate subjective occupancy paths when a blocker can appear or vanish.
@@ -671,70 +813,76 @@ class GridMap:
             event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED
             and event.phase == EventPhase.DECLARATION
         ):
-            self.invalidate_occupancy_paths(event.get_affected_positions() or None)
+            self.invalidate_occupancy_paths(event.get_affected_positions())
 
     def _bump_spatial_revisions(
-        self, channels: frozenset[SpatialChannel], positions: Optional[Collection[Tuple[int, int]]] = None,
+        self, channels: frozenset[SpatialChannel], positions: Collection[Tuple[int, int]],
     ) -> None:
-        """Advance channel revisions and clear dependent query caches."""
-        if not channels:
+        """Advance channel revisions and drop the cached queries that read the changed cells.
+
+        Every input of a cached solve is a cell-local fact (tile, center
+        objects, boundary sides, spatial conditions and crossings at that cell),
+        and every writer of such a fact bumps its channel over the cells it
+        changed. An entry whose read box holds none of them would recompute to
+        the same value, so only the others are dropped.
+        """
+        if not channels or not positions:
             return
         self._bump_observer_revisions(channels, positions)
-        self._spatial_revision += 1
+        self._obscurement_index_stale.update(positions)
         if SpatialChannel.OPTICAL in channels:
-            record_action_count("cache.clear.fov", 1)
             self._optical_revision += 1
-            self._fov_cache.clear()
+            for position in positions:
+                self._optics_blocking.pop(position, None)
+            drop_transitions_reading(self._directional_transition_cache, positions)
+            drop_reading_entries(self._fov_cache, positions, "cache.drop.fov")
         if SpatialChannel.MOVEMENT in channels:
-            record_action_count("cache.clear.path", 1)
             self._movement_revision += 1
-            self._path_cache.clear()
+            self._advance_traversal(positions)
+            drop_reading_entries(self._path_cache, positions, "cache.drop.path")
         if SpatialChannel.ILLUMINATION in channels:
             self._light_revision += 1
         if SpatialChannel.PROPAGATION in channels:
-            record_action_count("cache.clear.propagation", 1)
             self._propagation_revision += 1
-            self._propagation_fov_cache.clear()
-            self._propagation_transition_cache.clear()
-            self._propagation_blocking_cache.clear()
-        if SpatialChannel.OPTICAL in channels:
-            self._directional_transition_cache.clear()
-            self._directional_blocking_cache.clear()
+            for position in positions:
+                self._propagation_blocking_cache.pop(position, None)
+            drop_transitions_reading(self._propagation_transition_cache, positions)
+            drop_reading_entries(self._propagation_fov_cache, positions, "cache.drop.propagation")
         directional_channels = revision_edge_channels(channels)
-        for channel in directional_channels:
-            self._directional_blockers_cache.pop(channel, None)
-            if positions is None:
-                self._directional_blocking_owners.pop(channel, None)
-        if directional_channels and positions is not None:
+        if directional_channels:
             owners = {identity for position in positions
                       for identity in self._boundary_placements_by_position.get(position, ())}
             self._refresh_directional_blocker_owners(directional_channels, owners)
 
-    def _bump_all_spatial_revisions(
-        self, positions: Optional[Collection[Tuple[int, int]]] = None,
-    ) -> None:
-        """Advance every spatial channel revision and clear query caches."""
+    def _bump_all_spatial_revisions(self, positions: Collection[Tuple[int, int]]) -> None:
+        """Advance every spatial channel revision over these cells and drop the queries reading them."""
         self._bump_spatial_revisions(frozenset({
             SpatialChannel.MOVEMENT, SpatialChannel.OPTICAL,
             SpatialChannel.ILLUMINATION, SpatialChannel.PROPAGATION,
         }), positions)
 
-    def _path_requester_perception_signature(
+    def _path_requester_signature(
         self,
         requester_uuid: Optional[UUID],
         subjective: bool,
     ) -> Tuple[Any, ...]:
-        """Return subjective observer state that can change path blockers."""
-        if requester_uuid is None or not subjective:
+        """Every requester input a path search reads, so a kept search never outlives one.
+
+        The requester's own traversal rules (allegiance, hazard perception, size
+        and origin traversal, crossing rules) and, for a subjective search, the
+        blockers and crossings it perceives.
+        """
+        requester = BaseBlock.get(requester_uuid) if requester_uuid is not None else None
+        if requester is None:
             return ()
-        requester = BaseBlock.get(requester_uuid)
-        if requester is None or requester.get_senses() is None:
-            return ()
-        senses = requester.get_senses()
-        assert senses is not None
+        senses = requester.get_senses() if subjective else None
+        if senses is None:
+            return requester.traversal_rule_inputs()
         return (
+            requester.traversal_rule_inputs(),
             tuple(sorted(senses.entities, key=str)),
             tuple(sorted(senses.objects, key=str)),
+            tuple(sorted(senses.spatial_effects, key=str)),
         )
 
     @staticmethod
@@ -1661,7 +1809,13 @@ class GridMap:
                 layer,
             )
         self._refresh_optical_candidate_cells(previous_positions | normalized)
-        self._bump_spatial_revisions(condition.spatial_channels(), previous_positions | normalized)
+        channels = condition.spatial_channels()
+        self._bump_spatial_revisions(channels, previous_positions | normalized)
+        if SpatialChannel.OPTICAL in channels:
+            # Physical optics are light geometry (plan §4): the sources whose
+            # lit-area solve read these cells are re-lit. Footprint commits run
+            # inside their install/move group, which publishes the light fact.
+            self.recompute_lights_at_positions(previous_positions | normalized)
 
     def publish_tile_state_changed(
         self, position: Tuple[int, int], *, source_entity_uuid: UUID,
@@ -1947,12 +2101,9 @@ class GridMap:
     def is_blocking_optics(self, x: int, y: int) -> bool:
         """Return whether a Tile center blocks ordinary light and sight.
 
-        Every input (tile, center objects, conditions) changes only with an
-        optical revision bump, so the answer is kept for the current revision.
+        Every input (tile, center objects, conditions at this cell) changes only
+        with an optical bump over this cell, which drops the kept answer.
         """
-        if self._optics_blocking_revision != self._optical_revision:
-            self._optics_blocking.clear()
-            self._optics_blocking_revision = self._optical_revision
         blocked = self._optics_blocking.get((x, y))
         if blocked is None:
             blocked = self._optics_blocking[(x, y)] = self._center_blocks_optics(x, y)
@@ -3353,7 +3504,7 @@ class GridMap:
         self._bump_spatial_revisions(channels, positions)
         # A retained boundary can have no occupied bands. Its placement identity
         # still participates in the native global directional-solver decision.
-        self._refresh_directional_blocker_owners(revision_edge_channels(channels), (object_uuid,))
+        self._refresh_directional_blocker_owners(tuple(WorldEdgeChannel), (object_uuid,))
         provider = BaseBlock.get(object_uuid)
         if provider is None or provider.get_world_placement_spec().kind is WorldPlacementKind.BOUNDARY:
             self._bump_observer_revisions(frozenset({SpatialChannel.OPTICAL}) - channels, positions)
@@ -4501,34 +4652,21 @@ class GridMap:
 
     def _has_directional_blockers(self, channel: WorldEdgeChannel) -> bool:
         """Return whether any placed boundary blocks the canonical channel."""
-        cached = self._directional_blockers_cache.get(channel)
-        if cached is not None:
-            return cached
-        self._directional_blocking_owners[channel] = set()
-        identities = {identity for members in self._boundary_placements_by_position.values()
-                      for identity in members}
-        self._refresh_directional_blocker_owners({channel}, identities)
-        return self._directional_blockers_cache[channel]
+        return bool(self._directional_blocking_owners[channel])
 
     def _refresh_directional_blocker_owners(self, channels: Collection[WorldEdgeChannel],
                                             identities: Collection[UUID]) -> None:
-        """Reconcile settled providers in already-materialized presence sets."""
-        active = [(channel, self._directional_blocking_owners[channel])
-                  for channel in channels if channel in self._directional_blocking_owners]
-        if not active:
-            return
+        """Reconcile these providers' membership in the maintained blocking-boundary sets."""
         for identity in identities:
             placement = self._object_placements.get(identity)
             provider = (BaseBlock.get(identity) if placement is not None
                         and placement.kind is WorldPlacementKind.BOUNDARY else None)
             structure = provider.get_boundary_structure() if provider is not None else None
-            for channel, owners in active:
+            for channel in channels:
                 if structure is not None and channel in structure.blocked_channels:
-                    owners.add(identity)
+                    self._directional_blocking_owners[channel].add(identity)
                 else:
-                    owners.discard(identity)
-        for channel, owners in active:
-            self._directional_blockers_cache[channel] = bool(owners)
+                    self._directional_blocking_owners[channel].discard(identity)
 
     def _transition_clear(
         self,
@@ -4783,9 +4921,8 @@ class GridMap:
             transition_cache = self._propagation_transition_cache
             blocking_cache = self._propagation_blocking_cache
         elif channel is WorldEdgeChannel.OPTICAL:
-            cache_key = (channel, self._optical_revision)
-            transition_cache = self._directional_transition_cache.setdefault(cache_key, {})
-            blocking_cache = self._directional_blocking_cache.setdefault(cache_key, {})
+            transition_cache = self._directional_transition_cache
+            blocking_cache = self._optics_blocking
         else:
             transition_cache = {}
             blocking_cache = {}
@@ -5036,10 +5173,12 @@ class GridMap:
         """
         timing = action_timing_enabled()
         cache_started = time.perf_counter() if timing else 0.0
-        cache_key = (origin, self._optical_revision)
+        # The solver is a global choice; a result is reused only under the one that made it.
+        directional = self._has_directional_blockers(WorldEdgeChannel.OPTICAL)
+        cache_key = (origin, (directional, not self._global_crossing_owners))
         cached = self._fov_cache.get(cache_key)
         if cached is not None:
-            cached_distance, positions = cached
+            cached_distance, positions = cached.distance, cached.positions
             if cached_distance is None or (max_distance is not None and cached_distance >= max_distance):
                 self._fov_cache.move_to_end(cache_key)
                 if max_distance == cached_distance:
@@ -5056,29 +5195,20 @@ class GridMap:
             record_action_timing("grid.compute_fov.cache_miss_ms", cache_started)
 
         visible_positions: List[Tuple[int, int]] = []
-        blocking_cache: Dict[Tuple[int, int], bool] = {}
 
         def mark_visible(x: int, y: int) -> None:
             visible_positions.append((x, y))
 
-        def is_blocking_for(x: int, y: int) -> bool:
-            position = (x, y)
-            cached = blocking_cache.get(position)
-            if cached is not None:
-                return cached
-            blocked = self.is_blocking_optics(x, y)
-            blocking_cache[position] = blocked
-            return blocked
-
-        if self._has_directional_blockers(WorldEdgeChannel.OPTICAL):
+        if directional:
             visible_positions = self._compute_directional_fov(
                 origin,
                 max_distance,
                 WorldEdgeChannel.OPTICAL,
             )
         else:
-            compute_fov(origin, is_blocking_for, mark_visible, max_distance)
-        self._fov_cache[cache_key] = (max_distance, tuple(visible_positions))
+            compute_fov(origin, self.is_blocking_optics, mark_visible, max_distance)
+        self._fov_cache[cache_key] = SightEntry(sight_read_box(origin, max_distance), max_distance,
+                                                tuple(visible_positions))
         self._fov_cache.move_to_end(cache_key)
         if len(self._fov_cache) > FOV_CACHE_ORIGINS:
             self._fov_cache.popitem(last=False)
@@ -5125,10 +5255,8 @@ class GridMap:
             movement_mode,
             walk_in_danger,
             subjective,
-            self._movement_revision,
-            self._occupancy_revision,
             ignore_difficult_terrain,
-            self._path_requester_perception_signature(requesting_entity_uuid, subjective),
+            self._path_requester_signature(requesting_entity_uuid, subjective),
             tuple(sorted(collision_blocked or ())),
             tuple(sorted(directional_collision_blocked or ())),
             self._min_x,
@@ -5142,10 +5270,9 @@ class GridMap:
             self._path_cache.move_to_end(cache_key)
             if timing:
                 record_action_timing("grid.compute_paths.cache_hit_ms", cache_started)
-            cached_distances, cached_paths = cached
             return (
-                dict(cached_distances),
-                {position: list(path) for position, path in cached_paths.items()},
+                dict(cached.distances),
+                {position: list(path) for position, path in cached.paths.items()},
             )
         if timing:
             record_action_timing("grid.compute_paths.cache_miss_ms", cache_started)
@@ -5278,14 +5405,15 @@ class GridMap:
             or max_distance == 0
         ):
             sentinel_result = ({start: 0}, {start: [start]})
-            self._path_cache[cache_key] = (
+            self._path_cache[cache_key] = PathEntry(
+                path_read_box(start, max_distance),
                 dict(sentinel_result[0]),
                 {
                     position: tuple(path)
                     for position, path in sentinel_result[1].items()
                 },
             )
-            if len(self._path_cache) > 128:
+            if len(self._path_cache) > PATH_CACHE_QUERIES:
                 self._path_cache.popitem(last=False)
             return sentinel_result
 
@@ -5324,11 +5452,12 @@ class GridMap:
             record_action_elapsed("grid.compute_paths.tile_cost_ms", tile_cost_elapsed)
             record_action_elapsed("grid.compute_paths.can_enter_ms", can_enter_elapsed)
         distances, paths = result
-        self._path_cache[cache_key] = (
+        self._path_cache[cache_key] = PathEntry(
+            path_read_box(start, max_distance),
             dict(distances),
             {position: tuple(path) for position, path in paths.items()},
         )
-        if len(self._path_cache) > 128:
+        if len(self._path_cache) > PATH_CACHE_QUERIES:
             self._path_cache.popitem(last=False)
         return result
 
@@ -5526,8 +5655,8 @@ class GridMap:
     def _refresh_optical_candidate_cells(self, positions: Collection[Tuple[int, int]]) -> None:
         """Index candidate membership only; contribution activity remains owner-native."""
         # An explicit contribution can change without a spatial revision (on
-        # removed support), so the shared index is rebuilt on its next read.
-        self._obscurement_index_key = None
+        # removed support), so these cells' index entries are re-resolved on the next read.
+        self._obscurement_index_stale.update(positions)
         for position in positions:
             tile = self._tiles.get(position)
             chunk = self._spatial_chunk(position)
@@ -5556,32 +5685,40 @@ class GridMap:
                 if min_x <= position[0] <= max_x and min_y <= position[1] <= max_y}
 
     def _objective_obscurement_index(self) -> Dict[Tuple[int, int], Dict[UUID, frozenset[OpticalObscurement]]]:
-        """Every Tile's conditional optics, built once per revision and shared by observers (plan P4a).
+        """Every Tile's conditional optics, kept per cell and shared by observers (plan P4a, P5).
 
-        Obscurement is objective: it does not depend on who looks. Condition
-        changes bump the spatial revision and explicit contributions reset the
-        key, so the index is rebuilt only when the world changed, not once per
-        observer solve.
+        Obscurement is objective: it does not depend on who looks. An entry
+        reads only its own cell's explicit contributions and conditions, and
+        every write of those marks the cell (a spatial bump over it, or the
+        candidate refresh of an explicit contribution), so only marked cells
+        are re-resolved.
         """
-        key = (self._optical_revision, self._spatial_revision)
-        if self._obscurement_index_key == key:
-            return self._obscurement_index
-        index: Dict[Tuple[int, int], Dict[UUID, frozenset[OpticalObscurement]]] = {}
-        for cells in self._optical_candidate_cells.values():
-            for position in cells:
-                values = {owner: {value} for owner, value in
-                          self._optical_obscurements_by_position.get(position, {}).items()}
-                for condition in self.get_spatial_conditions_at(position):
-                    value = condition.get_optical_obscurement_at(position)
-                    if value is not None:
-                        values.setdefault(condition.uuid, set()).add(value)
-                if values:
-                    index[position] = {owner: frozenset(contributions)
-                                       for owner, contributions in values.items()}
-        self._obscurement_index = index
-        self._obscurement_index_key = key
-        record_action_count("cache.build.obscurement_index", 1)
-        return index
+        if not self._obscurement_index_built:
+            self._obscurement_index_built = True
+            self._obscurement_index_stale.clear()
+            self._obscurement_index = {}
+            for cells in self._optical_candidate_cells.values():
+                for position in cells:
+                    self._index_obscurement_at(position)
+            record_action_count("cache.build.obscurement_index", 1)
+        elif self._obscurement_index_stale:
+            for position in self._obscurement_index_stale:
+                self._obscurement_index.pop(position, None)
+                if position in self._optical_candidate_cells.get(self._spatial_chunk(position), ()):
+                    self._index_obscurement_at(position)
+            self._obscurement_index_stale.clear()
+        return self._obscurement_index
+
+    def _index_obscurement_at(self, position: Tuple[int, int]) -> None:
+        values = {owner: {value} for owner, value in
+                  self._optical_obscurements_by_position.get(position, {}).items()}
+        for condition in self.get_spatial_conditions_at(position):
+            value = condition.get_optical_obscurement_at(position)
+            if value is not None:
+                values.setdefault(condition.uuid, set()).add(value)
+        if values:
+            self._obscurement_index[position] = {owner: frozenset(contributions)
+                                                 for owner, contributions in values.items()}
 
     def get_optical_obscurements_at(
         self,
@@ -6033,6 +6170,11 @@ class GridMap:
         else:
             self._remove_light_source_tiles(source, parent_event=parent_event)
 
+    @staticmethod
+    def _light_radius_tiles(source: LightSourceData) -> int:
+        """The radius of a source's lit-area solve, in tiles."""
+        return max((source.bright_radius_feet + source.dim_radius_feet) // 5, 1)
+
     def _compute_light_tiles(self, source: LightSourceData,
                              position: Optional[Tuple[int, int]] = None) -> Dict[Tuple[int, int], LightLevel]:
         """Compute which tiles a light source would affect and at what level.
@@ -6042,8 +6184,7 @@ class GridMap:
         """
         record_action_count("light.source_fov", 1)
         pos = position or source.position
-        total_radius_feet = source.bright_radius_feet + source.dim_radius_feet
-        total_radius_tiles = max(total_radius_feet // 5, 1)
+        total_radius_tiles = self._light_radius_tiles(source)
         bright_radius_tiles = source.bright_radius_feet / 5
         very_bright_radius_tiles = source.very_bright_radius_feet / 5 if source.very_bright_radius_feet > 0 else 0
 
@@ -6289,18 +6430,22 @@ class GridMap:
         self, positions: Set[Tuple[int, int]], parent_event: Optional[UUID] = None,
         *, publish: bool = True,
     ) -> set[Tuple[int, int]]:
-        """Recompute each in-range source once and publish one light fact for the cause."""
+        """Recompute once each source whose lit-area solve read a changed cell; publish one light fact.
+
+        A source's lit area is a deterministic optical solve from its position
+        (`_compute_light_tiles`); a source whose read box holds no changed cell
+        would recompute the same area, so it is not selected.
+        """
         all_changed: set[Tuple[int, int]] = set()
         moved_lit_areas: set[Tuple[int, int]] = set()
+        changed_box = cells_box(positions)
+        if changed_box is None:
+            return all_changed
         for source in self._light_sources.values():
             if not self._is_light_effectively_active(source):
                 continue
-            total_radius_tiles = (source.bright_radius_feet + source.dim_radius_feet) / 5
-            if not any(
-                (position[0] - source.position[0]) ** 2
-                + (position[1] - source.position[1]) ** 2 <= total_radius_tiles ** 2
-                for position in positions
-            ):
+            if not box_reads_any(sight_read_box(source.position, self._light_radius_tiles(source)),
+                                 changed_box, positions):
                 continue
 
             old_affected = dict(source.affected_tiles)
@@ -6390,12 +6535,13 @@ class GridMap:
         and missing cells, directional boundaries and spatial-condition
         crossings give total cover. Magical darkness does not block it."""
         cache_started = time.perf_counter()
-        cache_key = (origin, max_distance)
+        # The sparse solver applies only without global crossing owners.
+        cache_key = (origin, max_distance, not self._global_crossing_owners)
         cached = self._propagation_fov_cache.get(cache_key)
         if cached is not None:
             self._propagation_fov_cache.move_to_end(cache_key)
             record_action_timing("grid.compute_propagation_fov.cache_hit_ms", cache_started)
-            return list(cached)
+            return list(cached.positions)
         record_action_timing("grid.compute_propagation_fov.cache_miss_ms", cache_started)
         visible_positions = self._compute_directional_fov(origin, max_distance, WorldEdgeChannel.PROPAGATION)
         visible_positions = [
@@ -6403,7 +6549,8 @@ class GridMap:
             if position in self._tiles
         ]
 
-        self._propagation_fov_cache[cache_key] = tuple(visible_positions)
+        self._propagation_fov_cache[cache_key] = PropagationEntry(sight_read_box(origin, max_distance),
+                                                                  tuple(visible_positions))
         self._propagation_fov_cache.move_to_end(cache_key)
         if len(self._propagation_fov_cache) > FOV_CACHE_ORIGINS:
             self._propagation_fov_cache.popitem(last=False)
@@ -6507,24 +6654,25 @@ class GridMap:
         self._pending_light_sources.clear()
         self._pending_light_parent = None
         self._obscurement_index = {}
-        self._obscurement_index_key = None
+        self._obscurement_index_built = False
+        self._obscurement_index_stale.clear()
         self._bounds_dirty = True
-        # Revisions stay monotonic: caches outside GridMap key on them, so a
-        # rebuilt world must never repeat a value the previous world used.
-        self._spatial_revision += 1
+        # Revisions stay monotonic: a rebuilt world never repeats a value the
+        # previous world used.
         self._optical_revision += 1
         self._movement_revision += 1
         self._occupancy_revision += 1
         self._connector_revision += 1
         self._light_revision += 1
         self._propagation_revision += 1
+        # The world itself is gone: every cached query goes with it.
         self._path_cache.clear()
         self._fov_cache.clear()
+        self._optics_blocking.clear()
         self._propagation_fov_cache.clear()
-        self._directional_blockers_cache.clear()
-        self._directional_blocking_owners.clear()
+        for owners in self._directional_blocking_owners.values():
+            owners.clear()
         self._directional_transition_cache.clear()
-        self._directional_blocking_cache.clear()
         self._propagation_transition_cache.clear()
         self._propagation_blocking_cache.clear()
 

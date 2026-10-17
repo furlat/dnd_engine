@@ -1,7 +1,7 @@
 from dnd.core.effect_types import EventResolutionRef, EffectOrigin
 from dnd.core.damage import DamageResolution
 from dnd.core.attack_types import NaturalWeaponSpec
-from typing import cast, Callable, AbstractSet, DefaultDict, Dict, FrozenSet, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
+from typing import cast, Callable, AbstractSet, DefaultDict, Dict, FrozenSet, Hashable, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from collections import defaultdict
@@ -101,8 +101,12 @@ from dnd.types.character_progression import (
 from dnd.types.character_receipts import CharacterGrantReceipt
 from dnd.core.gridmap import (
     ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN,
+    CellBox,
     PreparedObjectPlacement,
+    cells_box,
     get_map,
+    path_read_box,
+    union_box,
 )
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.geometry import supercover_line
@@ -596,6 +600,8 @@ class Entity(BaseBlock):
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
 
     _fast_move_target_cache_revision: Optional[Tuple[int, int]] = PrivateAttr(default=None)
+    # The cells the last navigation materialization read and their traversal stamp then.
+    _navigation_traversal: Optional[Tuple[CellBox, int]] = PrivateAttr(default=None)
     _fast_move_target_cache: Dict[
         Tuple[Any, ...],
         Tuple[AvailableTarget, ...],
@@ -1753,7 +1759,7 @@ class Entity(BaseBlock):
             return None
         previous = self.faction
         self.faction = faction
-        get_map().invalidate_occupancy_paths({self.position})
+        get_map().invalidate_allegiance(self.position if self.is_deployed else None)
         changed = EventQueue.publish_committed_phase(EntityFactionChangedEvent(
             source_entity_uuid=self.uuid, target_entity_uuid=self.uuid,
             entity_uuid=self.uuid, previous_faction=previous, faction_after=faction,
@@ -1912,7 +1918,13 @@ class Entity(BaseBlock):
         sizes = tuple(Size)
         durable = next(iter(self.structural_size_sources.values()), self.structural_base_size)
         index = sizes.index(durable) + sum(self.temporary_size_steps.values())
-        self.size = sizes[max(0, min(len(sizes) - 1, index))]
+        size = sizes[max(0, min(len(sizes) - 1, index))]
+        if size is not self.size:
+            self.size = size
+            # Requesters with origin traversal compare sizes at this creature's cell
+            # (`can_traverse_creature_space`); its own searches key its size.
+            if self.is_deployed:
+                get_map().invalidate_occupancy_paths({self.position})
 
     def add_temporary_size_step(self, owner_uuid: UUID, step: int) -> None:
         self.temporary_size_steps[owner_uuid] = step
@@ -1958,6 +1970,16 @@ class Entity(BaseBlock):
     ) -> bool:
         """Return whether any durable source grants this origin capability."""
         return bool(self.origin_capability_sources.get(capability))
+
+    def traversal_rule_inputs(self) -> Tuple[Hashable, ...]:
+        """Every value of this creature that path rules read when it requests a path.
+
+        Allegiance and size decide which creatures it may pass
+        (`can_traverse_creature_space`), passive perception which concealed
+        hazards it knows, and type and body form which crossings stop it.
+        """
+        return (self.faction, self.get_passive_perception(), self.size, self.creature_type, self.gaseous_body,
+                self.has_origin_capability(OriginCapability.HALFLING_NIMBLENESS))
 
     def can_traverse_creature_space(self, occupant: "Entity") -> bool:
         """Return whether allegiance or an origin rule permits crossing a cell.
@@ -5315,6 +5337,11 @@ class Entity(BaseBlock):
                     return True
         return False
 
+    def _navigation_traversal_current(self) -> bool:
+        """Whether no traversal write touched a cell the last navigation materialization read."""
+        recorded = self._navigation_traversal
+        return recorded is not None and get_map().traversal_stamp(recorded[0]) == recorded[1]
+
     def materialize_navigation_after_movement(self, movement_mode: MovementMode) -> None:
         """Refresh navigation, omitting unused routes after ordinary exhaustion."""
         remaining_distance = max(
@@ -5441,6 +5468,10 @@ class Entity(BaseBlock):
     def _materialize_navigation_distance(self, effective_path_distance: int) -> None:
         """Materialize the requested path domain, including an origin-only domain."""
         grid = get_map()
+        # Paths read traversal within their search box; the walkable map reads every visible cell.
+        read_box = union_box(path_read_box(self.position, effective_path_distance),
+                             cells_box(self.senses.visible))
+        self._navigation_traversal = (read_box, grid.traversal_stamp(read_box))
         distances, paths = grid.compute_paths(
             self.position,
             effective_path_distance,
@@ -6805,7 +6836,12 @@ class Entity(BaseBlock):
         """
         movement_blocked = remaining_movement <= 0
         grid = get_map()
-        cache_revision = (self.senses.path_revision, grid.movement_revision)
+        # Targets read step costs and hazards only on these paths' cells, so
+        # only movement writes there (or new paths) can change them.
+        read_box = cells_box(step for paths in (paths_by_position, self.senses.safe_paths)
+                             for path in paths.values() for step in path)
+        cache_revision = (self.senses.path_revision,
+                          grid.traversal_stamp(read_box) if read_box is not None else 0)
         if cache_revision != self._fast_move_target_cache_revision:
             self._fast_move_target_cache_revision = cache_revision
             self._fast_move_target_cache.clear()
@@ -7696,7 +7732,8 @@ class Entity(BaseBlock):
             required_path_distance = max(required_path_distance, 20)
         paths_need_refresh = (
             required_path_distance > 0
-            and not self.senses.has_clean_paths_for_distance(required_path_distance)
+            and not (self.senses.has_clean_paths_for_distance(required_path_distance)
+                     and self._navigation_traversal_current())
         )
         if paths_need_refresh:
             started = time.perf_counter() if timing else 0.0
