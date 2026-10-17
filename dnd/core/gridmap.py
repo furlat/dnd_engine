@@ -174,6 +174,12 @@ class SpatialConditionOwner(Protocol):
     def snapshot_mechanism_state(self) -> Optional[TrapState]: ...
 
 
+def _holds_ground_hazard(block: BaseBlock) -> bool:
+    """Whether a block holds a condition that can make its cells hazardous on the ground layer."""
+    return any(condition.hazard_filter is not None and condition.affects_occupancy_layer(OccupancyLayer.GROUND)
+               for condition in block.active_conditions.values())
+
+
 class LightSourceData(BaseModel):
     """Tracks a light source and its affected tiles."""
 
@@ -489,18 +495,23 @@ class GridMap:
         self._set_light_footprint(source, {})
         self._light_slot_of.pop(source.uuid, None)
 
-    def light_sources_lit_within(self, visible: CellLayer) -> Set[UUID]:
-        """Emitters whose lit cells include any visible cell of a bool layer."""
+    def light_slots_lit_within(self, visible: CellLayer) -> np.ndarray:
+        """The lit-slot words of the emitters whose lit cells include any visible cell of a bool layer."""
         slots = self._cell_light_slots
         if not self._light_slot_of or not visible.values.size:
-            return set()
+            return np.zeros(0, dtype=np.uint64)
         lx0, ly0, lx1, ly1 = visible.box
         sx0, sy0 = slots.x0, slots.y0
         words = slots.values[lx0 - sx0:lx1 - sx0 + 1, ly0 - sy0:ly1 - sy0 + 1][visible.values]
         if not words.size:
-            return set()
-        lit = np.bitwise_or.reduce(words, axis=0).tolist()
-        return {identity for identity, slot in self._light_slot_of.items() if lit[slot // 64] >> (slot % 64) & 1}
+            return np.zeros(slots.values.shape[2], dtype=np.uint64)
+        return np.bitwise_or.reduce(words, axis=0)
+
+    def light_sources_in_slots(self, words: np.ndarray) -> Set[UUID]:
+        """The emitters whose slot bit is set in lit-slot words."""
+        lit = words.tolist()
+        return {identity for identity, slot in self._light_slot_of.items()
+                if slot // 64 < len(lit) and lit[slot // 64] >> (slot % 64) & 1}
 
     def contact_cells_in_box(self, box: Box) -> List[Tuple[Tuple[int, int], Tuple[Tuple[UUID, ...], Tuple[UUID, ...]]]]:
         """Occupied cells in an inclusive box with their str-ordered entities and center objects."""
@@ -5249,24 +5260,41 @@ class GridMap:
         """A spatial condition's committed footprint as a bool layer."""
         return self._condition_footprints.get(condition_uuid)
 
-    def hazard_owners(self) -> List[Tuple[SpatialConditionOwner | BaseBlock, CellLayer]]:
+    def hazard_owners(self) -> Tuple[Tuple[SpatialConditionOwner | BaseBlock, ...], np.ndarray, np.ndarray, np.ndarray]:
         """Every owner whose hazard rule `is_position_hazardous_for` reads, with the cells it covers.
 
-        Spatial conditions with their footprints, Tiles holding a condition or a
-        residue, and placed objects holding a condition on the cells where a
-        cell's object lookup finds them.
+        Returns the owners and, concatenated, their cells' x, y and owner index.
+        Spatial conditions are owners over their footprints (each states its own
+        rule); a Tile or placed object is one only while it holds a condition
+        with a hazard filter on the ground layer, or a Tile a hazardous residue:
+        the inputs of `BaseBlock.is_hazardous_for` and `Tile.is_hazardous_for`.
         """
-        owners: List[Tuple[SpatialConditionOwner | BaseBlock, CellLayer]] = [
-            (self._spatial_conditions[identity], layer) for identity, layer in self._condition_footprints.items()]
-        residue_cells = {cell for field in self._residue_fields.values() for cell in field.cells}
+        owners: List[SpatialConditionOwner | BaseBlock] = []
+        xs: List[int] = []
+        ys: List[int] = []
+        owner_of: List[int] = []
+
+        def add(owner: SpatialConditionOwner | BaseBlock, cell_xs: List[int], cell_ys: List[int]) -> None:
+            owner_of.extend([len(owners)] * len(cell_xs))
+            owners.append(owner)
+            xs.extend(cell_xs)
+            ys.extend(cell_ys)
+
+        for identity, layer in self._condition_footprints.items():
+            cells_x, cells_y = np.nonzero(layer.values)
+            add(self._spatial_conditions[identity], (cells_x + layer.x0).tolist(), (cells_y + layer.y0).tolist())
+        residue_cells = {cell for field in self._residue_fields.values()
+                         if field.entry_handler_uuid is not None for cell in field.cells}
         for position, tile in self._tiles.items():
-            if tile.active_conditions or position in residue_cells:
-                owners.append((tile, cells_layer((position,), True)))
+            if position in residue_cells or (tile.active_conditions and _holds_ground_hazard(tile)):
+                add(tile, [position[0]], [position[1]])
         for block in self.get_objects_with_conditions():
-            placement = self._object_placements[block.uuid]
-            owners.append((block, cells_layer(placement.positions if placement.boundary_direction is None
-                                              else (placement.position,), True)))
-        return owners
+            if _holds_ground_hazard(block):
+                placement = self._object_placements[block.uuid]
+                cells = placement.positions if placement.boundary_direction is None else (placement.position,)
+                add(block, [cell[0] for cell in cells], [cell[1] for cell in cells])
+        return (tuple(owners), np.array(xs, dtype=np.int64), np.array(ys, dtype=np.int64),
+                np.array(owner_of, dtype=np.int64))
 
     def optical_obscurement_bits_at(self, position: Tuple[int, int]) -> int:
         """The OBSCUREMENT_BITS covering one cell, from every contributing owner."""
@@ -5338,40 +5366,23 @@ class GridMap:
         """Current optical version, retained after an emitter is extinguished."""
         return self._light_source_revisions.get(identity, 0)
 
-    def observe_light_sources(self, observer_uuid: UUID, visible: CellLayer,
-            entities: Dict[UUID, PerceivedContact], objects: Dict[UUID, PerceivedContact],
-            previous: Optional[Dict[UUID, PerceivedLightSource]] = None,
-            ) -> Dict[UUID, PerceivedLightSource]:
-        """Expose contributing emitter descriptors, never hidden inventory IDs.
+    def light_source_rows(self) -> List[Tuple[UUID, Optional[UUID], Tuple[Any, ...]]]:
+        """Each active emitter's observer-independent descriptor values, with its anchor.
 
-        The renderer needs an emitter, not another per-cell illumination map.
-        An emitter is observed when its lit cells reach a visible cell (one
-        gather of the lit-slot grid over the visible layer, per observer).
+        The renderer needs an emitter, not another per-cell illumination map; an
+        observer is shown the emitters whose lit cells reach a visible cell
+        (`light_slots_lit_within`), never hidden inventory identities.
         """
-        result = {}
-        lit = self.light_sources_lit_within(visible)
+        rows = []
         for identity in set(self._light_sources):
-            if identity not in lit:
-                continue
             source = self._light_sources[identity]
             if not self._is_light_effectively_active(source):
                 continue
-            actor = entities.get(source.anchor_uuid)
-            item = objects.get(source.anchor_uuid)
-            values = dict(source_uuid=identity, revision=source.revision, position=source.position,
-                base_height_steps=source.base_height_steps, appearance=source.appearance,
-                very_bright_radius_feet=source.very_bright_radius_feet,
-                bright_radius_feet=source.bright_radius_feet, dim_radius_feet=source.dim_radius_feet,
-                actor_anchored=source.anchor_uuid is not None
-                    and self.get_entity_position(source.anchor_uuid) is not None,
-                anchor_entity_uuid=source.anchor_uuid if source.anchor_uuid == observer_uuid
-                    or actor is not None and actor.visual else None,
-                anchor_item_uuid=source.anchor_uuid if item is not None and item.visual else None)
-            old = previous.get(identity) if previous is not None else None
-            result[identity] = (old if old is not None and not old.affected_tiles
-                and all(old.__dict__[key] == value for key, value in values.items())
-                else PerceivedLightSource(**values))
-        return result
+            rows.append((identity, source.anchor_uuid, (
+                source.revision, source.position, source.base_height_steps, source.appearance,
+                source.very_bright_radius_feet, source.bright_radius_feet, source.dim_radius_feet,
+                source.anchor_uuid is not None and self.get_entity_position(source.anchor_uuid) is not None)))
+        return rows
 
     def is_sunlit(self, position: Tuple[int, int]) -> bool:
         """Read active sunlight through the existing occluded light footprint."""

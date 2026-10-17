@@ -338,8 +338,9 @@ def _sorted_contacts(
 class PublishedSenses:
     """One observer's published perception at one moment: what a sensory event diffs.
 
-    `cells` and `seen` are replaced whole by each recompute, never mutated, so they
-    are held by reference; the contact and fixture mappings are detached.
+    Cells, seen cells, contacts and emitters are replaced whole by each recompute
+    (an unchanged one keeps its object), never mutated, so they are held by
+    reference; the fixture and removal mappings, mutated in place, are detached.
     """
 
     position: Tuple[int, int]
@@ -361,11 +362,11 @@ def published_senses(senses: Senses) -> PublishedSenses:
     """Capture what an observer has published, for a later sensory delta."""
     return PublishedSenses(
         position=senses.position, cells=senses.cells, seen=senses.seen,
-        entities=dict(senses.entities), objects=dict(senses.objects),
-        spatial_effects=dict(senses.spatial_effects), light_sources=dict(senses.light_sources),
+        entities=senses.entities, objects=senses.objects,
+        spatial_effects=dict(senses.spatial_effects), light_sources=senses.light_sources,
         light_source_removals=dict(senses.light_source_removals), paths_dirty=senses._paths_dirty,
         passive_perception=senses._last_passive_perception, sense_modes_hash=senses._last_sense_modes_hash,
-        sense_modes=tuple(mode.model_copy(deep=True) for mode in senses.get_sense_modes()),
+        sense_modes=tuple(senses.get_sense_modes()),  # fresh values each call; an event copies them
         visual_access=senses._last_visual_access,
     )
 
@@ -444,6 +445,18 @@ def _cell_delta(before: PublishedSenses, after: PublishedSenses, initial: bool,
             light, hazards)
 
 
+def _contact_delta(before: Dict[UUID, PerceivedContact], after: Dict[UUID, PerceivedContact], initial: bool,
+                   ) -> Tuple[Dict[UUID, PerceivedContact], Set[UUID]]:
+    """Changed and removed contacts; an unchanged mapping is the same object, an unchanged contact too."""
+    if initial:
+        return dict(after), set()
+    if before is after:
+        return {}, set()
+    changed = {uuid: contact for uuid, contact in after.items()
+               if (previous := before.get(uuid)) is not contact and previous != contact}
+    return changed, set(before) - set(after)
+
+
 def emit_sensory_update_delta(
     owner_uuid: UUID,
     cause_event: Optional[Event],
@@ -473,26 +486,17 @@ def emit_sensory_update_delta(
     started = time.perf_counter() if timing else 0.0
     visible_added, visible_removed, seen_added, light_changed, hazards_changed = _cell_delta(before, after, initial)
 
-    entity_changed = {
-        uuid: contact
-        for uuid, contact in after.entities.items()
-        if initial or before.entities.get(uuid) != contact
-    }
-    entity_removed = set() if initial else set(before.entities) - set(after.entities)
-    object_changed = {
-        uuid: contact
-        for uuid, contact in after.objects.items()
-        if initial or before.objects.get(uuid) != contact
-    }
-    object_removed = set() if initial else set(before.objects) - set(after.objects)
+    entity_changed, entity_removed = _contact_delta(before.entities, after.entities, initial)
+    object_changed, object_removed = _contact_delta(before.objects, after.objects, initial)
     effects_changed = {
         identity: value for identity, value in after.spatial_effects.items()
         if initial or before.spatial_effects.get(identity) != value
     }
     effects_removed = set() if initial else before.spatial_effects.keys() - after.spatial_effects.keys()
 
-    sources_changed = {identity: value for identity, value in after.light_sources.items()
-        if initial or before.light_sources.get(identity) != value}
+    sources_changed = ({} if not initial and before.light_sources is after.light_sources else
+        {identity: value for identity, value in after.light_sources.items()
+         if initial or before.light_sources.get(identity) is not value and before.light_sources.get(identity) != value})
     sources_removed = {identity: revision for identity, revision in after.light_source_removals.items()
         if not initial and before.light_source_removals.get(identity) != revision}
     passive_changed = initial or before.passive_perception != after.passive_perception
@@ -625,6 +629,22 @@ class ObserverField:
     felt_keys: Tuple[Tuple[SensesType, Tuple[Position, int, int]], ...]
     felt_rows: Tuple[np.ndarray, ...]
     grants: CellLayer                # bool over the window: cells whose facts this observer is granted
+    contact_rows: np.ndarray         # the published contacts as rows: kind, uuid halves, x, y, visual, senses
+    known_objects: Tuple[Tuple[UUID, Position], ...]
+    light_values: Dict[UUID, Tuple]  # each published emitter's descriptor inputs
+    light_inputs: Optional[Tuple]    # what the published emitters were derived from (reused while equal)
+
+
+NO_CONTACT_ROWS = np.zeros((0, 7), dtype=np.int64)
+
+
+@dataclass(frozen=True)
+class LightSourceRow:
+    """One active emitter's observer-independent descriptor values, read once per settlement."""
+
+    identity: UUID
+    anchor_uuid: Optional[UUID]
+    values: Tuple                    # revision, position, height, appearance, radii, actor_anchored
 
 
 @dataclass(frozen=True)
@@ -635,20 +655,51 @@ class SettlementWorld:
     light: CellLayer
     obscurement_owners: Tuple[Tuple[UUID, CellLayer], ...]
     obscurement: CellLayer           # OR of the contributing owners' bits over the cell box
-    hazard_owners: Tuple[Tuple[SpatialConditionOwner | BaseBlock, CellLayer], ...]
+    hazard_owners: Tuple[SpatialConditionOwner | BaseBlock, ...]
+    hazard_x: np.ndarray             # the owners' cells, concatenated, with each cell's owner index
+    hazard_y: np.ndarray
+    hazard_owner: np.ndarray
+    light_sources: Tuple[LightSourceRow, ...]
+    light_key: Tuple                 # the emitters' descriptor inputs, for an unchanged observer's reuse
     optical_revision: int
     propagation_revision: int
 
 
-@dataclass(frozen=True)
-class TargetFacts:
-    """What every observer of one settlement reads the same about one contact target."""
+STEALTH_NONE = np.iinfo(np.int64).min
+ROW_ENTITY, ROW_OBJECT, ROW_SIDE = 0, 1, 2
+UUID_LOW = (1 << 64) - 1
 
-    block: BaseBlock
-    listed: bool                     # appears_in_entity_contacts / should_include_in_senses_objects
-    stealth_dc: Optional[int]
-    invisible: bool
-    boundary_position: Optional[Position]   # the placement position of a boundary placement
+
+@dataclass(frozen=True)
+class ContactTable:
+    """The contact targets the views of one settlement can reach, as arrays (frozen, built once).
+
+    A target's observer-independent facts (stealth DC, invisibility, boundary placement) are
+    columns; unlisted targets have no row. A cell row is one (occupied cell, target) pair of an
+    entity or a center object; a side row is one object on a boundary side with a reached end,
+    with the channels open from across that side.
+    """
+
+    blocks: Tuple[BaseBlock, ...]
+    uuids: Tuple[UUID, ...]
+    entity_index: Dict[UUID, int]
+    uuid_halves: np.ndarray          # (targets, 2) uint64
+    stealth: np.ndarray              # int64 stealth DC, STEALTH_NONE when unhidden
+    invisible: np.ndarray            # bool
+    cell_x: np.ndarray
+    cell_y: np.ndarray
+    cell_target: np.ndarray
+    cell_kind: np.ndarray            # ROW_ENTITY or ROW_OBJECT
+    side_x: np.ndarray               # the owner Tile of the side
+    side_y: np.ndarray
+    across_x: np.ndarray
+    across_y: np.ndarray
+    across_tile: np.ndarray          # bool: the cell across holds a Tile
+    across_optical: np.ndarray       # bool: the optical channel is open from across
+    across_propagation: np.ndarray   # bool: the propagation channel is open from across
+    side_target: np.ndarray
+    side_position_x: np.ndarray      # the boundary placement position (the contact position)
+    side_position_y: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -968,7 +1019,6 @@ class SpatialSensesSystem:
         senses = self.senses_by_observer[observer_uuid]
         initial = observer_uuid not in self.published_observers
         before, effect_before = settled
-        self._refresh_light_sources(observer_uuid, senses)
         after = published_senses(senses)
         # Only the fixtures this settlement re-observed can change (an initial update carries all).
         before = _replace_effects(before, {identity: value for identity, value in effect_before.items()
@@ -980,8 +1030,8 @@ class SpatialSensesSystem:
             before.position != after.position,
             not _same_cells(before.cells.visible, after.cells.visible),
             not _same_cells(before.seen, after.seen),
-            before.entities != after.entities,
-            before.objects != after.objects,
+            before.entities is not after.entities and before.entities != after.entities,
+            before.objects is not after.objects and before.objects != after.objects,
             before.passive_perception != after.passive_perception,
             not _same_cells(before.cells.hazard, after.cells.hazard),
             before.spatial_effects != after.spatial_effects,
@@ -1026,7 +1076,6 @@ class SpatialSensesSystem:
         senses = self.senses_by_observer.get(observer_uuid)
         if senses is None:
             return None
-        self._refresh_light_sources(observer_uuid, senses)
         event = emit_sensory_update_delta(
             observer_uuid, None, before, published_senses(senses),
             SensoryUpdateReason.UNKNOWN,
@@ -1056,21 +1105,35 @@ class SpatialSensesSystem:
         if exists.values.size:
             for _, layer in owners:
                 combined |= embed(layer, exists.box, np.dtype(np.uint8))
+        hazard_owners, hazard_x, hazard_y, hazard_owner = grid.hazard_owners()
+        light_rows = grid.light_source_rows()
         return SettlementWorld(exists, grid.cell_light, owners, CellLayer(exists.x0, exists.y0, combined),
-                               tuple(grid.hazard_owners()), grid.optical_revision, grid.propagation_revision)
+                               hazard_owners, hazard_x, hazard_y, hazard_owner,
+                               tuple(LightSourceRow(identity, anchor, values) for identity, anchor, values in light_rows),
+                               tuple(light_rows), grid.optical_revision, grid.propagation_revision)
 
     def _recompute(self, observers: Sequence[UUID],
                    affected: Mapping[UUID, Optional[Set[Position]]]) -> Dict[UUID, Dict[UUID, Optional[PerceivedSpatialEffect]]]:
         """Recompute the observers' views with one settlement world and one target table."""
+        diagnostic = action_timing_enabled()
+        started = time.perf_counter() if diagnostic else 0.0
         world = self._world()
+        if diagnostic:
+            record_action_timing("sensory.settlement.world_ms", started)
         views = []
         for observer_uuid in observers:
             record_action_count("sensory.full_recompute", 1)
+            started = time.perf_counter() if diagnostic else 0.0
             views.append(self._view(observer_uuid, world))
-        facts = self._target_facts(views, world)
+            if diagnostic:
+                record_action_timing("sensory.recompute.view_ms", started)
+        started = time.perf_counter() if diagnostic else 0.0
+        table = self._contact_table(views, world)
+        if diagnostic:
+            record_action_timing("sensory.settlement.contact_table_ms", started)
         touched = {}
         for view in views:
-            touched[view.owner.uuid] = self._publish(view, world, facts, affected[view.owner.uuid])
+            touched[view.owner.uuid] = self._publish(view, world, table, affected[view.owner.uuid])
         self.perception_revision += 1
         return touched
 
@@ -1131,49 +1194,91 @@ class SpatialSensesSystem:
                   min(origin[0] + reach, cell_box[2]), min(origin[1] + reach, cell_box[3]))
         selection = (origin[0] - reach - 1, origin[1] - reach - 1, origin[0] + reach + 1, origin[1] + reach + 1)
         field = ObserverField(origin, window, selection, optical_key, routes, tuple(felt_keys), tuple(felt_rows),
-                              CellLayer(window[0], window[1], np.zeros((0, 0), dtype=bool)))
+                              CellLayer(window[0], window[1], np.zeros((0, 0), dtype=bool)),
+                              previous.contact_rows if previous is not None else NO_CONTACT_ROWS,
+                              previous.known_objects if previous is not None else (),
+                              previous.light_values if previous is not None else {},
+                              previous.light_inputs if previous is not None else None)
         return ObserverView(owner, senses, origin, modes, ordinary_sight, optical_radius if visual_access else 0,
                             field, optical, exists, seen_frame, senses_frame, felt_frame)
 
-    def _target_facts(self, views: Sequence[ObserverView],
-                      world: SettlementWorld) -> Dict[Tuple[UUID, bool], Optional[TargetFacts]]:
-        """The observer-independent facts of every target some view of this settlement can reach,
-        built once: occupants of reached cells and objects on sides with a reached end."""
+    def _contact_table(self, views: Sequence[ObserverView], world: SettlementWorld) -> ContactTable:
+        """Every target some view of this settlement can reach, and its observer-independent facts."""
         grid = get_map()
         box = world.exists.box
-        if not views or not world.exists.values.size:
-            return {}
         reached = np.zeros(world.exists.values.shape, dtype=bool)
         for view in views:
             frame = view.seen_frame | (view.felt_frame != 0)
             reached |= embed(CellLayer(view.origin[0] - R, view.origin[1] - R, frame[:-1].reshape(SIDE, SIDE)),
                              box, np.dtype(bool))
-        identities: Set[Tuple[UUID, bool]] = set()
-        for (x, y), (entity_ids, object_ids) in grid.contact_cells_in_box(box):
-            if reached[x - box[0], y - box[1]]:
-                identities.update((identity, True) for identity in entity_ids)
-                identities.update((identity, False) for identity in object_ids)
         width, height = reached.shape
-        for (x, y), direction, side_objects in grid.boundary_sides_in_box(box):
-            dx, dy = DELTAS[direction]
-            i, j = x - box[0], y - box[1]
-            if reached[i, j] or (0 <= i + dx < width and 0 <= j + dy < height and reached[i + dx, j + dy]):
-                identities.update((identity, False) for identity in side_objects)
-        facts: Dict[Tuple[UUID, bool], Optional[TargetFacts]] = {}
-        for identity, as_entity in identities:
-            block = BaseBlock.get(identity)
-            if block is None:
-                facts[(identity, as_entity)] = None
-                continue
-            placement = None if as_entity else grid.get_object_placement(identity)
-            facts[(identity, as_entity)] = TargetFacts(
-                block, block.appears_in_entity_contacts() if as_entity else block.should_include_in_senses_objects(),
-                block.stealth_dc, block.is_invisible,
-                placement.position if placement is not None and placement.boundary_direction is not None else None)
-        return facts
+        blocks: List[BaseBlock] = []
+        uuids: List[UUID] = []
+        stealth: List[int] = []
+        invisible: List[bool] = []
+        index: Dict[Tuple[UUID, bool], Optional[int]] = {}
+        entity_index: Dict[UUID, int] = {}
 
-    def _publish(self, view: ObserverView, world: SettlementWorld,
-                 facts: Mapping[Tuple[UUID, bool], Optional[TargetFacts]],
+        def target(identity: UUID, as_entity: bool) -> Optional[int]:
+            key = (identity, as_entity)
+            if key in index:
+                return index[key]
+            block = BaseBlock.get(identity)
+            listed = block is not None and (block.appears_in_entity_contacts() if as_entity
+                                            else block.should_include_in_senses_objects())
+            if block is None or not listed:
+                index[key] = None
+                return None
+            index[key] = len(blocks)
+            if as_entity:
+                entity_index[identity] = len(blocks)
+            blocks.append(block)
+            uuids.append(identity)
+            stealth.append(STEALTH_NONE if block.stealth_dc is None else block.stealth_dc)
+            invisible.append(block.is_invisible)
+            return index[key]
+
+        cells: List[Tuple[int, int, int, int]] = []
+        if world.exists.values.size:
+            for (x, y), (entity_ids, object_ids) in grid.contact_cells_in_box(box):
+                if not reached[x - box[0], y - box[1]]:
+                    continue
+                for identity in entity_ids:
+                    if (row := target(identity, True)) is not None:
+                        cells.append((x, y, row, ROW_ENTITY))
+                for identity in object_ids:
+                    if (row := target(identity, False)) is not None:
+                        cells.append((x, y, row, ROW_OBJECT))
+        sides: List[Tuple[int, ...]] = []
+        if world.exists.values.size:
+            exists = world.exists.values
+            for (x, y), direction, side_objects in grid.boundary_sides_in_box(box):
+                dx, dy = DELTAS[direction]
+                i, j = x - box[0], y - box[1]
+                across_inside = 0 <= i + dx < width and 0 <= j + dy < height
+                if not (reached[i, j] or across_inside and reached[i + dx, j + dy]):
+                    continue
+                across_tile = across_inside and bool(exists[i + dx, j + dy])
+                channels = self._open_channels(grid, (x, y), direction) if across_tile else ()
+                for identity in side_objects:
+                    row = target(identity, False)
+                    placement = grid.get_object_placement(identity) if row is not None else None
+                    if row is None or placement is None or placement.boundary_direction is None:
+                        continue
+                    sides.append((x, y, x + dx, y + dy, across_tile, WorldEdgeChannel.OPTICAL in channels,
+                                  WorldEdgeChannel.PROPAGATION in channels, row, *placement.position))
+        cell_array = np.array(cells, dtype=np.int64).reshape(-1, 4)
+        side_array = np.array(sides, dtype=np.int64).reshape(-1, 10)
+        return ContactTable(
+            tuple(blocks), tuple(uuids), entity_index,
+            np.array([(identity.int >> 64, identity.int & UUID_LOW) for identity in uuids],
+                     dtype=np.uint64).reshape(-1, 2),
+            np.array(stealth, dtype=np.int64), np.array(invisible, dtype=bool),
+            cell_array[:, 0], cell_array[:, 1], cell_array[:, 2], cell_array[:, 3],
+            side_array[:, 0], side_array[:, 1], side_array[:, 2], side_array[:, 3], side_array[:, 4] != 0,
+            side_array[:, 5] != 0, side_array[:, 6] != 0, side_array[:, 7], side_array[:, 8], side_array[:, 9])
+
+    def _publish(self, view: ObserverView, world: SettlementWorld, table: ContactTable,
                  affected: Optional[Set[Position]]) -> Dict[UUID, Optional[PerceivedSpatialEffect]]:
         """Contacts, hazards, volume sight and fixtures of one view; publish them on its Senses."""
         diagnostic = action_timing_enabled()
@@ -1182,19 +1287,23 @@ class SpatialSensesSystem:
         owner, senses, origin = view.owner, view.senses, view.origin
         observer_uuid = owner.uuid
         passive = owner.get_passive_perception()
-        entities, objects = self._contacts(view, facts, passive)
+        if diagnostic:
+            record_action_timing("sensory.recompute.passive_ms", started)
+            started = time.perf_counter()
+        entities, objects, contact_rows, known = self._contacts(view, table, passive)
         if diagnostic:
             record_action_timing("sensory.recompute.contacts_ms", started)
             started = time.perf_counter()
         window = view.field.window
+        # Each hazard owner states its rule once per observer; its cells are OR-ed in one scatter.
         hazard_frame = np.zeros(OFF + 1, dtype=bool)
-        frame = frame_box(origin)
-        for hazard_owner, layer in world.hazard_owners:
-            if not boxes_intersect(layer.box, frame):
-                continue
-            if hazard_owner.is_hazardous_for(observer_uuid):
-                xs, ys = np.nonzero(layer.values)
-                hazard_frame[frame_index(xs + layer.x0, ys + layer.y0, origin)] = True
+        cell_rows = frame_index(world.hazard_x, world.hazard_y, origin)
+        reaching = np.unique(world.hazard_owner[(cell_rows != OFF) & view.seen_frame[cell_rows]])
+        if reaching.size:
+            hazardous = np.zeros(len(world.hazard_owners), dtype=bool)
+            hazardous[reaching] = [world.hazard_owners[owner].is_hazardous_for(observer_uuid)
+                                   for owner in reaching.tolist()]
+            hazard_frame[cell_rows[hazardous[world.hazard_owner]]] = True
         hazard_frame[OFF] = False
         hazard_frame &= view.seen_frame
         if diagnostic:
@@ -1238,26 +1347,91 @@ class SpatialSensesSystem:
             cells_array = np.array(sorted(volume_grants), dtype=np.int64)
             grants[frame_index(cells_array[:, 0], cells_array[:, 1], origin)] = True
         grants[OFF] = False
+        if diagnostic:
+            record_action_timing("sensory.recompute.grants_ms", started)
+            started = time.perf_counter()
+        light_inputs, light_values = self._refresh_light_sources(observer_uuid, senses, world, view.field)
+        if diagnostic:
+            record_action_timing("sensory.recompute.light_sources_ms", started)
+            started = time.perf_counter()
         self.fields[observer_uuid] = ObserverField(
             view.field.origin, window, view.field.selection, view.field.optical_key, view.field.routes,
-            view.field.felt_keys, view.field.felt_rows, CellLayer(window[0], window[1], window_of(grants, origin, window)))
+            view.field.felt_keys, view.field.felt_rows, CellLayer(window[0], window[1], window_of(grants, origin, window)),
+            contact_rows, known, light_values, light_inputs)
         if diagnostic:
             record_action_timing("sensory.recompute.publish_ms", started)
         return effect_before
 
-    def _contacts(self, view: ObserverView, facts: Mapping[Tuple[UUID, bool], Optional[TargetFacts]],
-                  passive: int) -> Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact]]:
-        """Entity and object contacts: per target, on the cells the view reaches only."""
+    def _contacts(self, view: ObserverView, table: ContactTable, passive: int,
+                  ) -> Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray,
+                             Tuple[Tuple[UUID, Position], ...]]:
+        """Entity and object contacts as rows over the settlement's table: the per-target rules
+        (hiding, invisibility, boundary evidence) are masks; Python runs per observable target and
+        per contact only when the observer's rows changed."""
         grid = get_map()
         owner, senses, origin, modes = view.owner, view.senses, view.origin, view.modes
         observer_uuid = owner.uuid
-        entities: Dict[UUID, PerceivedContact] = {}
-        objects: Dict[UUID, PerceivedContact] = {}
+        seen_frame, felt_frame, senses_frame = view.seen_frame, view.felt_frame, view.senses_frame
 
-        def admitted(target: TargetFacts) -> bool:
-            if not target.block.is_observable_to(observer_uuid):
-                return False
-            return target.stealth_dc is None or target.stealth_dc < passive
+        def reveals(frame_rows: np.ndarray) -> np.ndarray:
+            distance = FRAME_DISTANCE_FEET[frame_rows]
+            return reach_mask(modes, SensesType.TRUESIGHT, distance) | reach_mask(modes, SensesType.SEE_INVISIBLE, distance)
+
+        # Cell rows: the cell's own evidence.
+        index = frame_index(table.cell_x, table.cell_y, origin)
+        cell_target = table.cell_target
+        cell_visual = seen_frame[index] & (reveals(index) | ~table.invisible[cell_target])
+        cell_mask = np.where(cell_visual, senses_frame[index], 0) | felt_frame[index]
+        cell_keep = (table.stealth[cell_target] < passive) & (cell_visual | (cell_mask != 0))
+        own_index = table.entity_index.get(observer_uuid)
+        if own_index is not None:
+            cell_keep &= ~((table.cell_kind == ROW_ENTITY) & (cell_target == own_index))
+        # Side rows: a side is reached from its owner Tile, and from across unless the far Tile's
+        # exit layer blocks the channel.
+        own = frame_index(table.side_x, table.side_y, origin)
+        across = frame_index(table.across_x, table.across_y, origin)
+        side_target = table.side_target
+        own_optical = seen_frame[own]
+        own_felt = felt_frame[own]
+        across_optical = seen_frame[across] & table.across_tile & table.across_optical
+        across_felt = felt_frame[across]
+        across_propagation = (across_felt != 0) & table.across_tile & table.across_propagation
+        hidden = table.invisible[side_target]
+        visual_own = own_optical & (reveals(own) | ~hidden)
+        visual_across = across_optical & (reveals(across) | ~hidden)
+        side_visual = visual_own | visual_across
+        side_mask = (np.where(visual_own, senses_frame[own], 0) | np.where(visual_across, senses_frame[across], 0)
+                     | np.where(own_optical | (own_felt != 0), own_felt, 0)
+                     | np.where(across_optical | across_propagation, across_felt, 0))
+        side_keep = (table.stealth[side_target] < passive) & (side_visual | (side_mask != 0))
+        # Observability is the target's own rule, asked once per kept target.
+        kept_targets = np.unique(np.concatenate((cell_target[cell_keep], side_target[side_keep])))
+        hidden_targets = [target for target in kept_targets.tolist()
+                          if not table.blocks[target].is_observable_to(observer_uuid)]
+        if hidden_targets:
+            cell_keep &= ~np.isin(cell_target, hidden_targets)
+            side_keep &= ~np.isin(side_target, hidden_targets)
+        order = np.flatnonzero(cell_keep)
+        order = order[np.lexsort((table.cell_y[order], table.cell_x[order]))]
+        sides = np.flatnonzero(side_keep)
+        halves = table.uuid_halves.astype(np.int64)
+        rows = np.concatenate((
+            np.column_stack((table.cell_kind[order], halves[cell_target[order]], table.cell_x[order],
+                             table.cell_y[order], cell_visual[order], cell_mask[order])),
+            np.column_stack((np.full(sides.size, ROW_SIDE), halves[side_target[sides]],
+                             table.side_position_x[sides], table.side_position_y[sides], side_visual[sides],
+                             side_mask[sides])))).astype(np.int64).reshape(-1, 7)
+        # Explicit construction knowledge is not visual sight or truesight.
+        # Only the declaring creator receives this otherwise invisible contact.
+        known = tuple((identity, placement.position) for identity in grid.get_known_object_candidates(observer_uuid)
+                      if (subject := BaseBlock.get(identity)) is not None
+                      and (placement := grid.get_object_placement(identity)) is not None
+                      and subject.is_object_known_to(observer_uuid))
+        previous_rows = view.field.contact_rows
+        if previous_rows.shape == rows.shape and np.array_equal(previous_rows, rows) \
+                and view.field.known_objects == known:
+            return senses.entities, senses.objects, rows, known
+        previous_entities, previous_objects = senses.entities, senses.objects
 
         def contact(position: Position, visual: bool, mask: int, previous: Optional[PerceivedContact],
                     ) -> PerceivedContact:
@@ -1267,122 +1441,55 @@ class SpatialSensesSystem:
                 return previous
             return PerceivedContact(position=position, visual=visual, special_senses=special)
 
-        occupied = grid.contact_cells_in_box(view.field.window)
-        if occupied:
-            index = frame_index(np.fromiter((row[0][0] for row in occupied), np.int64, len(occupied)),
-                                np.fromiter((row[0][1] for row in occupied), np.int64, len(occupied)), origin)
-            seen, felt = view.seen_frame[index], view.felt_frame[index]
-            distance = FRAME_DISTANCE_FEET[index]
-            reveals = reach_mask(modes, SensesType.TRUESIGHT, distance) | reach_mask(
-                modes, SensesType.SEE_INVISIBLE, distance)
-            hit = np.flatnonzero(seen | (felt != 0))
-            hit = hit[np.argsort(index[hit], kind="stable")]
-            for i, cell_seen, cell_senses, cell_felt, cell_reveals, cell_distance in zip(
-                    hit.tolist(), seen[hit].tolist(), view.senses_frame[index[hit]].tolist(), felt[hit].tolist(),
-                    reveals[hit].tolist(), distance[hit].tolist()):
-                position, (entity_ids, object_ids) = occupied[i]
-                for identity in entity_ids:
-                    if identity == observer_uuid:
-                        continue
-                    target = facts.get((identity, True))
-                    if target is None or not target.listed or not admitted(target):
-                        continue
-                    visual = cell_seen and (cell_reveals or not target.invisible)
-                    mask = (cell_senses if visual else 0) | cell_felt
-                    if visual or mask:
-                        entities[identity] = contact(position, visual, mask, senses.entities.get(identity))
-                for identity in object_ids:
-                    target = facts.get((identity, False))
-                    if target is None or not target.listed or not admitted(target):
-                        continue
-                    visual = cell_seen and (cell_reveals or not target.invisible)
-                    mask = (cell_senses if visual else 0) | cell_felt
-                    if not (visual or mask):
-                        continue
-                    found = objects.get(identity)
-                    if found is None:
-                        objects[identity] = contact(position, visual, mask, senses.objects.get(identity))
-                        continue
-                    # A multi-cell object: the best evidence, the union of its senses in enum order.
-                    chosen_position = min(((not found.visual, _distance_feet(origin, found.position), found.position),
-                                           (not visual, cell_distance, position)))[2]
-                    established = 0
-                    for sense in found.special_senses:
-                        established |= SENSE_BITS[sense]
-                    objects[identity] = PerceivedContact(position=chosen_position, visual=found.visual or visual,
-                                                         special_senses=SENSES_BY_ENUM[established | mask])
-        # Explicit construction knowledge is not visual sight or truesight.
-        # Only the declaring creator receives this otherwise invisible contact.
-        for identity in grid.get_known_object_candidates(observer_uuid):
-            subject = BaseBlock.get(identity)
-            placement = grid.get_object_placement(identity)
-            if (subject is not None and placement is not None
-                    and subject.is_object_known_to(observer_uuid) and identity not in objects):
-                objects[identity] = PerceivedContact(position=placement.position, visual=False, special_senses=())
-        for identity, found in self._boundary_contacts(view, facts, admitted).items():
-            objects[identity] = found
-        return entities, objects
-
-    def _boundary_contacts(self, view: ObserverView, facts: Mapping[Tuple[UUID, bool], Optional[TargetFacts]],
-                           admitted) -> Dict[UUID, PerceivedContact]:
-        """Boundary evidence per target: a side is reached from its owner Tile and, unless the far
-        Tile's own exit layer blocks the channel, from across the side."""
-        grid = get_map()
-        origin, modes, senses = view.origin, view.modes, view.senses
-        window = view.field.window
-        sides = grid.boundary_sides_in_box((window[0] - 1, window[1] - 1, window[2] + 1, window[3] + 1))
-        if not sides:
-            return {}
-        own_x = np.fromiter((side[0][0] for side in sides), np.int64, len(sides))
-        own_y = np.fromiter((side[0][1] for side in sides), np.int64, len(sides))
-        step = np.array([DELTAS[side[1]] for side in sides], dtype=np.int64).reshape(-1, 2)
-        own = frame_index(own_x, own_y, origin)
-        across = frame_index(own_x + step[:, 0], own_y + step[:, 1], origin)
-        seen, felt = view.seen_frame, view.felt_frame
-        reached = np.flatnonzero(seen[own] | (felt[own] != 0) | seen[across] | (felt[across] != 0))
-        if not reached.size:
-            return {}
-        ends = np.concatenate((own[reached], across[reached]))
-        end_distance = FRAME_DISTANCE_FEET[ends]
-        end_rows = list(zip(seen[ends].tolist(), felt[ends].tolist(), view.senses_frame[ends].tolist(),
-                            (reach_mask(modes, SensesType.TRUESIGHT, end_distance)
-                             | reach_mask(modes, SensesType.SEE_INVISIBLE, end_distance)).tolist()))
-        across_tiles = view.exists_frame[across[reached]].tolist()
-        evidence: Dict[UUID, List[Tuple[bool, int, int, bool]]] = {}
-        count = reached.size
-        for k, i in enumerate(reached.tolist()):
-            position, direction, identities = sides[i]
-            rows: List[Tuple[bool, int, int, bool]] = []
-            for end_row, channels in ((end_rows[k], CHANNELS), (end_rows[k + count], (
-                    self._open_channels(grid, position, direction) if across_tiles[k] else ()))):
-                end_seen, end_felt, end_senses, end_reveals = end_row
-                if end_seen and WorldEdgeChannel.OPTICAL in channels:
-                    rows.append((True, end_felt, end_senses, end_reveals))
-                if end_felt and WorldEdgeChannel.PROPAGATION in channels:
-                    rows.append((False, end_felt, 0, False))
-            if rows:
-                for identity in identities:
-                    evidence.setdefault(identity, []).extend(rows)
-        result: Dict[UUID, PerceivedContact] = {}
-        for identity in sorted(evidence, key=str):
-            target = facts.get((identity, False))
-            if target is None or target.boundary_position is None or not target.listed or not admitted(target):
+        if view.field.known_objects == known and previous_rows.size:
+            # Only the targets whose rows changed are resolved again; the others keep their contact.
+            new_keys, old_keys = _target_keys(rows), _target_keys(previous_rows)
+            new_rows, old_rows = _row_values(rows), _row_values(previous_rows)
+            touched = np.unique(np.concatenate((new_keys[~np.isin(new_rows, old_rows)],
+                                                old_keys[~np.isin(old_rows, new_rows)])))
+            entities, objects = dict(previous_entities), dict(previous_objects)
+            for group, high, low in _key_columns(touched):
+                (entities if group == 0 else objects).pop(UUID(int=(high << 64) | low), None)
+            selected = np.isin(new_keys, touched)
+            cell_selected, side_selected = selected[:order.size], selected[order.size:]
+            known_touched = bool(known)
+        else:
+            entities, objects = {}, {}
+            cell_selected = np.ones(order.size, dtype=bool)
+            side_selected = np.ones(sides.size, dtype=bool)
+            known_touched = True
+        cells = order[cell_selected]
+        for kind, target, x, y, visual, mask in zip(
+                table.cell_kind[cells].tolist(), cell_target[cells].tolist(), table.cell_x[cells].tolist(),
+                table.cell_y[cells].tolist(), cell_visual[cells].tolist(), cell_mask[cells].tolist()):
+            identity = table.uuids[target]
+            if kind == ROW_ENTITY:
+                entities[identity] = contact((x, y), visual, mask, previous_entities.get(identity))
                 continue
-            visual, mask = False, 0
-            for row_seen, row_felt, row_senses, row_reveals in evidence[identity]:
-                row_visual = row_seen and (row_reveals or not target.invisible)
-                visual |= row_visual
-                mask |= (row_senses if row_visual else 0) | row_felt
-            if not (visual or mask):
+            found = objects.get(identity)
+            if found is None:
+                objects[identity] = contact((x, y), visual, mask, previous_objects.get(identity))
                 continue
-            special = SENSES_BY_VALUE[mask]
-            previous = senses.objects.get(identity)
-            result[identity] = (previous if type(previous) is PerceivedContact
-                                and previous.position == target.boundary_position and previous.visual == visual
-                                and previous.special_senses == special
-                                else PerceivedContact(position=target.boundary_position, visual=visual,
-                                                      special_senses=special))
-        return result
+            # A multi-cell object: the best evidence, the union of its senses in enum order.
+            chosen_position = min(((not found.visual, _distance_feet(origin, found.position), found.position),
+                                   (not visual, _distance_feet(origin, (x, y)), (x, y))))[2]
+            established = 0
+            for sense in found.special_senses:
+                established |= SENSE_BITS[sense]
+            objects[identity] = PerceivedContact(position=chosen_position, visual=found.visual or visual,
+                                                 special_senses=SENSES_BY_ENUM[established | mask])
+        if known_touched:
+            for identity, position in known:
+                if identity not in objects:
+                    objects[identity] = PerceivedContact(position=position, visual=False, special_senses=())
+        side_rows = sides[side_selected]
+        for target, x, y, visual, mask in sorted(zip(
+                side_target[side_rows].tolist(), table.side_position_x[side_rows].tolist(),
+                table.side_position_y[side_rows].tolist(), side_visual[side_rows].tolist(),
+                side_mask[side_rows].tolist()), key=lambda row: str(table.uuids[row[0]])):
+            identity = table.uuids[target]
+            objects[identity] = contact((x, y), visual, mask, previous_objects.get(identity))
+        return entities, objects, rows, known
 
     @staticmethod
     def _open_channels(grid, position: Position, direction: CardinalDirection) -> Tuple[WorldEdgeChannel, ...]:
@@ -1415,7 +1522,9 @@ class SpatialSensesSystem:
         candidates = np.zeros(OFF + 1, dtype=bool)
         candidates[view.field.routes.rows] = True
         cells, lengths = supercover_route_table()
-        owner_frames = {owner_uuid: frame_of(layer, origin) for owner_uuid, layer in world.obscurement_owners}
+        frame = frame_box(origin)
+        owner_frames = {owner_uuid: frame_of(layer, origin) for owner_uuid, layer in world.obscurement_owners
+                        if boxes_intersect(layer.box, frame)}
         sights: Dict[UUID, FrozenSet[Position]] = {}
         upper: Dict[UUID, Tuple[VolumeSurfaceSight, ...]] = {}
         providers_of: Dict[UUID, Dict[UUID, FrozenSet[Position]]] = {}
@@ -1427,35 +1536,40 @@ class SpatialSensesSystem:
             assert condition is not None
             own = owner_frames[owner_uuid]
             others = np.zeros(OFF + 1, dtype=np.uint8)
-            for other_uuid, frame in owner_frames.items():
+            for other_uuid, other in owner_frames.items():
                 if other_uuid != owner_uuid:
-                    others |= frame
+                    others |= other
             at_entrance = own[surface_set] != 0
             entrance_light = optical.surface_light_rows[at_entrance]
             entrance_eligibility = optical.surface_eligibility[at_entrance]
             established = bool(((entrance_eligibility & SPECIAL) != 0).any() or (
                 ((entrance_eligibility & PLAIN) != 0) & exists[entrance_light]
                 & (light[entrance_light] > LightLevel.DARKNESS.value)).any())
-            occupied = grid.get_spatial_condition_positions(owner_uuid)
-            geometry = set(occupied)
-            for suppression in condition.spatial_suppressions:
-                geometry |= set(suppression.positions)
+            footprint = grid.condition_footprint(owner_uuid)
+            assert footprint is not None
+            occupied_x, occupied_y = np.nonzero(footprint.values)
+            occupied_x, occupied_y = occupied_x + footprint.x0, occupied_y + footprint.y0
+            suppressed = [cell for suppression in condition.spatial_suppressions for cell in suppression.positions]
+            if suppressed:
+                # Geometry is the footprint and the suppressed cells, sorted (x, y).
+                everything = np.unique(np.concatenate((np.column_stack((occupied_x, occupied_y)),
+                                                       np.array(suppressed, dtype=np.int64).reshape(-1, 2))), axis=0)
+                xs, ys = everything[:, 0], everything[:, 1]
+                in_footprint = _gather(footprint.values, footprint.box, everything)
+            else:
+                xs, ys = occupied_x, occupied_y
+                in_footprint = np.ones(occupied_x.size, dtype=bool)
             observation = condition.get_spatial_observation(set(), observer_uuid=view.owner.uuid, discovered=True)
             sphere = observation.area_geometry if observation is not None else None
             base = observation.anchor_elevation_steps if observation is not None else None
-            positions = sorted(geometry)
-            xs = np.array([cell[0] for cell in positions], dtype=np.int64)
-            ys = np.array([cell[1] for cell in positions], dtype=np.int64)
             rows = frame_index(xs, ys, origin)
             in_view = candidates[rows]
             surfaces: Dict[Position, VolumeSurfaceSight] = {}
             dependencies: Set[Position] = set()
             if isinstance(sphere, SpherePresentationGeometry) and base is not None:
                 radius_squared = view.optical_radius ** 2
-                for k, position in enumerate(positions):
-                    if in_view[k] or position not in occupied or (
-                            (position[0] - origin[0]) ** 2 + (position[1] - origin[1]) ** 2 > radius_squared):
-                        continue
+                near = ~in_view & in_footprint & ((xs - origin[0]) ** 2 + (ys - origin[1]) ** 2 <= radius_squared)
+                for position in zip(xs[near].tolist(), ys[near].tolist()):
                     # Tested routes are granted even when rejected: a remote door
                     # closing OR reopening must update this surface sight.
                     dependencies.update((cell[0] + dx, cell[1] + dy) for cell in supercover_line(origin, position)
@@ -1473,12 +1587,15 @@ class SpatialSensesSystem:
                            for x, y in ((position[0] + cx, position[1] + cy) for cx in (-.5, .5) for cy in (-.5, .5))):
                         continue
                     surfaces[position] = VolumeSurfaceSight(position=position, lower_height_planes=planes)
-            tested = np.array([in_view[k] or position in surfaces for k, position in enumerate(positions)], dtype=bool)
-            visible: Set[Position] = set()
+            tested = in_view.copy()
+            if surfaces:
+                tested |= _cells_mask(surfaces, (int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())))[
+                    xs - int(xs.min()), ys - int(ys.min())]
+            visible: FrozenSet[Position] = frozenset()
             upper_rows: List[VolumeSurfaceSight] = []
             if tested.any() and established:
                 picked = rows[tested]
-                picked_positions = [position for k, position in enumerate(positions) if tested[k]]
+                picked_x, picked_y = xs[tested], ys[tested]
                 routes = cells[picked, :int(lengths[picked].max())]
                 codes = own[routes]
                 inside = codes != 0
@@ -1492,16 +1609,14 @@ class SpatialSensesSystem:
                 shown = enters & exists[light_rows] & (eligibility != 0) & (
                     ((eligibility & SPECIAL) != 0)
                     | (((eligibility & PLAIN) != 0) & (light[light_rows] > LightLevel.DARKNESS.value)))
-                for k in np.flatnonzero(shown).tolist():
-                    position = picked_positions[k]
-                    surface = surfaces.get(position)
-                    if surface is None:
-                        visible.add(position)
-                    else:
-                        upper_rows.append(surface)
+                shown_cells = list(zip(picked_x[shown].tolist(), picked_y[shown].tolist()))
+                if surfaces:
+                    upper_rows = [surfaces[cell] for cell in shown_cells if cell in surfaces]
+                    shown_cells = [cell for cell in shown_cells if cell not in surfaces]
+                visible = frozenset(shown_cells)
             if established:
                 grants |= dependencies
-            sights[owner_uuid] = frozenset(visible)
+            sights[owner_uuid] = visible
             if upper_rows:
                 upper[owner_uuid] = tuple(upper_rows)
             providers_of[owner_uuid] = {row.provider_uuid: frozenset(row.positions)
@@ -1561,7 +1676,7 @@ class SpatialSensesSystem:
             if (previous.visible_volume_positions or previous.upper_volume_surfaces
                     or any(row.positions for row in previous.suppressions)):
                 touched.add(identity)
-            elif any(at(changed, position) for position in previous.positions):
+            elif previous.positions and _gather(changed, box, previous.positions).any():
                 touched.add(identity)
         if not reobserved.any() and not surfaces:
             before_values = {identity: senses.spatial_effects.get(identity) for identity in touched}
@@ -1575,27 +1690,26 @@ class SpatialSensesSystem:
                             position for position in row.positions if is_visible(position))})
                                               for row in previous.suppressions)})
             return before_values
-        candidates: Dict[UUID, Tuple[SpatialConditionOwner, Set[Position]]] = {}
+        candidates: Dict[UUID, Tuple[SpatialConditionOwner, Set[Position], Set[Position]]] = {}
+        surface_mask = _cells_mask(surfaces, box)
         for condition in grid.get_spatial_conditions():
             footprint = grid.condition_footprint(condition.uuid)
-            if footprint is None:
-                continue
-            if not boxes_intersect(footprint.box, box):
+            if footprint is None or not boxes_intersect(footprint.box, box):
                 continue
             inside = embed(footprint, box, np.dtype(bool))
-            own_volume = volumes.get(condition.uuid, frozenset())
-            own_upper = {row.position for row in upper.get(condition.uuid, ())}
-            observed = set(_mask_positions(box[0], box[1], inside & reobserved))
-            for position in surfaces:
-                if at(inside, position) and (at(now, position) or position in own_volume or position in own_upper):
-                    observed.add(position)
-            if observed:
-                candidates[condition.uuid] = (condition, observed)
+            seen_on = now
+            if condition.uuid in volumes or condition.uuid in upper:
+                seen_on = now | _cells_mask(volumes.get(condition.uuid, frozenset()), box) | _cells_mask(
+                    [row.position for row in upper.get(condition.uuid, ())], box)
+            observed_mask = inside & (reobserved | (surface_mask & seen_on))
+            if observed_mask.any():
+                candidates[condition.uuid] = (condition, set(_mask_positions(box[0], box[1], observed_mask)),
+                                              set(_mask_positions(box[0], box[1], observed_mask & now)))
         observations: Dict[UUID, PerceivedSpatialEffect] = {}
-        for condition, observed_positions in candidates.values():
+        for condition, observed_positions, observed_visible in candidates.values():
             volume_positions = observed_positions & volumes.get(condition.uuid, frozenset())
             observation = condition.get_spatial_observation(
-                {position for position in observed_positions if is_visible(position)}, observer_uuid=observer_uuid,
+                observed_visible, observer_uuid=observer_uuid,
                 discovered=condition.uuid in senses.spatial_effects,
             )
             if observation is not None:
@@ -1636,13 +1750,15 @@ class SpatialSensesSystem:
                 continue
             # Inspect only newly seen/changed visible cells. Hidden parts retain
             # their last observation, even when the objective owner was removed.
-            retained = {position for position in previous.positions if not at(reobserved, position)}
+            kept = (np.array(previous.positions, dtype=np.int64).reshape(-1, 2)[
+                ~_gather(reobserved, box, previous.positions)] if previous.positions else np.zeros((0, 2), np.int64))
             observed = observations.pop(identity, None)
-            if observed is not None:
-                retained.update(observed.positions)
-            if retained:
+            if observed is not None and observed.positions:
+                kept = np.concatenate((kept, np.array(observed.positions, dtype=np.int64).reshape(-1, 2)))
+            if kept.size:
+                kept = np.unique(kept, axis=0)
                 senses.spatial_effects[identity] = (observed or previous).model_copy(
-                    update={"positions": tuple(sorted(retained)),
+                    update={"positions": tuple(zip(kept[:, 0].tolist(), kept[:, 1].tolist())),
                             "visible_volume_positions": observed.visible_volume_positions if observed is not None else (),
                             "upper_volume_surfaces": observed.upper_volume_surfaces if observed is not None else (),
                             "suppressions": observed.suppressions if observed is not None else tuple(
@@ -1657,12 +1773,49 @@ class SpatialSensesSystem:
     # ------------------------------------------------------------------ light sources and helpers
 
     @staticmethod
-    def _refresh_light_sources(observer_uuid: UUID, senses: Senses) -> None:
-        """Retain compact emitter descriptors; cell illumination has its native events."""
+    def _refresh_light_sources(observer_uuid: UUID, senses: Senses, world: SettlementWorld,
+                               field: ObserverField) -> Tuple[Tuple, Dict[UUID, Tuple]]:
+        """Compact emitter descriptors of the emitters lighting a visible cell; cell illumination has
+        its native events. Returns what they were derived from and each descriptor's inputs."""
         grid = get_map()
+        words = grid.light_slots_lit_within(senses.cells.visible)
+        entities, objects = senses.entities, senses.objects
+        inputs = (world.light_key, words.tobytes(), entities, objects)
+        known = field.light_inputs
+        if (known is not None and known[2] is entities and known[3] is objects and known[1] == inputs[1]
+                and known[0] == inputs[0]):
+            return known, field.light_values
+        lit = grid.light_sources_in_slots(words)
         previous = senses.light_sources
-        sources = grid.observe_light_sources(observer_uuid, senses.cells.visible, senses.entities, senses.objects,
-                                             previous)
+        previous_values = field.light_values
+        sources: Dict[UUID, PerceivedLightSource] = {}
+        values_of: Dict[UUID, Tuple] = {}
+        reused = True
+        for row in world.light_sources:
+            identity = row.identity
+            if identity not in lit:
+                continue
+            anchor = row.anchor_uuid
+            actor = entities.get(anchor) if anchor is not None else None
+            item = objects.get(anchor) if anchor is not None else None
+            values = row.values + (
+                anchor if anchor is not None and (anchor == observer_uuid or actor is not None and actor.visual) else None,
+                anchor if item is not None and item.visual else None)
+            old = previous.get(identity)
+            if old is not None and not old.affected_tiles and previous_values.get(identity) == values:
+                sources[identity] = old
+            else:
+                reused = False
+                revision, position, height, appearance, very_bright, bright, dim, actor_anchored, \
+                    anchor_entity, anchor_item = values
+                sources[identity] = PerceivedLightSource(
+                    source_uuid=identity, revision=revision, position=position, base_height_steps=height,
+                    appearance=appearance, very_bright_radius_feet=very_bright, bright_radius_feet=bright,
+                    dim_radius_feet=dim, actor_anchored=actor_anchored, anchor_entity_uuid=anchor_entity,
+                    anchor_item_uuid=anchor_item)
+            values_of[identity] = values
+        if reused and len(sources) == len(previous):
+            return inputs, values_of
         for identity in previous:
             if identity not in sources:
                 senses.light_source_removals[identity] = max(previous[identity].revision,
@@ -1670,6 +1823,7 @@ class SpatialSensesSystem:
         for identity in sources:
             senses.light_source_removals.pop(identity, None)
         senses.light_sources = sources
+        return inputs, values_of
 
     @staticmethod
     def _residue_tile(event: Event) -> Optional[Tile]:
@@ -1755,6 +1909,44 @@ class SpatialSensesSystem:
         if hint.directional_neighbors:
             positions.update(hint.directional_neighbors)
         return positions
+
+
+def _row_values(rows: np.ndarray) -> np.ndarray:
+    """Each contact row as one comparable value (its bytes)."""
+    rows = np.ascontiguousarray(rows)
+    return rows.view(np.dtype((np.void, rows.dtype.itemsize * rows.shape[1]))).ravel()
+
+
+def _target_keys(rows: np.ndarray) -> np.ndarray:
+    """Each contact row's target key (entity or object, uuid halves) as one comparable value."""
+    return _row_values(np.column_stack(((rows[:, 0] != ROW_ENTITY).astype(np.int64), rows[:, 1], rows[:, 2])))
+
+
+def _key_columns(keys: np.ndarray) -> List[Tuple[int, int, int]]:
+    """Target keys back as (group, high, low) with the uuid halves unsigned."""
+    columns = keys.view(np.int64).reshape(-1, 3).tolist()
+    return [(group, high & UUID_LOW, low & UUID_LOW) for group, high, low in columns]
+
+
+def _gather(mask: np.ndarray, box: Box, positions: Sequence[Position] | np.ndarray) -> np.ndarray:
+    """A box-anchored mask's values at some cells, False outside the box."""
+    cells = np.asarray(positions, dtype=np.int64).reshape(-1, 2)
+    i, j = cells[:, 0] - box[0], cells[:, 1] - box[1]
+    inside = (i >= 0) & (i < mask.shape[0]) & (j >= 0) & (j < mask.shape[1])
+    values = np.zeros(cells.shape[0], dtype=bool)
+    values[inside] = mask[i[inside], j[inside]]
+    return values
+
+
+def _cells_mask(positions: Iterable[Position], box: Box) -> np.ndarray:
+    """A bool mask over a box holding some cells (cells outside it are left out)."""
+    mask = np.zeros((box[2] - box[0] + 1, box[3] - box[1] + 1), dtype=bool)
+    cells = np.array(list(positions), dtype=np.int64).reshape(-1, 2)
+    if cells.size:
+        i, j = cells[:, 0] - box[0], cells[:, 1] - box[1]
+        inside = (i >= 0) & (i < mask.shape[0]) & (j >= 0) & (j < mask.shape[1])
+        mask[i[inside], j[inside]] = True
+    return mask
 
 
 def _distance_feet(origin: Position, position: Position) -> int:

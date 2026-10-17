@@ -5,7 +5,7 @@ from dnd.core.condition_types import ConditionDurationSummary
 from collections.abc import Mapping, Sequence, Set
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -138,7 +138,7 @@ class SensesView(Protocol):
     """Minimal perception surface exposed upward by an observing block."""
 
     position: tuple[int, int]
-    visible: Mapping[tuple[int, int], object]
+    cells: Any  # the published cells, a dnd.core.view.PerceivedCells (numpy stays out of dnd/types)
     entities: Mapping[UUID, PerceivedContact]
     objects: Mapping[UUID, PerceivedContact]
     spatial_effects: Mapping[UUID, PerceivedSpatialEffect]
