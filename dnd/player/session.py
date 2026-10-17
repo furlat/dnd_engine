@@ -374,13 +374,13 @@ def _player_choices_for_transport(session: Session, actor_uuid: UUID, *, force_a
     return compact
 
 
-def encoded_player_choices(session: Session) -> bytes:
-    """The wire encoding of the retained compact choices, encoded once per discovery (plan PD2)."""
+def encoded_player_choices(session: Session, choices: PlayerChoices) -> bytes:
+    """The wire encoding of these retained compact choices, encoded once per discovery (plan PD2)."""
     cache = session.discovery
-    if cache.compact is None:
-        raise ValueError("No compact choices are retained")
+    if cache.compact is not choices:
+        raise ValueError("These choices are not the retained discovery")
     if cache.compact_json is None:
-        cache.compact_json = cache.compact.model_dump_json().encode()
+        cache.compact_json = choices.model_dump_json().encode()
     return cache.compact_json
 
 

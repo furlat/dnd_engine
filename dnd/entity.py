@@ -5,7 +5,7 @@ from typing import cast, Callable, AbstractSet, DefaultDict, Dict, FrozenSet, Ma
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from collections import defaultdict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from contextlib import contextmanager
 from functools import cache
 import time
@@ -122,6 +122,18 @@ from dnd.core.base_actions import (
     OpportunityAttackExposure,
     PositionDiscoveryContract, target_resolution_sort_key,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ThreatExits:
+    """One discovery call's visible hostile threat domains, with which of them each path step exits.
+
+    `exits` memoizes domain indices per step, so it lives only with these
+    domains: the call's paths share their steps (plan PD2).
+    """
+
+    domains: Tuple[Tuple['Entity', FrozenSet[Tuple[int, int]]], ...]
+    exits: Dict[Tuple[Tuple[int, int], Tuple[int, int]], Tuple[int, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -4132,28 +4144,26 @@ class Entity(BaseBlock):
     @staticmethod
     def _opportunity_attack_exposures_for_path(
         path: Sequence[Tuple[int, int]],
-        threat_domains: Sequence[Tuple['Entity', FrozenSet[Tuple[int, int]]]],
-        leaving: Dict[Tuple[Tuple[int, int], Tuple[int, int]], Tuple[int, ...]],
+        threats: ThreatExits,
     ) -> List[OpportunityAttackExposure]:
         """Return the first disclosed threat exit for each visible hostile, in domain order.
 
-        `leaving` holds, per step, the indices of the domains that step exits.
-        It belongs to one discovery call and its `threat_domains`: the paths of a
-        call share their steps, so each step meets the domains once (plan PD2).
+        Each step meets the domains once per discovery call (`threats.exits`).
         """
-        if not threat_domains:
+        domains = threats.domains
+        if not domains:
             return []
         first: Dict[int, Tuple[Tuple[int, int], Tuple[int, int]]] = {}
         for step in zip(path, path[1:]):
-            exits = leaving.get(step)
+            exits = threats.exits.get(step)
             if exits is None:
                 source, target = step
-                exits = leaving[step] = tuple(index for index, (_, cells) in enumerate(threat_domains)
-                                              if source in cells and target not in cells)
+                exits = threats.exits[step] = tuple(index for index, (_, cells) in enumerate(domains)
+                                                    if source in cells and target not in cells)
             for index in exits:
                 first.setdefault(index, step)
-        return [OpportunityAttackExposure(reactor_uuid=threat_domains[index][0].uuid,
-                                          reactor_name=threat_domains[index][0].name,
+        return [OpportunityAttackExposure(reactor_uuid=domains[index][0].uuid,
+                                          reactor_name=domains[index][0].name,
                                           from_position=step[0], to_position=step[1])
                 for index, step in sorted(first.items())]
 
@@ -6343,8 +6353,7 @@ class Entity(BaseBlock):
         contract: PositionDiscoveryContract,
         visible_cells: Tuple[Tuple[Tuple[int, int], int], ...],
         preview_facts: Tuple[Any, ...],
-        threat_domains: Callable[[], List[Tuple['Entity', FrozenSet[Tuple[int, int]]]]],
-        leaving: Dict[Tuple[Tuple[int, int], Tuple[int, int]], Tuple[int, ...]],
+        threats: Callable[[], ThreatExits],
     ) -> List[AvailableTarget]:
         """Materialize plain-position candidates from subjective facts.
 
@@ -6354,12 +6363,12 @@ class Entity(BaseBlock):
         self._prepare_position_preview_cache(preview_facts)
         action_range = template.get_range()
         max_range = action_range.normal if action_range is not None else 0
-        domains = threat_domains() if template.is_movement else []
+        exits = threats() if template.is_movement else ThreatExits(())
         cache_key = (
             template.get_semantic_key(),
             contract.model_dump_json(),
             max_range,
-            tuple((reactor.uuid, cells) for reactor, cells in domains),
+            tuple((reactor.uuid, cells) for reactor, cells in exits.domains),
         )
         cached_targets = self._position_preview_cache.get(cache_key)
         if cached_targets is not None:
@@ -6423,8 +6432,7 @@ class Entity(BaseBlock):
                     opportunity_attack_exposures=(
                         self._opportunity_attack_exposures_for_path(
                             disclosed_path,
-                            domains,
-                            leaving,
+                            exits,
                         )
                         if disclosed_path is not None
                         else []
@@ -6548,8 +6556,7 @@ class Entity(BaseBlock):
         discovery_variants: Mapping[UUID, List[BaseAction]],
         visible_cells: Tuple[Tuple[Tuple[int, int], int], ...],
         preview_facts: Tuple[Any, ...],
-        threat_domains: Callable[[], List[Tuple['Entity', FrozenSet[Tuple[int, int]]]]],
-        leaving: Dict[Tuple[Tuple[int, int], Tuple[int, int]], Tuple[int, ...]],
+        threats: Callable[[], ThreatExits],
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
         """Collect path-based movement and plain-position actions.
@@ -6598,8 +6605,7 @@ class Entity(BaseBlock):
                         template.position_discovery,
                         visible_cells,
                         preview_facts,
-                        threat_domains,
-                        leaving,
+                        threats,
                     )
                     # Only movement lists its destinations (D13); any other
                     # declared position is a free-aim region (plan §14.4).
@@ -6680,9 +6686,8 @@ class Entity(BaseBlock):
                             paths_by_position,
                             remaining_movement,
                             movement_mode,
-                            threat_domains(),
+                            threats(),
                             hazard,
-                            leaving,
                         )
                         rules_valid_count = (
                             len(valid_positions)
@@ -6690,7 +6695,7 @@ class Entity(BaseBlock):
                             else int(rules_route_exists)
                         )
                     else:
-                        domains = threat_domains()
+                        exits = threats()
                         base = template.current_selection()
                         # Costs that do not depend on the destination are checked once per template.
                         fixed_cost = (None if template.target_dependent_costs else (template.check_costs(), sum(
@@ -6741,14 +6746,12 @@ class Entity(BaseBlock):
                                 safe_path=safe_path_list,
                                 opportunity_attack_exposures=self._opportunity_attack_exposures_for_path(
                                     normal_path,
-                                    domains,
-                                    leaving,
+                                    exits,
                                 ),
                                 safe_path_opportunity_attack_exposures=(
                                     self._opportunity_attack_exposures_for_path(
                                         safe_path_list,
-                                        domains,
-                                        leaving,
+                                        exits,
                                     )
                                     if safe_path_list is not None
                                     else []
@@ -6822,16 +6825,15 @@ class Entity(BaseBlock):
         paths_by_position: Mapping[Tuple[int, int], List[Tuple[int, int]]],
         remaining_movement: int,
         movement_mode: MovementMode,
-        threat_domains: List[Tuple['Entity', FrozenSet[Tuple[int, int]]]],
+        threats: ThreatExits,
         hazard: Dict[Tuple[int, int], bool],
-        leaving: Dict[Tuple[Tuple[int, int], Tuple[int, int]], Tuple[int, ...]],
     ) -> List[AvailableTarget]:
         """Build legal movement targets from already-computed subjective paths.
 
         The cache is cleared with the path and movement revisions. The senses'
         paths, costs and safe paths are replaced only with a new path revision,
         so they need no signature of their own; computed (non-walking) paths do.
-        `hazard` and `leaving` are the discovery call's per-cell and per-step memos.
+        `threats` and `hazard` are the discovery call's threat exits and per-cell hazard memo.
         """
         movement_blocked = remaining_movement <= 0
         grid = get_map()
@@ -6854,7 +6856,7 @@ class Entity(BaseBlock):
             self.ignore_difficult_terrain,
             movement_mode,
             path_signature,
-            tuple((reactor.uuid, cells) for reactor, cells in threat_domains),
+            tuple((reactor.uuid, cells) for reactor, cells in threats.domains),
         )
         cached_targets = self._fast_move_target_cache.get(cache_context)
         if cached_targets is not None:
@@ -6934,14 +6936,12 @@ class Entity(BaseBlock):
             phase_started = time.perf_counter() if timing else 0.0
             opportunity_attack_exposures = self._opportunity_attack_exposures_for_path(
                 normal_path,
-                threat_domains,
-                leaving,
+                threats,
             )
             safe_path_opportunity_attack_exposures = (
                 self._opportunity_attack_exposures_for_path(
                     safe_path_list,
-                    threat_domains,
-                    leaving,
+                    threats,
                 )
                 if safe_path_list is not None
                 else []
@@ -6999,8 +6999,7 @@ class Entity(BaseBlock):
         seen: FrozenSet[Tuple[int, int]],
         visible_cells: Tuple[Tuple[Tuple[int, int], int], ...],
         preview_facts: Tuple[Any, ...],
-        threat_domains: Callable[[], List[Tuple['Entity', FrozenSet[Tuple[int, int]]]]],
-        leaving: Dict[Tuple[Tuple[int, int], Tuple[int, int]], Tuple[int, ...]],
+        threats: Callable[[], ThreatExits],
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
         """Collect line-of-sight position actions."""
@@ -7040,8 +7039,7 @@ class Entity(BaseBlock):
                         template.position_discovery,
                         visible_cells,
                         preview_facts,
-                        threat_domains,
-                        leaving,
+                        threats,
                     )
                     valid_positions = self._filter_targets_by_selected_cost(
                         template,
@@ -7746,18 +7744,14 @@ class Entity(BaseBlock):
         started = time.perf_counter() if timing else 0.0
         # One footprint per identity for this call only; dropped on return.
         footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]] = {}
-        caster_visible_positions = frozenset(
-            position
-            for position, visible in self.senses.visible.items()
-            if visible
-        )
-        # One position context per call (plan PD2): the visible cells sorted, with
-        # their distance, once; the perceived preview facts snapshotted once; the
-        # threat domains resolved on first use; one per-step memo of threat exits.
+        # One position context per call (plan PD2): the scan's visible cells, sorted
+        # with their distance once; the perceived preview facts snapshotted once;
+        # the threat domains and their per-step exits resolved on first use.
+        # Navigation rematerialized above changes no perception.
+        caster_visible_positions = scan.visible
         visible_cells = tuple((cell, self.senses.get_feet_distance(cell)) for cell in sorted(caster_visible_positions))
         preview_facts = self._position_preview_facts(caster_visible_positions)
-        threat_domains = cache(self._visible_hostile_threat_domains)
-        leaving: Dict[Tuple[Tuple[int, int], Tuple[int, int]], Tuple[int, ...]] = {}
+        threats = cache(lambda: ThreatExits(tuple(self._visible_hostile_threat_domains())))
         if timing:
             record_action_timing("available_actions.prepare_position_context_ms", started)
 
@@ -7768,8 +7762,7 @@ class Entity(BaseBlock):
             discovery_variants,
             visible_cells,
             preview_facts,
-            threat_domains,
-            leaving,
+            threats,
             legal_only,
         )
         if timing:
@@ -7782,8 +7775,7 @@ class Entity(BaseBlock):
                 caster_visible_positions,
                 visible_cells,
                 preview_facts,
-                threat_domains,
-                leaving,
+                threats,
                 legal_only,
             )
         )

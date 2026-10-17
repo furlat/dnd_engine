@@ -219,15 +219,15 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
     return Reply(publications=tuple(publications), needs_advance=needs_advance(session)), tuple(records), None
 
 
-def response_bytes(runtime: Runtime, request: Request, response: BaseModel) -> bytes:
-    """One response's wire bytes. Choices reuses its discovery's encoded choices (plan PD2).
+def response_bytes(session: Session, response: BaseModel) -> bytes:
+    """One response's wire bytes. Choices reuses the encoding of its retained choices (plan PD2).
 
     `choices` is the response's last field, so the envelope without it, reopened,
-    followed by the retained encoding is byte-identical to encoding the whole.
+    followed by that encoding is byte-identical to encoding the whole.
     """
-    if isinstance(request, Choices):
+    if isinstance(response, ChoicesResponse):
         envelope = response.model_dump_json(exclude={'choices'}).encode()
-        return envelope[:-1] + b',"choices":' + encoded_player_choices(runtime.session) + b'}'
+        return envelope[:-1] + b',"choices":' + encoded_player_choices(session, response.choices) + b'}'
     return response.model_dump_json().encode()
 
 
@@ -240,7 +240,7 @@ def main() -> None:
                 request = REQUEST_CODEC.validate_json(payload)
                 before = EventQueue.event_cursor()
                 started = perf_counter()
-                response = None
+                response = encoded = None
                 try:
                     if isinstance(request, Close):
                         break
@@ -257,11 +257,12 @@ def main() -> None:
                         if not isinstance(request, Start):
                             raise ValueError('Native owner has not started')
                         runtime, reply, records = start(request)
-                        response = ContentResponse(revision=next(iter(runtime.publications.values())).content_revision,
+                        encoded = ContentResponse(revision=next(iter(runtime.publications.values())).content_revision,
                             descriptors=tuple(descriptor for _, descriptor in runtime.catalog.content
-                                if descriptor.visibility is ContentVisibility.PUBLIC))
+                                if descriptor.visibility is ContentVisibility.PUBLIC)).model_dump_json().encode()
                     else:
                         reply, records, response = dispatch(runtime, request)
+                        encoded = None if response is None else response_bytes(runtime.session, response)
                 except CommandRejected as error:
                     if EventQueue.event_cursor() != before:
                         raise RuntimeError('A command rejected after mutating native state') from error
@@ -269,8 +270,6 @@ def main() -> None:
                     reason = code if code in ('stale_state', 'stale_discovery', 'not_your_turn') else 'invalid_selection'
                     reply = Reply(rejection=reason, needs_advance=needs_advance(runtime.session) if runtime is not None else False)
                     records = ()
-                encoded = (response_bytes(runtime, request, response)
-                           if response is not None and runtime is not None else None)
                 if encoded is not None and len(encoded) > MAX_PACKET_BYTES and isinstance(request, (Choices, Preview)):
                     reply = Reply(query_error='response_too_large')
                     encoded = None

@@ -79,7 +79,7 @@ def test_choices_wire_bytes_are_the_canonical_encoding_on_miss_and_hit(world):
         request = Choices(seat_id=seat, request=ChoicesRequest(actor_uuid=publication.boundary.input_actor_uuid,
             state_revision=publication.state_revision, force_attack=False, correlation_id=uuid4()))
         _, _, response = dispatch(runtime, request)
-        assert response_bytes(runtime, request, response) == response.model_dump_json().encode()
+        assert response_bytes(runtime.session, response) == response.model_dump_json().encode()
 
 
 @pytest.mark.parametrize('rich_first', [False, True])

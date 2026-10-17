@@ -113,7 +113,7 @@ def project_choices(original: AvailableActionsResult, actor_position: tuple[int,
     return PlayerChoices(discovery_generation=original.discovery_generation, entity_uuid=original.entity_uuid,
         subjects=tuple(tables.subjects), positions=tuple(tables.positions), target_sets=tuple(tables.target_sets),
         entity_actions=entity_rows, position_actions=position_rows, self_actions=self_rows, object_actions=object_rows,
-        remaining_movement=original.remaining_movement, handler_details=tuple(original.handler_details),
+        remaining_movement=original.remaining_movement, handler_details=original.handler_details,
         world_interactions=original.world_interactions)
 
 
