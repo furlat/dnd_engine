@@ -11,13 +11,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
+SHARED_ADMISSION = {"_admission_error", "requirements_error", "discovery_error"}
+
+
 def test_no_action_overrides_the_shared_admission_checks() -> None:
     overrides = []
     for path in sorted((ROOT / "dnd").rglob("*.py")):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.ClassDef) and node.name != "BaseAction":
                 overrides.extend(f"{path.relative_to(ROOT)}:{item.lineno} {node.name}" for item in node.body
-                                 if isinstance(item, ast.FunctionDef) and item.name == "_admission_error")
+                                 if isinstance(item, ast.FunctionDef) and item.name in SHARED_ADMISSION)
     assert overrides == []
 
 

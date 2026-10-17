@@ -1922,6 +1922,7 @@ class BaseAction(BaseObject):
         """
         return None
 
+    @final
     def discovery_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Discovery's admission of one candidate: the shared path plus physical access, without a copy or an event.
 
@@ -1940,6 +1941,7 @@ class BaseAction(BaseObject):
             return error
         return self.requirements_error(scan, selection)
 
+    @final
     def requirements_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Every non-cost requirement of one selection: shared admission, the action's rule, physical access.
 
