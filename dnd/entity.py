@@ -2451,10 +2451,14 @@ class Entity(BaseBlock):
         )
 
     def get_max_hp(self) -> int:
-        """Return maximum normal HP before temporary hit points and damage."""
-        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values(use_register=False)
+        """Return maximum normal HP before temporary hit points and damage.
+
+        The Constitution modifier is read directly (normalized score plus its
+        bonus), not through a freshly built combined value on every HP read.
+        """
+        con_modifier = self.ability_scores.get_ability("constitution").modifier
         return self.health.get_max_hit_dices_points(
-            constitution_modifier=con_modifier.normalized_score
+            constitution_modifier=con_modifier
         ) + self.health.max_hit_points_bonus.normalized_score
 
     def get_normal_hp(self) -> int:
