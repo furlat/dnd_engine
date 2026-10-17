@@ -295,3 +295,13 @@ Hard rules:
   - **Seat updates over 100 KB:** 22 ops. The largest are Sleet drop 615 KB, Daylight 502 KB, Cloudkill drop 484 KB, CoD 330 KB, Fireball 327 KB, Sleet 321 KB, SG moves ~230 KB and Wall of Stone 223 KB.
   - **Everything else is ≤100 ms.** Gust moves ~75, caster steps ~53, end turns ~9, single-target and small-area spells 20–90.
   - **Against bea589ae9** (single loaded runs, without the gen-2 pass): Fireball ~300 → 177, CoD ~274 → 175, Ice Storm ~162 → 111, Sleet cast ~370 → 172, Sleet drop 314 → 211, Gust move ~136 → ~75, SG move 355–394 → 169–189, Command 313 → 195.
+- 2026-10-18: **Closing push, human: "let's get below 100 ms on everything … also profile the wall".**
+  - **Pyright as the packed-mask detector.** It flags `in` on a CellMask (checked with a probe). The head has 0 such sites across dnd, server and devtools. It can't see untyped (`Any`) sites.
+  - **PV2 (shared contacts and light sources once per seat, schema 14) started.**
+    - Sleet drop, blue seat: 26 observers repeat 230 distinct object contacts 2,706 times (250 KB) and 46 light sources 532 times (190 KB). Together that is 73 % of a 601 KB update.
+    - A Godot fold note comes with it.
+  - **Wall of Stone profiled** (239 ms; native 179, publication ~53):
+    - The scalar wall FOV is ~70 ms: `compute_fov` → `_sparse_directional_visibility`, 64 calls (30 sight, 34 light).
+    - Light recompute is ~40 ms (`resolved_light_level`, 10,040 calls).
+    - `stone_enclosure_escapes` is ~21 ms (rule geometry).
+  - **PV1a-4 started (plan §6b):** the wall FOV as route × edge-grid arrays, one path, equal to the scalar path by oracle. Then per-tile light resolution as array reads.
