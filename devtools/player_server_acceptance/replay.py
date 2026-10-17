@@ -47,34 +47,32 @@ def record_log(entry: dict, digest: Any, counts: Counter) -> None:
     digest.update(json.dumps(text, sort_keys=True, separators=(',', ':')).encode())
 
 
-def check_group(group: dict, controlled: set[str], events: dict[str, int], lineages: set[str], counts: Counter, logs: Any) -> None:
+def check_group(group: dict, controlled: set[str], events: set[int], lineages: set[int], counts: Counter, logs: Any) -> None:
     nodes = group.get('events', group.get('nodes', []))
     rows = group['version_rows']
     start = group.get('start_cursor', 0)
     require([row['source_index'] for row in rows] == list(range(start, group['end_cursor'])), 'Occurrence coordinates are not dense')
     for row in rows:
-        identity, position = row['event_uuid'], row['source_index']
-        require(identity not in events or events[identity] == position, 'Occurrence identity changed public coordinate')
-        events[identity] = position
-        lineages.add(row['lineage_uuid'])
+        require(row['source_index'] not in events, 'Occurrence admitted twice')
+        events.add(row['source_index'])
+        lineages.add(row['lineage'])
     for node in nodes:
         if node['combat_log'] is not None:
             record_log(node['combat_log'], logs, counts)
-        require(node['uuid'] in events, 'Node has no disclosed occurrence')
+        require(node['occurrence'] in events, 'Node has no disclosed occurrence')
         for key in ('parent_event',):
             require(node[key] is None or node[key] in events, f'Undisclosed {key}')
         require(node['parent_lineage'] is None or node['parent_lineage'] in lineages, 'Undisclosed parent lineage')
         require(set(node['children_lineages']) <= lineages, 'Undisclosed child lineage')
         reference = node['resolution_ref']
         if reference is not None:
-            require(reference['lineage_uuid'] in lineages, 'Undisclosed resolution owner')
             counts['application_references' if reference['kind'] == 'application' else 'event_references'] += 1
         fact = node['fact']
         if fact is None:
             continue
         counts['fact:' + fact['kind']] += 1
-        if fact['kind'] == 'spatial' and fact['commit_event_uuid'] is not None:
-            require(fact['commit_event_uuid'] in events, 'Spatial commit occurrence is not disclosed')
+        if fact['kind'] == 'spatial' and fact['commit_occurrence'] is not None:
+            require(fact['commit_occurrence'] in events, 'Spatial commit occurrence is not disclosed')
         if fact['kind'] == 'equipment':
             check_body(fact['source_entity_uuid'], fact['changes'], fact['items'], controlled)
         if fact['kind'] == 'damage' and fact['stage'] == 'applied':
@@ -86,10 +84,10 @@ def check_group(group: dict, controlled: set[str], events: dict[str, int], linea
             if fact['application']['index'] > 0:
                 counts['nonfirst_spell_applications'] += 1
     for observation in group['observations']:
-        require(observation['event_uuid'] in events, 'Observation references an undisclosed occurrence')
+        require(observation['occurrence'] in events, 'Observation references an undisclosed occurrence')
         check_body(observation['actor_uuid'], observation['changes'], observation['items'], controlled)
     for update in group['world_updates']:
-        require(update['event_uuid'] in events, 'World update references an undisclosed occurrence')
+        require(update['occurrence'] in events, 'World update references an undisclosed occurrence')
     check_hud(group.get('hud'), controlled)
 
 
@@ -105,8 +103,8 @@ def replay_stream(directory: Path) -> dict[str, Any]:
     paths = records(directory)
     require(bool(paths), 'No numbered public records')
     metadata = json.loads((directory / 'result.json').read_bytes())
-    events: dict[str, int] = {}
-    lineages: set[str] = set()
+    events: set[int] = set()
+    lineages: set[int] = set()
     counts: Counter = Counter()
     state: PlayerState | None = None
     scope: dict = {}

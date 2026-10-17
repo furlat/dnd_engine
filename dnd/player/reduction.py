@@ -23,28 +23,26 @@ from dnd.player.facts import (
 
 @dataclass(frozen=True, slots=True)
 class PlayerCausalIndex:
-    """References into one received group, in its native commit order."""
-    by_lineage: Mapping[UUID, PlayerNode]
-    by_uuid: Mapping[UUID, PlayerNode]
-    source_order: Mapping[UUID, int]
+    """References into one received group, in its commit (occurrence) order."""
+    by_lineage: Mapping[int, PlayerNode]
+    by_occurrence: Mapping[int, PlayerNode]
     owned: Mapping[ResolutionRef, tuple[PlayerNode, ...]]
     results: Mapping[ResolutionRef, tuple[PlayerNode, ...]]
-    damage_requests: Mapping[UUID, UUID]
+    damage_requests: Mapping[int, int]
 
 
 def index_player_lineage(lineage: PlayerLineage) -> PlayerCausalIndex:
-    source_order = {row.event_uuid: row.source_index for row in lineage.version_rows}
     owned: dict[ResolutionRef, list[PlayerNode]] = {}
     results: dict[ResolutionRef, list[PlayerNode]] = {}
-    by_lineage = {row.lineage_uuid: row for row in lineage.events}
-    damage_requests: dict[UUID, UUID] = {}
+    by_lineage = {row.lineage: row for row in lineage.events}
+    damage_requests: dict[int, int] = {}
     for node in lineage.events:
-        ancestors: list[UUID] = []
+        ancestors: list[int] = []
         current = node
-        while current.lineage_uuid not in ancestors:
-            ancestors.append(current.lineage_uuid)
-            request = (current.lineage_uuid if isinstance(current.fact, DamageRequestFact)
-                       else damage_requests.get(current.lineage_uuid))
+        while current.lineage not in ancestors:
+            ancestors.append(current.lineage)
+            request = (current.lineage if isinstance(current.fact, DamageRequestFact)
+                       else damage_requests.get(current.lineage))
             if request is not None:
                 damage_requests.update((identity, request) for identity in ancestors)
                 break
@@ -52,7 +50,7 @@ def index_player_lineage(lineage: PlayerLineage) -> PlayerCausalIndex:
             if parent is None:
                 break
             current = parent
-    for node in sorted(lineage.events, key=lambda row: source_order[row.uuid]):
+    for node in sorted(lineage.events, key=lambda row: row.occurrence):
         reference = node.resolution_ref
         if reference is None:
             continue
@@ -61,7 +59,7 @@ def index_player_lineage(lineage: PlayerLineage) -> PlayerCausalIndex:
             results.setdefault(reference, []).append(node)
     return PlayerCausalIndex(
         MappingProxyType(by_lineage),
-        MappingProxyType({row.uuid: row for row in lineage.events}), MappingProxyType(source_order),
+        MappingProxyType({row.occurrence: row for row in lineage.events}),
         MappingProxyType({key: tuple(rows) for key, rows in owned.items()}),
         MappingProxyType({key: tuple(rows) for key, rows in results.items()}),
         MappingProxyType(damage_requests))
@@ -309,13 +307,13 @@ def apply_record_fact(target: PlayerState, fact: PlayerFact) -> None:
 
 
 def commit_current(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
-                   version_cursors: Mapping[UUID, int]) -> bool:
+                   occurrences: Collection[int]) -> bool:
     """Record a spatial transition's commit; False if a nested commit supersedes it (it is then not folded)."""
     if (isinstance(fact, SpatialFact) and fact.entity_uuid is not None
             and fact.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT)):
-        if fact.commit_event_uuid is None or fact.commit_event_uuid not in version_cursors:
+        if fact.commit_occurrence is None or fact.commit_occurrence not in occurrences:
             raise ValueError(f"Spatial change at cursor {source_cursor} lacks its recorded commit version")
-        committed_at = version_cursors[fact.commit_event_uuid]
+        committed_at = fact.commit_occurrence
         # Only a nested commit supersedes this closing transition. Independent
         # earlier transitions may be retimed (e.g. jump after preflight OAs).
         if committed_at < target.spatial_commit_cursors.get(fact.entity_uuid, -1) < source_cursor:
@@ -333,10 +331,10 @@ def change_membership(members: dict[UUID, ConditionFact], fact: ConditionChangeF
 
 
 def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
-                               version_cursors: Mapping[UUID, int],
+                               occurrences: Collection[int],
                                audience_composition: AudienceComposition | None = None) -> None:
     """Fold a committed fact without letting an outer move undo nested arrival."""
-    if commit_current(target, fact, source_cursor=source_cursor, version_cursors=version_cursors):
+    if commit_current(target, fact, source_cursor=source_cursor, occurrences=occurrences):
         apply_player_fact(target, fact, source_cursor=source_cursor, audience_composition=audience_composition)
 
 
@@ -348,14 +346,13 @@ def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: t
     return result
 
 
-def occurrence_order(nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
+def occurrence_order(nodes: tuple[PlayerNode, ...],
                      observations: tuple[PlayerObservation, ...]) -> Iterator[PlayerObservation | PlayerNode]:
     """The one fold order of a received group: each node after the observations at or before its version."""
-    indexes = {row.event_uuid: row.source_index for row in versions}
-    pending = iter(sorted(observations, key=lambda row: indexes[row.event_uuid]))
+    pending = iter(sorted(observations, key=lambda row: row.occurrence))
     observation = next(pending, None)
     for node in nodes:
-        while observation is not None and indexes[observation.event_uuid] <= indexes[node.uuid]:
+        while observation is not None and observation.occurrence <= node.occurrence:
             yield observation
             observation = next(pending, None)
         yield node
@@ -367,30 +364,30 @@ def occurrence_order(nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, 
 def _apply_nodes(result: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
                  observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...], *,
                  audience_composition: AudienceComposition | None = None) -> None:
-    indexes = {row.event_uuid: row.source_index for row in versions}
-    world_updates = {row.event_uuid: row for row in updates}
-    for row in occurrence_order(nodes, versions, observations):
+    occurrences = {row.source_index for row in versions}
+    world_updates = {row.occurrence: row for row in updates}
+    for row in occurrence_order(nodes, observations):
         match row:
             case PlayerObservation():
                 _observe(result, row, audience_composition=audience_composition)
             case PlayerNode():
-                if row.uuid in world_updates:
-                    apply_world_update(result, world_updates[row.uuid])
+                if row.occurrence in world_updates:
+                    apply_world_update(result, world_updates[row.occurrence])
                 if not row.canceled and row.fact is not None:
-                    apply_committed_player_fact(result, row.fact, source_cursor=indexes[row.uuid],
-                        version_cursors=indexes, audience_composition=audience_composition)
+                    apply_committed_player_fact(result, row.fact, source_cursor=row.occurrence,
+                        occurrences=occurrences, audience_composition=audience_composition)
 
 
 def state_before_event(before: PlayerState, lineage: PlayerLineage, event: PlayerNode) -> PlayerState:
     """Retained subjective state just before a descendant's declaration."""
-    first = min(row.source_index for row in lineage.version_rows if row.lineage_uuid == event.lineage_uuid)
-    completed = {row.event_uuid for row in lineage.version_rows if row.source_index < first}
-    events = tuple(row for row in lineage.events if row.uuid in completed)
+    first = min(row.source_index for row in lineage.version_rows if row.lineage == event.lineage)
+    completed = {row.source_index for row in lineage.version_rows if row.source_index < first}
+    events = tuple(row for row in lineage.events if row.occurrence in completed)
     if not events:
         return before
     return reduce_lineage(before, replace(lineage, events=events, end_cursor=first,
-        observations=tuple(row for row in lineage.observations if row.event_uuid in completed),
-        world_updates=tuple(row for row in lineage.world_updates if row.event_uuid in completed)))
+        observations=tuple(row for row in lineage.observations if row.occurrence in completed),
+        world_updates=tuple(row for row in lineage.world_updates if row.occurrence in completed)))
 
 
 def reduce_initialization(initialization: PlayerInitialization, *,
@@ -449,34 +446,34 @@ def _apply_lineage(target: PlayerState, lineage: PlayerLineage, *,
 
 
 def lineage_branch(lineage: PlayerLineage, root: PlayerNode) -> PlayerLineage:
-    by_lineage = {node.lineage_uuid: node for node in lineage.events}
-    intervals: dict[UUID, tuple[int, int]] = {}
+    by_lineage = {node.lineage: node for node in lineage.events}
+    intervals: dict[int, tuple[int, int]] = {}
     for row in lineage.version_rows:
-        first, last = intervals.get(row.lineage_uuid, (row.source_index, row.source_index))
-        intervals[row.lineage_uuid] = min(first, row.source_index), max(last, row.source_index)
-    first, last = intervals[root.lineage_uuid]
-    selected: set[UUID] = set()
+        first, last = intervals.get(row.lineage, (row.source_index, row.source_index))
+        intervals[row.lineage] = min(first, row.source_index), max(last, row.source_index)
+    first, last = intervals[root.lineage]
+    selected: set[int] = set()
     # Privacy can remove an intermediate cause (for example a carried light's
     # update between a walking step and its sensory result). The received
     # occurrence interval still places that unparented result inside this step.
     # Keep its real wire ancestry absent; this is a chronological branch view.
-    pending = [root.lineage_uuid, *(node.lineage_uuid for node in lineage.events
-        if node.parent_lineage is None and first <= intervals[node.lineage_uuid][0]
-        and intervals[node.lineage_uuid][1] <= last)]
+    pending = [root.lineage, *(node.lineage for node in lineage.events
+        if node.parent_lineage is None and first <= intervals[node.lineage][0]
+        and intervals[node.lineage][1] <= last)]
     while pending:
         identity = pending.pop()
         if identity in selected:
             continue
         selected.add(identity)
         pending.extend(by_lineage[identity].children_lineages)
-    nodes = tuple(node for node in lineage.events if node.lineage_uuid in selected)
-    versions = tuple(row for row in lineage.version_rows if row.lineage_uuid in selected)
-    identities = {row.event_uuid for row in versions}
-    return replace(lineage, root=next(index for index, node in enumerate(nodes) if node.uuid == root.uuid),
+    nodes = tuple(node for node in lineage.events if node.lineage in selected)
+    versions = tuple(row for row in lineage.version_rows if row.lineage in selected)
+    identities = {row.source_index for row in versions}
+    return replace(lineage, root=next(index for index, node in enumerate(nodes) if node.occurrence == root.occurrence),
         events=nodes, version_rows=versions,
         start_cursor=versions[0].source_index, end_cursor=versions[-1].source_index + 1,
-        observations=tuple(row for row in lineage.observations if row.event_uuid in identities),
-        world_updates=tuple(row for row in lineage.world_updates if row.event_uuid in identities))
+        observations=tuple(row for row in lineage.observations if row.occurrence in identities),
+        world_updates=tuple(row for row in lineage.world_updates if row.occurrence in identities))
 
 
 def encode_player_sequence(sequence: PlayerSequence) -> bytes:

@@ -27,7 +27,7 @@ def test_actor_changes_cover_every_body_field():
         normal_hp=7, maximum_hp=9, temporary_hp=0, life_state=LifeState.ALIVE, armor_class=12)
     first = actor_changes(None, body)
     assert set(first) == set(get_type_hints(ActorChanges))
-    acquired = observed_actor(None, PlayerObservation(event_uuid=uuid4(), actor_uuid=body.uuid, changes=first, contact=None))
+    acquired = observed_actor(None, PlayerObservation(occurrence=0, actor_uuid=body.uuid, changes=first, contact=None))
     assert acquired == body
     hurt = replace(body, normal_hp=3)
     assert actor_changes(body, hurt) == {"normal_hp": 3}

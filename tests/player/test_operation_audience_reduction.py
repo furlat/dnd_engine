@@ -47,7 +47,7 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
     template = next(node.fact for node in initial.nodes
         if isinstance(node.fact, SensoryFact) and node.fact.observer_uuid == owner.uuid)
     sensory = replace(template, initial=False, observer_position_changed=False,
-        effective_light_levels_changed={}, cause_event_uuid=None,
+        effective_light_levels_changed={}, cause_occurrence=None,
         visible_cells_added=(), visible_cells_removed=(), seen_cells_added=(),
         entity_contacts_changed={}, entity_contacts_removed=frozenset(),
         object_contacts_changed={}, object_contacts_removed=frozenset(),
@@ -57,28 +57,28 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
             spatial_effects_removed=frozenset())
     lineages = []
     for index, step in enumerate(steps, start=before.reducer_cursor):
-        identity, lineage_id = uuid4(), uuid4()
+        # Each step is its own one-version lineage: its occurrence is its lineage's index.
         fact = None
         observations = ()
         if step in ('sensory', 'canceled'):
             fact = sensory
         elif step == 'entry':
             fact = SpatialFact(change_type=SpatialChangeType.ENTITY_ENTERED,
-                entity_uuid=owner.uuid, position=(7, 5), commit_event_uuid=identity)
+                entity_uuid=owner.uuid, position=(7, 5), commit_occurrence=index)
         elif step == 'departure':
             fact = SpatialFact(change_type=SpatialChangeType.ENTITY_LEFT,
-                entity_uuid=witness.uuid, position=(6, 5), commit_event_uuid=identity,
+                entity_uuid=witness.uuid, position=(6, 5), commit_occurrence=index,
                 terminal_departure=True)
         else:
             # A re-observation of an unchanged body: an empty patch with its contact.
-            observations = (PlayerObservation(event_uuid=identity, actor_uuid=witness.uuid, changes={},
+            observations = (PlayerObservation(occurrence=index, actor_uuid=witness.uuid, changes={},
                 contact=PerceivedContact(position=(8, 5), visual=True)),)
-        node = PlayerNode(uuid=identity, lineage_uuid=lineage_id, parent_event=None,
+        node = PlayerNode(occurrence=index, lineage=index, parent_event=None,
             parent_lineage=None, children_lineages=(), phase=EventPhase.COMPLETION,
             canceled=step == 'canceled', fact=fact)
         lineages.append(PlayerLineage(generation=before.generation, observer_uuid=owner.uuid,
-            audience=audience, lineage_uuid=lineage_id, root=0, events=(node,),
-            version_rows=(VersionRow(source_index=index, event_uuid=identity, lineage_uuid=lineage_id),),
+            audience=audience, lineage=index, root=0, events=(node,),
+            version_rows=(VersionRow(source_index=index, lineage=index),),
             start_cursor=index, end_cursor=index + 1, observations=observations))
     if together:
         lineages = [replace(lineages[0], events=tuple(node for row in lineages for node in row.events),

@@ -356,7 +356,7 @@ class PlayerObservation:
     """One actor's observed body at an event, as a patch against what the seat holds,
     with the patches of the items that body discloses."""
 
-    event_uuid: UUID
+    occurrence: int
     actor_uuid: UUID
     changes: ActorChanges
     contact: PerceivedContact | None
@@ -438,8 +438,8 @@ class AreaReachFact:
     kind: Literal["area_reach"] = "area_reach"
     stage_index: int
     newly_reached_positions: tuple[tuple[int, int], ...]
-    previous_reach_lineage_uuid: UUID | None
-    prerequisite_destruction_lineages: tuple[UUID, ...]
+    previous_reach_lineage: int | None
+    prerequisite_destruction_lineages: tuple[int, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -629,7 +629,7 @@ class ItemEffectChangeFact:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CreationWitness:
     """Observed first placement tied to its exact recorded native birth."""
-    birth_event_uuid: UUID
+    birth_occurrence: int
     manifestation: SummonManifestation
 
 
@@ -640,7 +640,7 @@ class SpatialFact:
     entity_uuid: UUID | None
     position: tuple[int, int]
     object_uuid: UUID | None = None
-    commit_event_uuid: UUID | None = None
+    commit_occurrence: int | None = None
     previous_occupancy_layer: OccupancyLayer | None = None
     occupancy_layer: OccupancyLayer | None = None
     terminal_departure: bool = False
@@ -680,7 +680,7 @@ class ItemChargeFact:
 class ActionReaction:
     """Disclosed reaction result and its native triggering lineage."""
 
-    triggered_lineage_uuid: UUID | None
+    triggered_lineage: int | None
     succeeded: bool
     automatic: bool
 
@@ -758,7 +758,7 @@ class SensoryFact:
     observer_position: tuple[int, int]
     observer_position_changed: bool
     effective_light_levels_changed: dict[str, int]
-    cause_event_uuid: UUID | None
+    cause_occurrence: int | None
     visible_cells_added: tuple[tuple[int, int], ...]
     visible_cells_removed: tuple[tuple[int, int], ...]
     seen_cells_added: tuple[tuple[int, int], ...]
@@ -863,9 +863,9 @@ class ContentAttribution:
     provided_by_id: str | None = None
     origin_root_id: str | None = None
     source_entity_uuid: UUID | None = None
-    triggering_event_uuid: UUID | None = None
-    triggering_lineage_uuid: UUID | None = None
-    emitted_lineage_uuids: tuple[UUID, ...] = ()
+    triggering_occurrence: int | None = None
+    triggering_lineage: int | None = None
+    emitted_lineages: tuple[int, ...] = ()
     handler_name: str | None = None
     dispatch_index: int | None = None
     outcome: HandlerDispatchOutcome | None = None
@@ -880,11 +880,18 @@ class ActionCancellation:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerNode:
-    uuid: UUID
-    lineage_uuid: UUID
-    parent_event: UUID | None
-    parent_lineage: UUID | None
-    children_lineages: tuple[UUID, ...]
+    """One disclosed event version.
+
+    Versions are identified by the seat's occurrence index (the version
+    row's `source_index`), lineages by the occurrence index of their first
+    version the seat received.
+    """
+
+    occurrence: int
+    lineage: int
+    parent_event: int | None
+    parent_lineage: int | None
+    children_lineages: tuple[int, ...]
     phase: EventPhase
     canceled: bool
     fact: PlayerFact | None
@@ -898,8 +905,7 @@ class PlayerNode:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class VersionRow:
     source_index: int
-    event_uuid: UUID
-    lineage_uuid: UUID
+    lineage: int
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -955,7 +961,7 @@ class TileFieldUpdate:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorldUpdate:
-    event_uuid: UUID
+    occurrence: int
     tiles: tuple[WorldTileState, ...]
     objects: tuple[PlayerObject, ...]
     objects_removed: tuple[UUID, ...]
@@ -976,7 +982,8 @@ class PlayerWorld:
 class PlayerLineage:
     generation: UUID
     observer_uuid: UUID
-    lineage_uuid: UUID
+    # The root's lineage, or for a group whose root is undisclosed the lineage of its first version.
+    lineage: int
     # The root's index in `events`; None when the root itself is not disclosed.
     root: int | None
     events: tuple[PlayerNode, ...]
@@ -987,10 +994,6 @@ class PlayerLineage:
     world_updates: tuple[WorldUpdate, ...] = ()
     audience: PlayerAudience | None = None
 
-    @property
-    def group_uuid(self) -> UUID:
-        """Stable local presentation key, including consequences of an unknown cause."""
-        return self.events[self.root].uuid if self.root is not None else self.lineage_uuid
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

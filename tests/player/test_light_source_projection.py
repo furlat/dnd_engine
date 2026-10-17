@@ -190,7 +190,8 @@ def test_recorded_content_attribution_uses_foreign_equipment_grants(world, equip
     projection, _ = begin_projection(initial)
     packet = project_lineage(projection, lineage)
     assert packet is not None
-    node, = (node for node in packet.events if node.uuid == event.uuid)
+    assert packet.root is not None
+    node = packet.events[packet.root]
     role = 'effective_handler' if foreign_handler else 'behavior'
     attribution, = (value for value in node.content_attributions if value.role == role)
     expected_provider = item.item_id if equipped else None
@@ -241,7 +242,8 @@ def test_shared_light_tile_after_values_precede_parent_completion_and_survive_co
                 light_completion = next(event for event in native.events
                     if event.event_type is EventType.SPATIAL_LIGHT_CHANGED
                     and event.phase is EventPhase.COMPLETION)
-                assert indexes[update.event_uuid] < indexes[light_completion.uuid]
+                native = next(cursor for cursor, public in projection.public_cursors.items() if public == update.occurrence)
+                assert native < indexes[light_completion.uuid]
             state = reduce_lineage(state, packet)
         # The first observer's source after-value is projected while the other
         # observer still grants this cell. Darkness is remembered at that prefix

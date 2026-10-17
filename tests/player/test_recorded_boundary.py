@@ -97,9 +97,11 @@ def test_condition_remaining_duration_is_recorded_under_turn_and_private_to_owne
         if actor is owner:
             assert member.state.duration.remaining_rounds == 2
             changed = [node for node in delivered[-1].events if isinstance(node.fact, ConditionChangeFact)]
-            assert len(changed) == 1 and changed[0].parent_lineage == roots[-1].lineage_uuid
+            root = delivered[-1].root
+            assert root is not None
+            assert len(changed) == 1 and changed[0].parent_lineage == delivered[-1].events[root].lineage
             application = next(node for node in delivered[0].events if isinstance(node.fact, ConditionChangeFact))
-            origin = next(row.source_index for row in delivered[0].version_rows if row.event_uuid == application.uuid)
+            origin = application.occurrence
             assert member.state.applied_source_event_cursor == origin + 1
         else:
             assert member.state.duration is None

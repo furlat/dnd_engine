@@ -131,7 +131,7 @@ def group_trace(group: BoundChoreography) -> dict[str, Any]:
             "media": stationary_trace(cue.media), "recipe": cue.recipe.model_dump(mode="json")}
             for cue in group.spatial_responses],
         "state_times_ms": [at for at, _ in group.states],
-        "observations": [{"at_ms": at, "event_uuid": str(observation.event_uuid),
+        "observations": [{"at_ms": at, "occurrence": observation.occurrence,
                           "actor_uuid": str(observation.actor_uuid)} for at, observation in group.observations],
         "shoves": [SHOVE.dump_python(cue, mode="json", exclude={"data"}, warnings="error") for cue in group.shoves],
         "forced_movement": [{**FORCED.dump_python(cue, mode="json", exclude={"data"}, warnings="error"),

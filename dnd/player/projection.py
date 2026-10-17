@@ -8,7 +8,7 @@ it never asks the live engine what an observer can see.
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field, replace
 from math import floor
-from uuid import UUID, uuid5
+from uuid import UUID
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent, TraverseConnectorEvent
 from dnd.spells.abjuration import CounterspellReactionEvent
@@ -236,9 +236,9 @@ def _holdings(actor: ActorState, observer: PlayerAudience) -> ActorChanges:
         if observer.controls(actor.uuid) else None}
 
 
-def _gear_observation(event_uuid: UUID, actor: ActorState, observer: PlayerAudience) -> PlayerObservation:
+def _gear_observation(occurrence: int, actor: ActorState, observer: PlayerAudience) -> PlayerObservation:
     """A holdings change seen on a known body."""
-    return PlayerObservation(event_uuid=event_uuid, actor_uuid=actor.uuid, changes=_holdings(actor, observer),
+    return PlayerObservation(occurrence=occurrence, actor_uuid=actor.uuid, changes=_holdings(actor, observer),
         contact=None, items=_item_records(actor, observer))
 
 
@@ -257,7 +257,7 @@ def _sighting(effect: PerceivedSpatialEffect) -> SpatialEffectSighting:
         upper_volume_surfaces=effect.upper_volume_surfaces, suppressions=effect.suppressions)
 
 
-def _sensory_fact(event: SensoryUpdateEvent) -> SensoryFact:
+def _sensory_fact(event: SensoryUpdateEvent, keys: "NativeKeys") -> SensoryFact:
     return SensoryFact(observer_uuid=event.observer_uuid, initial=event.initial,
         observer_position=event.observer_position, observer_position_changed=event.observer_position_changed,
         effective_light_levels_changed=dict(event.effective_light_levels_changed),
@@ -268,7 +268,7 @@ def _sensory_fact(event: SensoryUpdateEvent) -> SensoryFact:
         spatial_effect_content={identity: SpatialEffectContent(content_ref=effect.content_ref, name=effect.name,
             description=effect.description) for identity, effect in event.spatial_effects_changed.items()},
         spatial_effects_removed=frozenset(event.spatial_effects_removed),
-        cause_event_uuid=event.cause_event_uuid,
+        cause_occurrence=_version_key(keys, event.cause_event_uuid),
         visible_cells_added=tuple(event.visible_cells_added), visible_cells_removed=tuple(event.visible_cells_removed),
         seen_cells_added=tuple(event.seen_cells_added),
         entity_contacts_changed=dict(event.entity_contacts_changed),
@@ -324,7 +324,7 @@ class DeclarationSenses:
 def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, ActorState],
                   condition: ConditionFact | None, events: tuple[Event, ...],
                   admissions: tuple[ActorAdmission, ...], known: Collection[UUID],
-                  observed_objects: set[UUID], senses: SensesSnapshot | None,
+                  observed_objects: set[UUID], senses: SensesSnapshot | None, keys: "NativeKeys",
                   declaration_senses: DeclarationSenses | None = None) -> PlayerFact | None:
     source = event.source_entity_uuid if event.source_entity_uuid in known and _identified(event, event.source_entity_uuid, observer) else None
     target = event.target_entity_uuid if event.target_entity_uuid in known and _identified(event, event.target_entity_uuid, observer) else None
@@ -336,8 +336,9 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
             if not positions:
                 return None
             return AreaReachFact(stage_index=event.stage_index, newly_reached_positions=positions,
-                previous_reach_lineage_uuid=event.previous_reach_lineage_uuid,
-                prerequisite_destruction_lineages=event.prerequisite_destruction_lineages)
+                previous_reach_lineage=_lineage_key(keys, event.previous_reach_lineage_uuid),
+                prerequisite_destruction_lineages=tuple(key for identity in event.prerequisite_destruction_lineages
+                    if (key := _lineage_key(keys, identity)) is not None))
         case SpatialEffectChangeEvent():
             interaction_operation = None
             by_lineage = {row.lineage_uuid: row for row in events}
@@ -393,7 +394,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                 operation=event.operation, previous_pressed=event.previous_pressed,
                 pressed=event.pressed, interaction_operation=interaction_operation) if positions else None
         case SensoryUpdateEvent():
-            return _sensory_fact(event) if observer.observes(event.observer_uuid) else None
+            return _sensory_fact(event, keys) if observer.observes(event.observer_uuid) else None
         case StepMovementEvent():
             if not _step_allowed(event, observer):
                 return None
@@ -732,7 +733,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                 if contact is None or placement is None or contact.position not in placement.positions:
                     return None
                 return SpatialFact(change_type=event.change_type, entity_uuid=None, object_uuid=event.object_uuid,
-                    position=contact.position, commit_event_uuid=event.commit_event_uuid)
+                    position=contact.position, commit_occurrence=_version_key(keys, event.commit_event_uuid))
             identified_entity = event.entity_uuid if _identified(event, event.entity_uuid, observer) else None
             own_position = observer.controls(identified_entity)
             if event.change_type not in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT,
@@ -772,14 +773,14 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                 and row.parent_lineage is not None and row.parent_lineage == event.parent_lineage
                 and row.summon_origin is not None
                 and row.summon_origin.cast_lineage_uuid == row.parent_lineage), None)
-            creation = (CreationWitness(birth_event_uuid=birth.uuid, manifestation=birth.summon_origin.manifestation)
+            creation = (CreationWitness(birth_occurrence=keys.versions[birth.uuid], manifestation=birth.summon_origin.manifestation)
                 if event.change_type is SpatialChangeType.ENTITY_ENTERED
                 and event.phase is EventPhase.COMPLETION and not event.canceled
                 and event.old_position is None and event.previous_occupancy_layer is None
                 and birth is not None and birth.summon_origin is not None
                 and contact is not None and contact.visual and contact.position == event.position else None)
             return SpatialFact(change_type=event.change_type, entity_uuid=identified_entity, position=event.position,
-                commit_event_uuid=event.commit_event_uuid,
+                commit_occurrence=_version_key(keys, event.commit_event_uuid),
                 previous_occupancy_layer=event.previous_occupancy_layer if departure_allowed else None,
                 occupancy_layer=event.occupancy_layer if arrival_allowed else None,
                 terminal_departure=terminal,
@@ -806,7 +807,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
             return (None if source is None or target is None else ActionFact(
                 source_entity_uuid=source, target_entity_uuid=target,
                 behavior_id=event.behavior_id, name=event.name,
-                reaction=ActionReaction(triggered_lineage_uuid=event.triggered_lineage_uuid,
+                reaction=ActionReaction(triggered_lineage=_lineage_key(keys, event.triggered_lineage_uuid),
                     succeeded=event.succeeded, automatic=event.automatic)))
         case ActionEvent():
             object_target = event.target_entity_uuid if event.target_entity_uuid in observed_objects else target
@@ -820,7 +821,8 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
 
 
 def _content_attributions(event: Event, fact: PlayerFact | None, observer: PlayerAudience,
-                          disclosed_lineages: set[UUID], known_content: frozenset[str]) -> tuple[ContentAttribution, ...]:
+                          disclosed_lineages: set[int], keys: "NativeKeys",
+                          known_content: frozenset[str]) -> tuple[ContentAttribution, ...]:
     result: list[ContentAttribution] = []
     def provider(identity: str | None) -> str | None:
         return identity if observer.controls(event.source_entity_uuid) or identity in known_content else None
@@ -834,15 +836,17 @@ def _content_attributions(event: Event, fact: PlayerFact | None, observer: Playe
     for evidence in event.effective_handler_presentations:
         if not _identified(event, evidence.source_entity_uuid, observer):
             continue
-        emitted = tuple(identity for identity in evidence.emitted_lineage_uuids if identity in disclosed_lineages)
+        emitted = tuple(key for identity in evidence.emitted_lineage_uuids
+            if (key := _lineage_key(keys, identity)) is not None and key in disclosed_lineages)
         if evidence.outcome is HandlerDispatchOutcome.EMITTED_EVENTS and not emitted:
             continue
         result.append(ContentAttribution(role="effective_handler", behavior_id=evidence.behavior_id,
             provided_by_id=evidence.provided_by_id if observer.controls(evidence.source_entity_uuid) or evidence.provided_by_id in known_content else None,
             origin_root_id=evidence.origin_root_id if observer.controls(evidence.source_entity_uuid) or evidence.origin_root_id in known_content else None,
-            source_entity_uuid=evidence.source_entity_uuid, triggering_event_uuid=evidence.triggering_event_uuid,
-            triggering_lineage_uuid=evidence.triggering_lineage_uuid,
-            emitted_lineage_uuids=emitted, handler_name=evidence.handler_name,
+            source_entity_uuid=evidence.source_entity_uuid,
+            triggering_occurrence=_version_key(keys, evidence.triggering_event_uuid),
+            triggering_lineage=_lineage_key(keys, evidence.triggering_lineage_uuid),
+            emitted_lineages=emitted, handler_name=evidence.handler_name,
             dispatch_index=evidence.dispatch_index, outcome=evidence.outcome))
     return tuple(result)
 
@@ -1056,7 +1060,7 @@ def _tile_changes(before: WorldTileState, after: WorldTileState) -> WorldTileCha
     return changes
 
 
-def _world_update(world: PresentationTarget, remembered: PlayerState, event_uuid: UUID,
+def _world_update(world: PresentationTarget, remembered: PlayerState, occurrence: int,
                   positions: set[tuple[int, int]], object_positions: set[tuple[int, int]], identities: set[UUID],
                   index: WorldProjectionIndex) -> WorldUpdate | None:
     senses = world.senses
@@ -1108,7 +1112,7 @@ def _world_update(world: PresentationTarget, remembered: PlayerState, event_uuid
                        if all(point in senses.visible for point in row.endpoints))
     if not tiles and not tile_changes and not objects and not removed and connectors == remembered.connectors:
         return None
-    update = WorldUpdate(event_uuid=event_uuid, tiles=tuple(tiles), objects=objects,
+    update = WorldUpdate(occurrence=occurrence, tiles=tuple(tiles), objects=objects,
                          objects_removed=removed, connectors=connectors, tile_changes=tuple(tile_changes))
     for identity in removed:
         _remember_object(index, remembered.objects[identity], None)
@@ -1119,22 +1123,55 @@ def _world_update(world: PresentationTarget, remembered: PlayerState, event_uuid
     return update
 
 
-def _versions(rows: tuple[ObjectiveRow, ...]) -> tuple[VersionRow, ...]:
-    return tuple(VersionRow(source_index=row.source_index, event_uuid=row.event_uuid,
-                            lineage_uuid=row.lineage_uuid) for row in rows)
+@dataclass(frozen=True, slots=True)
+class NativeKeys:
+    """The walk's version and lineage identities: a version's native cursor, a lineage's first version's.
+
+    `_public_occurrences` maps both to the seat's occurrence indices.
+    """
+
+    versions: Mapping[UUID, int]
+    lineages: Mapping[UUID, int]
 
 
-def _disclosed_slots(slots: tuple[ItemConcentrationSlot, ...], disclosed: set[UUID]
+def _version_key(keys: NativeKeys, identity: UUID | None) -> int | None:
+    return keys.versions.get(identity) if identity is not None else None
+
+
+def _lineage_key(keys: NativeKeys, identity: UUID | None) -> int | None:
+    return keys.lineages.get(identity) if identity is not None else None
+
+
+def _remember_versions(versions: dict[UUID, int], lineages: dict[UUID, int], rows: tuple[ObjectiveRow, ...]) -> None:
+    for row in rows:
+        versions[row.event_uuid] = row.source_index
+        lineages.setdefault(row.lineage_uuid, row.source_index)
+
+
+@dataclass(frozen=True, slots=True)
+class LineageDisclosure:
+    """The lineages disclosed to the seat (native keys) and the keys of native lineage identities."""
+
+    disclosed: set[int]
+    keys: NativeKeys
+
+
+def _lineage_disclosed(disclosure: LineageDisclosure, identity: UUID | None) -> bool:
+    key = _lineage_key(disclosure.keys, identity)
+    return key is not None and key in disclosure.disclosed
+
+
+def _disclosed_slots(slots: tuple[ItemConcentrationSlot, ...], disclosed: LineageDisclosure
                      ) -> tuple[ItemConcentrationSlot, ...]:
-    return tuple(slot if slot.cast_lineage_uuid in disclosed else
+    return tuple(slot if _lineage_disclosed(disclosed, slot.cast_lineage_uuid) else
                  slot.model_copy(update={"cast_lineage_uuid": None}) for slot in slots)
 
 
-def _disclosed_item(item: ItemPresentationState, disclosed: set[UUID]) -> ItemPresentationState:
+def _disclosed_item(item: ItemPresentationState, disclosed: LineageDisclosure) -> ItemPresentationState:
     return item.model_copy(update={"concentration_slots": _disclosed_slots(item.concentration_slots, disclosed)})
 
 
-def _disclosed_condition(condition: ConditionFact, disclosed: set[UUID]) -> ConditionFact:
+def _disclosed_condition(condition: ConditionFact, disclosed: LineageDisclosure) -> ConditionFact:
     state = condition.state
     return replace(condition,
         state=state.model_copy(update={"concentration_slots": _disclosed_slots(state.concentration_slots, disclosed)})
@@ -1143,25 +1180,25 @@ def _disclosed_condition(condition: ConditionFact, disclosed: set[UUID]) -> Cond
             if condition.resulting_item is not None else None)
 
 
-def _disclosed_changes(changes: ActorChanges, disclosed: set[UUID]) -> ActorChanges:
+def _disclosed_changes(changes: ActorChanges, disclosed: LineageDisclosure) -> ActorChanges:
     if "conditions" not in changes:
         return changes
     return {**changes, "conditions": tuple(_disclosed_condition(row, disclosed) for row in changes["conditions"])}
 
 
-def _disclosed_items(patches: tuple[ItemPatch, ...], disclosed: set[UUID]) -> tuple[ItemPatch, ...]:
+def _disclosed_items(patches: tuple[ItemPatch, ...], disclosed: LineageDisclosure) -> tuple[ItemPatch, ...]:
     return tuple(replace(row, state=replace(row.state, concentration_slots=_disclosed_slots(
         row.state.concentration_slots, disclosed))) if row.state is not None else row for row in patches)
 
 
-def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
+def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...],
                    admissions: tuple[ActorAdmission, ...], conditions: tuple[ConditionFact, ...],
                    private_world: PresentationTarget, private_actors: dict[UUID, ActorState],
-                   remembered: PlayerState, disclosed: set[UUID], world_index: WorldProjectionIndex,
+                   remembered: PlayerState, disclosed: set[int], world_index: WorldProjectionIndex,
                    audience_composition: AudienceComposition, logs: Mapping[UUID, PlayerLogEntry],
-                   observed_sources: tuple[Event, ...] = ()
+                   keys: NativeKeys, observed_sources: tuple[Event, ...] = ()
                    ) -> tuple[tuple[PlayerNode, ...], tuple[PlayerObservation, ...], tuple[WorldUpdate, ...],
-                              frozenset[UUID], frozenset[UUID]]:
+                              frozenset[int], frozenset[int]]:
     """Walk one lineage privately: nodes, observed bodies and items (complete values, not yet patches), world updates.
 
     The walk folds senses and world, not bodies: it reads which actors the
@@ -1169,12 +1206,15 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
     change only when the emitted lineage is folded (`_emit_bodies`). Also
     returns the spatial facts the walk's commit order superseded, and the
     removals of a known membership, whose value `_emit_bodies` takes from the
-    seat's body.
+    seat's body. Versions and lineages are identified by their native keys
+    (`NativeKeys`) until `_public_occurrences`.
     """
     events = upgrade_recorded_spatial_commits(events, tuple(
         (row.lineage_uuid, row.event_uuid) for row in sorted(versions, key=lambda row: row.source_index)))
     observer = remembered.viewing_audience
     indexes = {row.event_uuid: row.source_index for row in versions}
+    occurrences = frozenset(indexes.values())
+    disclosure = LineageDisclosure(disclosed, keys)
     by_version = {event.uuid: event for event in (*observed_sources, *events)}
     facts = {row.event_uuid: row for row in conditions}
     observations: list[PlayerObservation] = []
@@ -1189,8 +1229,8 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
             members[identity] = {row.condition_uuid: row for row in remembered.actors[identity].conditions}
         return members[identity]
 
-    superseded: set[UUID] = set()
-    known_removals: set[UUID] = set()
+    superseded: set[int] = set()
+    known_removals: set[int] = set()
     content_at_event: dict[UUID, frozenset[str]] = {}
     pending = iter(sorted(admissions, key=lambda row: indexes[row.event_uuid]))
     admission = next(pending, None)
@@ -1250,7 +1290,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
         while admission is not None and indexes[admission.event_uuid] <= indexes[event.uuid]:
             private_actors[admission.actor.uuid] = admission.actor
             observed = _public_actor(admission.actor, observer)
-            observations.append(PlayerObservation(event_uuid=admission.event_uuid, actor_uuid=observed.uuid,
+            observations.append(PlayerObservation(occurrence=indexes[admission.event_uuid], actor_uuid=observed.uuid,
                 changes=actor_changes(None, observed), contact=admission.contact,
                 items=_item_records(admission.actor, observer)))
             known.add(observed.uuid)
@@ -1265,7 +1305,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                 for identity in removed_holders:
                     contact = private_world.senses.entities.get(identity) if private_world.senses is not None else None
                     if identity in known and (observer.controls(identity) or contact is not None and contact.visual):
-                        observations.append(_gear_observation(event.uuid, private_actors[identity], observer))
+                        observations.append(_gear_observation(indexes[event.uuid], private_actors[identity], observer))
             if owner is not None and owner in private_actors:
                 private_actors[owner] = apply_actor_fact(private_actors[owner], event, facts.get(event.uuid))
             condition = facts.get(event.uuid)
@@ -1279,7 +1319,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                     private_actors[identity] = actor
                     contact = private_world.senses.entities.get(identity) if private_world.senses is not None else None
                     if identity in known and (observer.controls(identity) or contact is not None and contact.visual):
-                        observations.append(_gear_observation(event.uuid, actor, observer))
+                        observations.append(_gear_observation(indexes[event.uuid], actor, observer))
             positions, object_positions = world_event_footprints(private_world.recorded_world, event, condition)
             changed_objects = world_event_objects(private_world.recorded_world, event, condition)
             changed_objects.update(world_objects_at(private_world.recorded_world, object_positions))
@@ -1309,12 +1349,12 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                 changed_objects.update(event.object_contacts_removed)
                 for identity in set(event.spatial_effects_changed) | event.spatial_effects_removed:
                     changed_objects.update(private_world.recorded_world.constructions_by_provider.get(identity, ()))
-                apply_sensed_fact(remembered, _sensory_fact(event), known, source_cursor=indexes[event.uuid],
+                apply_sensed_fact(remembered, _sensory_fact(event, keys), known, source_cursor=indexes[event.uuid],
                     audience_composition=audience_composition)
                 private_world.senses = remembered.senses
                 world_changed = True
             if world_changed:
-                update = _world_update(private_world, remembered, event.uuid, positions, object_positions,
+                update = _world_update(private_world, remembered, indexes[event.uuid], positions, object_positions,
                     changed_objects, world_index)
                 if update is not None:
                     updates.append(update)
@@ -1340,7 +1380,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
             if isinstance(cause, DeathEvent) and not cause.canceled and cause.entity_uuid == event.entity_uuid:
                 declaration_senses = delivery_declarations.get(cause.lineage_uuid)
         fact = _project_fact(event, observer, private_actors, facts.get(event.uuid), events, admissions,
-                            known, observed_objects, private_world.senses,
+                            known, observed_objects, private_world.senses, keys,
                             declaration_senses)
         condition_target = event.target_entity_uuid
         if (fact is None and event.event_type is EventType.CONDITION_REMOVAL
@@ -1353,15 +1393,15 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
             if removed is not None and removed.condition_uuid in held_conditions(condition_target):
                 fact = ConditionChangeFact(target_entity_uuid=condition_target, event_type=event.event_type,
                     condition=removed)
-                known_removals.add(event.uuid)
+                known_removals.add(indexes[event.uuid])
         if isinstance(fact, ConditionChangeFact) and not event.canceled:
             change_membership(held_conditions(fact.target_entity_uuid), fact)
         if isinstance(fact, SpatialFact) and not event.canceled:
-            if commit_current(remembered, fact, source_cursor=indexes[event.uuid], version_cursors=indexes):
+            if commit_current(remembered, fact, source_cursor=indexes[event.uuid], occurrences=occurrences):
                 apply_sensed_fact(remembered, fact, known, source_cursor=indexes[event.uuid],
                     audience_composition=audience_composition)
             else:
-                superseded.add(event.uuid)
+                superseded.add(indexes[event.uuid])
         if isinstance(fact, FactionFact):
             parent = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
             removed = (facts.get(parent.uuid) if parent is not None
@@ -1424,49 +1464,51 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
         content_at_event[event.uuid] = (_held_content_at_event(event, observer,
             private_actors, known, private_world.senses)
             if needs_held_content else frozenset())
-        nodes.append(PlayerNode(uuid=event.uuid, lineage_uuid=event.lineage_uuid,
-            parent_event=event.parent_event, parent_lineage=event.parent_lineage,
-            children_lineages=tuple(event.children_lineages), phase=event.phase,
+        nodes.append(PlayerNode(occurrence=indexes[event.uuid], lineage=keys.lineages[event.lineage_uuid],
+            parent_event=_version_key(keys, event.parent_event), parent_lineage=_lineage_key(keys, event.parent_lineage),
+            children_lineages=tuple(key for identity in event.children_lineages
+                if (key := _lineage_key(keys, identity)) is not None), phase=event.phase,
             canceled=event.canceled, fact=fact, combat_log=_action_log(logs.get(event.uuid), fact, observer),
             resolution_ref=event.resolution_ref, turn_execution_id=event.turn_execution_id,
             cancellation=ActionCancellation(phase=event.canceled_from_phase,
                 action_economy_spent=event.action_economy_spent, outcome_code=event.outcome_code)
                 if event.canceled and isinstance(event, ActionEvent) and fact is not None else None))
-    disclosed.update(node.lineage_uuid for node in nodes if node.fact is not None)
-    disclosed_versions = {row.event_uuid for row in versions if row.lineage_uuid in disclosed}
+    disclosed.update(node.lineage for node in nodes if node.fact is not None)
+    disclosed_versions = {row.source_index for row in versions if keys.lineages[row.lineage_uuid] in disclosed}
     for index, node in enumerate(nodes):
         if isinstance(node.fact, SensoryFact):
             nodes[index] = replace(node, fact=replace(node.fact,
-                cause_event_uuid=node.fact.cause_event_uuid if node.fact.cause_event_uuid in disclosed_versions else None))
+                cause_occurrence=node.fact.cause_occurrence if node.fact.cause_occurrence in disclosed_versions else None))
         elif isinstance(node.fact, SpellFact) and node.fact.application is not None:
-            if node.fact.application.lineage_uuid not in disclosed:
+            if not _lineage_disclosed(disclosure, node.fact.application.lineage_uuid):
                 nodes[index] = replace(node, fact=replace(node.fact, application=None))
         elif isinstance(node.fact, ConditionChangeFact):
             nodes[index] = replace(node, fact=replace(node.fact,
-                condition=_disclosed_condition(node.fact.condition, disclosed)))
+                condition=_disclosed_condition(node.fact.condition, disclosure)))
         elif isinstance(node.fact, EquipmentFact):
-            nodes[index] = replace(node, fact=replace(node.fact, items=_disclosed_items(node.fact.items, disclosed)))
+            nodes[index] = replace(node, fact=replace(node.fact, items=_disclosed_items(node.fact.items, disclosure)))
         if isinstance(node.fact, AreaReachFact):
             nodes[index] = replace(node, fact=replace(node.fact,
-                previous_reach_lineage_uuid=(node.fact.previous_reach_lineage_uuid
-                    if node.fact.previous_reach_lineage_uuid in disclosed else None),
-                prerequisite_destruction_lineages=tuple(identity
-                    for identity in node.fact.prerequisite_destruction_lineages if identity in disclosed)))
-    nodes = [replace(node, content_attributions=_content_attributions(event, node.fact, observer, disclosed, content_at_event[event.uuid]),
+                previous_reach_lineage=(node.fact.previous_reach_lineage
+                    if node.fact.previous_reach_lineage in disclosed else None),
+                prerequisite_destruction_lineages=tuple(key
+                    for key in node.fact.prerequisite_destruction_lineages if key in disclosed)))
+    nodes = [replace(node, content_attributions=_content_attributions(event, node.fact, observer, disclosed, keys,
+                         content_at_event[event.uuid]),
                      resolution_ref=node.resolution_ref if node.resolution_ref is not None
-                        and node.resolution_ref.lineage_uuid in disclosed else None)
+                        and _lineage_disclosed(disclosure, node.resolution_ref.lineage_uuid) else None)
              for node, event in zip(nodes, events, strict=True)]
-    observations = [replace(row, changes=_disclosed_changes(row.changes, disclosed),
-        items=_disclosed_items(row.items, disclosed)) for row in observations]
-    updates = [replace(row, objects=tuple(_disclosed_object(obj, disclosed) for obj in row.objects))
+    observations = [replace(row, changes=_disclosed_changes(row.changes, disclosure),
+        items=_disclosed_items(row.items, disclosure)) for row in observations]
+    updates = [replace(row, objects=tuple(_disclosed_object(obj, disclosure) for obj in row.objects))
         for row in updates]
     for identity in {obj.item.item_uuid for update in updates for obj in update.objects}:
         if identity in remembered.objects:
-            remembered.objects[identity] = _disclosed_object(remembered.objects[identity], disclosed)
+            remembered.objects[identity] = _disclosed_object(remembered.objects[identity], disclosure)
     return tuple(nodes), tuple(observations), tuple(updates), frozenset(superseded), frozenset(known_removals)
 
 
-def _disclosed_object(obj: PlayerObject, disclosed: set[UUID]) -> PlayerObject:
+def _disclosed_object(obj: PlayerObject, disclosed: LineageDisclosure) -> PlayerObject:
     return replace(obj, item=replace(obj.item,
         concentration_slots=_disclosed_slots(obj.item.concentration_slots, disclosed)),
         contained_items=tuple(replace(item,
@@ -1530,11 +1572,16 @@ def _observe_spatial_revisions(state: "ProjectionState", nodes: tuple[PlayerNode
         state.spatial_values.update(((observer, identity), value) for observer, value in observations.items())
 
 
-def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
+def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...], versions: tuple[ObjectiveRow, ...],
                         observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...],
-                        known_removals: frozenset[UUID]
+                        known_removals: frozenset[int]
                         ) -> tuple[tuple[PlayerNode, ...], tuple[VersionRow, ...], tuple[PlayerObservation, ...], tuple[WorldUpdate, ...]]:
-    """Admit occurrence identities once and remove undisclosed causal links."""
+    """Admit occurrence identities once and remove undisclosed causal links.
+
+    The walk's native keys become the seat's: a version its occurrence index
+    (assigned once, in native order), a lineage the occurrence index of its
+    first admitted version.
+    """
     nodes = tuple(replace(node, fact=replace(node.fact, spatial_effect_sightings={
         identity: effect.model_copy(update={"duration": effect.duration if identity in state.owned_spatial_effects else None})
         for identity, effect in node.fact.spatial_effect_sightings.items()}))
@@ -1579,25 +1626,35 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
             node = replace(node, fact=fact)
         filtered.append(node)
     nodes = tuple(filtered)
-    observed_ids = {row.event_uuid for row in (*observations, *updates)}
-    observed_ids.update(node.fact.creation.birth_event_uuid for node in nodes
+    observed_ids = {row.occurrence for row in (*observations, *updates)}
+    observed_ids.update(node.fact.creation.birth_occurrence for node in nodes
         if isinstance(node.fact, SpatialFact) and node.fact.creation is not None)
     admitted_nodes = tuple(node for node in nodes if node.fact is not None or node.content_attributions
-        or node.uuid in observed_ids or (node.combat_log is not None
+        or node.occurrence in observed_ids or (node.combat_log is not None
             and not (node.combat_log.data.kind == "empty" and not node.combat_log.source_uuid
                 and node.combat_log.entry_type is CombatLogEntryType.ACTION
                 and node.combat_log.success is None)))
-    groups = {node.lineage_uuid for node in admitted_nodes}
+    groups = {node.lineage for node in admitted_nodes}
     state.disclosed_lineages.update(groups)
     rows = []
     for row in versions:
-        if row.lineage_uuid not in groups and row.event_uuid not in observed_ids:
+        lineage = state.lineage_keys[row.lineage_uuid]
+        if lineage not in groups and row.source_index not in observed_ids:
             continue
         if row.event_uuid not in state.public_versions:
             state.public_versions[row.event_uuid] = state.next_occurrence
             state.public_cursors[row.source_index] = state.next_occurrence
             state.next_occurrence += 1
-        rows.append(replace(row, source_index=state.public_versions[row.event_uuid]))
+        state.public_lineages.setdefault(lineage, state.public_versions[row.event_uuid])
+        rows.append(VersionRow(source_index=state.public_versions[row.event_uuid],
+            lineage=state.public_lineages[lineage]))
+
+    def lineage(key: int | None) -> int | None:
+        """A disclosed lineage's public index; an undisclosed one is no reference."""
+        return state.public_lineages.get(key) if key is not None and key in state.disclosed_lineages else None
+
+    def version(cursor: int | None) -> int | None:
+        return state.public_cursors.get(cursor) if cursor is not None else None
     for node in admitted_nodes:
         if isinstance(node.fact, TurnFact) and node.fact.entity_uuid is not None and node.turn_execution_id is not None:
             state.disclosed_turns.add(node.turn_execution_id)
@@ -1609,16 +1666,22 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
     for node in admitted_nodes:
         fact = node.fact
         if isinstance(fact, AreaReachFact):
-            fact = replace(fact, stage_index=sorted(set(stages[node.parent_lineage])).index(fact.stage_index))
+            fact = replace(fact, stage_index=sorted(set(stages[node.parent_lineage])).index(fact.stage_index),
+                previous_reach_lineage=lineage(fact.previous_reach_lineage),
+                prerequisite_destruction_lineages=tuple(public for key in fact.prerequisite_destruction_lineages
+                    if (public := lineage(key)) is not None))
         elif isinstance(fact, SensoryFact):
             spatial = {identity: effect.model_copy(update={
                 "owner_revision": state.spatial_versions[(identity, effect.owner_revision)]})
                 for identity, effect in fact.spatial_effect_sightings.items()}
-            fact = replace(fact, spatial_effect_sightings=spatial)
+            fact = replace(fact, spatial_effect_sightings=spatial, cause_occurrence=version(fact.cause_occurrence))
+        elif isinstance(fact, SpatialFact):
+            fact = replace(fact, commit_occurrence=version(fact.commit_occurrence),
+                creation=replace(fact.creation, birth_occurrence=state.public_cursors[fact.creation.birth_occurrence])
+                    if fact.creation is not None else None)
         elif isinstance(fact, ActionFact) and fact.reaction is not None:
-            fact = replace(fact, reaction=replace(fact.reaction, triggered_lineage_uuid=(fact.reaction.triggered_lineage_uuid
-                if fact.reaction.triggered_lineage_uuid in state.disclosed_lineages else None)))
-        elif isinstance(fact, ConditionChangeFact) and node.uuid not in known_removals:
+            fact = replace(fact, reaction=replace(fact.reaction, triggered_lineage=lineage(fact.reaction.triggered_lineage)))
+        elif isinstance(fact, ConditionChangeFact) and node.occurrence not in known_removals:
             fact = replace(fact, condition=_public_condition(fact.condition, state.public_cursors, state.public_versions,
                 owned=state.remembered.viewing_audience.controls(fact.target_entity_uuid)))
         elif isinstance(fact, AttackFact):
@@ -1631,20 +1694,22 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
             fact = replace(fact, previous_item=replace(fact.previous_item,
                 item_effects=_public_item_effects(fact.previous_item.item_effects, state.public_cursors)))
         attributions = tuple(replace(row,
-            triggering_event_uuid=row.triggering_event_uuid if row.triggering_event_uuid in state.public_versions else None,
-            triggering_lineage_uuid=row.triggering_lineage_uuid if row.triggering_lineage_uuid in state.disclosed_lineages else None,
+            triggering_occurrence=version(row.triggering_occurrence),
+            triggering_lineage=lineage(row.triggering_lineage),
+            emitted_lineages=tuple(public for key in row.emitted_lineages if (public := lineage(key)) is not None),
             dispatch_index=index if row.dispatch_index is not None else None)
             for index, row in enumerate(node.content_attributions))
-        result.append(replace(node, fact=fact,
-            parent_event=node.parent_event if node.parent_event in state.public_versions else None,
-            parent_lineage=node.parent_lineage if node.parent_lineage in state.disclosed_lineages else None,
-            children_lineages=tuple(identity for identity in node.children_lineages if identity in groups),
+        result.append(replace(node, fact=fact, occurrence=state.public_cursors[node.occurrence],
+            lineage=state.public_lineages[node.lineage], parent_event=version(node.parent_event),
+            parent_lineage=lineage(node.parent_lineage),
+            children_lineages=tuple(state.public_lineages[key] for key in node.children_lineages if key in groups),
             turn_execution_id=node.turn_execution_id if node.turn_execution_id in state.disclosed_turns else None,
             content_attributions=attributions))
-    observations = tuple(replace(row, changes=_public_changes(row.changes, state.public_cursors, state.public_versions,
+    observations = tuple(replace(row, occurrence=state.public_cursors[row.occurrence],
+        changes=_public_changes(row.changes, state.public_cursors, state.public_versions,
         owned=state.remembered.viewing_audience.controls(row.actor_uuid)), items=_public_items(row.items,
         state.public_cursors, owned=state.remembered.viewing_audience.controls(row.actor_uuid))) for row in observations)
-    updates = tuple(replace(row, objects=tuple(replace(obj, item=replace(obj.item,
+    updates = tuple(replace(row, occurrence=state.public_cursors[row.occurrence], objects=tuple(replace(obj, item=replace(obj.item,
         item_effects=_public_item_effects(obj.item.item_effects, state.public_cursors)),
         contained_items=tuple(replace(item,
             item_effects=_public_item_effects(item.item_effects, state.public_cursors))
@@ -1667,8 +1732,13 @@ class ProjectionState:
     world: PresentationTarget
     actors: dict[UUID, ActorState]
     remembered: PlayerState
-    disclosed_lineages: set[UUID] = field(default_factory=set)
+    # Disclosed lineages, by their native key (`NativeKeys.lineages`).
+    disclosed_lineages: set[int] = field(default_factory=set)
     public_versions: dict[UUID, int] = field(default_factory=dict)
+    # The walk's native keys of every captured version and lineage, and each disclosed lineage's public index.
+    version_cursors: dict[UUID, int] = field(default_factory=dict)
+    lineage_keys: dict[UUID, int] = field(default_factory=dict)
+    public_lineages: dict[int, int] = field(default_factory=dict)
     public_cursors: dict[int, int] = field(default_factory=dict)
     disclosed_turns: set[UUID] = field(default_factory=set)
     owned_spatial_effects: set[UUID] = field(default_factory=set)
@@ -1687,9 +1757,9 @@ def _item_patches(remembered: PlayerState, records: tuple[ItemPatch, ...]) -> tu
         is not None or patch.profile is not None or patch.state is not None)
 
 
-def _emit_bodies(remembered: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
-                 observations: tuple[PlayerObservation, ...], superseded: frozenset[UUID],
-                 known_removals: frozenset[UUID]) -> tuple[tuple[PlayerNode, ...], tuple[PlayerObservation, ...]]:
+def _emit_bodies(remembered: PlayerState, nodes: tuple[PlayerNode, ...], observations: tuple[PlayerObservation, ...],
+                 superseded: frozenset[int], known_removals: frozenset[int]
+                 ) -> tuple[tuple[PlayerNode, ...], tuple[PlayerObservation, ...]]:
     """Fold the emitted lineage's bodies and items into the seat's, in its client's order.
 
     Each observed (public) body and each equipment fact becomes the patch
@@ -1701,7 +1771,7 @@ def _emit_bodies(remembered: PlayerState, nodes: tuple[PlayerNode, ...], version
     """
     emitted: list[PlayerObservation] = []
     result: list[PlayerNode] = []
-    for row in occurrence_order(nodes, versions, observations):
+    for row in occurrence_order(nodes, observations):
         match row:
             case PlayerObservation():
                 before = remembered.actors.get(row.actor_uuid)
@@ -1726,15 +1796,15 @@ def _emit_bodies(remembered: PlayerState, nodes: tuple[PlayerNode, ...], version
                         for identity in fact.spatial_effect_sightings
                         if remembered.spatial_content.get(identity) != fact.spatial_effect_content[identity]})
                     row = replace(row, fact=fact)
-                elif isinstance(fact, ConditionChangeFact) and row.uuid in known_removals:
+                elif isinstance(fact, ConditionChangeFact) and row.occurrence in known_removals:
                     member = next((member for member in remembered.actors[fact.target_entity_uuid].conditions
                         if member.condition_uuid == fact.condition.condition_uuid), None)
                     if member is None:
                         raise ValueError("A known removal names a membership its seat does not hold")
-                    fact = replace(fact, condition=replace(member, event_uuid=row.uuid, resulting_stats=None,
+                    fact = replace(fact, condition=replace(member, event_uuid=fact.condition.event_uuid, resulting_stats=None,
                         resulting_max_hp=None, resulting_ac=None, resulting_tile=None, resulting_item=None))
                     row = replace(row, fact=fact)
-                if not row.canceled and fact is not None and row.uuid not in superseded:
+                if not row.canceled and fact is not None and row.occurrence not in superseded:
                     apply_record_fact(remembered, fact)
                 result.append(row)
     return tuple(result), tuple(emitted)
@@ -1827,6 +1897,11 @@ def project_after_values(state: ProjectionState, hud: PlayerHUDSnapshot | None,
     return patch, public_logs
 
 
+def _public_set(state: ProjectionState, cursors: frozenset[int]) -> frozenset[int]:
+    """The public occurrences of the walk's native versions that were admitted."""
+    return frozenset(state.public_cursors[cursor] for cursor in cursors if cursor in state.public_cursors)
+
+
 def begin_projection(initialization: IntervalEnvelope) -> tuple[ProjectionState, PlayerInitialization]:
     """Start a projection from recorded initialization; no native queries."""
     world_event = next((event for _, event in initialization.admitted if isinstance(event, WorldInitializedEvent)), None)
@@ -1837,23 +1912,21 @@ def begin_projection(initialization: IntervalEnvelope) -> tuple[ProjectionState,
     private_world = PresentationTarget(generation=initialization.generation, observer_uuid=initialization.observer_uuid)
     remembered = PlayerState(generation=initialization.generation, observer_uuid=initialization.observer_uuid, world=world, audience=resolve_audience(initialization.observer_uuid, initialization.audience))
     actors: dict[UUID, ActorState] = {}
-    versions = _versions(initialization.objective_rows)
-    disclosed: set[UUID] = set()
-    world_index = WorldProjectionIndex()
-    audience_composition = AudienceComposition()
+    versions = initialization.objective_rows
+    state = ProjectionState(private_world, actors, remembered)
+    _remember_versions(state.version_cursors, state.lineage_keys, versions)
     nodes, observations, updates, superseded, known_removals = _project_nodes(
         tuple(event for _, event in initialization.admitted), versions, initialization.admissions,
-        initialization.conditions, private_world, actors, remembered, disclosed, world_index, audience_composition,
-        initialization.logs)
-    state = ProjectionState(private_world, actors, remembered, disclosed, world_index=world_index,
-        audience_composition=audience_composition)
+        initialization.conditions, private_world, actors, remembered, state.disclosed_lineages, state.world_index,
+        state.audience_composition, initialization.logs, NativeKeys(state.version_cursors, state.lineage_keys))
     state.owned_spatial_effects.update(event.spatial_effect_uuid for _, event in initialization.admitted
         if isinstance(event, SpatialEffectChangeEvent) and remembered.viewing_audience.controls(event.source_entity_uuid))
-    nodes, versions, observations, updates = _public_occurrences(state, nodes, versions, observations, updates,
+    nodes, rows, observations, updates = _public_occurrences(state, nodes, versions, observations, updates,
         known_removals)
-    nodes, observations = _emit_bodies(remembered, nodes, versions, observations, superseded, known_removals)
+    nodes, observations = _emit_bodies(remembered, nodes, observations, _public_set(state, superseded),
+        _public_set(state, known_removals))
     initial = PlayerInitialization(generation=initialization.generation, observer_uuid=initialization.observer_uuid,
-        world=world, nodes=nodes, version_rows=versions, end_cursor=state.next_occurrence,
+        world=world, nodes=nodes, version_rows=rows, end_cursor=state.next_occurrence,
         observations=observations, world_updates=updates, audience=remembered.audience)
     return state, initial
 
@@ -1866,31 +1939,33 @@ def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> Player
     start_cursor = state.next_occurrence
     state.owned_spatial_effects.update(event.spatial_effect_uuid for event in lineage.events
         if isinstance(event, SpatialEffectChangeEvent) and state.remembered.viewing_audience.controls(event.source_entity_uuid))
-    versions = _versions(lineage.objective_rows)
+    versions = lineage.objective_rows
+    _remember_versions(state.version_cursors, state.lineage_keys, versions)
     nodes, observations, updates, superseded, known_removals = _project_nodes(
         upgrade_recorded_resolutions(lineage.events), versions, lineage.admissions, lineage.conditions, state.world,
         state.actors, state.remembered, state.disclosed_lineages, state.world_index, state.audience_composition,
-        lineage.logs, lineage.observed_sources)
+        lineage.logs, NativeKeys(state.version_cursors, state.lineage_keys), lineage.observed_sources)
     # Settled initialization needs resulting state only. Presenting a damage
     # operation additionally requires recorded causal ownership, or an explicit
     # current-format unknown owner; old missing fields cannot establish either.
-    native_events = {event.uuid: event for event in lineage.events}
+    native_events = {state.version_cursors[event.uuid]: event for event in lineage.events}
     for node in nodes:
-        event = native_events[node.uuid]
+        event = native_events[node.occurrence]
         if (isinstance(node.fact, DamageRequestFact) and node.resolution_ref is None
                 and "resolution_ref" in event._recorded_omissions):
             legacy_damage_reference(event.uuid, event.lineage_uuid, event.parent_lineage, is_request=True)
     if not observations and not updates and not any(node.fact is not None or node.combat_log is not None
                                                    or node.content_attributions for node in nodes):
         return None
-    nodes, versions, observations, updates = _public_occurrences(state, nodes, versions, observations, updates,
+    nodes, rows, observations, updates = _public_occurrences(state, nodes, versions, observations, updates,
         known_removals)
     if not nodes and not observations and not updates:
         return None
-    nodes, observations = _emit_bodies(state.remembered, nodes, versions, observations, superseded, known_removals)
-    root = next((index for index, node in enumerate(nodes) if node.uuid == lineage.root.uuid), None)
+    nodes, observations = _emit_bodies(state.remembered, nodes, observations, _public_set(state, superseded),
+        _public_set(state, known_removals))
+    root_occurrence = state.public_cursors.get(state.version_cursors[lineage.root.uuid])
+    root = next((index for index, node in enumerate(nodes) if node.occurrence == root_occurrence), None)
     return PlayerLineage(generation=lineage.generation, observer_uuid=lineage.observer_uuid,
-        lineage_uuid=nodes[root].lineage_uuid if root is not None else uuid5(lineage.generation,
-            f"{lineage.observer_uuid}:{lineage.root.lineage_uuid}"),
-        root=root, events=nodes, version_rows=versions, start_cursor=start_cursor,
+        lineage=nodes[root].lineage if root is not None else nodes[0].lineage if nodes else rows[0].lineage,
+        root=root, events=nodes, version_rows=rows, start_cursor=start_cursor,
         end_cursor=state.next_occurrence, observations=observations, world_updates=updates, audience=state.remembered.audience)
