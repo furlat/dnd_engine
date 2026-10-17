@@ -232,6 +232,7 @@ class SpikeGrowth(SpellAction):
     concentration, and lets that one condition own terrain, concealment, and
     spatial-entry damage.
     """
+    creates = (*SpellAction.creates, SpikeGrowthZone)
     name: str = Field(default="Spike Growth", description="Spell name.")
     description: str = Field(
         default="20ft radius difficult terrain, 2d4 piercing per 5ft traveled",
@@ -740,6 +741,7 @@ class Haste(SpellAction):
     condition. Cleanup removes the modifier bundle and, outside suppression
     paths, applies lethargy through the effect removal hook.
     """
+    creates = (*SpellAction.creates, HasteEffect)
     name: str = Field(default="Haste", description="Spell name.")
     description: str = Field(
         default=(
@@ -1691,6 +1693,7 @@ class TelekinesisMove(BaseAction):
 
 class Telekinesis(SpellAction):
     """Cast and move once; concentration grants paid, finite repeats for ten minutes."""
+    creates = (*SpellAction.creates, ConcentrationActionMarker, Prone)
     harmful: Optional[bool] = True
     name: str = "Telekinesis"
     description: str = "Move a creature up to 30ft; hostile landing deals 4d8 force + 2d6 bludgeoning"
@@ -2266,6 +2269,7 @@ class RainWetEffect(WetSurfaceMembership):
 
 
 class CreateOrDestroyWater(SpellAction):
+    creates = (*SpellAction.creates, RainWetEffect, WetSurface)
     name: str = "Create or Destroy Water"
     description: str = "Create persistent water and three-turn rain Wet/reveal, or remove water-bearing patches."
     spell_level: int = 1

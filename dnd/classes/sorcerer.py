@@ -1139,6 +1139,7 @@ class QuickenedSpell(BaseAction):
         costs: Sorcery point cost required to activate Quickened Spell.
         active_metamagic_condition_uuid: Exact active root owned by this template.
     """
+    creates = (MetamagicActive,)
     name: str = Field(default="Quickened Spell", description="Display name for the Quickened Spell metamagic action.")
     description: str = Field(default="Next spell costs a bonus action instead of an action", description="Rules summary for the Quickened Spell override.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Quickened Spell targets the caster's own next spell template.")
@@ -1206,6 +1207,7 @@ class TwinnedSpell(BaseAction):
         costs: Base sorcery point cost required to activate Twinned Spell.
         active_metamagic_condition_uuid: Exact active root owned by this template.
     """
+    creates = (MetamagicActive,)
     name: str = Field(default="Twinned Spell", description="Display name for the Twinned Spell metamagic action.")
     description: str = Field(default="Next single-target spell targets two creatures", description="Rules summary for the Twinned Spell override.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Twinned Spell targets the caster's own next eligible spell template.")
@@ -1273,6 +1275,7 @@ class DistantSpell(BaseAction):
         costs: Sorcery point cost required to activate Distant Spell.
         active_metamagic_condition_uuid: Exact active root owned by this template.
     """
+    creates = (MetamagicActive,)
     name: str = Field(default="Distant Spell", description="Display name for the Distant Spell metamagic action.")
     description: str = Field(default="Next spell has double range", description="Rules summary for the Distant Spell override.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Distant Spell targets the caster's own next eligible spell template.")

@@ -2380,6 +2380,7 @@ class CalmedEffect(BaseCondition):
 
 
 class CalmEmotions(SpellAction):
+    creates = (*SpellAction.creates, CalmedEffect)
     name: str = "Calm Emotions"
     description: str = "Humanoids in the area lose charm, fear and rage and cannot regain them."
     spell_level: int = 2

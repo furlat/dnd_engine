@@ -879,6 +879,7 @@ class SimpleMarkerCondition(BaseCondition):
 
 class HitSaveRiderFeature(BaseCondition):
     """Feature that applies a save-based condition rider after an exact authored item hit."""
+    creates = (Prone,)
 
     name: str = Field(default="Hit Save Rider", description="Condition name.")
     description: str = Field(

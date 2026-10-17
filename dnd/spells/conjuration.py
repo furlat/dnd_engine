@@ -224,6 +224,7 @@ class CallLightningStrike(SpellAction):
 
 class CallLightning(SpellAction):
     """BG3 adaptation: one bolt now, action-cost activations for ten turns."""
+    creates = (*SpellAction.creates, CallLightningStrike, ConcentrationActionMarker)
     name: str = "Call Lightning"
     description: str = "Strike a seven-foot area within 60 feet; repeat for ten turns while concentrating."
     spell_level: int = 3
@@ -578,6 +579,7 @@ class GreaseZone(AreaCondition):
 
     Applied to the caster, manages the zone via position-indexed handlers.
     """
+    creates = (Prone,)
     # Terrain/obscurement contributions do not reject crossing segments.
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
     name: str = Field(default="Grease Zone", description="Display name for the grease zone zone condition.")
@@ -715,6 +717,7 @@ class Grease(SpellAction):
     Duration: 1 minute (non-concentration in SRD, but we treat as concentration
     for BG3-style cleanup convenience)
     """
+    creates = (*SpellAction.creates, GreaseZone)
     name: str = Field(default="Grease", description="Display name for the grease spell.")
     description: str = Field(default="10ft square difficult terrain, DEX save or prone", description="Rules-facing summary for the grease spell.")
     spell_level: int = Field(default=1, description="Spell slot level required to cast grease; cantrips use 0.")
@@ -812,6 +815,7 @@ class EscapeWebAction(EscapeSpatialRestraintAction):
 
 class WebRestrained(SpatialRestraintSource):
     """Exact membership contributed by one Web zone."""
+    creates = (*SpatialRestraintSource.creates, EscapeWebAction)
 
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, frozen=True)
     name: str = Field(default="Web restraint")
@@ -853,6 +857,7 @@ class WebZone(RestrainingAreaCondition):
     The independent condition owns its footprint, restraint memberships, and
     environmental transition directly.
     """
+    creates = (WebRestrained,)
     name: str = Field(default="Web Zone", description="Display name for the web zone zone condition.")
     description: str = Field(default="Sticky webs - DEX save or restrained", description="Rules-facing summary for the web zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the web zone for cleanup and filtering.")
@@ -1060,6 +1065,7 @@ class Web(SpellAction):
 
     Duration: Concentration, up to 1 hour
     """
+    creates = (*SpellAction.creates, WebZone)
     name: str = Field(default="Web", description="Display name for the web spell.")
     description: str = Field(default="20ft cube of webs, DEX save or restrained, can escape with STR check", description="Rules-facing summary for the web spell.")
     spell_level: int = Field(default=2, description="Spell slot level required to cast web; cantrips use 0.")
@@ -1176,6 +1182,7 @@ class EscapeEntangleAction(EscapeSpatialRestraintAction):
 
 class EntangleRestrained(SpatialRestraintSource):
     """Independent restraint lease contributed by one Entangle field."""
+    creates = (*SpatialRestraintSource.creates, EscapeEntangleAction)
 
     description: str = Field(
         default="Restrained by one exact Entangle field until escaping.",
@@ -1197,6 +1204,7 @@ ENTANGLE_ZONE_CONTENT_REF = ContentRef(
 
 class EntangleZone(RestrainingAreaCondition):
     """Fixed Entangle field with cast-time saves and difficult terrain."""
+    creates = (EntangleRestrained,)
 
     name: str = Field(default="Entangle Zone")
     description: str = Field(
@@ -1251,6 +1259,7 @@ class EntangleZone(RestrainingAreaCondition):
 
 class Entangle(SpellAction):
     """Create a concentration field of grasping plants."""
+    creates = (*SpellAction.creates, EntangleZone)
 
     name: str = Field(default="Entangle")
     description: str = Field(
@@ -1884,6 +1893,7 @@ class Cloudkill(SpellAction):
 
     Duration: Concentration, up to 10 minutes
     """
+    creates = (*SpellAction.creates, CloudkillZone)
     name: str = Field(default="Cloudkill", description="Display name for the cloudkill spell.")
     description: str = Field(default="20ft sphere poison fog, 5d8 poison (CON half), moves away from caster", description="Rules-facing summary for the cloudkill spell.")
     spell_level: int = Field(default=5, description="Spell slot level required to cast cloudkill; cantrips use 0.")
@@ -2001,6 +2011,7 @@ class SpiritGuardiansSlowed(BaseCondition):
 
 class SpiritGuardiansSlowSource(SpatialConditionMembershipSource):
     """One exact Spirit Guardians source sharing the native public slow child."""
+    creates = (SpiritGuardiansSlowed,)
 
     slow_manifestation_uuid: Optional[UUID] = Field(default=None, exclude=True)
 
@@ -2048,6 +2059,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
 
     Explicit cast-time exclusions are unaffected, regardless of faction.
     """
+    creates = (SpiritGuardiansSlowSource,)
     name: str = Field(default="Spirit Guardians Zone", description="Display name for the spirit guardians zone zone condition.")
     description: str = Field(default="Spectral warriors damage nonexcluded creatures entering the zone", description="Rules-facing summary for the spirit guardians zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the spirit guardians zone for cleanup and filtering.")
@@ -2295,6 +2307,7 @@ class SpiritGuardians(SpellAction):
 
     Visible creatures explicitly excluded at cast time remain unaffected.
     """
+    creates = (*SpellAction.creates, SpiritGuardiansZone)
     name: str = Field(default="Spirit Guardians", description="Display name for the spirit guardians spell.")
     description: str = Field(default="15ft sphere around caster, nonexcluded creatures take 3d8 radiant/necrotic (WIS half), speed halved", description="Rules-facing summary for the spirit guardians spell.")
     spell_level: int = Field(default=3, description="Spell slot level required to cast spirit guardians; cantrips use 0.")
@@ -2615,6 +2628,7 @@ class Darkness(SpellAction):
 
     Duration: Concentration, up to 10 minutes
     """
+    creates = (*SpellAction.creates, DarknessZone)
     name: str = Field(default="Darkness", description="Display name for the darkness spell.")
     description: str = Field(default="15ft sphere magical darkness (blocks darkvision)", description="Rules-facing summary for the darkness spell.")
     spell_level: int = Field(default=2, description="Spell slot level required to cast darkness; cantrips use 0.")
@@ -2824,6 +2838,7 @@ class Daylight(SpellAction):
 
     Duration: 1 hour (using Concentration for cleanup)
     """
+    creates = (*SpellAction.creates, DaylightZone)
     name: str = Field(default="Daylight", description="Display name for the daylight spell.")
     description: str = Field(default="60ft sphere very bright light, reveals hidden, dispels darkness", description="Rules-facing summary for the daylight spell.")
     spell_level: int = Field(default=3, description="Spell slot level required to cast daylight; cantrips use 0.")
@@ -3689,6 +3704,7 @@ class SleetStormZone(AreaCondition):
     Entry + turn start: DEX save or Prone.
     Turn start: concentration disruption against spell save DC.
     """
+    creates = (Prone,)
     name: str = Field(default="Sleet Storm Zone", description="Display name for the sleet storm zone zone condition.")
     description: str = Field(default="Icy sleet - DEX save or prone, concentration disruption", description="Rules-facing summary for the sleet storm zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the sleet storm zone for cleanup and filtering.")
@@ -3939,6 +3955,7 @@ class SleetStorm(SpellAction):
 
     Duration: Concentration, up to 1 minute
     """
+    creates = (*SpellAction.creates, SleetStormZone)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Sleet Storm", description="Display name for the sleet storm spell.")
     description: str = Field(default="40ft cylinder: difficult terrain, heavily obscured, DEX save/prone, conc disruption", description="Rules-facing summary for the sleet storm spell.")

@@ -928,6 +928,7 @@ class ActionSurge(BaseAction):
         target_type: Action Surge always targets the acting fighter.
         costs: Action-surge resource cost rebuilt after model initialization.
     """
+    creates = (ActionSurging,)
     name: str = Field(default="Action Surge", description="Action name displayed for Action Surge.")
     description: str = Field(
         default="Take one additional action on your turn",

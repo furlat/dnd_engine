@@ -981,6 +981,7 @@ class _PotionOfGreaterInvisibility(UsableItem):
 )
 class _DrinkHastePotionAction(_PotionDrinkAction):
     """Drink a potion to gain Haste without concentration."""
+    creates = (HasteEffect,)
 
     name: str = Field(
         default="Drink Haste Potion",

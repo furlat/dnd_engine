@@ -16,6 +16,37 @@ class ContributionOwner(Protocol):
     def allows_contribution_at(self, position: tuple[int, int] | None) -> bool: ...
 
 
+class CreatesModels(Protocol):
+    """A model class declaring the model classes its content can create in play."""
+
+    creates: ClassVar[tuple[type['CreatesModels'], ...]]
+    __pydantic_complete__: ClassVar[bool]
+
+    @classmethod
+    def model_rebuild(cls) -> bool | None: ...
+
+
+def build_creatable_models(model: type[CreatesModels]) -> None:
+    """Build every model class `model`'s content can create, transitively.
+
+    Conditions and actions defer their validation schema to first use
+    (`defer_build`). Creating an object (a character, creature, item, placed
+    object, action template or condition) builds the closure of its declared
+    `creates` here, so the products it makes later in a gameplay operation are
+    already built.
+    """
+    pending = list(model.creates)
+    seen: set[type[CreatesModels]] = set()
+    while pending:
+        product = pending.pop()
+        if product in seen:
+            continue
+        seen.add(product)
+        if not product.__pydantic_complete__:
+            product.model_rebuild()
+        pending.extend(product.creates)
+
+
 def read_private_attribute(model: BaseModel, item: str) -> Any:
     """Pydantic's private-attribute read without its per-read descriptor probe.
 
@@ -39,6 +70,9 @@ class BaseObject(BaseModel):
     """
 
     _registry: ClassVar[Dict[UUID, ContributionOwner]] = {}
+    # The model classes this object's content can create in play, by its own
+    # rules or by the systems they trigger; a subclass extends its parent's.
+    creates: ClassVar[tuple[type[CreatesModels], ...]] = ()
     model_config = ConfigDict(arbitrary_types_allowed=True)
     __getattr__ = read_private_attribute
 
@@ -95,7 +129,8 @@ class BaseObject(BaseModel):
         return BaseObject._registry.get(uuid)
 
     def model_post_init(self, __context: Any) -> None:
-        """Register the object by UUID when registry participation is enabled."""
+        """Build what this object can create; register it by UUID when registry participation is enabled."""
+        build_creatable_models(type(self))
         if __context is not PASSIVE_EVENT_REPLAY and self.use_register:
             self.__class__._registry[self.uuid] = self
 

@@ -12,10 +12,20 @@ from dnd.core.events import EventPhase, EventQueue, Range, RangeType, SummonAdmi
 from dnd.summoning.forms import available_forms, selected_form
 from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.types.summoning import SummonApplication, SummonFamily, SummonSelection
+from dnd.summoning.conditions import Summoned
+from dnd.monsters.traits import (
+    KeenPerceptionFeature,
+    KeenHearingAndSmellFeature,
+    PackTacticsFeature,
+    HitSaveRiderFeature,
+    WolfBiteProneRiderFeature,
+    MultiattackAction,
+)
 
 
 class SummonSpell(SpellAction):
     """One creature/position choice; the explicit world binding owns creation."""
+    creates = (*SpellAction.creates, Summoned)
 
     family: SummonFamily
     form_id: str | None = None
@@ -94,6 +104,9 @@ class SummonSpell(SpellAction):
 
 
 class ConjureAnimals(SummonSpell):
+    # The features its beast forms install (dnd.monsters.beasts and the SRD wolf).
+    creates = (*SummonSpell.creates, KeenPerceptionFeature, KeenHearingAndSmellFeature, PackTacticsFeature,
+        HitSaveRiderFeature, WolfBiteProneRiderFeature, MultiattackAction)
     name: str = "Conjure Animals"
     description: str = "Summon one beast. Higher slots unlock stronger available creatures."
     family: SummonFamily = SummonFamily.ANIMALS

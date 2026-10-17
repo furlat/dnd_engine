@@ -407,6 +407,7 @@ class HypnoticPatternEffect(BaseCondition):
     Target is Charmed and Incapacitated (incapacitated + speed 0).
     Breaks when target takes damage or is shaken awake.
     """
+    creates = (Charmed,)
     name: str = Field(default="Hypnotic Pattern", description="Condition name.")
     description: str = Field(default="Charmed and incapacitated by swirling pattern", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
@@ -512,6 +513,7 @@ class HypnoticPattern(SpellAction):
 
     Duration: Concentration, up to 1 minute.
     """
+    creates = (*SpellAction.creates, HypnoticPatternEffect)
     name: str = Field(default="Hypnotic Pattern", description="Spell name.")
     description: str = Field(default="30ft cube, WIS save or Charmed + Incapacitated", description="Spell description.")
     spell_level: int = Field(default=3, description="Spell slot level.")
@@ -668,6 +670,7 @@ class ColorSpray(SpellAction):
     Skip: creatures that cannot currently see, creatures immune to Blinded
     Upcast: +2d10 per slot level above 1st.
     """
+    creates = (*SpellAction.creates, ColorSprayEffect)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Color Spray", description="Spell name.")
     description: str = Field(default="Roll 6d10 HP pool. Affects creatures in order of lowest HP.", description="Spell description.")
@@ -1615,6 +1618,7 @@ class WeirdEffect(Frightened):
 
 
 class Weird(SpellAction):
+    creates = (*SpellAction.creates, WeirdEffect)
     name: str = "Weird"
     description: str = "Initial WIS save; end-turn WIS recovery precedes 4d10 psychic damage on failure."
     spell_level: int = 9

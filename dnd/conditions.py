@@ -433,6 +433,16 @@ def has_taken_damage_processor(event: Event, source_entity_uuid: UUID) -> Option
     return None
 
 
+class HasAttackedTracker(EventHandler):
+    """An entity's attack tracker: an attack it executes applies HasAttacked."""
+    creates = (HasAttacked,)
+
+
+class HasTakenDamageTracker(EventHandler):
+    """An entity's damage tracker: damage it takes applies HasTakenDamage."""
+    creates = (HasTakenDamage,)
+
+
 def create_has_attacked_handler(source_entity_uuid: UUID) -> EventHandler:
     """Create an attack tracker handler for an entity.
 
@@ -442,7 +452,7 @@ def create_has_attacked_handler(source_entity_uuid: UUID) -> EventHandler:
     Returns:
         Event handler that applies HasAttacked on attack execution.
     """
-    return EventHandler(
+    return HasAttackedTracker(
         name="HasAttacked Tracker",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
@@ -464,7 +474,7 @@ def create_has_taken_damage_handler(source_entity_uuid: UUID) -> EventHandler:
     Returns:
         Event handler that applies HasTakenDamage when the entity takes damage.
     """
-    return EventHandler(
+    return HasTakenDamageTracker(
         name="HasTakenDamage Tracker",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[

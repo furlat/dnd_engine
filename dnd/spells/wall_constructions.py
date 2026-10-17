@@ -559,6 +559,7 @@ def stone_enclosure_escapes(caster: Entity, geometry: WallAssemblyPresentationGe
 
 class ConstructWall(SpellAction):
     """Concrete shared placement composer, configured by native spell data."""
+    creates = (*SpellAction.creates, WallOfIceZone, WallOfStoneZone, WallOfForceZone)
 
     construction_material: Literal["ice", "stone", "force"]
     concentration: bool = True

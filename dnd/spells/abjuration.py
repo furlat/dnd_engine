@@ -377,6 +377,7 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
 )
 class ShieldReactionHandler(EventHandler):
     """Direct player-toggleable Shield reaction behavior."""
+    creates = (ShieldBuff,)
 
 
 SHIELD_REACTION_DECLARATION = get_content_declaration(
@@ -1255,6 +1256,7 @@ class GlobeOfInvulnerability(SpellAction):
     Upcasting raises the maximum blocked base spell level by one per slot above
     sixth.
     """
+    creates = (*SpellAction.creates, GlobeZone)
     name: str = Field(default="Globe of Invulnerability", description="Spell name.")
     description: str = Field(default="10ft sphere blocks spells L5 or lower, concentration", description="Rules-facing spell summary.")
     spell_level: int = Field(default=6, description="Base spell level.")
@@ -3637,6 +3639,7 @@ class HolyAuraEffect(BaseCondition):
 
 
 class HolyAura(SpellAction):
+    creates = (*SpellAction.creates, HolyAuraEffect)
     name: str = "Holy Aura"
     description: str = "Fixed selected recipients within 30 feet gain a concentrating holy ward."
     spell_level: int = 8

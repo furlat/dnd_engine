@@ -22,7 +22,15 @@ from uuid import UUID
 
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.discovery import ActorScan, Relationship, ScanRecord
-from dnd.items.spell_payloads import SpellPayloadItem, SpellPayloadLifetime, build_spell_payload, payload_blast, commit_payload_cast
+from dnd.items.spell_payloads import (
+    SpellPayloadItem,
+    SpellPayloadLifetime,
+    build_spell_payload,
+    payload_blast,
+    commit_payload_cast,
+    ThrowSpellPayload,
+    TouchDelayedFireball,
+)
 from dnd.core.gridmap import PreparedObjectPlacement
 from dnd.spells.wall_fields import BladeBarrierZone, WallDamageSpec, selection_field_geometry, selection_wall_support_error
 from dnd.core.action_types import ActionSelection, PositionPathSelection, EntityDestinationSelection
@@ -106,7 +114,7 @@ from dnd.actions import (
     commit_forced_movement,
 )
 from dnd.conditions import Revealed, Blinded, Deafened, Stunned, NoReactions, ConcentrationActionMarker, Restrained
-from dnd.residues import ASHEN_RESIDUE, deposit_area_residue
+from dnd.residues import ASHEN_RESIDUE, deposit_area_residue, ObjectResidueCondition
 from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity, srd_condition_identity
 from dnd.core.content.registration import get_content_declaration
 from dnd.types.spatial_effects import SpatialEffectAnchorKind, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
@@ -334,6 +342,7 @@ class RayOfFrost(SpellAction):
 
     Damage scales: 2d8 at 5th, 3d8 at 11th, 4d8 at 17th.
     """
+    creates = (*SpellAction.creates, RayOfFrostEffect)
     @property
     def performs_attack(self) -> bool:
         return True
@@ -795,6 +804,7 @@ class Fireball(SpellAction):
 
     At Higher Levels: +1d6 damage per slot level above 3rd.
     """
+    creates = (*SpellAction.creates, ObjectResidueCondition)
     name: str = Field(default="Fireball", description="Display name for the fireball spell.")
     description: str = Field(default="20ft radius explosion dealing 8d6 fire damage (DEX save half)", description="Rules-facing summary for the fireball spell.")
     spell_level: int = Field(default=3, description="Spell slot level required to cast fireball; cantrips use 0.")
@@ -1851,6 +1861,7 @@ class SunburstBlindedEffect(BaseCondition):
     - Has Blinded as sub-condition
     - Repeat CON save at end of each turn to end blindness
     """
+    creates = (Blinded,)
     name: str = Field(default="Sunburst Blindness", description="Display name for the sunburst blinded effect condition.")
     description: str = Field(default="Blinded by brilliant sunlight", description="Rules-facing summary for the sunburst blinded effect condition.")
 
@@ -1942,6 +1953,7 @@ class Sunburst(SpellAction):
     Undead and oozes have disadvantage on the save.
     Repeat CON save at end of each turn to end blindness.
     """
+    creates = (*SpellAction.creates, SunburstBlindedEffect)
     name: str = Field(default="Sunburst", description="Display name for the sunburst spell.")
     description: str = Field(default="60ft sphere, 12d6 radiant, CON save or blinded", description="Rules-facing summary for the sunburst spell.")
     spell_level: int = Field(default=8, description="Spell slot level required to cast sunburst; cantrips use 0.")
@@ -2587,6 +2599,7 @@ from dnd.types.spatial_effects import (
     SpatialEffectOccupancyPolicy,
     SpatialEffectTriggerKind,
 )
+from dnd.spatial.environmental_conditions import IceSurface
 
 
 GUST_OF_WIND_ZONE_CONTENT_REF = ContentRef(
@@ -2836,6 +2849,7 @@ class GustOfWind(SpellAction):
     A line of strong wind 60ft long and 10ft wide blasts from you.
     STR save or pushed 15ft away. Difficult terrain toward caster.
     """
+    creates = (*SpellAction.creates, GustOfWindZone)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Gust of Wind", description="Display name for the gust of wind spell.")
     description: str = Field(default="60ft line of wind, STR save or pushed 15ft, difficult terrain", description="Rules-facing summary for the gust of wind spell.")
@@ -2976,6 +2990,7 @@ class IceStorm(SpellAction):
 
     At Higher Levels: +1d8 bludgeoning per level above 4th.
     """
+    creates = (*SpellAction.creates, IceStormTerrain)
     name: str = Field(default="Ice Storm", description="Display name for the ice storm spell.")
     description: str = Field(default="20ft cylinder: 2d8 bludgeoning + 4d6 cold (DEX half); difficult terrain through the caster's next turn", description="Rules-facing summary for the ice storm spell.")
     spell_level: int = Field(default=4, description="Spell slot level required to cast ice storm; cantrips use 0.")
@@ -3111,6 +3126,7 @@ class IceStorm(SpellAction):
 
 class SunbeamBlindedEffect(BaseCondition):
     """One failed beam's shared blindness, ending on its source's next turn."""
+    creates = (Blinded,)
     name: str = "Sunbeam Blindness"
     description: str = "Blinded until the start of the caster's next turn."
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
@@ -3269,6 +3285,7 @@ class SunbeamStrike(SpellAction):
 
 class Sunbeam(SpellAction):
     """One initial beam plus a one-minute, concentration-owned light and repeat."""
+    creates = (*SpellAction.creates, SunbeamEffect, SunbeamStrike)
     name: str = "Sunbeam"
     description: str = "60 by 5ft beam, 6d8 radiant and blindness; CON half; repeat as an action."
     spell_level: int = 6
@@ -3940,6 +3957,7 @@ class Light(SpellAction):
 
     Duration: Concentration, up to 1 hour (10 rounds in combat).
     """
+    creates = (*SpellAction.creates, LightEffect)
     name: str = Field(default="Light", description="Display name for the light spell.")
     description: str = Field(default="Touch: object sheds 20ft bright + 20ft dim light (concentration)", description="Rules-facing summary for the light spell.")
     spell_level: int = Field(default=0, description="Spell slot level required to cast light; cantrips use 0.")
@@ -5754,6 +5772,7 @@ class VitriolicResidue(BaseCondition):
 
 
 class VitriolicSphere(SpellAction):
+    creates = (*SpellAction.creates, VitriolicResidue)
     name: str = "Vitriolic Sphere"
     description: str = "DEX half initial acid; failed recipients take fixed 5d4 acid at next turn end."
     spell_level: int = 4
@@ -6221,6 +6240,7 @@ class ArcaneSword(SpellAction):
 
 
 class FreezingSphere(SpellAction):
+    creates = (*SpellAction.creates, SpellPayloadItem, ThrowSpellPayload, SpellPayloadLifetime, IceSurface)
     name: str = "Freezing Sphere"
     description: str = "Immediate 10d6 cold explosion or one real portable sphere on a nearby ally."
     spell_level: int = 6
@@ -6304,6 +6324,7 @@ class FreezingSphere(SpellAction):
 
 
 class DelayedBlastFireball(SpellAction):
+    creates = (*SpellAction.creates, SpellPayloadItem, ThrowSpellPayload, TouchDelayedFireball, SpellPayloadLifetime)
     name: str = "Delayed Blast Fireball"
     description: str = "Concentrate on a real growing bead for up to ten turns; its ending explodes after committed retirement."
     spell_level: int = 7

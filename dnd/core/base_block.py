@@ -4,7 +4,7 @@ from typing import AbstractSet, Dict, Hashable, Optional, Any, List, Self, Set, 
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
-from dnd.core.base_object import BaseObject, read_private_attribute
+from dnd.core.base_object import BaseObject, CreatesModels, build_creatable_models, read_private_attribute
 from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent
 from dnd.core.condition_types import (
     HazardFilter, InvoluntarySustainLoss, SustainLossPolicy,
@@ -252,6 +252,8 @@ class BaseBlock(BaseModel):
         return {cond: [name for name, _ in imms] for cond, imms in self.contextual_condition_immunities.items()}
 
     _registry: ClassVar[Dict[UUID, 'BaseBlock']] = {}
+    # The model classes this block's content can create in play (see BaseObject.creates).
+    creates: ClassVar[tuple[type[CreatesModels], ...]] = ()
     _accepted_condition_removals: ClassVar[ContextVar[Optional[Dict[
         UUID, Tuple[Optional['BaseBlock'], BaseCondition, Event, bool]
     ]]]] = ContextVar("accepted_condition_removals", default=None)
@@ -436,8 +438,9 @@ class BaseBlock(BaseModel):
 
 
     def model_post_init(self, __context: Any) -> None:
-        """Register this block in the block registry by UUID."""
+        """Build what this block can create and register it in the block registry by UUID."""
         super().model_post_init(__context)
+        build_creatable_models(type(self))
         self.__class__._registry[self.uuid] = self
 
     @classmethod

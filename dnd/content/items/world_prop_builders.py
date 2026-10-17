@@ -704,6 +704,7 @@ DEBRIS_CONTENT_REF = ContentRef(
 
 class DestructionDebris(BaseCondition):
     """An item's shared behavior owns one ordinary difficult-terrain region."""
+    creates = (AreaCondition,)
 
     name: str = "Destruction debris"
     condition_category: ConditionCategory = ConditionCategory.INTERNAL

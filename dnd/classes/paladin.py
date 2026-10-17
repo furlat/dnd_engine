@@ -60,7 +60,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.saving_throw_types import SAVING_THROW_CONTEXT_KEY, SavingThrowContext
 from dnd.conditions import Unconscious, Poisoned, prepare_control_removals
-from dnd.classes.divine import turn_creature, turning_targets
+from dnd.classes.divine import turn_creature, turning_targets, Turned
 from dnd.spatial.memberships import (
     MembershipAreaCondition,
     SpatialConditionMembershipSource,
@@ -1091,6 +1091,7 @@ class PaladinAuraRoot(BaseCondition):
 
 
 class TurnUnholy(BaseAction):
+    creates = (Turned,)
     name: str = "Turn the Unholy"
     target_type: TargetType = TargetType.SELF
     casting_source_id: UUID

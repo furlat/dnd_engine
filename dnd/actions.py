@@ -2053,6 +2053,7 @@ class Attack(BaseAction):
     Templates should receive a target through `set_target_entity()` before
     `pre_validate()` or `instantiate()`.
     """
+    creates = (ExtraAttacksGranted,)
 
     ordinary_off_hand_default: ClassVar[bool] = True
     declaration_name: ClassVar[str | None] = None
@@ -2602,6 +2603,7 @@ class Dash(BaseAction):
     Applies the Dashing condition which adds movement equal to current speed.
     Lasts until the start of your next turn (duration=1, advanced at turn start).
     """
+    creates = (Dashing,)
 
     name: str = Field(default="Dash", description="Human-readable dash action name.")
     description: str = Field(default="Gain extra movement equal to your speed", description="Dash action description.")
@@ -2672,6 +2674,7 @@ class Dodge(BaseAction):
 
     Lasts until the start of your next turn (duration=1, advanced at turn start).
     """
+    creates = (Dodging,)
 
     name: str = Field(default="Dodge", description="Human-readable dodge action name.")
     description: str = Field(default="Attackers have disadvantage, advantage on DEX saves", description="Dodge action description.")
@@ -2739,6 +2742,7 @@ class Disengage(BaseAction):
     Applies the Disengaging condition which prevents opportunity attacks.
     Lasts until the start of your next turn (duration=1, advanced at turn start).
     """
+    creates = (Disengaging,)
 
     name: str = Field(default="Disengage", description="Human-readable disengage action name.")
     description: str = Field(default="Movement doesn't provoke opportunity attacks", description="Disengage action description.")
@@ -3190,6 +3194,7 @@ class DropProne(BaseAction):
 
     Applies the Prone condition. Can only be used while not Prone.
     """
+    creates = (Prone,)
     name: str = Field(default="Drop Prone", description="Human-readable drop-prone action name.")
     description: str = Field(default="Drop to the ground", description="Player-facing drop-prone action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Drop Prone targets self")
@@ -3339,6 +3344,7 @@ class Jump(BaseAction):
     When used as a template (template=True), end_position should be set via set_target_position()
     before pre_validate() or instantiate().
     """
+    creates = (Prone,)
 
     name: str = Field(default="Jump", description="Human-readable jump action name.")
     description: str = Field(default="Jump to a visible position", description="Jump action description.")
@@ -3856,6 +3862,7 @@ class Shove(BaseAction):
 
     Forced movement does NOT trigger opportunity attacks.
     """
+    creates = (Prone,)
 
     name: str = Field(default="Shove", description="Human-readable shove action name.")
     description: str = Field(default="Push an adjacent enemy", description="Shove action description.")
@@ -4668,6 +4675,7 @@ def resolve_spell_attack_values(caster:Entity,target:Entity|BaseItem,parent_even
     )
 
 class SpellAction(BaseAction):
+    creates = (Concentrating,)
     magical_transfer: bool = False
     """Base class for all spells. Handles metadata and variant generation.
 

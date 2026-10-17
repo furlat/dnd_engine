@@ -29,6 +29,7 @@ from dnd.entity import Entity
 
 
 class TurnUndead(BaseAction):
+    creates = (Turned,)
     name: str = "Turn Undead"
     target_type: TargetType = TargetType.SELF
     casting_source_id: UUID

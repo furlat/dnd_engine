@@ -28,6 +28,8 @@ import sys
 from time import perf_counter
 from uuid import uuid4, uuid5
 
+from pydantic import BaseModel
+
 from dnd.action_timing import (reset_action_count_recorder, reset_action_timing_recorder,
     set_action_count_recorder, set_action_timing_recorder)
 from dnd.actions import DropConcentration, Move
@@ -37,6 +39,7 @@ from dnd.content.characters.premades import CLERIC_PREMADE_ID
 from dnd.content.items.environment_item_builders import build_oil_barrel
 from dnd.controller import HumanController
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_object import build_creatable_models
 from dnd.core.content.encounters import (AuthoredCreatureRosterSource, EncounterDeploymentSpec,
     EncounterDeploymentZone, EncounterRecipe, EncounterRosterMember, EncounterRosterRecipe,
     PremadeCharacterRosterSource, RosterControllerDefaults, RosterControllerKind, RosterSpellGrant,
@@ -288,6 +291,24 @@ def actor_states(runtime):
         'life_state': entity.health.life_state.value} for entity in runtime.session.game.entities.values()}
 
 
+def incomplete_models():
+    """Every model class whose validation schema is not built yet (conditions and actions defer theirs)."""
+    incomplete, seen, stack = set(), set(), [BaseModel]
+    while stack:
+        for subclass in stack.pop().__subclasses__():
+            if subclass not in seen:
+                seen.add(subclass)
+                stack.append(subclass)
+                if not subclass.__pydantic_complete__:
+                    incomplete.add(subclass)
+    return incomplete
+
+
+def built_since(incomplete):
+    """The classes of `incomplete` whose schema has been built since."""
+    return sorted(f'{model.__module__}.{model.__qualname__}' for model in incomplete if model.__pydantic_complete__)
+
+
 class Measurement:
     """Recorders for one measured operation, chosen by the mode."""
 
@@ -302,6 +323,7 @@ class Measurement:
         self.young_survivors = 0
         self._collection_started = 0.0
         self._young_before = 0
+        self.schema_builds = []
 
     def _collection(self, phase, info):
         """gc callback: count and time every collection inside the operation; a young pass's survivors are promoted."""
@@ -320,11 +342,14 @@ class Measurement:
         self.phase_calls[name] += 1
 
     def run(self, operation):
+        """Run `operation`; its schema builds are read outside its timed span."""
+        incomplete = incomplete_models()
         gc.callbacks.append(self._collection)
         try:
             return self._run(operation)
         finally:
             gc.callbacks.remove(self._collection)
+            self.schema_builds = built_since(incomplete)
 
     def _run(self, operation):
         if self.mode == 'ordinary':
@@ -342,7 +367,7 @@ class Measurement:
             reset_action_count_recorder(count_token)
 
     def gc_report(self):
-        return {'gc': {'collections': {str(generation): count for generation, count in sorted(self.collections.items())},
+        return {'schema_builds': self.schema_builds, 'gc': {'collections': {str(generation): count for generation, count in sorted(self.collections.items())},
             'ms': {str(generation): round(elapsed, 3) for generation, elapsed in sorted(self.collection_ms.items())},
             'young_survivors': self.young_survivors}}
 
@@ -413,9 +438,16 @@ def measured_operation(runtime, mode, kind, action_factory, faces=()):
 def measured_request(mode, kind, request):
     measurement = Measurement(mode)
     cursor = EventQueue.event_cursor()
-    started = perf_counter()
-    response = measurement.run(request)
-    elapsed = (perf_counter() - started) * 1000
+    span = {}
+
+    def timed():
+        started = perf_counter()
+        try:
+            return request()
+        finally:
+            span['ms'] = (perf_counter() - started) * 1000
+    response = measurement.run(timed)
+    elapsed = span['ms']
     return response, {'kind': kind, 'total_ms': elapsed, 'event_versions': EventQueue.event_cursor() - cursor,
         'response_bytes': len(response.model_dump_json().encode('utf-8')) if response is not None else 0,
         **measurement.report()}
@@ -452,6 +484,15 @@ def sequence_case(*steps, setup=None):
     def case(runtime, driver, mode, caster_uuid):
         if setup is not None:
             setup(runtime)
+        # The harness constructs these spells itself, outside any creature's content: build each as the
+        # template a caster holds is built at character creation (its class and what it can create).
+        incomplete = incomplete_models()
+        for kind, content_id, *_ in steps:
+            if kind == 'cast':
+                spell_type = SPELL_TYPES[content_id][0]
+                spell_type.model_rebuild()
+                build_creatable_models(spell_type)
+        harness_built = built_since(incomplete)
         operations = []
         encounter = runtime.session.encounter
         for index, (kind, content_id, aim, targets, actor_name, fields, faces) in enumerate(steps):
@@ -496,6 +537,8 @@ def sequence_case(*steps, setup=None):
             factory = partial(spell_type, source_entity_uuid=actor_uuid, use_register=False,
                 caster_level=20, cast_at_level=level, **fields)
             operations.append(measured_operation(runtime, mode, content_id, factory, faces))
+        if operations:
+            operations[0]['harness_built'] = harness_built
         return operations
     return case
 
@@ -648,7 +691,15 @@ def agreement_case(accepts, godmode, recipe_options=None):
     def case(runtime, driver, mode, caster_uuid):
         seat, actor_uuid = driver.turn_of(accepts)
         actor = runtime.session.game.entities[actor_uuid]
-        driver.choices(seat, actor_uuid)
+        schema_builds = []  # schema builds inside the case's Choices and Command requests (not its restarts)
+
+        def counted(request):
+            incomplete = incomplete_models()
+            try:
+                return request()
+            finally:
+                schema_builds.extend(built_since(incomplete))
+        counted(lambda: driver.choices(seat, actor_uuid))
         original = runtime.session.discovery.original
         checked, refused, keys = 0, [], []
         for row in original.all_actions:
@@ -667,7 +718,7 @@ def agreement_case(accepts, godmode, recipe_options=None):
 
         def current_row(key):
             seat, input_uuid = driver.input_seat()
-            choices = driver.choices(seat, input_uuid).choices
+            choices = counted(lambda: driver.choices(seat, input_uuid)).choices
             rows = driver.runtime.session.discovery.original.all_actions
             return seat, input_uuid, choices, next((row for row in rows
                 if _row_key(row) == key and row.can_afford and row.valid_targets), None)
@@ -701,8 +752,8 @@ def agreement_case(accepts, godmode, recipe_options=None):
                 extra_target_positions=positions, prefer_safe=False, cast_at_level=level)
             cursor = EventQueue.event_cursor()
             try:
-                driver.command(seat, input_uuid, ExecuteSelectionIntent(
-                    discovery_generation=choices.discovery_generation, selection=selection))
+                counted(lambda: driver.command(seat, input_uuid, ExecuteSelectionIntent(
+                    discovery_generation=choices.discovery_generation, selection=selection)))
             except AssertionError as error:
                 admission_cancels.append({'row': key[0], 'rejected': str(error)})
                 continue
@@ -712,7 +763,7 @@ def agreement_case(accepts, godmode, recipe_options=None):
                 admission_cancels.append({'row': key[0], **outcome})
         return [{'kind': 'agreement', 'rows': sum(1 for row in original.all_actions if row.can_afford),
             'checked_selections': checked, 'refused': refused, 'samples': len(keys), 'worlds': worlds,
-            'executed': executed, 'admission_cancels': admission_cancels}]
+            'executed': executed, 'admission_cancels': admission_cancels, 'schema_builds': schema_builds}]
     return case
 
 
@@ -804,7 +855,7 @@ def run(args):
         args.output.write_text(json.dumps(report, indent=2, default=str))
         print(json.dumps({'status': report['status'], 'case': args.case, 'mode': args.mode,
             'report': str(args.output), 'operations': [{key: row.get(key) for key in (
-                'kind', 'total_ms', 'native_ms', 'publication_ms', 'event_versions', 'deaths')
+                'kind', 'total_ms', 'native_ms', 'publication_ms', 'event_versions', 'deaths', 'schema_builds')
                 if key in row or row.get('kind') != 'agreement'}
                 for row in report['operations']]}, default=str), flush=True)
 
