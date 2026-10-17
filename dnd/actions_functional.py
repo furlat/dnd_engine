@@ -5,7 +5,7 @@ The functional layer keeps action construction and execution routes out of
 with registered templates manually.
 """
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, Optional, List, Tuple, cast
 from uuid import UUID, uuid4
 
@@ -646,6 +646,71 @@ def execute_available_action(
     )
 
 
+def selection_admission_error(
+    entity: Entity, action_info: AvailableActionInfo,
+    selected_targets: tuple[AvailableTarget, ...] = (),
+    extra_target_positions: tuple[Tuple[int, int], ...] = (), *,
+    cast_at_level: Optional[int] = None,
+) -> Optional[str]:
+    """Why this ordered selection cannot be confirmed (None when it can): preview's admission alone."""
+    if not action_info.valid_targets and action_info.position_region is None:
+        return action_info.availability_status.value.replace("_", " ")
+    if not selected_targets:
+        return "Choose a target" if action_info.valid_targets else "Choose a point"
+    return _admitted_selection(entity, action_info, selected_targets, extra_target_positions, cast_at_level).reason
+
+
+@dataclass(frozen=True)
+class _SelectionAdmission:
+    """A non-empty ordered selection bound to its row template, and why it cannot be confirmed.
+
+    A malformed selection has a reason and no binding.
+    """
+
+    reason: Optional[str]
+    template: Optional[BaseAction] = None
+    bound: Optional[BaseAction] = None
+    scan: Optional[ActorScan] = None
+
+
+def _admitted_selection(
+    entity: Entity, action_info: AvailableActionInfo, selected_targets: tuple[AvailableTarget, ...],
+    extra_target_positions: tuple[Tuple[int, int], ...], cast_at_level: Optional[int],
+) -> _SelectionAdmission:
+    """The row template bound to a non-empty ordered selection, with its admission reason."""
+    primary = selected_targets[0]
+    if primary not in action_info.valid_targets and not is_free_aim(action_info, primary):
+        return _SelectionAdmission("Target is no longer admitted")
+    try:
+        template = row_template_at_level(action_info, cast_at_level)
+    except ValueError as error:
+        return _SelectionAdmission(str(error))
+    if template is None:
+        raise ValueError("Selection preview requires the original discovery row")
+    try:
+        scan = entity.action_scan(subjective=True)
+        extras = validated_extra_target_uuids(action_info, primary,
+            [str(target.target_uuid) for target in selected_targets[1:]], scan, template)
+        if action_info.target_type is not TargetType.MULTI_ENTITY and len(selected_targets) != 1:
+            raise ValueError("This action selects one target")
+        selection = template.get_position_selection()
+        update: dict[str, object] = {"target_entity_uuid": primary.target_uuid,
+            "end_position": primary.position,
+            "extra_target_entity_uuids": extras,
+            "extra_target_positions": list(extra_target_positions)}
+        if selection is not None and selection.kind == "entity_destination":
+            if len(extra_target_positions) > 1:
+                raise ValueError("Choose exactly one destination")
+            update.update(end_position=extra_target_positions[0] if extra_target_positions else None,
+                          extra_target_positions=[])
+        bound = template.model_copy(deep=False, update=update)
+        # The whole selection is admitted through the one admission path (plan §14.3b).
+        reason = bound.selection_preview_error() or template.discovery_error(scan, bound.current_selection())
+    except ValueError as error:
+        return _SelectionAdmission(str(error))
+    return _SelectionAdmission(reason, template, bound, scan)
+
+
 def preview_available_selection(
     entity: Entity, action_info: AvailableActionInfo,
     selected_targets: tuple[AvailableTarget, ...] = (),
@@ -667,35 +732,13 @@ def preview_available_selection(
         return AvailableSelectionPreview(can_confirm=False,
             reason="Choose a target" if action_info.valid_targets else "Choose a point",
             next_targets=tuple(action_info.valid_targets))
+    admission = _admitted_selection(entity, action_info, selected_targets, extra_target_positions, cast_at_level)
+    if admission.bound is None or admission.template is None or admission.scan is None:
+        return AvailableSelectionPreview(can_confirm=False, reason=admission.reason)
+    template, bound, scan, reason = admission.template, admission.bound, admission.scan, admission.reason
     primary = selected_targets[0]
-    free_aim = is_free_aim(action_info, primary)
-    if primary not in action_info.valid_targets and not free_aim:
-        return AvailableSelectionPreview(can_confirm=False, reason="Target is no longer admitted")
+    selection = template.get_position_selection()
     try:
-        template = row_template_at_level(action_info, cast_at_level)
-    except ValueError as error:
-        return AvailableSelectionPreview(can_confirm=False, reason=str(error))
-    if template is None:
-        raise ValueError("Selection preview requires the original discovery row")
-    try:
-        scan = entity.action_scan(subjective=True)
-        extras = validated_extra_target_uuids(action_info, primary,
-            [str(target.target_uuid) for target in selected_targets[1:]], scan, template)
-        if action_info.target_type is not TargetType.MULTI_ENTITY and len(selected_targets) != 1:
-            raise ValueError("This action selects one target")
-        selection = template.get_position_selection()
-        update: dict[str, object] = {"target_entity_uuid": primary.target_uuid,
-            "end_position": primary.position,
-            "extra_target_entity_uuids": extras,
-            "extra_target_positions": list(extra_target_positions)}
-        if selection is not None and selection.kind == "entity_destination":
-            if len(extra_target_positions) > 1:
-                raise ValueError("Choose exactly one destination")
-            update.update(end_position=extra_target_positions[0] if extra_target_positions else None,
-                          extra_target_positions=[])
-        bound = template.model_copy(deep=False, update=update)
-        # Preview admits the whole selection through the one admission path (plan §14.3b).
-        reason = bound.selection_preview_error() or template.discovery_error(scan, bound.current_selection())
         pool = secondary_candidates(entity, action_info, scan)
         next_targets: list[AvailableTarget] = []
         if action_info.target_type is TargetType.MULTI_ENTITY and len(selected_targets) < (template.get_multi_target_count() or 1):

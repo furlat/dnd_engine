@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 
 from dnd.action_dispatch import dispatch_available_action
 from dnd.actions_functional import (get_available_actions, get_extra_position_options, is_free_aim,
-    preview_available_selection, secondary_candidates)
+    preview_available_selection, secondary_candidates, selection_admission_error)
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.ai.runtime.decision_epoch import clear_epoch_value_caches
 from dnd.ai.runtime.subjective_projection import clear_subjective_projection_fact_cache
@@ -497,10 +497,12 @@ def execute_player_action(
     if any(identity not in by_uuid for identity in extra_target_uuids):
         raise CommandRejected("This allocation is not admitted")
     selected = (retained, *(by_uuid[identity] for identity in extra_target_uuids))
-    preview = preview_player_selection(session, actor_uuid, original, selected, extra_target_positions,
-        prefer_safe=prefer_safe, include_aoe_effects=False, cast_at_level=cast_at_level)
-    if not preview.can_confirm:
-        raise CommandRejected(preview.reason or "This selection is incomplete")
+    if extra_target_positions and original.position_selection is None:
+        raise CommandRejected("This action does not select additional positions")
+    # The bare admission of the selection (plan PD2); preview's display work is not repeated.
+    reason = selection_admission_error(actor, original, selected, extra_target_positions, cast_at_level=cast_at_level)
+    if reason is not None:
+        raise CommandRejected(reason)
     start = EventQueue.event_cursor()
     dispatch_available_action(
         actor, action_info=original, target=retained,
