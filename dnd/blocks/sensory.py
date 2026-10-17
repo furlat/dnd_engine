@@ -32,7 +32,7 @@ from dnd.types.senses import (
     SensesSnapshot as SensesSnapshot,
     reduce_senses_snapshot as reduce_senses_snapshot,
 )
-from dnd.types.world import CardinalDirection, LightLevel, ObserverRevisions, WorldEdgeChannel
+from dnd.types.world import CardinalDirection, LightLevel, ObserverRevisions, WorldEdgeChannel, cell_key
 
 
 K = TypeVar("K")
@@ -504,13 +504,13 @@ def emit_sensory_update_delta(
     }
     object_removed = set() if initial else set(before.objects) - set(after.objects)
     light_changed = {
-        f"{position[0]},{position[1]}": level.value
+        cell_key(position): level.value
         for position, level in sorted((position, level)
             for position, level in after.effective_light_levels.items()
             if initial or before.effective_light_levels.get(position) != level)
     }
     hazards_changed = {
-        f"{position[0]},{position[1]}": hazardous
+        cell_key(position): hazardous
         for position, hazardous in sorted((position, hazardous)
             for position, hazardous in after.hazardous_cells.items()
             if initial or before.hazardous_cells.get(position) != hazardous)

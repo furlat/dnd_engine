@@ -2,6 +2,7 @@
 
 from collections.abc import Iterable, Mapping
 from enum import Enum, StrEnum
+from functools import lru_cache
 from typing import NamedTuple
 
 
@@ -84,8 +85,23 @@ class ObserverRevisions(NamedTuple):
     obscurement: int = 0
 
 
+@lru_cache(maxsize=65536)
+def cell_key(position: tuple[int, int]) -> str:
+    """The wire key of one grid cell ("x,y")."""
+    return f"{position[0]},{position[1]}"
+
+
+@lru_cache(maxsize=65536)
+def key_cell(key: str) -> tuple[int, int]:
+    """The grid cell of one wire key ("x,y")."""
+    x_text, y_text = key.split(",", maxsplit=1)
+    return int(x_text), int(y_text)
+
+
 __all__ = [
     "CardinalDirection",
+    "cell_key",
+    "key_cell",
     "EDGE_CHANNEL_REVISIONS",
     "LightLevel",
     "MovementMode",

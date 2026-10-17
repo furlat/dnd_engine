@@ -22,6 +22,7 @@ from dnd.core.life_types import LifeState
 from dnd.core.modifiers import ResistanceStatus
 from dnd.types.actor_facts import ActorState, ConditionFact
 from dnd.types.senses import SensesSnapshot, apply_current_senses, prepare_sensory_delta
+from dnd.types.world import key_cell
 from dnd.world_facts import WorldFacts, apply_world_fact, world_event_positions
 
 
@@ -224,9 +225,7 @@ class AIKnowledge:
             positions.update(event.visible_cells_added)
             positions.update(event.visible_cells_removed)
             positions.update(event.seen_cells_added)
-            for key in event.hazardous_cells_changed:
-                x, y = key.split(",", maxsplit=1)
-                positions.add((int(x), int(y)))
+            positions.update(key_cell(key) for key in event.hazardous_cells_changed)
             # A different known boundary provider changes subjective movement
             # sides even if the visible field did not change.
             for identity in objects:

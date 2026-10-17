@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dnd.types.world import LightLevel
+from dnd.types.world import LightLevel, key_cell
 from dnd.core.content.identities import ContentRef
 from dnd.core.creature_types import DamageType
 from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
@@ -245,14 +245,8 @@ def prepare_sensory_delta(expected_observer_uuid: UUID, previous: SensesSnapshot
             raise ValueError("initial sensory update requires capability after-values")
     elif previous is None:
         raise ValueError("sensory delta requires a previously recorded initial state")
-    light_levels = {}
-    for key, level in event.effective_light_levels_changed.items():
-        x_text, y_text = key.split(",", maxsplit=1)
-        light_levels[int(x_text), int(y_text)] = LightLevel(level)
-    hazardous_cells = {}
-    for key, hazardous in event.hazardous_cells_changed.items():
-        x_text, y_text = key.split(",", maxsplit=1)
-        hazardous_cells[int(x_text), int(y_text)] = hazardous
+    light_levels = {key_cell(key): LightLevel(level) for key, level in event.effective_light_levels_changed.items()}
+    hazardous_cells = {key_cell(key): hazardous for key, hazardous in event.hazardous_cells_changed.items()}
     modes, modes_hash = None, None
     if event.sense_modes_changed and event.sense_modes is not None:
         modes = tuple(mode.model_copy(deep=True) for mode in event.sense_modes)
