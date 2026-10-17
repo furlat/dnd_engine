@@ -570,15 +570,21 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
             # This member's value here changed: a kept ranking no longer holds.
             current.cell_order.pop(position, None)
 
-        def rank(identity: UUID) -> tuple[int, int]:
-            return (perception.members[identity].effective_light_levels.get(position, LightLevel.DARKNESS).value,
+        def rank(identity: UUID) -> tuple[LightLevel, int]:
+            # LightLevel is an int enum: members order exactly as their values.
+            return (perception.members[identity].effective_light_levels.get(position, LightLevel.DARKNESS),
                     -identity.int)
 
         held = current.cell_owners.get(position)
+        previous = previous_cells.get(position)
         if held is not None and held != observer and held in owners:
             # Only this observer changed: it takes the cell only by outranking the holder.
             if observer not in owners or rank(observer) <= rank(held):
                 continue
+            owner = observer
+        elif (held == observer and observer in owners and previous is not None and previous[0]
+              and rank(observer)[0] >= (previous[1] if previous[1] is not None else LightLevel.DARKNESS)):
+            # Only the holder changed, and not downward: it still outranks every member.
             owner = observer
         else:
             order = current.cell_order.get(position)
