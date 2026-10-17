@@ -267,3 +267,31 @@ Hard rules:
     - `value_bounds`, `outgoing_advantage` and `value_resistance` are second mechanisms used only by tests.
     - 57 temporary `parts(ModifiableValue(...))` records still register (a pre-existing leak).
     - The `sort_keys` change in gallery_transcript.py belongs in its own commit.
+- 2026-10-18: **Exit re-time at b1ce2a00c (+ ff37e2a29 for gas_vent_plate).** 31 gallery cases, 3 ordinary runs each, no other load; full table in scratchpad `logs/exit3_table.md`.
+  - **GC.** 0 collections inside any op. Post-reply collection: median 1–11 ms; the worst is the caster's Choices miss at ~70 ms. Every Start prints a ~11.9K-object cycle alarm (runtime-created functions, cells and types).
+  - **Fixed during the pass.** gas_vent_plate failed on the merged head: `projection.py:570` still used `in` on a packed mask (PV1b). Fixed in ff37e2a29; the case now runs at 95 ms.
+  - **Over 100 ms (median total; native / publication):**
+
+    | Op | ms | Native / publication |
+    | --- | --- | --- |
+    | Wall of Stone | 225 | 169 / 48 |
+    | Sleet drop | 211 | 60 / 140 |
+    | Daylight | 210 | 66 / 134 |
+    | Choices caster command | 195 | — |
+    | Cloudkill drop | 188 | 48 / 131 |
+    | Spirit Guardians moves | 169–189 | 110–127 / 51–55 |
+    | Round Sleet | 183 | 81 / 92 |
+    | Fireball | 177 | 100 / 68 |
+    | Circle of Death | 175 | 95 / 70 |
+    | Sleet cast | 172 | 79 / 83 |
+    | Choices caster miss | 168 | — |
+    | AI decision, 1st | 144 | — |
+    | AI decision, 4th | 262 | — |
+    | Cloudkill cast | 112 | — |
+    | Ice Storm | 111 | — |
+    | Portal plate move | 106 | — |
+    | Darkness | 101 | — |
+
+  - **Seat updates over 100 KB:** 22 ops. The largest are Sleet drop 615 KB, Daylight 502 KB, Cloudkill drop 484 KB, CoD 330 KB, Fireball 327 KB, Sleet 321 KB, SG moves ~230 KB and Wall of Stone 223 KB.
+  - **Everything else is ≤100 ms.** Gust moves ~75, caster steps ~53, end turns ~9, single-target and small-area spells 20–90.
+  - **Against bea589ae9** (single loaded runs, without the gen-2 pass): Fireball ~300 → 177, CoD ~274 → 175, Ice Storm ~162 → 111, Sleet cast ~370 → 172, Sleet drop 314 → 211, Gust move ~136 → ~75, SG move 355–394 → 169–189, Command 313 → 195.
