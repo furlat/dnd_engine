@@ -219,7 +219,7 @@ Hard rules:
     | AI first step | ~300 | 152 | 152 |
 
   - Every run carries one gen-2 pass (202–222 ms) in one of the first sizeable ops after Start. The worker's `gc.collect(); gc.freeze()` runs at boot, before Start creates ~540K objects.
-  - Moves are still slower than baseline (PV1a-2: one settlement per step, approved).
+  - Moves are still slower than baseline (PV1a-2: one settlement per step; the human: "seems okay").
   - Publication is now 130–280 ms on casts (PV1b).
   - Nothing is under the 100 ms ceiling yet.
 - 2026-10-17: **PS merged.**
@@ -253,4 +253,7 @@ Hard rules:
   - The prototype stored 514 of 564 versions, and the time it saved was within noise.
   - It changed AI behaviour: a held version stored later lands after its lineage's later versions in the occurrence index, so the AI's open-events map saw versions out of order. ai_decision ran 1 op instead of 4.
   - The settlement multiplier is already gone: Fireball emits 30 SensoryUpdateEvents (one per observer), not one per spatial lineage. Residue and item-destruction lineages each cost their own rule work, ~4 ms all together.
-  - Conclusion: event volume is not a remaining multiplier. Plan §6b's lazy-version item is dropped.
+  - Conclusion: event volume is not a remaining multiplier. The lazy-version idea was the integrator's (census entry above), not a plan item, and it would have been a lazy store against §6a; it is dropped.
+- 2026-10-17 (logged late): **Worker GC policy (9568bffbc), human decision** ("i am fine with 1-3"): no automatic collection inside requests; after each reply, collect that request's survivors and freeze them; cycles are printed as an alarm; EndGame unfreezes and collects. The gallery times the post-reply collection per op as `collect_after_ms`.
+- 2026-10-18: **Open from PV1a-2/PV1a-3, not done:** 2-D batching of the light stage, hazards, fixtures, emitter lit words and emit (only contacts are batched); the emit still builds the pydantic payload; the mover's own wall FOV is ~4 ms per step. PT navigation as a cost grid is not started.
+- 2026-10-18: **Long game (50 turns, blue AI) did not finish:** stopped by its 60-minute timeout with no report; RSS 8.8 GB at 47 min; every AI advance printed one 15-object cycle (tuple/function/cell, one runtime type). Memory retention is the next refactor (human).
