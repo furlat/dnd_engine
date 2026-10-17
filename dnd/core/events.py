@@ -505,7 +505,7 @@ class Event(BaseModel):
             EventQueue.run_pre_completion_callbacks(self)
             if EventQueue._identified_entity_observer_computer is not None:
                 phase_updates["located_entity_observer_uuids"] = (
-                    EventQueue._identified_entity_observer_computer(self))
+                    EventQueue._identified_entity_observer_computer(self, self.located_entity_observer_uuids))
             completion_locations = phase_updates.get(
                 "located_entity_observer_uuids",
                 self.located_entity_observer_uuids,
@@ -1375,7 +1375,8 @@ class EventQueue:
     _combat_log_callback: Optional[Callable[['Event'], None]] = None
     _perceiver_computer: Optional[Callable[['Event'], Set[str]]] = None
     _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
-    _identified_entity_observer_computer: Optional[Callable[['Event'], Dict[str, FrozenSet[str]]]] = None
+    _identified_entity_observer_computer: Optional[Callable[
+        ['Event', Dict[str, FrozenSet[str]]], Dict[str, FrozenSet[str]]]] = None
 
     @classmethod
     def begin_turn_execution(cls, execution_id: Optional[UUID] = None) -> UUID:
@@ -1432,7 +1433,7 @@ class EventQueue:
     @classmethod
     def set_identified_entity_observer_computer(
         cls,
-        func: Optional[Callable[['Event'], Dict[str, FrozenSet[str]]]],
+        func: Optional[Callable[['Event', Dict[str, FrozenSet[str]]], Dict[str, FrozenSet[str]]]],
     ) -> None:
         """Register the event-time participant identity provider.
 
@@ -1442,16 +1443,17 @@ class EventQueue:
         possessed when the event began.
 
         Args:
-            func: Callback returning a fresh dict of participant UUID keys to
-                the frozen observer UUID sets that currently identify each
-                participant. Versions share those frozen values.
+            func: Callback given the version and the grants mapping it carries,
+                returning the participant UUID keys mapped to the frozen observer
+                UUID sets that currently identify each participant: the carried
+                mapping itself when nothing changed. Versions share these values.
         """
         cls._identified_entity_observer_computer = func
 
     @classmethod
     def perceivers_for_event(cls, event: 'Event') -> Set[str]:
         """Use the installed event-time observation policy for informational entries."""
-        return set(cls._perceiver_computer(event)) if cls._perceiver_computer else set()
+        return cls._perceiver_computer(event) if cls._perceiver_computer else set()
 
     @classmethod
     def push_combat_log(cls, entry: 'CombatLogEntry', source_entity_uuid: UUID) -> None:
@@ -2330,7 +2332,7 @@ class EventQueue:
         else:
             # Location grants are this version's own; identity accumulates.
             started = time.perf_counter() if timing else 0.0
-            located = cls._identified_entity_observer_computer(event)
+            located = cls._identified_entity_observer_computer(event, event.located_entity_observer_uuids)
             if timing:
                 record_action_timing("event_queue.store.compute_identified_ms", started)
             started = time.perf_counter() if timing else 0.0
