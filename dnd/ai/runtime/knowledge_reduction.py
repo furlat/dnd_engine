@@ -107,9 +107,14 @@ class AIKnowledge:
     seen_index: dict[tuple[int, int], set[str]] = field(default_factory=dict)
     entity_index: dict[UUID, set[str]] = field(default_factory=dict)
     object_index: dict[UUID, set[str]] = field(default_factory=dict)
+    dirty_observers: set[UUID] = field(default_factory=set)
 
     def consume(self, rows: Iterable[tuple[int, Event, ConditionFact | None]]) -> None:
-        """Apply an exact recorded prefix; context/decision authority stays outside."""
+        """Apply an exact recorded prefix; context/decision authority stays outside.
+
+        Observer rows are pure projections of the current snapshot, read only
+        after consumption: each touched observer is projected once, at the end.
+        """
         for index, event, condition in rows:
             if index != self.source_cursor:
                 raise ValueError("AI source facts must be contiguous and ordered")
@@ -119,6 +124,9 @@ class AIKnowledge:
                 self._apply(event, condition if condition is not None else condition_fact(event, source_index=index))
             if event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL):
                 self.open_events.pop(event.lineage_uuid, None)
+        for identity in self.dirty_observers:
+            self._refresh_observer(identity)
+        self.dirty_observers.clear()
 
     def _apply(self, event: Event, condition: ConditionFact | None) -> None:
         if isinstance(event, EntityCreatedEvent):
@@ -129,7 +137,7 @@ class AIKnowledge:
             self.actors[event.entity_uuid] = replace(actor, conditions=tuple(conditions.values()))
             self._refresh_entity(event.entity_uuid)
             if event.entity_uuid in self.senses:
-                self._refresh_observer(event.entity_uuid)
+                self.dirty_observers.add(event.entity_uuid)
 
         owner = actor_fact_owner(event)
         if owner is not None:
@@ -165,7 +173,7 @@ class AIKnowledge:
             self.senses[event.observer_uuid] = reduce_senses_snapshot(event.observer_uuid, before, event)
             after = self.senses[event.observer_uuid]
             self._reindex(str(event.observer_uuid), before, after)
-            self._refresh_observer(event.observer_uuid)
+            self.dirty_observers.add(event.observer_uuid)
             actors = set(event.entity_contacts_changed) | set(event.entity_contacts_removed)
             actors.add(event.observer_uuid)
             objects.update(event.object_contacts_changed)

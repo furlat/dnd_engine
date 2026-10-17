@@ -26,6 +26,7 @@ from dnd.spells.abjuration import ProtectionFromEnergyEffect, ShieldBuff
 from dnd.spells.necromancy import NoHealing
 from dnd.types.actor_facts import ConditionFact
 from dnd.player.event_record import RecordedEvent
+from dnd.player.audience import resolve_audience
 from dnd.player.capture import _retained_event
 
 
@@ -77,7 +78,7 @@ def source_bytes(observer: UUID) -> bytes:
     for index, event in EventQueue.iter_events_since(0):
         cold = (event.model_copy(update={"use_register": False})
                 if isinstance(event, (EntityCreatedEvent, WorldInitializedEvent))
-                else _retained_event(event, observer))
+                else _retained_event(event, resolve_audience(observer, None)))
         rows.append((index, cold, condition_fact(event, source_index=index)))
     return SOURCE_ROWS.dump_json(rows)
 
