@@ -5,6 +5,8 @@ per measured operation, every stored event version (fields, identity and locatio
 presentations, combat log), the encounter combat-log slice and every seat's published update (its exact
 encoded JSON). Identities come from a seeded generator, dice faces from a dedicated seeded generator (so a
 change in other random draws cannot move a die), and the process hash seed must be fixed by the caller.
+Identities the value layer mints (in dnd/core/values.py) come from a third generator: the engine orders
+entities, items and conditions by identity, so a change in how many identities values mint must not move them.
 
     PYTHONHASHSEED=0 PYTHONPATH=<tree> python devtools/performance/gallery_transcript.py record <tree> <out.json> \
         --case fireball --mode ordinary --name <stem>
@@ -35,7 +37,22 @@ from pathlib import Path
 # Identities and dice are fixed before the engine is imported: identities from a seeded generator, die faces from
 # a dedicated one (`dnd.core.dice` draws faces through `random.randint`), other draws from the seeded module RNG.
 _IDENTITIES = random.Random(20261017)
-uuid.uuid4 = lambda: uuid.UUID(int=_IDENTITIES.getrandbits(128), version=4)
+_VALUE_IDENTITIES = random.Random(20261018)
+
+
+def _identity() -> uuid.UUID:
+    """A seeded identity; those the value layer mints (in dnd/core/values.py, directly or through a pydantic
+    default factory) come from their own generator, so a change in how many identities values mint does not
+    shift entity, item or event identities, which the engine orders by."""
+    frame = sys._getframe(1)
+    while frame is not None and '/pydantic' in frame.f_code.co_filename:
+        frame = frame.f_back
+    minted_by_values = frame is not None and frame.f_code.co_filename.endswith('dnd/core/values.py')
+    generator = _VALUE_IDENTITIES if minted_by_values else _IDENTITIES
+    return uuid.UUID(int=generator.getrandbits(128), version=4)
+
+
+uuid.uuid4 = _identity
 random.seed(4242)
 random.randint = random.Random(17).randint
 
