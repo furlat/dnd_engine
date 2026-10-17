@@ -31,7 +31,7 @@ from dnd.core.events import (
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
 from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome, roll_die_face
 from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, ContextualNumericalModifier
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, ValueRead, has_static_advantage_row, read_value, reading_with_advantage_row
 from dnd.blocks.equipment import Weapon, Shield
 from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
 from dnd.core.feature_grants import AttackMultiplicityGrant
@@ -476,24 +476,20 @@ def protection_processor(
 
     if not isinstance(event, AttackEvent) or not event.attack_bonus:
         return None
-    attack_bonus = event.attack_bonus
+    if has_static_advantage_row(event.attack_bonus, "Protection"):
+        return None
 
-    for modifier in attack_bonus.self_static.advantage_modifiers.values():
-        if modifier.name == "Protection":
-            return None
-
-    attack_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
-            name="Protection",
-            value=AdvantageStatus.DISADVANTAGE,
-            source_entity_uuid=source_entity_uuid,
-            target_entity_uuid=event.target_entity_uuid
-        )
-    )
+    protected = reading_with_advantage_row(event.attack_bonus, AdvantageModifier(
+        name="Protection",
+        value=AdvantageStatus.DISADVANTAGE,
+        source_entity_uuid=source_entity_uuid,
+        target_entity_uuid=event.target_entity_uuid
+    ))
 
     protector.action_economy.consume("reactions", 1)
 
     return event.with_updates(
+        attack_bonus=protected,
         status_message=(
             f"{protector.name} uses Protection to impose disadvantage"
         ),
@@ -766,11 +762,11 @@ class SecondWind(BaseAction):
         healing_dice = Dice(
             count=1,
             value=10,
-            bonus=ModifiableValue.create(
+            bonus=read_value(ModifiableValue.create(
                 source_entity_uuid=self.source_entity_uuid,
                 base_value=self.fighter_level,
                 value_name="Fighter Level"
-            ),
+            ), ValueRead(self.source_entity_uuid)),
             roll_type=RollType.CHECK
         )
         healing_roll = healing_dice.roll
@@ -1314,7 +1310,7 @@ def indomitable_processor(
         return None
 
     ability_name = event.ability_name
-    save_bonus = entity.saving_throw_bonus(event.source_entity_uuid, ability_name)
+    save_bonus = entity.saving_throw_bonus(event.source_entity_uuid, ability_name, None)
     new_roll = entity.roll_d20(
         save_bonus,
         RollType.SAVE,

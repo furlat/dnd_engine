@@ -11,7 +11,7 @@ from dnd.controller import Controller, HumanController, PassController, TurnCont
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue
 from dnd.core.modifiers import ContextualNumericalModifier, NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import BaseValue, ModifiableValue, ValueRead, outgoing_of, value_score
 from dnd.encounter import AdvanceResult, Encounter, TurnState
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -35,17 +35,15 @@ def registry_identities():
     return frozenset(BaseObject._registry), frozenset(BaseValue._registry)
 
 
-@pytest.mark.parametrize("target_on_base", [True, False])
 @pytest.mark.parametrize("focused_context, expected", [(False, 5), (True, 6)])
-def test_temporary_values_preserve_context_bounds_and_owned_uuid_lookup(
-        target_on_base, focused_context, expected):
+def test_temporary_values_preserve_context_bounds_and_owned_uuid_lookup(focused_context, expected):
     owner, target = uuid4(), uuid4()
-    base = ModifiableValue.create(source_entity_uuid=owner, target_entity_uuid=target, base_value=16,
+    base = ModifiableValue.create(source_entity_uuid=owner, base_value=16,
         score_normalizer=ability_score_normalizer)
-    bonus = ModifiableValue.create(source_entity_uuid=owner, target_entity_uuid=target, base_value=1)
+    bonus = ModifiableValue.create(source_entity_uuid=owner, base_value=1)
     ceiling = NumericalModifier(source_entity_uuid=owner, value=6)
     bonus.self_static.add_max_constraint(ceiling)
-    incoming = ModifiableValue.create(source_entity_uuid=target, target_entity_uuid=owner)
+    incoming = ModifiableValue.create(source_entity_uuid=target)
     incoming.to_target_static.add_value_modifier(
         NumericalModifier(source_entity_uuid=target, value=1))
     focused = NumericalModifier(source_entity_uuid=target, value=2)
@@ -56,8 +54,7 @@ def test_temporary_values_preserve_context_bounds_and_owned_uuid_lookup(
 
     incoming.to_target_contextual.add_value_modifier(ContextualNumericalModifier(
         source_entity_uuid=target, callable=focus_bonus))
-    incoming.set_context({"focused": focused_context})
-    (base if target_on_base else bonus).set_from_target(incoming)
+    read = ValueRead(owner, target, opponent=outgoing_of([incoming], context={"focused": focused_context}))
     registered = base.combine_values([bonus])
     assert ModifiableValue.get(registered.uuid) is registered
     before = registry_identities()
@@ -68,7 +65,7 @@ def test_temporary_values_preserve_context_bounds_and_owned_uuid_lookup(
         assert standalone.normalized_score == 3
         assert ModifiableValue.get(standalone.uuid) is None
         assert ModifiableValue.get(temporary.uuid) is None
-        assert temporary.normalized_score == registered.normalized_score == expected
+        assert value_score(temporary, read, normalized=True) == value_score(registered, read, normalized=True) == expected
         assert temporary.get_breakdown() == registered.get_breakdown()
     assert registry_identities() == before
     assert ModifiableValue.get(base.uuid) is base

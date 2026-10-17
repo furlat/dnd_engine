@@ -27,7 +27,7 @@ from dnd.core.values import (
     AdvantageStatus,
     AutoHitStatus,
     CriticalStatus,
-    ModifiableValue,
+    ValueReading,
 )
 
 
@@ -201,9 +201,9 @@ class Dice(BaseModel):
         ...,
         description="Number of sides on each die.",
     )
-    bonus: ModifiableValue = Field(
+    bonus: ValueReading = Field(
         ...,
-        description="Modifiable value that supplies score, advantage, critical, and auto-hit state.",
+        description="Evaluated bonus that supplies score, advantage, critical, and auto-hit state.",
     )
     roll_type: RollType = Field(
         default=RollType.ATTACK,

@@ -228,7 +228,7 @@ def test_feast_full_benefits_and_exact_tenth_recipient_turn_expiry(game):
     eat(feast, target)
     assert target.get_max_hp() == maximum + 9 and target.get_normal_hp() == maximum - 21
     assert target.health.get_resistance(DamageType.POISON) is ResistanceStatus.IMMUNITY
-    assert target.saving_throw_bonus(None, 'wisdom').advantage is AdvantageStatus.ADVANTAGE
+    assert target.saving_throw_bonus(None, 'wisdom', None).advantage is AdvantageStatus.ADVANTAGE
     assert all(name not in target.active_conditions for name in ('Poisoned', 'Frightened', 'Disease'))
     assert target.action_economy.actions.normalized_score == 0
     assert feast.charges == 12 and target.uuid in feast.consumed_by
@@ -342,7 +342,7 @@ def test_feast_source_cleanup_preserves_other_immunity_and_advantage_owners(game
     target.remove_condition("Heroes' Feast")
     assert not any(isinstance(c, HeroesFeastSource) for c in target.active_conditions.values())
     assert target.health.get_resistance(DamageType.POISON) is ResistanceStatus.IMMUNITY
-    assert target.saving_throw_bonus(None, 'wisdom').advantage is AdvantageStatus.ADVANTAGE
+    assert target.saving_throw_bonus(None, 'wisdom', None).advantage is AdvantageStatus.ADVANTAGE
     result = target.add_condition(Poisoned(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
     assert result is None or result.canceled
     assert 'Poisoned' not in target.active_conditions

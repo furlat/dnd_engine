@@ -2,7 +2,6 @@
 
 import time
 from dataclasses import dataclass, replace
-from contextlib import nullcontext
 from types import MappingProxyType
 
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
@@ -25,13 +24,13 @@ from dnd.core.base_actions import (
     TargetEffectDisposition,
 )
 from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, OpponentOutgoing, ValueRead, ValueReading, read_value
 from dnd.core.spell_damage import finalize_spell_damage_roll
 from dnd.core.condition_types import ConditionRemovalTrigger, DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, TakeDamageEvent, DamageAppliedEvent, SkillCheckEvent, SpatialChangeEvent, MovementTrajectory
+from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, TakeDamageEvent, DamageAppliedEvent, SkillCheckEvent, SpatialChangeEvent, MovementTrajectory, advantage_log_rows, value_log_rows
 from dnd.types.abilities import AbilityName
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.spatial_effects import AreaPropagation
@@ -1658,8 +1657,8 @@ class AttackEvent(ActionEvent):
     range: Optional[Range] = Field(default=None, description="Range band used by the attack.")
     is_long_range: bool = Field(default=False, description="Whether the target is beyond normal range.")
     is_threatened: bool = Field(default=False, description="Whether a hostile creature threatens the attacker.")
-    attack_bonus: Optional[ModifiableValue] = Field(default=None, description="Attack-roll bonus used for this attack.")
-    ac: Optional[ModifiableValue] = Field(default=None, description="Target armor class used for this attack.")
+    attack_bonus: Optional[ValueReading] = Field(default=None, description="Evaluated attack-roll bonus used for this attack.")
+    ac: Optional[ValueReading] = Field(default=None, description="Evaluated target armor class used for this attack.")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="Attack d20 roll after result handlers.")
     attack_outcome: Optional[AttackOutcome] = Field(default=None, description="Resolved attack outcome.")
     intercepted_by_condition_uuid: UUID | None = None
@@ -1731,27 +1730,8 @@ class AttackEvent(ActionEvent):
             attack_roll.bonus = self.dice_roll.bonus
             attack_roll.total = self.dice_roll.total
 
-        attack_breakdown: List[ModifierBreakdown] = []
-        if self.attack_bonus:
-            for mod in self.attack_bonus.get_breakdown():
-                attack_breakdown.append(ModifierBreakdown(
-                    name=mod.get('name', 'Unknown'),
-                    value=mod.get('value', 0),
-                    source=mod.get('source', 'self')
-                ))
-
-        advantage_breakdown: List[ModifierBreakdown] = []
-        if self.attack_bonus:
-            for mod in self.attack_bonus.get_full_advantage_breakdown():
-                adv_val = mod.get('value', 'inactive')
-                if adv_val == 'advantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
-                    ))
-                elif adv_val == 'disadvantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
-                    ))
+        attack_breakdown = value_log_rows(self.attack_bonus.breakdown) if self.attack_bonus else []
+        advantage_breakdown = advantage_log_rows(self.attack_bonus.advantage_breakdown) if self.attack_bonus else []
 
         target_ac = 0
         if self.ac:
@@ -1759,14 +1739,7 @@ class AttackEvent(ActionEvent):
         elif target_entity:
             target_ac = target_entity.ac_bonus().normalized_score
 
-        ac_breakdown: List[ModifierBreakdown] = []
-        if self.ac:
-            for mod in self.ac.get_breakdown():
-                ac_breakdown.append(ModifierBreakdown(
-                    name=mod.get('name', 'Unknown'),
-                    value=mod.get('value', 0),
-                    source=mod.get('source', 'self')
-                ))
+        ac_breakdown = value_log_rows(self.ac.breakdown) if self.ac else []
 
         outcome = "unknown"
         is_hit = False
@@ -1791,14 +1764,8 @@ class AttackEvent(ActionEvent):
                     elif isinstance(dr.results, int):
                         dice_results = [dr.results]
 
-                damage_bonus_breakdown: List[ModifierBreakdown] = []
-                if damage and damage.damage_bonus:
-                    for mod in damage.damage_bonus.get_breakdown():
-                        damage_bonus_breakdown.append(ModifierBreakdown(
-                            name=mod.get('name', 'Unknown'),
-                            value=mod.get('value', 0),
-                            source=mod.get('source', 'self')
-                        ))
+                damage_bonus_breakdown = (value_log_rows(damage.damage_bonus.get_breakdown())
+                                          if damage and damage.damage_bonus else [])
 
                 num_dice = len(dice_results)
                 dice_size = damage.damage_dice if damage else 6
@@ -2225,24 +2192,18 @@ class Attack(BaseAction):
                 return execution_event.cancel(status_message=f"Target entity not found for {execution_event.name}")
             record_action_timing("attack.resolve_entities_ms", started)
 
-            started = time.perf_counter()
-            with (
-                source_entity._temporary_target(target_entity_uuid),
-                target_entity._temporary_target(source_entity_uuid) if isinstance(target_entity, Entity) else nullcontext(),
-            ):
-                record_action_timing("attack.set_target_context_ms", started)
-                return Attack._resolve_attack_with_target_context(
-                    execution_event=execution_event,
-                    source_entity=source_entity,
-                    target_entity=target_entity,
-                    target_entity_uuid=target_entity_uuid,
-                    weapon_slot=weapon_slot,
-                    physical_access=physical_access,
-                    on_hit=on_hit,
-                )
+            return Attack._resolve_attack(
+                execution_event=execution_event,
+                source_entity=source_entity,
+                target_entity=target_entity,
+                target_entity_uuid=target_entity_uuid,
+                weapon_slot=weapon_slot,
+                physical_access=physical_access,
+                on_hit=on_hit,
+            )
 
     @staticmethod
-    def _resolve_attack_with_target_context(
+    def _resolve_attack(
         *,
         execution_event: AttackEvent,
         source_entity: Entity,
@@ -2252,34 +2213,31 @@ class Attack(BaseAction):
         physical_access: Optional[PhysicalAccess],
         on_hit: Callable[[AttackEvent], AttackEvent] | None = None,
     ) -> AttackEvent:
-            """Resolve one attack while both contextual targets are bound."""
+            """Resolve one attack: both sides read against each other, then roll, outcome and damage."""
             source_entity_uuid = source_entity.uuid
             started = time.perf_counter()
             override_ability = execution_event.override_ability
             weapon = None if execution_event.natural_weapon else source_entity.equipment.get_weapon(weapon_slot)
-            attack_bonus = source_entity.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid, override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
-            ac = (target_entity.ac_bonus(source_entity.uuid) if isinstance(target_entity, Entity)
-                  else ModifiableValue.create(source_entity_uuid=target_entity.uuid,
-                      target_entity_uuid=source_entity.uuid, base_value=target_entity.armor_class, value_name="Object AC"))
-            ac.set_from_target(attack_bonus)
-            attack_bonus.set_from_target(ac)
-            attack_bonus.set_event_lineage(execution_event.lineage_uuid)
-            ac.set_event_lineage(execution_event.lineage_uuid)
+            attack_value, attack_value_context = source_entity.weapon_attack_value(
+                ValueRead(source_entity_uuid, target_entity_uuid), weapon_slot,
+                override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
+            ac_value = (target_entity.armor_class_value(ValueRead(target_entity_uuid, source_entity_uuid))
+                        if isinstance(target_entity, Entity)
+                        else ModifiableValue.create(source_entity_uuid=target_entity.uuid,
+                            base_value=target_entity.armor_class, value_name="Object AC"))
             attack_context: Dict[str, Any] = {
                 "weapon_slot": weapon_slot.value,
                 "weapon_name": execution_event.weapon_name or "Unarmed",
                 "range_type": execution_event.range.type.value if execution_event.range else None,
                 "is_long_range": execution_event.is_long_range,
             }
-            attack_bonus.set_context(attack_context)
             record_action_timing("attack.compute_attack_bonus_ac_ms", started)
 
             started = time.perf_counter()
-            ranged_disadvantage_modifiers: List[UUID] = []
             is_ranged = execution_event.range is not None and execution_event.range.type == RangeType.RANGE
 
             if is_ranged and execution_event.is_long_range:
-                modifier_uuid = attack_bonus.self_static.add_advantage_modifier(
+                attack_value.self_static.add_advantage_modifier(
                     AdvantageModifier(
                         name="Long Range",
                         value=AdvantageStatus.DISADVANTAGE,
@@ -2287,10 +2245,9 @@ class Attack(BaseAction):
                         target_entity_uuid=target_entity_uuid
                     )
                 )
-                ranged_disadvantage_modifiers.append(modifier_uuid)
 
             if is_ranged and execution_event.is_threatened:
-                modifier_uuid = attack_bonus.self_static.add_advantage_modifier(
+                attack_value.self_static.add_advantage_modifier(
                     AdvantageModifier(
                         name="Threatened (Ranged)",
                         value=AdvantageStatus.DISADVANTAGE,
@@ -2298,15 +2255,19 @@ class Attack(BaseAction):
                         target_entity_uuid=target_entity_uuid
                     )
                 )
-                ranged_disadvantage_modifiers.append(modifier_uuid)
             record_action_timing("attack.ranged_disadvantage_modifiers_ms", started)
 
             started = time.perf_counter()
+            # The armor class reads the attacker's outgoing rows in the attack value's
+            # composition context; the attack's own rows read the attack context.
             attack_event = execution_event.phase_to(
                 new_phase=EventPhase.EXECUTION,
                 status_message="Rolling attack",
-                attack_bonus=attack_bonus,
-                ac=ac
+                attack_bonus=read_value(attack_value, ValueRead(source_entity_uuid, target_entity_uuid, attack_context,
+                    OpponentOutgoing(ac_value.to_target_static, ac_value.to_target_contextual))),
+                ac=read_value(ac_value, ValueRead(target_entity_uuid, source_entity_uuid, None,
+                    OpponentOutgoing(attack_value.to_target_static, attack_value.to_target_contextual,
+                                     attack_value_context))),
             )
             record_action_timing("attack.phase_to_roll_ms", started)
 
@@ -2316,16 +2277,15 @@ class Attack(BaseAction):
             ):
                 attack_event = attack_event.cancel(status_message="A physical barrier interrupted the attack")
             if attack_event.canceled:
-                for modifier_uuid in ranged_disadvantage_modifiers:
-                    attack_bonus.self_static.remove_modifier(modifier_uuid)
-                started = time.perf_counter()
-                attack_bonus.clear_context()
-                record_action_timing("attack.cleanup_canceled_roll_ms", started)
                 return attack_event
+            # Reactions at EXECUTION (Parry, Protection) replace the reads on the event.
+            attack_reading, ac_reading = attack_event.attack_bonus, attack_event.ac
+            if attack_reading is None or ac_reading is None:
+                raise RuntimeError("An attack lost its attack bonus or armor class read")
 
             started = time.perf_counter()
             dice_roll = source_entity.roll_d20(
-                attack_bonus,
+                attack_reading,
                 RollType.ATTACK,
                 weapon_slot=weapon_slot,
                 parent_event=attack_event.uuid,
@@ -2334,7 +2294,7 @@ class Attack(BaseAction):
             started = time.perf_counter()
             crit_threshold = (source_entity.get_spell_crit_threshold() if weapon is not None and weapon.spell_attack_profile is not None
                 else source_entity.get_crit_threshold(weapon_slot))
-            attack_outcome = determine_attack_outcome(dice_roll, ac, crit_threshold)
+            attack_outcome = determine_attack_outcome(dice_roll, ac_reading, crit_threshold)
             weapon = source_entity.equipment.get_weapon(weapon_slot)
             missile_size = (execution_event.natural_weapon.missile_size if execution_event.natural_weapon is not None
                             else weapon.missile_size if weapon is not None else "ordinary")
@@ -2360,13 +2320,6 @@ class Attack(BaseAction):
                 physical_access or source_entity.get_weapon_physical_access(weapon_slot),
             ):
                 attack_event = attack_event.cancel(status_message="A physical barrier interrupted the attack")
-            started = time.perf_counter()
-            ac.reset_from_target()
-            attack_bonus.reset_from_target()
-            attack_bonus.clear_event_lineage()
-            ac.clear_event_lineage()
-            attack_bonus.clear_context()
-            record_action_timing("attack.cleanup_roll_modifiers_ms", started)
 
             if attack_event.canceled:
                 return attack_event
@@ -2400,7 +2353,7 @@ class Attack(BaseAction):
             attack_event = attack_event.phase_to(
                 EventPhase.EFFECT,
                 is_last=False,
-                status_message=f"Damages: {[(damage.dice_numbers,damage.damage_dice,damage.damage_bonus.normalized_score if damage.damage_bonus else 0,damage.damage_type) for damage in damages]}",
+                status_message=f"Damages: {[(damage.dice_numbers,damage.damage_dice,damage.read_bonus().normalized_score if damage.damage_bonus else 0,damage.damage_type) for damage in damages]}",
                 damages=damages
             )
             record_action_timing("attack.phase_to_damage_effect_ms", started)
@@ -3757,7 +3710,7 @@ class ShoveEvent(ActionEvent):
     costs: List[BaseCost] = Field(default_factory=list, description="Serialized shove costs.")
     target_weight: int = Field(default=0, description="Target's weight in pounds")
     max_shove_weight: int = Field(default=0, description="Maximum weight shover can push in pounds.")
-    shover_athletics: Optional[ModifiableValue] = Field(default=None, description="Shover's Athletics bonus")
+    shover_athletics: Optional[ValueReading] = Field(default=None, description="Shover's evaluated Athletics bonus")
     target_passive: int = Field(default=10, description="Target's passive Athletics or Acrobatics")
     target_resistance_skill: str = Field(default="athletics", description="Target skill used for passive resistance.")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="Shover's Athletics check roll")
@@ -4191,8 +4144,8 @@ class SpellEvent(ActionEvent):
         description="Exact immutable area geometry captured when the spell was declared.",
     )
 
-    attack_bonus: Optional[ModifiableValue] = Field(default=None, description="The spell attack bonus")
-    ac: Optional[ModifiableValue] = Field(default=None, description="The target's AC")
+    attack_bonus: Optional[ValueReading] = Field(default=None, description="The evaluated spell attack bonus")
+    ac: Optional[ValueReading] = Field(default=None, description="The target's evaluated AC")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="The attack roll result")
     attack_outcome: Optional[AttackOutcome] = Field(default=None, description="The attack outcome")
     is_threatened: bool = Field(
@@ -4417,27 +4370,8 @@ class SpellEvent(ActionEvent):
             attack_roll.bonus = self.dice_roll.bonus
             attack_roll.total = self.dice_roll.total
 
-        attack_breakdown: List[ModifierBreakdown] = []
-        if self.attack_bonus:
-            for mod in self.attack_bonus.get_breakdown():
-                attack_breakdown.append(ModifierBreakdown(
-                    name=mod.get('name', 'Unknown'),
-                    value=mod.get('value', 0),
-                    source=mod.get('source', 'self')
-                ))
-
-        advantage_breakdown: List[ModifierBreakdown] = []
-        if self.attack_bonus:
-            for mod in self.attack_bonus.get_full_advantage_breakdown():
-                adv_val = mod.get('value', 'inactive')
-                if adv_val == 'advantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
-                    ))
-                elif adv_val == 'disadvantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
-                    ))
+        attack_breakdown = value_log_rows(self.attack_bonus.breakdown) if self.attack_bonus else []
+        advantage_breakdown = advantage_log_rows(self.attack_bonus.advantage_breakdown) if self.attack_bonus else []
 
         target_ac = 0
         if self.ac:
@@ -4445,14 +4379,7 @@ class SpellEvent(ActionEvent):
         elif target_entity:
             target_ac = target_entity.ac_bonus().normalized_score
 
-        ac_breakdown: List[ModifierBreakdown] = []
-        if self.ac:
-            for mod in self.ac.get_breakdown():
-                ac_breakdown.append(ModifierBreakdown(
-                    name=mod.get('name', 'Unknown'),
-                    value=mod.get('value', 0),
-                    source=mod.get('source', 'self')
-                ))
+        ac_breakdown = value_log_rows(self.ac.breakdown) if self.ac else []
 
         outcome = "unknown"
         is_hit = False
@@ -4475,14 +4402,8 @@ class SpellEvent(ActionEvent):
                         dice_results = list(dr.results)
                     elif isinstance(dr.results, int):
                         dice_results = [dr.results]
-                damage_bonus_breakdown: List[ModifierBreakdown] = []
-                if damage and damage.damage_bonus:
-                    for mod in damage.damage_bonus.get_breakdown():
-                        damage_bonus_breakdown.append(ModifierBreakdown(
-                            name=mod.get('name', 'Unknown'),
-                            value=mod.get('value', 0),
-                            source=mod.get('source', 'self')
-                        ))
+                damage_bonus_breakdown = (value_log_rows(damage.damage_bonus.get_breakdown())
+                                          if damage and damage.damage_bonus else [])
                 num_dice = len(dice_results)
                 dice_size = damage.damage_dice if damage else 6
                 dice_str = f"{num_dice}d{dice_size}"
@@ -4562,7 +4483,7 @@ class SpellEvent(ActionEvent):
             results = dr.results if isinstance(dr.results, list) else [dr.results]
             num_dice = len(results)
             die_size = self.damages[0].damage_dice if self.damages else 4
-            bonus = self.damages[0].damage_bonus.normalized_score if self.damages and self.damages[0].damage_bonus else 1
+            bonus = self.damages[0].read_bonus().normalized_score if self.damages and self.damages[0].damage_bonus else 1
             dice_part = f"{num_dice}d{die_size}"
             if bonus != 0:
                 dice_part += f"+{bonus}"
@@ -4599,8 +4520,8 @@ class SpellEvent(ActionEvent):
 class SpellAttackResolution(BaseModel):
     """Resolved spell attack roll and the values that produced it."""
 
-    attack_bonus: ModifiableValue = Field(description="Combined spell attack value used for the roll.")
-    target_ac: ModifiableValue = Field(description="Target armor class used to determine the outcome.")
+    attack_bonus: ValueReading = Field(description="Evaluated spell attack bonus used for the roll.")
+    target_ac: ValueReading = Field(description="Evaluated target armor class used to determine the outcome.")
     dice_roll: DiceRoll = Field(description="Completed d20 spell attack roll.")
     outcome: AttackOutcome = Field(description="Hit, miss, or critical outcome of the roll.")
     is_threatened: bool = Field(
@@ -4620,23 +4541,20 @@ def resolve_spell_attack_values(caster:Entity,target:Entity|BaseItem,parent_even
     ranged:bool,spellcasting_source_id:UUID|None=None,casting_ability:AbilityName|None=None,
     extra_advantage_modifiers:Tuple[AdvantageModifier,...]=(),attack_origin_position:tuple[int,int]|None=None)->SpellAttackResolution:
     """Native spell-roll mechanics shared by spells and intrinsic spell attacks."""
-    attack_bonus = caster.spell_attack_bonus(
-        target.uuid,
+    attack_value = caster.spell_attack_value(
+        ValueRead(caster.uuid, target.uuid),
         spellcasting_source_id=spellcasting_source_id,
         casting_ability=casting_ability,
     )
-    target_ac = (target.ac_bonus(caster.uuid) if isinstance(target, Entity)
-        else ModifiableValue.create(source_entity_uuid=target.uuid,
-            target_entity_uuid=caster.uuid, base_value=target.armor_class, value_name="Object AC"))
-    if attack_origin_position is not None:
-        attack_bonus.set_context({"attack_origin_position":attack_origin_position})
-        target_ac.set_context({"attack_origin_position":attack_origin_position})
+    ac_value = (target.armor_class_value(ValueRead(target.uuid, caster.uuid)) if isinstance(target, Entity)
+        else ModifiableValue.create(source_entity_uuid=target.uuid, base_value=target.armor_class, value_name="Object AC"))
+    context = {"attack_origin_position": attack_origin_position} if attack_origin_position is not None else None
     for modifier in extra_advantage_modifiers:
-        attack_bonus.self_static.add_advantage_modifier(modifier)
+        attack_value.self_static.add_advantage_modifier(modifier)
 
     is_threatened = ranged and caster.is_threatened()
     if is_threatened:
-        attack_bonus.self_static.add_advantage_modifier(
+        attack_value.self_static.add_advantage_modifier(
             AdvantageModifier(
                 name="Threatened (Ranged)",
                 value=AdvantageStatus.DISADVANTAGE,
@@ -4645,8 +4563,10 @@ def resolve_spell_attack_values(caster:Entity,target:Entity|BaseItem,parent_even
             )
         )
 
-    attack_bonus.set_from_target(target_ac)
-    target_ac.set_from_target(attack_bonus)
+    attack_bonus = read_value(attack_value, ValueRead(caster.uuid, target.uuid, context,
+        OpponentOutgoing(ac_value.to_target_static, ac_value.to_target_contextual, context)))
+    target_ac = read_value(ac_value, ValueRead(target.uuid, caster.uuid, context,
+        OpponentOutgoing(attack_value.to_target_static, attack_value.to_target_contextual, context)))
     dice_roll = caster.roll_d20(
         attack_bonus,
         RollType.ATTACK,
@@ -4657,8 +4577,6 @@ def resolve_spell_attack_values(caster:Entity,target:Entity|BaseItem,parent_even
         target_ac,
         caster.get_spell_crit_threshold(),
     )
-    attack_bonus.reset_from_target()
-    target_ac.reset_from_target()
     return SpellAttackResolution(
         attack_bonus=attack_bonus,
         target_ac=target_ac,

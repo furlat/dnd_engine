@@ -33,15 +33,15 @@ def test_recipient_faction_change_updates_only_its_aura_memberships(game):
     check_auras(ally, owner)
     check_auras(changed, owner, ())
     stable_memberships = frozenset(ally.active_conditions_by_uuid)
-    base_save = changed.saving_throw_bonus(None, "wisdom").normalized_score
+    base_save = changed.saving_throw_bonus(None, "wisdom", None).normalized_score
 
     changed.set_faction("heroes")
     check_auras(changed, owner)
-    protected_save = changed.saving_throw_bonus(None, "wisdom").normalized_score
+    protected_save = changed.saving_throw_bonus(None, "wisdom", None).normalized_score
     assert protected_save == base_save + max(1, owner.ability_scores.charisma.modifier)
     changed.set_faction("foes")
     check_auras(changed, owner, ())
-    restored_save = changed.saving_throw_bonus(None, "wisdom").normalized_score
+    restored_save = changed.saving_throw_bonus(None, "wisdom", None).normalized_score
     assert restored_save == base_save
 
     remote.set_faction("heroes")
@@ -74,7 +74,7 @@ def test_owner_faction_change_preserves_another_paladins_contributions(game):
     check_auras(foe, other, ())
     retained = frozenset(ally.active_conditions_by_uuid)
     assert other_memberships <= retained
-    bonus = ally.saving_throw_bonus(None, "wisdom").normalized_score
+    bonus = ally.saving_throw_bonus(None, "wisdom", None).normalized_score
     assert bonus == ally.ability_scores.wisdom.modifier + other.ability_scores.charisma.modifier
 
     owner.set_faction("heroes")

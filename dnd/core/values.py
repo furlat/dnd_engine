@@ -1,11 +1,10 @@
-from copy import deepcopy
 from fractions import Fraction
 from math import prod
 
-from pydantic import Field, computed_field, model_validator
-from typing import List, Optional, Dict, Any, Callable, ClassVar, Tuple, Union, Self
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from typing import Any, Callable, ClassVar, Dict, Iterable, List, NamedTuple, Optional, Self, Sequence, Tuple, Union
 from uuid import UUID, uuid4, uuid5
-from dnd.core.base_object import BaseObject
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
     naming_callable,
@@ -53,15 +52,16 @@ def _clamped(total: int | Fraction, minimum: int | None, maximum: int | None) ->
     return total
 
 
-class BaseValue(BaseObject):
+class BaseValue(BaseModel):
     """Base model for UUID-addressable values.
 
-    Values extend `BaseObject` with score normalization and generation-chain
-    metadata. Concrete subclasses define how modifiers are stored and
-    aggregated.
+    A value is data: its modifiers, its owner and its normalizer. It holds no
+    read state; who reads it, against whom and in which situation is the
+    `ValueRead` passed to the read.
     """
 
     _registry: ClassVar[Dict[UUID, 'BaseValue']] = {}
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     name: str = Field(
         default="A Value",
@@ -79,17 +79,9 @@ class BaseValue(BaseObject):
         default=None,
         description="Optional display name for the value's source entity."
     )
-    target_entity_uuid: Optional[UUID] = Field(
-        default=None,
-        description="Entity UUID currently targeted while evaluating this value, if any."
-    )
-    target_entity_name: Optional[str] = Field(
-        default=None,
-        description="Optional display name for the current target entity."
-    )
-    context: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Runtime context used by contextual modifiers during evaluation."
+    use_register: bool = Field(
+        default=True,
+        description="Whether to register this value in the value registry."
     )
     score_normalizer: Callable[[int], int] = Field(
         default=identity,
@@ -104,6 +96,11 @@ class BaseValue(BaseObject):
         default=True,
         description="Whether this value's normalizer also applies to numerical modifiers."
     )
+
+    def model_post_init(self, __context: Any) -> None:
+        """Register the value by UUID when registry participation is enabled."""
+        if __context is not PASSIVE_EVENT_REPLAY and self.use_register:
+            self.__class__._registry[self.uuid] = self
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['BaseValue']:
@@ -126,6 +123,26 @@ class BaseValue(BaseObject):
         else:
             raise ValueError(f"Value with UUID {uuid} is not a BaseValue, but {type(value)}")
 
+    @classmethod
+    def unregister(cls, uuid: UUID) -> None:
+        """Remove a value from the value registry."""
+        cls._registry.pop(uuid, None)
+
+    def remove_from_register(self) -> None:
+        """Remove this value from the registry and disable registration."""
+        self.__class__._registry.pop(self.uuid, None)
+        self.use_register = False
+
+    def set_source_entity(self, source_entity_uuid: UUID, source_entity_name: Optional[str] = None) -> None:
+        """Set the owning entity of this value."""
+        self.source_entity_uuid = source_entity_uuid
+        self.source_entity_name = source_entity_name
+
+    def validate_source_id(self, source_id: UUID) -> None:
+        """Raise unless `source_id` owns this value."""
+        if self.source_entity_uuid != source_id:
+            raise ValueError("Source entity UUIDs do not match")
+
     def validate_modifier_target(self, modifier: Union[NumericalModifier, AdvantageModifier, CriticalModifier, AutoHitModifier, SizeModifier, DamageTypeModifier, ResistanceModifier, ContextualNumericalModifier, ContextualAdvantageModifier, ContextualCriticalModifier, ContextualAutoHitModifier, ContextualSizeModifier, ContextualDamageTypeModifier, ContextualResistanceModifier]) -> None:
         """Validate whether a modifier can be attached to this value.
 
@@ -133,6 +150,7 @@ class BaseValue(BaseObject):
             modifier: Modifier candidate.
         """
         pass
+
 
 class StaticValue(BaseValue):
     """Non-contextual modifier bucket for one value channel.
@@ -757,37 +775,75 @@ class StaticValue(BaseValue):
             self._set_normalizer_recursive(self.score_normalizer)
         return self
 
-def _contextual_additive_score(
+def _contextual_numbers(
     modifiers: Dict[UUID, ContextualNumericalModifier], source: UUID,
-    target: Optional[UUID], context: Optional[Dict[str, Any]], lineage: Optional[UUID],
-    normalized: bool, excluded: frozenset[UUID] = frozenset(),
-) -> int:
-    total = 0
-    for key, modifier in modifiers.items():
-        if key in excluded:
-            continue
-        result = modifier.evaluate(source, target, context, event_lineage_uuid=lineage)
+    target: Optional[UUID], context: Optional[Dict[str, Any]],
+) -> tuple[int, int]:
+    """Raw and normalized totals of contextual numerical rows; each callable is evaluated once."""
+    raw = normalized = 0
+    for modifier in modifiers.values():
+        result = modifier.evaluate(source, target, context)
         if isinstance(result, NumericalModifier):
-            total += result.normalized_value if normalized else result.value
-    return total
+            raw += result.value
+            normalized += result.normalized_value
+    return raw, normalized
 
 
 def _contextual_constraint_values(
     modifiers: Dict[UUID, ContextualNumericalModifier], source: UUID,
-    target: Optional[UUID], context: Optional[Dict[str, Any]], lineage: Optional[UUID],
+    target: Optional[UUID], context: Optional[Dict[str, Any]],
 ) -> List[int]:
-    results = [modifier.evaluate(source, target, context, event_lineage_uuid=lineage)
-               for modifier in modifiers.values()]
+    results = [modifier.evaluate(source, target, context) for modifier in modifiers.values()]
     return [result.value for result in results if isinstance(result, NumericalModifier)]
 
 
-def _contextual_advantage_sum(
-    modifiers: Dict[UUID, ContextualAdvantageModifier], source: UUID,
-    target: Optional[UUID], context: Optional[Dict[str, Any]], lineage: Optional[UUID],
-) -> int:
-    results = [modifier.evaluate(source, target, context, event_lineage_uuid=lineage)
-               for modifier in modifiers.values()]
-    return sum(result.numerical_value for result in results if isinstance(result, AdvantageModifier))
+def _contextual_advantage_results(modifiers: Dict[UUID, ContextualAdvantageModifier], source: UUID,
+                                  target: Optional[UUID], context: Optional[Dict[str, Any]],
+                                  ) -> list[tuple[ContextualAdvantageModifier, Any]]:
+    """Each contextual advantage row with its result in one read situation."""
+    return [(modifier, modifier.evaluate(source, target, context)) for modifier in modifiers.values()]
+
+
+def _advantage_total(results: list[tuple[ContextualAdvantageModifier, Any]]) -> int:
+    return sum(result.numerical_value for _, result in results if isinstance(result, AdvantageModifier))
+
+
+def _advantage_status(total: int) -> AdvantageStatus:
+    if total > 0:
+        return AdvantageStatus.ADVANTAGE
+    if total < 0:
+        return AdvantageStatus.DISADVANTAGE
+    return AdvantageStatus.NONE
+
+
+def _critical_status(statuses: Sequence[CriticalStatus]) -> CriticalStatus:
+    if CriticalStatus.NOCRIT in statuses:
+        return CriticalStatus.NOCRIT
+    if CriticalStatus.AUTOCRIT in statuses:
+        return CriticalStatus.AUTOCRIT
+    return CriticalStatus.NONE
+
+
+def _resistance_statuses(sums: Dict[DamageType, int]) -> Dict[DamageType, ResistanceStatus]:
+    statuses = {}
+    for damage_type, sum_value in sums.items():
+        if sum_value > 1:
+            statuses[damage_type] = ResistanceStatus.IMMUNITY
+        elif sum_value == 1:
+            statuses[damage_type] = ResistanceStatus.RESISTANCE
+        elif sum_value == 0:
+            statuses[damage_type] = ResistanceStatus.NONE
+        else:
+            statuses[damage_type] = ResistanceStatus.VULNERABILITY
+    return statuses
+
+
+def _auto_hit_status(statuses: Sequence[AutoHitStatus]) -> AutoHitStatus:
+    if AutoHitStatus.AUTOMISS in statuses:
+        return AutoHitStatus.AUTOMISS
+    if AutoHitStatus.AUTOHIT in statuses:
+        return AutoHitStatus.AUTOHIT
+    return AutoHitStatus.NONE
 
 
 class ContextualValue(BaseValue):
@@ -797,12 +853,6 @@ class ContextualValue(BaseValue):
     current source, target, context dictionary, and event lineage before being
     aggregated.
     """
-
-    event_lineage_uuid: Optional[UUID] = Field(
-        default=None,
-        exclude=True,
-        description="Current event lineage UUID used by contextual modifier cache keys."
-    )
 
     value_modifiers: Dict[UUID, ContextualNumericalModifier] = Field(
         default_factory=dict,
@@ -870,71 +920,51 @@ class ContextualValue(BaseValue):
         else:
             raise ValueError(f"Value with UUID {uuid} is not a ContextualValue, but {type(value)}")
 
+    def bounds_in(self, target: Optional[UUID], context: Optional[Dict[str, Any]]) -> tuple[int | None, int | None]:
+        """Lowest evaluated minimum and highest evaluated maximum in one read situation."""
+        minimum = min(_contextual_constraint_values(self.min_constraints, self.source_entity_uuid, target, context),
+                      default=None) if self.min_constraints else None
+        maximum = max(_contextual_constraint_values(self.max_constraints, self.source_entity_uuid, target, context),
+                      default=None) if self.max_constraints else None
+        return minimum, maximum
+
+    def numbers_in(self, target: Optional[UUID], context: Optional[Dict[str, Any]]) -> tuple[int, int]:
+        """Raw and normalized additive totals in one read situation."""
+        return _contextual_numbers(self.value_modifiers, self.source_entity_uuid, target, context)
+
+    def advantage_sum_in(self, target: Optional[UUID], context: Optional[Dict[str, Any]]) -> int:
+        """Signed advantage total in one read situation."""
+        return _advantage_total(_contextual_advantage_results(self.advantage_modifiers, self.source_entity_uuid,
+                                                              target, context))
+
+    def critical_in(self, target: Optional[UUID], context: Optional[Dict[str, Any]]) -> CriticalStatus:
+        """Critical override in one read situation; NOCRIT takes precedence."""
+        results = [modifier.evaluate(self.source_entity_uuid, target, context)
+                   for modifier in self.critical_modifiers.values()]
+        return _critical_status([result.value for result in results if isinstance(result, CriticalModifier)])
+
+    def auto_hit_in(self, target: Optional[UUID], context: Optional[Dict[str, Any]]) -> AutoHitStatus:
+        """Hit override in one read situation; AUTOMISS takes precedence."""
+        results = [modifier.evaluate(self.source_entity_uuid, target, context)
+                   for modifier in self.auto_hit_modifiers.values()]
+        return _auto_hit_status([result.value for result in results if isinstance(result, AutoHitModifier)])
+
     @computed_field
     @property
     def min(self) -> Optional[int]:
-        """Return the lowest active contextual minimum constraint.
-
-        Returns:
-            Minimum evaluated constraint value when present, otherwise `None`.
-        """
-        if not self.min_constraints:
-            return None
-        return min(_contextual_constraint_values(self.min_constraints, self.source_entity_uuid,
-            self.target_entity_uuid, self.context, self.event_lineage_uuid), default=None)
+        """Return the lowest active contextual minimum constraint read with no target or context."""
+        return self.bounds_in(None, None)[0]
 
     @computed_field
     @property
     def max(self) -> Optional[int]:
-        """Return the highest active contextual maximum constraint.
-
-        Returns:
-            Maximum evaluated constraint value when present, otherwise `None`.
-        """
-        if not self.max_constraints:
-            return None
-        return max(_contextual_constraint_values(self.max_constraints, self.source_entity_uuid,
-            self.target_entity_uuid, self.context, self.event_lineage_uuid), default=None)
-
-    def score_bounds(self, excluded: frozenset[UUID] = frozenset()) -> tuple[int | None, int | None]:
-        # Exclusion names static contributions; contextual constraints retain their contract.
-        return self.min, self.max
-
-    def arithmetic_factor(self, excluded: frozenset[UUID] = frozenset()) -> Fraction:
-        return Fraction(1)
-
-    def additive_score(self, normalized: bool = False, excluded: frozenset[UUID] = frozenset()) -> int:
-        return _contextual_additive_score(self.value_modifiers, self.source_entity_uuid,
-            self.target_entity_uuid, self.context, self.event_lineage_uuid, normalized, excluded)
-
-    def bounded_score(self, normalized: bool = False,
-                      excluded: frozenset[UUID] = frozenset()) -> tuple[int, int | None, int | None]:
-        """Channel score with the bounds that clamped it; each callable is evaluated once.
-
-        Exclusion names static contributions, so contextual rows are all read.
-
-        Args:
-            normalized: Whether to read each evaluated modifier's normalized value.
-            excluded: Static contribution UUIDs; not consulted by contextual channels.
-
-        Returns:
-            Score after constraints, lowest evaluated minimum, highest evaluated maximum.
-        """
-        total = self.additive_score(normalized)
-        minimum, maximum = self.score_bounds()
-        return _clamped(total, minimum, maximum), minimum, maximum
+        """Return the highest active contextual maximum constraint read with no target or context."""
+        return self.bounds_in(None, None)[1]
 
     def _score(self, normalized: bool = False) -> int:
-        """Calculate the contextual score after modifiers and constraints.
-
-        Args:
-            normalized: Whether to read each evaluated modifier's normalized
-                value.
-
-        Returns:
-            Final score after active minimum and maximum constraints are applied.
-        """
-        return self.bounded_score(normalized)[0]
+        """The channel score read with no target or context: its rows clamped by its own bounds."""
+        raw, scaled = self.numbers_in(None, None)
+        return int(_clamped(scaled if normalized else raw, *self.bounds_in(None, None)))
 
     @computed_field
     @property
@@ -959,13 +989,8 @@ class ContextualValue(BaseValue):
     @computed_field
     @property
     def advantage_sum(self) -> int:
-        """Return the signed aggregate of active advantage modifiers.
-
-        Returns:
-            Positive values mean advantage, negative values mean disadvantage.
-        """
-        return _contextual_advantage_sum(self.advantage_modifiers, self.source_entity_uuid,
-            self.target_entity_uuid, self.context, self.event_lineage_uuid)
+        """Return the signed aggregate of active advantage modifiers read with no target or context."""
+        return self.advantage_sum_in(None, None)
 
     @computed_field
     @property
@@ -975,92 +1000,66 @@ class ContextualValue(BaseValue):
         Returns:
             Advantage, disadvantage, or none after signed aggregation.
         """
-        if self.advantage_sum > 0:
-            return AdvantageStatus.ADVANTAGE
-        elif self.advantage_sum < 0:
-            return AdvantageStatus.DISADVANTAGE
-        else:
-            return AdvantageStatus.NONE
+        return _advantage_status(self.advantage_sum)
 
     @computed_field
     @property
     def critical(self) -> CriticalStatus:
-        """Return the final contextual critical-hit override state.
-
-        Returns:
-            `NOCRIT`, `AUTOCRIT`, or `NONE`, with `NOCRIT` taking precedence.
-        """
-        critical_modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
-                              event_lineage_uuid=self.event_lineage_uuid) for modifier in self.critical_modifiers.values()]
-        values = [modifier.value for modifier in critical_modifiers if isinstance(modifier, CriticalModifier)]
-        if CriticalStatus.NOCRIT in values:
-            return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in values:
-            return CriticalStatus.AUTOCRIT
-        else:
-            return CriticalStatus.NONE
+        """Return the final contextual critical-hit override state read with no target or context."""
+        return self.critical_in(None, None)
 
     @computed_field
     @property
     def auto_hit(self) -> AutoHitStatus:
-        """Return the final contextual hit override state.
+        """Return the final contextual hit override state read with no target or context."""
+        return self.auto_hit_in(None, None)
 
-        Returns:
-            `AUTOMISS`, `AUTOHIT`, or `NONE`, with `AUTOMISS` taking precedence.
-        """
-        auto_hit_modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
-                              event_lineage_uuid=self.event_lineage_uuid) for modifier in self.auto_hit_modifiers.values()]
-        values = [modifier.value for modifier in auto_hit_modifiers if isinstance(modifier, AutoHitModifier)]
-        if AutoHitStatus.AUTOMISS in values:
-            return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in values:
-            return AutoHitStatus.AUTOHIT
-        else:
-            return AutoHitStatus.NONE
-
-    @computed_field
-    @property
-    def size(self) -> Size:
-        """Return the effective size from active contextual size modifiers.
-
-        Returns:
-            Effective size, defaulting to `MEDIUM` when no modifier applies.
-        """
+    def size_in(self, target: Optional[UUID], context: Optional[Dict[str, Any]]) -> Size:
+        """Effective size of the contextual size rows in one read situation."""
         if not self.size_modifiers:
             return Size.MEDIUM
-        size_modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
-                          event_lineage_uuid=self.event_lineage_uuid) for modifier in self.size_modifiers.values()]
+        size_modifiers = [modifier.evaluate(self.source_entity_uuid, target, context)
+                          for modifier in self.size_modifiers.values()]
         sizes = [modifier.value for modifier in size_modifiers if isinstance(modifier, SizeModifier)]
         if self.largest_size_priority:
             return max(sizes, key=lambda s: list(Size).index(s)) if len(sizes) > 0 else Size.MEDIUM
         else:
             return min(sizes, key=lambda s: list(Size).index(s)) if len(sizes) > 0 else Size.MEDIUM
 
+    def damage_types_in(self, target: Optional[UUID], context: Optional[Dict[str, Any]]) -> List[DamageType]:
+        """Most common contextual damage types in one read situation."""
+        if not self.damage_type_modifiers:
+            return []
+        type_counts = {}
+        for modifier in self.damage_type_modifiers.values():
+            result = modifier.evaluate(self.source_entity_uuid, target, context)
+            if isinstance(result, DamageTypeModifier):
+                type_counts[result.value] = type_counts.get(result.value, 0) + 1
+        if not type_counts:
+            return []
+        max_count = max(type_counts.values())
+        return [dt for dt, count in type_counts.items() if count == max_count]
+
+    def resistance_sum_in(self, target: Optional[UUID], context: Optional[Dict[str, Any]]) -> Dict[DamageType, int]:
+        """Signed contextual resistance totals by damage type in one read situation."""
+        resistance_sum = {damage_type: 0 for damage_type in DamageType}
+        for modifier in self.resistance_modifiers.values():
+            result = modifier.evaluate(self.source_entity_uuid, target, context)
+            if result is not None and isinstance(result, ResistanceModifier):
+                resistance_sum[result.damage_type] += result.numerical_value
+        return resistance_sum
+
+    @computed_field
+    @property
+    def size(self) -> Size:
+        """Return the effective size from active contextual size modifiers read with no target or context."""
+        return self.size_in(None, None)
+
     @computed_field
     @property
     def damage_types(self) -> List[DamageType]:
-        """Return the most common active contextual damage types.
-
-        Returns:
-            Damage types tied for highest occurrence.
-        """
-        if not self.damage_type_modifiers:
-            return []
-
-        type_counts = {}
-        for modifier in self.damage_type_modifiers.values():
-            result = modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
-                                        event_lineage_uuid=self.event_lineage_uuid)
-            if isinstance(result, DamageTypeModifier):
-                type_counts[result.value] = type_counts.get(result.value, 0) + 1
-
-        if not type_counts:
-            return []
-
-        max_count = max(type_counts.values())
-        most_common_types = [dt for dt, count in type_counts.items() if count == max_count]
-
-        return most_common_types
+        """Return the most common active contextual damage types read with no target or context."""
+        return self.damage_types_in(None, None)
 
     @computed_field
     @property
@@ -1078,18 +1077,8 @@ class ContextualValue(BaseValue):
     @computed_field
     @property
     def resistance_sum(self) -> Dict[DamageType, int]:
-        """Return signed contextual resistance totals by damage type.
-
-        Returns:
-            Damage type to signed resistance total.
-        """
-        resistance_sum = {damage_type: 0 for damage_type in DamageType}
-        for modifier in self.resistance_modifiers.values():
-            result = modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
-                                        event_lineage_uuid=self.event_lineage_uuid)
-            if result is not None and isinstance(result, ResistanceModifier):
-                resistance_sum[result.damage_type] += result.numerical_value
-        return resistance_sum
+        """Return signed contextual resistance totals by damage type read with no target or context."""
+        return self.resistance_sum_in(None, None)
 
     @computed_field
     @property
@@ -1099,17 +1088,7 @@ class ContextualValue(BaseValue):
         Returns:
             Damage type to vulnerability, none, resistance, or immunity.
         """
-        resistance = {}
-        for damage_type, sum_value in self.resistance_sum.items():
-            if sum_value > 1:
-                resistance[damage_type] = ResistanceStatus.IMMUNITY
-            elif sum_value == 1:
-                resistance[damage_type] = ResistanceStatus.RESISTANCE
-            elif sum_value == 0:
-                resistance[damage_type] = ResistanceStatus.NONE
-            else:
-                resistance[damage_type] = ResistanceStatus.VULNERABILITY
-        return resistance
+        return _resistance_statuses(self.resistance_sum)
 
     def add_value_modifier(self, modifier: ContextualNumericalModifier) -> UUID:
         """Add a contextual numerical modifier.
@@ -1364,9 +1343,6 @@ class ContextualValue(BaseValue):
             generated_from=(self.uuid, *(other.uuid for other in others)),
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
-            target_entity_uuid=self.target_entity_uuid,
-            target_entity_name=self.target_entity_name,
-            context=self.context,
             score_normalizer=self.score_normalizer,
             is_outgoing_modifier=self.is_outgoing_modifier,
             global_normalizer=False
@@ -1401,34 +1377,287 @@ class ContextualValue(BaseValue):
         self.resistance_modifiers.clear()
 
     def _set_normalizer_recursive(self, normalizer: Callable[[int], int]) -> None:
-        """Set the score normalizer on this value and numerical callables.
+        """Set the score normalizer on this channel; contextual rows produce their own normalized values.
 
         Args:
             normalizer: Normalizer function to apply.
         """
         self.score_normalizer = normalizer
 
-        for modifier in self.value_modifiers.values():
-            modifier.callable.score_normalizer = normalizer
+class OpponentOutgoing(NamedTuple):
+    """The opponent's outgoing channels in an opposed read and the context their rows are read in."""
 
-    @model_validator(mode='after')
-    def apply_global_normalizer(self) -> Self:
-        """Apply the value normalizer to contextual numerical callables.
+    static: StaticValue
+    contextual: ContextualValue
+    context: Optional[Dict[str, Any]] = None
 
-        Returns:
-            This value after normalizer propagation.
-        """
-        if self.global_normalizer and self.score_normalizer is not None:
-            self._set_normalizer_recursive(self.score_normalizer)
-        return self
+
+class ValueRead(NamedTuple):
+    """One read of a value: its owner, the target, the situation and the opponent's outgoing channels.
+
+    The owner's contextual rows are read with (target, context). The opponent's
+    outgoing contextual rows are read with (owner, opponent context).
+    """
+
+    source_entity_uuid: UUID
+    target_entity_uuid: Optional[UUID] = None
+    context: Optional[Dict[str, Any]] = None
+    opponent: Optional[OpponentOutgoing] = None
+
+
+def outgoing_of(values: Sequence['ModifiableValue'], context: Optional[Dict[str, Any]]) -> OpponentOutgoing:
+    """The opponent side of an opposed read: its components' outgoing channels, merged in order."""
+    first, rest = values[0], values[1:]
+    if not rest:
+        return OpponentOutgoing(first.to_target_static, first.to_target_contextual, context)
+    return OpponentOutgoing(
+        first.to_target_static.combine_values([value.to_target_static for value in rest], use_register=False),
+        first.to_target_contextual.combine_values([value.to_target_contextual for value in rest], use_register=False),
+        context,
+    )
+
+
+_DISPLAY_NAMES = {
+    "proficiency_bonus_base_value": "Prof",
+    "Value_base_value": "Prof",
+    "Attack Bonus_base_value": "Base",
+    "Melee Attack Bonus_base_value": "Melee",
+    "Ranged Attack Bonus_base_value": "Ranged",
+    "Damage Bonus_base_value": "Base",
+    "strength_modifier_base_value": "STR",
+    "dexterity_modifier_base_value": "DEX",
+    "constitution_modifier_base_value": "CON",
+    "intelligence_modifier_base_value": "INT",
+    "wisdom_modifier_base_value": "WIS",
+    "charisma_modifier_base_value": "CHA",
+    "strength Ability Score_base_value": "STR",
+    "dexterity Ability Score_base_value": "DEX",
+    "constitution Ability Score_base_value": "CON",
+    "intelligence Ability Score_base_value": "INT",
+    "wisdom Ability Score_base_value": "WIS",
+    "charisma Ability Score_base_value": "CHA",
+    "strength Modifier Bonus_base_value": "STR Mod",
+    "dexterity Modifier Bonus_base_value": "DEX Mod",
+    "constitution Modifier Bonus_base_value": "CON Mod",
+    "intelligence Modifier Bonus_base_value": "INT Mod",
+    "wisdom Modifier Bonus_base_value": "WIS Mod",
+    "charisma Modifier Bonus_base_value": "CHA Mod",
+    "ac_bonus_base_value": "Base AC",
+    "AC Bonus_base_value": "Base AC",
+    "Armor Class_base_value": "Armor",
+    "Armor Class Bonus_base_value": "AC Bonus",
+    "Max Dex Bonus_base_value": "Max DEX",
+}
+
+
+def _display_name(raw_name: str) -> str:
+    """Normalize an internal modifier name for breakdown display."""
+    if raw_name in _DISPLAY_NAMES:
+        return _DISPLAY_NAMES[raw_name]
+    cleaned = raw_name
+    for suffix in ["_base_value", "_bonus", "_modifier", " Bonus", " Modifier"]:
+        if cleaned.endswith(suffix):
+            cleaned = cleaned[:-len(suffix)]
+    if " Ability Score" in cleaned:
+        cleaned = cleaned.replace(" Ability Score", "")
+    return cleaned.replace("_", " ").title()
+
+
+class ValueBreakdownRow(BaseModel):
+    """One displayed static numerical row: a flat value or a multiplying factor."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(description="Display name of the contribution.")
+    source: str = Field(description="'self' for the owner's rows, 'from_target' for the opponent's outgoing rows.")
+    value: int = Field(default=0, description="Normalized flat value; 0 for factor rows.")
+    numerator: Optional[int] = Field(default=None, description="Factor numerator for multiplying rows.")
+    denominator: Optional[int] = Field(default=None, description="Factor denominator for multiplying rows.")
+    operation: Optional[str] = Field(default=None, description="'multiply' for factor rows.")
+
+
+class AdvantageBreakdownRow(BaseModel):
+    """One displayed advantage row; contextual rows record whether they applied in the read."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(description="Display name of the contribution.")
+    value: str = Field(description="'advantage', 'disadvantage', a lower-cased contextual status, or 'inactive'.")
+    source: str = Field(description="'self', 'from_target', 'self_contextual' or 'from_target_contextual'.")
+    active: Optional[bool] = Field(default=None, description="Whether a contextual row applied; None for static rows.")
+
+
+class ValueChannelReading(BaseModel):
+    """One channel's numerical aggregate in a read: totals, bounds and factor."""
+
+    model_config = ConfigDict(frozen=True)
+
+    raw: int = Field(description="Sum of the active raw contributions.")
+    normalized: int = Field(description="Sum of the active normalized contributions.")
+    minimum: Optional[int] = Field(default=None, description="Lowest active minimum constraint.")
+    maximum: Optional[int] = Field(default=None, description="Highest active maximum constraint.")
+    factor_numerator: int = Field(default=1, description="Numerator of the product of active factors.")
+    factor_denominator: int = Field(default=1, description="Denominator of the product of active factors.")
+    factor_keyed: bool = Field(default=False, description="Whether the channel holds factor rows, which select the factor rule.")
+
+
+class _ChannelNumbers(NamedTuple):
+    raw: int
+    normalized: int
+    minimum: Optional[int]
+    maximum: Optional[int]
+    factor: Optional[Fraction]
+    factor_keyed: bool
+
+
+def _score_of(channels: Sequence[_ChannelNumbers], normalized: bool) -> int:
+    """Sum the channels, multiply once when any factor row exists, then bound.
+
+    Without factors each channel is clamped by its own bounds before the sum, and
+    the sum by the lowest minimum and highest maximum of all channels.
+    """
+    keyed = False
+    total = 0
+    minimum: Optional[int] = None
+    maximum: Optional[int] = None
+    for channel in channels:
+        low, high = channel.minimum, channel.maximum
+        if low is not None and (minimum is None or low < minimum):
+            minimum = low
+        if high is not None and (maximum is None or high > maximum):
+            maximum = high
+        keyed = keyed or channel.factor_keyed
+    if keyed:
+        factor = Fraction(1)
+        for channel in channels:
+            total += channel.normalized if normalized else channel.raw
+            if channel.factor is not None:
+                factor *= channel.factor
+        return int(_clamped(total * factor, minimum, maximum))
+    for channel in channels:
+        number = channel.normalized if normalized else channel.raw
+        if channel.minimum is not None or channel.maximum is not None:
+            number = int(_clamped(number, channel.minimum, channel.maximum))
+        total += number
+    return int(_clamped(total, minimum, maximum))
+
+
+def _static_buckets(channel: StaticValue) -> Dict[str, Dict[UUID, Any]]:
+    return {"factor_modifiers": dict(channel.factor_modifiers), "min_constraints": dict(channel.min_constraints),
+            "max_constraints": dict(channel.max_constraints), "advantage_modifiers": dict(channel.advantage_modifiers),
+            "critical_modifiers": dict(channel.critical_modifiers), "auto_hit_modifiers": dict(channel.auto_hit_modifiers),
+            "size_modifiers": dict(channel.size_modifiers), "damage_type_modifiers": dict(channel.damage_type_modifiers),
+            "resistance_modifiers": dict(channel.resistance_modifiers)}
+
+
+def _contextual_buckets(channel: ContextualValue) -> Dict[str, Dict[UUID, Any]]:
+    return {"value_modifiers": dict(channel.value_modifiers), "min_constraints": dict(channel.min_constraints),
+            "max_constraints": dict(channel.max_constraints), "advantage_modifiers": dict(channel.advantage_modifiers),
+            "critical_modifiers": dict(channel.critical_modifiers), "auto_hit_modifiers": dict(channel.auto_hit_modifiers),
+            "size_modifiers": dict(channel.size_modifiers), "damage_type_modifiers": dict(channel.damage_type_modifiers),
+            "resistance_modifiers": dict(channel.resistance_modifiers)}
+
+
+def _value_rows(channel: StaticValue, source: str) -> List[ValueBreakdownRow]:
+    rows = [ValueBreakdownRow(name=_display_name(modifier.name or "Factor"), source=source,
+                              numerator=modifier.numerator, denominator=modifier.denominator, operation="multiply")
+            for modifier in channel.factor_modifiers.values()]
+    for modifier in channel.value_modifiers.values():
+        value = modifier.normalized_value
+        if value != 0:
+            rows.append(ValueBreakdownRow(name=_display_name(modifier.name or "Unknown"), source=source, value=value))
+    return rows
+
+
+def _static_advantage_rows(modifiers: Iterable[AdvantageModifier], source: str) -> List[AdvantageBreakdownRow]:
+    rows = []
+    for modifier in modifiers:
+        if modifier.value == AdvantageStatus.ADVANTAGE:
+            rows.append(AdvantageBreakdownRow(name=modifier.name or "Unknown", value="advantage", source=source))
+        elif modifier.value == AdvantageStatus.DISADVANTAGE:
+            rows.append(AdvantageBreakdownRow(name=modifier.name or "Unknown", value="disadvantage", source=source))
+    return rows
+
+
+def _contextual_advantage(channel: ContextualValue, target: Optional[UUID], context: Optional[Dict[str, Any]],
+                          source: str) -> tuple[int, List[AdvantageBreakdownRow]]:
+    """Signed advantage total and display rows of one contextual channel; each callable is evaluated once."""
+    total = 0
+    rows = []
+    for modifier, result in _contextual_advantage_results(channel.advantage_modifiers, channel.source_entity_uuid,
+                                                          target, context):
+        if isinstance(result, AdvantageModifier):
+            total += result.numerical_value
+            rows.append(AdvantageBreakdownRow(name=modifier.name or "Unknown", value=result.value.value.lower(),
+                                              source=source, active=True))
+        else:
+            rows.append(AdvantageBreakdownRow(name=modifier.name or "Unknown", value="inactive",
+                                              source=source, active=False))
+    return total, rows
+
+
+def _insert_after_source(rows: tuple, row: BaseModel, source: str, static_only: bool) -> tuple:
+    at = 0
+    for index, existing in enumerate(rows):
+        if existing.source == source and (not static_only or existing.active is None):
+            at = index + 1
+    return rows[:at] + (row,) + rows[at:]
+
+
+class ValueReading(BaseModel):
+    """A value evaluated once in one read situation: the record that dice, events and logs keep.
+
+    Rows a reaction adds during an attack (Shield, Parry, Protection) enter the
+    owner's static channel, so the totals recompute as they did on the composed value.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(description="Name of the value that was read.")
+    source_entity_uuid: UUID = Field(description="Entity that owns the value.")
+    target_entity_uuid: Optional[UUID] = Field(default=None, description="Entity the value was read against.")
+    fixed_score: Optional[int] = Field(default=None, description="Active fixed score, which replaces the channels.")
+    fixed_normalized_score: Optional[int] = Field(default=None, description="Normalized active fixed score.")
+    channels: tuple[ValueChannelReading, ...] = Field(
+        description="Owner static, owner contextual, then opponent contextual and static channels.")
+    advantage_sum: int = Field(description="Signed total of the active advantage rows.")
+    critical: CriticalStatus = Field(description="Critical override, NOCRIT first.")
+    auto_hit: AutoHitStatus = Field(description="Hit override, AUTOMISS first.")
+    breakdown: tuple[ValueBreakdownRow, ...] = Field(default=(), description="Static numerical rows, owner first.")
+    advantage_breakdown: tuple[AdvantageBreakdownRow, ...] = Field(
+        default=(), description="Static advantage rows, then contextual rows with whether they applied.")
+
+    def _total(self, normalized: bool) -> int:
+        if self.fixed_score is not None and self.fixed_normalized_score is not None:
+            return self.fixed_normalized_score if normalized else self.fixed_score
+        return _score_of([_ChannelNumbers(channel.raw, channel.normalized, channel.minimum, channel.maximum,
+                                          Fraction(channel.factor_numerator, channel.factor_denominator),
+                                          channel.factor_keyed) for channel in self.channels], normalized)
+
+    @computed_field
+    @property
+    def score(self) -> int:
+        """Raw total of the read."""
+        return self._total(False)
+
+    @computed_field
+    @property
+    def normalized_score(self) -> int:
+        """Normalized total of the read; what dice add."""
+        return self._total(True)
+
+    @computed_field
+    @property
+    def advantage(self) -> AdvantageStatus:
+        """Advantage state of the read."""
+        return _advantage_status(self.advantage_sum)
+
 
 class ModifiableValue(BaseValue):
-    """Public value composed from self, outgoing, and imported channels.
+    """A value composed of the owner's channels and the channels it exports to opponents.
 
-    `ModifiableValue` is the value object exposed to higher-level engine
-    systems. It aggregates always-on and contextual self channels, keeps
-    outgoing target channels separate, and can import a target's outgoing
-    channels with `set_from_target()`.
+    A read takes a `ValueRead`. Properties read with no target, no context and
+    no opponent; `read_value` evaluates the value once in a situation.
     """
 
     fixed_scores: Dict[UUID, NumericalModifier] = Field(default_factory=dict)
@@ -1449,21 +1678,13 @@ class ModifiableValue(BaseValue):
         default_factory=lambda: ContextualValue(source_entity_uuid=uuid4(), is_outgoing_modifier=True),
         description="Contextual modifiers this value exports to entities targeting its owner."
     )
-    from_target_contextual: Optional[ContextualValue] = Field(
-        default=None,
-        description="Contextual outgoing modifiers imported from the current target."
-    )
-    from_target_static: Optional[StaticValue] = Field(
-        default=None,
-        description="Static outgoing modifiers imported from the current target."
-    )
     global_normalizer: bool = Field(
         default=True,
         description="Whether this value propagates its normalizer into nested numerical channels."
     )
 
     def retire_owned_state(self) -> None:
-        """Release this value's exact owned channels, leaving imported values alone."""
+        """Release this value's exact owned channels."""
         for identity in self.fixed_scores:
             BaseObject.unregister(identity)
         self.fixed_scores.clear()
@@ -1473,8 +1694,6 @@ class ModifiableValue(BaseValue):
                 BaseObject.unregister(identity)
             component.remove_all_modifiers()
             component.remove_from_register()
-        self.from_target_static = None
-        self.from_target_contextual = None
         self.remove_from_register()
 
     def get_base_modifier(self) -> Optional[NumericalModifier]:
@@ -1491,7 +1710,6 @@ class ModifiableValue(BaseValue):
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,
-               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                base_value: int = 0, value_name: str = "Value", score_normalizer: Optional[Callable[[int], int]] = None,
                global_normalizer: bool = True, identity_uuid: Optional[UUID] = None,
                *, use_register: bool = True) -> 'ModifiableValue':
@@ -1500,8 +1718,6 @@ class ModifiableValue(BaseValue):
         Args:
             source_entity_uuid: Entity UUID that owns the value.
             source_entity_name: Optional display name for the source entity.
-            target_entity_uuid: Optional initial target entity UUID.
-            target_entity_name: Optional display name for the target entity.
             base_value: Base numerical score stored in `self_static`.
             value_name: Human-readable value name.
             score_normalizer: Optional normalizer for scores and numerical
@@ -1533,7 +1749,7 @@ class ModifiableValue(BaseValue):
             score_normalizer=normalizer
         )
 
-        obj = cls(
+        return cls(
             use_register=use_register,
             uuid=identity_uuid or uuid4(),
             name=value_name,
@@ -1578,21 +1794,6 @@ class ModifiableValue(BaseValue):
             global_normalizer=global_normalizer
         )
 
-        if target_entity_uuid is not None:
-            obj.set_target_entity(target_entity_uuid, target_entity_name)
-
-        return obj
-
-    def get_typed_modifiers(self) -> List[Union[StaticValue, ContextualValue]]:
-        """Return active self and imported target channels.
-
-        Returns:
-            Non-`None` static and contextual channels that contribute to this
-            value's own aggregates.
-        """
-        modifiers = [self.self_static, self.self_contextual, self.from_target_contextual, self.from_target_static]
-        return [modifier for modifier in modifiers if modifier is not None]
-
     @classmethod
     def get(cls, uuid: UUID) -> Optional['ModifiableValue']:
         """Retrieve a modifiable value by UUID.
@@ -1617,78 +1818,31 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def min(self) -> Optional[int]:
-        """Return the lowest active minimum constraint across channels.
-
-        Returns:
-            Minimum constraint value when present, otherwise `None`.
-        """
-        return min((low for low in (channel.min for channel in self.get_typed_modifiers()) if low is not None),
-                   default=None)
+        """Return the lowest active minimum constraint of the owner's channels."""
+        return min((low for low in (self.self_static.min, self.self_contextual.min) if low is not None), default=None)
 
     @computed_field
     @property
     def max(self) -> Optional[int]:
-        """Return the highest active maximum constraint across channels.
-
-        Returns:
-            Maximum constraint value when present, otherwise `None`.
-        """
-        return max((high for high in (channel.max for channel in self.get_typed_modifiers()) if high is not None),
-                   default=None)
+        """Return the highest active maximum constraint of the owner's channels."""
+        return max((high for high in (self.self_static.max, self.self_contextual.max) if high is not None), default=None)
 
     def add_fixed_score(self, modifier: NumericalModifier) -> UUID:
         self.validate_modifier_target(modifier)
         self.fixed_scores[modifier.uuid] = modifier
         return modifier.uuid
 
-    def _score(self, normalized: bool = False, excluded: frozenset[UUID] = frozenset()) -> int:
-        """Sum all channels, multiply exactly once, then bound and normalize."""
-        if self.fixed_scores:
-            fixed = [modifier.value for identity, modifier in self.fixed_scores.items()
-                if identity not in excluded and modifier.contributions_active()]
-            if fixed:
-                raw = min(fixed)
-                return self.score_normalizer(raw) if normalized else raw
-        channels = self.get_typed_modifiers()
-        has_factors = any(key not in excluded for key in self.self_static.factor_modifiers) or (
-            self.from_target_static is not None
-            and any(key not in excluded for key in self.from_target_static.factor_modifiers))
-        if has_factors:
-            factors = tuple(channel.arithmetic_factor(excluded) for channel in channels)
-            total: int | Fraction = sum(channel.additive_score(normalized, excluded) for channel in channels) * prod(factors)
-            bounds = [channel.score_bounds(excluded) for channel in channels]
-        else:
-            # Preserve established channel bounds for values without factors: each
-            # channel is clamped by the same bounds the aggregate then reads.
-            total = 0
-            bounds = []
-            for channel in channels:
-                channel_score, low, high = channel.bounded_score(normalized, excluded)
-                total += channel_score
-                bounds.append((low, high))
-        minimum = min((low for low, _ in bounds if low is not None), default=None)
-        maximum = max((high for _, high in bounds if high is not None), default=None)
-        return int(_clamped(total, minimum, maximum))
-
     @computed_field
     @property
     def score(self) -> int:
-        """Return the raw aggregate score.
-
-        Returns:
-            Score computed from active self and imported target channels.
-        """
-        return self._score(normalized=False)
+        """Return the raw aggregate score read with no target or context."""
+        return value_score(self, ValueRead(self.source_entity_uuid), normalized=False)
 
     @computed_field
     @property
     def normalized_score(self) -> int:
-        """Return the aggregate score using normalized channels.
-
-        Returns:
-            Score computed from each active channel's normalized score.
-        """
-        return self._score(normalized=True)
+        """Return the normalized aggregate score read with no target or context."""
+        return value_score(self, ValueRead(self.source_entity_uuid), normalized=True)
 
     def normalized_score_excluding_static_modifiers(
         self,
@@ -1703,128 +1857,44 @@ class ModifiableValue(BaseValue):
         Returns:
             Filtered aggregate with channel and value constraints preserved.
         """
-        return self._score(normalized=True, excluded=frozenset(modifier_uuids))
+        return value_score(self, ValueRead(self.source_entity_uuid), normalized=True,
+                           excluded=frozenset(modifier_uuids))
 
     @computed_field
     @property
     def advantage_sum(self) -> int:
-        """Return the signed aggregate of active advantage modifiers.
-
-        Returns:
-            Positive values mean advantage, negative values mean disadvantage.
-        """
-        sums = []
-        for source in [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]:
-            if source is not None:
-                sum_val = source.advantage_sum
-                sums.append(sum_val)
-        total = sum(sums)
-        return total
+        """Return the signed aggregate of active advantage modifiers read with no target or context."""
+        return _value_advantage_sum(self, ValueRead(self.source_entity_uuid))
 
     @computed_field
     @property
     def advantage(self) -> AdvantageStatus:
-        """Return the final advantage state.
-
-        Returns:
-            Advantage, disadvantage, or none after signed aggregation.
-        """
-        total_sum = self.advantage_sum
-        if total_sum > 0:
-            return AdvantageStatus.ADVANTAGE
-        elif total_sum < 0:
-            return AdvantageStatus.DISADVANTAGE
-        else:
-            return AdvantageStatus.NONE
+        """Return the final advantage state read with no target or context."""
+        return _advantage_status(self.advantage_sum)
 
     @computed_field
     @property
     def critical(self) -> CriticalStatus:
-        """Return the final critical-hit override state.
-
-        Returns:
-            `NOCRIT`, `AUTOCRIT`, or `NONE`, with `NOCRIT` taking precedence.
-        """
-        typed_modifiers = self.get_typed_modifiers()
-        all_critical_modifiers = [modifier.critical for modifier in typed_modifiers]
-        if CriticalStatus.NOCRIT in all_critical_modifiers:
-            return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in all_critical_modifiers:
-            return CriticalStatus.AUTOCRIT
-        else:
-            return CriticalStatus.NONE
+        """Return the critical-hit override read with no target or context."""
+        return _value_critical(self, ValueRead(self.source_entity_uuid))
 
     @computed_field
     @property
     def auto_hit(self) -> AutoHitStatus:
-        """Return the final hit override state.
-
-        Returns:
-            `AUTOMISS`, `AUTOHIT`, or `NONE`, with `AUTOMISS` taking precedence.
-        """
-        typed_modifiers = self.get_typed_modifiers()
-        all_auto_hit_modifiers = [modifier.auto_hit for modifier in typed_modifiers]
-        if AutoHitStatus.AUTOMISS in all_auto_hit_modifiers:
-            return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in all_auto_hit_modifiers:
-            return AutoHitStatus.AUTOHIT
-        else:
-            return AutoHitStatus.NONE
+        """Return the hit override read with no target or context."""
+        return _value_auto_hit(self, ValueRead(self.source_entity_uuid))
 
     @computed_field
     @property
     def size(self) -> Size:
-        """Return the effective size from active size modifiers.
-
-        Returns:
-            Effective size, defaulting to `MEDIUM` when no modifier applies.
-        """
-        sizes: List[Size] = []
-        components = self.get_typed_modifiers()
-        for component in components:
-            if component.size != Size.MEDIUM:
-                sizes.append(component.size)
-        if self.from_target_static and self.from_target_static.size != Size.MEDIUM:
-            sizes.append(self.from_target_static.size)
-        if self.from_target_contextual and self.from_target_contextual.size != Size.MEDIUM:
-            sizes.append(self.from_target_contextual.size)
-
-        if not sizes:
-            return Size.MEDIUM
-
-        largest_size_priority = self.self_static.largest_size_priority
-
-        if largest_size_priority:
-            return max(sizes, key=lambda s: list(Size).index(s))
-        else:
-            return min(sizes, key=lambda s: list(Size).index(s))
+        """Return the effective size read with no target or context."""
+        return value_size(self, ValueRead(self.source_entity_uuid))
 
     @computed_field
     @property
     def damage_types(self) -> List[DamageType]:
-        """Return the most common active damage types.
-
-        Returns:
-            Damage types tied for highest occurrence.
-        """
-        type_counts = {}
-        for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
-            for dt in component.damage_types:
-                type_counts[dt] = type_counts.get(dt, 0) + 1
-        if self.from_target_static:
-            for dt in self.from_target_static.damage_types:
-                type_counts[dt] = type_counts.get(dt, 0) + 1
-        if self.from_target_contextual:
-            for dt in self.from_target_contextual.damage_types:
-                type_counts[dt] = type_counts.get(dt, 0) + 1
-
-        if not type_counts:
-            return []
-
-        max_count = max(type_counts.values())
-        most_common_types = [dt for dt, count in type_counts.items() if count == max_count]
-
-        return most_common_types
+        """Return the most common active damage types read with no target or context."""
+        return value_damage_types(self, ValueRead(self.source_entity_uuid))
 
     @computed_field
     @property
@@ -1842,42 +1912,14 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def resistance_sum(self) -> Dict[DamageType, int]:
-        """Return signed resistance totals by damage type.
-
-        Returns:
-            Damage type to signed resistance total.
-        """
-        resistance_sum = {damage_type: 0 for damage_type in DamageType}
-        for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
-            for damage_type, value in component.resistance_sum.items():
-                resistance_sum[damage_type] += value
-        if self.from_target_static:
-            for damage_type, value in self.from_target_static.resistance_sum.items():
-                resistance_sum[damage_type] += value
-        if self.from_target_contextual:
-            for damage_type, value in self.from_target_contextual.resistance_sum.items():
-                resistance_sum[damage_type] += value
-        return resistance_sum
+        """Return signed resistance totals by damage type read with no target or context."""
+        return value_resistance_sum(self, ValueRead(self.source_entity_uuid))
 
     @computed_field
     @property
     def resistance(self) -> Dict[DamageType, ResistanceStatus]:
-        """Return final resistance states by damage type.
-
-        Returns:
-            Damage type to vulnerability, none, resistance, or immunity.
-        """
-        resistance = {}
-        for damage_type, sum_value in self.resistance_sum.items():
-            if sum_value > 1:
-                resistance[damage_type] = ResistanceStatus.IMMUNITY
-            elif sum_value == 1:
-                resistance[damage_type] = ResistanceStatus.RESISTANCE
-            elif sum_value == 0:
-                resistance[damage_type] = ResistanceStatus.NONE
-            else:
-                resistance[damage_type] = ResistanceStatus.VULNERABILITY
-        return resistance
+        """Return final resistance states by damage type read with no target or context."""
+        return _resistance_statuses(self.resistance_sum)
 
     def set_source_entity(self, source_entity_uuid: UUID, source_entity_name: Optional[str]=None) -> None:
         """Set the source entity on this value and primary channels.
@@ -1892,107 +1934,6 @@ class ModifiableValue(BaseValue):
         self.to_target_static.set_source_entity(source_entity_uuid, source_entity_name)
         self.self_contextual.set_source_entity(source_entity_uuid, source_entity_name)
         self.to_target_contextual.set_source_entity(source_entity_uuid, source_entity_name)
-
-    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None:
-        """Set the target entity on this value and primary channels.
-
-        Args:
-            target_entity_uuid: Entity UUID to assign as target.
-            target_entity_name: Optional display name for the target entity.
-
-        Raises:
-            ValueError: If `target_entity_uuid` is not a UUID.
-        """
-        if not isinstance(target_entity_uuid, UUID):
-            raise ValueError("target_entity_uuid must be a UUID")
-        self.target_entity_uuid = target_entity_uuid
-        self.target_entity_name = target_entity_name
-        self.self_contextual.set_target_entity(target_entity_uuid, target_entity_name)
-        self.self_static.set_target_entity(target_entity_uuid, target_entity_name)
-        self.to_target_static.set_target_entity(target_entity_uuid, target_entity_name)
-        self.to_target_contextual.set_target_entity(target_entity_uuid, target_entity_name)
-
-    def clear_target_entity(self) -> None:
-        """Clear target metadata and imported target channels."""
-        self.target_entity_uuid = None
-        self.target_entity_name = None
-        self.self_contextual.clear_target_entity()
-        self.self_static.clear_target_entity()
-        self.to_target_contextual.clear_target_entity()
-        self.to_target_static.clear_target_entity()
-        self.from_target_contextual = None
-        self.from_target_static = None
-
-    def set_context(self, context: Dict[str,Any]) -> None:
-        """Set runtime context on this value and contextual primary channels.
-
-        Args:
-            context: Runtime context dictionary.
-        """
-        self.context = context
-        self.to_target_contextual.set_context(context)
-        self.self_contextual.set_context(context)
-
-    def clear_context(self) -> None:
-        """Clear runtime context on this value and contextual primary channels."""
-        self.context = None
-        self.to_target_contextual.clear_context()
-        self.self_contextual.clear_context()
-
-    def set_from_target_contextual(self, contextual: ContextualValue) -> None:
-        """Import contextual outgoing modifiers from the current target.
-
-        Args:
-            contextual: Target-owned outgoing contextual channel.
-
-        Raises:
-            ValueError: If source/target UUID relationships do not match.
-        """
-        self.validate_target_id(contextual.source_entity_uuid)
-        if contextual.target_entity_uuid is None:
-            raise ValueError("Contextual value target entity UUID cannot be None when being assigned to a ModifiableValue")
-        self.validate_source_id(contextual.target_entity_uuid)
-        self.from_target_contextual = contextual.model_copy(update={"target_entity_uuid": self.source_entity_uuid, "target_entity_name": self.source_entity_name})
-
-    def set_from_target_static(self, static: StaticValue) -> None:
-        """Import static outgoing modifiers from the current target.
-
-        Args:
-            static: Target-owned outgoing static channel.
-
-        Raises:
-            ValueError: If source/target UUID relationships do not match.
-        """
-        self.validate_target_id(static.source_entity_uuid)
-        self.from_target_static = static.model_copy(update={"target_entity_uuid": self.source_entity_uuid, "target_entity_name": self.source_entity_name})
-
-    def set_from_target(self, target_value: 'ModifiableValue') -> None:
-        """Import both outgoing target channels from another value.
-
-        Args:
-            target_value: The current target's value.
-        """
-        self.set_from_target_contextual(target_value.to_target_contextual)
-        self.set_from_target_static(target_value.to_target_static)
-
-    def reset_from_target(self) -> None:
-        """Clear imported target channels."""
-        self.from_target_contextual = None
-        self.from_target_static = None
-
-    def set_event_lineage(self, lineage_uuid: UUID) -> None:
-        """Set event lineage UUID for cache indexing on all contextual channels."""
-        self.self_contextual.event_lineage_uuid = lineage_uuid
-        if self.from_target_contextual:
-            self.from_target_contextual.event_lineage_uuid = lineage_uuid
-        self.to_target_contextual.event_lineage_uuid = lineage_uuid
-
-    def clear_event_lineage(self) -> None:
-        """Clear event lineage UUID from all contextual channels."""
-        self.self_contextual.event_lineage_uuid = None
-        if self.from_target_contextual:
-            self.from_target_contextual.event_lineage_uuid = None
-        self.to_target_contextual.event_lineage_uuid = None
 
     def combine_values(self, others: List['ModifiableValue'], naming_callable: Optional[naming_callable] = None,
                        *, use_register: bool = True) -> 'ModifiableValue':
@@ -2016,27 +1957,7 @@ class ModifiableValue(BaseValue):
         for other in others:
             self.validate_source_id(other.source_entity_uuid)
 
-        other_from_target_static_values = [other.from_target_static for other in others if other.from_target_static is not None]
-        other_from_target_contextual_values = [other.from_target_contextual for other in others if other.from_target_contextual is not None]
-        if self.from_target_static is not None:
-            new_from_target_static = self.from_target_static.combine_values(other_from_target_static_values, use_register=use_register)
-        elif len(other_from_target_static_values) > 0:
-            new_from_target_static = other_from_target_static_values[0].combine_values(other_from_target_static_values[1:], use_register=use_register)
-        else:
-            new_from_target_static = None
-
-        if self.from_target_contextual is not None:
-            new_from_target_contextual = self.from_target_contextual.combine_values(other_from_target_contextual_values, use_register=use_register)
-        elif len(other_from_target_contextual_values) > 0:
-            new_from_target_contextual = other_from_target_contextual_values[0].combine_values(other_from_target_contextual_values[1:], use_register=use_register)
-        else:
-            new_from_target_contextual = None
-        if new_from_target_static is not None:
-            new_from_target_static.set_target_entity(self.source_entity_uuid, self.source_entity_name)
-        if new_from_target_contextual is not None:
-            new_from_target_contextual.set_target_entity(self.source_entity_uuid, self.source_entity_name)
-
-        new_value= ModifiableValue(
+        return ModifiableValue(
             use_register=use_register,
             fixed_scores={**self.fixed_scores, **{k: v for other in others for k, v in other.fixed_scores.items()}},
             name=naming_callable([self.name] + [other.name for other in others]),
@@ -2044,200 +1965,41 @@ class ModifiableValue(BaseValue):
             to_target_static=self.to_target_static.combine_values([other.to_target_static for other in others], use_register=use_register),
             self_contextual=self.self_contextual.combine_values([other.self_contextual for other in others], use_register=use_register),
             to_target_contextual=self.to_target_contextual.combine_values([other.to_target_contextual for other in others], use_register=use_register),
-            from_target_static=new_from_target_static,
-            from_target_contextual=new_from_target_contextual,
             generated_from=(self.uuid, *(other.uuid for other in others)),
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
-            target_entity_uuid=self.target_entity_uuid,
-            target_entity_name=self.target_entity_name,
-            context=self.context,
             score_normalizer=self.score_normalizer,
             global_normalizer=False,
         )
-        if self.target_entity_uuid is not None:
-            new_value.set_target_entity(self.target_entity_uuid, self.target_entity_name)
-        return new_value
 
-    def get_breakdown(self) -> List[Dict[str, Any]]:
-        """Return static numerical modifier entries for display.
+    def renormalized(self, normalizer: Callable[[int], int]) -> 'ModifiableValue':
+        """This value with its numerical rows scaled by `normalizer` (a proficiency rule), sharing every other row.
 
-        Combined values already have their static modifiers merged into
-        `self_static` and `from_target_static`, so this method reads those
-        channels directly rather than traversing `generated_from`.
-
-        Returns:
-            Display dictionaries containing `name`, `value`, and `source`.
+        The returned value is unregistered and keeps this value's identity. Its row
+        buckets are fresh dicts holding the same row objects, except the scaled
+        numerical rows, which are copies with the new normalizer.
         """
-        name_cleanup = {
-            "proficiency_bonus_base_value": "Prof",
-            "Value_base_value": "Prof",
-            "Attack Bonus_base_value": "Base",
-            "Melee Attack Bonus_base_value": "Melee",
-            "Ranged Attack Bonus_base_value": "Ranged",
-            "Damage Bonus_base_value": "Base",
-            "strength_modifier_base_value": "STR",
-            "dexterity_modifier_base_value": "DEX",
-            "constitution_modifier_base_value": "CON",
-            "intelligence_modifier_base_value": "INT",
-            "wisdom_modifier_base_value": "WIS",
-            "charisma_modifier_base_value": "CHA",
-            "strength Ability Score_base_value": "STR",
-            "dexterity Ability Score_base_value": "DEX",
-            "constitution Ability Score_base_value": "CON",
-            "intelligence Ability Score_base_value": "INT",
-            "wisdom Ability Score_base_value": "WIS",
-            "charisma Ability Score_base_value": "CHA",
-            "strength Modifier Bonus_base_value": "STR Mod",
-            "dexterity Modifier Bonus_base_value": "DEX Mod",
-            "constitution Modifier Bonus_base_value": "CON Mod",
-            "intelligence Modifier Bonus_base_value": "INT Mod",
-            "wisdom Modifier Bonus_base_value": "WIS Mod",
-            "charisma Modifier Bonus_base_value": "CHA Mod",
-            "ac_bonus_base_value": "Base AC",
-            "AC Bonus_base_value": "Base AC",
-            "Armor Class_base_value": "Armor",
-            "Armor Class Bonus_base_value": "AC Bonus",
-            "Max Dex Bonus_base_value": "Max DEX",
-        }
+        def static(channel: StaticValue) -> StaticValue:
+            return channel.model_copy(update={**_static_buckets(channel), "score_normalizer": normalizer,
+                "value_modifiers": {key: modifier.model_copy(update={"score_normalizer": normalizer})
+                                    for key, modifier in channel.value_modifiers.items()}})
 
-        def clean_name(raw_name: str) -> str:
-            """Normalize internal modifier names for display."""
-            if raw_name in name_cleanup:
-                return name_cleanup[raw_name]
-            cleaned = raw_name
-            for suffix in ["_base_value", "_bonus", "_modifier", " Bonus", " Modifier"]:
-                if cleaned.endswith(suffix):
-                    cleaned = cleaned[:-len(suffix)]
-            if " Ability Score" in cleaned:
-                cleaned = cleaned.replace(" Ability Score", "")
-            return cleaned.replace("_", " ").title()
+        def contextual(channel: ContextualValue) -> ContextualValue:
+            return channel.model_copy(update={**_contextual_buckets(channel), "score_normalizer": normalizer})
 
-        result: List[Dict[str, Any]] = []
+        return self.model_copy(update={
+            "score_normalizer": normalizer,
+            "fixed_scores": dict(self.fixed_scores),
+            "generated_from": list(self.generated_from),
+            "self_static": static(self.self_static),
+            "to_target_static": static(self.to_target_static),
+            "self_contextual": contextual(self.self_contextual),
+            "to_target_contextual": contextual(self.to_target_contextual),
+        })
 
-        static_components = [
-            (self.self_static, "self"),
-            (self.from_target_static, "from_target"),
-        ]
-
-        for component, source in static_components:
-            if component is None:
-                continue
-            for modifier in component.factor_modifiers.values():
-                result.append({"name": clean_name(modifier.name or "Factor"),
-                    "numerator": modifier.numerator, "denominator": modifier.denominator,
-                    "source": source, "operation": "multiply"})
-            for modifier in component.value_modifiers.values():
-                value = modifier.normalized_value
-                if value == 0:
-                    continue
-                result.append({
-                    "name": clean_name(modifier.name or "Unknown"),
-                    "value": value,
-                    "source": source
-                })
-
-        return result
-
-    def get_advantage_breakdown(self) -> List[Dict[str, Any]]:
-        """Return static advantage modifier entries for display.
-
-        Contextual modifiers are excluded because their cached results can be
-        invalidated by context changes.
-
-        Returns:
-            Display dictionaries containing `name`, `value`, and `source`.
-        """
-        result: List[Dict[str, Any]] = []
-
-        static_components = [
-            (self.self_static, "self"),
-            (self.from_target_static, "from_target"),
-        ]
-
-        for component, source in static_components:
-            if component is None:
-                continue
-            for modifier in component.advantage_modifiers.values():
-                if modifier.value == AdvantageStatus.ADVANTAGE:
-                    result.append({
-                        "name": modifier.name or "Unknown",
-                        "value": "advantage",
-                        "source": source
-                    })
-                elif modifier.value == AdvantageStatus.DISADVANTAGE:
-                    result.append({
-                        "name": modifier.name or "Unknown",
-                        "value": "disadvantage",
-                        "source": source
-                    })
-
-        return result
-
-    def get_full_breakdown(self) -> List[Dict[str, Any]]:
-        """Return static and cached contextual numerical entries for display.
-
-        Returns:
-            Display dictionaries from static numerical modifiers and cached
-            contextual numerical modifiers.
-        """
-        result = self.get_breakdown()
-
-        contextual_components: List[tuple[Optional[ContextualValue], str]] = [
-            (self.self_contextual, "self_contextual"),
-            (self.from_target_contextual, "from_target_contextual"),
-        ]
-        for component, source in contextual_components:
-            if component is None:
-                continue
-            for modifier in component.value_modifiers.values():
-                cached = modifier.breakdown_result(component.source_entity_uuid,
-                    component.target_entity_uuid, component.event_lineage_uuid)
-                if cached is not None and isinstance(cached, NumericalModifier):
-                    value = cached.normalized_value
-                    if value != 0:
-                        result.append({
-                            "name": modifier.name or "Unknown",
-                            "value": value,
-                            "source": source,
-                            "contextual": True
-                        })
-        return result
-
-    def get_full_advantage_breakdown(self) -> List[Dict[str, Any]]:
-        """Return static and cached contextual advantage entries for display.
-
-        Returns:
-            Display dictionaries from static advantage modifiers and cached
-            contextual advantage modifiers.
-        """
-        result = self.get_advantage_breakdown()
-
-        contextual_components: List[tuple[Optional[ContextualValue], str]] = [
-            (self.self_contextual, "self_contextual"),
-            (self.from_target_contextual, "from_target_contextual"),
-        ]
-        for component, source in contextual_components:
-            if component is None:
-                continue
-            for modifier in component.advantage_modifiers.values():
-                cached = modifier.breakdown_result(component.source_entity_uuid,
-                    component.target_entity_uuid, component.event_lineage_uuid)
-                if cached is not None and isinstance(cached, AdvantageModifier):
-                    result.append({
-                        "name": modifier.name or "Unknown",
-                        "value": cached.value.value.lower(),
-                        "source": source,
-                        "active": True
-                    })
-                else:
-                    result.append({
-                        "name": modifier.name or "Unknown",
-                        "value": "inactive",
-                        "source": source,
-                        "active": False
-                    })
-        return result
+    def get_breakdown(self) -> List[ValueBreakdownRow]:
+        """Return the owner's static numerical rows for display."""
+        return _value_rows(self.self_static, "self")
 
     def remove_modifier(self, uuid: UUID) -> None:
         """Remove a modifier UUID from every channel.
@@ -2250,10 +2012,6 @@ class ModifiableValue(BaseValue):
         self.self_contextual.remove_modifier(uuid)
         self.to_target_static.remove_modifier(uuid)
         self.to_target_contextual.remove_modifier(uuid)
-        if self.from_target_static is not None:
-            self.from_target_static.remove_modifier(uuid)
-        if self.from_target_contextual is not None:
-            self.from_target_contextual.remove_modifier(uuid)
 
     def remove_all_modifiers(self) -> None:
         """Clear every modifier bucket on every channel."""
@@ -2262,24 +2020,16 @@ class ModifiableValue(BaseValue):
         self.self_contextual.remove_all_modifiers()
         self.to_target_static.remove_all_modifiers()
         self.to_target_contextual.remove_all_modifiers()
-        if self.from_target_static:
-            self.from_target_static.remove_all_modifiers()
-        if self.from_target_contextual:
-            self.from_target_contextual.remove_all_modifiers()
 
     def get_all_modifier_uuids(self) -> List[UUID]:
         """Return all modifier UUIDs stored in any channel.
 
         Returns:
-            UUIDs from self, outgoing, and imported target channels.
+            UUIDs from self and outgoing channels.
         """
         uuids = list(self.fixed_scores)
         for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
             uuids.extend(component.get_all_modifier_uuids())
-        if self.from_target_static:
-            uuids.extend(self.from_target_static.get_all_modifier_uuids())
-        if self.from_target_contextual:
-            uuids.extend(self.from_target_contextual.get_all_modifier_uuids())
         return uuids
 
     def update_normalizers(self, new_normalizer: Optional[Callable[[int], int]] = None) -> None:
@@ -2297,11 +2047,6 @@ class ModifiableValue(BaseValue):
 
         self.to_target_static._set_normalizer_recursive(self.score_normalizer)
         self.to_target_contextual._set_normalizer_recursive(self.score_normalizer)
-
-        if self.from_target_static is not None:
-            self.from_target_static._set_normalizer_recursive(self.score_normalizer)
-        if self.from_target_contextual is not None:
-            self.from_target_contextual._set_normalizer_recursive(self.score_normalizer)
 
     @model_validator(mode="after")
     def validate_outgoing_modifier_flags(self) -> Self:
@@ -2323,119 +2068,223 @@ class ModifiableValue(BaseValue):
         if not self.to_target_contextual.is_outgoing_modifier:
             raise ValueError("to_target_contextual should have is_outgoing_modifier set to True")
 
-        if self.from_target_static is not None and not self.from_target_static.is_outgoing_modifier:
-            raise ValueError("from_target_static should have is_outgoing_modifier set to True")
-        if self.from_target_contextual is not None and not self.from_target_contextual.is_outgoing_modifier:
-            raise ValueError("from_target_contextual should have is_outgoing_modifier set to True")
-
         return self
 
     @model_validator(mode="after")
-    def validate_source_and_target_consistency(self) -> Self:
-        """Align primary channel sources and validate imported target channels.
+    def align_channel_sources(self) -> Self:
+        """Give every primary channel this value's source.
 
         Returns:
-            This value after validation.
-
-        Raises:
-            ValueError: If imported target channel source/target UUIDs are
-                inconsistent with this value.
+            This value after alignment.
         """
         for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
             if component.source_entity_uuid != self.source_entity_uuid:
                 component.source_entity_uuid = self.source_entity_uuid
-
-        if self.from_target_static is not None:
-            if self.from_target_static.target_entity_uuid != self.source_entity_uuid:
-                raise ValueError(
-                    f"from_target_static target UUID ({self.from_target_static.target_entity_uuid}) "
-                    f"should be the same as ModifiableValue source UUID ({self.source_entity_uuid})"
-                )
-            if self.from_target_static.source_entity_uuid == self.source_entity_uuid:
-                raise ValueError(f"from_target_static source UUID ({self.from_target_static.source_entity_uuid}) "
-                                 f"should not be the same as ModifiableValue source UUID ({self.source_entity_uuid})")
-
-        if self.from_target_contextual is not None:
-            if self.from_target_contextual.target_entity_uuid != self.source_entity_uuid:
-                raise ValueError(f"from_target_contextual target UUID ({self.from_target_contextual.target_entity_uuid}) "
-                                 f"should be the same as ModifiableValue source UUID ({self.source_entity_uuid})")
-            if self.from_target_contextual.source_entity_uuid == self.source_entity_uuid:
-                raise ValueError(f"from_target_contextual source UUID ({self.from_target_contextual.source_entity_uuid}) "
-                                 f"should not be the same as ModifiableValue source UUID ({self.source_entity_uuid})")
-
         return self
 
     @computed_field
     @property
     def outgoing_advantage_sum(self) -> int:
-        """Return the signed advantage total exported to targeters.
-
-        Returns:
-            Positive values mean exported advantage, negative values mean
-            exported disadvantage.
-        """
-        sums = []
-        for source in [self.to_target_static, self.to_target_contextual]:
-            if source is not None:
-                sum_val = source.advantage_sum
-                sums.append(sum_val)
-        return sum(sums)
+        """Return the signed advantage total exported to targeters, read with no target or context."""
+        return self.to_target_static.advantage_sum + self.to_target_contextual.advantage_sum
 
     @computed_field
     @property
     def outgoing_advantage(self) -> AdvantageStatus:
-        """Return the advantage state exported to targeters.
-
-        Returns:
-            Advantage, disadvantage, or none after signed aggregation.
-        """
-        total_sum = self.outgoing_advantage_sum
-        if total_sum > 0:
-            return AdvantageStatus.ADVANTAGE
-        elif total_sum < 0:
-            return AdvantageStatus.DISADVANTAGE
-        else:
-            return AdvantageStatus.NONE
+        """Return the advantage state exported to targeters."""
+        return _advantage_status(self.outgoing_advantage_sum)
 
     @computed_field
     @property
     def outgoing_critical(self) -> CriticalStatus:
-        """Return the critical-hit override exported to targeters.
-
-        Returns:
-            `NOCRIT`, `AUTOCRIT`, or `NONE`, with `NOCRIT` taking precedence.
-        """
-        critical_modifiers = []
-        for source in [self.to_target_static, self.to_target_contextual]:
-            if source is not None:
-                critical_modifiers.append(source.critical)
-
-        if CriticalStatus.NOCRIT in critical_modifiers:
-            return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in critical_modifiers:
-            return CriticalStatus.AUTOCRIT
-        else:
-            return CriticalStatus.NONE
+        """Return the critical-hit override exported to targeters; NOCRIT takes precedence."""
+        return _critical_status([self.to_target_static.critical, self.to_target_contextual.critical])
 
     @computed_field
     @property
     def outgoing_auto_hit(self) -> AutoHitStatus:
-        """Return the hit override exported to targeters.
+        """Return the hit override exported to targeters; AUTOMISS takes precedence."""
+        return _auto_hit_status([self.to_target_static.auto_hit, self.to_target_contextual.auto_hit])
 
-        Returns:
-            `AUTOMISS`, `AUTOHIT`, or `NONE`, with `AUTOMISS` taking precedence.
-        """
-        auto_hit_modifiers = []
-        for source in [self.to_target_static, self.to_target_contextual]:
-            if source is not None:
-                auto_hit_modifiers.append(source.auto_hit)
 
-        if AutoHitStatus.AUTOMISS in auto_hit_modifiers:
-            return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in auto_hit_modifiers:
-            return AutoHitStatus.AUTOHIT
-        else:
-            return AutoHitStatus.NONE
+def _fixed_score(value: 'ModifiableValue', excluded: frozenset[UUID]) -> Optional[int]:
+    if not value.fixed_scores:
+        return None
+    fixed = [modifier.value for identity, modifier in value.fixed_scores.items()
+             if identity not in excluded and modifier.contributions_active()]
+    return min(fixed) if fixed else None
+
+
+def _static_numbers(channel: StaticValue, excluded: frozenset[UUID], sides: tuple[bool, bool]) -> _ChannelNumbers:
+    """A static channel's totals (raw and/or normalized, as `sides` asks), bounds and factor."""
+    factors = channel.factor_modifiers
+    return _ChannelNumbers(channel.additive_score(False, excluded) if sides[0] else 0,
+                           channel.additive_score(True, excluded) if sides[1] else 0,
+                           *channel.score_bounds(excluded),
+                           channel.arithmetic_factor(excluded) if factors else None,
+                           any(key not in excluded for key in factors) if factors else False)
+
+
+def _contextual_channel_numbers(channel: ContextualValue, target: Optional[UUID],
+                                context: Optional[Dict[str, Any]]) -> _ChannelNumbers:
+    """A contextual channel's totals and bounds in one read situation; each callable is evaluated once."""
+    return _ChannelNumbers(*channel.numbers_in(target, context), *channel.bounds_in(target, context), None, False)
+
+
+def _channel_numbers(value: 'ModifiableValue', read: ValueRead, excluded: frozenset[UUID],
+                     sides: tuple[bool, bool]) -> List[_ChannelNumbers]:
+    """Each channel's totals in this read, in score order (owner static, owner contextual, opponent)."""
+    opponent = read.opponent
+    channels = [_static_numbers(value.self_static, excluded, sides),
+                _contextual_channel_numbers(value.self_contextual, read.target_entity_uuid, read.context)]
+    if opponent is not None:
+        channels.append(_contextual_channel_numbers(opponent.contextual, read.source_entity_uuid, opponent.context))
+        channels.append(_static_numbers(opponent.static, excluded, sides))
+    return channels
+
+
+def value_score(value: 'ModifiableValue', read: ValueRead, *, normalized: bool,
+                excluded: frozenset[UUID] = frozenset()) -> int:
+    """A value's total in a read: channels summed, multiplied exactly once, then bounded (and normalized)."""
+    fixed = _fixed_score(value, excluded)
+    if fixed is not None:
+        return value.score_normalizer(fixed) if normalized else fixed
+    return _score_of(_channel_numbers(value, read, excluded, (not normalized, normalized)), normalized)
+
+
+def _value_advantage_sum(value: 'ModifiableValue', read: ValueRead) -> int:
+    total = value.self_static.advantage_sum + value.self_contextual.advantage_sum_in(read.target_entity_uuid, read.context)
+    if read.opponent is not None:
+        total += read.opponent.static.advantage_sum + read.opponent.contextual.advantage_sum_in(
+            read.source_entity_uuid, read.opponent.context)
+    return total
+
+
+def _value_critical(value: 'ModifiableValue', read: ValueRead) -> CriticalStatus:
+    statuses = [value.self_static.critical, value.self_contextual.critical_in(read.target_entity_uuid, read.context)]
+    if read.opponent is not None:
+        statuses += [read.opponent.contextual.critical_in(read.source_entity_uuid, read.opponent.context),
+                     read.opponent.static.critical]
+    return _critical_status(statuses)
+
+
+def _value_auto_hit(value: 'ModifiableValue', read: ValueRead) -> AutoHitStatus:
+    statuses = [value.self_static.auto_hit, value.self_contextual.auto_hit_in(read.target_entity_uuid, read.context)]
+    if read.opponent is not None:
+        statuses += [read.opponent.contextual.auto_hit_in(read.source_entity_uuid, read.opponent.context),
+                     read.opponent.static.auto_hit]
+    return _auto_hit_status(statuses)
+
+
+def value_size(value: 'ModifiableValue', read: ValueRead) -> Size:
+    """Effective size of a value in a read: the largest (or smallest) non-medium size of its channels."""
+    sizes = [size for size in (value.self_static.size, value.self_contextual.size_in(read.target_entity_uuid, read.context))
+             if size != Size.MEDIUM]
+    if read.opponent is not None:
+        sizes += [size for size in (read.opponent.contextual.size_in(read.source_entity_uuid, read.opponent.context),
+                                    read.opponent.static.size) if size != Size.MEDIUM]
+    if not sizes:
+        return Size.MEDIUM
+    if value.self_static.largest_size_priority:
+        return max(sizes, key=lambda s: list(Size).index(s))
+    return min(sizes, key=lambda s: list(Size).index(s))
+
+
+def value_damage_types(value: 'ModifiableValue', read: ValueRead) -> List[DamageType]:
+    """Most common damage types of a value in a read, over its own, outgoing and opponent channels."""
+    groups = [value.self_static.damage_types, value.to_target_static.damage_types,
+              value.self_contextual.damage_types_in(read.target_entity_uuid, read.context),
+              value.to_target_contextual.damage_types_in(read.target_entity_uuid, read.context)]
+    if read.opponent is not None:
+        groups += [read.opponent.static.damage_types,
+                   read.opponent.contextual.damage_types_in(read.source_entity_uuid, read.opponent.context)]
+    type_counts: Dict[DamageType, int] = {}
+    for group in groups:
+        for damage_type in group:
+            type_counts[damage_type] = type_counts.get(damage_type, 0) + 1
+    if not type_counts:
+        return []
+    max_count = max(type_counts.values())
+    return [damage_type for damage_type, count in type_counts.items() if count == max_count]
+
+
+def value_resistance_sum(value: 'ModifiableValue', read: ValueRead) -> Dict[DamageType, int]:
+    """Signed resistance totals of a value in a read, over its own, outgoing and opponent channels."""
+    sums = [value.self_static.resistance_sum, value.to_target_static.resistance_sum,
+            value.self_contextual.resistance_sum_in(read.target_entity_uuid, read.context),
+            value.to_target_contextual.resistance_sum_in(read.target_entity_uuid, read.context)]
+    if read.opponent is not None:
+        sums += [read.opponent.static.resistance_sum,
+                 read.opponent.contextual.resistance_sum_in(read.source_entity_uuid, read.opponent.context)]
+    total = {damage_type: 0 for damage_type in DamageType}
+    for row in sums:
+        for damage_type, amount in row.items():
+            total[damage_type] += amount
+    return total
+
+
+def value_resistance(value: 'ModifiableValue', read: ValueRead) -> Dict[DamageType, ResistanceStatus]:
+    """Resistance states of a value in a read."""
+    return _resistance_statuses(value_resistance_sum(value, read))
+
+
+def read_value(value: 'ModifiableValue', read: ValueRead) -> ValueReading:
+    """Evaluate this value once in a read situation; the frozen record dice and events keep."""
+    opponent = read.opponent
+    fixed = _fixed_score(value, frozenset())
+    own_total, own_rows = _contextual_advantage(value.self_contextual, read.target_entity_uuid, read.context,
+                                                "self_contextual")
+    advantage_sum = value.self_static.advantage_sum + own_total
+    breakdown = _value_rows(value.self_static, "self")
+    static_rows = _static_advantage_rows(value.self_static.advantage_modifiers.values(), "self")
+    contextual_rows = own_rows
+    if opponent is not None:
+        opponent_total, opponent_rows = _contextual_advantage(opponent.contextual, read.source_entity_uuid,
+                                                              opponent.context, "from_target_contextual")
+        advantage_sum += opponent.static.advantage_sum + opponent_total
+        breakdown += _value_rows(opponent.static, "from_target")
+        static_rows += _static_advantage_rows(opponent.static.advantage_modifiers.values(), "from_target")
+        contextual_rows += opponent_rows
+    return ValueReading(
+        name=value.name, source_entity_uuid=value.source_entity_uuid, target_entity_uuid=read.target_entity_uuid,
+        fixed_score=fixed, fixed_normalized_score=value.score_normalizer(fixed) if fixed is not None else None,
+        channels=tuple(ValueChannelReading(raw=channel.raw, normalized=channel.normalized, minimum=channel.minimum,
+            maximum=channel.maximum,
+            factor_numerator=channel.factor.numerator if channel.factor is not None else 1,
+            factor_denominator=channel.factor.denominator if channel.factor is not None else 1,
+            factor_keyed=channel.factor_keyed)
+            for channel in _channel_numbers(value, read, frozenset(), (True, True))),
+        advantage_sum=advantage_sum,
+        critical=_value_critical(value, read), auto_hit=_value_auto_hit(value, read),
+        breakdown=tuple(breakdown), advantage_breakdown=tuple(static_rows + contextual_rows))
+
+
+def reading_with_value_row(reading: ValueReading, modifier: NumericalModifier) -> ValueReading:
+    """The read with one more owner static numerical row (a reaction's AC bonus)."""
+    own = reading.channels[0]
+    if modifier.contributions_active():
+        own = own.model_copy(update={"raw": own.raw + modifier.value,
+                                     "normalized": own.normalized + modifier.normalized_value})
+    rows = reading.breakdown
+    if modifier.normalized_value != 0:
+        rows = _insert_after_source(rows, ValueBreakdownRow(name=_display_name(modifier.name or "Unknown"),
+                                    source="self", value=modifier.normalized_value), "self", False)
+    return reading.model_copy(update={"channels": (own, *reading.channels[1:]), "breakdown": rows})
+
+
+def reading_with_advantage_row(reading: ValueReading, modifier: AdvantageModifier) -> ValueReading:
+    """The read with one more owner static advantage row (a reaction's disadvantage)."""
+    total = reading.advantage_sum + (modifier.numerical_value if modifier.contributions_active() else 0)
+    rows = reading.advantage_breakdown
+    for row in _static_advantage_rows((modifier,), "self"):
+        rows = _insert_after_source(rows, row, "self", True)
+    return reading.model_copy(update={"advantage_sum": total, "advantage_breakdown": rows})
+
+
+def has_static_advantage_row(reading: ValueReading, name: str) -> bool:
+    """Whether the owner's static rows of the read hold an advantage row with this name."""
+    return any(row.source == "self" and row.active is None and row.name == name
+               for row in reading.advantage_breakdown)
 
 
 def composed_passive_score(
@@ -2447,21 +2296,19 @@ def composed_passive_score(
     proficiency_normalizer: Callable[[int], int],
     ability_normalizer: Callable[[int], int],
 ) -> Optional[int]:
-    """Read a passive score without constructing temporary value models.
+    """Read a passive score (no target, no context, no opponent) without constructing temporary values.
 
-    The proficiency copy has observable callable/cache behavior in its contextual
-    channels. Those uncommon inputs retain the existing composition path. All
+    Inputs this scalar form does not cover (contextual proficiency rows, fixed
+    scores, invalid outgoing rows) return None and take the composed read. All
     other rows are merged in the native order, independently in each channel,
-    and each channel's bounds are read once, as in `ModifiableValue._score`.
+    and each channel's bounds are read once, as in `value_score`.
     """
-    for channel in (proficiency.self_contextual, proficiency.to_target_contextual,
-                    proficiency.from_target_contextual):
-        if channel is not None and channel.value_modifiers:
+    for channel in (proficiency.self_contextual, proficiency.to_target_contextual):
+        if channel.value_modifiers:
             return None
-    for channel in (proficiency.self_contextual, proficiency.from_target_contextual):
-        if channel is not None and (channel.min_constraints or channel.max_constraints
-                                    or channel.advantage_modifiers):
-            return None
+    if (proficiency.self_contextual.min_constraints or proficiency.self_contextual.max_constraints
+            or proficiency.self_contextual.advantage_modifiers):
+        return None
     # Rebuilding outgoing channels also validates their targets, even though
     # they do not contribute to this score. Preserve that validation for rows
     # installed through mutable modifier owners after channel construction.
@@ -2509,7 +2356,7 @@ def composed_passive_score(
             advantages.update(channel.advantage_modifiers)
         return numbers, factors, minima, maxima, advantages
 
-    def contextual_inputs(channels, *, imported):
+    def contextual_inputs(channels):
         numbers, minima, maxima, advantages = {}, {}, {}, {}
         first = None
         for channel in channels:
@@ -2525,18 +2372,11 @@ def composed_passive_score(
             advantages.update(channel.advantage_modifiers)
         if first is None:
             return None
-        proficiency_owned = first is proficiency.self_contextual or first is proficiency.from_target_contextual
-        context = (deepcopy(first.context) if proficiency_owned else dict(first.context)) if first.context is not None else None
-        target = (proficiency.source_entity_uuid if imported else
-            proficiency.target_entity_uuid if proficiency.target_entity_uuid is not None else first.target_entity_uuid)
-        return numbers, minima, maxima, advantages, first.source_entity_uuid, target, context
+        return numbers, minima, maxima, advantages, first.source_entity_uuid
 
     own_static = static_inputs([(value.self_static,
         proficiency_normalizer if index == 0 else None) for index, value in enumerate(values)])
-    imported_static = static_inputs([(value.from_target_static,
-        proficiency_normalizer if index == 0 else None) for index, value in enumerate(values)])
-    own_context = contextual_inputs([value.self_contextual for value in values], imported=False)
-    imported_context = contextual_inputs([value.from_target_contextual for value in values], imported=True)
+    own_context = contextual_inputs([value.self_contextual for value in values])
 
     def static_additive(inputs, base=0):
         numbers, _, _, _, _ = inputs
@@ -2556,49 +2396,39 @@ def composed_passive_score(
     def context_additive(inputs):
         if inputs is None:
             return 0
-        numbers, _, _, _, source, target, context = inputs
-        return _contextual_additive_score(numbers, source, target, context, None, True)
+        numbers, _, _, _, source = inputs
+        return _contextual_numbers(numbers, source, None, None)[1]
 
     def context_bounds(inputs):
         if inputs is None:
             return None, None
-        _, minima, maxima, _, source, target, context = inputs
-        return (min(_contextual_constraint_values(minima, source, target, context, None), default=None),
-                max(_contextual_constraint_values(maxima, source, target, context, None), default=None))
+        _, minima, maxima, _, source = inputs
+        return (min(_contextual_constraint_values(minima, source, None, None), default=None),
+                max(_contextual_constraint_values(maxima, source, None, None), default=None))
 
     # Factor presence selects the aggregate-first rule even when a retained
     # factor is currently suppressed. Evaluate factors before additive callbacks.
-    if own_static[1] or imported_static[1]:
-        factor = static_factor(own_static) * static_factor(imported_static)
-        total = sum((static_additive(own_static, ability_base), context_additive(own_context),
-                     context_additive(imported_context), static_additive(imported_static))) * factor
-        bounds = (static_bounds(own_static), context_bounds(own_context),
-                  context_bounds(imported_context), static_bounds(imported_static))
+    if own_static[1]:
+        factor = static_factor(own_static)
+        total = sum((static_additive(own_static, ability_base), context_additive(own_context))) * factor
+        bounds = (static_bounds(own_static), context_bounds(own_context))
     else:
         # Native channel order; each channel is clamped by the bounds the aggregate then reads.
         own_static_total, own_static_bounds = static_additive(own_static, ability_base), static_bounds(own_static)
         own_context_total, own_context_bounds = context_additive(own_context), context_bounds(own_context)
-        imported_context_total, imported_context_bounds = (context_additive(imported_context),
-                                                           context_bounds(imported_context))
-        imported_static_total, imported_static_bounds = static_additive(imported_static), static_bounds(imported_static)
         total = (int(_clamped(own_static_total, *own_static_bounds))
-                 + _clamped(own_context_total, *own_context_bounds)
-                 + _clamped(imported_context_total, *imported_context_bounds)
-                 + int(_clamped(imported_static_total, *imported_static_bounds)))
-        bounds = (own_static_bounds, own_context_bounds, imported_context_bounds, imported_static_bounds)
+                 + _clamped(own_context_total, *own_context_bounds))
+        bounds = (own_static_bounds, own_context_bounds)
     minimum = min((lower for lower, _ in bounds if lower is not None), default=None)
     maximum = max((upper for _, upper in bounds if upper is not None), default=None)
     score = 10 + int(_clamped(total, minimum, maximum))
 
     def advantage_sum():
-        result = 0
-        for _, _, _, _, advantages in (own_static, imported_static):
-            result += sum(modifier.numerical_value for modifier in advantages.values()
-                          if modifier.contributions_active())
-        for inputs in (own_context, imported_context):
-            if inputs is not None:
-                _, _, _, advantages, source, target, context = inputs
-                result += _contextual_advantage_sum(advantages, source, target, context, None)
+        _, _, _, _, advantages = own_static
+        result = sum(modifier.numerical_value for modifier in advantages.values() if modifier.contributions_active())
+        if own_context is not None:
+            _, _, _, contextual_advantages, source = own_context
+            result += _advantage_total(_contextual_advantage_results(contextual_advantages, source, None, None))
         return result
 
     if advantage_sum() > 0:

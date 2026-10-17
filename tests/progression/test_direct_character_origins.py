@@ -59,6 +59,7 @@ from dnd.types.character_progression import (
 )
 from dnd.types.abilities import AbilityName
 from dnd.types.senses import SenseMode, SensesType
+from dnd.core.values import ValueRead, read_value
 from tests.engine.support import create_test_entity
 
 
@@ -84,6 +85,11 @@ _ORIGIN_CASES = (
     (Species.HUMAN, None),
     (Species.TIEFLING, None),
 )
+
+
+def reading(value, target_uuid=None):
+    """The value read by its owner against an optional target."""
+    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
 
 
 @pytest.fixture(autouse=True)
@@ -842,14 +848,13 @@ def test_origin_save_rules_consume_exact_cause_context(
     )
 
     for ability in ABILITY_ORDER:
-        bonus = entity.saving_throws.get_saving_throw(ability).bonus
-        bonus.set_context({SAVING_THROW_CONTEXT_KEY: context})
+        bonus = read_value(entity.saving_throws.get_saving_throw(ability).bonus,
+                           ValueRead(entity.uuid, context={SAVING_THROW_CONTEXT_KEY: context}))
         assert bonus.advantage is (
             AdvantageStatus.ADVANTAGE
             if ability in abilities
             else AdvantageStatus.NONE
         )
-        bonus.clear_context()
 
 
 def test_halfling_lucky_and_half_orc_endurance_are_direct_bound_handlers() -> None:
@@ -860,7 +865,7 @@ def test_halfling_lucky_and_half_orc_endurance_are_direct_bound_handlers() -> No
     assert lucky.behavior_binding.behavior_id == "trait.origin.halfling.lucky"
     with fixed_dice_faces(1, 7):
         roll, event = halfling.roll_d20_event(
-            halfling.ability_scores.dexterity.ability_score,
+            reading(halfling.ability_scores.dexterity.ability_score),
             RollType.CHECK,
             skill_name="stealth",
         )

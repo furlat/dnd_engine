@@ -35,7 +35,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import AdvantageStatus, BaseValue, ModifiableValue
+from dnd.core.values import AdvantageStatus, BaseValue, ValueReading
 from dnd.types.senses import PerceivedContact
 from dnd.conditions import Exhaustion
 from dnd.entity import Entity, EntityConfig
@@ -186,9 +186,9 @@ def test_eb_06_002_abilities_skills_saves_and_passives_compose() -> None:
 
     athletics = entity.skill_bonus(None, "athletics")
     perception = entity.skill_bonus(None, "perception")
-    dex_save = entity.saving_throw_bonus(None, "dexterity")
+    dex_save = entity.saving_throw_bonus(None, "dexterity", None)
     self_targeted_athletics = entity.skill_bonus(entity.uuid, "athletics")
-    self_targeted_dex_save = entity.saving_throw_bonus(entity.uuid, "dexterity")
+    self_targeted_dex_save = entity.saving_throw_bonus(entity.uuid, "dexterity", None)
 
     assert athletics.normalized_score == 10
     assert entity.passive_skill("athletics") == 20
@@ -290,7 +290,6 @@ def test_eb_06_006_targeted_skill_bonus_imports_target_outgoing_modifiers() -> N
 
     assert targeted_athletics.normalized_score == base_athletics - 2
     assert actor.target_entity_uuid is None
-    assert actor.skill_set.athletics.skill_bonus.from_target_static is None
 
 
 def test_eb_06_007_standard_actions_register_templates_and_handlers() -> None:
@@ -506,7 +505,7 @@ def test_eb_06_013_saving_throw_and_skill_check_execute_event_phases() -> None:
     save_completion_event = save_history[-1]
     assert isinstance(save_execution_event, SavingThrowEvent)
     assert isinstance(save_completion_event, SavingThrowEvent)
-    assert isinstance(save_execution_event.bonus, ModifiableValue)
+    assert isinstance(save_execution_event.bonus, ValueReading)
     assert save_execution_event.bonus.normalized_score == 6
     assert save_completion_event.dice_roll is save_roll
     assert save_completion_event.result is True
@@ -549,7 +548,7 @@ def test_eb_06_013_saving_throw_and_skill_check_execute_event_phases() -> None:
     skill_completion_event = skill_history[-1]
     assert isinstance(skill_execution_event, SkillCheckEvent)
     assert isinstance(skill_completion_event, SkillCheckEvent)
-    assert isinstance(skill_execution_event.bonus, ModifiableValue)
+    assert isinstance(skill_execution_event.bonus, ValueReading)
     assert skill_execution_event.bonus.normalized_score == 10
     assert skill_completion_event.dice_roll is skill_roll
     assert skill_completion_event.result is False

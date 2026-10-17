@@ -73,7 +73,7 @@ def test_blight_plant_maximum_still_halves_on_a_save(slot, saved, expected):
     assert event is not None and not event.canceled
     assert target.get_normal_hp() == before - expected
     assert event.save_roll.advantage_status is AdvantageStatus.DISADVANTAGE
-    assert target.saving_throw_bonus(caster.uuid, "constitution").advantage is AdvantageStatus.NONE
+    assert target.saving_throw_bonus(caster.uuid, "constitution", None).advantage is AdvantageStatus.NONE
 
 
 @pytest.mark.parametrize("creature_type", [CreatureType.UNDEAD, CreatureType.CONSTRUCT])
@@ -244,7 +244,7 @@ def test_eyebite_sickened_disadvantages_attacks_and_checks_without_save_penalty(
     assert target.attack_bonus().advantage is AdvantageStatus.DISADVANTAGE
     assert target.skill_bonus(None, "athletics").advantage is AdvantageStatus.DISADVANTAGE
     assert target.ability_check_bonus(None, "strength").advantage is AdvantageStatus.DISADVANTAGE
-    assert target.saving_throw_bonus(None, "strength").advantage is AdvantageStatus.NONE
+    assert target.saving_throw_bonus(None, "strength", None).advantage is AdvantageStatus.NONE
 
 
 def test_eyebite_panicked_cleanup_preserves_independent_frightened():
@@ -513,7 +513,7 @@ def test_panicked_sources_keep_separate_visibility_and_cleanup():
     assert target.attack_bonus().advantage is AdvantageStatus.DISADVANTAGE
     assert target.skill_bonus(None, "athletics").advantage is AdvantageStatus.DISADVANTAGE
     assert target.ability_check_bonus(None, "strength").advantage is AdvantageStatus.DISADVANTAGE
-    assert target.saving_throw_bonus(None, "strength").advantage is AdvantageStatus.NONE
+    assert target.saving_throw_bonus(None, "strength", None).advantage is AdvantageStatus.NONE
     second.remove_condition("Concentrating")
     assert target.active_conditions["Frightened"].uuid == shared_uuid
     assert sum(condition.get_display_name() == "Eyebite Panicked"

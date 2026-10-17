@@ -303,7 +303,7 @@ def test_eb_14_002_spellcasting_block_is_modifier_only() -> None:
     assert not hasattr(block, "spell_slot_1")
     assert not hasattr(block, "known_spells")
 
-    extra_damage = block.get_extra_spell_damage()
+    extra_damage = block.get_extra_spell_damage(None)
 
     assert len(extra_damage) == 1
     assert extra_damage[0].damage_dice == 6

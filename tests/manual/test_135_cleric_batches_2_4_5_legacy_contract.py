@@ -72,6 +72,20 @@ from tests.manual.spell_regression_support import (
 )
 
 
+from dnd.core.values import ModifiableValue, ValueRead, outgoing_of, read_value
+
+
+def situated(value, target_uuid):
+    """The value read against a target."""
+    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+
+
+def outgoing_read(value, reader_uuid):
+    """What a value's outgoing rows give a reader: an empty reader value read against the owner."""
+    probe = ModifiableValue.create(source_entity_uuid=reader_uuid, use_register=False)
+    return read_value(probe, ValueRead(reader_uuid, value.source_entity_uuid, opponent=outgoing_of([value], None)))
+
+
 def _make_difficult(position: tuple[int, int]) -> None:
     """Add one difficult-terrain cost unit to an existing tile."""
     tile = get_map().get_tile(*position)
@@ -632,14 +646,11 @@ def test_bestow_curse_ability_and_contextual_attack_options() -> None:
             caster_uuid=caster.uuid,
         )
     )
-    target.equipment.attack_bonus.set_target_entity(caster.uuid)
     assert (
-        target.equipment.attack_bonus.advantage
+        situated(target.equipment.attack_bonus, caster.uuid).advantage
         is AdvantageStatus.DISADVANTAGE
     )
-    target.equipment.attack_bonus.set_target_entity(other.uuid)
-    assert target.equipment.attack_bonus.advantage is AdvantageStatus.NONE
-    target.equipment.attack_bonus.clear_target_entity()
+    assert situated(target.equipment.attack_bonus, other.uuid).advantage is AdvantageStatus.NONE
 
 
 def test_bestow_curse_inaction_option_spends_and_releases_one_action() -> None:

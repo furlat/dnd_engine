@@ -85,7 +85,7 @@ from dnd.core.equipment_types import UnarmoredAc
 from dnd.core.dice import RollType, AttackOutcome, Dice, roll_die_face
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterruptionLogData
 from dnd.entity import Entity, PreparedSpatialReturn
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, reading_with_value_row
 from dnd.spatial.ignition import apply_elemental_surface_contacts
 from dnd.actions import commit_forced_movement, SpellAction, SpellEvent, AttackEvent, ShoveEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.creature_transforms import (
@@ -353,11 +353,10 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
             return None
         entity.commit_condition_application(prepared)
         entity.publish_condition_application(prepared)
-        if isinstance(event, AttackEvent):
-            event.ac.self_static.add_value_modifier(NumericalModifier.create(
+        if isinstance(event, AttackEvent) and event.ac is not None:
+            return event.with_updates(ac=reading_with_value_row(event.ac, NumericalModifier.create(
                 source_entity_uuid=source_entity_uuid, target_entity_uuid=source_entity_uuid,
-                name="Shield (reaction)", value=5))
-            return event.with_updates(attack_outcome=AttackOutcome.MISS,
+                name="Shield (reaction)", value=5)), attack_outcome=AttackOutcome.MISS,
                 intercepted_by_condition_uuid=buff.uuid,
                 status_message=f"{entity.name} casts Shield (+5 AC, attack blocked)")
         return event.cancel(status_message=f"{entity.name} casts Shield, blocking Magic Missile",
@@ -2326,11 +2325,10 @@ class FreedomOfMovement(SpellAction):
 
 def _freedom_of_movement_magical_condition_immunity(
     entity: Any,
-    target_entity: Optional[Any],
     context: Optional[dict],
 ) -> bool:
     """Return whether an incoming condition is magical."""
-    _ = entity, target_entity
+    _ = entity
     if context is None:
         return False
     condition = context.get("condition")
@@ -3083,7 +3081,7 @@ class ProtectionFromEvilAndGoodEffect(BaseCondition):
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     _purge: PreparedConditionRemovals | None = PrivateAttr(default=None)
 
-    def _blocks_condition(self,entity: BaseBlock,_selected: BaseBlock | None,context: Dict[str,Any] | None) -> bool:
+    def _blocks_condition(self,entity: BaseBlock,context: Dict[str,Any] | None) -> bool:
         incoming=(context or {}).get("condition")
         if not isinstance(incoming,BaseCondition):
             return False

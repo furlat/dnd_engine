@@ -325,8 +325,6 @@ class Tile(BaseBlock):
         value = ModifiableValue.create(
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
-            target_entity_uuid=self.target_entity_uuid,
-            target_entity_name=self.target_entity_name,
             base_value=cost,
             value_name=f"{mode.value.capitalize()} Cost",
         )
@@ -335,8 +333,6 @@ class Tile(BaseBlock):
                     MovementMode.BURROWING: "No Earth"}[mode]
             value.self_static.add_max_constraint(NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid, name=name, value=0))
-        if self.context is not None:
-            value.set_context(self.context)
         match mode:
             case MovementMode.WALKING:
                 self.walking_cost = value
@@ -729,7 +725,6 @@ def release_tile_owned_movement_graph(tile: Tile) -> None:
     """Release one detached Tile's authenticated finite value graph."""
     validate_tile_owned_movement_graph(tile)
     for value in tile.movement_cost_values():
-        value.reset_from_target()
         for channel in (
             value.self_static,
             value.to_target_static,

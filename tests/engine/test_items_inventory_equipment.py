@@ -2,6 +2,7 @@
 
 from uuid import uuid4
 
+from dnd.core.values import ValueRead
 from dnd.actions_functional import execute_use_action, setup_standard_actions
 from dnd.blocks.base_item import BaseItem
 from dnd.content.items.authored_item_builders import build_authored_item
@@ -530,9 +531,9 @@ def test_eb_13_019_equipment_damage_bonuses_are_counted_once() -> None:
     assert entity.equipment.equip(bow, WeaponSlot.RANGED_MAIN)
 
     def damage_bonus(slot: WeaponSlot) -> int:
-        damages = entity.equipment.get_damages(slot, entity.ability_scores)
+        damages = entity.equipment.get_damages(slot, entity.ability_scores, ValueRead(entity.uuid))
         assert damages[0].damage_bonus is not None
-        return damages[0].damage_bonus.normalized_score
+        return damages[0].read_bonus().normalized_score
 
     melee_base = damage_bonus(WeaponSlot.MELEE_MAIN)
     ranged_base = damage_bonus(WeaponSlot.RANGED_MAIN)

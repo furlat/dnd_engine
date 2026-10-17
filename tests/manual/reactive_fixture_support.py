@@ -20,6 +20,7 @@ from dnd.core.base_actions import (
     TargetType,
     Cost,
 )
+from dnd.core.values import reading_with_advantage_row
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import DurationType
 from dnd.core.events import (
@@ -470,15 +471,13 @@ def dodge_roll_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
 
     if moved_cells > 0:
         if isinstance(event, AttackEvent) and event.attack_bonus is not None:
-            attack_bonus = event.attack_bonus
-            attack_bonus.self_static.add_advantage_modifier(
+            event = event.with_updates(attack_bonus=reading_with_advantage_row(event.attack_bonus,
                 AdvantageModifier(
                     name="Dodge Roll",
                     value=AdvantageStatus.DISADVANTAGE,
                     source_entity_uuid=defender.uuid,
                     target_entity_uuid=event.source_entity_uuid,
-                )
-            )
+                )))
         defender.action_economy.consume("reactions", 1)
 
     return event
