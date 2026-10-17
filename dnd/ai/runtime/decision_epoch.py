@@ -816,9 +816,9 @@ def _action_row_descriptor_cache_key(row: AvailableActionInfo) -> tuple[Any, ...
         row.weapon_name,
         tuple(row.damage_types),
         row.outcome_profile,
-        _frozen_model_key(row.self_setup_profile),
-        _frozen_model_key(row.target_effect_profile),
-        _frozen_model_key(row.world_effect_profile),
+        row.self_setup_profile,
+        row.target_effect_profile,
+        row.world_effect_profile,
         _enum_value(row.action_category),
         row.base_template_name,
         row.spell_level,
@@ -827,36 +827,13 @@ def _action_row_descriptor_cache_key(row: AvailableActionInfo) -> tuple[Any, ...
         row.requires_concentration,
         row.num_projectiles,
         row.allow_same_target,
-        _frozen_model_key(row.position_selection),
+        row.position_selection,
         row.is_item_use,
         str(row.source_item_uuid) if row.source_item_uuid is not None else None,
         row.item_stack_count,
         row.item_charge_cost,
         row.fixed_healing,
     )
-
-
-def _frozen_model_key(value: Any) -> Any:
-    """Return a hashable JSON-mode value for a small Pydantic model."""
-    if value is None:
-        return None
-    if hasattr(value, "model_dump"):
-        return _freeze_json_value(value.model_dump(mode="json"))
-    return _freeze_json_value(value)
-
-
-def _freeze_json_value(value: Any) -> Any:
-    """Turn JSON-like model data into a hashable deterministic structure."""
-    if isinstance(value, dict):
-        return tuple(
-            (key, _freeze_json_value(item))
-            for key, item in sorted(value.items(), key=lambda row: str(row[0]))
-        )
-    if isinstance(value, list):
-        return tuple(_freeze_json_value(item) for item in value)
-    if isinstance(value, tuple):
-        return tuple(_freeze_json_value(item) for item in value)
-    return value
 
 
 def _build_affordance_rows_from_actions(
