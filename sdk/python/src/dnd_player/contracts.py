@@ -255,6 +255,19 @@ type BoundaryStructureKind = Literal[
 type CardinalDirection = Literal['north', 'south', 'east', 'west']
 
 
+class CellMask(TypedDict):
+    x0: int
+    y0: int
+    width: int
+    height: int
+    bits: str
+
+
+class CellValues(TypedDict):
+    cells: CellMask
+    values: str
+
+
 type CharacterClass = Literal[
     'class.barbarian',
     'class.fighter',
@@ -1382,7 +1395,7 @@ class PreviewRequest(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[12]]
+    player_schema_version: NotRequired[Literal[13]]
     schema_digest: str
 
 
@@ -1502,15 +1515,6 @@ type SensesType = Literal[
 
 
 type ObserverPositionItem = int
-
-
-type VisibleCellsAddedItem = int
-
-
-type VisibleCellsRemovedItem = int
-
-
-type SeenCellsAddedItem = int
 
 
 type Ability = int
@@ -3361,11 +3365,11 @@ class SensoryFact(TypedDict):
     initial: bool
     observer_position: list[ObserverPositionItem]
     observer_position_changed: bool
-    effective_light_levels_changed: dict[str, int]
+    effective_light_levels_changed: CellValues
     cause_occurrence: int | None
-    visible_cells_added: list[list[VisibleCellsAddedItem]]
-    visible_cells_removed: list[list[VisibleCellsRemovedItem]]
-    seen_cells_added: list[list[SeenCellsAddedItem]]
+    visible_cells_added: CellMask
+    visible_cells_removed: CellMask
+    seen_cells_added: CellMask
     entity_contacts_changed: dict[str, PerceivedContact]
     entity_contacts_removed: list[str]
     object_contacts_changed: dict[str, PerceivedContact]
@@ -3377,7 +3381,7 @@ class SensoryFact(TypedDict):
     visual_access_changed: bool
     visual_access: int | None
     paths_dirty: bool
-    hazardous_cells_changed: NotRequired[dict[str, bool]]
+    hazardous_cells_changed: NotRequired[CellValues]
     spatial_effect_sightings: NotRequired[dict[str, SpatialEffectSighting]]
     spatial_effect_content: NotRequired[dict[str, SpatialEffectContent]]
     spatial_effects_removed: NotRequired[list[str]]
