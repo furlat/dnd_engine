@@ -1,4 +1,4 @@
-# Single-pass change propagation — analysis and plan (v3.7)
+# Single-pass change propagation — analysis and plan (v3.8)
 
 Date: 2026-10-16. Status: **APPROVED by the human 2026-10-17 (incl. D7c, Q7 EXECUTION convention, temp-HP record-only).** **v3.5 adds available-actions discovery (§14, PD1/PD2) per the human's 2026-10-17 decisions (model approved 2026-10-17).** **v3.6 folds in the §14 antislop/antiOOP reviews and the whole-world-scan redesign. v3.7 folds in the v3.6 re-reviews, the human's answers (D14 approved; Q-W1, Q-W3, Q-W4 decided) and the first P0a measurements; open items are in §14.10.** Implementation is at P0a.
 
@@ -485,6 +485,56 @@ refreshes and C versions remain per terrain install until P2.
 - AI decision;
 - Choices: modelled in §14.6 (PD1/PD2).
 
+## 6a. Whole-action targets (D18)
+
+Human, 2026-10-17: "of course we need good targets for all the slowdowns we are
+getting this needs to be smooth and playable". §6 prices perception only; these
+targets cover the whole request the player waits on.
+
+**How a row is measured.**
+
+- GC rows (worst case: ~30 observers, the godmode caster), ordinary mode, this machine.
+- Wall clock includes GC pauses.
+- A row passes when the median of 3 runs is within the target and no run exceeds 1.5× the target.
+- Split: `native_ms` / `publication_ms` from `gallery_crowd.py`.
+- §6's sensory targets stay; they are part of the native budget.
+
+**Why these numbers.**
+
+- 16 ms is one frame at 60 fps: hover previews.
+- ~100 ms reads as an immediate reply to a click: Choices, commands, single area spells.
+- 50 ms per move command keeps walks from stuttering.
+- 150 ms for the two whole-area rewrites, where ~half of every observer's cells change: Sleet cast and drop.
+
+The numbers are proposed by the plan; the human may change them.
+
+| Row (GC case) | Now ms: total (native / publication), median of 3 at 7f836e17b | Target total | Native | Publication | Owners |
+| --- | --- | --- | --- | --- | --- |
+| Preview, caster / fighter | 7 / 5 | ≤16 | — | — | met; keep |
+| Choices hit | 0 | ≤5 | — | — | met; keep |
+| Choices miss, caster (577 rows) | 252 | ≤100 | discovery | — | PD1b, PD2, P8 |
+| Choices miss, fighter | 140 | ≤50 | discovery | — | PD1b, PD2, P8 |
+| Command, fighter attack (request path) | 46 | ≤50 | — | — | met; keep |
+| Command, caster Fireball (request path) | 668 (one sampled run 435: apply 213, publication 201) | ≤100 | ≤70 | ≤30 | P5, P6, P8; P7 |
+| Fireball | 323 (159 / 148) | ≤100 | ≤70 | ≤30 | P5, P6, P8; P7 |
+| Circle of Death | 334 (156 / 158) | ≤100 | ≤70 | ≤30 | P5, P6, P8; P7 |
+| Ice Storm | 203 (85 / 101) | ≤100 | ≤70 | ≤30 | P6; P7 |
+| Sleet Storm cast | 513 (265 / 226) | ≤150 | ≤100 | ≤50 | P5, P4b re-scoped; P7 |
+| Sleet Storm concentration drop | 769 (191 / 538) | ≤150 | ≤100 | ≤50 | P7 (D16) |
+| Gust of Wind cast | 190 (133 / 37) | ≤100 | ≤70 | ≤30 | P5, P6 |
+| Gust of Wind walk, per move | 93–102 (51–63 / 31–37) | ≤50 | ≤35 | ≤15 | P5, P6; P7 |
+| Spirit Guardians cast | 81 (45 / 26) | ≤50 | ≤35 | ≤15 | P6; P7 |
+| Spirit Guardians walk, per move (3 cells, aura carried) | 233–308 (123–166 / 99–115) | ≤50 | ≤35 | ≤15 | P5, P6; P7 |
+| AI Advance (one decision and the action it runs) | 99–327 | ≤150 | — | — | PD2, P7 (AI knowledge) |
+
+**Rules.**
+
+- These targets are the program's exit gate, together with the phase gates in §7.
+- After each merged phase the integrator re-times every row (3 runs) and records the table in the progress log.
+- A row still over target once its owners have landed gets its residual terms measured (CPU sampler, counts) and reported to the human with a proposed phase. Targets are never silently changed.
+- §1 routine rows must not regress.
+- Gen-2 collections inside a measured row are counted and reported with the row. Per the human, GC is a symptom of too much work: it falls with the allocations the phases remove.
+
 ## 7. Phases (execution order) and gates
 
 **Order (decided 2026-10-17; the human left it to the plan):**
@@ -514,6 +564,7 @@ refreshes and C versions remain per terrain install until P2.
 | **P7** | Seat-independent capture (pure function, frozen value); one fold per seat; AI knowledge reduction consumes settled sensory events once per group | publication and AI ms before/after |
 | **P8** | Value layer: min/max once per read; bounded breakdown cache; stats snapshot on change | passive-perception and resistance evaluation counts before/after |
 | **PC** | *(other repo; human)* NDClientGodot SDK schema 9 → 11; grouped world boundaries | — |
+| **Exit** | Whole-action targets (§6a, D18): every GC row re-timed after each merged phase | every §6a row within target (median of 3, no run > 1.5×); misses reported with residual terms |
 
 **Correctness oracle.**
 
@@ -552,6 +603,8 @@ stopped and reported.
 | D15 | Residues: one condition per material for the whole map, updated per deposit (per-cell amounts and contributions), instead of one condition membership per tile | **Decided** (human 2026-10-17: "one condition for material across all map that gets updated … so we have good scaling") |
 | D16 | One sensory fold per seat: the projection's and the current state's audience compositions are one (the duplication predates event-stream reduction) | **Decided** (human 2026-10-17: "we obviously do not need to duplicate … or to even keep the separation if it is not needed") |
 | D17 | Spells listed once with castable levels; the selection names the level; the AI always casts the base level | **Decided** (human 2026-10-17) |
+| D16-C | D16's method: the server mirror fold (`prepare_current_operation` / `apply_current_operation`, the current composition) leaves the live path; bookkeeping reads the outgoing update; the replica check (emitted-update fold == cold composition) becomes a test | **Approved** (human 2026-10-17: "c is ok") |
+| D18 | Whole-action targets (§6a) for every GC row, not only perception | **Decided** (human 2026-10-17); numbers proposed by the plan |
 | D11 | Worktree | **Done** |
 
 ### 8.1 Verified bugs (verification pass at `d13e6ad`)
@@ -717,6 +770,11 @@ worktree. The rest is static reading.
 | AI discovery | `ai/runtime/decision_epoch.py:148-157, 819-845, 948-971` |
 
 ## 12. Changes
+
+**v3.7 → v3.8** (human 2026-10-17):
+
+- §6a whole-action targets for every GC row (D18), with native/publication budgets and owners; an exit row in §7.
+- D16 method C approved: the mirror fold leaves the live path; the replica check becomes a test.
 
 **v3 → v3.1:**
 
