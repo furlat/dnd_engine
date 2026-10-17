@@ -73,14 +73,16 @@ class PressurePlate(SpatialCondition):
         self._complete_change(effect)
 
     def _send_output(self, *, parent_event: Event) -> None:
-        if isinstance(self.link, ControlLink):
-            request_control(self.link, self.pressed, controller_uuid=self.uuid, parent_event=parent_event)
-        elif self.pressed:
-            # One actual press emits all authored pulses even if the first
-            # mechanism moves its recipient and releases this same plate.
-            links = self.link if isinstance(self.link, tuple) else (self.link,)
-            for link in links:
-                activate_link(link, parent_event=parent_event)
+        # One press and everything it drives are one instant.
+        with EventQueue.group(GroupEntryKind.TRAP_FIRE, root=parent_event):
+            if isinstance(self.link, ControlLink):
+                request_control(self.link, self.pressed, controller_uuid=self.uuid, parent_event=parent_event)
+            elif self.pressed:
+                # One actual press emits all authored pulses even if the first
+                # mechanism moves its recipient and releases this same plate.
+                links = self.link if isinstance(self.link, tuple) else (self.link,)
+                for link in links:
+                    activate_link(link, parent_event=parent_event)
 
     def _apply(self, execution_event: Event) -> tuple[
         list[tuple[UUID, UUID]], list[UUID], list[UUID], list[UUID], Event,

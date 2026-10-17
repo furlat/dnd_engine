@@ -2236,7 +2236,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     )
     assert spirit_zone.position == caster.position
     assert len(spirit_zone.spatial_handler_uuids) == 2
-    assert len(spirit_zone.event_handlers_uuids) == 2
+    assert len(spirit_zone.event_handlers_uuids) == 3  # turn start, anchor loss (inline), anchor movement (phase B)
 
     enemy_hp_before = get_hp(enemy)
     ally_hp_before = get_hp(ally)

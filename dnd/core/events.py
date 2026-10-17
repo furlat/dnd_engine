@@ -136,7 +136,7 @@ class PreCompletionSystem(Protocol):
 
     def __call__(self, event: 'Event') -> None: ...
 
-    def settle_group(self, root_uuid: Optional[UUID]) -> None:
+    def settle_group(self, group: 'OpenGroup') -> None:
         """Settle work this system recorded while a simultaneous group was open."""
         ...
 
@@ -164,6 +164,9 @@ class OpenGroup:
     # Owners holding work for this group (GridMap's light fact) flush it after
     # the systems settle, whether or not a system absorbed it.
     settlers: List[Callable[[Optional[UUID]], None]] = field(default_factory=list)
+    # Lineages of facts opened in the group that complete right after its
+    # settle (a zone's own change): settled observers need no second pass.
+    completes_after: Set[UUID] = field(default_factory=set)
 
 
 @runtime_checkable
@@ -1745,7 +1748,7 @@ class EventQueue:
             group.settling = True
             try:
                 for system in tuple(cls._pre_completion_systems.values()):
-                    system.settle_group(group.root_uuid)
+                    system.settle_group(group)
                 for settle in group.settlers:
                     settle(group.root_uuid)
             finally:

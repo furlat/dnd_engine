@@ -16,7 +16,8 @@ from dnd.spatial.triggers import materialize_pressure_plate
 from dnd.types.controls import ActivationLink
 from dnd.types.event_facts import GroupEntryKind
 from dnd.types.senses import OpticalObscurement
-from dnd.types.spatial_effects import SpatialEffectLayer, SpatialEffectOccupancyPolicy
+from dnd.core.condition_types import HazardFilter
+from dnd.types.spatial_effects import SpatialEffectAnchorKind, SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from tests.engine.test_senses_light_stealth import create_skeleton, reset_senses_state
 
 
@@ -130,3 +131,26 @@ def test_a_plate_released_gas_cloud_settles_observers_as_a_cold_recompute_would(
     finally:
         EventQueue.end_turn_execution(turn)
     assert_matches_cold_recompute(*observers, traveler)
+
+
+def test_an_anchored_zone_following_each_step_settles_as_a_cold_recompute_would() -> None:
+    """The zone moves inside the step, before the step's own contacts settle (plan §5.1 P-e)."""
+    reset_senses_state(width=10, height=3)
+    observers = [create_skeleton(name=f"Observer {index}", position=(index * 4, 0), darkvision=True)
+        for index in range(3)]
+    walker = create_skeleton(name="Walker", position=(1, 2), darkvision=True)
+    zone = AreaCondition(name="Following Mud", source_entity_uuid=walker.uuid, content_ref=ContentRef(
+            pack_id="test.groups", definition_kind=ContentDefinitionKind.CONDITION,
+            content_id="condition.groups.following_mud", content_version=1, definition_contract_hash="0" * 64),
+        position=(1, 2), affected_positions={(1, 2), (2, 2)}, layer=SpatialEffectLayer.FIELD,
+        occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING, adds_difficult_terrain=True,
+        hazard_filter=HazardFilter.ALL, anchor_kind=SpatialEffectAnchorKind.ENTITY, anchor_uuid=walker.uuid)
+    zone.activate(parent_event=_cause(walker.uuid))
+    Entity.update_all_entities_senses()
+    for x in range(2, 6):
+        with _counting() as counts:
+            Entity.update_entity_position(walker, (x, 2), parent_event=_cause(walker.uuid).uuid)
+        assert zone.position == (x, 2)
+        full_recomputes = counts["sensory.full_recompute"]
+        assert full_recomputes <= 1, "only the walker itself re-solves its sight"
+        assert_matches_cold_recompute(*observers, walker)

@@ -295,7 +295,8 @@ def test_entity_anchored_area_translates_from_committed_movement() -> None:
     )
     completion = condition.activate(parent_event=cause)
     assert completion is not None
-    assert len(condition.event_handlers_uuids) == 1
+    # Losing the anchor ends the area inline; following it waits for phase B.
+    assert len(condition.event_handlers_uuids) == 2
 
     Entity.update_entity_position(
         anchor,

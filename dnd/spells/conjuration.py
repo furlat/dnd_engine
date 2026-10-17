@@ -91,6 +91,7 @@ from dnd.actions import AttackEvent, SpellAction, SpellEvent, entity_action_econ
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.ignition import resolve_interaction
+from dnd.types.event_facts import GroupEntryKind
 from dnd.spatial.environmental_conditions import (
     BURNING_WEB_RECIPE,
     build_environmental_replacement,
@@ -3145,16 +3146,18 @@ class Daylight(SpellAction):
             faction=caster.faction,
             effect_origin=execution_event.to_effect_origin(),
         )
-        zone_completion = zone.activate(parent_event=effect_event)
-        if (
-            zone_completion is None
-            or zone_completion.canceled
-            or not zone.applied
-        ):
-            return effect_event.with_updates(
-                status_message="Daylight could not establish its area",
-            )
-        removed_darkness = _remove_overlapping_darkness_zones(zone, effect_event)
+        # The light and the darkness it dispels change in one instant.
+        with EventQueue.group(GroupEntryKind.ZONE_INSTALL, root=effect_event):
+            zone_completion = zone.activate(parent_event=effect_event)
+            if (
+                zone_completion is None
+                or zone_completion.canceled
+                or not zone.applied
+            ):
+                return effect_event.with_updates(
+                    status_message="Daylight could not establish its area",
+                )
+            removed_darkness = _remove_overlapping_darkness_zones(zone, effect_event)
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)

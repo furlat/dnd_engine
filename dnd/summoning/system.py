@@ -13,7 +13,7 @@ from dnd.core.condition_types import DurationType, InvoluntarySustainLoss
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
 from dnd.core.creature_types import CreatureType
-from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, SummonAdmissionEvent, Trigger
+from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, OpenGroup, SummonAdmissionEvent, Trigger
 from dnd.core.gridmap import get_map
 from dnd.encounter import Encounter, EncounterState, PreparedCombatantJoin
 from dnd.reactions import add_stand_when_healed_handler
@@ -527,9 +527,9 @@ class SummoningSystem:
         if errors:
             raise BaseExceptionGroup("Summon close failed", errors)
 
-    def settle_group(self, root_uuid: UUID | None) -> None:
+    def settle_group(self, group: OpenGroup) -> None:
         """Resolve departures recorded while the group was open, in arrival order."""
-        del root_uuid
+        del group
         events, self._group_events = self._group_events, []
         for event in events:
             self._resolve(event)

@@ -615,7 +615,7 @@ class SpatialCondition(BaseCondition):
         self._activation_positions = set(admitted)
         # The install's terrain, light and displacements are one simultaneous
         # group; its own change completes after observers settled (plan §5.2-5.4).
-        with EventQueue.group(GroupEntryKind.ZONE_INSTALL, root=parent_event, shares_damage_rolls=True):
+        with EventQueue.group(GroupEntryKind.ZONE_INSTALL, root=parent_event, shares_damage_rolls=True) as group:
             try:
                 effect = self.apply(parent_event=parent_event)
             except BaseException:
@@ -629,6 +629,7 @@ class SpatialCondition(BaseCondition):
                     "Spatial condition application did not return its change effect",
                 )
             self._finalize_displacements(parent_event=effect)
+            group.completes_after.add(effect.lineage_uuid)
         self._complete_change(effect)
         application_effect = (
             EventQueue.get_event_by_uuid(effect.parent_event)
@@ -708,11 +709,13 @@ class SpatialCondition(BaseCondition):
         parent_event: Event,
     ) -> bool:
         """Replace the footprint and close its change after all mechanics."""
-        with EventQueue.group(GroupEntryKind.ZONE_MOVE, root=parent_event, shares_damage_rolls=True):
+        with EventQueue.group(GroupEntryKind.ZONE_MOVE, root=parent_event, shares_damage_rolls=True) as group:
             change_effect = self._change_footprint(
                 positions,
                 parent_event=parent_event,
             )
+            if change_effect is not None:
+                group.completes_after.add(change_effect.lineage_uuid)
         if change_effect is None:
             return False
         self._complete_change(change_effect)
@@ -879,7 +882,8 @@ class SpatialCondition(BaseCondition):
         grid = get_map()
         # The released cells and lights are one instant; the removal's own
         # change completes after observers settled (plan §5.4).
-        with EventQueue.group(GroupEntryKind.ZONE_REMOVE, root=publication.condition_effect):
+        with EventQueue.group(GroupEntryKind.ZONE_REMOVE, root=publication.condition_effect) as group:
+            group.completes_after.add(publication.effect.lineage_uuid)
             for change in (*publication.tile_changes, *publication.light_changes):
                 try:
                     grid.publish_committed_spatial_event(change)

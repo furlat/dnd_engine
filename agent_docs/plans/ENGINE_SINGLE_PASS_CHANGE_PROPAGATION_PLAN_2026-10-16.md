@@ -384,6 +384,12 @@ Thunderwave EVO:1606-1607.
 
 **Group settlers.** Owners holding work for a group register a settler on it (GridMap's pending light fact). They run after the pre-completion systems, so the light fact is published even when no sensory reducer is attached (no observers yet).
 
+**Late-completing facts.** A zone's own change completes right after its group (its completion reads settled senses). The group lists it in `completes_after`; systems receive the `OpenGroup` in `settle_group`, and the reducer does not settle those observers a second time for it.
+
+**Anchors.** An attached zone has two bindings: losing its anchor ends it inline (a broken trap cannot strike inside its own group), and following its anchor's moves is phase B.
+
+**Occupancy-free facts.** Zone membership, residue and movement-topology facts take the hazard path even when a pending step has bumped occupancy; the step's own fact settles contacts afterwards (anchored zones no longer force a full recompute mid-step).
+
 **Shared staged loop** (§5.6): `resolve_staged_area` in `dnd/spatial/area_reach.py`, used by Fireball and `payload_blast`. Each stage continues only when one of its own propagation barriers is `DESTROYED`; `BaseItem.destruction_lineage_uuid` (recorded at the accepted breakage) feeds `prerequisite_destruction_lineages`. No event scan, no `propagation_revision`.
 
 **Shared roll.** `Damage.get_dice` returns one `Dice` per (source, packet, outcome) inside a sharing group: area effects, zone install/move, cast loops, round step, and multi-target effects without attack rolls.

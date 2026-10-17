@@ -1,6 +1,6 @@
 """Authoritative observer-local perception and navigation state."""
 
-from typing import AbstractSet, DefaultDict, Dict, Iterable, List, Optional, Self, Sequence, Set, Tuple, TypeVar, cast
+from typing import AbstractSet, DefaultDict, Dict, FrozenSet, Iterable, List, Optional, Self, Sequence, Set, Tuple, TypeVar, cast
 from uuid import UUID
 from pydantic import Field, PrivateAttr
 
@@ -21,7 +21,7 @@ from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
 from dnd.core.events import (
     Event, EventType, EventPhase, SpatialChangeEvent,
-    SpatialEffectChangeEvent, DeathEvent, EventQueue, SensoryUpdateEvent,
+    SpatialEffectChangeEvent, DeathEvent, EventQueue, OpenGroup, SensoryUpdateEvent,
     SensoryUpdateReason,
 )
 from dnd.types.senses import (
@@ -686,6 +686,11 @@ class SpatialSensesSystem:
         self._pending: Dict[UUID, _GroupSettlement] = {}
         self._settling = False
         self._absorbing_light = False
+        # The last settled group's late-completing facts and its observers. A
+        # zone change opened in that group completes right after it (its
+        # completion reads settled senses); those observers already settled it.
+        self._covered_facts: FrozenSet[UUID] = frozenset()
+        self._covered_observers: FrozenSet[UUID] = frozenset()
 
     def attach(self) -> None:
         """Attach the reducer to the existing pre-completion event boundary."""
@@ -700,6 +705,8 @@ class SpatialSensesSystem:
         self.senses_by_observer.clear()
         self.published_observers.clear()
         self.footprints_by_observer.clear()
+        self._covered_facts = frozenset()
+        self._covered_observers = frozenset()
         self.observers_by_known_position.clear()
         self.observers_by_entity.clear()
         self.observers_by_object.clear()
@@ -718,14 +725,16 @@ class SpatialSensesSystem:
         return (group is not None and not self._settling
                 and (self._absorbing_light or not group.settling))
 
-    def settle_group(self, root_uuid: Optional[UUID]) -> None:
+    def settle_group(self, group: OpenGroup) -> None:
         """Publish the group's pending light, then settle every recorded observer once."""
+        root_uuid = group.root_uuid
         self._absorbing_light = True
         try:
             get_map().settle_pending_lights(parent_event=root_uuid)
         finally:
             self._absorbing_light = False
         pending, self._pending = self._pending, {}
+        self._covered_facts, self._covered_observers = frozenset(group.completes_after), frozenset(pending)
         if not pending:
             return
         root = EventQueue.get_event_by_uuid(root_uuid) if root_uuid is not None else None
@@ -1725,12 +1734,14 @@ class SpatialSensesSystem:
             return
         sensory_events: List[SensoryUpdateEvent] = []
         deferred: Set[UUID] = set()
+        if event.lineage_uuid in self._covered_facts:
+            deferred = set(self._covered_observers)
         if event.event_type in (EventType.SPATIAL_LIGHT_CHANGED, EventType.SPATIAL_LIGHT_SOURCES_CHANGED):
             parent = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event is not None else None
             if isinstance(parent, SpatialChangeEvent) and parent.senses_hint is not None and parent.senses_hint.requires_light_recompute:
                 # The geometry parent observes after every affected emitter has
                 # settled. Its observers must not see partial source recomputes.
-                deferred = self.candidate_observer_uuids(parent)
+                deferred = set(self.candidate_observer_uuids(parent))
         for observer_uuid in sorted(self.candidate_observer_uuids(event), key=str):
             if observer_uuid in deferred:
                 continue
@@ -1814,12 +1825,19 @@ class SpatialSensesSystem:
             or self._is_tile_refresh(event) or isinstance(event, SpatialEffectChangeEvent) for event in events)
         gated_objects: Set[UUID] = set()
         field = senses._field
+        # Zone membership, residue and movement-topology facts read no
+        # occupancy. When a step moved an anchored zone, the step's own fact is
+        # still pending and settles the contacts after this; the hazard refresh
+        # leaves the field's revisions alone so that delta still applies.
+        reads_no_occupancy = all(self._residue_tile(event) is not None or self._is_tile_refresh(event)
+            or isinstance(event, SpatialEffectChangeEvent) for event in events)
         only_refresh_hazards = (
             not force_full
             and cheap_kinds
             and observer_uuid in self.published_observers
             and field is not None
-            and field.revisions.occupancy == get_map().observer_spatial_revisions(observer_uuid).occupancy
+            and (reads_no_occupancy
+                 or field.revisions.occupancy == get_map().observer_spatial_revisions(observer_uuid).occupancy)
             and self._field_is_current(observer_uuid, senses)
         )
         if only_refresh_hazards:
