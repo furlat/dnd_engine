@@ -3269,12 +3269,18 @@ class GridMap:
 
     def _bump_object_revisions(self, object_uuid: UUID, channels: frozenset[SpatialChannel],
                                positions: Collection[Tuple[int, int]]) -> None:
-        """Invalidate physical contacts locally as well as existing blocker caches."""
+        """Invalidate existing blocker caches, and side structures in observers' boundary snapshots.
+
+        A center object's contact is re-read by its own published change; only a
+        side structure is retained in every covering observer's field.
+        """
         self._bump_spatial_revisions(channels, positions)
         # A retained boundary can have no occupied bands. Its placement identity
         # still participates in the native global directional-solver decision.
         self._refresh_directional_blocker_owners(revision_edge_channels(channels), (object_uuid,))
-        self._bump_observer_revisions(frozenset({SpatialChannel.OPTICAL}) - channels, positions)
+        provider = BaseBlock.get(object_uuid)
+        if provider is None or provider.get_world_placement_spec().kind is WorldPlacementKind.BOUNDARY:
+            self._bump_observer_revisions(frozenset({SpatialChannel.OPTICAL}) - channels, positions)
 
     def _object_revision_channels(self, obj: BaseBlock) -> frozenset[SpatialChannel]:
         """Return the revision channels of everything one placed object blocks."""
