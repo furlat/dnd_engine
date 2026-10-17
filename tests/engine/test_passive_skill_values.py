@@ -169,7 +169,7 @@ def test_passive_proficiency_callback_retains_normalizer_and_copy_isolation(acto
     actor.proficiency_bonus.self_contextual.add_value_modifier(modifier)
     check_passive(actor, 20)
     assert conditional.score_normalizer(5) == 5
-    assert modifier.cached_results == {}
+    assert modifier.breakdown_result(actor.uuid, None, None) is None
 
 
 def test_passive_rechecks_contextual_advantage_after_neutral_result(actor):
@@ -229,7 +229,7 @@ def test_passive_proficiency_advantage_keeps_original_contextual_cache_detached(
             value=AdvantageStatus.DISADVANTAGE, use_register=False))
     actor.proficiency_bonus.self_contextual.add_advantage_modifier(modifier)
     check_passive(actor, 7)
-    assert modifier.cached_results == {}
+    assert modifier.breakdown_result(actor.uuid, None, None) is None
 
 
 def test_passive_proficiency_outgoing_callback_retains_shared_normalizer_write(actor):

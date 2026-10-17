@@ -2190,10 +2190,9 @@ class ModifiableValue(BaseValue):
         for component, source in contextual_components:
             if component is None:
                 continue
-            lineage = component.event_lineage_uuid
-            key = f"{component.source_entity_uuid}|{component.target_entity_uuid or 'none'}|{lineage or 'none'}"
             for modifier in component.value_modifiers.values():
-                cached = modifier.cached_results.get(key)
+                cached = modifier.breakdown_result(component.source_entity_uuid,
+                    component.target_entity_uuid, component.event_lineage_uuid)
                 if cached is not None and isinstance(cached, NumericalModifier):
                     value = cached.normalized_value
                     if value != 0:
@@ -2221,10 +2220,9 @@ class ModifiableValue(BaseValue):
         for component, source in contextual_components:
             if component is None:
                 continue
-            lineage = component.event_lineage_uuid
-            key = f"{component.source_entity_uuid}|{component.target_entity_uuid or 'none'}|{lineage or 'none'}"
             for modifier in component.advantage_modifiers.values():
-                cached = modifier.cached_results.get(key)
+                cached = modifier.breakdown_result(component.source_entity_uuid,
+                    component.target_entity_uuid, component.event_lineage_uuid)
                 if cached is not None and isinstance(cached, AdvantageModifier):
                     result.append({
                         "name": modifier.name or "Unknown",
