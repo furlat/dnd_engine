@@ -239,6 +239,8 @@ get hit").
 - Phase-B items run after depth returns to 0, each opening a fresh group.
 - `BaseAction.apply` itself does **not** open a group. Single-target actions and
   each Move step settle per fact through the §4 delta, as today but cheap.
+  **Amended 2026-10-18 (PV1a-3, human: "seems okay"):** an arrival opens a MOVE_STEP group, so
+  a step's facts settle once; nothing settles across steps (progress log, 2026-10-18).
 - Move is `POSITION_PATH` (`actions.py:563`), so OA and attack validation keep
   per-step perception (`reactions.py:50`, `actions.py:261`).
 
@@ -557,6 +559,10 @@ Rows still to measure: magic_missile, chain_lightning, holy_aura, mass_heal, mas
   - No manager or registry classes, no lazy properties.
   - A value that must be kept is a frozen value owned by the system that computes it, keyed by named revisions, with its invalidation stated in this plan.
 - GC tuning, freezing around operations, pooling and disabling the collector are not fixes.
+  **Human decision 2026-10-17** (worker only, after the cycles were fixed): no automatic collection
+  inside a request; the request's survivors are collected after its reply and frozen; a cycle found
+  is printed as an alarm. The post-reply collection is timed per op (`collect_after_ms`) and
+  reported beside the op's own time, so its cost is not hidden.
 
 ## 6b. Subjective vision as data (PV1–PV3, D19)
 
@@ -1179,7 +1185,7 @@ worktree. The rest is static reading.
   one exception. Antislop #1 asked that a §5.2 entry close at its own exit even
   when nested. The antiOOP nesting rule (join; phase B after depth 0) was chosen
   instead, because it keeps one settle per spell and still gives each phase-B item
-  a fresh group. Move steps aren't groups at all.
+  a fresh group. Move steps aren't groups at all (amended 2026-10-18: a step is a MOVE_STEP group, §5.2).
 - **v3.2:** no separate re-review was run. v3.3–v3.5 changes are human decisions, plus §14, which is under review now.
 - **Bug verification:** done (§8.1).
 - **v3.5 §14:** antislop (13) and antiOOP (14), all accepted into v3.6. Where they conflicted, the code decided: `_aoe_origin_fov_cache` and `compute_subjective`/`compute_for_targeting` are dead (antislop); the footprint cache is not a new one (antiOOP; the existing `_propagation_fov_cache` remains).
