@@ -154,3 +154,7 @@ Hard rules:
   - **Player-visible bug, pre-existing, to fix separately:** `actions.py:2272` `set_context` replaces the attack context set at `entity.py:3425`, so `attack_ability` is missing during a real weapon-attack roll. Reckless Attack's contextual advantage never applies. PR preserves the behaviour exactly.
   - **First-use pydantic schema builds inside ops** (`defer_build` kept): Fireball 12.6–14.6 ms, Ice Storm 7.3–8.3, Circle of Death 2.7–2.9, once per process per model.
   - The value-read lineage only keyed a "latest evaluation" slot; it is deleted with the frozen reading.
+- 2026-10-17: **PV1a, rule-level side effects** (logged per the human's direction):
+  - perception radius capped once at 80 cells (400 ft);
+  - entity-anchored optics blockers now raise (the construction invariant P5 flagged);
+  - the mover's contact change rides the zone fact.
