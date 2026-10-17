@@ -164,6 +164,7 @@ class GroupEntryKind(str, Enum):
     TRAP_FIRE = "trap_fire"
     PORTAL_TRANSFER = "portal_transfer"
     MATERIAL_INTERACTION = "material_interaction"
+    DEPLOYMENT = "deployment"
 
 
 class HandlerGroupDispatch(str, Enum):
