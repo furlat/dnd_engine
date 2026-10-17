@@ -1,4 +1,4 @@
-# Single-pass change propagation — analysis and plan (v3.14)
+# Single-pass change propagation — analysis and plan (v3.15)
 
 Date: 2026-10-16. Status: **APPROVED by the human 2026-10-17 (incl. D7c, Q7 EXECUTION convention, temp-HP record-only).** **v3.5 adds available-actions discovery (§14, PD1/PD2) per the human's 2026-10-17 decisions (model approved 2026-10-17).** **v3.6 folds in the §14 antislop/antiOOP reviews and the whole-world-scan redesign. v3.7 folds in the v3.6 re-reviews, the human's answers (D14 approved; Q-W1, Q-W3, Q-W4 decided) and the first P0a measurements; open items are in §14.10.** Implementation is at P0a.
 
@@ -694,6 +694,32 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 - **Navigation:** one path search over a cost grid with a predecessor array. `walkable`, `paths`, `path_costs`, `safe_*` and `collision_blocked` stop being per-cell dicts and sets.
 - **Gate:** the turn-start rows within the ceiling.
 
+**PR — area-spell rules work (Fireball, Circle of Death, Ice Storm).**
+
+After PV1a, Fireball's native time is ~200 ms (loaded), of which perception is ~37 ms. CPU sample `smp_fb2` (loaded, 736 ms op):
+
+| Term | ms |
+| --- | --- |
+| per-target `_apply` | ~195 |
+| saving throws (`saving_throw_bonus`, which sets and clears the target on every value of both creatures, plus deep copies; ~1.2 ms per read, P8) | ~60 |
+| creature damage | ~45 |
+| object damage and destruction (`_apply_destruction`, environment `_on_destroy` builders) | ~75 |
+| event post / register over ~560 versions | ~68 |
+| first-use pydantic schema builds inside the op (`model_rebuild`) | ~30 |
+| enum property reads in hot loops | — |
+
+- **Work:**
+  - The target context of a value read is an argument, not state set and cleared on every value.
+  - No deep copies on the save path.
+  - Per-target damage and destruction do only what the rule needs.
+  - Schemas are built at startup.
+  - Hot enum reads are taken out of the loops.
+  - Each removal is counted.
+- **Gate:**
+  - native ms of Fireball, Circle of Death and Ice Storm before/after;
+  - P6's deterministic transcript (every version's fields, grants, combat logs and seat updates) identical;
+  - counts of value context set/clear calls and deep copies on the save path → 0.
+
 **PH — heap: the GC alarm** (human: "reach the point where gc does not trigger or is not meaningfull").
 
 - **Measured (GC Sleet, HEAD 5c3b90e90; scratch `heap_attrib.py`, `heap_fields.py`):**
@@ -765,6 +791,7 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 | **PV2** | The rest of the wire (§6b); after P7 | §6b PV2 gate; every update ≤100 KB |
 | **PV3** | Bodies and items as patches (§6b); after P7 | §6b PV3 gate |
 | **P7b** | Stored versions frozen, capture by reference (§6b) | versions frozen at store; no deepcopy in capture; wire byte-identical |
+| **PR** | Area-spell rules work (§6b): value reads take the target as an argument; no deep copies on saves; per-target damage and destruction; startup schema builds | Fireball / Circle of Death / Ice Storm native before/after; transcript identical |
 | **PH** | Heap (§6b): per-op retained growth ~0; value layer as data; tiles without empty containers (paths and perception via PT / PV1) | 0 gen-2 collections inside measured ops; retained per op ≤1K |
 | **PT** | Turn start (§6b): the AI knowledge system (one owner, advanced at batch dispatch, cold start); navigation as a cost grid with a predecessor array | turn-start rows within the ceiling; first-decision knowledge equality |
 | **PC** | *(other repo; human)* NDClientGodot SDK schema 9 → 11; grouped world boundaries | — |
@@ -972,6 +999,8 @@ worktree. The rest is static reading.
 | AI discovery | `ai/runtime/decision_epoch.py:148-157, 819-845, 948-971` |
 
 ## 12. Changes
+
+**v3.14 → v3.15:** PR area-spell rules work (no phase owned it after P6 / P8).
 
 **v3.13 → v3.14:** PH heap phase, from the GC census (the GC alarm).
 
