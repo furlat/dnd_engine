@@ -201,6 +201,43 @@ def decode_event(value: Any) -> Event:
     return event
 
 
+def _recorded_resolution(event: Event, by_lineage: dict[UUID, Event], resolved: dict[UUID, ResolutionRef | None],
+                         pending: set[UUID]) -> ResolutionRef | None:
+    """One event's admitted resolution, memoized in `resolved`. A module function, so the
+    recursion leaves no closure cycle holding the whole operation's events alive."""
+    if event.lineage_uuid in resolved:
+        return resolved[event.lineage_uuid]
+    if event.lineage_uuid in pending:
+        raise ValueError("Cyclic legacy event ancestry")
+    if "resolution_ref" not in event._recorded_omissions:
+        return event.resolution_ref
+    pending.add(event.lineage_uuid)
+    parent = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
+    result: ResolutionRef | None = None
+    if isinstance(event, ActionEvent):
+        application = event.application
+        if application is not None and "application" in event._recorded_omissions:
+            owner = parent
+            while isinstance(owner, AreaReachEvent):
+                owner = by_lineage.get(owner.parent_lineage) if owner.parent_lineage is not None else None
+            if not isinstance(owner, ActionEvent):
+                raise ValueError(f"Legacy application {event.uuid} has no recorded action owner")
+            application = application.model_copy(update={"lineage_uuid": owner.lineage_uuid})
+        result = (ApplicationResolutionRef(lineage_uuid=application.lineage_uuid,
+            application_id=application.application_id) if application is not None
+            else EventResolutionRef(lineage_uuid=event.lineage_uuid))
+    elif isinstance(event, TakeDamageEvent):
+        # A legacy object result can reduce without a damage-animation owner.
+        # Projection diagnoses missing proof if it admits a creature request.
+        result = (legacy_damage_reference(event.uuid, event.lineage_uuid,
+            event.parent_lineage, is_request=True) if event.parent_lineage is None else None)
+    elif parent is not None:
+        result = _recorded_resolution(parent, by_lineage, resolved, pending)
+    pending.remove(event.lineage_uuid)
+    resolved[event.lineage_uuid] = result
+    return result
+
+
 def upgrade_recorded_resolutions(events: tuple[Event, ...]) -> tuple[Event, ...]:
     """Admit old native relations only when retained resolution evidence proves them.
 
@@ -210,46 +247,12 @@ def upgrade_recorded_resolutions(events: tuple[Event, ...]) -> tuple[Event, ...]
     by_lineage = {event.lineage_uuid: event for event in events}
     resolved: dict[UUID, ResolutionRef | None] = {}
     pending: set[UUID] = set()
-
-    def reference(event: Event) -> ResolutionRef | None:
-        if event.lineage_uuid in resolved:
-            return resolved[event.lineage_uuid]
-        if event.lineage_uuid in pending:
-            raise ValueError("Cyclic legacy event ancestry")
-        if "resolution_ref" not in event._recorded_omissions:
-            return event.resolution_ref
-        pending.add(event.lineage_uuid)
-        parent = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
-        result: ResolutionRef | None = None
-        if isinstance(event, ActionEvent):
-            application = event.application
-            if application is not None and "application" in event._recorded_omissions:
-                owner = parent
-                while isinstance(owner, AreaReachEvent):
-                    owner = by_lineage.get(owner.parent_lineage) if owner.parent_lineage is not None else None
-                if not isinstance(owner, ActionEvent):
-                    raise ValueError(f"Legacy application {event.uuid} has no recorded action owner")
-                application = application.model_copy(update={"lineage_uuid": owner.lineage_uuid})
-            result = (ApplicationResolutionRef(lineage_uuid=application.lineage_uuid,
-                application_id=application.application_id) if application is not None
-                else EventResolutionRef(lineage_uuid=event.lineage_uuid))
-        elif isinstance(event, TakeDamageEvent):
-            # A legacy object result can reduce without a damage-animation owner.
-            # Projection diagnoses missing proof if it admits a creature request.
-            result = (legacy_damage_reference(event.uuid, event.lineage_uuid,
-                event.parent_lineage, is_request=True) if event.parent_lineage is None else None)
-        elif parent is not None:
-            result = reference(parent)
-        pending.remove(event.lineage_uuid)
-        resolved[event.lineage_uuid] = result
-        return result
-
     result = []
     for event in events:
         if "resolution_ref" not in event._recorded_omissions:
             result.append(event)
             continue
-        owner = reference(event)
+        owner = _recorded_resolution(event, by_lineage, resolved, pending)
         update: dict[str, Any] = {"resolution_ref": owner}
         if isinstance(event, ActionEvent) and event.application is not None and isinstance(owner, ApplicationResolutionRef):
             update["application"] = event.application.model_copy(update={"lineage_uuid": owner.lineage_uuid})
