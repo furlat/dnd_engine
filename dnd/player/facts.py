@@ -17,8 +17,8 @@ from dnd.player.audience import AudiencePerception, PlayerAudience, resolve_audi
 from dnd.types.appearance import AppearanceConfig
 from dnd.types.world import MovementProvocationPolicy
 from dnd.core.action_types import AvailableHandlerInfo
-from dnd.core.combat_log import CombatLogEntry
-from dnd.core.content.identities import HandlerDispatchOutcome
+from dnd.core.combat_log import CombatLogData, CombatLogEntryType
+from dnd.core.content.identities import ContentRef, HandlerDispatchOutcome
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.creature_types import AttackOutcome
 from dnd.core.effect_types import ObjectSectionVolume, ApplicationMembership, ResolutionRef, EffectPropagationLink
@@ -27,13 +27,11 @@ from dnd.types.event_facts import EventPhase, EventType, LandingKind, MovementTr
 from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot, ItemResourceChange, ItemEffectPresentationState,
     ItemIntegrity, ItemPresentationKind, ItemRarity, ItemRemnantState)
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
-from dnd.core.presentation_geometry import AoEPresentationGeometry
+from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState
 from dnd.types.senses import (PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesSnapshot,
     VolumeSurfaceSight)
 from dnd.core.condition_types import ConditionDurationSummary
-from dnd.core.content.identities import ContentRef
-from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry
 from dnd.types.class_features import DraconicPresenceMode
 from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.spatial_effects import AreaPropagation, SpatialDamageSource, SpatialEffectChangeOperation, SpatialEffectInteractionOperation
@@ -148,12 +146,34 @@ class PlayerHUDPatch:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class PlayerLogEntry:
+    """One disclosed combat-log entry, rendered for its seat, without nested copies.
+
+    An entry's children are composed from its node's lineage: in
+    `children_lineages` order, each child lineage's own entry, or, for a child
+    without one, that child's children (the native collection rule). A
+    multi-entity entry's `target_entry_indices` index those children.
+    """
+
+    entry_type: CombatLogEntryType
+    source_name: str
+    source_uuid: str
+    target_name: str | None
+    target_uuid: str | None
+    compact: str
+    verbose: str
+    detailed: str
+    data: CombatLogData
+    success: bool | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CombatLogAppend:
     generation: UUID
     observer_uuid: UUID
     encounter_log_index: int
     operation_end_cursor: int
-    entry: CombatLogEntry
+    entry: PlayerLogEntry
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -870,7 +890,7 @@ class PlayerNode:
     fact: PlayerFact | None
     resolution_ref: ResolutionRef | None = None
     cancellation: ActionCancellation | None = None
-    combat_log: CombatLogEntry | None = None
+    combat_log: PlayerLogEntry | None = None
     turn_execution_id: UUID | None = None
     content_attributions: tuple[ContentAttribution, ...] = ()
 
@@ -957,7 +977,8 @@ class PlayerLineage:
     generation: UUID
     observer_uuid: UUID
     lineage_uuid: UUID
-    root: PlayerNode | None
+    # The root's index in `events`; None when the root itself is not disclosed.
+    root: int | None
     events: tuple[PlayerNode, ...]
     version_rows: tuple[VersionRow, ...]
     start_cursor: int
@@ -969,7 +990,7 @@ class PlayerLineage:
     @property
     def group_uuid(self) -> UUID:
         """Stable local presentation key, including consequences of an unknown cause."""
-        return self.root.uuid if self.root is not None else self.lineage_uuid
+        return self.events[self.root].uuid if self.root is not None else self.lineage_uuid
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

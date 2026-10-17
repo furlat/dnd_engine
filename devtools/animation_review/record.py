@@ -116,7 +116,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     anchored_frames = []
     spatial_frames = set()
     for root in sequence.lineages:
-        fact = root.root.fact if root.root is not None else None
+        fact = root.events[root.root].fact if root.root is not None else None
         if (case.framing == "scene" and isinstance(fact, SpellFact) and fact.aoe_position is not None
                 and fact.behavior_id is not None and fact.behavior_id in data.drafts):
             recipe = data.drafts[fact.behavior_id]
@@ -368,7 +368,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 bound = bind_presentation_group(before, presentation, data, facings=facings,
                     contacts=contacts, activated_conditions=activated_conditions)
                 motion = bound if isinstance(bound, MotionTimeline) else None
-                if lineage.root is not None and isinstance(lineage.root.fact, MovementFact) and any(
+                if lineage.root is not None and isinstance(lineage.events[lineage.root].fact, MovementFact) and any(
                     isinstance(event.fact, AttackFact) or isinstance(event.fact, StepFact) and event.fact.committed
                     for event in lineage.events
                 ):

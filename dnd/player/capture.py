@@ -63,6 +63,7 @@ from dnd.world_facts import copy_world_facts, apply_world_fact as apply_recorded
 from dnd.player.audience import PlayerAudience, resolve_audience
 
 from dnd.player.event_record import RecordedEvent
+from dnd.player.facts import PlayerLogEntry
 from dnd.player.actor_facts import ActorState, ConditionFact, PresentationTarget
 from dnd.actor_projection import condition_fact as committed_condition_fact
 from dnd.actor_projection import remove_previous_item_holdings
@@ -104,14 +105,6 @@ class ObjectiveRow:
 
 
 @dataclass(frozen=True, slots=True)
-class SubjectiveTextRow:
-    """Already-projected subjective text retained during capture."""
-
-    source_index: int
-    text: str
-
-
-@dataclass(frozen=True, slots=True)
 class IntervalEnvelope:
     """One complete immutable cursor interval crossing the async seam."""
 
@@ -124,12 +117,13 @@ class IntervalEnvelope:
     door_uuid: UUID | None
     standing_torch_uuid: UUID | None
     objective_rows: tuple[ObjectiveRow, ...]
-    subjective_rows: tuple[SubjectiveTextRow, ...]
     admitted: tuple[tuple[int, RecordedEvent], ...]
     dispositions: tuple[tuple[int, Disposition], ...]
     conditions: tuple[ConditionFact, ...] = ()
     admissions: tuple[ActorAdmission, ...] = ()
     audience: PlayerAudience | None = None
+    # The audience's combat-log entry of each admitted event that has one.
+    logs: dict[UUID, PlayerLogEntry] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +198,8 @@ class CompletedLineage:
     audience: PlayerAudience | None = None
     # Exact already-recorded versions that caused an observation before completion.
     observed_sources: tuple[RecordedEvent, ...] = ()
+    # The audience's combat-log entry of each retained event that has one.
+    logs: dict[UUID, PlayerLogEntry] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,14 +341,16 @@ def capture_interval(
     admitted: list[tuple[int, Event]] = []
     admitted_original: list[tuple[int, Event]] = []
     dispositions: list[tuple[int, Disposition]] = []
-    subjective: list[SubjectiveTextRow] = []
+    logs: dict[UUID, PlayerLogEntry] = {}
     for index, event in indexed:
         is_admitted = any(_admitted(event, observer_uuid=identity, battlefield_id=battlefield_id)
                           for identity in audience.observers)
         if is_admitted:
-            copied = _retained_event(event, audience)
-            admitted.append((index, copied))
+            admitted.append((index, _retained_event(event, audience)))
             admitted_original.append((index, event))
+            entry = seat_log_entry(event.combat_log, audience)
+            if entry is not None:
+                logs[event.uuid] = entry
             disposition = (
                 Disposition.STATE_ONLY
                 if isinstance(event, (EntityCreatedEvent, SensoryUpdateEvent, TurnEvent, RoundEvent, EncounterEvent))
@@ -362,13 +360,6 @@ def capture_interval(
         else:
             disposition = Disposition.UNSUPPORTED
         dispositions.append((index, disposition))
-        projected = project_combat_log(
-            event.combat_log,
-            controlled_entity_uuids=audience.controlled_ids,
-            observer_entity_uuids=audience.observer_ids,
-        )
-        if projected is not None:
-            subjective.append(SubjectiveTextRow(index, projected.compact))
 
     return IntervalEnvelope(
         name=name,
@@ -381,13 +372,13 @@ def capture_interval(
         door_uuid=door_uuid,
         standing_torch_uuid=standing_torch_uuid,
         objective_rows=tuple(_objective_row(index, event) for index, event in indexed),
-        subjective_rows=tuple(subjective),
         admitted=tuple(admitted),
         dispositions=tuple(dispositions),
         conditions=tuple(fact for _, event in admitted_original if (fact := _condition_fact(event)) is not None),
         admissions=(_derive_admissions(tuple(admitted_original), audience, (context or capture_context(
             CaptureCheckpoint(generation, frozenset(audience.observers)), end_cursor=end_cursor)).evidence, frozenset(),
         ) if admitted_original else ()),
+        logs=logs,
     )
 
 
@@ -707,20 +698,31 @@ def _controller_redaction(event: Event, audience: PlayerAudience) -> bool | None
     return None
 
 
-def _retained_event(event: Event, audience: PlayerAudience,
-                    known_entity_names: Mapping[str, str] | None = None,
-                    known_connector_uuids: frozenset[str] = frozenset(),
-                    known_content_ids: frozenset[str] = frozenset(),
-                    retained_entries: dict[int, CombatLogEntry | None] | None = None,
-                    *, omit_sensory_payload: bool = False,
-                    bodies: dict[tuple[UUID, bool, bool | None], Event] | None = None) -> Event:
-    """The seat's retained event: the shared detached body, copied only to carry this seat's combat log."""
-    projected_log = project_combat_log(
-        event.combat_log, known_entity_names=known_entity_names, retained_entries=retained_entries,
+def seat_log_entry(log: CombatLogEntry | None, audience: PlayerAudience, *,
+                   known_entity_names: Mapping[str, str] | None = None,
+                   known_connector_uuids: frozenset[str] = frozenset(),
+                   known_content_ids: frozenset[str] = frozenset(),
+                   retained_entries: dict[int, CombatLogEntry | None] | None = None) -> PlayerLogEntry | None:
+    """The one projection of a native log for a seat: rendered, without nested copies or grants.
+
+    Nested child entries inform the rendering; the seat receives each child's
+    own entry with its node, so its target indices refer to those (see
+    `PlayerLogEntry`).
+    """
+    projected = project_combat_log(log, known_entity_names=known_entity_names, retained_entries=retained_entries,
         known_connector_uuids=known_connector_uuids, known_content_ids=known_content_ids,
-        controlled_entity_uuids=audience.controlled_ids,
-        observer_entity_uuids=audience.observer_ids,
-    )
+        controlled_entity_uuids=audience.controlled_ids, observer_entity_uuids=audience.observer_ids)
+    if projected is None:
+        return None
+    return PlayerLogEntry(entry_type=projected.entry_type, source_name=projected.source_name,
+        source_uuid=projected.source_uuid, target_name=projected.target_name, target_uuid=projected.target_uuid,
+        compact=projected.compact, verbose=projected.verbose, detailed=projected.detailed, data=projected.data,
+        success=projected.success)
+
+
+def _retained_event(event: Event, audience: PlayerAudience, *, omit_sensory_payload: bool = False,
+                    bodies: dict[tuple[UUID, bool, bool | None], Event] | None = None) -> Event:
+    """The seat's retained event: the shared detached body (its combat log is the seat's `logs` entry)."""
     controls = _controller_redaction(event, audience)
     key = (event.uuid, omit_sensory_payload, controls)
     body = bodies.get(key) if bodies is not None else None
@@ -728,9 +730,7 @@ def _retained_event(event: Event, audience: PlayerAudience,
         body = _retained_body(event, controls, omit_sensory_payload=omit_sensory_payload)
         if bodies is not None:
             bodies[key] = body
-    if projected_log is None:
-        return body
-    return body.model_copy(update={"combat_log": deepcopy(projected_log)})
+    return body
 
 
 def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload: bool) -> Event:
@@ -1139,12 +1139,19 @@ def _capture_lineage(
         and event.uuid not in observed_source_ids
     }
     retained_values = []
+    logs: dict[UUID, PlayerLogEntry] = {}
     for _, event in indexed:
         for admission in admissions_at.get(event.uuid, ()):
             names[str(admission.actor.uuid)] = admission.actor.name
         if event.uuid == nodes[event.lineage_uuid].uuid:
-            retained_values.append(_retained_event(nodes[event.lineage_uuid], audience, names, known_connector_uuids, known_content_ids,
-                retained_logs, omit_sensory_payload=event.uuid in omitted_sensory, bodies=context.bodies))
+            node = nodes[event.lineage_uuid]
+            retained_values.append(_retained_event(node, audience,
+                omit_sensory_payload=event.uuid in omitted_sensory, bodies=context.bodies))
+            entry = seat_log_entry(node.combat_log, audience,
+                known_entity_names=names, known_connector_uuids=known_connector_uuids,
+                known_content_ids=known_content_ids, retained_entries=retained_logs)
+            if entry is not None:
+                logs[node.uuid] = entry
     retained = tuple(retained_values)
     retained_root = next(event for event in retained if event.uuid == root.uuid)
     condition_ids = {fact.event_uuid for fact in conditions}
@@ -1171,6 +1178,7 @@ def _capture_lineage(
         observed_sources=tuple(_retained_event(event, audience, bodies=context.bodies)
             for _, event in indexed
             if event.uuid in observed_source_ids and event.uuid not in retained_ids),
+        logs=logs,
     )
 
 
@@ -1193,7 +1201,8 @@ def lineage_branch(lineage: CompletedLineage, root: Event) -> CompletedLineage:
                    start_cursor=rows[0].source_index, end_cursor=rows[-1].source_index + 1,
                    conditions=tuple(row for row in lineage.conditions if row.event_uuid in identities),
                    dispositions=tuple(row for row in lineage.dispositions if row[0] in identities),
-                   admissions=tuple(row for row in lineage.admissions if row.event_uuid in version_ids))
+                   admissions=tuple(row for row in lineage.admissions if row.event_uuid in version_ids),
+                   logs={identity: entry for identity, entry in lineage.logs.items() if identity in identities})
 
 
 def _admit_actor(target: PresentationTarget, admission: ActorAdmission) -> None:
@@ -1304,12 +1313,12 @@ __all__ = [
     "ObjectiveRow",
     "PresentationTarget",
     "ReducedInterval",
-    "SubjectiveTextRow",
     "capture_interval",
     "capture_lineage",
     "copy_target",
     "reduce_interval",
     "reduce_lineage",
+    "seat_log_entry",
     "seed_actors",
     "stage_actors",
     "stage_lineage",

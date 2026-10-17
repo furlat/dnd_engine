@@ -77,7 +77,7 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
             parent_lineage=None, children_lineages=(), phase=EventPhase.COMPLETION,
             canceled=step == 'canceled', fact=fact)
         lineages.append(PlayerLineage(generation=before.generation, observer_uuid=owner.uuid,
-            audience=audience, lineage_uuid=lineage_id, root=node, events=(node,),
+            audience=audience, lineage_uuid=lineage_id, root=0, events=(node,),
             version_rows=(VersionRow(source_index=index, event_uuid=identity, lineage_uuid=lineage_id),),
             start_cursor=index, end_cursor=index + 1, observations=observations))
     if together:

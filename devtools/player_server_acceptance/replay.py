@@ -45,8 +45,6 @@ def record_log(entry: dict, digest: Any, counts: Counter) -> None:
     counts['log:' + entry['entry_type']] += 1
     text = {key: entry[key] for key in ('entry_type', 'source_name', 'target_name', 'compact', 'verbose', 'detailed', 'success')}
     digest.update(json.dumps(text, sort_keys=True, separators=(',', ':')).encode())
-    for child in entry['sub_entries']:
-        record_log(child, digest, counts)
 
 
 def check_group(group: dict, controlled: set[str], events: dict[str, int], lineages: set[str], counts: Counter, logs: Any) -> None:

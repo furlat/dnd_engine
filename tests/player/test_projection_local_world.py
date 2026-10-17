@@ -73,7 +73,7 @@ def initial(objects, visible, contacts):
     return IntervalEnvelope(name='recorded local changes', generation=generation, start_cursor=0,
         end_cursor=2, observer_uuid=observer, battlefield_id=world.battlefield_id, door_uuid=None,
         standing_torch_uuid=None, objective_rows=tuple(objective(i, event) for i, event in enumerate(events)),
-        subjective_rows=(), admitted=tuple(enumerate(events)), dispositions=())
+        admitted=tuple(enumerate(events)), dispositions=())
 
 
 def check(initialization, events):

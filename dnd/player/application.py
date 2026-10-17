@@ -3,7 +3,8 @@
 from dataclasses import dataclass, replace
 
 from dnd.core.events import EventQueue
-from dnd.player.capture import CaptureCheckpoint, Disposition, capture_context, capture_interval, capture_lineages
+from dnd.player.capture import (CaptureCheckpoint, Disposition, capture_context, capture_interval, capture_lineages,
+    seat_log_entry)
 from dnd.player.content import UIContentManifest
 from dnd.player.content_composition import (ContentCatalog, admitted_content, index_content_catalog,
     observed_content_additions)
@@ -11,7 +12,6 @@ from dnd.player.facts import CombatLogAppend, PlayerInitialization, PlayerUpdate
 from dnd.player.projection import ProjectionState, begin_projection, project_after_values, project_lineage
 from dnd.player.reduction import reduce_initialization
 from dnd.player.session import Operation, Session, snapshot_player_hud
-from dnd.subjective_combat_log import project_combat_log
 
 
 @dataclass(slots=True)
@@ -80,10 +80,8 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
                 lineages.append(lineage)
         appends = tuple(CombatLogAppend(generation=remembered.generation, observer_uuid=remembered.observer_uuid,
             encounter_log_index=index, operation_end_cursor=operation.end_cursor, entry=entry)
-            for index, original in operation.original_logs if (entry := project_combat_log(original,
-                controlled_entity_uuids=audience.controlled_ids,
-                observer_entity_uuids=audience.observer_ids, known_entity_names=names,
-                known_content_ids=known_content)) is not None)
+            for index, original in operation.original_logs if (entry := seat_log_entry(original, audience,
+                known_entity_names=names, known_content_ids=known_content)) is not None)
         hud, appends = project_after_values(runtime.projection, hud_by_seat[seat], appends)
         if runtime.content_catalog.source is catalog:
             additions = observed_content_additions(runtime.content_catalog, known_content_keys, tuple(lineages))

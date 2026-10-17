@@ -16,7 +16,7 @@ from dnd.player.audience import (AudienceComposition, apply_current_audience, au
     begin_audience_composition, observe_audience, resolve_audience)
 from dnd.player.facts import (
     AttackFact, ConditionChangeFact, ConditionFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
-    PlayerActor, PlayerCharacterSheet, PlayerFact, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
+    ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SpatialFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact, FactionFact,
 )
 
@@ -103,6 +103,8 @@ def apply_world_update(target: PlayerState, update: WorldUpdate) -> None:
 def observed_actor(previous: PlayerActor | None, observation: PlayerObservation) -> PlayerActor:
     """The body after an observation's patch; against an absent body the patch is complete."""
     if previous is None:
+        if observation.changes.keys() != ActorChanges.__optional_keys__:
+            raise ValueError("A first observation must carry the whole body")
         return PlayerActor(uuid=observation.actor_uuid, **observation.changes)
     return replace(previous, **observation.changes)
 
@@ -240,7 +242,8 @@ def apply_record_fact(target: PlayerState, fact: PlayerFact) -> None:
             if actor.controlled_items is None or not target.viewing_audience.controls(actor.uuid):
                 raise ValueError("item charges require the controlled actor's inventory")
             if fact.item_destroyed:
-                target.items.pop(fact.item_uuid, None)
+                if fact.item_uuid in actor.controlled_items:
+                    del target.items[fact.item_uuid]
                 target.actors[actor.uuid] = replace(actor,
                     controlled_items=tuple(identity for identity in actor.controlled_items if identity != fact.item_uuid),
                     visual_loadout=replace(actor.visual_loadout, layers=tuple(layer for layer in actor.visual_loadout.layers
@@ -413,6 +416,8 @@ def apply_hud(target: PlayerState, patch: PlayerHUDPatch, *, end_cursor: int) ->
     sheets = {row.actor_uuid: row for row in previous.sheets} if previous is not None else {}
     for row in patch.sheets:
         before = sheets.get(row.actor_uuid)
+        if before is None and row.changes.keys() != SheetChanges.__optional_keys__:
+            raise ValueError("A first sheet must carry every field")
         sheets[row.actor_uuid] = (PlayerCharacterSheet(actor_uuid=row.actor_uuid, **row.changes) if before is None
             else replace(before, **row.changes))
     initiative = patch.initiative if patch.initiative is not None else previous.initiative if previous is not None else None
@@ -467,7 +472,8 @@ def lineage_branch(lineage: PlayerLineage, root: PlayerNode) -> PlayerLineage:
     nodes = tuple(node for node in lineage.events if node.lineage_uuid in selected)
     versions = tuple(row for row in lineage.version_rows if row.lineage_uuid in selected)
     identities = {row.event_uuid for row in versions}
-    return replace(lineage, root=root, events=nodes, version_rows=versions,
+    return replace(lineage, root=next(index for index, node in enumerate(nodes) if node.uuid == root.uuid),
+        events=nodes, version_rows=versions,
         start_cursor=versions[0].source_index, end_cursor=versions[-1].source_index + 1,
         observations=tuple(row for row in lineage.observations if row.event_uuid in identities),
         world_updates=tuple(row for row in lineage.world_updates if row.event_uuid in identities))

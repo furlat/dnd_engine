@@ -5,7 +5,7 @@ authority, remembers last-observed world values, and copies committed facts;
 it never asks the live engine what an observer can see.
 """
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field, replace
 from math import floor
 from uuid import UUID, uuid5
@@ -18,7 +18,7 @@ from dnd.types.senses import SensesSnapshot, PerceivedContact, PerceivedSpatialE
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.base_actions import ActionEvent
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.presentation_geometry import ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.runtime import HandlerDispatchOutcome
@@ -47,7 +47,7 @@ from dnd.player.facts import (
     DeathSaveFact, EquipmentFact, FloorItem, ForcedMovementFact, PortalTransferFact, MechanismActivationFact, HealFact, ItemChargeFact, LifeFact,
     MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage,
     PlayerNode, PlayerObject, PlayerObservation, PlayerState, PlayerHUDSnapshot, PlayerHUDPatch, CombatLogAppend,
-    PlayerCharacterSheet, SheetChanges, SheetPatch, SpatialEffectContent, SpatialEffectSighting,
+    PlayerCharacterSheet, PlayerLogEntry, SheetChanges, SheetPatch, SpatialEffectContent, SpatialEffectSighting,
     PlayerWorld, SensoryFact, ShoveFact, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
     VersionRow, VisualItem, VisualLoadout, WorldUpdate, ItemLook, ItemPatch, ItemProfile, ItemState, PlayerItem, TileFieldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
 )
@@ -71,8 +71,8 @@ def _action_name(event: ActionEvent, observer: PlayerAudience) -> str | None:
         else "Convert sorcery points to slot")
 
 
-def _action_log(log: CombatLogEntry | None, fact: PlayerFact | None,
-                observer: PlayerAudience) -> CombatLogEntry | None:
+def _action_log(log: PlayerLogEntry | None, fact: PlayerFact | None,
+                observer: PlayerAudience) -> PlayerLogEntry | None:
     """Keep a foreign conversion's resource amounts out of its public label too."""
     if (log is None or log.data.kind != "action" or not isinstance(fact, ActionFact) or fact.font_conversion is None
             or observer.controls(fact.source_entity_uuid)):
@@ -80,8 +80,8 @@ def _action_log(log: CombatLogEntry | None, fact: PlayerFact | None,
     description = log.data.effect_description if log.data.kind == "action" else ""
     compact = f"{{cyan:{log.source_name or 'Unknown'}}} uses {{bold:{fact.name}}}"
     verbose = compact + (f"\n  {description}" if description else "")
-    return log.model_copy(update={"compact": compact, "verbose": verbose, "detailed": verbose,
-        "data": log.data.model_copy(update={"action_name": fact.name})})
+    return replace(log, compact=compact, verbose=verbose, detailed=verbose,
+        data=log.data.model_copy(update={"action_name": fact.name}))
 
 
 def _position_allowed(event: Event, position: tuple[int, int], observer: PlayerAudience) -> bool:
@@ -1158,7 +1158,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                    admissions: tuple[ActorAdmission, ...], conditions: tuple[ConditionFact, ...],
                    private_world: PresentationTarget, private_actors: dict[UUID, ActorState],
                    remembered: PlayerState, disclosed: set[UUID], world_index: WorldProjectionIndex,
-                   audience_composition: AudienceComposition,
+                   audience_composition: AudienceComposition, logs: Mapping[UUID, PlayerLogEntry],
                    observed_sources: tuple[Event, ...] = ()
                    ) -> tuple[tuple[PlayerNode, ...], tuple[PlayerObservation, ...], tuple[WorldUpdate, ...],
                               frozenset[UUID], frozenset[UUID]]:
@@ -1427,7 +1427,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
         nodes.append(PlayerNode(uuid=event.uuid, lineage_uuid=event.lineage_uuid,
             parent_event=event.parent_event, parent_lineage=event.parent_lineage,
             children_lineages=tuple(event.children_lineages), phase=event.phase,
-            canceled=event.canceled, fact=fact, combat_log=_action_log(event.combat_log, fact, observer),
+            canceled=event.canceled, fact=fact, combat_log=_action_log(logs.get(event.uuid), fact, observer),
             resolution_ref=event.resolution_ref, turn_execution_id=event.turn_execution_id,
             cancellation=ActionCancellation(phase=event.canceled_from_phase,
                 action_economy_spent=event.action_economy_spent, outcome_code=event.outcome_code)
@@ -1546,6 +1546,8 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
     previous_revisions = {identity: state.spatial_revisions[identity] for _, identity in touched_spatial
         if identity in state.spatial_revisions}
     _observe_spatial_revisions(state, nodes)
+    # The content the seat holds at each node, as `_emit_bodies` will fold it.
+    content_held = dict(state.remembered.spatial_content)
     filtered = []
     for node in nodes:
         fact = node.fact
@@ -1557,8 +1559,10 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
                 content = fact.spatial_effect_content[identity]
                 if (previous_spatial.get(key) != value or previous_revisions.get(identity)
                         != state.spatial_versions[(identity, effect.owner_revision)]
-                        or state.remembered.spatial_content.get(identity, content) != content):
+                        or content_held.get(identity, content) != content):
                     changed[identity] = effect
+                    if not node.canceled:
+                        content_held[identity] = content
                 previous_spatial[key] = value
             for identity in fact.spatial_effects_removed:
                 previous_spatial.pop((fact.observer_uuid, identity), None)
@@ -1801,7 +1805,6 @@ def project_after_values(state: ProjectionState, hud: PlayerHUDSnapshot | None,
     The display travels as the patch against the seat's last one, folded into
     `remembered` by the client's reducer; an unchanged display sends nothing.
     """
-    """Map already-admitted native after-values into this audience's ordering."""
     def boundary(native_cursor: int) -> int:
         # Public occurrences increase in insertion order, including late
         # disclosures of older native events. The first qualifying occurrence
@@ -1840,7 +1843,8 @@ def begin_projection(initialization: IntervalEnvelope) -> tuple[ProjectionState,
     audience_composition = AudienceComposition()
     nodes, observations, updates, superseded, known_removals = _project_nodes(
         tuple(event for _, event in initialization.admitted), versions, initialization.admissions,
-        initialization.conditions, private_world, actors, remembered, disclosed, world_index, audience_composition)
+        initialization.conditions, private_world, actors, remembered, disclosed, world_index, audience_composition,
+        initialization.logs)
     state = ProjectionState(private_world, actors, remembered, disclosed, world_index=world_index,
         audience_composition=audience_composition)
     state.owned_spatial_effects.update(event.spatial_effect_uuid for _, event in initialization.admitted
@@ -1866,7 +1870,7 @@ def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> Player
     nodes, observations, updates, superseded, known_removals = _project_nodes(
         upgrade_recorded_resolutions(lineage.events), versions, lineage.admissions, lineage.conditions, state.world,
         state.actors, state.remembered, state.disclosed_lineages, state.world_index, state.audience_composition,
-        lineage.observed_sources)
+        lineage.logs, lineage.observed_sources)
     # Settled initialization needs resulting state only. Presenting a damage
     # operation additionally requires recorded causal ownership, or an explicit
     # current-format unknown owner; old missing fields cannot establish either.
@@ -1884,9 +1888,9 @@ def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> Player
     if not nodes and not observations and not updates:
         return None
     nodes, observations = _emit_bodies(state.remembered, nodes, versions, observations, superseded, known_removals)
-    root = next((node for node in nodes if node.uuid == lineage.root.uuid), None)
+    root = next((index for index, node in enumerate(nodes) if node.uuid == lineage.root.uuid), None)
     return PlayerLineage(generation=lineage.generation, observer_uuid=lineage.observer_uuid,
-        lineage_uuid=root.lineage_uuid if root is not None else uuid5(lineage.generation,
+        lineage_uuid=nodes[root].lineage_uuid if root is not None else uuid5(lineage.generation,
             f"{lineage.observer_uuid}:{lineage.root.lineage_uuid}"),
         root=root, events=nodes, version_rows=versions, start_cursor=start_cursor,
         end_cursor=state.next_occurrence, observations=observations, world_updates=updates, audience=state.remembered.audience)

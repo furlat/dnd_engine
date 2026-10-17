@@ -27,12 +27,11 @@ from dnd.controller import HumanController
 from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, TargetType
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.blocks.equipment import EquippableItem
-from dnd.player.facts import PlayerCharacterSheet, PlayerHUDSnapshot, PlayerResource, CombatLogAppend
+from dnd.player.facts import PlayerCharacterSheet, PlayerHUDSnapshot, PlayerResource
 from dnd.player.audience import PlayerAudience, SeatAssignment
 from dnd.player.commands import CommandRejected
 from dnd.player.choices import PlayerChoices, PlayerSelectionPreview
 from dnd.player.choice_projection import project_choices, project_selection_preview
-from dnd.subjective_combat_log import project_combat_log
 from dnd.core.combat_log import CombatLogEntry
 from typing import Callable
 from dnd.core.base_actions import CostType, spell_slot_cost_type
@@ -109,8 +108,6 @@ class Operation:
     end_cursor: int
     roots: tuple[Event, ...]
     boundary: AdvanceResult | None = None
-    hud_snapshot: PlayerHUDSnapshot | None = None
-    combat_log_appends: tuple[CombatLogAppend, ...] = ()
     original_logs: tuple[tuple[int, CombatLogEntry], ...] = ()
     hud_by_seat: tuple[tuple[str, PlayerHUDSnapshot], ...] = ()
 
@@ -478,16 +475,10 @@ def _operation(session: Session, start_cursor: int, boundary: AdvanceResult | No
                   and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
     originals = tuple(session.logs.log_appends)
     session.logs.log_appends.clear()
-    audience = player_audience(session)
-    appends = tuple(CombatLogAppend(generation=EventQueue.generation_id(), observer_uuid=audience.observers[0],
-        encounter_log_index=index, operation_end_cursor=end_cursor, entry=projected)
-        for index, entry in originals if (projected := project_combat_log(entry,
-            controlled_entity_uuids=audience.controlled_ids,
-            observer_entity_uuids=audience.observer_ids)) is not None)
     sheets = _snapshot_sheets(session, session.player_uuids)
     hud = tuple((key, snapshot_player_hud(session, audience=value, evaluated_sheets=sheets))
                 for key, value in session.seats.items())
-    return Operation(start_cursor, end_cursor, roots, boundary, hud[0][1], appends, originals, hud)
+    return Operation(start_cursor, end_cursor, roots, boundary, originals, hud)
 
 
 def execute_player_action(

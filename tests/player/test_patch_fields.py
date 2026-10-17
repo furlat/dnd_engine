@@ -8,12 +8,13 @@ from dataclasses import fields, replace
 from typing import get_type_hints
 from uuid import uuid4
 
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.equipment_types import WeaponSet
 from dnd.core.item_types import ItemPresentationState
 from dnd.core.life_types import LifeState
 from dnd.player.facts import (ActorChanges, ItemLook, ItemProfile, ItemState, PlayerActor, PlayerCharacterSheet,
-    PlayerObservation, SheetChanges, SpatialEffectContent, SpatialEffectSighting, VisualLoadout)
-from dnd.player.projection import actor_changes
+    PlayerObservation, SheetChanges, SpatialEffectContent, SpatialEffectSighting, VisualLoadout, joined_effect)
+from dnd.player.projection import _sighting, actor_changes
 from dnd.player.reduction import observed_actor
 from dnd.types.appearance import AppearanceConfig
 from dnd.types.senses import PerceivedSpatialEffect
@@ -47,3 +48,15 @@ def test_a_sighting_and_its_content_are_every_perceived_effect_field():
 
 def test_sheet_changes_cover_every_sheet_field():
     assert set(get_type_hints(SheetChanges)) == {row.name for row in fields(PlayerCharacterSheet)} - {"actor_uuid"}
+
+
+def test_a_sighting_split_and_joined_back_passes_every_field():
+    effect = PerceivedSpatialEffect(content_ref=ContentRef(pack_id="test.patch",
+        definition_kind=ContentDefinitionKind.CONDITION, content_id="condition.test.patch",
+        content_version=1, definition_contract_hash="0" * 64), name="Fog", description="Thick.",
+        positions=((1, 2),), owner_revision=3)
+    sighting = _sighting(effect)
+    content = SpatialEffectContent(content_ref=effect.content_ref, name=effect.name, description=effect.description)
+    assert sighting.model_fields_set == set(SpatialEffectSighting.model_fields)
+    joined = joined_effect(sighting, content)
+    assert joined.model_fields_set == set(PerceivedSpatialEffect.model_fields) and joined == effect
