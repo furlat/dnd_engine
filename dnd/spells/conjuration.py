@@ -68,7 +68,7 @@ from dnd.core.condition_types import (
     HazardFilter,
 )
 from dnd.blocks.base_item import BaseItem, UsableItem
-from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
+from dnd.types.senses import OBSCUREMENT_BITS, OpticalObscurement, PerceivedSpatialEffect
 from dnd.core.dice import AttackOutcome, Dice, RollType
 from dnd.core.values import ModifiableValue
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, ExposedFlameEvent, SpatialChangeEvent, SpatialEffectInteractionEvent
@@ -86,6 +86,7 @@ from dnd.core.events import SavingThrowEvent
 from dnd.core.aoe import AoEShape, Cube, Cylinder
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.gridmap import CrossingChannel, get_map
+from dnd.core.view import visible_positions
 from dnd.entity import Entity
 from dnd.types.world import OccupancyLayer, SpatialChannel
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
@@ -142,8 +143,8 @@ def _call_lightning_positions(spell: SpellAction) -> List[Tuple[int, int]]:
     caster = Entity.get(spell.source_entity_uuid)
     if caster is None:
         return []
-    return [point for point, visible in caster.senses.visible.items()
-            if visible and spell.target_position_error(point) is None]
+    return [point for point in visible_positions(caster.senses.cells)
+            if spell.target_position_error(point) is None]
 
 
 def _apply_call_lightning(spell: SpellAction, event: SpellEvent, *, dc: int) -> SpellEvent:
@@ -2783,8 +2784,7 @@ def _is_daylight_targetable_darkness(position: Tuple[int, int]) -> bool:
     grid = get_map()
     return (
         grid.get_tile(*position) is not None
-        and OpticalObscurement.MAGICAL_DARKNESS
-        in grid.get_optical_obscurements_at(position)
+        and bool(grid.optical_obscurement_bits_at(position) & OBSCUREMENT_BITS[OpticalObscurement.MAGICAL_DARKNESS])
     )
 
 

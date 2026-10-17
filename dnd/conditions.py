@@ -62,6 +62,7 @@ from dnd.core.base_block import CommittedConditionRemovals, LightLevel, Prepared
 from dnd.core.geometry import bresenham_line
 from dnd.core.elevation import support_distance_feet
 from dnd.core.gridmap import get_map
+from dnd.core.view import cell_visible
 from dnd.core.ground import ground_neighbors
 from dnd.types.world import OccupancyLayer
 from uuid import UUID
@@ -1252,7 +1253,7 @@ class Frightened(BaseCondition):
         target = Entity.get(source_entity_uuid)
         if (target is not None and target.get_occupancy_layer() is OccupancyLayer.GROUND
                 and ground_has_residue(target.position, origin.residue_id)
-                and target.senses.visible.get(target.position, False)):
+                and cell_visible(target.senses.cells, target.position)):
             return AdvantageModifier(name="Frightened", value=AdvantageStatus.DISADVANTAGE,
                 source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid)
         return None

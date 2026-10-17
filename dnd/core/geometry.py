@@ -155,8 +155,9 @@ def supercover_cells_relative(dx: int, dy: int) -> frozenset[Tuple[int, int]]:
     return frozenset(_supercover_line_relative_cached(dx, dy))
 
 
-# Square radius in cells of the vectorized route table (81 x 81 endpoints).
-ROUTE_TABLE_RADIUS = 40
+# Square radius in cells of the vectorized route table (161 x 161 endpoints, about 17 MB):
+# the engine's perception reach (`update_all_entities_senses(max_distance=80)`).
+ROUTE_TABLE_RADIUS = 80
 
 
 @lru_cache(maxsize=1)

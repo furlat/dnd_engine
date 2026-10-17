@@ -73,7 +73,8 @@ from dnd.blocks.creature_proficiencies import (
 )
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
-from dnd.blocks.sensory import Senses, capture_senses_snapshot, spatial_senses_system
+from dnd.blocks.sensory import Senses, published_senses, spatial_senses_system
+from dnd.core.view import cell_seen, cell_visible, known_positions, visible_box, visible_positions
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.blocks.inventory import Inventory, InventoryAddResult
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
@@ -4465,7 +4466,7 @@ class Entity(BaseBlock):
             actor_uuid=self.uuid,
             subjective=subjective,
             position=self.position,
-            visible=frozenset(position for position, visible in self.senses.visible.items() if visible),
+            visible=frozenset(visible_positions(self.senses.cells)),
             creatures=creatures,
             objects={identity: ObjectRecord(uuid=identity, position=contact.position)
                      for identity, contact in self.senses.objects.items()},
@@ -5357,11 +5358,12 @@ class Entity(BaseBlock):
         paths: Dict[Tuple[int, int], List[Tuple[int, int]]],
         path_costs: Dict[Tuple[int, int], int],
         threat_domains: List[Tuple['Entity', FrozenSet[Tuple[int, int]]]],
+        known: AbstractSet[Tuple[int, int]],
         *,
         walk_in_danger: bool,
         has_reachable_hazard: bool,
     ) -> None:
-        """Prefer equal-cost monotone routes that add no disclosed risk."""
+        """Prefer equal-cost monotone routes that add no disclosed risk; every step must be a known cell."""
         grid = get_map()
 
         def turns(path):
@@ -5446,8 +5448,7 @@ class Entity(BaseBlock):
                 if candidate == original or candidate == previous:
                     continue
                 previous = candidate
-                if any(step not in self.senses.seen and step not in self.senses.visible
-                       for step in candidate[1:]):
+                if any(step not in known for step in candidate[1:]):
                     continue
                 if not all(can_step(source, target) for source, target in zip(candidate, candidate[1:])):
                     continue
@@ -5468,7 +5469,7 @@ class Entity(BaseBlock):
         grid = get_map()
         # Paths read traversal within their search box; the walkable map reads every visible cell.
         read_box = union_box(path_read_box(self.position, effective_path_distance),
-                             cells_box(self.senses.visible))
+                             visible_box(self.senses.cells))
         self._navigation_traversal = (read_box, grid.traversal_stamp(read_box))
         distances, paths = grid.compute_paths(
             self.position,
@@ -5483,13 +5484,11 @@ class Entity(BaseBlock):
             Tuple[int, int], List[Tuple[int, int]]
         ] = defaultdict(list)
         path_costs: Dict[Tuple[int, int], int] = {}
+        known = known_positions(self.senses.cells, self.senses.seen)
         for position, path in paths.items():
             if (
-                (position in self.senses.seen or position in self.senses.visible)
-                and all(
-                    step in self.senses.seen or step in self.senses.visible
-                    for step in path
-                )
+                position in known
+                and all(step in known for step in path)
                 and self.can_end_movement_at(position, subjective=True)
             ):
                 filtered_paths[position] = path
@@ -5517,11 +5516,8 @@ class Entity(BaseBlock):
             )
             for position, path in safe_raw_paths.items():
                 if (
-                    (position in self.senses.seen or position in self.senses.visible)
-                    and all(
-                        step in self.senses.seen or step in self.senses.visible
-                        for step in path
-                    )
+                    position in known
+                    and all(step in known for step in path)
                     and self.can_end_movement_at(position, subjective=True)
                 ):
                     safe_paths[position] = path
@@ -5530,13 +5526,13 @@ class Entity(BaseBlock):
                     )
         if len(filtered_paths) > 1:
             threat_domains = self._visible_hostile_threat_domains()
-            self._prefer_direct_navigation_paths(filtered_paths, path_costs, threat_domains,
+            self._prefer_direct_navigation_paths(filtered_paths, path_costs, threat_domains, known,
                 walk_in_danger=True, has_reachable_hazard=has_reachable_hazard)
-            self._prefer_direct_navigation_paths(safe_paths, safe_path_costs, threat_domains,
+            self._prefer_direct_navigation_paths(safe_paths, safe_path_costs, threat_domains, known,
                 walk_in_danger=False, has_reachable_hazard=has_reachable_hazard)
         walkable = {
             position: grid.is_walkable(position[0], position[1])
-            for position in self.senses.visible
+            for position in visible_positions(self.senses.cells)
         }
         self.senses.replace_navigation(
             walkable=walkable,
@@ -5546,7 +5542,6 @@ class Entity(BaseBlock):
             safe_path_costs=safe_path_costs,
             path_max_distance=effective_path_distance,
         )
-        spatial_senses_system.refresh_observer(self.uuid)
 
     def update_entity_senses(
         self,
@@ -5554,7 +5549,7 @@ class Entity(BaseBlock):
         path_max_distance: Optional[int] = None,
     ) -> None:
         """Reduce perception, materialize navigation, and record any actual delta."""
-        before = capture_senses_snapshot(self.senses)
+        before = published_senses(self.senses)
         spatial_senses_system.recompute_observer(
             self.uuid,
             max_distance=max_distance,
@@ -6135,7 +6130,7 @@ class Entity(BaseBlock):
         return frozenset(
             caster_visible_positions
             if caster_visible_positions is not None
-            else (position for position, visible in self.senses.visible.items() if visible)
+            else visible_positions(self.senses.cells)
         )
 
     def _collect_self_actions(
@@ -6673,14 +6668,11 @@ class Entity(BaseBlock):
                             subjective=scan.subjective,
                             ignore_difficult_terrain=self.ignore_difficult_terrain,
                         )
+                        known = known_positions(self.senses.cells, self.senses.seen)
                         paths_by_position = {
                             pos: path
                             for pos, path in computed_paths.items()
-                            if (pos in self.senses.seen or pos in self.senses.visible)
-                            and all(
-                                step in self.senses.seen or step in self.senses.visible
-                                for step in path
-                            )
+                            if pos in known and all(step in known for step in path)
                         }
 
                     if template.is_movement and remaining_movement <= 0:
@@ -6800,7 +6792,7 @@ class Entity(BaseBlock):
                     self.position[0] + delta_x,
                     self.position[1] + delta_y,
                 )
-                if position not in self.senses.seen and not self.senses.visible.get(position, False):
+                if not cell_seen(self.senses.seen, position) and not cell_visible(self.senses.cells, position):
                     continue
                 if grid.can_transition(
                     self.position,
@@ -7583,9 +7575,7 @@ class Entity(BaseBlock):
                 use_base = use_template.current_selection()
                 action_range = use_template.get_range()
                 max_range = action_range.normal if action_range else 0
-                for pos, is_visible in self.senses.visible.items():
-                    if not is_visible:
-                        continue
+                for pos in visible_positions(self.senses.cells):
                     if pos == self.senses.position:
                         continue
                     dist = use_template.get_target_distance(pos)

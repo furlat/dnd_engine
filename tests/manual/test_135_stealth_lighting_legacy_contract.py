@@ -13,6 +13,7 @@ from enum import StrEnum
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import Sphere
 from dnd.actions import Attack, Disengage, Dodge, Hide, Move
 from dnd.actions_functional import execute_use_action
@@ -454,10 +455,7 @@ def reset_stealth_world(
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
     Encounter.clear_registry()
-    grid = get_map()
-    grid.create_rectangle(0, 0, width, height)
-    for tile in grid._tiles.values():
-        tile.default_light = default_light
+    get_map().create_rectangle(0, 0, width, height, default_light=default_light)
 
 
 def target_is_discoverable(actor: Entity, target_uuid: UUID) -> bool:
@@ -1109,7 +1107,7 @@ def test_magical_darkness_controls_attack_discovery_by_sense_mode() -> None:
     assert target.uuid in attacker.senses.entities
     assert target_is_discoverable(attacker, target.uuid)
     assert (
-        attacker.senses.effective_light_levels[target.position]
+        capture_senses_snapshot(attacker.senses).effective_light_levels[target.position]
         == LightLevel.BRIGHT_LIGHT
     )
 

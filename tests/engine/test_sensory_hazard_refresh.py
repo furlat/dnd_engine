@@ -129,8 +129,8 @@ def test_stationary_observer_hazards_follow_moving_light_and_hidden_removal():
     grid.add_light_source(carrier.position, bright_radius_feet=10,
         dim_radius_feet=0, anchor_uuid=carrier.uuid)
     observer.update_entity_senses(max_distance=11)
-    assert observer.senses.hazardous_cells[old_cell]
-    assert new_cell not in observer.senses.hazardous_cells
+    assert capture_senses_snapshot(observer.senses).hazardous_cells[old_cell]
+    assert new_cell not in capture_senses_snapshot(observer.senses).hazardous_cells
 
     replayed = capture_senses_snapshot(observer.senses)
     for destination in ((8, 1), (2, 1)):
@@ -140,11 +140,11 @@ def test_stationary_observer_hazards_follow_moving_light_and_hidden_removal():
             replayed = reduce_senses_snapshot(observer.uuid, replayed, decode_event(encode_event(event)))
         assert replayed == capture_senses_snapshot(observer.senses)
         if destination == (8, 1):
-            assert old_cell not in observer.senses.hazardous_cells
-            assert observer.senses.hazardous_cells[new_cell]
+            assert old_cell not in capture_senses_snapshot(observer.senses).hazardous_cells
+            assert capture_senses_snapshot(observer.senses).hazardous_cells[new_cell]
             cursor = EventQueue.event_cursor()
             assert remove_tile_residue(old_tile, old_residue.residue_id)
             assert sensory_since(observer.uuid, cursor) == ()
         else:
-            assert not observer.senses.hazardous_cells[old_cell]
-            assert new_cell not in observer.senses.hazardous_cells
+            assert not capture_senses_snapshot(observer.senses).hazardous_cells[old_cell]
+            assert new_cell not in capture_senses_snapshot(observer.senses).hazardous_cells

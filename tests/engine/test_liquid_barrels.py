@@ -11,6 +11,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.condition_types import ConditionTag
 from dnd.core.creature_types import DamageType
@@ -354,7 +355,7 @@ def test_visible_material_publishes_only_its_observed_cells(world: Game, content
     cause = completed(0)[-1]
     hidden.activate(parent_event=cause)
     observer.update_entity_senses()
-    assert (4, 1) in observer.senses.visible
+    assert (4, 1) in capture_senses_snapshot(observer.senses).visible
     assert hidden.uuid not in observer.senses.spatial_effects
 
 

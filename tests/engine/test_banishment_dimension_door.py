@@ -3,6 +3,7 @@
 import pytest
 
 from dnd.actions_functional import execute_available_action, get_available_actions, get_extra_position_options, register_spell
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.conditions import Concentrating, Poisoned
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType
@@ -93,7 +94,7 @@ def test_unseen_destination_is_selectable_and_paid_mishap_damages_both(scene, bl
     for y in range(8):
         get_map().set_tile(9, y, walking_cost=0, blocks_optics=True)
     Entity.update_all_entities_senses(max_distance=125)
-    assert not caster.senses.visible.get(destination, False)
+    assert not (destination in capture_senses_snapshot(caster.senses).visible)
     register_spell(caster, DimensionDoor)
     actions = get_available_actions(caster)
     row = next(row for row in actions.entity_actions if row.behavior_id == "spell.dimension_door")
@@ -226,7 +227,7 @@ def test_dimension_door_unseen_open_space_succeeds_but_out_of_range_rejects(scen
         get_map().set_tile(9, y, walking_cost=0, blocks_optics=True)
     get_map().set_tile(105, 2)
     Entity.update_all_entities_senses(max_distance=125)
-    assert not caster.senses.visible.get((12, 2), False)
+    assert (12, 2) not in capture_senses_snapshot(caster.senses).visible
     rejected = door(caster, caster, (105, 2))
     assert rejected is not None and rejected.canceled
     assert caster.action_economy.spell_slot_4.normalized_score == 3

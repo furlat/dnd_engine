@@ -51,7 +51,7 @@ def test_fireball_spreads_around_open_doorway_within_original_radius(opening, ex
             if tile.residue_state(ASHEN_RESIDUE.residue_id) is not None} == reached
     preview = caster.preview_aoe_target(spell, AvailableTarget(index=0, position=(5, 8)))
     assert set(preview.affected_positions or ()) == {position for position in reached
-        if caster.senses.visible.get(position)}
+        if (position in capture_senses_snapshot(caster.senses).visible or None)}
 
 
 def test_connected_spread_contacts_solid_cell_but_does_not_cross_it():

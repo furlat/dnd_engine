@@ -24,6 +24,7 @@ from dnd.types.physical_access import PhysicalAccess
 from dnd.types.discovery import ActorScan, Relationship, ScanRecord
 from dnd.items.spell_payloads import SpellPayloadItem, SpellPayloadLifetime, build_spell_payload, payload_blast, commit_payload_cast
 from dnd.core.gridmap import PreparedObjectPlacement
+from dnd.core.view import cell_visible, visible_positions
 from dnd.spells.wall_fields import BladeBarrierZone, WallDamageSpec, selection_field_geometry, selection_wall_support_error
 from dnd.core.action_types import ActionSelection, PositionPathSelection, EntityDestinationSelection
 from dnd.core.geometry import grid_distance_feet
@@ -6009,7 +6010,7 @@ class ArcaneSwordEffect(BaseCondition):
 def sword_anchor_error(caster: Entity, old_position: Tuple[int,int], destination: Tuple[int,int], limit: int) -> str | None:
     if not get_map().has_tile(*destination) or grid_distance_feet(old_position, destination) > limit:
         return "Sword anchor is beyond its movement range"
-    if destination != caster.position and not caster.senses.visible.get(destination, False):
+    if destination != caster.position and not cell_visible(caster.senses.cells, destination):
         return "Sword anchor must be visible to its caster"
     if not get_map().can_reach_between(old_position,destination,PhysicalAccess.PROJECTILE,caster.uuid):
         return "A physical boundary blocks the sword movement"
@@ -6089,7 +6090,7 @@ class ArcaneSwordStrike(SpellAction):
         owner=BaseCondition.get(self.grant_condition_uuid);caster=Entity.get(self.source_entity_uuid)
         if caster is None or not isinstance(owner,ArcaneSwordEffect):return []
         caster.materialize_navigation(max_distance=grid_distance_feet(caster.position,owner.position)+25)
-        return [position for position,visible in caster.senses.visible.items() if visible and (self.target_entity_uuid is None or
+        return [position for position in visible_positions(caster.senses.cells) if (self.target_entity_uuid is None or
             (target:=Entity.get(self.target_entity_uuid)) is not None and grid_distance_feet(position,target.position)<=5) and sword_anchor_error(caster,owner.position,position,20) is None]
 
     def _create_declaration_event(self,parent_event=None,use_register=True):
@@ -6187,7 +6188,7 @@ class ArcaneSword(SpellAction):
         caster=Entity.get(self.source_entity_uuid)
         if caster is None:return []
         caster.materialize_navigation(max_distance=65)
-        return [position for position,visible in caster.senses.visible.items() if visible and (self.target_entity_uuid is None or
+        return [position for position in visible_positions(caster.senses.cells) if (self.target_entity_uuid is None or
             (target:=Entity.get(self.target_entity_uuid)) is not None and grid_distance_feet(position,target.position)<=5) and sword_anchor_error(caster,caster.position,position,60) is None]
 
     def get_physical_access(self): return PhysicalAccess.WEAPON

@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import TypeAdapter
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import Sphere
 from dnd.actor_projection import condition_fact
 from dnd.ai.contracts.observation import ObservationTileFact
@@ -60,7 +61,7 @@ def tile_checkpoint(observer_uuid: UUID) -> tuple[bytes, list[ObservationTileFac
     observer = Entity.get(observer_uuid)
     assert observer is not None
     expected = [project_visible_tile_fact(position, from_observer)
-                for position in sorted(observer.senses.visible)]
+                for position in sorted(capture_senses_snapshot(observer.senses).visible)]
     return recorded(observer_uuid), expected
 
 
@@ -157,10 +158,10 @@ def test_tile_condition_and_independent_area_hazards_publish_without_contact_cha
     assert zone.activate(parent_event=cause) is not None
     area = tile_checkpoint(observer.uuid)
     assert tile.active_conditions == {}
-    assert observer.senses.hazardous_cells[(2, 1)] is True
+    assert capture_senses_snapshot(observer.senses).hazardous_cells[(2, 1)] is True
     assert zone.remove_from_runtime_owner(parent_event=cause)
     ended = tile_checkpoint(observer.uuid)
-    assert observer.senses.hazardous_cells[(2, 1)] is False
+    assert capture_senses_snapshot(observer.senses).hazardous_cells[(2, 1)] is False
     observer_uuid = observer.uuid
     check_saved_tiles([initial, trapped, cleared, area, ended], observer_uuid)
     area_world, _ = replay(area[0], observer_uuid)

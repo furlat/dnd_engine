@@ -19,7 +19,7 @@ from dnd.core.base_tiles import (
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import get_map
-from dnd.types.senses import OpticalObscurement
+from dnd.types.senses import OBSCUREMENT_SETS, OpticalObscurement
 from dnd.entity import Entity
 from dnd.spells.conjuration import (
     Cloudkill,
@@ -341,7 +341,7 @@ def test_cloudkill_preserves_initial_entry_turn_move_and_cleanup_rules() -> None
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert (
         OpticalObscurement.HEAVY
-        in get_map().get_optical_obscurements_at((10, 7))
+        in OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 7))]
     )
 
     entrant_hp = get_hp(entrant)
@@ -806,11 +806,11 @@ def test_incendiary_cloud_executes_initial_entry_turn_move_and_cleanup() -> None
     assert old_only_tile is not None
     assert added_tile is not None
     assert old_only_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(old_only_position) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(old_only_position)] == {
         OpticalObscurement.HEAVY
     }
     assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(added_position) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(added_position)] == set()
 
     entrant = create_spell_regression_actor(
         "Incendiary Entrant",
@@ -833,9 +833,9 @@ def test_incendiary_cloud_executes_initial_entry_turn_move_and_cleanup() -> None
     assert old_only_position not in zone.affected_positions
     assert added_position in zone.affected_positions
     assert old_only_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(old_only_position) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(old_only_position)] == set()
     assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(added_position) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(added_position)] == {
         OpticalObscurement.HEAVY
     }
 
@@ -843,7 +843,7 @@ def test_incendiary_cloud_executes_initial_entry_turn_move_and_cleanup() -> None
 
     assert zone not in get_map().get_spatial_conditions()
     assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(added_position) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(added_position)] == set()
     Entity.update_entity_position(entrant, (2, 2))
     hp_after_cleanup = get_hp(entrant)
     Entity.update_entity_position(entrant, zone.position)

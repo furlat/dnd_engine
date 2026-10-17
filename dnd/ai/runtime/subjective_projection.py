@@ -32,6 +32,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag
 from dnd.core.gridmap import get_map
+from dnd.core.view import cell_visible, layer_positions, visible_positions
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import ResistanceStatus
 from dnd.entity import Entity
@@ -106,12 +107,8 @@ def project_observer_state(observer: Entity) -> ObservationObserverState:
             }
             for mode in observer.senses.get_sense_modes()
         ],
-        visible_cells=sorted(
-            position
-            for position, visible in observer.senses.visible.items()
-            if visible
-        ),
-        seen_cells=sorted(observer.senses.seen),
+        visible_cells=visible_positions(observer.senses.cells),
+        seen_cells=layer_positions(observer.senses.seen),
         visible_entity_uuids=sorted(
             str(entity_uuid) for entity_uuid in observer.senses.entities
         ),
@@ -369,7 +366,7 @@ def observers_that_see_position(
     return sorted(
         str(observer.uuid)
         for observer in observers
-        if observer.senses.visible.get(position, False)
+        if cell_visible(observer.senses.cells, position)
     )
 
 
@@ -440,10 +437,9 @@ def project_known_tiles(
     seen_by_position: dict[tuple[int, int], set[str]] = {}
     for observer in observers:
         observer_uuid = str(observer.uuid)
-        for position, visible in observer.senses.visible.items():
-            if visible:
-                visible_by_position.setdefault(position, set()).add(observer_uuid)
-        for position in observer.senses.seen:
+        for position in visible_positions(observer.senses.cells):
+            visible_by_position.setdefault(position, set()).add(observer_uuid)
+        for position in layer_positions(observer.senses.seen):
             seen_by_position.setdefault(position, set()).add(observer_uuid)
 
     facts: dict[str, ObservationTileFact] = {}

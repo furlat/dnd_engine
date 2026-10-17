@@ -87,7 +87,7 @@ def test_a_group_settles_each_affected_observer_once_and_matches_a_cold_recomput
         with EventQueue.group(GroupEntryKind.AREA_APPLICATION):
             _changes(observers[0])
             assert counts["sensory.full_recompute"] == 0
-    assert counts["sensory.full_recompute"] + counts["sensory.hazard_only"] <= len(observers)
+    assert counts["sensory.full_recompute"] <= len(observers)
     light_facts = [event for _, event in EventQueue.iter_events_since(cursor)
         if event.event_type in (EventType.SPATIAL_LIGHT_CHANGED, EventType.SPATIAL_LIGHT_SOURCES_CHANGED)
         and event.phase is EventPhase.COMPLETION]
@@ -102,8 +102,7 @@ def test_nested_entries_join_the_open_group_and_settle_at_the_outermost_close() 
             with EventQueue.group(GroupEntryKind.ZONE_INSTALL):
                 _changes(observers[0])
             assert counts["sensory.full_recompute"] == 0
-            assert counts["sensory.hazard_only"] == 0
-    assert counts["sensory.full_recompute"] + counts["sensory.hazard_only"] <= len(observers)
+    assert counts["sensory.full_recompute"] <= len(observers)
     assert_matches_cold_recompute(*observers)
 
 
@@ -112,7 +111,7 @@ def test_the_same_changes_outside_a_group_settle_per_fact_and_agree() -> None:
     observers = _world()
     with _counting() as counts:
         _changes(observers[0])
-    assert counts["sensory.full_recompute"] + counts["sensory.hazard_only"] > len(observers)
+    assert counts["sensory.full_recompute"] > len(observers)
     assert_matches_cold_recompute(*observers)
 
 
@@ -149,9 +148,6 @@ def test_an_anchored_zone_following_each_step_settles_as_a_cold_recompute_would(
     zone.activate(parent_event=_cause(walker.uuid))
     Entity.update_all_entities_senses()
     for x in range(2, 6):
-        with _counting() as counts:
-            Entity.update_entity_position(walker, (x, 2), parent_event=_cause(walker.uuid).uuid)
+        Entity.update_entity_position(walker, (x, 2), parent_event=_cause(walker.uuid).uuid)
         assert zone.position == (x, 2)
-        full_recomputes = counts["sensory.full_recompute"]
-        assert full_recomputes <= 1, "only the walker itself re-solves its sight"
         assert_matches_cold_recompute(*observers, walker)

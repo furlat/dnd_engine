@@ -6,6 +6,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.blocks.sensory import capture_senses_snapshot, spatial_senses_system
 from dnd.conditions import Hidden, Invisible
 from dnd.actions_functional import execute_by_index
 from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
@@ -123,7 +124,7 @@ def test_light_change_emits_subjective_levels_without_visibility_membership_delt
     reset_perception_tutorial_state(width=5, height=1, default_light=LightLevel.DIM_LIGHT)
     observer = create_perception_actor("Observer", position=(0, 0), faction="heroes")
     observer.update_entity_senses(max_distance=5)
-    visible_before = set(observer.senses.visible)
+    visible_before = set(capture_senses_snapshot(observer.senses).visible)
     source_cursor = EventQueue.event_cursor()
 
     get_map().add_light_source((2, 0), bright_radius_feet=5, dim_radius_feet=0)
@@ -134,7 +135,7 @@ def test_light_change_emits_subjective_levels_without_visibility_membership_delt
         if isinstance(event, SensoryUpdateEvent)
         and event.observer_uuid == observer.uuid
     ]
-    assert set(observer.senses.visible) == visible_before
+    assert set(capture_senses_snapshot(observer.senses).visible) == visible_before
     assert updates
     assert updates[-1].visible_cells_added == []
     assert updates[-1].visible_cells_removed == []
@@ -197,13 +198,12 @@ def test_first_perception_example_prints_visible_observer_knowledge(capsys) -> N
     target = create_perception_actor("Target", position=(3, 0), faction="monsters")
     observer.update_entity_senses(max_distance=5)
 
-    subscriptions = get_map().get_entity_subscriptions(observer.uuid)
     before = {
-        "subscribed": (3, 0) in subscriptions,
-        "adjacent_visible": (1, 0) in observer.senses.visible,
-        "target_cell_visible": (3, 0) in observer.senses.visible,
+        "subscribed": observer.uuid in spatial_senses_system.observers_granted({(3, 0)}),
+        "adjacent_visible": (1, 0) in capture_senses_snapshot(observer.senses).visible,
+        "target_cell_visible": (3, 0) in capture_senses_snapshot(observer.senses).visible,
         "target_visible": target.uuid in observer.senses.entities,
-        "target_cell_seen": (3, 0) in observer.senses.seen,
+        "target_cell_seen": (3, 0) in capture_senses_snapshot(observer.senses).seen,
     }
 
     get_map().add_light_source((3, 0), bright_radius_feet=5, dim_radius_feet=0)
@@ -216,9 +216,9 @@ def test_first_perception_example_prints_visible_observer_knowledge(capsys) -> N
         and event.update_reason == SensoryUpdateReason.LIGHT
     ]
     after = {
-        "target_cell_visible": (3, 0) in observer.senses.visible,
+        "target_cell_visible": (3, 0) in capture_senses_snapshot(observer.senses).visible,
         "target_visible": target.uuid in observer.senses.entities,
-        "target_cell_seen": (3, 0) in observer.senses.seen,
+        "target_cell_seen": (3, 0) in capture_senses_snapshot(observer.senses).seen,
         "update_cell": any(
             (3, 0) in event.visible_cells_added for event in light_updates
         ),
@@ -267,20 +267,18 @@ def test_senses_subscribe_to_geometric_fov_before_light_filtering(capsys) -> Non
 
     observer.update_entity_senses(max_distance=5)
 
-    subscriptions = get_map().get_entity_subscriptions(observer.uuid)
-
-    assert (3, 0) in subscriptions
-    assert (3, 0) not in observer.senses.visible
-    assert (1, 0) in observer.senses.visible
+    assert observer.uuid in spatial_senses_system.observers_granted({(3, 0)})
+    assert (3, 0) not in capture_senses_snapshot(observer.senses).visible
+    assert (1, 0) in capture_senses_snapshot(observer.senses).visible
     assert target.uuid not in observer.senses.entities
-    assert (3, 0) not in observer.senses.seen
+    assert (3, 0) not in capture_senses_snapshot(observer.senses).seen
 
     geometry_lines = [
         f"subscribed target cell: {(3, 0) in subscriptions}",
-        f"visible adjacent cell: {(1, 0) in observer.senses.visible}",
-        f"visible target cell: {(3, 0) in observer.senses.visible}",
+        f"visible adjacent cell: {(1, 0) in capture_senses_snapshot(observer.senses).visible}",
+        f"visible target cell: {(3, 0) in capture_senses_snapshot(observer.senses).visible}",
         f"target in visible entities: {target.uuid in observer.senses.entities}",
-        f"target cell remembered: {(3, 0) in observer.senses.seen}",
+        f"target cell remembered: {(3, 0) in capture_senses_snapshot(observer.senses).seen}",
     ]
 
     print("\n".join(geometry_lines))
@@ -399,14 +397,14 @@ def test_light_changes_reveal_subscribed_cells_reactively(capsys) -> None:
     assert target.uuid not in observer.senses.entities
     before = {
         "target_visible": target.uuid in observer.senses.entities,
-        "cell_visible": (3, 0) in observer.senses.visible,
-        "cell_seen": (3, 0) in observer.senses.seen,
+        "cell_visible": (3, 0) in capture_senses_snapshot(observer.senses).visible,
+        "cell_seen": (3, 0) in capture_senses_snapshot(observer.senses).seen,
     }
 
     get_map().add_light_source((3, 0), bright_radius_feet=5, dim_radius_feet=0)
 
-    assert (3, 0) in observer.senses.visible
-    assert (3, 0) in observer.senses.seen
+    assert (3, 0) in capture_senses_snapshot(observer.senses).visible
+    assert (3, 0) in capture_senses_snapshot(observer.senses).seen
     assert target.uuid in observer.senses.entities
 
     light_updates = [
@@ -419,8 +417,8 @@ def test_light_changes_reveal_subscribed_cells_reactively(capsys) -> None:
     assert any(target.uuid in event.visible_entities_added for event in light_updates)
     after = {
         "target_visible": target.uuid in observer.senses.entities,
-        "cell_visible": (3, 0) in observer.senses.visible,
-        "cell_seen": (3, 0) in observer.senses.seen,
+        "cell_visible": (3, 0) in capture_senses_snapshot(observer.senses).visible,
+        "cell_seen": (3, 0) in capture_senses_snapshot(observer.senses).seen,
         "added_cell": any(
             (3, 0) in event.visible_cells_added for event in light_updates
         ),

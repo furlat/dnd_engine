@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from dnd.actions import Attack, AttackEvent, PickUp
 from dnd.actions_functional import execute_use_action, get_available_actions, setup_standard_actions
 from dnd.blocks.base_item import BaseItem, WorldItem
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import build_directional_wall, build_storage_chest
 from dnd.core.base_block import BaseBlock, LightLevel
@@ -190,7 +191,7 @@ def test_far_end_attack_and_same_identity_destruction_update_only_real_supports(
     item.place_on_grid((2, 3))
     tile_ids = tuple(support.tile_uuid for support in placement(item).covered_supports)
     attacker.update_entity_senses(max_distance=1)
-    assert (2, 3) not in attacker.senses.visible
+    assert (2, 3) not in capture_senses_snapshot(attacker.senses).visible
     assert attacker.senses.objects[item.uuid].position == (3, 3)
     assert object_choices(attacker, item)
     assert all(choice.position == (3, 3) for choice in object_choices(attacker, item))

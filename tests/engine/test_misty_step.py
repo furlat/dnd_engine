@@ -8,6 +8,7 @@ import pytest
 from dnd.actions import AttackEvent, SpellEvent
 from dnd.actions_functional import execute_by_index, get_available_actions, register_spell, setup_standard_actions
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.equipment_types import WeaponSlot
@@ -104,7 +105,7 @@ def test_misty_step_discovers_a_visible_landing_across_unwalkable_water(
         grid.set_tile(3, y, name="Water", walking_cost=0, swimming_cost=1)
     destination = (5, 2)
     caster.materialize_navigation()
-    assert caster.senses.visible[destination]
+    assert (destination in capture_senses_snapshot(caster.senses).visible)
     assert destination not in caster.senses.paths
     assert MistyStep(source_entity_uuid=caster.uuid, end_position=destination).pre_validate()
     available = get_available_actions(caster)

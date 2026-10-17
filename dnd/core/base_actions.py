@@ -41,6 +41,7 @@ from dnd.core.traversal_connectors import ConnectorTraversalDiscovery
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.geometry import bresenham_line, grid_distance_feet
 from dnd.core.gridmap import get_map
+from dnd.core.view import cell_visible, visible_positions
 from dnd.types.physical_access import PhysicalAccess
 from dnd.core.item_types import (
     ItemPresentationProvider,
@@ -1518,7 +1519,7 @@ class BaseAction(BaseObject):
             error = self.target_position_error(position)
             if error is not None:
                 return error
-            if senses is None or not senses.visible.get(position, False):
+            if senses is None or not cell_visible(senses.cells, position):
                 return "Path position is not visible"
         return None
 
@@ -1612,16 +1613,14 @@ class BaseAction(BaseObject):
             return []
 
         valid: List[Tuple[int, int]] = []
-        visible = senses_block.visible
+        visible = visible_positions(senses_block.cells)
         position = senses_block.position
         selection = self.get_position_selection()
 
         if not visible:
             return []
 
-        for pos, is_visible in visible.items():
-            if not is_visible:
-                continue
+        for pos in visible:
             if pos == position and (selection is None or selection.kind != "path"):
                 continue
             if self.target_position_error(pos) is not None:

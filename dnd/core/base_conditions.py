@@ -481,12 +481,8 @@ class BaseCondition(BaseObject):
             return False
         return True
 
-    def get_optical_obscurement_at(
-        self,
-        position: Tuple[int, int],
-    ) -> Optional[OpticalObscurement]:
-        """Return no optical contribution for an ordinary condition."""
-        del position
+    def optical_obscurement_value(self) -> Optional[OpticalObscurement]:
+        """An ordinary condition contributes no optical obscurement."""
         return None
 
     def blocks_physical_optics_at(self, position: Tuple[int, int]) -> bool:

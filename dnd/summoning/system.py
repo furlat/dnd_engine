@@ -16,6 +16,7 @@ from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePos
 from dnd.core.creature_types import CreatureType
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, OpenGroup, SummonAdmissionEvent, Trigger
 from dnd.core.gridmap import get_map
+from dnd.core.view import cell_visible
 from dnd.encounter import Encounter, EncounterState, PreparedCombatantJoin
 from dnd.reactions import add_stand_when_healed_handler
 from dnd.entity import Entity, PreparedBirth
@@ -98,7 +99,7 @@ class SummoningSystem:
             return "Summoning requires the caster to have an allegiance"
         position = selection.target_position
         specification = SPELL_SPECIFICATIONS[selection.family]
-        if (not caster.senses.visible.get(position, False)
+        if (not cell_visible(caster.senses.cells, position)
                 or caster.senses.get_feet_distance(position) > specification.placement_range_feet):
             return "Choose a visible destination within summoning range"
         if subjective:

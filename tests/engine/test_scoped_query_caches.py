@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from dnd.blocks.base_item import BaseItem
 from dnd.core.gridmap import get_map
+from dnd.core.base_tiles import tile_light_contributions
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalWall
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
@@ -71,7 +72,8 @@ def answers(walker: Entity) -> Dict[str, object]:
         for distance in (8, None):
             distances, paths = grid.compute_paths(origin, distance, requesting_entity_uuid=walker.uuid)
             result[f"paths {origin} {distance}"] = (distances, paths)
-    result["lit"] = sorted(position for position in grid.get_all_tiles() if grid.light_sources_at({position}))
+    result["lit"] = sorted(position for position, tile in grid.get_all_tiles().items()
+                           if tile_light_contributions(tile)[0])
     return result
 
 

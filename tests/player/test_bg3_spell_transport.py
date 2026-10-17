@@ -3,6 +3,7 @@ from uuid import uuid4
 from dnd.core.base_block import BaseBlock
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.gridmap import get_map
+from dnd.core.view import cell_visible, visible_positions
 from dnd.items.created_items import GoodberryItem
 from dnd.spells.enchantment import Hex, HideousLaughter
 from tests.engine.test_bg3_spell_hit_riders import equip
@@ -82,7 +83,7 @@ def test_worker_revivifies_dead_companion_with_optional_compound_destination(wor
     choices=request_choices(world).choices
     action=next(row for row in rows(choices) if row.behavior_id=='spell.revivify' and row.can_afford
         and any(facet.key=='form' and facet.value==('relocate' if relocate else 'in_place') for facet in row.variant_facets))
-    assert choices.target_sets[action.target_set],(ally.is_deployed,ally.position,actor.senses.visible.get(ally.position),Revivify(source_entity_uuid=actor.uuid,target_entity_uuid=ally.uuid).pre_validate(),actor.is_ally(ally))
+    assert choices.target_sets[action.target_set],(ally.is_deployed,ally.position,cell_visible(actor.senses.cells, ally.position),Revivify(source_entity_uuid=actor.uuid,target_entity_uuid=ally.uuid).pre_validate(),actor.is_ally(ally))
     target=next(binding for binding in choices.target_sets[action.target_set]
         if choices.subjects[binding.subject].uuid==ally.uuid)
     selection=ActionSelection(action_index=action.discovery_index,target_indices=(target.index,))
@@ -149,11 +150,11 @@ def test_worker_mixed_spell_encounter_returns_to_human_with_owned_effects_cleane
             # A free-aim row lists no cells: aim at a seen, empty cell beside the creature.
             position=next(cell for cell in sorted((near.position[0]+dx,near.position[1]+dy)
                 for dx in (-1,0,1) for dy in (-1,0,1) if (dx,dy)!=(0,0))
-                if actor.senses.visible.get(cell) and not get_map().get_entities_at(cell))
+                if cell_visible(actor.senses.cells, cell) and not get_map().get_entities_at(cell))
         if chosen is None and position is None and near is None:
             # Any seen, empty point two to three cells from the actor.
-            position=next(cell for cell in sorted(actor.senses.visible)
-                if actor.senses.visible[cell] and 2<=max(abs(cell[0]-actor.position[0]),abs(cell[1]-actor.position[1]))<=3
+            position=next(cell for cell in sorted(visible_positions(actor.senses.cells))
+                if 2<=max(abs(cell[0]-actor.position[0]),abs(cell[1]-actor.position[1]))<=3
                 and not get_map().get_entities_at(cell))
         if chosen is None and position is not None:
             # A free-aim row lists no cells: aim at the requested point (plan §14.4).

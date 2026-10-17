@@ -15,6 +15,7 @@ from dnd.ai.runtime.decision_epoch import (
 from dnd.ai.contracts.semantics import ActionTag, MovementKind, OutcomeKind, TopologyOperation, TruthValue, evaluate_fact_expression
 from dnd.ai.contracts.control import AffordanceSet
 from dnd.actions_functional import execute_by_index, register_spell
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_object import BaseObject
 from dnd.core.base_actions import ActionAvailabilityStatus
 from dnd.core.base_actions import ActionCategory
@@ -1085,39 +1086,6 @@ def test_multi_target_wire_round_trip_reuses_canonical_target_pool() -> None:
         assert selected is matching_option
 
 
-def test_aoe_discovery_reads_visible_field_once_per_query_context() -> None:
-    """AoE candidates share one immutable snapshot of caster-visible cells."""
-    arena = assemble_authored_encounter("high_level_spell_resource_duel")
-    archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
-    archmage.update_entity_senses(max_distance=20)
-
-    class CountingVisibleMap(dict[tuple[int, int], bool]):
-        """Track full visibility scans while preserving normal mapping behavior."""
-
-        items_calls: int = 0
-
-        def items(self):
-            self.items_calls += 1
-            return super().items()
-
-    visible = CountingVisibleMap(archmage.senses.visible)
-    archmage.senses.visible = visible
-    discovery_variants = {
-        template.uuid: template.get_discovery_variants(archmage)
-        for template in archmage.registered_actions
-    }
-
-    actions = archmage._collect_aoe_actions(
-        include_dead=False,
-        fov_cache={},
-        barrier_positions=get_map().get_barrier_positions(),
-        discovery_variants=discovery_variants,
-    )
-
-    assert actions
-    assert sum(len(action.valid_targets) for action in actions) > 10
-    assert visible.items_calls <= 3
-
 
 def test_aoe_discovery_caches_empty_previews_for_upcast_variants(monkeypatch) -> None:
     """Empty AoE previews are shared across slots and unchanged epochs."""
@@ -1345,7 +1313,7 @@ def test_aoe_discovery_reuses_previews_until_subjective_contacts_change(
     contact_uuid, old_position = next(iter(archmage.senses.entities.items()))
     visible_positions = [
         position
-        for position, is_visible in archmage.senses.visible.items()
+        for position, is_visible in ((position, True) for position in capture_senses_snapshot(archmage.senses).visible)
         if is_visible and position != old_position
     ]
     archmage.senses.entities[contact_uuid] = visible_positions[0]

@@ -1,5 +1,8 @@
 """Manual Chapter 17 checks for encounters, turns, and controllers."""
 
+import numpy as np
+from dnd.core.view import NO_CELLS, CellLayer
+from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import UUID, uuid4
 
 from pydantic import Field
@@ -131,9 +134,10 @@ def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
     reset_encounter_tutorial_state(width=8, height=3)
     hero = create_goblin(name="Turn Observer", position=(1, 1), faction="heroes")
     monster = create_skeleton(name="Turn Target", position=(5, 1), faction="monsters")
-    hero.senses.visible.clear()
-    hero.senses.seen.clear()
-    hero.senses.entities.clear()
+    # A fresh observer: nothing published yet.
+    hero.senses.cells = NO_CELLS
+    hero.senses.seen = CellLayer(0, 0, np.zeros((0, 0), dtype=bool))
+    hero.senses.entities = {}
     encounter = start_ordered_encounter(
         hero,
         monster,

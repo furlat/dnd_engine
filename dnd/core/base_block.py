@@ -262,6 +262,10 @@ class BaseBlock(BaseModel):
     _involuntary_loss: ClassVar[ContextVar[InvoluntarySustainLoss | None]] = ContextVar("condition_involuntary_loss", default=None)
     _graph_settled_hooks: ClassVar[dict[UUID, ConditionGraphSettledHook]] = {}
     _removal_participants: ClassVar[dict[UUID, ConditionRemovalParticipant]] = {}
+    # Blocks holding a condition that can make their cells hazardous on the ground layer,
+    # written at every condition membership commit; GridMap's hazard owners read it with
+    # the blocks' placements.
+    ground_hazard_holders: ClassVar[dict[UUID, None]] = {}
 
     @classmethod
     def register_condition_removal_participant(cls, participant: ConditionRemovalParticipant) -> UUID:
@@ -1159,6 +1163,15 @@ class BaseBlock(BaseModel):
             )
             if source_rows is not None and condition_name in source_rows:
                 source_rows.remove(condition_name)
+        self._write_ground_hazard_holder()
+
+    def _write_ground_hazard_holder(self) -> None:
+        """Keep this block's entry in `ground_hazard_holders` after a membership change."""
+        if any(condition.hazard_filter is not None and condition.affects_occupancy_layer(OccupancyLayer.GROUND)
+               for condition in self.active_conditions.values()):
+            BaseBlock.ground_hazard_holders[self.uuid] = None
+        else:
+            BaseBlock.ground_hazard_holders.pop(self.uuid, None)
 
     def _discard_uncommitted_condition_tree(
         self,
@@ -1898,6 +1911,7 @@ class BaseBlock(BaseModel):
         self.active_conditions[name] = prepared.condition
         self.active_conditions_by_uuid[prepared.condition.uuid] = prepared.condition
         self.active_conditions_by_source.setdefault(prepared.condition.source_entity_uuid, []).append(name)
+        self._write_ground_hazard_holder()
         prepared.publication = ConditionPublication(
             prepared.condition, prepared.effect, prepared.condition.snapshot_state(),
             self.snapshot_entity_stats(), self.snapshot_world_tile(), self.snapshot_item_state(), {},

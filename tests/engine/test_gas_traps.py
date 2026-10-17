@@ -24,7 +24,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.spatial.gas_traps import GasCloud, GasCloudSpec, GasVent, materialize_gas_vent
 from dnd.spatial.triggers import materialize_pressure_plate
 from dnd.types.controls import ActivationLink
-from dnd.types.senses import OpticalObscurement
+from dnd.types.senses import OBSCUREMENT_SETS, OpticalObscurement
 from dnd.types.spatial_effects import SpatialEffectInteractionIntensity, SpatialEffectInteractionOperation
 from dnd.types.traps import TrapState
 from dnd.types.world import CardinalDirection, OccupancyLayer
@@ -224,7 +224,8 @@ def test_authored_obscuration_and_native_wind_dispersal(arena, obscurement):
     vent = materialize_gas_vent((3, 2), gas=GasCloudSpec(radius_feet=5, optical_obscurement=obscurement))
     pulse(vent)
     cloud, = clouds()
-    assert get_map().get_optical_obscurements_at((3, 2)) == (set() if obscurement is None else {obscurement})
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((3, 2))] == (
+        set() if obscurement is None else {obscurement})
     original = set(cloud.affected_positions)
     for intensity in (SpatialEffectInteractionIntensity.MINOR, SpatialEffectInteractionIntensity.MODERATE):
         event = EventQueue.publish_declaration(SpatialEffectInteractionEvent(
@@ -234,7 +235,7 @@ def test_authored_obscuration_and_native_wind_dispersal(arena, obscurement):
         event.phase_to(EventPhase.COMPLETION)
         assert cloud.affected_positions == (original if intensity is SpatialEffectInteractionIntensity.MINOR
                                             else original - {(3, 2)})
-    assert not get_map().get_optical_obscurements_at((3, 2))
+    assert not get_map().optical_obscurement_bits_at((3, 2))
     assert vent.is_active_spatial_condition() and vent.trap_state is TrapState.READY
 
 

@@ -33,6 +33,7 @@ from dnd.core.dice import AttackOutcome, Dice, RollType
 from dnd.core.events import EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event, SavingThrowEvent, TakeDamageEvent, DamageAppliedEvent, EventQueue
 from dnd.types.abilities import AbilityName, SkillName
 from dnd.core.gridmap import get_map
+from dnd.core.view import cell_visible
 from dnd.core.elevation import support_distance_feet
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.core.creature_types import CreatureType, DamageType
@@ -2661,7 +2662,7 @@ class Revivify(SpellAction):
             # Discovery knows the occupants and blockers the caster perceives; execution knows the world.
             occupants=({identity for identity,contact in caster.senses.entities.items() if contact.position==destination}
                        if subjective else grid.get_entities_at(destination))
-            if (occupants-{target.uuid} or not caster.senses.visible.get(destination,False)
+            if (occupants-{target.uuid} or not cell_visible(caster.senses.cells, destination)
                     or not grid.is_walkable_for(*destination,caster.uuid if subjective else target.uuid,subjective=subjective)):
                 return "Choose a visible unoccupied supported destination within thirty feet"
         return None
@@ -2676,7 +2677,7 @@ class Revivify(SpellAction):
         return {target.uuid:target.position for target in map(Entity.get,get_map().get_entities_within(origin,30))
             if target.is_player_companion and caster.is_ally(target)
             and target.health.life_state in (LifeState.DEAD,LifeState.DYING,LifeState.STABLE)
-            and caster.senses.visible.get(target.position,False)}
+            and cell_visible(caster.senses.cells, target.position)}
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         target=Entity.get(selection.target_uuids[0]) if selection.target_uuids else None

@@ -11,6 +11,7 @@ from dnd.actions_functional import (
     execute_available_action, get_available_actions, preview_available_selection,
     register_spell, setup_standard_actions,
 )
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import (
     Cone, Cube, Cylinder, Line, Sphere, snapshot_aoe_aiming_geometry,
 )
@@ -107,7 +108,7 @@ def test_selected_subjective_preview_matches_rich_cells_and_recipients(scene, sp
     assert preview.affected_entity_names == tuple(expected.affected_entity_names)
     assert {enemy.uuid, ally.uuid} <= set(preview.affected_entity_uuids)
     assert hidden.uuid not in preview.affected_entity_uuids
-    assert set(preview.affected_positions) <= {p for p, visible in caster.senses.visible.items() if visible}
+    assert set(preview.affected_positions) <= {p for p, visible in ((position, True) for position in capture_senses_snapshot(caster.senses).visible) if visible}
     assert preview.geometry is not None
     assert selected.affected_positions is None
     assert (selected.index, selected.position, selected.distance) == (
