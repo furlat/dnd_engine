@@ -879,6 +879,8 @@ class ObserverView:
     published: bool                  # the observer has a settled view (its published contacts are its own)
     lit_kept: bool                   # sight and light inputs held: the published optical view is current
     frames_kept: bool                # the visible cells and their senses held (what contacts read of the view)
+    frame_changes: Optional[Set[Position]]  # with the sight held: the cells whose visibility or senses
+                                            # changed (contacts read only those); None when the sight changed
     optical: OpticalView
     exists_frame: np.ndarray         # bool frame of the cells holding a Tile
     seen_frame: np.ndarray           # bool frame of the visible cells
@@ -1390,16 +1392,17 @@ class SpatialSensesSystem:
             # one before it through the update's changed targets.
             base = (np.zeros(0, dtype=np.int64) if field.table_version == self._table_version
                     else self._table_changes if field.table_version == self._table_version - 1 else None)
-            if view.frames_kept and cells is not None and base is not None \
+            if view.frame_changes is not None and cells is not None and base is not None \
                     and field.passive == passives[view.owner.uuid]:
-                # The view and passive perception held: only the targets whose rows differ between
-                # the two tables, which stand on a cell the facts name, or whose observability rule
-                # reads the world, can change contact.
+                # The sight and passive perception held: only the targets whose rows differ between
+                # the two tables, which stand on a cell the facts name or whose visibility or senses
+                # changed, or whose observability rule reads the world, can change contact.
                 cells_key = frozenset(cells)
                 at = named.get(cells_key)
                 if at is None:
                     at = named[cells_key] = _targets_at(table, cells_key)
-                changed.append(np.unique(np.concatenate((base, at, volatile))))
+                seen_at = _targets_at(table, view.frame_changes) if view.frame_changes else at[:0]
+                changed.append(np.unique(np.concatenate((base, at, seen_at, volatile))))
                 record_action_count("sensory.contacts.incremental", 1)
             else:
                 changed.append(None)
@@ -1485,6 +1488,7 @@ class SpatialSensesSystem:
                 felt_frame[rows] |= bit
             felt_keys, felt_rows = tuple(keys), tuple(rows_of)
             lit_kept = sight_kept = False
+        frame_changes: Optional[Set[Position]] = set() if sight_kept else None
         if lit_kept:
             optical, seen_frame, senses_frame = previous.optical, previous.seen_frame, previous.senses_frame
             frames_kept = True
@@ -1501,6 +1505,9 @@ class SpatialSensesSystem:
                 seen_frame[optical.rows] = True
                 senses_frame = np.zeros(OFF + 1, dtype=np.uint8)
                 senses_frame[optical.rows] = ELIGIBLE_SENSE_BITS[optical.eligibility]
+                if sight_kept:
+                    moved = np.flatnonzero((seen_frame != previous.seen_frame) | (senses_frame != previous.senses_frame))
+                    frame_changes = set(rows_positions(moved, origin))
         field = ObserverField(origin, window, selection, optical_key, routes, felt_keys, felt_rows, inputs, sight,
                               light, world.light_version, optical, exists, felt_frame, seen_frame, senses_frame,
                               CellLayer(window[0], window[1], np.zeros((0, 0), dtype=bool)),
@@ -1513,7 +1520,8 @@ class SpatialSensesSystem:
                               previous.volumes if previous is not None else {},
                               previous.upper if previous is not None else {})
         return ObserverView(owner, senses, origin, modes, ordinary_sight, optical_radius if visual_access else 0,
-                            field, previous is not None, lit_kept, frames_kept, optical, exists, seen_frame,
+                            field, previous is not None, lit_kept, frames_kept, frame_changes, optical, exists,
+                            seen_frame,
                             senses_frame, felt_frame)
 
     def _target_table(self, world: SettlementWorld, named: Optional[Set[Position]]) -> ContactTable:
@@ -1938,11 +1946,6 @@ class SpatialSensesSystem:
         for kind, identity in zip(previous_rows[previous_changed, 0].tolist() + rows[row_changed, 0].tolist(),
                                   previous_uuids[previous_changed].tolist() + row_uuids[row_changed].tolist()):
             (entity_touched if kind == ROW_ENTITY else object_touched).add(identity)
-        entities, objects = dict(start_entities), dict(start_objects)
-        for identity in entity_touched:
-            entities.pop(identity, None)
-        for identity in object_touched:
-            objects.pop(identity, None)
         selected = np.isin(rows[:, 7], touched)
 
         def contact(position: Position, visual: bool, mask: int, previous: Optional[PerceivedContact],
@@ -1957,18 +1960,21 @@ class SpatialSensesSystem:
                 value = shared[key] = PerceivedContact(position=position, visual=visual, special_senses=special)
             return value
 
+        # The touched targets' contacts, resolved from their rows in evidence order.
+        fresh_entities: Dict[UUID, PerceivedContact] = {}
+        fresh_objects: Dict[UUID, PerceivedContact] = {}
         for (kind, _, _, x, y, visual, mask, _), identity in zip(rows[selected].tolist(), row_uuids[selected].tolist()):
             visual = bool(visual)
             if kind == ROW_ENTITY:
-                entities[identity] = contact((x, y), visual, mask, start_entities.get(identity))
+                fresh_entities[identity] = contact((x, y), visual, mask, start_entities.get(identity))
                 continue
             if kind == ROW_KNOWN:
-                if identity not in objects:
-                    objects[identity] = contact((x, y), False, 0, start_objects.get(identity))
+                if identity not in fresh_objects:
+                    fresh_objects[identity] = contact((x, y), False, 0, start_objects.get(identity))
                 continue
-            found = objects.get(identity)
+            found = fresh_objects.get(identity)
             if kind == ROW_SIDE or found is None:
-                objects[identity] = contact((x, y), visual, mask, start_objects.get(identity))
+                fresh_objects[identity] = contact((x, y), visual, mask, start_objects.get(identity))
                 continue
             # A multi-cell object: the best evidence, the union of its senses in enum order.
             chosen_position = min(((not found.visual, _distance_feet(origin, found.position), found.position),
@@ -1980,14 +1986,14 @@ class SpatialSensesSystem:
             merged = shared.get(key)
             if merged is None:
                 merged = shared[key] = PerceivedContact(position=chosen_position, visual=key[2], special_senses=key[3])
-            objects[identity] = merged
+            fresh_objects[identity] = merged
         # Contacts are listed in evidence order (cells x-major, construction knowledge in placement
-        # order, sides), each at its first row, whatever the history of the recomputes.
-        entity_order, object_order = _first_appearance(rows, row_uuids)
-        if list(entities) != entity_order:
-            entities = {identity: entities[identity] for identity in entity_order}
-        if list(objects) != object_order:
-            objects = {identity: objects[identity] for identity in object_order}
+        # order, sides), each at its first row, whatever the history of the recomputes: while the
+        # order of the targets held, the touched ones are replaced in place.
+        entities = _listed(rows, row_uuids, rows[:, 0] == ROW_ENTITY, previous_rows, previous_rows[:, 0] == ROW_ENTITY,
+                           start_entities, entity_touched, fresh_entities)
+        objects = _listed(rows, row_uuids, rows[:, 0] != ROW_ENTITY, previous_rows, previous_rows[:, 0] != ROW_ENTITY,
+                          start_objects, object_touched, fresh_objects)
         return (entities, objects, rows, row_uuids,
                 (frozenset(entity_touched), frozenset(object_touched)) if view.published else None)
 
@@ -2535,12 +2541,28 @@ def _rows_in(rows: np.ndarray, others: np.ndarray) -> np.ndarray:
     return found
 
 
-def _first_appearance(rows: np.ndarray, uuids: np.ndarray) -> Tuple[List[UUID], List[UUID]]:
-    """The entity and object targets of evidence rows, each at its first row."""
-    _, first = np.unique(rows[:, 7], return_index=True)
+def _target_order(rows: np.ndarray, of_class: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """The targets of a class of evidence rows in order of their first row: their keys and rows."""
+    keys = rows[of_class, 7]
+    _, first = np.unique(keys, return_index=True)
     first.sort()
-    entity = rows[first, 0] == ROW_ENTITY
-    return uuids[first[entity]].tolist(), uuids[first[~entity]].tolist()
+    return keys[first], np.flatnonzero(of_class)[first]
+
+
+def _listed(rows: np.ndarray, uuids: np.ndarray, of_class: np.ndarray, previous_rows: np.ndarray,
+            previous_class: np.ndarray, published: Dict[UUID, PerceivedContact], touched: Set[UUID],
+            fresh: Dict[UUID, PerceivedContact]) -> Dict[UUID, PerceivedContact]:
+    """One class's contacts in evidence order: the published mapping when untouched, updated in
+    place while the targets' order held, rebuilt otherwise."""
+    if not touched:
+        return published
+    order, first = _target_order(rows, of_class)
+    if published and np.array_equal(order, _target_order(previous_rows, previous_class)[0]):
+        listed = dict(published)
+        listed.update(fresh)
+        return listed
+    return {identity: fresh[identity] if identity in fresh else published[identity]
+            for identity in uuids[first].tolist()}
 
 
 def _gather(mask: np.ndarray, box: Box, positions: Sequence[Position] | np.ndarray) -> np.ndarray:
