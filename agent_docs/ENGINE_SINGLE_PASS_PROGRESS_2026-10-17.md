@@ -169,3 +169,8 @@ Hard rules:
     - batch-callback errors are logged by `_dispatch_event_batch`, not surfaced (existing passive-observer behaviour);
     - a rebind re-folds full history;
     - the summon-cast cold fold (30–39 ms) grows with history.
+- 2026-10-17: **AIK follow-up merged.**
+  - Batch-callback errors are fatal.
+  - A CREATED assignment raises at decision instead of auto-starting.
+  - `open` and `unbind` are strict.
+  - Edge left open: a summon committed while `has_runtime_agency()` is false is never started, and would raise if it got a turn. Not reached by any test.
