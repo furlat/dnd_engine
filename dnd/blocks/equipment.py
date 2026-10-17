@@ -1412,7 +1412,7 @@ class Equipment(BaseBlock):
         self,
     ) -> ArmorClassFormulaCandidate:
         """Represent the existing singleton mode as a compatibility candidate."""
-        base_ac = normalized_base(self.unarmored_ac)
+        base_ac = normalized_base(self.unarmored_ac) if self.unarmored_ac.base is not None else 10
         if self.unarmored_ac_type == UnarmoredAc.BARBARIAN:
             abilities: Tuple[AbilityName, ...] = (
                 "dexterity",
@@ -1575,14 +1575,10 @@ class Equipment(BaseBlock):
         return conflicts
 
     def _reparent_equippable_item(self, item: EquippableItem) -> None:
-        """Update item-owned values and channels to this equipment owner."""
+        """Give the item and its owned values this equipment owner."""
         item.source_entity_uuid = self.source_entity_uuid
-        for field_value in item.__dict__.values():
-            values = field_value if isinstance(field_value, list) else (field_value,)
-            for value in values:
-                if not isinstance(value, ModifiableValue):
-                    continue
-                value.source_entity_uuid = self.source_entity_uuid
+        for value in item.owned_values():
+            value.source_entity_uuid = self.source_entity_uuid
 
     def validate_initial_items(
         self,

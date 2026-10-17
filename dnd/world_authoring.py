@@ -38,6 +38,8 @@ def _authored_cost(value: int | ModifiableValue) -> int:
     """Return the exact base cost owned by one Tile movement value."""
     if isinstance(value, int):
         return value
+    if value.base is None:
+        raise RuntimeError("Tile movement value has no exact base modifier")
     return value.base
 
 

@@ -372,7 +372,7 @@ def test_eb_06_009_bare_entity_creation_registers_and_normalizes_defaults() -> N
     assert entity.ability_scores.source_entity_uuid == source_uuid
     assert entity.health.source_entity_uuid == source_uuid
     assert all(block.source_entity_uuid == source_uuid for block in entity.blocks.values())
-    assert all(value.source_entity_uuid == source_uuid for value in entity.values.values())
+    assert all(value.source_entity_uuid == source_uuid for value in entity.value_fields())
     assert entity.proficiency_bonus.normalized_score == 2
     assert entity.get_hp() == 6
 

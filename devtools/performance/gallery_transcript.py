@@ -11,8 +11,7 @@ entities, items and conditions by identity, so a change in how many identities v
     PYTHONHASHSEED=0 PYTHONPATH=<tree> python devtools/performance/gallery_transcript.py record <tree> <out.json> \
         --case fireball --mode ordinary --name <stem>
 
-compare: report whether two recordings are equal after uuid (first appearance, in the engine's own order:
-dicts keep their insertion order, so identities the engine keys by never sort by their raw values) and timestamp
+compare: report whether two recordings are equal after uuid (first appearance) and timestamp
 normalization, after projecting both onto a named representation. Published seat updates are compared
 byte for byte after uuid normalization. The engine on PYTHONPATH is imported but not run.
 
@@ -27,7 +26,8 @@ and healing rolls: those now carry the read's target where the base left the val
 
 The `value-record` representation (value layer as data, PH-2 2026-10-18) projects every value dump (the old
 channel graph, a value record, or a composed read in a damage or healing packet) onto the read it gives with no
-target or context: name, owner, score, normalized score, advantage, critical and auto-hit states.
+target or context: name, owner, score, normalized score, advantage, critical and auto-hit states. Block dumps
+lose their `values` dict: a block's values are its value fields (still dumped, and named by `values_dict_*`).
 """
 
 import argparse
@@ -127,7 +127,7 @@ def record(tree: Path, out: Path) -> None:
     try:
         gallery.entry()
     finally:
-        out.write_text(json.dumps(operations, default=str))
+        out.write_text(json.dumps(operations, sort_keys=True, default=str))
         print(f"TRANSCRIPT {out} operations={len(operations)} versions={[op['versions'] for op in operations]}",
               file=sys.stderr)
 
@@ -179,7 +179,8 @@ def _project_value_record(value):
     if ('self_static' in value and 'to_target_static' in value) or (
             'normalized_score' in value and ('parts' in value or 'modifiers' in value)):
         return {field: value.get(field) for field in VALUE_RECORD_FIELDS}
-    return {key: _project_value_record(item) for key, item in value.items()}
+    block = 'values_dict_uuid_name' in value
+    return {key: _project_value_record(item) for key, item in value.items() if not (block and key == 'values')}
 
 
 def _normalized(text: str) -> str:
@@ -220,7 +221,7 @@ def compare(base_path: Path, new_path: Path, representation: str | None) -> int:
             body = _project_value_read(body)
         elif representation == 'value-record':
             body = _project_value_record(body)
-        loaded.append((json.loads(_normalized(json.dumps(body))),
+        loaded.append((json.loads(_normalized(json.dumps(body, sort_keys=True))),
                        [[{seat: _normalized(update) for seat, update in seats.items()} for seats in op]
                         for op in published]))
     (base, base_published), (new, new_published) = loaded

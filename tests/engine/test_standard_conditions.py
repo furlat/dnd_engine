@@ -222,7 +222,7 @@ def test_eb_08_004_incapacitated_and_restrained_limit_actions() -> None:
         target.saving_throws.get_saving_throw("dexterity").bonus.advantage
         == AdvantageStatus.DISADVANTAGE
     )
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, source.uuid).advantage == AdvantageStatus.ADVANTAGE
 
 
 def test_eb_08_005_prone_uses_distance_context_for_incoming_attacks() -> None:

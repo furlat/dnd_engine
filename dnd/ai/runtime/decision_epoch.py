@@ -1275,7 +1275,7 @@ def _build_action_economy_state_from_actor(
         if slot_attr is None:
             continue
         slot_started = time.perf_counter()
-        base: int = slot_attr.base
+        base = slot_attr.base if slot_attr.base is not None else 0
         _record_timing(record_timing, f"action_economy.spell_slot_{level}.base_modifier_ms", slot_started)
         max_val = installed_capacities.get(
             level,

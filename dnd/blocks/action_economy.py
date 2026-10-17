@@ -1028,6 +1028,8 @@ class ActionEconomy(BaseBlock):
         self._update_flying_base()
 
     def _update_flying_base(self) -> None:
+        if self.flying_speed.base is None:
+            raise RuntimeError("Flying speed is missing its base value")
         self.flying_speed.base = max((grant.get(MovementMode.FLYING, 0)
             for identity, grant in self.movement_speed_grants.items()
             if (owner := BaseObject.get(identity)) is not None and owner.contributions_active()), default=0)

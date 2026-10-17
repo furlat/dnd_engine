@@ -207,8 +207,7 @@ def _runtime_snapshot(entity: Entity) -> dict[str, object]:
         ),
         "base_objects": frozenset(BaseObject._registry),
         "base_blocks": frozenset(BaseBlock._registry),
-        "base_values": frozenset(ModifiableValue._registry),
-        "modifiable_values": frozenset(ModifiableValue._registry),
+        "values": frozenset(ModifiableValue._registry),
         "cursor": EventQueue.event_cursor(),
     }
 

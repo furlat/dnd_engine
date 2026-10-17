@@ -191,7 +191,7 @@ def test_eb_05_013_constructor_source_propagates_after_field_discovery() -> None
         child=foreign_child,
     )
 
-    assert block.values == {foreign_direct_value.uuid: foreign_direct_value}
+    assert block.value_fields() == (foreign_direct_value,)
     assert block.blocks == {foreign_child.uuid: foreign_child}
     assert block.source_entity_uuid == parent_source_uuid
     assert block.direct_value.source_entity_uuid == parent_source_uuid

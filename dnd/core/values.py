@@ -10,13 +10,15 @@ from enum import Enum
 from fractions import Fraction
 from math import prod
 import random
-from typing import Annotated, Any, Callable, ClassVar, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
+from types import MappingProxyType
+from typing import (Annotated, Any, Callable, ClassVar, Dict, Iterable, List, Mapping, NamedTuple, Optional, Sequence,
+    Tuple)
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 from pydantic_core import core_schema
 
-from dnd.core.base_object import PASSIVE_EVENT_REPLAY, BaseObject
+from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
     AdvantageModifier,
@@ -139,7 +141,7 @@ class ModifiableValue:
 
     The base contributes `base` raw and `score_normalizer(base)` normalized, displayed
     as `<name>_base_value`; `base_owner_uuid` gates it like a modifier's contribution
-    owner. `modifiers` holds one row per (channel, kind, modifier uuid), in insertion
+    owner. A removed base (`remove_all_modifiers`) is None: it contributes and shows nothing. `modifiers` holds one row per (channel, kind, modifier uuid), in insertion
     order. The properties below read the value alone with no target or context, through
     the same read functions every other read uses.
     """
@@ -156,7 +158,7 @@ class ModifiableValue:
         self.name = name
         self.source_entity_uuid = source_entity_uuid
         self.source_entity_name = source_entity_name
-        self.base = base
+        self.base: Optional[int] = base
         self.base_owner_uuid = base_owner_uuid
         self.score_normalizer = score_normalizer if score_normalizer is not None else identity
         self.modifiers: Tuple[Row, ...] = ()
@@ -232,14 +234,8 @@ class ModifiableValue:
     @property
     def resistance(self) -> Dict[DamageType, ResistanceStatus]:
         """Resistance states read with no target or context."""
-        return _resistance_statuses(value_resistance_sum(parts(self), ValueRead(self.source_entity_uuid)))
+        return value_resistance(parts(self), ValueRead(self.source_entity_uuid))
 
-    @property
-    def outgoing_advantage(self) -> AdvantageStatus:
-        """Advantage state this value exports to its targeters, read with no target or context."""
-        buckets = _buckets(parts(self))
-        return _advantage_status(_static_advantage_sum(buckets, TO_TARGET_STATIC) + _contextual_advantage_sum(
-            buckets, TO_TARGET_CONTEXTUAL, self.source_entity_uuid, None, None))
 
 
 def _value_json(value: ModifiableValue) -> Dict[str, Any]:
@@ -262,17 +258,20 @@ def _checked_kind(channel: Channel, kind: Kind) -> None:
         raise ValueError("contextual channels hold no factor rows")
 
 
+def _with_row(rows: Tuple[Row, ...], new: Row) -> Tuple[Row, ...]:
+    """Rows with one more row; a row with the same (channel, kind, uuid) is replaced in place."""
+    _checked_kind(new.channel, new.kind)
+    identity_uuid = new.modifier.uuid
+    for index, row in enumerate(rows):
+        if row.channel is new.channel and row.kind is new.kind and row.modifier.uuid == identity_uuid:
+            return rows[:index] + (new,) + rows[index + 1:]
+    return rows + (new,)
+
+
 def add_modifier(value: ModifiableValue, channel: Channel, kind: Kind, modifier: Any) -> UUID:
     """Add one modifier row to a value; a row with the same (channel, kind, uuid) is replaced in place."""
-    _checked_kind(channel, kind)
-    identity_uuid = modifier.uuid
-    rows = value.modifiers
-    for index, row in enumerate(rows):
-        if row.channel is channel and row.kind is kind and row.modifier.uuid == identity_uuid:
-            value.modifiers = rows[:index] + (Row(channel, kind, modifier),) + rows[index + 1:]
-            return identity_uuid
-    value.modifiers = rows + (Row(channel, kind, modifier),)
-    return identity_uuid
+    value.modifiers = _with_row(value.modifiers, Row(channel, kind, modifier))
+    return modifier.uuid
 
 
 def remove_modifier(value: ModifiableValue, uuid: UUID, channel: Optional[Channel] = None,
@@ -298,14 +297,14 @@ def modifier_of(value: ModifiableValue, channel: Channel, kind: Kind, uuid: UUID
 
 
 def normalized_base(value: ModifiableValue) -> int:
-    """A value's base contribution, normalized."""
-    return value.score_normalizer(value.base)
+    """A value's base contribution, normalized; 0 once the base was removed."""
+    return value.score_normalizer(value.base) if value.base is not None else 0
 
 
 def remove_all_modifiers(value: ModifiableValue) -> None:
-    """Clear every row of a value and its base contribution."""
+    """Remove every row of a value and its base contribution."""
     value.modifiers = ()
-    value.base = 0
+    value.base = None
 
 
 def retire_value(value: ModifiableValue) -> None:
@@ -317,31 +316,52 @@ def retire_value(value: ModifiableValue) -> None:
 
 
 class Part(NamedTuple):
-    """One value inside a read: the value, its rows when the read was composed, and a proficiency rule.
+    """One value inside a read.
 
-    `normalizer`, when set, replaces the normalizer of the value's base, its static
-    value rows and its fixed score (a proficiency multiplier applied for one read).
+    `rows` is None while the part reads its value live; it holds the value's rows as
+    they were when the part was composed (`composed`, a proficiency rule, read-only
+    rows), as the old combined and renormalized copies did. `normalizer`, when set,
+    replaces the normalizer of the value's base, its static value rows and its fixed
+    score (a proficiency rule for one read). `extra` are rows of this read only, each
+    read with its own normalizer.
     """
 
     value: ModifiableValue
-    rows: Tuple[Row, ...]
+    rows: Optional[Tuple[Row, ...]] = None
     normalizer: Optional[Callable[[int], int]] = None
+    extra: Tuple[Row, ...] = ()
+
+
+def _rows_of(item: Part) -> Tuple[Row, ...]:
+    return item.value.modifiers if item.rows is None else item.rows
+
+
+def _taken(item: Part) -> Part:
+    """The part with its value's rows taken now (a live part becomes a snapshot)."""
+    return item if item.rows is not None else Part(item.value, item.value.modifiers, item.normalizer, item.extra)
 
 
 def part(value: ModifiableValue, normalizer: Optional[Callable[[int], int]] = None) -> Part:
-    """A value as one part of a read, its rows taken now."""
-    return Part(value, value.modifiers, normalizer)
+    """A value as one part of a read: live, or with its rows taken now when a proficiency rule applies."""
+    return Part(value) if normalizer is None else Part(value, value.modifiers, normalizer)
 
 
 def parts(*values: ModifiableValue) -> Tuple[Part, ...]:
-    """Values as the parts of one read, in order."""
-    return tuple(Part(value, value.modifiers, None) for value in values)
+    """Values as live parts of one read, in order."""
+    return tuple(Part(value) for value in values)
 
 
 def with_rows(composed_parts: Sequence[Part], rows: Tuple[Row, ...]) -> Tuple[Part, ...]:
-    """The parts with rows that apply to this read only (a long-range shot, a formula bonus), added last."""
-    last = composed_parts[-1]
-    return (*composed_parts[:-1], Part(last.value, last.rows + rows, last.normalizer))
+    """The parts with rows that apply to this read only (a long-range shot, a formula bonus), added last.
+
+    The rows join the last part as `add_modifier` would add them (one per channel, kind and uuid), each read
+    with its own normalizer; the part's own rows are taken now.
+    """
+    last = _taken(composed_parts[-1])
+    extra = last.extra
+    for row in rows:
+        extra = _with_row(extra, row)
+    return (*composed_parts[:-1], Part(last.value, last.rows, last.normalizer, extra))
 
 
 def _source_checked(composed_parts: Sequence[Part]) -> UUID:
@@ -362,18 +382,9 @@ def _outgoing_checked(composed_parts: Sequence[Part], source: UUID) -> None:
 
 
 def composed(composed_parts: Sequence[Part]) -> Tuple[Part, ...]:
-    """Parts read as one bonus: they share an owner and export no row that targets that owner."""
+    """Parts read as one bonus, their rows taken now: they share an owner and export no row targeting it."""
     _outgoing_checked(composed_parts, _source_checked(composed_parts))
-    return tuple(composed_parts)
-
-
-def _validated_parts(value: Any, info: core_schema.ValidationInfo) -> Optional[Tuple[Part, ...]]:
-    """Parts pass through; a passive replay of a packet's JSON keeps no live parts (the capture strips them too)."""
-    if isinstance(value, tuple):
-        return value
-    if info.context is PASSIVE_EVENT_REPLAY and isinstance(value, dict):
-        return None
-    raise ValueError("a composed value is a tuple of parts")
+    return tuple(_taken(item) for item in composed_parts)
 
 
 def _composed_json(composed_parts: Tuple[Part, ...]) -> Dict[str, Any]:
@@ -390,7 +401,7 @@ def _composed_json(composed_parts: Tuple[Part, ...]) -> Dict[str, Any]:
 
 class _ComposedSchema:
     def __get_pydantic_core_schema__(self, source: Any, handler: Any) -> core_schema.CoreSchema:
-        return core_schema.with_info_plain_validator_function(_validated_parts,
+        return core_schema.is_instance_schema(tuple,
             serialization=core_schema.plain_serializer_function_ser_schema(_composed_json, when_used="json"))
 
 
@@ -422,9 +433,9 @@ class ValueRead(NamedTuple):
 
 
 def outgoing_of(composed_parts: Sequence[Part], context: Optional[Dict[str, Any]]) -> OpponentOutgoing:
-    """The opponent side of an opposed read: its parts, checked as one bonus when there are several."""
+    """The opponent side of an opposed read: one live part, or several composed as one bonus."""
     if len(composed_parts) > 1:
-        _outgoing_checked(composed_parts, _source_checked(composed_parts))
+        return OpponentOutgoing(composed(composed_parts), context)
     return OpponentOutgoing(tuple(composed_parts), context)
 
 
@@ -612,39 +623,43 @@ class ValueReading(BaseModel):
 
 
 _Entry = Tuple[Any, Optional[Callable[[int], int]]]
-_Buckets = Dict[Tuple[Channel, Kind], List[_Entry]]
-_NO_BUCKETS: _Buckets = {}
+_Buckets = Mapping[Tuple[Channel, Kind], List[_Entry]]
+_NO_BUCKETS: Mapping[Tuple[Channel, Kind], List[_Entry]] = MappingProxyType({})
 
 
 def _buckets(composed_parts: Sequence[Part]) -> _Buckets:
-    """The parts' rows by (channel, kind), one per (channel, kind, uuid): last wins at its first position."""
-    if len(composed_parts) == 1:
+    """The parts' rows by (channel, kind), one per (channel, kind, uuid): last wins at its first position.
+
+    One part without read-only rows is already one row per key (`add_modifier`); everything else is merged.
+    """
+    if len(composed_parts) == 1 and not composed_parts[0].extra:
         only = composed_parts[0]
-        if not only.rows:
+        rows = _rows_of(only)
+        if not rows:
             return _NO_BUCKETS
-        buckets: _Buckets = {}
-        for row in only.rows:
-            buckets.setdefault((row.channel, row.kind), []).append((row.modifier, only.normalizer))
-        return buckets
+        single: Dict[Tuple[Channel, Kind], List[_Entry]] = {}
+        for row in rows:
+            single.setdefault((row.channel, row.kind), []).append((row.modifier, only.normalizer))
+        return single
     merged: Dict[Tuple[Channel, Kind, UUID], Tuple[Row, Optional[Callable[[int], int]]]] = {}
     for item in composed_parts:
-        for row in item.rows:
+        for row in _rows_of(item):
             merged[(row.channel, row.kind, row.modifier.uuid)] = (row, item.normalizer)
-    buckets = {}
+        for row in item.extra:
+            merged[(row.channel, row.kind, row.modifier.uuid)] = (row, None)
+    buckets: Dict[Tuple[Channel, Kind], List[_Entry]] = {}
     for (channel, kind, _), (row, normalizer) in merged.items():
         buckets.setdefault((channel, kind), []).append((row.modifier, normalizer))
     return buckets
 
 
-def _bases(composed_parts: Sequence[Part]) -> List[Tuple[ModifiableValue, Callable[[int], int]]]:
-    """Each part value's base with the normalizer it is read with, one per value."""
-    if len(composed_parts) == 1:
-        only = composed_parts[0]
-        return [(only.value, only.normalizer if only.normalizer is not None else only.value.score_normalizer)]
+def _bases(composed_parts: Sequence[Part]) -> List[Tuple[int, Optional[UUID], Callable[[int], int]]]:
+    """Each part value's present base (raw, owner gate, normalizer it is read with), one per value."""
     merged = {}
     for item in composed_parts:
-        merged[item.value.uuid] = (item.value,
-                                   item.normalizer if item.normalizer is not None else item.value.score_normalizer)
+        if item.value.base is not None:
+            merged[item.value.uuid] = (item.value.base, item.value.base_owner_uuid,
+                                       item.normalizer if item.normalizer is not None else item.value.score_normalizer)
     return list(merged.values())
 
 
@@ -659,16 +674,17 @@ def _row_normalized(modifier: NumericalModifier, normalizer: Optional[Callable[[
     return normalizer(modifier.value) if normalizer is not None else modifier.normalized_value
 
 
-def _static_numbers(buckets: _Buckets, channel: Channel, bases: Sequence[Tuple[ModifiableValue, Callable[[int], int]]],
+def _static_numbers(buckets: _Buckets, channel: Channel,
+                    bases: Sequence[Tuple[int, Optional[UUID], Callable[[int], int]]],
                     excluded: frozenset[UUID], sides: Tuple[bool, bool]) -> "_ChannelNumbers":
     """A static channel's totals (raw and/or normalized, as `sides` asks), bounds and factor."""
     raw = normalized = 0
-    for value, normalizer in bases:
-        if _owner_allows(value.base_owner_uuid):
+    for base, owner_uuid, normalizer in bases:
+        if _owner_allows(owner_uuid):
             if sides[0]:
-                raw += value.base
+                raw += base
             if sides[1]:
-                normalized += normalizer(value.base)
+                normalized += normalizer(base)
     for modifier, normalizer in buckets.get((channel, VALUE), ()):
         if modifier.uuid in excluded or not modifier.contributions_active():
             continue
@@ -733,7 +749,7 @@ def _channel_numbers(composed_parts: Sequence[Part], buckets: _Buckets, read: Va
     return channels
 
 
-def _fixed_score(composed_parts: Sequence[Part], buckets: _Buckets, excluded: frozenset[UUID]) -> Optional[int]:
+def _fixed_score(buckets: _Buckets, excluded: frozenset[UUID]) -> Optional[int]:
     rows = buckets.get((FIXED, VALUE))
     if not rows:
         return None
@@ -750,7 +766,7 @@ def value_score(composed_parts: Sequence[Part], read: ValueRead, *, normalized: 
                 excluded: frozenset[UUID] = frozenset()) -> int:
     """A read's total: channels summed, multiplied exactly once, then bounded (and normalized)."""
     buckets = _buckets(composed_parts)
-    fixed = _fixed_score(composed_parts, buckets, excluded)
+    fixed = _fixed_score(buckets, excluded)
     if fixed is not None:
         return _fixed_normalizer(composed_parts)(fixed) if normalized else fixed
     return _score_of(_channel_numbers(composed_parts, buckets, read, excluded, (not normalized, normalized)),
@@ -932,22 +948,6 @@ def value_resistance(composed_parts: Sequence[Part], read: ValueRead) -> Dict[Da
     return _resistance_statuses(value_resistance_sum(composed_parts, read))
 
 
-def value_bounds(composed_parts: Sequence[Part], read: ValueRead) -> Tuple[Optional[int], Optional[int]]:
-    """Lowest minimum and highest maximum of the owner's static and contextual channels in a read."""
-    buckets = _buckets(composed_parts)
-    source = composed_parts[0].value.source_entity_uuid
-    static = _static_numbers(buckets, SELF_STATIC, (), frozenset(), (False, False))
-    minima = buckets.get((SELF_CONTEXTUAL, MIN))
-    maxima = buckets.get((SELF_CONTEXTUAL, MAX))
-    lows = [static.minimum, min(_numerical_results(minima, source, read.target_entity_uuid, read.context),
-                                default=None) if minima else None]
-    highs = [static.maximum, max(_numerical_results(maxima, source, read.target_entity_uuid, read.context),
-                                 default=None) if maxima else None]
-    lows = [low for low in lows if low is not None]
-    highs = [high for high in highs if high is not None]
-    return (min(lows) if lows else None), (max(highs) if highs else None)
-
-
 def _value_rows(composed_parts: Sequence[Part], buckets: _Buckets, channel: Channel, source: str,
                 with_bases: bool) -> List[ValueBreakdownRow]:
     """Displayed static numerical rows: factors, then each base and value row in composition order."""
@@ -956,13 +956,16 @@ def _value_rows(composed_parts: Sequence[Part], buckets: _Buckets, channel: Chan
             for modifier, _ in buckets.get((channel, FACTOR), ())]
     ordered: Dict[Tuple[str, UUID], Tuple[str, int]] = {}
     for item in composed_parts:
-        if with_bases:
+        if with_bases and item.value.base is not None:
             normalizer = item.normalizer if item.normalizer is not None else item.value.score_normalizer
             ordered[("base", item.value.uuid)] = (f"{item.value.name}_base_value", normalizer(item.value.base))
-        for row in item.rows:
+        for row in _rows_of(item):
             if row.channel is channel and row.kind is VALUE:
                 ordered[("row", row.modifier.uuid)] = (row.modifier.name or "Unknown",
                                                        _row_normalized(row.modifier, item.normalizer))
+        for row in item.extra:
+            if row.channel is channel and row.kind is VALUE:
+                ordered[("row", row.modifier.uuid)] = (row.modifier.name or "Unknown", _row_normalized(row.modifier, None))
     for name, value in ordered.values():
         if value != 0:
             rows.append(ValueBreakdownRow(name=_display_name(name), source=source, value=value))
@@ -1004,7 +1007,7 @@ def read_value(composed_parts: Sequence[Part], read: ValueRead) -> ValueReading:
     """Evaluate parts once in a read situation; the frozen record dice and events keep."""
     opponent = read.opponent
     buckets = _buckets(composed_parts)
-    fixed = _fixed_score(composed_parts, buckets, frozenset())
+    fixed = _fixed_score(buckets, frozenset())
     source = composed_parts[0].value.source_entity_uuid
     own_total, own_rows = _contextual_advantage(buckets, SELF_CONTEXTUAL, source, read.target_entity_uuid,
                                                 read.context, "self_contextual")

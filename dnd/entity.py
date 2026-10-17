@@ -4346,7 +4346,8 @@ class Entity(BaseBlock):
             spell.
         """
         for level in range(1, 10):
-            if self.action_economy.spell_slot_value(level).base > 0:
+            slot_base = self.action_economy.spell_slot_value(level).base
+            if slot_base is not None and slot_base > 0:
                 return True
         if any(action.is_spell for action in self.registered_actions):
             return True

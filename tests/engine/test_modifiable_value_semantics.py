@@ -40,7 +40,6 @@ from dnd.core.values import (
     modifiers_of,
     parts,
     remove_all_modifiers,
-    value_bounds,
     value_breakdown,
     with_rows,
     Row,
@@ -215,7 +214,6 @@ def test_eb_02_004_to_target_channels_apply_only_in_an_opposed_read() -> None:
             value=AdvantageStatus.DISADVANTAGE,
         ))
 
-    assert defender_ac.outgoing_advantage == AdvantageStatus.DISADVANTAGE
     assert read_value(parts(attacker_attack), ValueRead(attacker_uuid, defender_uuid)).advantage == AdvantageStatus.NONE
 
     opposed = read_value(parts(attacker_attack), ValueRead(attacker_uuid, defender_uuid,
@@ -428,13 +426,13 @@ def test_eb_02_008_multiple_constraints_are_permissive() -> None:
     low_static = ModifiableValue(source_entity_uuid=source_uuid, base=6)
     add_modifier(low_static, Channel.SELF_STATIC, Kind.MIN, number_mod(source_uuid, 8, "Minimum 8"))
     add_modifier(low_static, Channel.SELF_STATIC, Kind.MIN, number_mod(source_uuid, 12, "Minimum 12"))
-    assert value_bounds(parts(low_static), ValueRead(source_uuid))[0] == 8
+    assert read_value(parts(low_static), ValueRead(source_uuid)).channels[0].minimum == 8
     assert low_static.score == 8
 
     high_static = ModifiableValue(source_entity_uuid=source_uuid, base=20)
     add_modifier(high_static, Channel.SELF_STATIC, Kind.MAX, number_mod(source_uuid, 14, "Maximum 14"))
     add_modifier(high_static, Channel.SELF_STATIC, Kind.MAX, number_mod(source_uuid, 9, "Maximum 9"))
-    assert value_bounds(parts(high_static), ValueRead(source_uuid))[1] == 14
+    assert read_value(parts(high_static), ValueRead(source_uuid)).channels[0].maximum == 14
     assert high_static.score == 14
 
     def contextual_bound(bound: int, name: str):
@@ -463,8 +461,9 @@ def test_eb_02_008_multiple_constraints_are_permissive() -> None:
                 callable=contextual_bound(bound, f"Minimum {bound}"),
             ))
     active = ValueRead(source_uuid, context={"constraints_active": True})
-    assert value_bounds(parts(low_contextual), active) == (8, None)
-    assert value_bounds(parts(low_contextual), ValueRead(source_uuid))[0] is None
+    contextual = read_value(parts(low_contextual), active).channels[1]
+    assert (contextual.minimum, contextual.maximum) == (8, None)
+    assert read_value(parts(low_contextual), ValueRead(source_uuid)).channels[1].minimum is None
     assert value_score(parts(low_contextual), active, normalized=False) == 14
 
     high_contextual = ModifiableValue(source_entity_uuid=source_uuid, base=20)
@@ -475,7 +474,8 @@ def test_eb_02_008_multiple_constraints_are_permissive() -> None:
                 name=f"Maximum {bound}",
                 callable=contextual_bound(bound, f"Maximum {bound}"),
             ))
-    assert value_bounds(parts(high_contextual), active) == (None, 14)
+    contextual = read_value(parts(high_contextual), active).channels[1]
+    assert (contextual.minimum, contextual.maximum) == (None, 14)
     assert value_score(parts(high_contextual), active, normalized=False) == 14
 
 
@@ -556,7 +556,7 @@ def test_eb_02_009_contextual_resistance_aggregates_and_executes_strictly() -> N
 
 
 def test_eb_02_010_opponent_outgoing_rows_are_read_live() -> None:
-    """EB-02-010: an opposed read reads the opponent's outgoing rows as they are when the read is built."""
+    """EB-02-010: an opposed read reads the opponent's live outgoing rows."""
     reset_value_state()
     attacker_uuid = uuid4()
     defender_uuid = uuid4()
@@ -588,8 +588,6 @@ def test_eb_02_010_opponent_outgoing_rows_are_read_live() -> None:
             name="Fresh Penalty",
             value=-1,
         ))
-    assert value_score(parts(attacker_attack), opposed, normalized=False) == 5
-    opposed = ValueRead(attacker_uuid, defender_uuid, opponent=outgoing_of(parts(defender_ac), None))
     assert value_score(parts(attacker_attack), opposed, normalized=False) == 4
     assert attacker_attack.score == 10
 
@@ -681,7 +679,6 @@ def test_exact_factors_apply_after_all_channels_before_bounds_and_survive_compos
     read = ValueRead(owner, target, opponent=outgoing_of(parts(external), None))
     assert value_score(combined, read, normalized=True) == 50
     remove_modifier(external, slow.uuid)
-    read = ValueRead(owner, target, opponent=outgoing_of(parts(external), None))
     assert value_score(combined, read, normalized=True) == 100
     cap = number_mod(owner, 0)
     assert value_score(with_rows(combined, (Row(Channel.SELF_STATIC, Kind.MAX, cap),)), read, normalized=True) == 0

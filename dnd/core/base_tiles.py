@@ -343,8 +343,11 @@ class Tile(BaseBlock):
                 self.swimming_cost = value
             case MovementMode.BURROWING:
                 self.burrowing_cost = value
-        self.values[value.uuid] = value
         return value
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """A tile's values are its materialized movement costs."""
+        return self.movement_cost_values()
 
     def movement_cost_values(self) -> tuple[ModifiableValue, ...]:
         """Return only already-materialized graphs for ownership and cleanup."""

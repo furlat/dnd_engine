@@ -131,3 +131,11 @@ def test_values_declare_no_target_or_context_fields() -> None:
             if "BaseObject" in bases:
                 fields.append(f"{node.name} inherits BaseObject's target and context fields")
     assert fields == []
+
+
+def test_blocks_own_their_values_one_way() -> None:
+    """A block's values are its value fields; no block keeps a second dict of them."""
+    tree = ast.parse((ROOT / "dnd/core/base_block.py").read_text(encoding="utf-8"))
+    fields = [item.target.id for node in ast.walk(tree) if isinstance(node, ast.ClassDef) and node.name == "BaseBlock"
+              for item in node.body if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)]
+    assert "values" not in fields

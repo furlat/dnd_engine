@@ -188,7 +188,7 @@ def test_movement_and_control_conditions_clamp_action_economy_values() -> None:
         target.saving_throws.get_saving_throw("dexterity").bonus.advantage
         == AdvantageStatus.DISADVANTAGE
     )
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, source.uuid).advantage == AdvantageStatus.ADVANTAGE
 
 
 def test_posture_and_invisibility_use_attacker_context() -> None:

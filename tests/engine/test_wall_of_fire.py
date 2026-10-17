@@ -83,7 +83,9 @@ def test_wall_damage_records_exact_source_and_physical_contact(position, exposur
     assert source is not None and source.spatial_effect_uuid == zone.uuid
     assert source.position == (7, 5) and source.target_position == position
     assert source.exposure == exposure and source.base_height_steps == zone.geometry.base_height_steps
-    assert DamageAppliedEvent.model_validate_json(applied[0].model_dump_json(), context=PASSIVE_EVENT_REPLAY).spatial_source == source
+    # A retained (passive) fact keeps no live damage packets, as the player capture retains it.
+    retained = applied[0].model_copy(update={"damages": []})
+    assert DamageAppliedEvent.model_validate_json(retained.model_dump_json(), context=PASSIVE_EVENT_REPLAY).spatial_source == source
 
 
 def test_overlapping_walls_keep_their_separate_damage_sources():
