@@ -278,6 +278,7 @@ class GridMap:
         # observer's last epoch names exactly the emitters changed since.
         self._light_epoch = 0
         self._light_changes: List[Tuple[int, UUID]] = []
+        self._subscription_revision = 0
         self._block_light_suppressions: DefaultDict[UUID, Set[str]] = defaultdict(set)
         self._optical_obscurements_by_position: DefaultDict[
             Tuple[int, int], Dict[UUID, OpticalObscurement]
@@ -451,6 +452,11 @@ class GridMap:
         """Get all entity UUIDs subscribed to a cell."""
         return self._cell_subscribers.get(position, set()).copy()
 
+    @property
+    def subscription_revision(self) -> int:
+        """Advanced whenever any cell's subscriber set changes."""
+        return self._subscription_revision
+
     def subscribers_view_at(self, position: Tuple[int, int]) -> AbstractSet[UUID]:
         """The live subscriber set of a cell, for an immediate read-only query."""
         return self._cell_subscribers.get(position, frozenset())
@@ -506,6 +512,8 @@ class GridMap:
         rectangle and extra cells. Their coarse memberships never grant knowledge.
         """
         old_cells = self._entity_subscriptions.get(entity_uuid, set())
+        if old_cells != cells:
+            self._subscription_revision += 1
 
         for cell in old_cells - cells:
             self._cell_subscribers[cell].discard(entity_uuid)
@@ -538,6 +546,7 @@ class GridMap:
     def unsubscribe_entity(self, entity_uuid: UUID) -> None:
         """Remove all subscriptions for an entity."""
         cells = self._entity_subscriptions.pop(entity_uuid, set())
+        self._subscription_revision += 1
         self._observer_revisions.pop(entity_uuid, None)
         self._observer_dependency_cells.pop(entity_uuid, None)
         self._observer_dependency_bounds.pop(entity_uuid, None)
@@ -6453,6 +6462,7 @@ class GridMap:
         self._connector_uuids_by_endpoint.clear()
         self._cell_subscribers.clear()
         self._entity_subscriptions.clear()
+        self._subscription_revision += 1
         self._observer_revisions.clear()
         self._observer_dependency_chunks.clear()
         self._observer_dependency_cells.clear()

@@ -112,10 +112,11 @@ def _compute_identified_entity_observers(event: Event) -> Dict[str, Set[str]]:
 
     for participant_uuid in participant_uuids:
         position = grid.get_entity_position(participant_uuid)
-        holders = (spatial_senses_system.contact_holders(participant_uuid, grid.subscribers_view_at(position))
-                   if position is not None else set())
-        holders.add(participant_uuid)
-        grants[str(participant_uuid)] = {str(observer) for observer in holders if Entity.get(observer) is not None}
+        if position is None:
+            grants[str(participant_uuid)] = {str(participant_uuid)}
+            continue
+        grants[str(participant_uuid)] = {text for observer, text in
+            spatial_senses_system.identifying_observers(participant_uuid, position) if Entity.get(observer) is not None}
 
     return grants
 

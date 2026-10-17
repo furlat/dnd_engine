@@ -694,6 +694,11 @@ class SpatialSensesSystem:
         self._pending: Dict[UUID, _GroupSettlement] = {}
         self._settling = False
         self._absorbing_light = False
+        # Advanced whenever the reverse contact index changes; identity grants
+        # for a creature at a cell hold while it and the cell's subscribers do.
+        self.contact_epoch = 0
+        self._identity_grants: Dict[Tuple[UUID, Tuple[int, int]], Tuple[Tuple[UUID, str], ...]] = {}
+        self._identity_grants_key: Optional[Tuple[int, int]] = None
         # The last settled group's late-completing facts and its observers. A
         # zone change opened in that group completes right after it (its
         # completion reads settled senses); those observers already settled it.
@@ -721,6 +726,9 @@ class SpatialSensesSystem:
         self._pending.clear()
         self._settling = False
         self._absorbing_light = False
+        self.contact_epoch = 0
+        self._identity_grants.clear()
+        self._identity_grants_key = None
 
     def _recording(self) -> bool:
         """Whether facts are recorded for the open group instead of settled now.
@@ -796,6 +804,7 @@ class SpatialSensesSystem:
         footprint = self.footprints_by_observer.pop(observer_uuid, None)
         if footprint is not None:
             self._remove_footprint(observer_uuid, footprint)
+            self.contact_epoch += 1
         get_map().unsubscribe_entity(observer_uuid)
 
     def recompute_observer(
@@ -1708,6 +1717,8 @@ class SpatialSensesSystem:
         old = self.footprints_by_observer.get(observer_uuid)
         if old == new:
             return
+        if old is None or old.entity_uuids != new.entity_uuids:
+            self.contact_epoch += 1
         if old is not None:
             self._remove_footprint(observer_uuid, old, retained=new)
         self._add_footprint(observer_uuid, new, previous=old)
@@ -1736,9 +1747,28 @@ class SpatialSensesSystem:
             if key not in members:
                 members.add(key)
                 index[key].add(observer_uuid)
+                if index is self.observers_by_entity:
+                    self.contact_epoch += 1
         elif key in members:
             members.discard(key)
             self._discard_reverse(index, key, observer_uuid)
+            if index is self.observers_by_entity:
+                self.contact_epoch += 1
+
+    def identifying_observers(self, subject_uuid: UUID, position: Tuple[int, int]) -> Tuple[Tuple[UUID, str], ...]:
+        """(observer, its string id) for the creature itself and each subscriber of its cell holding its contact."""
+        grid = get_map()
+        key = (self.contact_epoch, grid.subscription_revision)
+        if key != self._identity_grants_key:
+            self._identity_grants.clear()
+            self._identity_grants_key = key
+        grants = self._identity_grants.get((subject_uuid, position))
+        if grants is None:
+            holders = self.contact_holders(subject_uuid, grid.subscribers_view_at(position))
+            holders.add(subject_uuid)
+            grants = self._identity_grants[(subject_uuid, position)] = tuple(
+                (holder, str(holder)) for holder in holders)
+        return grants
 
     def contact_holders(self, subject_uuid: UUID, observers: AbstractSet[UUID]) -> Set[UUID]:
         """Those observers whose current contacts include this subject (the reverse contact index)."""
