@@ -31,7 +31,6 @@ from dnd.ai.contracts.observation import (
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag
-from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import ResistanceStatus
@@ -305,18 +304,15 @@ def entity_health_details(
 
 
 def damage_affinities(entity: Entity) -> tuple[list[str], list[str], list[str]]:
-    """Return visible damage affinity labels for an entity."""
+    """Return visible damage affinity labels for an entity, from one resistance evaluation."""
     vulnerabilities: list[str] = []
     resistances: list[str] = []
     immunities: list[str] = []
-    for damage_type in DamageType:
-        status = entity.health.get_resistance(damage_type)
-        if status is ResistanceStatus.VULNERABILITY:
-            vulnerabilities.append(damage_type.value)
-        elif status is ResistanceStatus.RESISTANCE:
-            resistances.append(damage_type.value)
-        elif status is ResistanceStatus.IMMUNITY:
-            immunities.append(damage_type.value)
+    labels = {ResistanceStatus.VULNERABILITY.value: vulnerabilities,
+              ResistanceStatus.RESISTANCE.value: resistances,
+              ResistanceStatus.IMMUNITY.value: immunities}
+    for damage_type, status in entity.health.damage_affinities():
+        labels[status].append(damage_type)
     return vulnerabilities, resistances, immunities
 
 

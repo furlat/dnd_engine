@@ -14,7 +14,7 @@ from dnd.core.values import BaseValue, ModifiableValue, AdvantageStatus, compose
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.elevation import support_distance_feet
-from dnd.core.modifiers import NumericalModifier, ResistanceStatus
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.action_types import ActionEconomyCostType, ActionSelection, RestrictedActionGrant
@@ -1221,12 +1221,7 @@ class Entity(BaseBlock):
                 )
                 for hit_die in self.health.hit_dices
             ),
-            damage_affinities=tuple(
-                (damage_type.value, status.value)
-                for damage_type in DamageType
-                if (status := self.health.get_resistance(damage_type))
-                is not ResistanceStatus.NONE
-            ),
+            damage_affinities=self.health.damage_affinities(),
             walking_speed_feet=self.action_economy.current_speed(),
             swimming_speed_feet=self.swimming_speed,
             has_ordinary_sight=self.has_ordinary_sight,
@@ -2444,10 +2439,7 @@ class Entity(BaseBlock):
             native_plane_id=self.native_plane_id, current_plane_id=self.current_plane_id,
             spatial_disposition=self.spatial_disposition,
             healing_blocked=self.health.is_healing_blocked(),
-            damage_affinities=tuple(
-                (damage_type.value, status.value) for damage_type in DamageType
-                if (status := self.health.get_resistance(damage_type)) is not ResistanceStatus.NONE
-            ),
+            damage_affinities=self.health.damage_affinities(),
         )
 
     def get_max_hp(self) -> int:

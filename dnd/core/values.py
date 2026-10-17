@@ -43,6 +43,16 @@ def identity(x: int) -> int:
     """
     return x
 
+
+def _clamped(total: int | Fraction, minimum: int | None, maximum: int | None) -> int | Fraction:
+    """Apply an upper then a lower bound; the lower bound wins when they cross."""
+    if maximum is not None:
+        total = min(total, maximum)
+    if minimum is not None:
+        total = max(total, minimum)
+    return total
+
+
 class BaseValue(BaseObject):
     """Base model for UUID-addressable values.
 
@@ -449,6 +459,23 @@ class StaticValue(BaseValue):
             return None
         return max((constraint.value for constraint in self.max_constraints.values() if constraint.contributions_active()), default=None)
 
+    def bounded_score(self, normalized: bool = False,
+                      excluded: frozenset[UUID] = frozenset()) -> tuple[int, int | None, int | None]:
+        """Channel score with the bounds that clamped it; every contribution is read once.
+
+        Args:
+            normalized: Whether to read each modifier's normalized value.
+            excluded: Owned contribution UUIDs omitted from this read.
+
+        Returns:
+            Score after factors and constraints, lowest active minimum, highest active maximum.
+        """
+        total: int | Fraction = self.additive_score(normalized, excluded)
+        if self.factor_modifiers:
+            total *= self.arithmetic_factor(excluded)
+        minimum, maximum = self.score_bounds(excluded)
+        return int(_clamped(total, minimum, maximum)), minimum, maximum
+
     def _score(self, normalized: bool = False) -> int:
         """Calculate the channel score after numerical modifiers and constraints.
 
@@ -458,17 +485,7 @@ class StaticValue(BaseValue):
         Returns:
             Final score after minimum and maximum constraints are applied.
         """
-        modifier_sum: int | Fraction = self.additive_score(normalized)
-        if self.factor_modifiers:
-            modifier_sum *= self.arithmetic_factor()
-        if self.max is not None and self.min is not None:
-            return int(max(self.min, min(modifier_sum, self.max)))
-        elif self.max is not None:
-            return int(min(modifier_sum, self.max))
-        elif self.min is not None:
-            return int(max(self.min, modifier_sum))
-        else:
-            return int(modifier_sum)
+        return self.bounded_score(normalized)[0]
 
     @computed_field
     @property
@@ -491,20 +508,12 @@ class StaticValue(BaseValue):
         return self._score(normalized=True)
 
     def score_bounds(self, excluded: frozenset[UUID] = frozenset()) -> tuple[int | None, int | None]:
-        minima = [value.value for key, value in self.min_constraints.items() if key not in excluded and value.contributions_active()]
-        maxima = [value.value for key, value in self.max_constraints.items() if key not in excluded and value.contributions_active()]
-        return (min(minima) if minima else None, max(maxima) if maxima else None)
-
-    def normalized_score_excluding(self, modifier_uuids: set[UUID]) -> int:
-        """Resolve this channel without the explicitly excluded owned contributions."""
-        excluded = frozenset(modifier_uuids)
-        total = self.additive_score(True, excluded) * self.arithmetic_factor(excluded)
-        minimum, maximum = self.score_bounds(excluded)
-        if maximum is not None:
-            total = min(total, maximum)
-        if minimum is not None:
-            total = max(total, minimum)
-        return int(total)
+        """Return the lowest active minimum and highest active maximum, each constraint read once."""
+        minimum = min((value.value for key, value in self.min_constraints.items()
+            if key not in excluded and value.contributions_active()), default=None) if self.min_constraints else None
+        maximum = max((value.value for key, value in self.max_constraints.items()
+            if key not in excluded and value.contributions_active()), default=None) if self.max_constraints else None
+        return minimum, maximum
 
     @computed_field
     @property
@@ -898,6 +907,23 @@ class ContextualValue(BaseValue):
         return _contextual_additive_score(self.value_modifiers, self.source_entity_uuid,
             self.target_entity_uuid, self.context, self.event_lineage_uuid, normalized, excluded)
 
+    def bounded_score(self, normalized: bool = False,
+                      excluded: frozenset[UUID] = frozenset()) -> tuple[int, int | None, int | None]:
+        """Channel score with the bounds that clamped it; each callable is evaluated once.
+
+        Exclusion names static contributions, so contextual rows are all read.
+
+        Args:
+            normalized: Whether to read each evaluated modifier's normalized value.
+            excluded: Static contribution UUIDs; not consulted by contextual channels.
+
+        Returns:
+            Score after constraints, lowest evaluated minimum, highest evaluated maximum.
+        """
+        total = self.additive_score(normalized)
+        minimum, maximum = self.score_bounds()
+        return _clamped(total, minimum, maximum), minimum, maximum
+
     def _score(self, normalized: bool = False) -> int:
         """Calculate the contextual score after modifiers and constraints.
 
@@ -908,15 +934,7 @@ class ContextualValue(BaseValue):
         Returns:
             Final score after active minimum and maximum constraints are applied.
         """
-        modifier_sum = self.additive_score(normalized)
-        if self.max is not None and self.min is not None:
-            return max(self.min, min(modifier_sum, self.max))
-        elif self.max is not None:
-            return min(modifier_sum, self.max)
-        elif self.min is not None:
-            return max(self.min, modifier_sum)
-        else:
-            return modifier_sum
+        return self.bounded_score(normalized)[0]
 
     @computed_field
     @property
@@ -1604,11 +1622,8 @@ class ModifiableValue(BaseValue):
         Returns:
             Minimum constraint value when present, otherwise `None`.
         """
-        typed_modifiers = self.get_typed_modifiers()
-        modifiers_min = [modifier.min for modifier in typed_modifiers if modifier.min is not None]
-        if len(modifiers_min) == 0:
-            return None
-        return min(modifiers_min)
+        return min((low for low in (channel.min for channel in self.get_typed_modifiers()) if low is not None),
+                   default=None)
 
     @computed_field
     @property
@@ -1618,11 +1633,8 @@ class ModifiableValue(BaseValue):
         Returns:
             Maximum constraint value when present, otherwise `None`.
         """
-        typed_modifiers = self.get_typed_modifiers()
-        modifiers_max = [modifier.max for modifier in typed_modifiers if modifier.max is not None]
-        if len(modifiers_max) == 0:
-            return None
-        return max(modifiers_max)
+        return max((high for high in (channel.max for channel in self.get_typed_modifiers()) if high is not None),
+                   default=None)
 
     def add_fixed_score(self, modifier: NumericalModifier) -> UUID:
         self.validate_modifier_target(modifier)
@@ -1638,27 +1650,25 @@ class ModifiableValue(BaseValue):
                 raw = min(fixed)
                 return self.score_normalizer(raw) if normalized else raw
         channels = self.get_typed_modifiers()
-        has_factors = bool(set(self.self_static.factor_modifiers) - excluded) or (
+        has_factors = any(key not in excluded for key in self.self_static.factor_modifiers) or (
             self.from_target_static is not None
-            and bool(set(self.from_target_static.factor_modifiers) - excluded))
+            and any(key not in excluded for key in self.from_target_static.factor_modifiers))
         if has_factors:
             factors = tuple(channel.arithmetic_factor(excluded) for channel in channels)
-            total = sum(channel.additive_score(normalized, excluded) for channel in channels) * prod(factors)
+            total: int | Fraction = sum(channel.additive_score(normalized, excluded) for channel in channels) * prod(factors)
+            bounds = [channel.score_bounds(excluded) for channel in channels]
         else:
-            # Preserve established channel bounds for values without factors.
-            total = Fraction(sum(
-                channel.normalized_score_excluding(set(excluded))
-                if excluded and isinstance(channel, StaticValue) else
-                channel.normalized_score if normalized else channel.score
-                for channel in channels))
-        bounds = tuple(channel.score_bounds(excluded) for channel in channels)
+            # Preserve established channel bounds for values without factors: each
+            # channel is clamped by the same bounds the aggregate then reads.
+            total = 0
+            bounds = []
+            for channel in channels:
+                channel_score, low, high = channel.bounded_score(normalized, excluded)
+                total += channel_score
+                bounds.append((low, high))
         minimum = min((low for low, _ in bounds if low is not None), default=None)
         maximum = max((high for _, high in bounds if high is not None), default=None)
-        if maximum is not None:
-            total = min(total, maximum)
-        if minimum is not None:
-            total = max(total, minimum)
-        return int(total)
+        return int(_clamped(total, minimum, maximum))
 
     @computed_field
     @property
@@ -2180,10 +2190,9 @@ class ModifiableValue(BaseValue):
         for component, source in contextual_components:
             if component is None:
                 continue
-            lineage = component.event_lineage_uuid
-            key = f"{component.source_entity_uuid}|{component.target_entity_uuid or 'none'}|{lineage or 'none'}"
             for modifier in component.value_modifiers.values():
-                cached = modifier.cached_results.get(key)
+                cached = modifier.breakdown_result(component.source_entity_uuid,
+                    component.target_entity_uuid, component.event_lineage_uuid)
                 if cached is not None and isinstance(cached, NumericalModifier):
                     value = cached.normalized_value
                     if value != 0:
@@ -2211,10 +2220,9 @@ class ModifiableValue(BaseValue):
         for component, source in contextual_components:
             if component is None:
                 continue
-            lineage = component.event_lineage_uuid
-            key = f"{component.source_entity_uuid}|{component.target_entity_uuid or 'none'}|{lineage or 'none'}"
             for modifier in component.advantage_modifiers.values():
-                cached = modifier.cached_results.get(key)
+                cached = modifier.breakdown_result(component.source_entity_uuid,
+                    component.target_entity_uuid, component.event_lineage_uuid)
                 if cached is not None and isinstance(cached, AdvantageModifier):
                     result.append({
                         "name": modifier.name or "Unknown",
@@ -2443,7 +2451,8 @@ def composed_passive_score(
 
     The proficiency copy has observable callable/cache behavior in its contextual
     channels. Those uncommon inputs retain the existing composition path. All
-    other rows are merged in the native order, independently in each channel.
+    other rows are merged in the native order, independently in each channel,
+    and each channel's bounds are read once, as in `ModifiableValue._score`.
     """
     for channel in (proficiency.self_contextual, proficiency.to_target_contextual,
                     proficiency.from_target_contextual):
@@ -2550,37 +2559,12 @@ def composed_passive_score(
         numbers, _, _, _, source, target, context = inputs
         return _contextual_additive_score(numbers, source, target, context, None, True)
 
-    def context_min(inputs):
+    def context_bounds(inputs):
         if inputs is None:
-            return None
-        _, minima, _, _, source, target, context = inputs
-        return min(_contextual_constraint_values(minima, source, target, context, None), default=None)
-
-    def context_max(inputs):
-        if inputs is None:
-            return None
-        _, _, maxima, _, source, target, context = inputs
-        return max(_contextual_constraint_values(maxima, source, target, context, None), default=None)
-
-    def context_score(inputs):
-        total = context_additive(inputs)
-        # Keep native repeated evaluation for arbitrary contextual callables.
-        if context_max(inputs) is not None and context_min(inputs) is not None:
-            return max(context_min(inputs), min(total, context_max(inputs)))
-        elif context_max(inputs) is not None:
-            return min(total, context_max(inputs))
-        elif context_min(inputs) is not None:
-            return max(context_min(inputs), total)
-        return total
-
-    def static_score(inputs, base=0):
-        total = static_additive(inputs, base)
-        minimum, maximum = static_bounds(inputs)
-        if maximum is not None:
-            total = min(total, maximum)
-        if minimum is not None:
-            total = max(total, minimum)
-        return int(total)
+            return None, None
+        _, minima, maxima, _, source, target, context = inputs
+        return (min(_contextual_constraint_values(minima, source, target, context, None), default=None),
+                max(_contextual_constraint_values(maxima, source, target, context, None), default=None))
 
     # Factor presence selects the aggregate-first rule even when a retained
     # factor is currently suppressed. Evaluate factors before additive callbacks.
@@ -2588,18 +2572,23 @@ def composed_passive_score(
         factor = static_factor(own_static) * static_factor(imported_static)
         total = sum((static_additive(own_static, ability_base), context_additive(own_context),
                      context_additive(imported_context), static_additive(imported_static))) * factor
+        bounds = (static_bounds(own_static), context_bounds(own_context),
+                  context_bounds(imported_context), static_bounds(imported_static))
     else:
-        total = Fraction(sum((static_score(own_static, ability_base), context_score(own_context),
-                              context_score(imported_context), static_score(imported_static))))
-    bounds = (static_bounds(own_static), (context_min(own_context), context_max(own_context)),
-              (context_min(imported_context), context_max(imported_context)), static_bounds(imported_static))
+        # Native channel order; each channel is clamped by the bounds the aggregate then reads.
+        own_static_total, own_static_bounds = static_additive(own_static, ability_base), static_bounds(own_static)
+        own_context_total, own_context_bounds = context_additive(own_context), context_bounds(own_context)
+        imported_context_total, imported_context_bounds = (context_additive(imported_context),
+                                                           context_bounds(imported_context))
+        imported_static_total, imported_static_bounds = static_additive(imported_static), static_bounds(imported_static)
+        total = (int(_clamped(own_static_total, *own_static_bounds))
+                 + _clamped(own_context_total, *own_context_bounds)
+                 + _clamped(imported_context_total, *imported_context_bounds)
+                 + int(_clamped(imported_static_total, *imported_static_bounds)))
+        bounds = (own_static_bounds, own_context_bounds, imported_context_bounds, imported_static_bounds)
     minimum = min((lower for lower, _ in bounds if lower is not None), default=None)
     maximum = max((upper for _, upper in bounds if upper is not None), default=None)
-    if maximum is not None:
-        total = min(total, maximum)
-    if minimum is not None:
-        total = max(total, minimum)
-    score = 10 + int(total)
+    score = 10 + int(_clamped(total, minimum, maximum))
 
     def advantage_sum():
         result = 0
