@@ -1659,7 +1659,7 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
         if isinstance(node.fact, TurnFact) and node.fact.entity_uuid is not None and node.turn_execution_id is not None:
             state.disclosed_turns.add(node.turn_execution_id)
     result = []
-    stages: dict[UUID | None, list[int]] = {}
+    stages: dict[int | None, list[int]] = {}
     for node in admitted_nodes:
         if isinstance(node.fact, AreaReachFact):
             stages.setdefault(node.parent_lineage, []).append(node.fact.stage_index)
@@ -1966,6 +1966,6 @@ def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> Player
     root_occurrence = state.public_cursors.get(state.version_cursors[lineage.root.uuid])
     root = next((index for index, node in enumerate(nodes) if node.occurrence == root_occurrence), None)
     return PlayerLineage(generation=lineage.generation, observer_uuid=lineage.observer_uuid,
-        lineage=nodes[root].lineage if root is not None else nodes[0].lineage if nodes else rows[0].lineage,
+        lineage=nodes[root].lineage if root is not None else rows[0].lineage,
         root=root, events=nodes, version_rows=rows, start_cursor=start_cursor,
         end_cursor=state.next_occurrence, observations=observations, world_updates=updates, audience=state.remembered.audience)
