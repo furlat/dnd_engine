@@ -1,7 +1,7 @@
 """Tile primitives for terrain, lighting, elevation, and object bands."""
 
 from dataclasses import dataclass, field
-from typing import Dict, FrozenSet, Optional, Set, Tuple
+from typing import Any, Dict, FrozenSet, Optional, Set, Tuple
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, StrictInt, model_validator
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
@@ -43,14 +43,6 @@ class TileObjectBand:
 
     object_uuids: frozenset[UUID] = frozenset()
     occupant_uuid: Optional[UUID] = None
-
-
-def _empty_boundary_object_bands() -> Dict[
-    CardinalDirection,
-    Dict[int, TileObjectBand],
-]:
-    """Create all four private boundary-band buckets for one Tile."""
-    return {direction: {} for direction in CardinalDirection}
 
 
 @dataclass(slots=True)
@@ -126,21 +118,29 @@ class Tile(BaseBlock):
         default=LightLevel.BRIGHT_LIGHT,
         description="Base objective light level before illumination or obscurement modifiers.",
     )
-    _light: TileLight = PrivateAttr(default_factory=TileLight)
+    # Set by `model_post_init`: a private default factory would cost pydantic a
+    # signature inspection per Tile.
+    _light: TileLight = PrivateAttr()
     _center_object_bands: Dict[int, TileObjectBand] = PrivateAttr(default={})
     # Residue after-values per material, written by that material's map field (plan §5.9).
     _residues: Dict[str, TileResidueState] = PrivateAttr(default={})
     _residue_names: Dict[str, str] = PrivateAttr(default={})
     _hazardous_residues: Set[str] = PrivateAttr(default=set())
+    # Sides with no bands are absent.
     _boundary_object_bands: Dict[
         CardinalDirection,
         Dict[int, TileObjectBand],
-    ] = PrivateAttr(default_factory=_empty_boundary_object_bands)
+    ] = PrivateAttr(default={})
     _entity_uuids: set[UUID] = PrivateAttr(default=set())
     _spatial_condition_uuids: Dict[
         SpatialEffectLayer,
         set[UUID],
     ] = PrivateAttr(default={})
+
+    def model_post_init(self, __context: Any) -> None:
+        """Give the Tile its own objective light state."""
+        self._light = TileLight()
+        super().model_post_init(__context)
 
     @model_validator(mode="after")
     def validate_elevation_surface(self) -> "Tile":
@@ -178,9 +178,10 @@ class Tile(BaseBlock):
 
     def snapshot_boundary_object_uuids(self) -> Dict[CardinalDirection, Tuple[UUID, ...]]:
         """Capture every owner side once for a batch of spatial queries."""
-        return {direction: tuple(sorted({identity for band in bands.values()
+        sides = self._boundary_object_bands
+        return {direction: tuple(sorted({identity for band in sides.get(direction, {}).values()
                                         for identity in band.object_uuids}, key=str))
-                for direction, bands in self._boundary_object_bands.items()}
+                for direction in CardinalDirection}
 
     def get_boundary_object_uuids(
         self,
