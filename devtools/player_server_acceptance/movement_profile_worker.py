@@ -254,28 +254,16 @@ def main():
             increment('handler.invocations')
             return result
 
-    original_spatial = EventQueue._get_handlers_for_spatial_event
-    def spatial(cls, event, position):
-        if current is None:
-            return original_spatial(event, position)
-        increment('discovery.spatial_lookups')
-        increment('discovery.position_index_entries', len(
-            cls._spatial_handlers_by_position[(event.event_type, event.phase)].get(position, ())))
-        with span('events.spatial_lookup'):
-            result = original_spatial(event, position)
-        increment('discovery.spatial_admitted_before_cross_position_dedup', len(result))
-        return result
-
-    original_nonspatial = EventQueue._get_handlers_for_non_spatial_event
-    def nonspatial(cls, event):
-        increment('discovery.nonspatial_lookups')
-        with span('events.nonspatial_lookup'):
-            result = original_nonspatial(event)
-        increment('discovery.nonspatial_admitted', len(result))
+    original_global = EventQueue._global_handlers_for_event
+    def global_handlers(cls, event, *, positioned):
+        increment('discovery.global_lookups')
+        with span('events.global_lookup'):
+            result = original_global(event, positioned=positioned)
+        increment('discovery.global_admitted', len(result))
         return result
 
     original_candidates = EventQueue._event_trigger_candidates
-    def candidates(cls, event, *, include_simple=True):
+    def candidates(cls, event, *, include_simple):
         result = original_candidates(event, include_simple=include_simple)
         increment('discovery.indexed_candidates_visited', len(result))
         return result
@@ -318,7 +306,7 @@ def main():
         increment('world_update.input_object_positions', len(object_positions))
         increment('world_update.input_object_ids', len(identities))
 
-    def audience_count(composition, audience, observer_uuid, event, cursor, *, prepared=None):
+    def audience_count(composition, audience, observer_uuid, event, cursor):
         increment('audience.current.visible_added', len(event.visible_cells_added))
         increment('audience.current.visible_removed', len(event.visible_cells_removed))
         increment('audience.current.seen_added', len(event.seen_cells_added))
@@ -338,9 +326,6 @@ def main():
         (capture, '_copy_snapshot', 'capture.copy_snapshot', capture._copy_snapshot, snapshot_count),
         (reduction, 'copy_target', 'reduction.copy_target', reduction.copy_target, target_count),
         (reduction, 'reduce_nodes', 'reduction.nodes', reduction.reduce_nodes, None),
-        (application, 'reduce_operation', 'application.reduce_operation', application.reduce_operation, None),
-        (application, 'prepare_current_operation', 'application.prepare_current', application.prepare_current_operation, None),
-        (application, 'apply_current_operation', 'application.apply_current', application.apply_current_operation, None),
         (application, 'capture_lineages', 'capture.lineages', application.capture_lineages, None),
         (application, 'project_lineage', 'projection.lineage', application.project_lineage, None),
         (application, 'admitted_content', 'application.content', application.admitted_content, None),
@@ -407,8 +392,7 @@ def main():
             patches.enter_context(patch.object(EventQueue, '_invoke_handler', classmethod(invoke)))
             patches.enter_context(patch.object(EventQueue, '_get_handlers_for_event', classmethod(lookup)))
             patches.enter_context(patch.object(EventQueue, '_event_trigger_candidates', classmethod(candidates)))
-            patches.enter_context(patch.object(EventQueue, '_get_handlers_for_spatial_event', classmethod(spatial)))
-            patches.enter_context(patch.object(EventQueue, '_get_handlers_for_non_spatial_event', classmethod(nonspatial)))
+            patches.enter_context(patch.object(EventQueue, '_global_handlers_for_event', classmethod(global_handlers)))
             patches.enter_context(patch.object(Trigger, '__call__', trigger))
             for owner, original in ((BaseHandler, BaseHandler.__call__),
                     (EventHandler, EventHandler.__call__), (SpatialHandler, SpatialHandler.__call__)):

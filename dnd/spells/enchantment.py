@@ -57,6 +57,7 @@ from dnd.core.aoe import AoEShape, Sphere, objective_footprint
 from dnd.core.gridmap import get_map
 
 from dnd.entity import Entity
+from dnd.encounter import Encounter
 from dnd.actions import Move, SpellAction, SpellEvent
 from dnd.conditions import Paralyzed, Charmed, Stunned, Prone
 from dnd.creature_transforms import (
@@ -2544,10 +2545,10 @@ class CharmMonster(SpellAction):
         if caster is None or target is None: return event.cancel(status_message="Charm recipient absent")
         bonus = target.saving_throws.get_saving_throw("wisdom").bonus
         advantage = None
-        if target.active_encounter_uuid is not None and any(
-                ally.active_encounter_uuid == target.active_encounter_uuid and ally.is_encounter_alive
-                and target.is_enemy(ally) and (ally.uuid == caster.uuid or caster.is_ally(ally))
-                for ally in Entity.get_all_entities()):
+        encounter = Encounter.get(target.active_encounter_uuid) if target.active_encounter_uuid is not None else None
+        if encounter is not None and any(
+                target.is_enemy(ally) and (ally.uuid == caster.uuid or caster.is_ally(ally))
+                for ally in (combatant.entity for combatant in encounter.get_alive_combatants())):
             advantage = bonus.self_static.add_advantage_modifier(AdvantageModifier(
                 name="Combat charm save", value=AdvantageStatus.ADVANTAGE,
                 source_entity_uuid=target.uuid, target_entity_uuid=caster.uuid))

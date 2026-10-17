@@ -31,26 +31,11 @@ from dnd.ai.contracts.observation import (
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag
-from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import ResistanceStatus
 from dnd.entity import Entity
 from dnd.types.world import MovementMode, WorldEdgeChannel
-
-
-_adjacent_domain_cache_revision: int | None = None
-_adjacent_domain_cache: dict[
-    tuple[int, int],
-    dict[AdjacentOffset, SpatialDomainKnowledge],
-] = {}
-
-
-def clear_subjective_projection_fact_cache() -> None:
-    """Clear projection-only spatial caches after an engine reset."""
-    global _adjacent_domain_cache_revision
-    _adjacent_domain_cache_revision = None
-    _adjacent_domain_cache.clear()
 
 
 def resolve_controlled_observers(
@@ -305,18 +290,15 @@ def entity_health_details(
 
 
 def damage_affinities(entity: Entity) -> tuple[list[str], list[str], list[str]]:
-    """Return visible damage affinity labels for an entity."""
+    """Return visible damage affinity labels for an entity, from one resistance evaluation."""
     vulnerabilities: list[str] = []
     resistances: list[str] = []
     immunities: list[str] = []
-    for damage_type in DamageType:
-        status = entity.health.get_resistance(damage_type)
-        if status is ResistanceStatus.VULNERABILITY:
-            vulnerabilities.append(damage_type.value)
-        elif status is ResistanceStatus.RESISTANCE:
-            resistances.append(damage_type.value)
-        elif status is ResistanceStatus.IMMUNITY:
-            immunities.append(damage_type.value)
+    labels = {ResistanceStatus.VULNERABILITY.value: vulnerabilities,
+              ResistanceStatus.RESISTANCE.value: resistances,
+              ResistanceStatus.IMMUNITY.value: immunities}
+    for damage_type, status in entity.health.damage_affinities():
+        labels[status].append(damage_type)
     return vulnerabilities, resistances, immunities
 
 
@@ -564,16 +546,8 @@ def adjacent_domain_knowledge(
     position: tuple[int, int],
 ) -> dict[AdjacentOffset, SpatialDomainKnowledge]:
     """Disclose only known local boundaries around one perceived tile."""
-    global _adjacent_domain_cache_revision
     grid = get_map()
-    revision = grid.movement_revision
-    if _adjacent_domain_cache_revision != revision:
-        _adjacent_domain_cache_revision = revision
-        _adjacent_domain_cache.clear()
-    cached = _adjacent_domain_cache.get(position)
-    if cached is not None:
-        return dict(cached)
-    result = {
+    return {
         offset: (
             SpatialDomainKnowledge.INVALID
             if grid.get_tile(
@@ -585,8 +559,6 @@ def adjacent_domain_knowledge(
         )
         for offset in AdjacentOffset
     }
-    _adjacent_domain_cache[position] = result
-    return dict(result)
 
 
 def project_object_state(obj: BaseBlock) -> dict[str, Any]:
@@ -647,7 +619,6 @@ def subjective_tile_key(position: tuple[int, int]) -> str:
 
 __all__ = [
     "adjacent_domain_knowledge",
-    "clear_subjective_projection_fact_cache",
     "condition_semantic_key",
     "damage_affinities",
     "entity_health_details",

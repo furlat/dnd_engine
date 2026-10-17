@@ -18,7 +18,7 @@ from dnd.core.events import EventQueue
 from dnd.player.commands import ActionSelection, CommandRejected
 from dnd.player.session import close_session, discover_player_actions
 from server.protocol import ChoicesRequest, CommandRequest, ExecuteSelectionIntent, PreviewRequest
-from server.worker import dispatch, needs_advance, start
+from server.worker import dispatch, needs_advance, response_bytes, start
 from server.worker_protocol import Advance, Choices, Command, Preview, Start
 
 
@@ -71,6 +71,15 @@ def native_value(domains, binding):
             exposure['from_position'] = domains.positions[exposure['from_position']]
             exposure['to_position'] = domains.positions[exposure['to_position']]
     return AvailableTarget.model_validate(data).model_dump()
+
+
+def test_choices_wire_bytes_are_the_canonical_encoding_on_miss_and_hit(world):
+    runtime, seat, publication = world
+    for _ in range(2):  # the discovery, then its retained answer
+        request = Choices(seat_id=seat, request=ChoicesRequest(actor_uuid=publication.boundary.input_actor_uuid,
+            state_revision=publication.state_revision, force_attack=False, correlation_id=uuid4()))
+        _, _, response = dispatch(runtime, request)
+        assert response_bytes(runtime.session, response) == response.model_dump_json().encode()
 
 
 @pytest.mark.parametrize('rich_first', [False, True])

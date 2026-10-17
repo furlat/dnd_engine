@@ -267,8 +267,8 @@ def retention(args) -> dict[str, Any]:
                     'history': EventQueue.event_cursor(), 'rss_high_water_bytes': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
                     'rss_current_bytes': resident_bytes(),
                     'actor_count': len(runtime.session.game.entities),
-                    'audience_actor_counts': {seat: len(view.latest.actors) for seat, view in runtime.audiences.items()},
-                    'audience_occurrences': {seat: view.latest.reducer_cursor for seat, view in runtime.audiences.items()},
+                    'audience_actor_counts': {seat: len(view.projection.remembered.actors) for seat, view in runtime.audiences.items()},
+                    'audience_occurrences': {seat: view.projection.next_occurrence for seat, view in runtime.audiences.items()},
                     'rows': measured}
                 samples.append(sample)
                 log.write(json.dumps(sample) + '\n'); log.flush()

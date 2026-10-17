@@ -1,6 +1,7 @@
 from typing import Optional, List, Literal, Tuple
 from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field, computed_field, field_validator
+from dnd.action_timing import record_action_count
 from dnd.core.damage import DamageComponentResolution, DamageResolution
 from dnd.core.life_types import LifeState, RemainsDisposition
 from dnd.core.values import ModifiableValue
@@ -342,11 +343,23 @@ class Health(BaseBlock):
     healing_blocked: bool = Field(default=False, description="If True, entity cannot regain HP (e.g., Chill Touch)")
 
     def get_resistance(self,damage_type: DamageType, *, attack_magical: bool | None = None) -> ResistanceStatus:
+        record_action_count("health.resistance_evaluation", 1)
         status = self.damage_reduction.resistance[damage_type]
         if attack_magical is False and damage_type in self.nonmagical_attack_resistances:
             if status is ResistanceStatus.IMMUNITY: return status
             return ResistanceStatus.NONE if status is ResistanceStatus.VULNERABILITY else ResistanceStatus.RESISTANCE
         return status
+
+    def damage_affinities(self) -> tuple[tuple[str, str], ...]:
+        """Return every non-neutral damage affinity from one resistance evaluation.
+
+        Each row equals `get_resistance(damage_type)` with no attack magic stated,
+        in `DamageType` order.
+        """
+        record_action_count("health.resistance_evaluation", 1)
+        resistance = self.damage_reduction.resistance
+        return tuple((damage_type.value, status.value) for damage_type in DamageType
+                     if (status := resistance[damage_type]) is not ResistanceStatus.NONE)
 
     @computed_field
     @property

@@ -8,7 +8,6 @@ import pytest
 from dnd.content.characters.builds import create_character
 from dnd.content.items.item_loadouts import ItemLoadoutEntry
 from dnd.characters.mastery import SpellMasteryStudy
-from dnd.player.reduction import reduce_operation, copy_target
 from dnd.player.commands import CommandRejected
 from dnd.content.characters.spellcasting_grants import change_prepared_spells
 from dnd.core.creature_types import DamageType
@@ -141,7 +140,7 @@ def test_captured_scroll_learning_and_preparation_rebuild_then_real_worker_fireb
                 assert detached == record
         sheet = next(
             sheet
-            for sheet in runtime.audiences[seat].latest.hud_snapshot.sheets
+            for sheet in detached.hud.sheets
             if sheet.actor_uuid == actor.uuid
         )
         assert "spell.fireball" in sheet.scribed_spell_ids
@@ -256,7 +255,6 @@ def test_worker_item_cast_and_learn_are_distinct_and_captured_book_rebuilds():
             ),
         )
         assert preview.preview.can_confirm and EventQueue.event_cursor() == cursor
-        before = copy_target(runtime.audiences[seat].latest)
         reply, records, _ = dispatch(
             runtime,
             Command(
@@ -277,10 +275,9 @@ def test_worker_item_cast_and_learn_are_distinct_and_captured_book_rebuilds():
             record for record in records if isinstance(record, PlayerOperation)
         )
         detached = PlayerOperation.model_validate_json(packet.model_dump_json())
-        replayed = reduce_operation(before, detached)
         sheet = next(
             sheet
-            for sheet in replayed.hud_snapshot.sheets
+            for sheet in detached.hud.sheets
             if sheet.actor_uuid == actor.uuid
         )
         assert "spell.fireball" in sheet.scribed_spell_ids

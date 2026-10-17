@@ -134,10 +134,8 @@ class SunderHeretical(BaseAction):
         if event.application is None:
             targets = [
                 target.uuid
-                for target in Entity.get_all_entities()
-                if target.is_deployed
-                and actor.is_enemy(target)
-                and grid_distance_feet(actor.position, target.position) <= 50
+                for target in map(Entity.get, get_map().get_entities_within(actor.position, 50))
+                if actor.is_enemy(target)
             ]
             self._apply_target_batch(event, targets, parent_event=effect)
         else:
@@ -206,11 +204,9 @@ class OpulentRevival(BaseAction):
         actor = Entity.get(self.source_entity_uuid)
         living = []
         self._revivals = []
-        for target in Entity.get_all_entities():
-            if (
-                target.faction != actor.faction
-                or grid_distance_feet(actor.position, target.position) > 60
-            ):
+        # Grid members only: a suspended corpse keeps its coordinate but must not revive off-grid.
+        for target in map(Entity.get, get_map().get_entities_within(actor.position, 60)):
+            if target.faction != actor.faction:
                 continue
             if target.health.life_state is LifeState.DEAD:
                 if (
@@ -232,7 +228,7 @@ class OpulentRevival(BaseAction):
                 )
                 if revival is not None:
                     self._revivals.append((target.uuid, revival))
-            elif target.is_deployed:
+            else:
                 living.append(target.uuid)
         self._living = tuple(living)
         if not self._living and not self._revivals:

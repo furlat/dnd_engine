@@ -10,7 +10,7 @@ from dnd.actions import Move, SpellAction, SpellEvent, commit_forced_movement, e
 from dnd.blocks.base_item import BaseItem, WorldItem, PreparedItemRetirement
 from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection, selection_facet
 from dnd.core.base_actions import Cost, TargetType
-from dnd.core.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock, resolution_order_key
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.content.identities import ContentRef
@@ -515,10 +515,11 @@ def stone_enclosure_escapes(caster: Entity, geometry: WallAssemblyPresentationGe
     shell = wall_shell_cells(geometry)
     min_x, max_x = min(p[0] for p in shell), max(p[0] for p in shell)
     min_y, max_y = min(p[1] for p in shell), max(p[1] for p in shell)
-    for entity in Entity.get_all_entities():
+    # Displaced creatures stand on shell cells, inside the box; the formation group fixes the order (plan §5.3).
+    for entity in sorted(map(Entity.get, grid.get_entities_in_bounds((min_x, min_y, max_x, max_y))),
+                         key=resolution_order_key):
         start = displacements.get(entity.uuid, entity.position)
-        if (not entity.is_deployed or not min_x <= start[0] <= max_x
-                or not min_y <= start[1] <= max_y):
+        if not min_x <= start[0] <= max_x or not min_y <= start[1] <= max_y:
             continue
         visited = {start}
         pending = [start]
@@ -894,10 +895,14 @@ def forcecage_displacements(caster: Entity, center: tuple[int,int],side_feet:int
     grid=get_map()
     known=caster.senses.entities
     occupied={contact.position for contact in known.values()}|{caster.position} if subjective else set()
-    for entity in sorted(Entity.get_all_entities(),key=lambda actor:str(actor.uuid)):
-        if not entity.is_deployed: continue
-        if subjective and entity.uuid!=caster.uuid and entity.uuid not in known: continue
-        position=known[entity.uuid].position if subjective and entity.uuid!=caster.uuid else entity.position
+    # The box spans half the side plus a Gargantuan space, so it holds every partially enclosed occupant.
+    reach=side_feet//10+2
+    nearby=((caster.uuid,*known) if subjective
+            else grid.get_entities_in_bounds((center[0]-reach,center[1]-reach,center[0]+reach,center[1]+reach)))
+    for identity in sorted(nearby,key=str):
+        entity=Entity.get(identity)
+        if entity is None: continue
+        position=known[identity].position if subjective and identity!=caster.uuid else entity.position
         space={Size.TINY:2.5,Size.SMALL:5,Size.MEDIUM:5,Size.LARGE:10,Size.HUGE:15,Size.GARGANTUAN:20}[entity.size]/10
         dx,dy=abs(position[0]-center[0]),abs(position[1]-center[1])
         if dx-space>=half or dy-space>=half: continue

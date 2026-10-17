@@ -412,12 +412,12 @@ def test_eb_02_007_contextual_exceptions_cache_none_but_strict_execution_raises(
     value.set_event_lineage(lineage_uuid)
 
     assert value.score == 3
-    cache_key = f"{source_uuid}|{target_uuid}|{lineage_uuid}"
-    assert broken_modifier.cached_results[cache_key] is None
+    assert broken_modifier.breakdown_result(source_uuid, target_uuid, lineage_uuid) is None
+    assert not any(row.get("contextual") for row in value.get_full_breakdown())
     assert calls == 1
 
     assert value.score == 3
-    assert broken_modifier.cached_results[cache_key] is None
+    assert broken_modifier.breakdown_result(source_uuid, target_uuid, lineage_uuid) is None
     assert calls == 2
 
     try:

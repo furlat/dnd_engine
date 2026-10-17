@@ -3,6 +3,7 @@
 from dataclasses import replace
 import pytest
 
+from dnd.classes.cleric import PreserveLife
 from dnd.classes.divine_intervention import (
     SunderHeretical,
     OpulentRevival,
@@ -235,6 +236,43 @@ def test_opulent_does_not_revive_a_corpse_whose_tile_becomes_occupied_after_admi
     assert result is not None and not result.canceled
     assert corpse.health.life_state is LifeState.DEAD
     assert actor.action_economy.resources["divine_intervention"].current == 0
+
+
+@pytest.mark.parametrize(
+    "feature, radius_feet, faction",
+    [
+        (PreserveLife, 30, "heroes"),
+        (SunderHeretical, 50, "foes"),
+        (OpulentRevival, 60, "heroes"),
+    ],
+)
+def test_radius_features_reach_exactly_their_radius(game, feature, radius_feet, faction):
+    actor = cleric(game)
+    inside = combatant(game, "At the radius", (2 + radius_feet // 5, 2), faction)
+    outside = combatant(game, "Five feet past", (3 + radius_feet // 5, 2), faction)
+    for target in (inside, outside):
+        target.receive_damage(10, DamageType.FORCE, actor.uuid)
+    before = {target.uuid: target.get_hp() for target in (inside, outside)}
+    with fixed_dice_faces(*([10] * 40)):
+        result = use(actor, feature)
+    assert result is not None and not result.canceled
+    assert inside.get_hp() != before[inside.uuid]
+    assert outside.get_hp() == before[outside.uuid]
+
+
+def test_opulent_does_not_revive_a_suspended_companion_off_grid(game):
+    actor = cleric(game)
+    corpse = create_character(
+        replace(prepared_build(CharacterClass.WIZARD, 2), faction="heroes")
+    )
+    corpse.is_player_companion = True
+    game.deploy_entity(corpse, (4, 2))
+    corpse.receive_damage(1000, DamageType.FORCE, actor.uuid)
+    corpse.suspend_spatial_presence()
+    result = use(actor, OpulentRevival)
+    assert result is not None and not result.canceled
+    assert corpse.health.life_state is LifeState.DEAD
+    assert not corpse.is_deployed
 
 
 def test_rejected_mace_inventory_admission_does_not_spend_permanent_use(game):

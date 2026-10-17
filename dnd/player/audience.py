@@ -8,7 +8,7 @@ from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field, replace
 from uuid import UUID
 
-from dnd.types.senses import (PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, PreparedSensoryDelta, SensoryDelta,
+from dnd.types.senses import (PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SensoryDelta,
     SensesSnapshot, apply_current_senses, copy_senses_snapshot, prepare_sensory_delta, reduce_senses_snapshot)
 from dnd.types.world import LightLevel
 
@@ -427,15 +427,14 @@ def _current_effect(current: AudienceComposition, identity: UUID) -> PerceivedSp
 
 
 def apply_current_audience(current: AudienceComposition, audience: PlayerAudience, observer_uuid: UUID,
-                           event: SensoryDelta, cursor: int, *,
-                           prepared: PreparedSensoryDelta | None = None) -> None:
+                           event: SensoryDelta, cursor: int) -> None:
     """Apply local sensory changes to an exclusively owned audience composition."""
     if not audience.observes(event.observer_uuid):
         raise ValueError("Sensory observation does not belong to this audience")
     observer = event.observer_uuid
     perception = current.perception
     before = perception.members.get(observer)
-    prepared = prepared or prepare_sensory_delta(observer, before, event)
+    prepared = prepare_sensory_delta(observer, before, event)
     added, removed = set(event.visible_cells_added), set(event.visible_cells_removed)
     cells = added | removed | prepared.light_levels.keys() | prepared.hazardous_cells.keys()
     contacts = (set(event.entity_contacts_changed) | event.entity_contacts_removed

@@ -371,6 +371,16 @@ def get_extra_position_options(
     return template.get_valid_extra_target_positions(target.position, extra_target_positions or ())
 
 
+def allocation_limit(action_info: AvailableActionInfo, template: Optional[BaseAction]) -> Optional[int]:
+    """How many targets a selection of this row may name at the template's level.
+
+    An unbounded set (`any_number_of_targets`) counts the row's admitted recipients at any level.
+    """
+    if template is None or template.any_number_of_targets:
+        return action_info.num_projectiles
+    return template.get_multi_target_count()
+
+
 def validated_extra_target_uuids(
     action_info: AvailableActionInfo,
     primary_target: AvailableTarget,
@@ -388,7 +398,7 @@ def validated_extra_target_uuids(
     if not extra_target_uuids:
         return []
     template = template if template is not None else action_info.execution_template
-    limit = template.get_multi_target_count() if template is not None else action_info.num_projectiles
+    limit = allocation_limit(action_info, template)
     if action_info.target_type != TargetType.MULTI_ENTITY or limit is None:
         raise ValueError("Additional targets require a multi-entity action")
     if len(extra_target_uuids) + 1 > limit:
@@ -596,7 +606,8 @@ def preview_available_selection(
     try:
         pool = secondary_candidates(entity, action_info, scan)
         next_targets: list[AvailableTarget] = []
-        if action_info.target_type is TargetType.MULTI_ENTITY and len(selected_targets) < (template.get_multi_target_count() or 1):
+        limit = allocation_limit(action_info, template)
+        if action_info.target_type is TargetType.MULTI_ENTITY and len(selected_targets) < (limit or 1):
             for candidate in pool:
                 try:
                     validated_extra_target_uuids(action_info, primary,

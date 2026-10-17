@@ -259,16 +259,26 @@ class ContextualModifier(BaseObject):
         default=None,
         description="Arguments used by strict `execute_callable()` rather than normal contextual aggregation."
     )
-    _cached_results: Dict[str, Optional[Any]] = PrivateAttr(default_factory=dict)
+    _latest_evaluation: Optional[Tuple[UUID, Optional[UUID], Optional[UUID], Optional[Any]]] = PrivateAttr(default=None)
 
-    @property
-    def cached_results(self) -> Dict[str, Optional[Any]]:
-        """Last evaluated values for breakdown display, never authoritative data.
+    def breakdown_result(
+        self,
+        source_entity_uuid: UUID,
+        target_entity_uuid: Optional[UUID],
+        event_lineage_uuid: Optional[UUID],
+    ) -> Optional[Any]:
+        """Return the latest evaluated result for breakdown display, never authoritative data.
 
-        Evaluation always recomputes; equipment/condition changes cannot leave
-        a stale cached value driving a rules query.
+        Only the latest evaluation is kept (one slot, not one entry per
+        lineage); it answers when it was made for this source, target and
+        lineage. Evaluation always recomputes; equipment/condition changes
+        cannot leave a stale value driving a rules query.
         """
-        return self._cached_results
+        latest = self._latest_evaluation
+        if (latest is None or latest[0] != source_entity_uuid or latest[1] != target_entity_uuid
+                or latest[2] != event_lineage_uuid):
+            return None
+        return latest[3]
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['ContextualModifier']:
@@ -349,7 +359,8 @@ class ContextualModifier(BaseObject):
             source_entity_uuid: Source UUID passed to the callable.
             target_entity_uuid: Optional target UUID passed to the callable.
             context: Optional context dictionary passed to the callable.
-            event_lineage_uuid: Optional event lineage UUID used in the cache key.
+            event_lineage_uuid: Optional event lineage UUID recorded with the
+                latest result for breakdown display.
 
         Returns:
             Callable result, or ``None`` when the rule does not apply or its
@@ -371,8 +382,7 @@ class ContextualModifier(BaseObject):
                 self.uuid,
             )
             result = None
-        key = f"{source_entity_uuid}|{target_entity_uuid or 'none'}|{event_lineage_uuid or 'none'}"
-        self.cached_results[key] = result
+        self._latest_evaluation = (source_entity_uuid, target_entity_uuid, event_lineage_uuid, result)
         return result
 
     def execute_callable(self) -> Union[

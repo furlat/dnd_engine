@@ -3646,15 +3646,13 @@ class HolyAura(SpellAction):
     include_self: bool = True
     valid_target_filter: str = "self_or_allies"
     allow_same_target: bool = False
+    any_number_of_targets: bool = True
     concentration: bool = True
 
     def _new_concentration(self,owner,parent_event):
         condition=super()._new_concentration(owner,parent_event)
         condition.duration=Duration(duration=10,duration_type=DurationType.ROUNDS)
         return condition
-
-    def get_multi_target_count(self) -> int:
-        return len(Entity.get_all_entities())
 
     def get_target_effect_profile(self):
         actor = Entity.get(self.source_entity_uuid)
