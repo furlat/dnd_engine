@@ -3,7 +3,7 @@
 from dataclasses import dataclass, replace
 import json
 from types import MappingProxyType
-from typing import Mapping
+from typing import Iterator, Mapping
 from dnd.types.actor import SpatialDisposition
 from dnd.types.senses import copy_senses_snapshot
 from dnd.core.effect_types import ResolutionRef
@@ -16,7 +16,7 @@ from dnd.player.audience import (AudienceComposition, apply_current_audience, au
     begin_audience_composition, observe_audience, resolve_audience)
 from dnd.player.facts import (
     AttackFact, ConditionChangeFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, LifeFact,
-    PlayerFact, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
+    PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SpatialFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact, FactionFact,
 )
 
@@ -99,32 +99,38 @@ def apply_world_update(target: PlayerState, update: WorldUpdate) -> None:
     target.connectors = update.connectors
 
 
+def observed_actor(previous: PlayerActor | None, observation: PlayerObservation) -> PlayerActor:
+    """The body after an observation's patch; against an absent body the patch is complete."""
+    if previous is None:
+        return PlayerActor(uuid=observation.actor_uuid, **observation.changes)
+    return replace(previous, **observation.changes)
+
+
+def observe_body(target: PlayerState, observation: PlayerObservation) -> bool:
+    """Apply an observation's body patch; False if a terminal lifetime ignores it."""
+    previous = target.actors.get(observation.actor_uuid)
+    if previous is not None and not previous.present:
+        return False  # A later retained observation cannot resurrect a terminal lifetime.
+    target.actors[observation.actor_uuid] = observed_actor(previous, observation)
+    return True
+
+
 def _observe(target: PlayerState, observation: PlayerObservation, *,
              audience_composition: AudienceComposition | None = None) -> None:
-    previous = target.actors.get(observation.actor.uuid)
-    if previous is not None and not previous.present:
-        return  # A later retained observation cannot resurrect a terminal lifetime.
-    target.actors[observation.actor.uuid] = observation.actor
+    if not observe_body(target, observation):
+        return
     if observation.contact is not None and target.senses is not None:
-        target.senses.entities[observation.actor.uuid] = observation.contact
+        target.senses.entities[observation.actor_uuid] = observation.contact
         if audience_composition is not None:
-            audience_composition.contact_overrides.add(observation.actor.uuid)
+            audience_composition.contact_overrides.add(observation.actor_uuid)
 
 
 def stage_actors(target: PlayerState, observations: tuple[PlayerObservation, ...]) -> PlayerState:
     """Supply absent bodies for binding; existing historical actors win."""
     result = copy_target(target)
     for observation in observations:
-        if observation.actor.uuid not in result.actors:
+        if observation.actor_uuid not in result.actors:
             _observe(result, observation)
-    return result
-
-
-def observe_actors(target: PlayerState, observations: tuple[PlayerObservation, ...]) -> PlayerState:
-    """Apply actual event-time observations, including a reacquired actor."""
-    result = copy_target(target)
-    for observation in observations:
-        _observe(result, observation)
     return result
 
 
@@ -148,7 +154,39 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
 
 def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int | None = None,
                       audience_composition: AudienceComposition | None = None) -> None:
-    """Fold an already-disclosed committed fact into player memory."""
+    """Fold an already-disclosed committed fact into player memory: its senses and turn part, then its bodies' part."""
+    match fact:
+        case SpatialFact():
+            if fact.terminal_departure and fact.entity_uuid is not None and fact.entity_uuid in target.actors:
+                if target.senses is not None:
+                    target.senses.entities.pop(fact.entity_uuid, None)
+                    if audience_composition is not None:
+                        audience_composition.contact_overrides.add(fact.entity_uuid)
+            elif (target.viewing_audience.controls(fact.entity_uuid)
+                    and fact.change_type is SpatialChangeType.ENTITY_ENTERED
+                    and target.senses is not None and fact.entity_uuid == target.observer_uuid):
+                # Own entry is an explicit permitted contact even when one
+                # sensory batch folds an arrival and return to the same cell.
+                target.senses = replace(target.senses, position=fact.position)
+        case SensoryFact():
+            cursor = target.reducer_cursor if source_cursor is None else source_cursor
+            if audience_composition is None:
+                target.perception = observe_audience(target.perception, target.viewing_audience, fact, cursor)
+                target.senses = audience_view(target.perception, target.observer_uuid)
+            else:
+                apply_current_audience(audience_composition, target.viewing_audience,
+                    target.observer_uuid, fact, cursor)
+                target.perception, target.senses = audience_composition.perception, audience_composition.view
+        case TurnFact():
+            if fact.round_number is not None:
+                target.round_number = fact.round_number
+            if fact.event_type in (EventType.TURN_START, EventType.TURN_END, EventType.ENCOUNTER_END):
+                target.current_actor_uuid = fact.entity_uuid if fact.event_type is EventType.TURN_START else None
+    apply_body_fact(target, fact)
+
+
+def apply_body_fact(target: PlayerState, fact: PlayerFact) -> None:
+    """The bodies' part of a committed fact: it changes `target.actors` only."""
     match fact:
         case FactionFact():
             actor = target.actors.get(fact.entity_uuid)
@@ -158,10 +196,6 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: i
             if fact.terminal_departure and fact.entity_uuid is not None and fact.entity_uuid in target.actors:
                 actor = target.actors[fact.entity_uuid]
                 target.actors[actor.uuid] = replace(actor, present=False, last_visual_position=None, occupancy_layer=None)
-                if target.senses is not None:
-                    target.senses.entities.pop(actor.uuid, None)
-                    if audience_composition is not None:
-                        audience_composition.contact_overrides.add(actor.uuid)
                 return
             actor = target.actors.get(fact.entity_uuid) if fact.entity_uuid is not None else None
             if actor is not None and fact.change_type is SpatialChangeType.ENTITY_ENTERED:
@@ -169,14 +203,9 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: i
                 target.actors[actor.uuid] = actor
             if actor is not None and fact.occupancy_layer is not None:
                 target.actors[actor.uuid] = replace(actor, occupancy_layer=fact.occupancy_layer)
-            if (target.viewing_audience.controls(fact.entity_uuid)
+            if (actor is not None and target.viewing_audience.controls(fact.entity_uuid)
                     and fact.change_type is SpatialChangeType.ENTITY_ENTERED):
-                # Own entry is an explicit permitted contact even when one
-                # sensory batch folds an arrival and return to the same cell.
-                if target.senses is not None and fact.entity_uuid == target.observer_uuid:
-                    target.senses = replace(target.senses, position=fact.position)
-                if actor is not None:
-                    target.actors[actor.uuid] = replace(target.actors[actor.uuid], last_visual_position=fact.position)
+                target.actors[actor.uuid] = replace(target.actors[actor.uuid], last_visual_position=fact.position)
         case ItemChargeFact():
             actor = target.actors[fact.source_entity_uuid]
             if actor.controlled_items is None or not target.viewing_audience.controls(actor.uuid):
@@ -190,14 +219,6 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: i
             target.actors[actor.uuid] = replace(actor, controlled_items=items,
                 visual_loadout=replace(actor.visual_loadout, layers=layers))
         case SensoryFact():
-            cursor = target.reducer_cursor if source_cursor is None else source_cursor
-            if audience_composition is None:
-                target.perception = observe_audience(target.perception, target.viewing_audience, fact, cursor)
-                target.senses = audience_view(target.perception, target.observer_uuid)
-            else:
-                apply_current_audience(audience_composition, target.viewing_audience,
-                    target.observer_uuid, fact, cursor)
-                target.perception, target.senses = audience_composition.perception, audience_composition.view
             if fact.observer_position_changed and fact.observer_uuid in target.actors:
                 target.actors[fact.observer_uuid] = replace(target.actors[fact.observer_uuid], last_visual_position=fact.observer_position)
             for identity, contact in fact.entity_contacts_changed.items():
@@ -252,17 +273,12 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: i
                 resolved_size=(condition.resulting_stats.resolved_size
                     if condition.resulting_stats is not None and condition.resulting_stats.resolved_size is not None
                     else actor.resolved_size))
-        case TurnFact():
-            if fact.round_number is not None:
-                target.round_number = fact.round_number
-            if fact.event_type in (EventType.TURN_START, EventType.TURN_END, EventType.ENCOUNTER_END):
-                target.current_actor_uuid = fact.entity_uuid if fact.event_type is EventType.TURN_START else None
 
 
 def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
                                version_cursors: Mapping[UUID, int],
-                               audience_composition: AudienceComposition | None = None) -> None:
-    """Fold a committed fact without letting an outer move undo nested arrival."""
+                               audience_composition: AudienceComposition | None = None) -> bool:
+    """Fold a committed fact without letting an outer move undo nested arrival; False if superseded."""
     if (isinstance(fact, SpatialFact) and fact.entity_uuid is not None
             and fact.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT)):
         if fact.commit_event_uuid is None or fact.commit_event_uuid not in version_cursors:
@@ -271,9 +287,10 @@ def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source
         # Only a nested commit supersedes this closing transition. Independent
         # earlier transitions may be retimed (e.g. jump after preflight OAs).
         if committed_at < target.spatial_commit_cursors.get(fact.entity_uuid, -1) < source_cursor:
-            return
+            return False
         target.spatial_commit_cursors[fact.entity_uuid] = committed_at
     apply_player_fact(target, fact, source_cursor=source_cursor, audience_composition=audience_composition)
+    return True
 
 
 def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
@@ -284,26 +301,37 @@ def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: t
     return result
 
 
+def occurrence_order(nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
+                     observations: tuple[PlayerObservation, ...]) -> Iterator[PlayerObservation | PlayerNode]:
+    """The one fold order of a received group: each node after the observations at or before its version."""
+    indexes = {row.event_uuid: row.source_index for row in versions}
+    pending = iter(sorted(observations, key=lambda row: indexes[row.event_uuid]))
+    observation = next(pending, None)
+    for node in nodes:
+        while observation is not None and indexes[observation.event_uuid] <= indexes[node.uuid]:
+            yield observation
+            observation = next(pending, None)
+        yield node
+    if observation is not None:
+        yield observation
+    yield from pending
+
+
 def _apply_nodes(result: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
                  observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...], *,
                  audience_composition: AudienceComposition | None = None) -> None:
     indexes = {row.event_uuid: row.source_index for row in versions}
-    pending = iter(sorted(observations, key=lambda row: indexes[row.event_uuid]))
-    observation = next(pending, None)
     world_updates = {row.event_uuid: row for row in updates}
-    for node in nodes:
-        while observation is not None and indexes[observation.event_uuid] <= indexes[node.uuid]:
-            _observe(result, observation, audience_composition=audience_composition)
-            observation = next(pending, None)
-        if node.uuid in world_updates:
-            apply_world_update(result, world_updates[node.uuid])
-        if not node.canceled and node.fact is not None:
-            apply_committed_player_fact(result, node.fact, source_cursor=indexes[node.uuid], version_cursors=indexes,
-                audience_composition=audience_composition)
-    if observation is not None:
-        _observe(result, observation, audience_composition=audience_composition)
-    for remaining in pending:
-        _observe(result, remaining, audience_composition=audience_composition)
+    for row in occurrence_order(nodes, versions, observations):
+        match row:
+            case PlayerObservation():
+                _observe(result, row, audience_composition=audience_composition)
+            case PlayerNode():
+                if row.uuid in world_updates:
+                    apply_world_update(result, world_updates[row.uuid])
+                if not row.canceled and row.fact is not None:
+                    apply_committed_player_fact(result, row.fact, source_cursor=indexes[row.uuid],
+                        version_cursors=indexes, audience_composition=audience_composition)
 
 
 def state_before_event(before: PlayerState, lineage: PlayerLineage, event: PlayerNode) -> PlayerState:

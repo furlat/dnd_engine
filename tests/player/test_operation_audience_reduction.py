@@ -69,7 +69,8 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
                 entity_uuid=witness.uuid, position=(6, 5), commit_event_uuid=identity,
                 terminal_departure=True)
         else:
-            observations = (PlayerObservation(event_uuid=identity, actor=before.actors[witness.uuid],
+            # A re-observation of an unchanged body: an empty patch with its contact.
+            observations = (PlayerObservation(event_uuid=identity, actor_uuid=witness.uuid, changes={},
                 contact=PerceivedContact(position=(8, 5), visual=True)),)
         node = PlayerNode(uuid=identity, lineage_uuid=lineage_id, parent_event=None,
             parent_lineage=None, children_lineages=(), phase=EventPhase.COMPLETION,

@@ -7,21 +7,35 @@ from dnd.content.items.authored_item_builders import DIRECT_ITEM_BUILDERS
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.player.content import UIContentManifest
 from dnd.core.content.descriptors import ContentDescriptor, ContentVisibility
+from dnd.core.item_types import ItemPresentationState
 from dnd.player.facts import (
-    ActionFact, AttackFact, SpellFact, ConditionChangeFact, EquipmentFact,
+    ActionFact, ActorChanges, AttackFact, SpellFact, ConditionChangeFact, ConditionFact, EquipmentFact,
     MechanismActivationFact, ObjectDestroyedFact, PlayerActor, PlayerLineage, PlayerState,
-    SensoryFact,
+    SensoryFact, VisualLoadout,
 )
 
 
-def _actor_content(actor: PlayerActor) -> set[str]:
-    known = {actor.creature_content_ref} if actor.creature_content_ref is not None else set()
-    known.update(row.item_id for row in actor.visual_loadout.layers)
-    known.update(effect.behavior_id for row in actor.visual_loadout.layers for effect in row.item_effects)
-    known.update(row.item_id for row in actor.controlled_items or ())
-    known.update(effect.behavior_id for row in actor.controlled_items or () for effect in row.item_effects)
-    known.update(row.behavior_id for row in actor.conditions if row.behavior_id is not None)
+def _body_content(creature_content_ref: str | None, visual_loadout: VisualLoadout | None,
+                  controlled_items: tuple[ItemPresentationState, ...] | None,
+                  conditions: tuple[ConditionFact, ...]) -> set[str]:
+    known = {creature_content_ref} if creature_content_ref is not None else set()
+    layers = visual_loadout.layers if visual_loadout is not None else ()
+    known.update(row.item_id for row in layers)
+    known.update(effect.behavior_id for row in layers for effect in row.item_effects)
+    known.update(row.item_id for row in controlled_items or ())
+    known.update(effect.behavior_id for row in controlled_items or () for effect in row.item_effects)
+    known.update(row.behavior_id for row in conditions if row.behavior_id is not None)
     return known
+
+
+def _actor_content(actor: PlayerActor) -> set[str]:
+    return _body_content(actor.creature_content_ref, actor.visual_loadout, actor.controlled_items, actor.conditions)
+
+
+def _patch_content(changes: ActorChanges) -> set[str]:
+    """Identities a body patch discloses; omitted fields were disclosed when first sent."""
+    return _body_content(changes.get("creature_content_ref"), changes.get("visual_loadout"),
+        changes.get("controlled_items"), changes.get("conditions", ()))
 
 
 def ui_content_manifest() -> UIContentManifest:
@@ -44,7 +58,7 @@ def _lineage_content(lineages: tuple[PlayerLineage, ...]) -> set[str]:
     known: set[str] = set()
     for lineage in lineages:
         for observation in lineage.observations:
-            known.update(_actor_content(observation.actor))
+            known.update(_patch_content(observation.changes))
         for update in lineage.world_updates:
             known.update(row.item.item_id for row in update.objects)
             known.update(effect.behavior_id for row in update.objects for effect in row.item.item_effects)

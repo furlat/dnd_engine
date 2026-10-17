@@ -7,7 +7,7 @@ engine constructors, executable state, audience grant maps, or diagnostic rows.
 from dnd.core.content.descriptors import ContentDescriptor
 
 from dataclasses import dataclass, field
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypedDict
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -149,10 +149,45 @@ class PlayerActor:
     spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT
 
 
+class ActorChanges(TypedDict, total=False):
+    """Present fields replace the seat's known body values; omitted fields are unchanged.
+
+    Against an absent body (first acquisition) every field is present.
+    """
+
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
+    name: str
+    character_body_id: str | None
+    creature_content_ref: str | None
+    appearance: AppearanceConfig
+    visual_loadout: VisualLoadout
+    normal_hp: int
+    maximum_hp: int
+    temporary_hp: int
+    life_state: LifeState
+    armor_class: int
+    conditions: tuple[ConditionFact, ...]
+    last_visual_position: tuple[int, int] | None
+    controlled_items: tuple[ItemPresentationState, ...] | None
+    occupancy_layer: OccupancyLayer | None
+    temporary_hp_grant: TemporaryHitPointsGrant | None
+    resolved_size: Size | None
+    structural_base_size: Size | None
+    manifestation: SummonManifestation | None
+    faction: str | None
+    present: bool
+    remains_disposition: RemainsDisposition
+    spatial_disposition: SpatialDisposition
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerObservation:
+    """One actor's observed body at an event, as a patch against what the seat holds."""
+
     event_uuid: UUID
-    actor: PlayerActor
+    actor_uuid: UUID
+    changes: ActorChanges
     contact: PerceivedContact | None
 
 

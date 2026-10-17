@@ -1,10 +1,11 @@
 """Emitted updates, folded the way the client folds them, reproduce what the seat's projection knows.
 
 The server keeps no replica of a seat's client state. Its projection fold
-(`ProjectionState.remembered`) is what capture and the worker read, so the
-client fold of the detached updates must agree with it on everything read
-there, and the client's composed view must equal a cold composition of its
-folded member senses.
+(`ProjectionState.remembered`) is what capture and the worker read, and the
+bodies it patches against, so the client fold of the detached updates must
+agree with it on every body and on everything else read there, and the
+client's composed view must equal a cold composition of its folded member
+senses.
 """
 
 from dataclasses import dataclass
@@ -67,8 +68,7 @@ def operation_since(session: Session, start: int) -> Operation:
 
 
 def what_capture_reads(state: PlayerState) -> tuple:
-    return ({identity: actor.name for identity, actor in state.actors.items()}, state.connectors,
-        state.content, state.hud_snapshot, state.tiles, state.objects)
+    return (state.actors, state.connectors, state.content, state.hud_snapshot, state.tiles, state.objects)
 
 
 def check_replica(session: Session, steps: tuple[Step, ...]) -> dict[str, PlayerState]:
