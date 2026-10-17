@@ -108,6 +108,9 @@ class AIKnowledge:
     entity_index: dict[UUID, set[str]] = field(default_factory=dict)
     object_index: dict[UUID, set[str]] = field(default_factory=dict)
     dirty_observers: set[UUID] = field(default_factory=set)
+    # Visible tiles touched since their last projection; projected once, when they stop
+    # being visible or when consumption ends (a visible tile's row is a pure projection).
+    dirty_tiles: set[tuple[int, int]] = field(default_factory=set)
 
     def consume(self, rows: Iterable[tuple[int, Event, ConditionFact | None]]) -> None:
         """Apply an exact recorded prefix; context/decision authority stays outside.
@@ -127,6 +130,9 @@ class AIKnowledge:
         for identity in self.dirty_observers:
             self._refresh_observer(identity)
         self.dirty_observers.clear()
+        for position in self.dirty_tiles:
+            self._project_visible_tile(position)
+        self.dirty_tiles.clear()
 
     def _apply(self, event: Event, condition: ConditionFact | None) -> None:
         if isinstance(event, EntityCreatedEvent):
@@ -158,6 +164,16 @@ class AIKnowledge:
             self._refresh_world(positions, objects)
 
         if isinstance(event, SensoryUpdateEvent) and event.observer_uuid in self.controlled_entity_uuids:
+            before = self.senses.get(event.observer_uuid)
+            after = reduce_senses_snapshot(event.observer_uuid, before, event)
+            if before is not None and self.dirty_tiles:
+                # A tile nobody else sees stops being visible here: its remembered row is its
+                # projection at its last visible touch, which is now (before ancestor facts).
+                observer = str(event.observer_uuid)
+                for position in (before.visible - after.visible) & self.dirty_tiles:
+                    if self.visible_index.get(position, set()) <= {observer}:
+                        self._project_visible_tile(position)
+                        self.dirty_tiles.discard(position)
             # Spatial owners have committed these after-values before publishing
             # their sensory child, even though the parent terminal version is later.
             parent = event.parent_lineage
@@ -169,9 +185,7 @@ class AIKnowledge:
                         positions.update(affected)
                         objects.update(changed_objects)
                 parent = ancestor.parent_lineage
-            before = self.senses.get(event.observer_uuid)
-            self.senses[event.observer_uuid] = reduce_senses_snapshot(event.observer_uuid, before, event)
-            after = self.senses[event.observer_uuid]
+            self.senses[event.observer_uuid] = after
             self._reindex(str(event.observer_uuid), before, after)
             self.dirty_observers.add(event.observer_uuid)
             actors = set(event.entity_contacts_changed) | set(event.entity_contacts_removed)
@@ -249,18 +263,23 @@ class AIKnowledge:
                     "knowledge_state": KnowledgeState.REMEMBERED, "observer_uuids": [],
                 })
         for position in positions:
-            visible = sorted(self.visible_index.get(position, ()))
+            if self.visible_index.get(position):
+                self.dirty_tiles.add(position)
+                continue
             seen = sorted(self.seen_index.get(position, ()))
             key = f"{position[0]},{position[1]}"
-            if visible:
-                self.known_tiles[key] = project_tile(self.world, position, visible, self.senses)
-            elif (prior := self.known_tiles.get(key)) is not None:
+            if (prior := self.known_tiles.get(key)) is not None:
                 self.known_tiles[key] = prior.model_copy(update={"knowledge_state": KnowledgeState.SEEN, "observer_uuids": seen})
             elif seen:
                 self.known_tiles[key] = ObservationTileFact(
                     key=key, position=position, knowledge_state=KnowledgeState.SEEN,
                     observer_uuids=seen, adjacent_domain=adjacent_domain(self.world, position),
                 )
+
+    def _project_visible_tile(self, position: tuple[int, int]) -> None:
+        visible = sorted(self.visible_index.get(position, ()))
+        if visible:
+            self.known_tiles[f"{position[0]},{position[1]}"] = project_tile(self.world, position, visible, self.senses)
 
     def _event_objects(self, event: Event) -> set[UUID]:
         match event:
