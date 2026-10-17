@@ -932,12 +932,24 @@ class CaptureContext:
     """A native generation/cursor boundary over the EventQueue's existing indexes.
 
     `bodies` holds each retained event's detached, seat-independent body for
-    this operation: every seat shares it and adds only its own combat log.
+    this operation: every seat shares it and adds only its own combat log;
+    `graphs` holds each root's lineage graph the same way.
     """
 
     generation: UUID
     end_cursor: int
     bodies: dict[tuple[UUID, bool, bool | None], Event] = field(default_factory=dict)
+    graphs: dict[UUID, "LineageGraph"] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class LineageGraph:
+    """One root's terminal node per lineage and every version in source order, shared by every seat."""
+
+    nodes: dict[UUID, Event]
+    indexed: tuple[tuple[int, Event], ...]
+    conditions: tuple[ConditionFact, ...]
+    objective_rows: tuple[ObjectiveRow, ...]
 
 
 def capture_context() -> CaptureContext:
@@ -975,17 +987,8 @@ def capture_lineages(
     return tuple(retained)
 
 
-def _capture_lineage(
-    root: Event, *, observer_uuid: UUID, audience: PlayerAudience, known_actor_uuids: Collection[UUID],
-    context: CaptureContext, known_entity_names: Mapping[str, str],
-    known_connector_uuids: frozenset[str], known_content_ids: frozenset[str],
-    checkpoint: CaptureCheckpoint | None,
-    newly_known_actor_uuids: Collection[UUID] = (),
-    omit_foreign_sensory_payloads: bool = False,
-) -> CompletedLineage:
-    generation = context.generation
-    if generation != EventQueue.generation_id():
-        raise RuntimeError("EventQueue generation changed during lineage capture")
+def _lineage_graph(root: Event, context: CaptureContext) -> LineageGraph:
+    """One root's seat-independent capture: terminal nodes, every version in source order."""
     versions: dict[UUID, tuple[tuple[int, Event], ...]] = {}
     pending = [root]
     nodes: dict[UUID, Event] = {}
@@ -1026,6 +1029,28 @@ def _capture_lineage(
                            key=lambda row: row[0]))
     if not indexed or root.uuid not in {event.uuid for _, event in indexed}:
         raise ValueError("lineage root is absent from the current EventQueue")
+    conditions = tuple(fact for _, event in indexed
+                       if event.uuid == nodes[event.lineage_uuid].uuid
+                       and (fact := _condition_fact(event)) is not None)
+    return LineageGraph(nodes, indexed, conditions,
+                        tuple(_objective_row(index, event) for index, event in indexed))
+
+
+def _capture_lineage(
+    root: Event, *, observer_uuid: UUID, audience: PlayerAudience, known_actor_uuids: Collection[UUID],
+    context: CaptureContext, known_entity_names: Mapping[str, str],
+    known_connector_uuids: frozenset[str], known_content_ids: frozenset[str],
+    checkpoint: CaptureCheckpoint | None,
+    newly_known_actor_uuids: Collection[UUID] = (),
+    omit_foreign_sensory_payloads: bool = False,
+) -> CompletedLineage:
+    generation = context.generation
+    if generation != EventQueue.generation_id():
+        raise RuntimeError("EventQueue generation changed during lineage capture")
+    graph = context.graphs.get(root.uuid)
+    if graph is None:
+        graph = context.graphs[root.uuid] = _lineage_graph(root, context)
+    nodes, indexed, conditions = graph.nodes, graph.indexed, graph.conditions
     admissions = _capture_actor_admissions(indexed, audience, known_actor_uuids, generation, checkpoint,
         newly_known_actor_uuids)
     names = ChainMap({}, known_entity_names)
@@ -1054,9 +1079,6 @@ def _capture_lineage(
                 retained_logs, omit_sensory_payload=event.uuid in omitted_sensory, bodies=context.bodies))
     retained = tuple(retained_values)
     retained_root = next(event for event in retained if event.uuid == root.uuid)
-    conditions = tuple(fact for _, event in indexed
-                       if event.uuid == nodes[event.lineage_uuid].uuid
-                       and (fact := _condition_fact(event)) is not None)
     condition_ids = {fact.event_uuid for fact in conditions}
     dispositions = tuple(
         (event.uuid, Disposition.NOT_DISCLOSED if event.uuid in omitted_sensory else Disposition.UNSUPPORTED)
@@ -1072,7 +1094,7 @@ def _capture_lineage(
         audience=audience,
         root=retained_root,
         events=retained,
-        objective_rows=tuple(_objective_row(index, event) for index, event in indexed),
+        objective_rows=graph.objective_rows,
         start_cursor=indexed[0][0],
         end_cursor=indexed[-1][0] + 1,
         conditions=conditions,
