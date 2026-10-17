@@ -8,7 +8,7 @@ from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventPhase, EventQueue
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.extensions.aegis_spark import (
     AegisSpark,
@@ -32,7 +32,7 @@ def reset_spell_feature_state(width: int = 8, height: int = 6) -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseCondition._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
     GridMap.reset()

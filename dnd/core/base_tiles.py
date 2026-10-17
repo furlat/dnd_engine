@@ -8,7 +8,7 @@ from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.events import WorldTileState
-from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, retire_value
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.types.materials import Material, TileSurface
@@ -323,11 +323,11 @@ class Tile(BaseBlock):
         cost = self._movement_cost(mode)
         if isinstance(cost, ModifiableValue):
             return cost
-        value = ModifiableValue.create(
+        value = ModifiableValue(
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
-            base_value=cost,
-            value_name=f"{mode.value.capitalize()} Cost",
+            base=cost,
+            name=f"{mode.value.capitalize()} Cost",
         )
         if cost <= 0 and mode is not MovementMode.FLYING:
             name = {MovementMode.WALKING: "Impassable", MovementMode.SWIMMING: "No Water",
@@ -659,83 +659,30 @@ def tile_light_dimmers(tile: Tile) -> FrozenSet[UUID]:
 
 
 def validate_tile_owned_movement_graph(tile: Tile) -> None:
-    """Authenticate every locally owned movement root, channel, and modifier."""
+    """Authenticate every locally owned movement value and modifier row."""
     if tile.source_entity_uuid != tile.uuid or BaseBlock.get(tile.uuid) is not tile:
         raise ValueError("Tile registry ownership is not current")
     values = tile.movement_cost_values()
     if len({value.uuid for value in values}) != len(values):
         raise ValueError("Tile movement value identities are not distinct")
-    channels = tuple(
-        channel
-        for value in values
-        for channel in (
-            value.self_static,
-            value.to_target_static,
-            value.self_contextual,
-            value.to_target_contextual,
-        )
-    )
-    if len({channel.uuid for channel in channels}) != len(channels):
-        raise ValueError("Tile movement channel identities are not distinct")
-
-    seen_modifier_uuids = set()
+    modifiers = []
     for value in values:
-        if value.source_entity_uuid != tile.uuid or BaseValue.get(value.uuid) is not value:
+        if value.source_entity_uuid != tile.uuid or ModifiableValue.get(value.uuid) is not value:
             raise ValueError("Tile movement value ownership is not current")
-        for channel in (
-            value.self_static,
-            value.to_target_static,
-            value.self_contextual,
-            value.to_target_contextual,
-        ):
-            if channel.source_entity_uuid != tile.uuid or BaseValue.get(channel.uuid) is not channel:
-                raise ValueError("Tile movement channel ownership is not current")
-            modifier_entries = (
-                tuple(channel.value_modifiers.items())
-                + tuple(channel.min_constraints.items())
-                + tuple(channel.max_constraints.items())
-                + tuple(channel.advantage_modifiers.items())
-                + tuple(channel.critical_modifiers.items())
-                + tuple(channel.auto_hit_modifiers.items())
-                + tuple(channel.size_modifiers.items())
-                + tuple(channel.damage_type_modifiers.items())
-                + tuple(channel.resistance_modifiers.items())
-            )
-            if any(
-                modifier_uuid != modifier.uuid
-                for modifier_uuid, modifier in modifier_entries
-            ):
-                raise ValueError("Tile movement modifier key does not match identity")
-            modifiers = tuple(modifier for _, modifier in modifier_entries)
-            modifier_uuids = {modifier.uuid for modifier in modifiers}
-            if (
-                len(modifier_uuids) != len(modifiers)
-                or seen_modifier_uuids & modifier_uuids
-            ):
-                raise ValueError("Tile movement modifier identities are not distinct")
-            seen_modifier_uuids.update(modifier_uuids)
-            if any(
-                modifier.source_entity_uuid != tile.uuid
-                or BaseObject.get(modifier.uuid) is not modifier
-                for modifier in modifiers
-            ):
-                raise ValueError("Tile movement modifier ownership is not current")
+        modifiers.extend(row.modifier for row in value.modifiers)
+    if len({modifier.uuid for modifier in modifiers}) != len(modifiers):
+        raise ValueError("Tile movement modifier identities are not distinct")
+    if any(
+        modifier.source_entity_uuid != tile.uuid
+        or BaseObject.get(modifier.uuid) is not modifier
+        for modifier in modifiers
+    ):
+        raise ValueError("Tile movement modifier ownership is not current")
 
 
 def release_tile_owned_movement_graph(tile: Tile) -> None:
-    """Release one detached Tile's authenticated finite value graph."""
+    """Release one detached Tile's authenticated movement values."""
     validate_tile_owned_movement_graph(tile)
     for value in tile.movement_cost_values():
-        for channel in (
-            value.self_static,
-            value.to_target_static,
-            value.self_contextual,
-            value.to_target_contextual,
-        ):
-            modifier_uuids = tuple(channel.get_all_modifier_uuids())
-            channel.remove_all_modifiers()
-            for modifier_uuid in modifier_uuids:
-                BaseObject.unregister(modifier_uuid)
-            BaseValue.unregister(channel.uuid)
-        BaseValue.unregister(value.uuid)
+        retire_value(value)
     BaseBlock.unregister(tile.uuid)

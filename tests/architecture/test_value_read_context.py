@@ -35,6 +35,24 @@ REMOVED_NAMES = {
     "get_full_breakdown",
     "get_full_advantage_breakdown",
     "get_advantage_breakdown",
+    # PH-2: values are records with modifier rows; composed reads are parts, never a new value graph.
+    "self_static",
+    "to_target_static",
+    "self_contextual",
+    "to_target_contextual",
+    "StaticValue",
+    "ContextualValue",
+    "BaseValue",
+    "combine_values",
+    "get_base_modifier",
+    "renormalized",
+    "composed_passive_score",
+    "retire_owned_state",
+    "get_all_modifier_uuids",
+    "normalized_score_excluding_static_modifiers",
+    "update_normalizers",
+    "get_combined_values",
+    "add_fixed_score",
 }
 
 # Values, blocks and entities may not define target or context setters on their models.
@@ -42,10 +60,9 @@ STATE_SETTERS = {"set_target_entity", "clear_target_entity", "set_context", "cle
 VALUE_AND_BLOCK_MODULES = ("dnd/core/values.py", "dnd/core/base_block.py", "dnd/core/base_tiles.py", "dnd/entity.py")
 VALUE_AND_BLOCK_PACKAGES = ("dnd/blocks/",)
 
-# Records that keep a read keep its evaluated result; only damage and healing packets carry a value,
-# which they read in their own situation (source, target, attack context).
+# Records that keep a read keep its evaluated result. Damage and healing packets keep the parts of their
+# bonus (a ComposedValue), which they read in their own situation (source, target, attack context).
 READ_RECORD_MODULES = ("dnd/core/events.py", "dnd/core/dice.py", "dnd/actions.py")
-PACKET_VALUE_FIELDS = {("Damage", "damage_bonus"), ("Healing", "healing_bonus")}
 
 
 def _names(tree: ast.AST) -> set[str]:
@@ -96,8 +113,7 @@ def test_read_records_hold_evaluated_readings_not_values() -> None:
                 continue
             for item in node.body:
                 if (isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
-                        and "ModifiableValue" in ast.unparse(item.annotation)
-                        and (node.name, item.target.id) not in PACKET_VALUE_FIELDS):
+                        and "ModifiableValue" in ast.unparse(item.annotation)):
                     fields.append(f"{relative}:{item.lineno} {node.name}.{item.target.id}")
     assert fields == []
 
@@ -107,8 +123,7 @@ def test_values_declare_no_target_or_context_fields() -> None:
     fields = []
     tree = ast.parse((ROOT / "dnd/core/values.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and node.name in {"BaseValue", "StaticValue", "ContextualValue",
-                                                             "ModifiableValue"}:
+        if isinstance(node, ast.ClassDef) and node.name == "ModifiableValue":
             fields.extend(f"{node.name}.{item.target.id}" for item in node.body
                           if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
                           and item.target.id in {"target_entity_uuid", "target_entity_name", "context"})

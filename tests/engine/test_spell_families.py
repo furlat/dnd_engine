@@ -36,7 +36,7 @@ from dnd.core.modifiers import (
     ResistanceModifier,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue, ValueRead, read_value, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, ValueRead, read_value, Channel, Kind, add_modifier
 from dnd.types.senses import OBSCUREMENT_SETS, OpticalObscurement
 from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import execute_by_index, setup_standard_actions
@@ -136,7 +136,7 @@ def reset_spell_family_state(width: int = 12, height: int = 8) -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, width, height)
 
 

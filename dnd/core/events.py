@@ -42,7 +42,7 @@ from contextvars import ContextVar
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, StrictInt, field_serializer, model_validator
 from typing import FrozenSet, Union, List, Optional, Dict, Mapping, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
-from dnd.core.values import (AdvantageBreakdownRow, ModifiableValue, ValueBreakdownRow, ValueRead, ValueReading,
+from dnd.core.values import (AdvantageBreakdownRow, ComposedValue, ValueBreakdownRow, ValueRead, ValueReading,
     read_value)
 from dnd.types.actor import TemporaryHitPointsGrant, ConditionState
 from dnd.types.class_features import IndomitableReroll, RelentlessRageIntervention
@@ -4687,7 +4687,7 @@ class Damage(BaseObject):
     dice_numbers: int = Field(
         description="Number of damage dice to roll."
     )
-    damage_bonus: Optional[ModifiableValue] = Field(
+    damage_bonus: Optional[ComposedValue] = Field(
         default=None,
         description="Modifiable flat bonus added to damage rolls."
     )
@@ -4733,7 +4733,7 @@ class Healing(BaseObject):
     dice_numbers: int = Field(
         description="Number of dice to roll for healing (e.g., 2 for 2d8)"
     )
-    healing_bonus: Optional[ModifiableValue] = Field(
+    healing_bonus: Optional[ComposedValue] = Field(
         default=None,
         description="Bonus to healing rolls (typically spellcasting ability modifier)"
     )

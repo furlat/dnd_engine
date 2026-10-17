@@ -17,7 +17,7 @@ from dnd.core.dice import AttackOutcome
 from dnd.core.events import Damage, DamageRollResultEvent, Event, EventQueue, EventHandler, EventPhase, EventType, Range, RangeType, Trigger
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.life_types import LifeState
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.spells.spell_utils import seen_recipients_error
 from dnd.types.discovery import ActorScan, ScanRecord
@@ -64,7 +64,7 @@ def install_hit_rider(owner: BaseCondition,*,dice_count: int,die_size: Literal[4
         component=Damage(name=owner.get_display_name(),source_entity_uuid=caster.uuid,
             target_entity_uuid=event.target_entity_uuid,damage_dice=die_size,dice_numbers=dice_count,
             damage_type=damage_type or event.damage_packets[0].damage.damage_type,effect_origin=owner.effect_origin,
-            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)))
         roll=component.get_dice(event.attack_outcome).roll
         return event.append_damage_roll(component,roll,owner.get_display_name(),"Native attack-hit spell component")
     handler=EventHandler(name=owner.get_display_name(),source_entity_uuid=caster.uuid,

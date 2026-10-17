@@ -75,6 +75,7 @@ from dnd.core.values import (
     Kind,
     add_modifier,
     modifier_of,
+    parts,
 )
 from dnd.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
@@ -784,14 +785,14 @@ class BonusDamageFeature(BaseCondition):
         if self.requires_unseen_attacker and not _is_unseen_attacker(owner, target):
             return None
         damage_type = self.damage_type or event.damage_packets[0].damage.damage_type
-        bonus = ModifiableValue.create(source_entity_uuid=owner.uuid, base_value=0, value_name=f"{self.name} Bonus")
-        dice = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=read_value(bonus, ValueRead(owner.uuid)), roll_type=RollType.DAMAGE, attack_outcome=event.attack_outcome)
+        bonus = ModifiableValue(source_entity_uuid=owner.uuid, base=0, name=f"{self.name} Bonus")
+        dice = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=read_value(parts(bonus), ValueRead(owner.uuid)), roll_type=RollType.DAMAGE, attack_outcome=event.attack_outcome)
         roll = dice.roll
         damage = Damage(
             damage_type=damage_type,
             dice_numbers=self.dice_numbers,
             damage_dice=self.damage_dice,
-            damage_bonus=bonus,
+            damage_bonus=parts(bonus),
             source_entity_uuid=owner.uuid,
             target_entity_uuid=target.uuid,
             attack_magical=event.damage_packets[0].damage.attack_magical,
@@ -1401,7 +1402,7 @@ class LeadershipAura(AreaCondition):
         if roller.position not in self.affected_positions:
             return None
         roll = event.get_effective_roll()
-        d4 = Dice(count=1, value=4, bonus=read_value(ModifiableValue.create(source_entity_uuid=leader.uuid, base_value=0, value_name="Leadership"), ValueRead(leader.uuid)), roll_type=roll.roll_type).roll
+        d4 = Dice(count=1, value=4, bonus=read_value(parts(ModifiableValue(source_entity_uuid=leader.uuid, base=0, name="Leadership")), ValueRead(leader.uuid)), roll_type=roll.roll_type).roll
         new_roll = roll.model_copy(update={"total": roll.total + d4.total})
         return event.replace_roll(
             new_roll,

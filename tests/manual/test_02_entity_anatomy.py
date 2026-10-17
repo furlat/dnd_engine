@@ -13,7 +13,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
 
 
@@ -22,7 +22,7 @@ def reset_entity_anatomy_state() -> None:
     EventQueue.reset()
     GridMap.reset()
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()

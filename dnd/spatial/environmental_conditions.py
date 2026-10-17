@@ -36,7 +36,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
-from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts
 from dnd.conditions import Poisoned, Prone
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.entity import Entity
@@ -300,10 +300,10 @@ class FireSurface(AreaCondition):
 
     def _deal_damage(self, entity: Entity, parent_event: Event) -> None:
         """Deal this surface's typed entry or turn-start damage."""
-        damage_bonus = ModifiableValue.create(
+        damage_bonus = ModifiableValue(
             source_entity_uuid=self.source_entity_uuid,
-            base_value=0,
-            value_name="Fire Surface Damage",
+            base=0,
+            name="Fire Surface Damage",
         )
         damage = Damage(
             name="Fire Surface",
@@ -311,7 +311,7 @@ class FireSurface(AreaCondition):
             target_entity_uuid=entity.uuid,
             damage_dice=4,
             dice_numbers=2,
-            damage_bonus=damage_bonus,
+            damage_bonus=parts(damage_bonus),
             damage_type=DamageType.FIRE,
         )
         damage_roll = damage.get_dice(AttackOutcome.HIT).roll
@@ -748,10 +748,10 @@ class ElectrifiedWater(WetAreaCondition):
     hazard_filter: HazardFilter = Field(default=HazardFilter.ALL)
 
     def _deal_damage(self, entity: Entity, parent_event: Event) -> None:
-        damage_bonus = ModifiableValue.create(
+        damage_bonus = ModifiableValue(
             source_entity_uuid=self.source_entity_uuid,
-            base_value=0,
-            value_name="Electrified Water Damage",
+            base=0,
+            name="Electrified Water Damage",
         )
         damage = Damage(
             name="Electrified Water",
@@ -759,7 +759,7 @@ class ElectrifiedWater(WetAreaCondition):
             target_entity_uuid=entity.uuid,
             damage_dice=4,
             dice_numbers=1,
-            damage_bonus=damage_bonus,
+            damage_bonus=parts(damage_bonus),
             damage_type=DamageType.LIGHTNING,
         )
         damage_roll = damage.get_dice(AttackOutcome.HIT).roll
@@ -1124,16 +1124,16 @@ class SpikeTrap(SpatialCondition):
         if not self.affects_occupancy_layer(entity.get_occupancy_layer()):
             return
         for component in self.payload.damages:
-            bonus = ModifiableValue.create(
+            bonus = ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=0,
-                value_name="Spike Trap Damage",
+                base=0,
+                name="Spike Trap Damage",
             )
             damage = Damage(
                 name=self.name, source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=entity.uuid,
                 damage_dice=component.dice_sides, dice_numbers=component.dice_count,
-                damage_bonus=bonus, damage_type=component.damage_type,
+                damage_bonus=parts(bonus), damage_type=component.damage_type,
             )
             roll = damage.get_dice(AttackOutcome.HIT).roll
             entity.receive_damage(

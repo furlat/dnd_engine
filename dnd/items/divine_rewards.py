@@ -30,7 +30,7 @@ from dnd.core.events import (
     Healing,
 )
 from dnd.core.geometry import grid_distance_feet
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.types.discovery import ActorScan
 from dnd.spatial.area_conditions import AreaCondition
@@ -92,9 +92,9 @@ class HealingIncenseZone(AreaCondition):
                 target_entity_uuid=target.uuid,
                 healing_dice=4,
                 dice_numbers=1,
-                healing_bonus=ModifiableValue.create(
-                    source_entity_uuid=holder.uuid, base_value=0
-                ),
+                healing_bonus=parts(ModifiableValue(
+                    source_entity_uuid=holder.uuid, base=0
+                )),
             )
             roll = fire_heal_roll_result(
                 holder.uuid, target.uuid, healing, event, "Healing Incense"
@@ -196,17 +196,17 @@ def build_devotees_mace(source_entity_uuid: UUID) -> DevoteesMace:
         damage_type=DamageType.BLUDGEONING,
         properties=[WeaponProperty.SIMPLE],
         range=Range(type=RangeType.REACH, normal=5),
-        attack_bonus=ModifiableValue.create(
-            source_entity_uuid=source_entity_uuid, base_value=3
+        attack_bonus=ModifiableValue(
+            source_entity_uuid=source_entity_uuid, base=3
         ),
-        damage_bonus=ModifiableValue.create(
-            source_entity_uuid=source_entity_uuid, base_value=3
+        damage_bonus=ModifiableValue(
+            source_entity_uuid=source_entity_uuid, base=3
         ),
         extra_damage_dices=[8],
         extra_damage_dices_numbers=[1],
         extra_damage_type=[DamageType.RADIANT],
         extra_damage_bonus=[
-            ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=0)
+            ModifiableValue(source_entity_uuid=source_entity_uuid, base=0)
         ],
         use_action_templates=[
             HealingIncense(source_entity_uuid=uuid4(), template=True)

@@ -29,7 +29,7 @@ from dnd.core.modifiers import (
     NumericalModifier,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from tests.spell_test_exports import (
     ALL_SPELLS,

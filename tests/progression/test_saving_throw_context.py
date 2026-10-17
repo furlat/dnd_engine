@@ -19,7 +19,8 @@ from dnd.core.saving_throw_types import (
     SavingThrowEffectTag,
 )
 from dnd.core.spell_execution import spell_execution_scope
-from dnd.core.values import ContextualAdvantageModifier, Channel, Kind, add_modifier
+from dnd.core.modifiers import ContextualAdvantageModifier
+from dnd.core.values import Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import Cloudkill, PoisonSpray, StinkingCloud

@@ -26,7 +26,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.actions import Jump, Move, Shove
 from dnd.entity import Entity
 from dnd.game import Game
@@ -123,7 +123,7 @@ def reset_grid_state(width: int = 8, height: int = 8, x: int = 0, y: int = 0) ->
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(x, y, width, height)
     _grid_game = Game()
 

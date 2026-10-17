@@ -40,6 +40,7 @@ from dnd.core.values import (
     Channel,
     Kind,
     add_modifier,
+    parts,
 )
 from dnd.blocks.equipment import Weapon, Shield
 from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
@@ -771,11 +772,11 @@ class SecondWind(BaseAction):
         healing_dice = Dice(
             count=1,
             value=10,
-            bonus=read_value(ModifiableValue.create(
+            bonus=read_value(parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=self.fighter_level,
-                value_name="Fighter Level"
-            ), ValueRead(self.source_entity_uuid)),
+                base=self.fighter_level,
+                name="Fighter Level"
+            )), ValueRead(self.source_entity_uuid)),
             roll_type=RollType.CHECK
         )
         healing_roll = healing_dice.roll

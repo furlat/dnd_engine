@@ -97,7 +97,7 @@ class Skill(BaseBlock):
     """
 
     name: SkillName = Field(default="acrobatics", description="The name of the skill in D&D 5e")
-    skill_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Skill Bonus"), description="Any additional bonus applied to skill checks, beyond ability modifier and proficiency")
+    skill_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(),base=0, name="Skill Bonus"), description="Any additional bonus applied to skill checks, beyond ability modifier and proficiency")
     proficiency_sources: ProficiencySourceSet = Field(
         default_factory=ProficiencySourceSet,
         description="Exact source-owned proficiency contributions.",
@@ -208,7 +208,7 @@ class Skill(BaseBlock):
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
-            skill_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.skill_bonus, value_name=name+" Skill Bonus")
+            skill_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.skill_bonus, name=name+" Skill Bonus")
             if len(config.skill_bonus_modifiers) > 0:
                 for modifier in config.skill_bonus_modifiers:
                     add_modifier(skill_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))

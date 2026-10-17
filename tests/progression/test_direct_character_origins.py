@@ -67,6 +67,7 @@ from dnd.core.values import (
     add_modifier,
     modifier_of,
     remove_modifier,
+    parts,
 )
 from tests.engine.support import create_test_entity
 
@@ -97,7 +98,7 @@ _ORIGIN_CASES = (
 
 def reading(value, target_uuid=None):
     """The value read by its owner against an optional target."""
-    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 @pytest.fixture(autouse=True)
@@ -856,7 +857,7 @@ def test_origin_save_rules_consume_exact_cause_context(
     )
 
     for ability in ABILITY_ORDER:
-        bonus = read_value(entity.saving_throws.get_saving_throw(ability).bonus,
+        bonus = read_value(parts(entity.saving_throws.get_saving_throw(ability).bonus),
                            ValueRead(entity.uuid, context={SAVING_THROW_CONTEXT_KEY: context}))
         assert bonus.advantage is (
             AdvantageStatus.ADVANTAGE

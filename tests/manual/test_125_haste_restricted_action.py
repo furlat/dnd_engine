@@ -1093,9 +1093,7 @@ def test_rage_maintenance_requires_a_hostile_creature_attack(recipient: str) -> 
 
 def test_divine_smite_keeps_slot_when_attacking_an_object() -> None:
     actor, _, prop_uuid = _create_grid_actor(1, None, slow=False, surge=False)
-    base = actor.action_economy.spell_slot_1.get_base_modifier()
-    assert base is not None
-    base.value = 1
+    actor.action_economy.spell_slot_1.base = 1
     actor.add_event_handler(create_divine_smite_handler(actor.uuid, 1))
     with fixed_dice_faces(18, 4, 4):
         result = _execute(actor, "Attack_MELEE_MAIN", target_uuid=prop_uuid)

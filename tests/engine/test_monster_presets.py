@@ -16,7 +16,7 @@ from dnd.core.modifiers import (
     AdvantageStatus,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue, Channel, Kind, modifiers_of
+from dnd.core.values import ModifiableValue, Channel, Kind, modifiers_of
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.monsters.bestiary import (
@@ -49,7 +49,7 @@ def reset_monster_state(width: int = 30, height: int = 15) -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, width, height)
     _monster_game = Game()
 

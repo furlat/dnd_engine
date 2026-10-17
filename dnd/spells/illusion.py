@@ -42,7 +42,7 @@ from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModi
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.dice import AttackOutcome, roll_die_face
 from dnd.core.aoe import AoEShape, Cone, Cube, Sphere
-from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, modifier_of
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, modifier_of, parts
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
 from dnd.types.senses import PerceivedSpatialEffect
@@ -1468,7 +1468,7 @@ class PhantasmalForceEffect(BaseCondition):
             else:
                 damage=Damage(name=self.name,source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
                     damage_dice=6,dice_numbers=1,damage_type=self.damage_type,
-                    damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0),effect_origin=self.effect_origin)
+                    damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)),effect_origin=self.effect_origin)
                 roll=roll_spell_damage(damage, parent_event=boundary, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
                 target.receive_damage(roll.total,self.damage_type,caster.uuid,parent_event=boundary.uuid,
                     damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,

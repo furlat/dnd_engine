@@ -21,7 +21,7 @@ from dnd.core.modifiers import (
     AdvantageStatus,
     NumericalModifier,
 )
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.items.consumables import build_healing_potion
@@ -55,7 +55,7 @@ def reset_item_state(
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     grid = get_map()
     grid.create_rectangle(
         0,

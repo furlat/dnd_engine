@@ -30,7 +30,7 @@ from dnd.core.events import (
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.gridmap import PreparedObjectPlacement, get_map
 from dnd.core.life_types import LifeState, RemainsDisposition
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.entity import Entity
 from dnd.items.divine_rewards import build_devotees_mace, HealingIncense
@@ -164,9 +164,9 @@ class SunderHeretical(BaseAction):
                 damage_dice=10,
                 dice_numbers=8,
                 damage_type=DamageType.RADIANT,
-                damage_bonus=ModifiableValue.create(
-                    source_entity_uuid=actor.uuid, base_value=0
-                ),
+                damage_bonus=parts(ModifiableValue(
+                    source_entity_uuid=actor.uuid, base=0
+                )),
                 effect_origin=effect.get_effect_origin(),
             )
             roll = damage.get_dice(AttackOutcome.HIT).roll

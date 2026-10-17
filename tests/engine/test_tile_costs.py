@@ -11,7 +11,7 @@ from dnd.core.base_tiles import Tile
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import ContextualNumericalModifier, NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier, remove_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.world import MovementMode
 from dnd.world_authoring import project_world_tile, set_world_tile
@@ -21,7 +21,7 @@ def test_ordinary_tile_queries_allocate_no_modifier_graphs() -> None:
     """Untouched terrain creates only its Tile identity, including after reads."""
     reset_engine_runtime()
     blocks = set(BaseBlock._registry)
-    values = set(BaseValue._registry)
+    values = set(ModifiableValue._registry)
     objects = set(BaseObject._registry)
 
     tile = Tile.create((0, 0), walking_cost=2, flying_cost=3)
@@ -30,7 +30,7 @@ def test_ordinary_tile_queries_allocate_no_modifier_graphs() -> None:
     assert not tile.blocks_walking(mode=MovementMode.WALKING)
     assert tile.blocks_walking(mode=MovementMode.SWIMMING)
     assert set(BaseBlock._registry) == blocks | {tile.uuid}
-    assert set(BaseValue._registry) == values
+    assert set(ModifiableValue._registry) == values
     assert set(BaseObject._registry) == objects
 
 

@@ -28,7 +28,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import create_test_entity, reset_combat_state
 
@@ -50,7 +50,7 @@ def reset_condition_state() -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, 12, 12)
 
 

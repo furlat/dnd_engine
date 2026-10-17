@@ -23,7 +23,7 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.dice import AttackOutcome
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts
 from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.effect_types import EffectOrigin, EffectOriginKind
 from dnd.blocks.spellcasting import DivineSmiteEntitlement
@@ -204,7 +204,7 @@ def create_divine_smite_processor(slot_level: int):
             ),
             damage_dice=8,
             dice_numbers=dice_count,
-            damage_bonus=smite_damage_bonus,
+            damage_bonus=parts(smite_damage_bonus),
             damage_type=DamageType.RADIANT,
         )
 
@@ -706,9 +706,9 @@ def improved_divine_smite(event, source_uuid):
             magical=True,
             source_id="class_feature.paladin.improved_divine_smite",
         ),
-        damage_bonus=ModifiableValue.create(
-            source_entity_uuid=source_uuid, base_value=0
-        ),
+        damage_bonus=parts(ModifiableValue(
+            source_entity_uuid=source_uuid, base=0
+        )),
     )
     return event.append_damage_roll(
         damage,

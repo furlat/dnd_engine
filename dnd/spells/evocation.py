@@ -82,6 +82,7 @@ from dnd.core.values import (
     Kind,
     add_modifier,
     remove_modifier,
+    parts,
 )
 from dnd.core.dice import AttackOutcome, Dice, RollType, roll_die_face
 from dnd.core.effect_types import EffectOrigin, EffectOriginKind, EffectEndpoint, EffectPropagationLink, ApplicationMembership
@@ -640,11 +641,11 @@ class MagicMissile(SpellAction):
             target_entity_uuid=target.uuid,
             damage_dice=4,
             dice_numbers=1,
-            damage_bonus=ModifiableValue.create(
+            damage_bonus=parts(ModifiableValue(
                 source_entity_uuid=caster.uuid,
-                base_value=1,
-                value_name="Magic Missile Dart"
-            ),
+                base=1,
+                name="Magic Missile Dart"
+            )),
             damage_type=DamageType.FORCE
         )
 
@@ -2252,7 +2253,7 @@ class GuidingBoltMarked(BaseCondition):
     next turn has advantage."
 
     Duration: Until next attack against target OR end of caster's next turn.
-    Uses to_target_static to grant attackers advantage.
+    Uses an outgoing static advantage row to grant attackers advantage.
     Has an EventHandler to remove after first attack against target.
     """
     name: str = Field(default="Guiding Bolt", description="Display name for the guiding bolt marked condition.")
@@ -3076,9 +3077,9 @@ class IceStorm(SpellAction):
         cold_damage = Damage(
             source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
             damage_dice=6, dice_numbers=self.cold_dice,
-            damage_bonus=ModifiableValue.create(
-                source_entity_uuid=caster.uuid, base_value=0, value_name="Cold Damage"
-            ),
+            damage_bonus=parts(ModifiableValue(
+                source_entity_uuid=caster.uuid, base=0, name="Cold Damage"
+            )),
             damage_type=DamageType.COLD
         )
         bludg_roll = roll_spell_damage(bludg_damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
@@ -3772,7 +3773,7 @@ class TrueStrike(SpellAction):
         extra_dice = self._get_cantrip_dice_count(self.caster_level) - 1
         additional = [Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
             damage_dice=6, dice_numbers=extra_dice, damage_type=DamageType.RADIANT,
-            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0))] if extra_dice > 0 else []
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid, base=0)))] if extra_dice > 0 else []
         attack = Attack(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
             weapon_slot=self.weapon_slot, override_ability=ability_name,
             additional_damages=additional, costs=[], template=False)
@@ -3883,9 +3884,9 @@ class FlameStrike(SpellAction):
         radiant_damage = Damage(
             source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
             damage_dice=6, dice_numbers=self.radiant_dice,
-            damage_bonus=ModifiableValue.create(
-                source_entity_uuid=caster.uuid, base_value=0, value_name="Radiant Damage"
-            ),
+            damage_bonus=parts(ModifiableValue(
+                source_entity_uuid=caster.uuid, base=0, name="Radiant Damage"
+            )),
             damage_type=DamageType.RADIANT
         )
         fire_roll = roll_spell_damage(fire_damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
@@ -4158,11 +4159,11 @@ def _create_healing(
         source_entity_uuid=caster.uuid,
         healing_dice=type_cast(Literal[4, 6, 8, 10, 12, 20], die_value),
         dice_numbers=num_dice,
-        healing_bonus=ModifiableValue.create(
+        healing_bonus=parts(ModifiableValue(
             source_entity_uuid=caster.uuid,
-            base_value=wis_mod,
-            value_name=f"{spell_name} Healing"
-        )
+            base=wis_mod,
+            name=f"{spell_name} Healing"
+        ))
     )
 
 
@@ -4877,7 +4878,7 @@ class FireShieldEffect(BaseCondition):
             self.retaliated_lineages.add(attack.lineage_uuid)
             damage = Damage(source_entity_uuid=owner.uuid, target_entity_uuid=attacker.uuid,
                 damage_dice=8, dice_numbers=2, damage_type=damage_type,
-                damage_bonus=ModifiableValue.create(source_entity_uuid=owner.uuid, base_value=0, value_name="Fire Shield damage"))
+                damage_bonus=parts(ModifiableValue(source_entity_uuid=owner.uuid, base=0, name="Fire Shield damage")))
             roll = roll_spell_damage(damage, parent_event=attack, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             attacker.receive_damage(amount=roll.total, damage_type=damage_type, source_entity_uuid=owner.uuid,
                 parent_event=attack.uuid, damages=[damage], damage_rolls=[roll], effect_origin=self.effect_origin,
@@ -5079,8 +5080,8 @@ class SorcerousBurst(SpellAction):
         pending=sum(face==8 for face in faces)
         extra=0
         while pending and extra<cap:
-            bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0,value_name="Burst extra die")
-            extra_roll=Dice(count=1,value=8,bonus=read_value(bonus,ValueRead(caster.uuid,target.uuid)),roll_type=RollType.DAMAGE,attack_outcome=AttackOutcome.HIT).roll
+            bonus=ModifiableValue(source_entity_uuid=caster.uuid,base=0,name="Burst extra die")
+            extra_roll=Dice(count=1,value=8,bonus=read_value(parts(bonus),ValueRead(caster.uuid,target.uuid)),roll_type=RollType.DAMAGE,attack_outcome=AttackOutcome.HIT).roll
             face=extra_roll.results[0] if isinstance(extra_roll.results,list) else extra_roll.results
             faces.append(face)
             pending=pending-1+int(face==8)
@@ -5203,7 +5204,7 @@ class SearingSmiteEffect(BaseCondition):
                 return None
             damage=Damage(name="Searing Smite Burn",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
                 damage_dice=6,dice_numbers=1,damage_type=DamageType.FIRE,
-                damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0),effect_origin=self.effect_origin)
+                damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)),effect_origin=self.effect_origin)
             roll=roll_spell_damage(damage, parent_event=boundary, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             target.receive_damage(roll.total,DamageType.FIRE,caster.uuid,parent_event=boundary.uuid,
                 damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,
@@ -5229,7 +5230,7 @@ class SearingSmite(AttackBackedSpell):
         assert caster is not None
         damage=Damage(name=self.name,source_entity_uuid=caster.uuid,target_entity_uuid=event.target_entity_uuid,
             damage_dice=6,dice_numbers=self.cast_at_level,damage_type=DamageType.FIRE,
-            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0),effect_origin=event.get_effect_origin())
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)),effect_origin=event.get_effect_origin())
         self.apply_hit_condition(event,SearingSmiteEffect(source_entity_uuid=caster.uuid,
             target_entity_uuid=event.target_entity_uuid,spell_dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)))
         return attack.with_updates(additional_damages=[*attack.additional_damages,damage]) if hit_spell_payload_allowed(self,event) else attack
@@ -5254,7 +5255,7 @@ class BrandingSmite(AttackBackedSpell):
         assert caster is not None
         damage=Damage(name=self.name,source_entity_uuid=caster.uuid,target_entity_uuid=event.target_entity_uuid,
             damage_dice=6,dice_numbers=self.cast_at_level,damage_type=DamageType.RADIANT,
-            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0),effect_origin=event.get_effect_origin())
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)),effect_origin=event.get_effect_origin())
         self.apply_hit_condition(event,BrandingSmiteEffect(source_entity_uuid=caster.uuid,target_entity_uuid=event.target_entity_uuid))
         return attack.with_updates(additional_damages=[*attack.additional_damages,damage]) if hit_spell_payload_allowed(self,event) else attack
 
@@ -5395,7 +5396,7 @@ class MoonbeamZone(AreaCondition):
         saved=target.saving_throw(request)[2]
         damage=Damage(name="Moonbeam",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
             damage_dice=10,dice_numbers=self.dice_count,damage_type=DamageType.RADIANT,
-            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0),effect_origin=self.effect_origin)
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)),effect_origin=self.effect_origin)
         roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         target.receive_damage(roll.total//2 if saved else roll.total,DamageType.RADIANT,caster.uuid,
             parent_event=event.uuid,damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,
@@ -5642,7 +5643,7 @@ class AcidArrowEffect(BaseCondition):
             if self.contributions_active():
                 damage=Damage(name="Acid Arrow",source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,
                     damage_dice=4,dice_numbers=self.dice_count,damage_type=DamageType.ACID,effect_origin=self.effect_origin,
-                    damage_bonus=ModifiableValue.create(source_entity_uuid=self.source_entity_uuid,base_value=0))
+                    damage_bonus=parts(ModifiableValue(source_entity_uuid=self.source_entity_uuid,base=0)))
                 roll=roll_spell_damage(damage, parent_event=boundary, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
                 target.receive_damage(roll.total,DamageType.ACID,self.source_entity_uuid,parent_event=boundary.uuid,
                     damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,

@@ -40,7 +40,7 @@ from dnd.core.events import (
 )
 from dnd.core.creature_types import DamageType
 from dnd.core.saving_throw_types import SavingThrowContext
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.spells.content_metadata import (
     SpellCatalogMetadata,
@@ -231,11 +231,11 @@ def _rebuke_processor(
     damage = Damage(source_entity_uuid=caster.uuid,target_entity_uuid=attacker.uuid,
         name="Hellish Rebuke",dice_numbers=2 + max(0, cast_rank - 1),
         damage_dice=10,damage_type=DamageType.FIRE,effect_origin=origin,
-        damage_bonus=ModifiableValue.create(
+        damage_bonus=parts(ModifiableValue(
             source_entity_uuid=caster.uuid,
-            base_value=0,
-            value_name="Hellish Rebuke damage",
-        ),
+            base=0,
+            name="Hellish Rebuke damage",
+        )),
     )
     damage_dice=roll_spell_damage(damage,parent_event=effect,attack_outcome=AttackOutcome.HIT)
     attacker.receive_damage(

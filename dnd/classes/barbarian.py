@@ -21,7 +21,7 @@ Level 20: Primal Champion
 
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier, parts
 from dnd.types.class_features import RelentlessRageIntervention
 from dnd.core.condition_types import DurationType
 from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
@@ -773,7 +773,7 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
 
     con_save = entity.saving_throws.get_saving_throw("constitution")
     dice_roll = entity.roll_d20(
-        read_value(con_save.bonus, ValueRead(entity.uuid)),
+        read_value(parts(con_save.bonus), ValueRead(entity.uuid)),
         RollType.SAVE,
         ability_name="constitution",
         parent_event=event.uuid,

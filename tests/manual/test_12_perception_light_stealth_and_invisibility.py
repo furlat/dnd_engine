@@ -20,7 +20,7 @@ from dnd.core.events import (
     SensoryUpdateReason,
 )
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from tests.manual.authored_encounter_support import (
     assemble_authored_encounter,
@@ -38,7 +38,7 @@ def reset_perception_tutorial_state(
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseCondition._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
     GridMap.reset()

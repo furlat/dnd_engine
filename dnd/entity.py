@@ -11,18 +11,24 @@ import time
 
 from dnd.action_timing import action_timing_enabled, record_action_count, record_action_elapsed, record_action_timing
 from dnd.core.values import (
-    BaseValue,
     ModifiableValue,
     AdvantageStatus,
     ValueRead,
     ValueReading,
-    composed_passive_score,
+    Part,
+    Row,
+    composed,
+    part,
+    parts,
+    value_advantage_sum,
+    with_rows,
     outgoing_of,
     read_value,
     value_score,
     Channel,
     Kind,
     add_modifier,
+    normalized_base,
 )
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import CreatureType, DamageType, Size
@@ -69,7 +75,7 @@ from dnd.types.actor import EntityStatsState, PendingSpatialReturn, SpatialDispo
 from dnd.types.summoning import SummonOrigin, TerminalOwnerRelease
 from dnd.types.discovery import ActorScan, CreatureFacts, ObjectRecord, Relationship, ScanRecord, relationship
 from dnd.types.spatial_effects import SpatialDamageSource
-from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores, ability_score_normalizer
+from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
 from dnd.blocks.health import (
     DamageApplicationPreview,
@@ -465,11 +471,11 @@ class Entity(BaseBlock):
         description="Action economy block owned by this entity."
     )
     proficiency_bonus: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="proficiency_bonus", base_value=2),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), name="proficiency_bonus", base=2),
         description="Entity proficiency bonus value."
     )
     initiative: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="initiative", base_value=0),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), name="initiative", base=0),
         description="Initiative modifier value."
     )
     senses: Senses = Field(
@@ -561,11 +567,11 @@ class Entity(BaseBlock):
     )
 
     jump_distance_additive: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="Jump Distance (Additive)", base_value=0),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), name="Jump Distance (Additive)", base=0),
         description="Additive jump-distance value used by spell and condition effects."
     )
     jump_distance_multiplier: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="Jump Distance (Multiplier)", base_value=1),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), name="Jump Distance (Multiplier)", base=1),
         description="Multiplicative jump-distance value used by spell and condition effects."
     )
     turn_duration_interval: Optional[Tuple[UUID, int]] = Field(
@@ -607,7 +613,7 @@ class Entity(BaseBlock):
     def ignore_underwater_penalties(self, value: bool) -> None:
         self.intrinsic_ignore_underwater_penalties = value
     max_concentration_slots: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="max_concentration_slots", base_value=1),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), name="max_concentration_slots", base=1),
         description="Maximum simultaneous concentration slots available to this entity."
     )
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
@@ -1231,7 +1237,7 @@ class Entity(BaseBlock):
             ),
             proficiency_bonus=self.proficiency_bonus.normalized_score,
             initiative=self.initiative.normalized_score,
-            armor_class=self.ac_bonus(use_register=False).normalized_score,
+            armor_class=self.ac_bonus().normalized_score,
             life_state=self.health.life_state.value,
             remains_disposition=self.health.remains_disposition,
             current_hit_points=max(0, self.get_hp()),
@@ -1435,9 +1441,9 @@ class Entity(BaseBlock):
         for obj in tuple(BaseObject._registry.values()):
             if isinstance(obj, BaseObject) and obj.source_entity_uuid in owned_source_uuids:
                 obj.remove_from_register()
-        for value in tuple(BaseValue._registry.values()):
+        for value in tuple(ModifiableValue._registry.values()):
             if value.source_entity_uuid in owned_source_uuids:
-                value.remove_from_register()
+                ModifiableValue.unregister(value.uuid)
         for block in owned_blocks:
             BaseBlock.unregister(block.uuid)
 
@@ -1839,12 +1845,12 @@ class Entity(BaseBlock):
         senses = Senses.create(source_entity_uuid=source_entity_uuid, position=config.position)
         appearance = Appearance.create(source_entity_uuid=source_entity_uuid, config=config.appearance)
         action_economy = ActionEconomy.create(source_entity_uuid=source_entity_uuid, config=config.action_economy)
-        proficiency_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.proficiency_bonus)
+        proficiency_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.proficiency_bonus)
         for modifier in config.proficiency_bonus_modifiers:
             add_modifier(proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
         dex_mod = ability_scores.get_ability("dexterity").modifier
-        initiative = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=dex_mod, value_name="initiative")
+        initiative = ModifiableValue(source_entity_uuid=source_entity_uuid, base=dex_mod, name="initiative")
         for modifier in config.initiative_modifiers:
             add_modifier(initiative, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
@@ -2386,7 +2392,7 @@ class Entity(BaseBlock):
         if count > hit_die.available_hit_dice:
             raise ValueError(f"Not enough hit dice available to spend {count}")
 
-        constitution_modifier = self.ability_scores.get_ability("constitution").get_combined_values(use_register=False).normalized_score
+        constitution_modifier = self.ability_scores.get_ability("constitution").modifier_reading().normalized_score
         results: List[HitDiceHealingResult] = []
         for _ in range(count):
             roll_result = self.health.spend_hit_die(
@@ -2444,7 +2450,7 @@ class Entity(BaseBlock):
             maximum_hp=maximum_hp,
             temporary_hp=self.health.temporary_hit_points.normalized_score,
             temporary_hp_grant=self.health.temporary_hit_points_grant,
-            armor_class=self.ac_bonus(use_register=False).normalized_score,
+            armor_class=self.ac_bonus().normalized_score,
             resolved_size=self.size,
             native_plane_id=self.native_plane_id, current_plane_id=self.current_plane_id,
             spatial_disposition=self.spatial_disposition,
@@ -2837,7 +2843,7 @@ class Entity(BaseBlock):
         event = event.phase_to(EventPhase.EXECUTION)
 
         roll, roll_event = self.roll_d20_event(
-            read_value(self.health.death_save_bonus, ValueRead(self.uuid)),
+            read_value(parts(self.health.death_save_bonus), ValueRead(self.uuid)),
             RollType.SAVE,
             context={"death_save": True},
             parent_event=event.uuid,
@@ -3049,17 +3055,15 @@ class Entity(BaseBlock):
 
         return event
 
-    def _get_bonuses_for_skill(self, skill_name: SkillName, read: ValueRead, *,
-                               use_register: bool = True) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
-        """Return component values that make up an entity skill bonus in one read.
+    def _get_bonuses_for_skill(self, skill_name: SkillName, read: ValueRead) -> Tuple[Part, ...]:
+        """Return the parts of an entity skill bonus in one read.
 
         Args:
             skill_name: Skill to assemble.
-            read: The read the components take part in.
-            use_register: Register the temporary ability modifier value.
+            read: The read the parts take part in.
 
         Returns:
-            Normalized proficiency, skill bonus, and ability modifier values.
+            Proficiency (with the skill's proficiency rule), skill bonus, and ability modifier parts.
         """
         skill = self.skill_set.get_skill(skill_name)
         ability = self.ability_scores.get_ability(skill.ability)
@@ -3071,41 +3075,39 @@ class Entity(BaseBlock):
                 ability.check_proficiency_sources.apply(bonus),
             )
 
-        ability_bonus = ability.combined_value(read, use_register=use_register)
-        return (self.proficiency_bonus.renormalized(proficiency_bonus_multiplier_callable),
-                skill.skill_bonus, ability_bonus)
+        return (part(self.proficiency_bonus, proficiency_bonus_multiplier_callable), part(skill.skill_bonus),
+                *ability.combined_value(read))
 
     def _get_bonuses_for_ability_check(
         self,
         ability_name: AbilityName,
         read: ValueRead,
-    ) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
-        """Return proficiency, ability modifier and check-only contributions in one read."""
+    ) -> Tuple[Part, ...]:
+        """Return proficiency, ability modifier and check-only parts in one read."""
         ability = self.ability_scores.get_ability(ability_name)
-        return (self.proficiency_bonus.renormalized(ability.check_proficiency_sources.converter()),
-                ability.combined_value(read), ability.check_bonus)
+        return (part(self.proficiency_bonus, ability.check_proficiency_sources.converter()),
+                *ability.combined_value(read), part(ability.check_bonus))
 
     def _get_bonuses_for_saving_throw(
         self,
         ability_name: AbilityName,
         read: ValueRead,
-    ) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
-        """Return component values that make up an entity saving throw bonus in one read.
+    ) -> Tuple[Part, ...]:
+        """Return the parts of an entity saving throw bonus in one read.
 
         Args:
             ability_name: Ability save to assemble.
-            read: The read the components take part in.
+            read: The read the parts take part in.
 
         Returns:
-            Normalized proficiency, save bonus, and ability modifier values.
+            Proficiency (with the save's proficiency rule), save bonus, and ability modifier parts.
         """
         saving_throw = self.saving_throws.get_saving_throw(ability_name)
-        ability_bonus = self.ability_scores.get_ability(ability_name).combined_value(read)
-        return (self.proficiency_bonus.renormalized(saving_throw._get_proficiency_converter()),
-                saving_throw.bonus, ability_bonus)
+        return (part(self.proficiency_bonus, saving_throw._get_proficiency_converter()), part(saving_throw.bonus),
+                *self.ability_scores.get_ability(ability_name).combined_value(read))
 
-    def _get_attack_bonuses(self, read: ValueRead, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Tuple[ModifiableValue, ModifiableValue, List[ModifiableValue], List[ModifiableValue], Range]:
-        """Return component values that make up a weapon attack bonus in one read.
+    def _get_attack_bonuses(self, read: ValueRead, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Tuple[Part, Tuple[Part, ...], List[ModifiableValue], Tuple[Part, ...], Range]:
+        """Return the parts of a weapon attack bonus in one read.
 
         Args:
             read: The attack's read: attacker and target.
@@ -3113,8 +3115,8 @@ class Entity(BaseBlock):
             override_ability: Optional ability to use instead of weapon rules.
 
         Returns:
-            Proficiency value, weapon bonus, attack bonus list, ability bonus
-            list, and weapon range.
+            Proficiency part, weapon bonus parts, attack bonus values, ability
+            modifier parts, and weapon range.
         """
         weapon_bonus, attack_bonuses, ability_bonuses, range = (
             self.equipment.get_attack_bonus_components(
@@ -3125,33 +3127,35 @@ class Entity(BaseBlock):
                 natural_weapon=natural_weapon,
             )
         )
-        proficiency_bonus = self.proficiency_bonus
+        proficiency_bonus = part(self.proficiency_bonus)
         weapon = None if natural_weapon else self.equipment.get_weapon(weapon_slot)
         if not self.creature_proficiencies.is_weapon_proficient(
             weapon.properties if weapon is not None else None,
             weapon.item_id if weapon is not None else None,
         ):
-            proficiency_bonus = proficiency_bonus.renormalized(lambda _bonus: 0)
+            proficiency_bonus = part(self.proficiency_bonus, lambda _bonus: 0)
 
+        weapon_bonuses = parts(weapon_bonus)
         if natural_weapon is not None and natural_weapon.fixed_attack_bonus is not None:
-            intrinsic = ModifiableValue.create(source_entity_uuid=self.uuid, value_name="Intrinsic attack bonus",
-                base_value=natural_weapon.fixed_attack_bonus)
+            intrinsic = ModifiableValue(source_entity_uuid=self.uuid, name="Intrinsic attack bonus",
+                base=natural_weapon.fixed_attack_bonus, use_register=False)
             # Keep independent actor/target effects; fixed baseline replaces STR/proficiency.
-            weapon_bonus = weapon_bonus.combine_values([intrinsic])
-            proficiency_bonus = ModifiableValue.create(source_entity_uuid=self.uuid, value_name="Intrinsic proficiency", base_value=0)
-            ability_bonuses = []
-        return proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range
+            weapon_bonuses = composed(parts(weapon_bonus, intrinsic))
+            proficiency_bonus = part(ModifiableValue(source_entity_uuid=self.uuid, name="Intrinsic proficiency",
+                                                     base=0, use_register=False))
+            ability_bonuses = ()
+        return proficiency_bonus, weapon_bonuses, attack_bonuses, ability_bonuses, range
 
     def _opposed_reading(
         self,
         target_entity_uuid: Optional[UUID],
-        components: Callable[['Entity', ValueRead], Tuple[ModifiableValue, ...]],
+        components: Callable[['Entity', ValueRead], Tuple[Part, ...]],
         context: Optional[Dict[str, Any]],
     ) -> ValueReading:
-        """Read one composed d20 bonus against a target whose matching components export modifiers.
+        """Read one composed d20 bonus against a target whose matching parts export modifiers.
 
         A missing target, the reader itself, or a tile reads without opponent
-        channels; the target still reaches the reader's contextual rows. A
+        rows; the target still reaches the reader's contextual rows. A
         retained effect can outlive its source: its recorded DC still applies,
         but only a present opponent contributes outgoing modifiers.
         """
@@ -3161,8 +3165,7 @@ class Entity(BaseBlock):
                 and get_map().get_tile_by_uuid(target_entity.uuid) is None):
             opponent = outgoing_of(components(target_entity, ValueRead(target_entity.uuid, self.uuid)), None)
         read = ValueRead(self.uuid, target_entity_uuid, context, opponent)
-        bonuses = components(self, ValueRead(self.uuid, target_entity_uuid))
-        return read_value(bonuses[0].combine_values(list(bonuses[1:])), read)
+        return read_value(composed(components(self, ValueRead(self.uuid, target_entity_uuid))), read)
 
     def saving_throw_bonus(self, target_entity_uuid: Optional[UUID], ability_name: AbilityName,
                            context: Optional[Dict[str, Any]]) -> ValueReading:
@@ -3222,34 +3225,20 @@ class Entity(BaseBlock):
         """
         timing = action_timing_enabled()
         started = time.perf_counter() if timing else 0.0
-        skill = self.skill_set.get_skill(skill_name)
-        ability = self.ability_scores.get_ability(skill.ability)
-
-        def proficiency_normalizer(bonus: int) -> int:
-            return max(skill.proficiency_sources.apply(bonus), ability.check_proficiency_sources.apply(bonus))
-
-        scalar = composed_passive_score(self.proficiency_bonus, skill.skill_bonus,
-            ability.ability_score, ability.modifier_bonus, ability.source_entity_uuid,
-            proficiency_normalizer, ability_score_normalizer)
-        if scalar is not None:
-            if timing:
-                record_action_timing(f"passive_skill.{skill_name}.scalar_ms", started)
-            return scalar
-
-        skill_bonuses = self._get_bonuses_for_skill(skill_name, ValueRead(self.uuid), use_register=False)
-        skill_bonus = skill_bonuses[0].combine_values(list(skill_bonuses[1:]), use_register=False)
+        read = ValueRead(self.uuid)
+        skill_bonus = composed(self._get_bonuses_for_skill(skill_name, read))
         if timing:
             record_action_timing(f"passive_skill.{skill_name}.skill_bonus_ms", started)
 
         started = time.perf_counter() if timing else 0.0
-        base = 10 + skill_bonus.normalized_score
+        base = 10 + value_score(skill_bonus, read, normalized=True)
         if timing:
             record_action_timing(f"passive_skill.{skill_name}.normalized_score_ms", started)
 
         started = time.perf_counter() if timing else 0.0
-        if skill_bonus.advantage == AdvantageStatus.ADVANTAGE:
+        if value_advantage_sum(skill_bonus, read) > 0:
             base += 5
-        elif skill_bonus.advantage == AdvantageStatus.DISADVANTAGE:
+        elif value_advantage_sum(skill_bonus, read) < 0:
             base -= 5
         if timing:
             record_action_timing(f"passive_skill.{skill_name}.advantage_ms", started)
@@ -3274,28 +3263,25 @@ class Entity(BaseBlock):
         """Entity relays to its Senses block for sense modes."""
         return self.senses.get_sense_modes()
 
-    def armor_class_value(self, read: ValueRead, *, use_register: bool = True) -> ModifiableValue:
-        """Compose the entity's armor class value for one read.
+    def armor_class_value(self, read: ValueRead) -> Tuple[Part, ...]:
+        """Compose the entity's armor class for one read.
 
         Args:
             read: The armor class read: this entity and the attacker it is read against.
-            use_register: Register combined values for later UUID lookup.
 
         Returns:
-            Composed armor class value.
+            The parts of the armor class.
         """
         formula = self.equipment.resolve_armor_class_formula_candidate(self.ability_scores, read)
         denies_dexterity = any(condition.contributions_active() and condition.denies_dexterity_ac
             for condition in self.active_conditions_by_uuid.values())
-        formula_ac: Optional[ModifiableValue] = None
+        formula_ac: Optional[Tuple[Part, ...]] = None
         if formula is not None:
-            unarmored_values = self.equipment.get_unarmored_ac_values(formula, use_register=use_register)
+            unarmored_values = self.equipment.get_unarmored_ac_values(formula)
             abilities = [ability for ability in self.equipment.get_unarmored_abilities(formula)
                 if not (denies_dexterity and ability == "dexterity")]
-            ability_bonuses = [self.ability_scores.get_ability(cast(AbilityName, ability)).combined_value(read, use_register=use_register) for ability in abilities]
-            formula_ac = unarmored_values[0].combine_values(
-                unarmored_values[1:] + ability_bonuses, use_register=use_register
-            )
+            formula_ac = composed((*unarmored_values, *(ability_part for ability in abilities
+                for ability_part in self.ability_scores.get_ability(cast(AbilityName, ability)).combined_value(read))))
 
         if self.equipment.is_unarmored():
             if formula_ac is None:
@@ -3303,15 +3289,15 @@ class Entity(BaseBlock):
             return formula_ac
         armored_values = self.equipment.get_armored_ac_values()
         max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
-        combined_dexterity_bonus = self.ability_scores.get_ability("dexterity").combined_value(read, use_register=use_register)
+        combined_dexterity_bonus = self.ability_scores.get_ability("dexterity").combined_value(read)
 
         if denies_dexterity:
-            combined_dexterity_bonus = ModifiableValue.create(source_entity_uuid=self.uuid,base_value=0,use_register=use_register)
+            combined_dexterity_bonus = parts(ModifiableValue(source_entity_uuid=self.uuid, base=0, use_register=False))
         if (max_dexterity_bonus is not None and value_score(combined_dexterity_bonus, read, normalized=True)
-                > value_score(max_dexterity_bonus, read, normalized=True)):
-            combined_dexterity_bonus = max_dexterity_bonus
+                > value_score(parts(max_dexterity_bonus), read, normalized=True)):
+            combined_dexterity_bonus = parts(max_dexterity_bonus)
 
-        ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus], use_register=use_register)
+        ac_bonus = composed((*armored_values, *combined_dexterity_bonus))
         if (
             formula_ac is not None
             and value_score(formula_ac, read, normalized=True) > value_score(ac_bonus, read, normalized=True)
@@ -3319,23 +3305,22 @@ class Entity(BaseBlock):
             ac_bonus = formula_ac
         return ac_bonus
 
-    def ac_bonus(self, target_entity_uuid: Optional[UUID]=None, *, use_register: bool = True) -> ValueReading:
+    def ac_bonus(self, target_entity_uuid: Optional[UUID] = None) -> ValueReading:
         """Read the entity's armor class against an optional attacker.
 
         Args:
             target_entity_uuid: Optional entity targeting this armor class.
-            use_register: Register temporary combined values for later UUID lookup.
 
         Returns:
             The evaluated armor class.
         """
         read = ValueRead(self.uuid, target_entity_uuid)
-        return read_value(self.armor_class_value(read, use_register=use_register), read)
+        return read_value(self.armor_class_value(read), read)
 
     def weapon_attack_value(self, read: ValueRead, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
                             override_ability: Optional[AbilityName] = None,
                             natural_weapon: Optional[NaturalWeaponSpec] = None,
-                            ) -> Tuple[ModifiableValue, Optional[Dict[str, Any]]]:
+                            ) -> Tuple[Tuple[Part, ...], Optional[Dict[str, Any]]]:
         """Compose the weapon attack bonus for one read, with the context its own rows read.
 
         Args:
@@ -3345,14 +3330,14 @@ class Entity(BaseBlock):
             natural_weapon: Optional natural weapon used instead of equipment.
 
         Returns:
-            Composed attack value and its attack context (None for a spell-attack weapon).
+            Attack bonus parts and their attack context (None for a spell-attack weapon).
         """
         weapon = None if natural_weapon else self.equipment.get_weapon(weapon_slot)
         if weapon is not None and weapon.spell_attack_profile is not None:
             return self.spell_attack_value(read, casting_ability=weapon.spell_attack_profile.casting_ability), None
         (
             proficiency_bonus,
-            weapon_bonus,
+            weapon_bonuses,
             attack_bonuses,
             ability_bonuses,
             weapon_range,
@@ -3362,8 +3347,7 @@ class Entity(BaseBlock):
             override_ability=override_ability,
             natural_weapon=natural_weapon,
         )
-        bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
-        return proficiency_bonus.combine_values(bonuses), {
+        return composed((proficiency_bonus, *weapon_bonuses, *parts(*attack_bonuses), *ability_bonuses)), {
             "attack_ability": self.equipment.get_weapon_attack_ability_name(
                 self.ability_scores,
                 weapon_slot,
@@ -3460,7 +3444,7 @@ class Entity(BaseBlock):
         weapon=None if natural_weapon else self.equipment.get_weapon(weapon_slot)
         if weapon is not None and weapon.spell_attack_profile is not None:
             return (DamageRollProfile(dice_count=weapon.dice_numbers,die_size=weapon.damage_dice,
-                damage_type=weapon.damage_type.value,flat_bonus=self.get_spell_damage_bonus().normalized_score),)
+                damage_type=weapon.damage_type.value,flat_bonus=value_score(self.get_spell_damage_bonus(), ValueRead(self.uuid), normalized=True)),)
 
         profiles = self.equipment.get_weapon_damage_profiles(
             self.ability_scores,
@@ -3549,17 +3533,17 @@ class Entity(BaseBlock):
         size_dice = self.get_size_damage_dice(weapon_slot, natural_weapon=natural_weapon)
         if size_dice > 0 and damages:
             primary_type = damages[0].damage_type
-            size_damage_bonus = ModifiableValue.create(
+            size_damage_bonus = ModifiableValue(
                 source_entity_uuid=self.uuid,
-                base_value=0,
-                value_name="Size Damage Bonus",
+                base=0,
+                name="Size Damage Bonus",
             )
             damages.append(Damage(
                 source_entity_uuid=self.uuid,
                 target_entity_uuid=target_entity_uuid,
                 damage_dice=4,
                 dice_numbers=size_dice,
-                damage_bonus=size_damage_bonus,
+                damage_bonus=parts(size_damage_bonus),
                 damage_type=primary_type,
             ))
         return damages
@@ -4026,7 +4010,7 @@ class Entity(BaseBlock):
 
     def get_hp(self) -> int:
         """Return current total HP after Constitution, bonuses, temp HP, and damage."""
-        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values(use_register=False)
+        con_modifier = self.ability_scores.get_ability("constitution").modifier_reading()
         return self.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
 
     def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Range:
@@ -4134,25 +4118,22 @@ class Entity(BaseBlock):
         *,
         spellcasting_source_id: Optional[UUID] = None,
         casting_ability: AbilityName | None = None,
-    ) -> ModifiableValue:
+    ) -> Tuple[Part, ...]:
         """Compose the spell attack bonus for one read.
 
         Args:
             read: The attack's read: this entity and its target.
 
         Returns:
-            Composed spell attack value.
+            The parts of the spell attack bonus.
         """
         ability = self.ability_scores.get_ability(
             casting_ability or self.spellcasting.resolve_spellcasting_ability(
                 spellcasting_source_id
             )
         )
-        return self.proficiency_bonus.combine_values([
-            ability.combined_value(read),
-            self.equipment.attack_bonus,
-            self.spellcasting.spell_attack_bonus,
-        ])
+        return composed((part(self.proficiency_bonus), *ability.combined_value(read),
+                         *parts(self.equipment.attack_bonus, self.spellcasting.spell_attack_bonus)))
 
     def spell_attack_bonus(
         self,
@@ -4266,7 +4247,7 @@ class Entity(BaseBlock):
         spell_specific = self.spellcasting.spell_crit_extra_dice.normalized_score
         return general + spell_specific
 
-    def get_spell_damage_bonus(self) -> ModifiableValue:
+    def get_spell_damage_bonus(self) -> Tuple[Part, ...]:
         """Get combined spell damage bonus.
 
         Combines:
@@ -4276,9 +4257,7 @@ class Entity(BaseBlock):
         Returns:
             Combined spell damage bonus.
         """
-        combined = self.equipment.damage_bonus.combine_values([
-            self.spellcasting.spell_damage_bonus,
-        ])
+        combined = composed(parts(self.equipment.damage_bonus, self.spellcasting.spell_damage_bonus))
         execution = current_spell_execution()
         if (
             execution is None
@@ -4296,14 +4275,13 @@ class Entity(BaseBlock):
             return combined
 
         ability_modifier = self.ability_scores.get_ability(ability_name).modifier
-        add_modifier(combined, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
+        return with_rows(combined, (Row(Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 source_entity_uuid=self.uuid,
                 target_entity_uuid=self.uuid,
                 name=f"{ability_name.title()} Spell Damage Affinity",
                 value=ability_modifier,
                 use_register=False,
-            ))
-        return combined
+            )),))
 
     def spell_damage_outcome_bonus(self) -> int:
         """Read the actor-side spell damage bonus without allocating values.
@@ -4342,11 +4320,7 @@ class Entity(BaseBlock):
         if capacity is not None:
             return capacity > 0
         slot_attr = self.action_economy.spell_slot_value(level)
-        base_modifier = slot_attr.get_base_modifier()
-        return bool(
-            base_modifier is not None
-            and base_modifier.normalized_value > 0
-        )
+        return normalized_base(slot_attr) > 0
 
     def get_lowest_spell_slot(self, min_level: int) -> Optional[int]:
         """Find lowest available slot at or above min_level.
@@ -4372,10 +4346,7 @@ class Entity(BaseBlock):
             spell.
         """
         for level in range(1, 10):
-            base_mod = self.action_economy.spell_slot_value(
-                level,
-            ).get_base_modifier()
-            if base_mod and base_mod.value > 0:
+            if self.action_economy.spell_slot_value(level).base > 0:
                 return True
         if any(action.is_spell for action in self.registered_actions):
             return True
@@ -4664,7 +4635,7 @@ class Entity(BaseBlock):
             dc_value = ModifiableValue.get(dc)
             if dc_value is None or dc_value.source_entity_uuid != self.uuid:
                 raise ValueError("DC is not coming from self oir not present")
-            int_dc = value_score(dc_value, ValueRead(self.uuid, target_entity_uuid), normalized=True)
+            int_dc = value_score(parts(dc_value), ValueRead(self.uuid, target_entity_uuid), normalized=True)
         else:
             int_dc = dc
 
@@ -4718,7 +4689,7 @@ class Entity(BaseBlock):
             dc_modifier = ModifiableValue.get(dc)
             if dc_modifier is None or dc_modifier.source_entity_uuid != self.uuid:
                 raise ValueError(f"not present {dc_modifier is None} or not coming from self")
-            int_dc = value_score(dc_modifier, ValueRead(self.uuid, target_entity_uuid), normalized=True)
+            int_dc = value_score(parts(dc_modifier), ValueRead(self.uuid, target_entity_uuid), normalized=True)
         else:
             int_dc = dc
 
@@ -4916,7 +4887,7 @@ class Entity(BaseBlock):
             position=position,
             equipment_slot=equipment_slot,
             merged_into_item_uuid=merged_into_item_uuid,
-            entity_armor_class_after=self.ac_bonus(use_register=False).normalized_score,
+            entity_armor_class_after=self.ac_bonus().normalized_score,
             stack_count=stack_count,
             source_entity_uuid=self.uuid,
             parent_event=parent_event,

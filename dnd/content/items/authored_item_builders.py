@@ -168,15 +168,15 @@ def _build_weapon(
             normal=definition.normal_range_feet,
             long=definition.long_range_feet,
         ),
-        attack_bonus=ModifiableValue.create(
+        attack_bonus=ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=definition.attack_bonus,
-            value_name="Attack Bonus",
+            base=definition.attack_bonus,
+            name="Attack Bonus",
         ),
-        damage_bonus=ModifiableValue.create(
+        damage_bonus=ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=definition.damage_bonus,
-            value_name="Damage Bonus",
+            base=definition.damage_bonus,
+            name="Damage Bonus",
         ),
         extra_damage_dices=[packet.die for packet in packets],
         extra_damage_dices_numbers=[packet.count for packet in packets],
@@ -193,10 +193,10 @@ def _build_weapon(
 
 
 def _armor_value(source_entity_uuid: UUID, name: str, value: int) -> ModifiableValue:
-    return ModifiableValue.create(
+    return ModifiableValue(
         source_entity_uuid=source_entity_uuid,
-        base_value=value,
-        value_name=name,
+        base=value,
+        name=name,
     )
 
 

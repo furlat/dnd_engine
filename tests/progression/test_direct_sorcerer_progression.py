@@ -27,7 +27,6 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.progression import FULL_CASTER_SPELL_SLOTS
 from dnd.core.values import (
-    BaseValue,
     ModifiableValue,
     Channel,
     Kind,
@@ -168,7 +167,7 @@ def _registry_ids() -> tuple[frozenset[object], ...]:
     return (
         frozenset(BaseObject._registry),
         frozenset(BaseBlock._registry),
-        frozenset(BaseValue._registry),
+        frozenset(ModifiableValue._registry),
         frozenset(ModifiableValue._registry),
     )
 

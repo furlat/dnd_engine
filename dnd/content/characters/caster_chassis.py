@@ -18,7 +18,7 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.core.proficiency_types import ProficiencyMode
 from dnd.entity import Entity
 from dnd.types.character_receipts import CasterChassisReceipt
-from dnd.core.values import Channel, Kind, add_modifier, remove_modifier
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, modifier_of
 
 
 def class_level_source(entity: Entity, identity: str) -> UUID:
@@ -210,9 +210,8 @@ def validate_caster_chassis(entity: Entity, receipt: CasterChassisReceipt) -> No
         if source not in entity.feature_sources.get(feature, set()):
             raise RuntimeError("Class feature ownership changed")
     for ability, identity in receipt.ability_score_modifier_ids:
-        value = entity.ability_scores.get_ability(
-            ability
-        ).modifier_of(ability_score, Channel.SELF_STATIC, Kind.VALUE, identity)
+        value = modifier_of(entity.ability_scores.get_ability(ability).ability_score, Channel.SELF_STATIC, Kind.VALUE,
+                            identity)
         if value is None or NumericalModifier.get(identity) is not value:
             raise RuntimeError("Class ability modifier ownership changed")
     for name, source in receipt.saving_throw_proficiency_sources:

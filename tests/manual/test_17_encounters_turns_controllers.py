@@ -20,7 +20,7 @@ from dnd.core.modifiers import (
     AutoHitModifier,
     AutoHitStatus,
 )
-from dnd.core.values import BaseValue, Channel, Kind, add_modifier, remove_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
@@ -75,7 +75,7 @@ def reset_encounter_tutorial_state(width: int = 16, height: int = 10) -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseCondition._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
     Controller.clear_registry()

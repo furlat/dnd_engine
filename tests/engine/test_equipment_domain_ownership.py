@@ -163,7 +163,6 @@ def test_canceled_multislot_equip_has_no_public_events_or_location_mutation() ->
     source_snapshot = (
         greatsword.source_entity_uuid,
         greatsword.attack_bonus.source_entity_uuid,
-        greatsword.attack_bonus.self_static.source_entity_uuid,
         greatsword.owner_uuid,
         greatsword.stored_in_uuid,
     )
@@ -236,7 +235,6 @@ def test_canceled_multislot_equip_has_no_public_events_or_location_mutation() ->
     assert (
         greatsword.source_entity_uuid,
         greatsword.attack_bonus.source_entity_uuid,
-        greatsword.attack_bonus.self_static.source_entity_uuid,
         greatsword.owner_uuid,
         greatsword.stored_in_uuid,
     ) == source_snapshot

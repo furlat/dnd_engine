@@ -82,7 +82,7 @@ from dnd.core.modifiers import (
     AdvantageModifier,
     AdvantageStatus,
 )
-from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts, Row, with_rows
 from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.core.gridmap import get_map
 from dnd.core.view import cell_visible
@@ -200,9 +200,9 @@ class SpikeGrowthZone(AreaCondition):
                 raise ValueError(f"Invalid damage dice: {damage_dice!r}")
             count, value = int(count_text), int(value_text)
             caster = Entity.get(source_uuid)
-            dmg_bonus = caster.get_spell_damage_bonus() if caster else ModifiableValue.create(
-                source_entity_uuid=source_uuid, base_value=0, value_name="Spell Damage"
-            )
+            dmg_bonus = caster.get_spell_damage_bonus() if caster else parts(ModifiableValue(
+                source_entity_uuid=source_uuid, base=0, name="Spell Damage"
+            ))
             damage_obj = Damage(
                 source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid,
                 damage_dice=type_cast(Literal[4, 6, 8, 10, 12, 20], value), dice_numbers=count, damage_bonus=dmg_bonus,
@@ -1008,10 +1008,9 @@ class Disintegrate(SpellAction):
                 status_message=f"{target.name} dodges the ray"
             )
 
-        damage_bonus = caster.get_spell_damage_bonus()
-        add_modifier(damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
+        damage_bonus = with_rows(caster.get_spell_damage_bonus(), (Row(Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
-            name="Disintegrate flat damage", value=self.base_damage_bonus))
+            name="Disintegrate flat damage", value=self.base_damage_bonus)),))
         force_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -1280,9 +1279,9 @@ class EnhanceAbilityEffect(BaseCondition):
             healing = Healing(
                 source_entity_uuid=self.source_entity_uuid,
                 healing_dice=6, dice_numbers=2,
-                healing_bonus=ModifiableValue.create(
-                    source_entity_uuid=self.source_entity_uuid, base_value=0, value_name="Bear's Endurance"
-                )
+                healing_bonus=parts(ModifiableValue(
+                    source_entity_uuid=self.source_entity_uuid, base=0, name="Bear's Endurance"
+                ))
             )
             temp_hp = healing.get_dice().roll.total
             target.health.add_temporary_hit_points(temp_hp, self.source_entity_uuid, parent_event=effect_event.uuid)
@@ -1604,7 +1603,7 @@ def _resolve_telekinetic_transfer(caster: Entity, target: Entity,
             (8, 4, DamageType.FORCE), (6, 2, DamageType.BLUDGEONING))
         for sides, count, damage_type in packets:
             damage = Damage(name="Telekinesis impact", source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, damage_dice=sides, dice_numbers=count,
-                damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0), damage_type=damage_type)
+                damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid, base=0)), damage_type=damage_type)
             roll = roll_spell_damage(damage, parent_event=parent, effect_origin=None, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             target.receive_damage(roll.total, damage_type, source_entity_uuid=caster.uuid,
                 damage_rolls=[roll], damages=[damage], parent_event=landing.uuid,
@@ -1860,11 +1859,11 @@ class Regenerate(SpellAction):
             source_entity_uuid=caster.uuid,
             healing_dice=8,
             dice_numbers=4,
-            healing_bonus=ModifiableValue.create(
+            healing_bonus=parts(ModifiableValue(
                 source_entity_uuid=caster.uuid,
-                base_value=15,
-                value_name="Regenerate Healing"
-            )
+                base=15,
+                name="Regenerate Healing"
+            ))
         )
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -2425,7 +2424,7 @@ class ExhaleDragonsBreath(SpellAction):
             return effect
         damage=Damage(name="Dragon's Breath",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
             damage_type=self.spell_damage_type,damage_dice=6,dice_numbers=1+self.cast_at_level,
-            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)))
         roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         return deliver_spell_damage(effect,target,damage,roll,amount=roll.total//2 if saved else roll.total)
 

@@ -10,7 +10,7 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventPhase, EventQueue
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 
 
 class TutorialLeafBlock(BaseBlock):
@@ -72,16 +72,16 @@ def reset_block_state() -> None:
     EventQueue.reset()
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     BaseBlock._registry.clear()
 
 
 def create_tutorial_value(source_entity_uuid: UUID, name: str, base_value: int) -> ModifiableValue:
     """Create a named value for the tutorial block graph."""
-    return ModifiableValue.create(
+    return ModifiableValue(
         source_entity_uuid=source_entity_uuid,
-        value_name=name,
-        base_value=base_value,
+        name=name,
+        base=base_value,
     )
 
 

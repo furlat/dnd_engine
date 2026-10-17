@@ -3,7 +3,7 @@ from dnd.core.action_types import ActionEconomyCostType, RestrictedActionGrant
 from typing import AbstractSet, Dict, Hashable, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, retire_value
 from dnd.core.base_object import BaseObject, CreatesModels, build_creatable_models, read_private_attribute
 from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent
 from dnd.core.condition_types import (
@@ -387,7 +387,8 @@ class BaseBlock(BaseModel):
                 owner identity.
         """
         for value in block.values.values():
-            value.set_source_entity(block.source_entity_uuid, block.source_entity_name)
+            value.source_entity_uuid = block.source_entity_uuid
+            value.source_entity_name = block.source_entity_name
 
         for sub_block in block.blocks.values():
             sub_block.source_entity_uuid = block.source_entity_uuid
@@ -771,7 +772,7 @@ class BaseBlock(BaseModel):
             self.remove_event_handler(handler)
             handler.remove_from_register()
         for value in {value.uuid: value for value in self.owned_values()}.values():
-            value.retire_owned_state()
+            retire_value(value)
         BaseBlock.unregister(self.uuid)
 
     def on_owned_item_destroyed(

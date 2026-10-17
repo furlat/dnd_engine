@@ -878,7 +878,7 @@ class Exhaustion(BaseCondition):
                 )
 
             if self.level >= 4:
-                constitution_modifier = target_entity.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+                constitution_modifier = target_entity.ability_scores.get_ability("constitution").modifier_reading().normalized_score
                 current_max_hp = (
                     target_entity.health.get_max_hit_dices_points(constitution_modifier)
                     + target_entity.health.max_hit_points_bonus.normalized_score
@@ -2399,7 +2399,7 @@ class NoReactions(BaseCondition):
     Used by Shocking Grasp - "target can't take reactions until the start
     of its next turn."
 
-    This condition sets max reactions to 0 via self_static.
+    This condition sets max reactions to 0 with an owner static max row.
     Duration: 1 round (expires at start of target's next turn).
     """
     name: str = "No Reactions"

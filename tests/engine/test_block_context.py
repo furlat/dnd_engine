@@ -12,7 +12,6 @@ from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.modifiers import ContextualNumericalModifier, NumericalModifier
 from dnd.core.values import (
-    BaseValue,
     ModifiableValue,
     ValueRead,
     read_value,
@@ -20,6 +19,7 @@ from dnd.core.values import (
     Kind,
     add_modifier,
     modifier_of,
+    parts,
 )
 
 
@@ -94,15 +94,15 @@ def reset_block_state() -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
 
 
 def make_value(source_uuid: UUID, name: str, base_value: int = 0) -> ModifiableValue:
     """Create a named value for synthetic block examples."""
-    return ModifiableValue.create(
+    return ModifiableValue(
         source_entity_uuid=source_uuid,
-        value_name=name,
-        base_value=base_value,
+        name=name,
+        base=base_value,
     )
 
 
@@ -159,7 +159,7 @@ def test_eb_05_002_block_values_hold_no_read_state_and_a_read_carries_it() -> No
     add_modifier(block.child.leaf_value, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(source_entity_uuid=source_uuid, callable=observe))
     context = {"range": "melee", "cover": "none"}
 
-    read_value(block.child.leaf_value, ValueRead(source_uuid, target_uuid, context))
+    read_value(parts(block.child.leaf_value), ValueRead(source_uuid, target_uuid, context))
     assert seen and all(row == (source_uuid, target_uuid, context) for row in seen)
 
     seen.clear()

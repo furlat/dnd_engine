@@ -11,7 +11,7 @@ from dnd.core.content.runtime import reset_runtime_behavior_context
 from dnd.core.events import EventQueue
 from dnd.core.dice import Dice, DiceRoll
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 
@@ -49,7 +49,7 @@ def reset_engine_runtime(
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseBlock.ground_hazard_holders.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Dice._registry.clear()
     DiceRoll._registry.clear()
     Entity._entity_registry.clear()

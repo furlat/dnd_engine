@@ -17,7 +17,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.events import Damage, DamageAppliedEvent, EventPhase, EventQueue, EventType, SpatialChangeEvent, SpatialChangeType
 from dnd.core.gridmap import get_map
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity, EntityConfig
 from dnd.items.environment import DirectionalDoor
 from dnd.game import Game
@@ -100,7 +100,7 @@ def test_mixed_packet_releases_once_even_if_only_nonphysical_damage_gets_through
     install_body_response(creature, BLOOD_BODY_RESPONSE)
     components = [Damage(source_entity_uuid=creature.uuid, damage_type=kind,
                          damage_dice=4 if kind is DamageType.PIERCING else 8, dice_numbers=1,
-                         damage_bonus=ModifiableValue.create(source_entity_uuid=creature.uuid, base_value=0))
+                         damage_bonus=parts(ModifiableValue(source_entity_uuid=creature.uuid, base=0)))
                   for kind in (DamageType.PIERCING, DamageType.FIRE)]
     with fixed_dice_faces(2, 8):
         rolls = [damage.get_dice(AttackOutcome.HIT).roll for damage in components]

@@ -9,7 +9,7 @@ from dnd.core.content.runtime import RuntimeBehaviorKind, bind_runtime_behavior_
 from dnd.core.events import Damage, DamageRollResultEvent, Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.item_properties import ArmorPenalties, ItemProperty, UnseenStrike, WearerBonus, WearerValue
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, ContextualNumericalModifier, NumericalModifier
-from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier, parts
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,9 +46,9 @@ def _unseen_strike(event: Event, source_entity_uuid: UUID, *, item_uuid: UUID,
     damage = Damage(name=property.name, source_entity_uuid=source_entity_uuid,
         target_entity_uuid=event.target_entity_uuid, damage_dice=property.die,
         dice_numbers=property.count, damage_type=property.damage_type,
-        damage_bonus=ModifiableValue.create(source_entity_uuid=source_entity_uuid,
-            base_value=0,
-            value_name=f"{property.name} Damage Bonus"))
+        damage_bonus=parts(ModifiableValue(source_entity_uuid=source_entity_uuid,
+            base=0,
+            name=f"{property.name} Damage Bonus")))
     return event.append_damage_roll(damage, damage.get_dice(event.attack_outcome).roll,
         property.name, f"{property.count}d{property.die} {property.damage_type.value.lower()} (unseen attacker)")
 

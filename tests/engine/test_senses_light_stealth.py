@@ -29,7 +29,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.game import Game
@@ -166,7 +166,7 @@ def reset_senses_state(
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Encounter.clear_registry()
     grid = get_map()
     grid.create_rectangle(

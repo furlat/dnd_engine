@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 
-from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier, parts
 from dnd.actions import Attack
 from dnd.blocks.health import HealthConfig
 from dnd.classes.fighter import GreatWeaponFighting
@@ -31,7 +31,7 @@ from tests.manual.spell_regression_support import force_save_result
 
 def reading(value, target_uuid=None):
     """The value read by its owner against an optional target."""
-    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 @pytest.fixture(autouse=True, params=[0, 1], ids=["seed0", "seed1"])
@@ -43,8 +43,8 @@ def seeded_rng(request):
 
 
 def bonus(owner):
-    return ModifiableValue.create(
-        source_entity_uuid=owner.uuid, value_name="Dice coverage", base_value=0,
+    return ModifiableValue(
+        source_entity_uuid=owner.uuid, name="Dice coverage", base=0,
     )
 
 

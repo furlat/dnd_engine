@@ -22,7 +22,7 @@ from dnd.blocks.spellcasting import SpellcastingBlock
 from dnd.core.base_actions import BaseAction
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, modifiers_of
 from dnd.types.character_progression import RitualPreparationPolicy
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
@@ -232,39 +232,11 @@ def test_hit_dice_remove_by_uuid_preserves_other_blocks_and_spend() -> None:
     d6.spend()
     removed_values = (d10.hit_dice_value, d10.hit_dice_count)
     sibling_values = (d6.hit_dice_value, d6.hit_dice_count)
-    removed_channels = tuple(
-        channel
-        for value in removed_values
-        for channel in (
-            value.self_static,
-            value.to_target_static,
-            value.self_contextual,
-            value.to_target_contextual,
-        )
-    )
-    sibling_channels = tuple(
-        channel
-        for value in sibling_values
-        for channel in (
-            value.self_static,
-            value.to_target_static,
-            value.self_contextual,
-            value.to_target_contextual,
-        )
-    )
-    removed_modifier_ids = {
-        modifier_uuid
-        for channel in removed_channels
-        for modifier_uuid in channel.get_all_modifier_uuids()
-    }
-    sibling_modifier_ids = {
-        modifier_uuid
-        for channel in sibling_channels
-        for modifier_uuid in channel.get_all_modifier_uuids()
-    }
+    removed_modifier_ids = {row.modifier.uuid for value in removed_values for row in value.modifiers}
+    sibling_modifier_ids = {row.modifier.uuid for value in sibling_values for row in value.modifiers}
 
     target_uuid = uuid4()
-    target_value = ModifiableValue.create(
+    target_value = ModifiableValue(
         source_entity_uuid=target_uuid,
     )
     borrowed_modifier = NumericalModifier(
@@ -274,25 +246,20 @@ def test_hit_dice_remove_by_uuid_preserves_other_blocks_and_spend() -> None:
         value=3,
     )
     add_modifier(target_value, Channel.TO_TARGET_STATIC, Kind.VALUE, borrowed_modifier)
-    borrowed_channel_uuid = target_value.to_target_static.uuid
 
     assert health.remove_hit_dice_by_uuid(d10.uuid)
     assert health.hit_dices == [d6]
     assert d6.spent_hit_dice == 1
     assert not health.remove_hit_dice_by_uuid(d10.uuid)
     assert d10.uuid not in BaseBlock._registry
-    assert all(value.uuid not in BaseValue._registry for value in removed_values)
-    assert all(channel.uuid not in BaseValue._registry for channel in removed_channels)
+    assert all(value.uuid not in ModifiableValue._registry for value in removed_values)
     assert removed_modifier_ids.isdisjoint(BaseObject._registry)
     assert d6.uuid in BaseBlock._registry
-    assert all(value.uuid in BaseValue._registry for value in sibling_values)
-    assert all(channel.uuid in BaseValue._registry for channel in sibling_channels)
+    assert all(value.uuid in ModifiableValue._registry for value in sibling_values)
     assert sibling_modifier_ids <= BaseObject._registry.keys()
-    assert borrowed_channel_uuid in BaseValue._registry
+    assert target_value.uuid in ModifiableValue._registry
     assert borrowed_modifier.uuid in BaseObject._registry
-    assert target_value.to_target_static.value_modifiers == {
-        borrowed_modifier.uuid: borrowed_modifier,
-    }
+    assert modifiers_of(target_value, Channel.TO_TARGET_STATIC, Kind.VALUE) == (borrowed_modifier,)
 
 
 def test_equipment_selects_highest_owned_ac_formula_and_reverts_exactly() -> None:

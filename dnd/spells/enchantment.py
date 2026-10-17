@@ -12,7 +12,7 @@ from dnd.core.base_block import BaseBlock, PreparedConditionRemovals
 from dnd.blocks.skills import all_skills, SKILL_TO_ABILITY
 from dnd.creature_transforms import apply_incapacitated_transform
 from dnd.core.modifiers import NumericalModifier, ContextualAdvantageModifier
-from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier, parts
 from dnd.conditions import prepare_control_removals
 from dnd.spells.hit_effects import QuarrySustain, ReapplyQuarry, install_hit_rider
 from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
@@ -2731,7 +2731,7 @@ class Feeblemind(SpellAction):
         if effect.canceled: return effect
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, dice_numbers=4,
             damage_dice=6, damage_type=DamageType.PSYCHIC,
-            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0))
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid, base=0)))
         effect = deliver_spell_damage(effect, target, damage, roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0))
         if effect.canceled or saved or not target.is_active: return effect
         return self.apply_owned_condition(effect, FeeblemindEffect(source_entity_uuid=caster.uuid,

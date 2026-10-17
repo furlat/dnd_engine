@@ -22,7 +22,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from dnd.items.environment import DirectionalWall
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
@@ -34,7 +34,7 @@ def reset_world_state(width: int = 8, height: int = 8) -> None:
     reset_combat_state()
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     BaseBlock._registry.clear()
     get_map().create_rectangle(0, 0, width, height)
 

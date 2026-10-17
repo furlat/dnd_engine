@@ -25,7 +25,7 @@ from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
-from dnd.core.values import BaseValue, ValueRead, read_value
+from dnd.core.values import ModifiableValue, ValueRead, read_value, parts
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.monsters.srd_roster import (
@@ -45,7 +45,7 @@ def reset_srd_trait_state(width: int = 12, height: int = 12) -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseCondition._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Entity._entity_registry.clear()
     GridMap.reset()
     get_map().create_rectangle(0, 0, width, height)
@@ -209,7 +209,7 @@ def test_pack_tactics_sunlight_and_keen_senses_use_contextual_values() -> None:
     assert attack_in(kobold, {"sunlight": True}).advantage == AdvantageStatus.NONE
 
     wolf = _materialize_srd_fixture("wolf", position=(5, 5), faction="monsters")
-    perception = read_value(wolf.skill_set.perception.skill_bonus, ValueRead(wolf.uuid, context={"sense": "hearing"}))
+    perception = read_value(parts(wolf.skill_set.perception.skill_bonus), ValueRead(wolf.uuid, context={"sense": "hearing"}))
     assert perception.advantage == AdvantageStatus.ADVANTAGE
 
 

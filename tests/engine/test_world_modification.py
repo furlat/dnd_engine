@@ -35,7 +35,7 @@ from dnd.core.traversal_connectors import (
     TraversalConnectorDefinition,
     TraversalConnectorKind,
 )
-from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier, remove_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.core.world_edges import SlopeAxis
 from dnd.entity import Entity, EntityConfig
@@ -171,19 +171,12 @@ def _copy_closed_event_interval(
 
 
 def _tile_graph_uuids(tile) -> tuple[set, set]:
-    """Return the exact BaseValue/BaseObject identities locally owned by a Tile."""
+    """Return the exact ModifiableValue/BaseObject identities locally owned by a Tile."""
     values = set()
     modifiers = set()
     for value in tile.movement_cost_values():
         values.add(value.uuid)
-        for channel in (
-            value.self_static,
-            value.to_target_static,
-            value.self_contextual,
-            value.to_target_contextual,
-        ):
-            values.add(channel.uuid)
-            modifiers.update(channel.get_all_modifier_uuids())
+        modifiers.update(row.modifier.uuid for row in value.modifiers)
     return values, modifiers
 
 
@@ -417,7 +410,7 @@ def test_equal_and_invalid_tile_requests_allocate_nothing_and_emit_nothing() -> 
     tile = grid.set_tile(0, 0, fire_event=False)
     cursor = EventQueue.event_cursor()
     blocks = dict(BaseBlock._registry)
-    values = dict(BaseValue._registry)
+    values = dict(ModifiableValue._registry)
     objects = dict(BaseObject._registry)
 
     assert set_world_tile(
@@ -427,7 +420,7 @@ def test_equal_and_invalid_tile_requests_allocate_nothing_and_emit_nothing() -> 
     ) is None
     assert EventQueue.event_cursor() == cursor
     assert BaseBlock._registry == blocks
-    assert BaseValue._registry == values
+    assert ModifiableValue._registry == values
     assert BaseObject._registry == objects
 
     with pytest.raises(ValueError, match="nonnegative strict integer"):
@@ -439,7 +432,7 @@ def test_equal_and_invalid_tile_requests_allocate_nothing_and_emit_nothing() -> 
     assert grid.get_tile(1, 0) is None
     assert EventQueue.event_cursor() == cursor
     assert BaseBlock._registry == blocks
-    assert BaseValue._registry == values
+    assert ModifiableValue._registry == values
     assert BaseObject._registry == objects
 
 
@@ -449,10 +442,10 @@ def test_tile_replacement_releases_only_the_displaced_owned_graph() -> None:
     grid = get_map()
     previous = grid.set_tile(0, 0, fire_event=False)
     sibling = grid.set_tile(1, 0, fire_event=False)
-    imported_owner = ModifiableValue.create(
+    imported_owner = ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=7,
-        value_name="Imported owner",
+        base=7,
+        name="Imported owner",
     )
     previous.edit_movement_cost(MovementMode.WALKING)
     old_values, old_modifiers = _tile_graph_uuids(previous)
@@ -467,118 +460,64 @@ def test_tile_replacement_releases_only_the_displaced_owned_graph() -> None:
 
     assert completed is not None
     assert BaseBlock.get(previous.uuid) is None
-    assert all(BaseValue.get(value_uuid) is None for value_uuid in old_values)
+    assert all(ModifiableValue.get(value_uuid) is None for value_uuid in old_values)
     assert all(BaseObject.get(modifier_uuid) is None for modifier_uuid in old_modifiers)
-    assert BaseValue.get(imported_owner.uuid) is imported_owner
-    assert all(BaseValue.get(value_uuid) is not None for value_uuid in sibling_values)
+    assert ModifiableValue.get(imported_owner.uuid) is imported_owner
+    assert all(ModifiableValue.get(value_uuid) is not None for value_uuid in sibling_values)
     assert all(BaseObject.get(modifier_uuid) is not None for modifier_uuid in sibling_modifiers)
     assert grid.get_tile(1, 0) is sibling
 
 
-def test_tile_detachment_authenticates_root_channel_and_modifier_ownership() -> None:
-    """A foreign empty channel or modifier cannot be unregistered as Tile-owned."""
+def test_tile_detachment_authenticates_root_and_modifier_ownership() -> None:
+    """A foreign modifier cannot be unregistered as Tile-owned."""
     reset_engine_runtime()
     grid = get_map()
     tile = grid.set_tile(0, 0, fire_event=False)
-    foreign_value = ModifiableValue.create(
-        source_entity_uuid=uuid4(),
-        value_name="Foreign channel owner",
-    )
-    original_channel = tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual
-    tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual = foreign_value.to_target_contextual
-    cursor = EventQueue.event_cursor()
-
-    with pytest.raises(ValueError, match="channel ownership"):
-        set_world_tile((0, 0), author_uuid=uuid4(), name="Rejected")
-
-    assert grid.get_tile(0, 0) is tile
-    assert BaseValue.get(foreign_value.to_target_contextual.uuid) is (
-        foreign_value.to_target_contextual
-    )
-    assert EventQueue.event_cursor() == cursor
-
-    tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual = original_channel
     foreign_modifier = NumericalModifier.create(
         source_entity_uuid=uuid4(),
         name="Foreign movement effect",
         value=1,
     )
     add_modifier(tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, foreign_modifier)
+    cursor = EventQueue.event_cursor()
     with pytest.raises(ValueError, match="modifier ownership"):
-        set_world_tile((0, 0), author_uuid=uuid4(), name="Rejected again")
+        set_world_tile((0, 0), author_uuid=uuid4(), name="Rejected")
+    assert grid.get_tile(0, 0) is tile
     assert BaseObject.get(foreign_modifier.uuid) is foreign_modifier
+    assert EventQueue.event_cursor() == cursor
 
 
-def test_tile_detachment_rejects_same_owner_root_and_channel_aliases() -> None:
-    """Distinct Tile-owned graph slots cannot alias and leak displaced rows."""
+def test_tile_detachment_rejects_same_owner_root_aliases() -> None:
+    """Distinct Tile-owned movement slots cannot alias one value."""
     reset_engine_runtime()
     grid = get_map()
     tile = grid.set_tile(0, 0, fire_event=False)
-    original_channel = tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual
-    tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual = tile.edit_movement_cost(MovementMode.FLYING).to_target_contextual
-    cursor = EventQueue.event_cursor()
-
-    with pytest.raises(ValueError, match="channel identities"):
-        set_world_tile((0, 0), author_uuid=uuid4(), name="Rejected channel alias")
-
-    assert grid.get_tile(0, 0) is tile
-    assert BaseValue.get(original_channel.uuid) is original_channel
-    assert EventQueue.event_cursor() == cursor
-
-    tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual = original_channel
     original_root = tile.edit_movement_cost(MovementMode.WALKING)
+    tile.edit_movement_cost(MovementMode.FLYING)
     tile.walking_cost = tile.flying_cost
+    cursor = EventQueue.event_cursor()
     with pytest.raises(ValueError, match="value identities"):
         set_world_tile((0, 0), author_uuid=uuid4(), name="Rejected root alias")
     assert grid.get_tile(0, 0) is tile
-    assert BaseValue.get(original_root.uuid) is original_root
+    assert ModifiableValue.get(original_root.uuid) is original_root
     assert EventQueue.event_cursor() == cursor
 
 
 def test_tile_detachment_rejects_same_owner_modifier_aliases() -> None:
-    """A Tile modifier row cannot be owned by two local channel slots."""
+    """A Tile modifier row cannot be owned by two local movement values."""
     reset_engine_runtime()
     grid = get_map()
     tile = grid.set_tile(0, 0, fire_event=False)
-    walking_base = tile.edit_movement_cost(MovementMode.WALKING).get_base_modifier()
-    flying_base = tile.edit_movement_cost(MovementMode.FLYING).get_base_modifier()
-    assert walking_base is not None
-    assert flying_base is not None
-    remove_modifier(tile.edit_movement_cost(MovementMode.FLYING), flying_base.uuid, Channel.SELF_STATIC, Kind.VALUE)
-    add_modifier(tile.edit_movement_cost(MovementMode.FLYING), Channel.SELF_STATIC, Kind.VALUE, walking_base)
+    shared = NumericalModifier.create(source_entity_uuid=tile.uuid, name="Shared terrain", value=1)
+    add_modifier(tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, shared)
+    add_modifier(tile.edit_movement_cost(MovementMode.FLYING), Channel.SELF_STATIC, Kind.VALUE, shared)
     cursor = EventQueue.event_cursor()
 
     with pytest.raises(ValueError, match="modifier identities"):
         set_world_tile((0, 0), author_uuid=uuid4(), name="Rejected modifier alias")
 
     assert grid.get_tile(0, 0) is tile
-    assert BaseObject.get(walking_base.uuid) is walking_base
-    assert BaseObject.get(flying_base.uuid) is flying_base
-    assert EventQueue.event_cursor() == cursor
-
-
-def test_tile_detachment_rejects_modifier_stored_under_foreign_key() -> None:
-    """Cleanup keys must authenticate the same registry rows as their values."""
-    reset_engine_runtime()
-    grid = get_map()
-    tile = grid.set_tile(0, 0, fire_event=False)
-    walking_base = tile.edit_movement_cost(MovementMode.WALKING).get_base_modifier()
-    assert walking_base is not None
-    foreign = NumericalModifier.create(
-        source_entity_uuid=uuid4(),
-        name="Foreign key owner",
-        value=1,
-    )
-    tile.edit_movement_cost(MovementMode.WALKING).self_static.value_modifiers.pop(walking_base.uuid)
-    tile.edit_movement_cost(MovementMode.WALKING).self_static.value_modifiers[foreign.uuid] = walking_base
-    cursor = EventQueue.event_cursor()
-
-    with pytest.raises(ValueError, match="key does not match identity"):
-        set_world_tile((0, 0), author_uuid=uuid4(), name="Rejected wrong key")
-
-    assert grid.get_tile(0, 0) is tile
-    assert BaseObject.get(walking_base.uuid) is walking_base
-    assert BaseObject.get(foreign.uuid) is foreign
+    assert BaseObject.get(shared.uuid) is shared
     assert EventQueue.event_cursor() == cursor
 
 
@@ -765,7 +704,7 @@ def test_tile_removal_veto_is_precommit_and_cancels_the_world_root(with_modifier
     assert grid.get_tile(0, 0) is tile
     assert grid.get_tile_by_uuid(tile.uuid) is tile
     assert BaseBlock.get(tile.uuid) is tile
-    assert all(BaseValue.get(value_uuid) is not None for value_uuid in tile_values)
+    assert all(ModifiableValue.get(value_uuid) is not None for value_uuid in tile_values)
     assert all(BaseObject.get(modifier_uuid) is not None for modifier_uuid in tile_modifiers)
     events = _events_since(cursor)
     assert any(
@@ -879,7 +818,7 @@ def test_successful_tile_removal_has_cold_absence_and_releases_owned_graph(with_
     assert grid.get_tile(0, 0) is None
     assert grid.get_tile_by_uuid(tile.uuid) is None
     assert BaseBlock.get(tile.uuid) is None
-    assert all(BaseValue.get(value_uuid) is None for value_uuid in values)
+    assert all(ModifiableValue.get(value_uuid) is None for value_uuid in values)
     assert all(BaseObject.get(modifier_uuid) is None for modifier_uuid in modifiers)
 
 

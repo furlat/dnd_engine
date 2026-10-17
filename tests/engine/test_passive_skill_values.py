@@ -19,8 +19,8 @@ def actor():
     reset_engine_runtime()
     actor = Entity.create(uuid4(), "Passive observer", config=EntityConfig())
     actor.compose_entity()
-    actor.proficiency_bonus.get_base_modifier().value = 3
-    actor.ability_scores.wisdom.ability_score.get_base_modifier().value = 15
+    actor.proficiency_bonus.base = 3
+    actor.ability_scores.wisdom.ability_score.base = 15
     yield actor
     reset_engine_runtime()
 
@@ -68,9 +68,9 @@ def test_passive_skill_keeps_last_uuid_winner_normalizer(actor):
 @pytest.mark.parametrize("inactive_factor,expected", [(False, 28), (True, 30)])
 def test_passive_factor_presence_keeps_channel_and_aggregate_bounds(actor, inactive_factor, expected):
     ability = actor.ability_scores.wisdom
-    ability.ability_score.get_base_modifier().value = 10
+    ability.ability_score.base = 10
     skill = actor.skill_set.get_skill("perception").skill_bonus
-    skill.get_base_modifier().value = 10
+    skill.base = 10
     add_modifier(skill, Channel.SELF_STATIC, Kind.MAX, number(actor, 8, score_normalizer=lambda n: 0))
     value, bound = number(actor, 10), number(actor, 20)
     add_modifier(skill, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
@@ -85,14 +85,14 @@ def test_passive_factor_presence_keeps_channel_and_aggregate_bounds(actor, inact
 
 def test_passive_fractional_factor_truncates_after_raw_ability_normalization(actor):
     ability = actor.ability_scores.wisdom
-    ability.ability_score.get_base_modifier().value = 20
+    ability.ability_score.base = 20
     add_modifier(ability.ability_score, Channel.SELF_STATIC, Kind.FACTOR, ArithmeticFactor(source_entity_uuid=actor.uuid,
         numerator=1, denominator=2))
     add_modifier(ability.ability_score, Channel.SELF_STATIC, Kind.MAX, number(actor, 9))
     add_modifier(ability.ability_score, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
         source_entity_uuid=actor.uuid, value=AdvantageStatus.ADVANTAGE))
     skill = actor.skill_set.get_skill("perception").skill_bonus
-    skill.get_base_modifier().value = -4
+    skill.base = -4
     add_modifier(skill, Channel.SELF_STATIC, Kind.FACTOR, ArithmeticFactor(source_entity_uuid=actor.uuid,
         numerator=1, denominator=2))
     assert ability.ability_score.score == 9
@@ -102,8 +102,8 @@ def test_passive_fractional_factor_truncates_after_raw_ability_normalization(act
 
 def test_passive_direct_ability_bonus_constraint_clamps_combined_skill(actor):
     ability = actor.ability_scores.wisdom
-    ability.ability_score.get_base_modifier().value = 16
-    ability.modifier_bonus.get_base_modifier().value = 2
+    ability.ability_score.base = 16
+    ability.modifier_bonus.base = 2
     add_modifier(ability.modifier_bonus, Channel.SELF_STATIC, Kind.MAX, number(actor, 4))
     check_passive(actor, 14)
 
@@ -146,7 +146,7 @@ def test_passive_rechecks_contextual_advantage_after_neutral_result(actor):
 def clamped_perception(actor):
     """Owner channels with their own bounds: static 3+2 in [8, 10], contextual 4 in [6, 7]."""
     skill = actor.skill_set.get_skill("perception").skill_bonus
-    skill.get_base_modifier().value = 3
+    skill.base = 3
     add_modifier(skill, Channel.SELF_STATIC, Kind.MIN, number(actor, 8))
     add_modifier(skill, Channel.SELF_STATIC, Kind.MAX, number(actor, 10))
     contextual_value, minimum, maximum = number(actor, 4), number(actor, 6), number(actor, 7)
@@ -243,7 +243,7 @@ def test_passive_contextual_uuid_winners_and_channel_advantage_cancellation(acto
 def test_passive_rejects_mismatched_value_sources(actor, ability_bonus):
     value = (actor.ability_scores.wisdom.modifier_bonus if ability_bonus else
              actor.skill_set.get_skill("perception").skill_bonus)
-    value.set_source_entity(uuid4())
+    value.source_entity_uuid = uuid4()
     with pytest.raises(ValueError, match="Source entity UUIDs do not match"):
         actor.skill_bonus(None, "perception")
     with pytest.raises(ValueError, match="Source entity UUIDs do not match"):

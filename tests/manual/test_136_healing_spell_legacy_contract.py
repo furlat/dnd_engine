@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.core.values import ValueRead, read_value
+from dnd.core.values import ValueRead, read_value, parts
 from dnd.actions import SpellEvent
 from dnd.conditions import (
     Blinded,
@@ -46,7 +46,7 @@ from tests.manual.spell_regression_support import (
 
 def reading(value, target_uuid=None):
     """The value read by its owner against an optional target."""
-    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 def _healing_caster(
@@ -81,10 +81,10 @@ def test_heal_roll_type_accepts_and_preserves_multiple_dice() -> None:
     """Old case 1: HEAL is a multi-die rules category, like DAMAGE."""
     reset_spell_regression_arena(8, 5)
     source_uuid = uuid4()
-    bonus = ModifiableValue.create(
+    bonus = ModifiableValue(
         source_entity_uuid=source_uuid,
-        value_name="Healing regression bonus",
-        base_value=4,
+        name="Healing regression bonus",
+        base=4,
     )
     dice = Dice(
         count=3,

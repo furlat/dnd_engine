@@ -265,7 +265,7 @@ def get_hp(entity: Entity) -> int:
 def get_max_hp(entity: Entity) -> int:
     """Get the maximum HP of an entity."""
 
-    con_mod = entity.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+    con_mod = entity.ability_scores.get_ability("constitution").modifier_reading().normalized_score
     base_max = entity.health.get_max_hit_dices_points(constitution_modifier=con_mod)
     bonus = entity.health.max_hit_points_bonus.normalized_score
     return base_max + bonus

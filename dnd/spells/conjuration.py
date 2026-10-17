@@ -78,6 +78,7 @@ from dnd.core.values import (
     Kind,
     add_modifier,
     remove_modifier,
+    parts,
 )
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, ExposedFlameEvent, SpatialChangeEvent, SpatialEffectInteractionEvent
 from dnd.core.creature_types import DamageType, Size
@@ -1470,11 +1471,11 @@ class BlackTentaclesZone(RestrainingAreaCondition):
         damage_bonus = (
             caster.get_spell_damage_bonus()
             if isinstance(caster, Entity)
-            else ModifiableValue.create(
+            else parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=0,
-                value_name="Spell Damage",
-            )
+                base=0,
+                name="Spell Damage",
+            ))
         )
         damage = Damage(
             source_entity_uuid=self.source_entity_uuid,
@@ -1764,11 +1765,11 @@ class CloudkillZone(AreaCondition):
         damage_bonus = (
             caster.get_spell_damage_bonus()
             if caster is not None
-            else ModifiableValue.create(
+            else parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=0,
-                value_name="Spell Damage",
-            )
+                base=0,
+                name="Spell Damage",
+            ))
         )
         damage = Damage(
             source_entity_uuid=self.source_entity_uuid,
@@ -2163,11 +2164,11 @@ class SpiritGuardiansZone(MembershipAreaCondition):
         damage_bonus = (
             caster.get_spell_damage_bonus()
             if caster is not None
-            else ModifiableValue.create(
+            else parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=0,
-                value_name="Spell Damage",
-            )
+                base=0,
+                name="Spell Damage",
+            ))
         )
         damage = Damage(
             source_entity_uuid=self.source_entity_uuid,
@@ -3032,11 +3033,11 @@ class InsectPlagueZone(AreaCondition):
         damage_bonus = (
             caster.get_spell_damage_bonus()
             if caster is not None
-            else ModifiableValue.create(
+            else parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=0,
-                value_name="Spell Damage",
-            )
+                base=0,
+                name="Spell Damage",
+            ))
         )
         damage = Damage(
             source_entity_uuid=self.source_entity_uuid,
@@ -3261,11 +3262,11 @@ class IncendiaryCloudZone(AreaCondition):
         damage_bonus = (
             caster.get_spell_damage_bonus()
             if caster is not None
-            else ModifiableValue.create(
+            else parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=0,
-                value_name="Spell Damage",
-            )
+                base=0,
+                name="Spell Damage",
+            ))
         )
         damage = Damage(
             source_entity_uuid=self.source_entity_uuid,
@@ -4136,7 +4137,7 @@ class DimensionDoor(SpellAction):
         caster = participants[0]
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
             dice_numbers=4, damage_dice=6, damage_type=DamageType.FORCE,
-            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0))
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid, base=0)))
         roll = roll_spell_damage(damage, parent_event=effect, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         for actor in participants:
             actor.receive_damage(amount=roll.total, damage_type=DamageType.FORCE,
@@ -4661,7 +4662,7 @@ class EatFromFeast(BaseAction):
         if effect.canceled:
             return effect
         roll = Dice(count=2, value=10, roll_type=RollType.HEAL,
-            bonus=read_value(ModifiableValue.create(source_entity_uuid=entity.uuid, base_value=0, value_name="Feast HP"),
+            bonus=read_value(parts(ModifiableValue(source_entity_uuid=entity.uuid, base=0, name="Feast HP")),
                              ValueRead(entity.uuid))).roll
         source = HeroesFeastSource(source_entity_uuid=self.caster_uuid, target_entity_uuid=entity.uuid,
             feast_uuid=feast.uuid, hp_bonus=roll.total, effect_origin=feast.effect_origin)
@@ -4858,7 +4859,7 @@ class EnsnaringStrikeEffect(Restrained):
         def tick(boundary: Event,_: UUID):
             damage=Damage(name=self.name,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,
                 damage_dice=6,dice_numbers=self.dice_count,damage_type=DamageType.PIERCING,
-                damage_bonus=ModifiableValue.create(source_entity_uuid=self.source_entity_uuid,base_value=0),effect_origin=self.effect_origin)
+                damage_bonus=parts(ModifiableValue(source_entity_uuid=self.source_entity_uuid,base=0)),effect_origin=self.effect_origin)
             roll=roll_spell_damage(damage, parent_event=boundary, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             target.receive_damage(roll.total,DamageType.PIERCING,self.source_entity_uuid,parent_event=boundary.uuid,
                 damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,

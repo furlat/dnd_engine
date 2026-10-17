@@ -14,7 +14,7 @@ from dnd.core.base_actions import (
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventPhase, EventQueue
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.extensions.field_focus import (
     DeployFieldFocus,

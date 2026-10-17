@@ -25,7 +25,7 @@ from dnd.core.modifiers import (
     CriticalStatus,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue, ModifiableValue, ValueRead, outgoing_of, read_value
+from dnd.core.values import ModifiableValue, ValueRead, outgoing_of, read_value, parts
 from dnd.types.senses import SenseMode, SensesType
 from dnd.entity import Entity, EntityConfig
 from dnd.conditions import (
@@ -52,13 +52,13 @@ from tests.engine.support import create_test_entity, get_max_hp, reset_combat_st
 
 def situated(value, target_uuid):
     """The value read against a target."""
-    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 def outgoing_read(value, reader_uuid):
     """What a value's outgoing rows give a reader: an empty reader value read against the owner."""
-    probe = ModifiableValue.create(source_entity_uuid=reader_uuid, use_register=False)
-    return read_value(probe, ValueRead(reader_uuid, value.source_entity_uuid, opponent=outgoing_of([value], None)))
+    probe = ModifiableValue(source_entity_uuid=reader_uuid, use_register=False)
+    return read_value(parts(probe), ValueRead(reader_uuid, value.source_entity_uuid, opponent=outgoing_of(parts(value), None)))
 
 
 @contextmanager
@@ -88,7 +88,7 @@ def reset_condition_state() -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, 20, 20)
 
 

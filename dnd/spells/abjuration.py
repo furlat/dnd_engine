@@ -85,7 +85,16 @@ from dnd.core.equipment_types import UnarmoredAc
 from dnd.core.dice import RollType, AttackOutcome, Dice, roll_die_face
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterruptionLogData
 from dnd.entity import Entity, PreparedSpatialReturn
-from dnd.core.values import ModifiableValue, reading_with_value_row, Channel, Kind, add_modifier
+from dnd.core.values import (
+    ModifiableValue,
+    reading_with_value_row,
+    Channel,
+    Kind,
+    add_modifier,
+    parts,
+    ValueRead,
+    value_score,
+)
 from dnd.spatial.ignition import apply_elemental_surface_contacts
 from dnd.actions import (
     commit_forced_movement,
@@ -2092,7 +2101,8 @@ def _freedom_of_movement_available_movement(entity: Entity) -> int:
         for condition in entity.active_conditions_by_uuid.values()
         if condition.name in FREEDOM_OF_MOVEMENT_RESTRAINT_NAMES
         for modifier_uuid in condition.modifers_uuids.get(economy.walking_speed.uuid, [])}
-    speed = economy.walking_speed.normalized_score_excluding_static_modifiers(excluded)
+    speed = value_score(parts(economy.walking_speed), ValueRead(economy.walking_speed.source_entity_uuid),
+                        normalized=True, excluded=frozenset(excluded))
     return max(0, speed * (1 + economy.dash_count) - economy.movement_spent())
 
 
@@ -2609,7 +2619,7 @@ class AidEffect(BaseCondition):
             ))
         outs.append((target.health.max_hit_points_bonus.uuid, modifier_uuid))
 
-        con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+        con_mod = target.ability_scores.get_ability("constitution").modifier_reading().normalized_score
         max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -2621,7 +2631,7 @@ class AidEffect(BaseCondition):
     def _post_removal_stats(self) -> Dict[str, Any]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target and isinstance(target, Entity):
-            con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+            con_mod = target.ability_scores.get_ability("constitution").modifier_reading().normalized_score
             max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
             return {"resulting_max_hp": max_hp}
         return {}
@@ -3402,7 +3412,7 @@ class GlyphOfWardingZone(AreaCondition):
                     damage_type=DamageType[self.payload.upper()]
                     damage=Damage(name="Glyph of Warding",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
                         damage_dice=8,dice_numbers=self.dice_count,damage_type=damage_type,effect_origin=self.effect_origin,
-                        damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
+                        damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)))
                     roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
                     target.receive_damage(roll.total//2 if saved else roll.total,damage_type,caster.uuid,parent_event=event.uuid,
                         damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,independent_resolution=True,

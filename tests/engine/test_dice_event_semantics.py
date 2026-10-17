@@ -7,7 +7,7 @@ import random
 
 import pytest
 
-from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier, parts
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import (
@@ -48,7 +48,7 @@ from dnd.core.modifiers import (
     AdvantageModifier,
     AdvantageStatus,
 )
-from dnd.core.values import AutoHitStatus, BaseValue, CriticalStatus, ModifiableValue
+from dnd.core.values import AutoHitStatus, ModifiableValue, CriticalStatus
 from dnd.entity import Entity, EntityConfig, determine_attack_outcome
 from dnd.spells.spell_utils import fire_heal_roll_result
 from tests.engine.support import create_test_entity
@@ -56,7 +56,7 @@ from tests.engine.support import create_test_entity
 
 def reading(value, target_uuid=None):
     """The value read by its owner against an optional target."""
-    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 @contextmanager
@@ -85,7 +85,7 @@ def reset_dice_state() -> None:
     reset_map()
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Dice._registry.clear()
     DiceRoll._registry.clear()
     Entity._entity_registry.clear()
@@ -97,10 +97,10 @@ def make_bonus(
     base_value: int = 0,
 ) -> ModifiableValue:
     """Create a ModifiableValue bonus for deterministic dice tests."""
-    return ModifiableValue.create(
+    return ModifiableValue(
         source_entity_uuid=source_uuid,
-        value_name="Dice Bonus",
-        base_value=base_value,
+        name="Dice Bonus",
+        base=base_value,
     )
 
 
@@ -138,7 +138,7 @@ def make_damage_packet(
         target_entity_uuid=target_uuid,
         damage_dice=6,
         dice_numbers=1,
-        damage_bonus=make_bonus(source_uuid, target_uuid),
+        damage_bonus=parts(make_bonus(source_uuid, target_uuid)),
         damage_type=damage_type,
     )
 
@@ -883,7 +883,7 @@ def test_eb_03_010_heal_roll_result_handlers_replace_final_roll() -> None:
         name="Engine Book Healing",
         healing_dice=8,
         dice_numbers=2,
-        healing_bonus=healing_bonus,
+        healing_bonus=parts(healing_bonus),
     )
     parent_event = Event(
         source_entity_uuid=caster_uuid,
@@ -1280,7 +1280,7 @@ def test_eb_03_015_heal_roll_result_events_complete_after_handlers() -> None:
         name="Engine Book Healing Completion",
         healing_dice=4,
         dice_numbers=1,
-        healing_bonus=healing_bonus,
+        healing_bonus=parts(healing_bonus),
     )
     parent_event = Event(
         source_entity_uuid=caster_uuid,

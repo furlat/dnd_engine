@@ -35,7 +35,16 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import AdvantageStatus, BaseValue, ValueReading, Channel, Kind, add_modifier
+from dnd.core.values import (
+    AdvantageStatus,
+    ModifiableValue,
+    ValueReading,
+    Channel,
+    Kind,
+    add_modifier,
+    ValueRead,
+    value_score,
+)
 from dnd.types.senses import PerceivedContact
 from dnd.conditions import Exhaustion
 from dnd.entity import Entity, EntityConfig
@@ -49,7 +58,7 @@ def reset_entity_state() -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, 20, 20)
 
 
@@ -218,7 +227,7 @@ def test_eb_06_003_health_action_economy_and_spellcasting_compose() -> None:
 
     assert entity.spell_save_dc() == 16
     assert entity.spell_attack_bonus().normalized_score == 9
-    assert entity.get_spell_damage_bonus().normalized_score == 4
+    assert value_score(entity.get_spell_damage_bonus(), ValueRead(entity.uuid), normalized=True) == 4
 
 
 def test_eb_06_004_action_economy_resources_recharge_by_type() -> None:

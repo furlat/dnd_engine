@@ -3,7 +3,7 @@
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
-from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier, parts
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType
 from dnd.core.equipment_types import WeaponSlot
@@ -25,20 +25,20 @@ from dnd.core.modifiers import (
     AutoHitStatus,
     CriticalStatus,
 )
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import determine_attack_outcome
 
 
 def reading(value, target_uuid=None):
     """The value read by its owner against an optional target."""
-    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 def reset_dice_state() -> None:
     """Clear global state touched by primitive dice examples."""
     EventQueue.reset()
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Dice._registry.clear()
     DiceRoll._registry.clear()
 
@@ -49,10 +49,10 @@ def test_plain_d20_and_advantage_selection() -> None:
     hero_id = uuid4()
     goblin_id = uuid4()
 
-    attack_bonus = ModifiableValue.create(
+    attack_bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        value_name="Attack Bonus",
-        base_value=3,
+        name="Attack Bonus",
+        base=3,
     )
     with patch("random.randint", side_effect=[12]):
         normal_roll = Dice(
@@ -67,10 +67,10 @@ def test_plain_d20_and_advantage_selection() -> None:
     assert normal_roll.bonus == 3
     assert normal_roll.advantage_status == AdvantageStatus.NONE
 
-    advantage_bonus = ModifiableValue.create(
+    advantage_bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        value_name="Attack Bonus With Advantage",
-        base_value=3,
+        name="Attack Bonus With Advantage",
+        base=3,
     )
     add_modifier(advantage_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=hero_id,
@@ -97,10 +97,10 @@ def test_critical_damage_doubles_dice_and_adds_bonus_once() -> None:
     reset_dice_state()
     hero_id = uuid4()
     goblin_id = uuid4()
-    damage_bonus = ModifiableValue.create(
+    damage_bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        value_name="Damage Bonus",
-        base_value=4,
+        name="Damage Bonus",
+        base=4,
     )
 
     with patch("random.randint", side_effect=[1, 2, 3, 4, 5]):
@@ -175,10 +175,10 @@ def test_d20_result_event_replaces_effective_roll() -> None:
         source_entity_uuid=hero_id,
         target_entity_uuid=goblin_id,
     )
-    check_bonus = ModifiableValue.create(
+    check_bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        value_name="Check Bonus",
-        base_value=2,
+        name="Check Bonus",
+        base=2,
     )
 
     def replace_low_d20(
@@ -295,11 +295,11 @@ def test_damage_result_event_replaces_effective_packet_roll_only() -> None:
                     target_entity_uuid=goblin_id,
                     damage_dice=6,
                     dice_numbers=2,
-                    damage_bonus=ModifiableValue.create(
+                    damage_bonus=parts(ModifiableValue(
                         source_entity_uuid=hero_id,
-                        value_name="Tutorial Damage Bonus",
-                        base_value=3,
-                    ),
+                        name="Tutorial Damage Bonus",
+                        base=3,
+                    )),
                     damage_type=DamageType.SLASHING,
                 ),
                 original_roll=original_damage,

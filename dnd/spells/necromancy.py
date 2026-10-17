@@ -51,6 +51,8 @@ from dnd.core.values import (
     Kind,
     add_modifier,
     remove_modifier,
+    parts,
+    value_score,
 )
 from functools import partial
 from typing import Any, Dict
@@ -107,15 +109,15 @@ class FalseLife(SpellAction):
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
 
-        bonus_value = ModifiableValue.create(
+        bonus_value = ModifiableValue(
             source_entity_uuid=caster.uuid,
-            base_value=self.get_temp_hp_bonus(),
-            value_name="False Life Bonus"
+            base=self.get_temp_hp_bonus(),
+            name="False Life Bonus"
         )
         dice = Dice(
             count=1,
             value=4,
-            bonus=read_value(bonus_value, ValueRead(caster.uuid)),
+            bonus=read_value(parts(bonus_value), ValueRead(caster.uuid)),
             roll_type=RollType.CHECK
         )
         temp_hp_roll = dice.roll
@@ -432,7 +434,7 @@ class Blight(SpellAction):
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
-        damage_bonus_value = damage_bonus.normalized_score
+        damage_bonus_value = value_score(damage_bonus, ValueRead(caster.uuid), normalized=True)
 
         necrotic_damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
             damage_dice=8, dice_numbers=num_dice, damage_bonus=damage_bonus, damage_type=DamageType.NECROTIC)
@@ -1881,11 +1883,11 @@ class Harm(SpellAction):
             target_entity_uuid=target.uuid,
             damage_dice=6,
             dice_numbers=14,
-            damage_bonus=ModifiableValue.create(
+            damage_bonus=parts(ModifiableValue(
                 source_entity_uuid=caster.uuid,
-                base_value=0,
-                value_name="Harm Damage",
-            ),
+                base=0,
+                name="Harm Damage",
+            )),
             damage_type=DamageType.NECROTIC,
         )
         damage_roll = roll_spell_damage(necrotic_damage, parent_event=execution_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)

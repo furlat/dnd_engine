@@ -35,7 +35,7 @@ from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, Channel, Kind, add_modifier, modifiers_of
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, modifiers_of
 from dnd.entity import Entity, EntityConfig
 from dnd.items.spell_items import build_fireball_scroll, build_fire_bolt_scroll
 from tests.manual.reactive_fixture_support import PrepareIntercept

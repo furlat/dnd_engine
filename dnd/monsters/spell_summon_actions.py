@@ -100,7 +100,7 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.core.saving_throw_types import SavingThrowContext
-from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts
 from dnd.entity import Entity
 from dnd.monsters.traits import NaturalAttack
 from dnd.spatial.area_conditions import AreaCondition
@@ -629,10 +629,10 @@ class NativeSaveBurst(BaseAction):
                     dice_numbers=packet.dice_count,
                     damage_type=DamageType(packet.damage_type),
                     effect_origin=origin,
-                    damage_bonus=ModifiableValue.create(
+                    damage_bonus=parts(ModifiableValue(
                         source_entity_uuid=self.source_entity_uuid,
-                        base_value=packet.flat_bonus,
-                    ),
+                        base=packet.flat_bonus,
+                    )),
                 )
                 damages.append(damage)
                 if packet.dice_count:
@@ -1086,9 +1086,9 @@ class ElementalContactBurst(BaseAction):
                         damage_dice=8,
                         dice_numbers=3,
                         damage_type=DamageType.COLD,
-                        damage_bonus=ModifiableValue.create(
-                            source_entity_uuid=actor.uuid, base_value=0
-                        ),
+                        damage_bonus=parts(ModifiableValue(
+                            source_entity_uuid=actor.uuid, base=0
+                        )),
                         effect_origin=technique_origin(effect),
                     )
                     roll = damage.get_dice(resolution.outcome).roll
@@ -1150,9 +1150,9 @@ class ElementalContactBurst(BaseAction):
                     damage_dice=4,
                     dice_numbers=0,
                     damage_type=DamageType.BLUDGEONING,
-                    damage_bonus=ModifiableValue.create(
-                        source_entity_uuid=actor.uuid, base_value=5
-                    ),
+                    damage_bonus=parts(ModifiableValue(
+                        source_entity_uuid=actor.uuid, base=5
+                    )),
                     attack_magical=True,
                 )
                 return boundary.append_damage_roll(
@@ -1499,9 +1499,9 @@ class HealingVapours(NativeSaveBurst):
                 target_entity_uuid=target.uuid,
                 healing_dice=8,
                 dice_numbers=2,
-                healing_bonus=ModifiableValue.create(
-                    source_entity_uuid=actor.uuid, base_value=0
-                ),
+                healing_bonus=parts(ModifiableValue(
+                    source_entity_uuid=actor.uuid, base=0
+                )),
             )
             roll = fire_heal_roll_result(
                 actor.uuid, target.uuid, healing, effect, self.name
@@ -1968,9 +1968,9 @@ class DrainingKiss(BaseAction):
                         damage_dice=10,
                         dice_numbers=5,
                         damage_type=DamageType.PSYCHIC,
-                        damage_bonus=ModifiableValue.create(
-                            source_entity_uuid=self.source_entity_uuid, base_value=5
-                        ),
+                        damage_bonus=parts(ModifiableValue(
+                            source_entity_uuid=self.source_entity_uuid, base=5
+                        )),
                     )
                     roll = damage.get_dice(AttackOutcome.HIT).roll
                     target.receive_damage(
@@ -2047,9 +2047,9 @@ class ElementalMultiattackBonus(BaseCondition):
                     dice_numbers=original.dice_numbers,
                     damage_type=original.damage_type,
                     attack_magical=original.attack_magical,
-                    damage_bonus=ModifiableValue.create(
-                        source_entity_uuid=actor.uuid, base_value=0
-                    ),
+                    damage_bonus=parts(ModifiableValue(
+                        source_entity_uuid=actor.uuid, base=0
+                    )),
                 )
                 changed = changed.append_damage_roll(
                     damage,
@@ -2482,9 +2482,9 @@ class MyrmidonStrikeDice(BaseCondition):
                 damage_dice=10,
                 dice_numbers=1,
                 damage_type=self.damage_type,
-                damage_bonus=ModifiableValue.create(
-                    source_entity_uuid=actor.uuid, base_value=0
-                ),
+                damage_bonus=parts(ModifiableValue(
+                    source_entity_uuid=actor.uuid, base=0
+                )),
                 attack_magical=True,
             )
             return boundary.append_damage_roll(

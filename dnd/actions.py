@@ -32,7 +32,10 @@ from dnd.core.values import (
     read_value,
     Channel,
     Kind,
-    add_modifier,
+    Row,
+    parts,
+    value_breakdown,
+    with_rows,
 )
 from dnd.core.spell_damage import finalize_spell_damage_roll
 from dnd.core.condition_types import ConditionRemovalTrigger, DurationType
@@ -365,7 +368,7 @@ def resolve_fall_damage(target: Entity, *, drop_feet: int, source_entity_uuid: U
     if not dice_count:
         return 0
     damage = Damage(name="Fall", source_entity_uuid=source_entity_uuid, target_entity_uuid=target.uuid, damage_dice=6, dice_numbers=dice_count,
-        damage_bonus=ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=0), damage_type=DamageType.BLUDGEONING)
+        damage_bonus=parts(ModifiableValue(source_entity_uuid=source_entity_uuid, base=0)), damage_type=DamageType.BLUDGEONING)
     roll = damage.get_dice(AttackOutcome.HIT).roll
     applied = 0
 
@@ -1773,7 +1776,7 @@ class AttackEvent(ActionEvent):
                     elif isinstance(dr.results, int):
                         dice_results = [dr.results]
 
-                damage_bonus_breakdown = (value_log_rows(damage.damage_bonus.get_breakdown())
+                damage_bonus_breakdown = (value_log_rows(value_breakdown(damage.damage_bonus))
                                           if damage and damage.damage_bonus else [])
 
                 num_dice = len(dice_results)
@@ -2233,8 +2236,8 @@ class Attack(BaseAction):
                 override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
             ac_value = (target_entity.armor_class_value(ValueRead(target_entity_uuid, source_entity_uuid))
                         if isinstance(target_entity, Entity)
-                        else ModifiableValue.create(source_entity_uuid=target_entity.uuid,
-                            base_value=target_entity.armor_class, value_name="Object AC"))
+                        else parts(ModifiableValue(source_entity_uuid=target_entity.uuid,
+                            base=target_entity.armor_class, name="Object AC", use_register=False)))
             attack_context: Dict[str, Any] = {
                 "weapon_slot": weapon_slot.value,
                 "weapon_name": execution_event.weapon_name or "Unarmed",
@@ -2247,20 +2250,20 @@ class Attack(BaseAction):
             is_ranged = execution_event.range is not None and execution_event.range.type == RangeType.RANGE
 
             if is_ranged and execution_event.is_long_range:
-                add_modifier(attack_value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
+                attack_value = with_rows(attack_value, (Row(Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                         name="Long Range",
                         value=AdvantageStatus.DISADVANTAGE,
                         source_entity_uuid=source_entity_uuid,
                         target_entity_uuid=target_entity_uuid
-                    ))
+                    )),))
 
             if is_ranged and execution_event.is_threatened:
-                add_modifier(attack_value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
+                attack_value = with_rows(attack_value, (Row(Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                         name="Threatened (Ranged)",
                         value=AdvantageStatus.DISADVANTAGE,
                         source_entity_uuid=source_entity_uuid,
                         target_entity_uuid=target_entity_uuid
-                    ))
+                    )),))
             record_action_timing("attack.ranged_disadvantage_modifiers_ms", started)
 
             started = time.perf_counter()
@@ -2270,9 +2273,9 @@ class Attack(BaseAction):
                 new_phase=EventPhase.EXECUTION,
                 status_message="Rolling attack",
                 attack_bonus=read_value(attack_value, ValueRead(source_entity_uuid, target_entity_uuid, attack_context,
-                    outgoing_of((ac_value,), None))),
+                    outgoing_of(ac_value, None))),
                 ac=read_value(ac_value, ValueRead(target_entity_uuid, source_entity_uuid, None,
-                    outgoing_of((attack_value,), attack_value_context))),
+                    outgoing_of(attack_value, attack_value_context))),
             )
             record_action_timing("attack.phase_to_roll_ms", started)
 
@@ -4414,7 +4417,7 @@ class SpellEvent(ActionEvent):
                         dice_results = list(dr.results)
                     elif isinstance(dr.results, int):
                         dice_results = [dr.results]
-                damage_bonus_breakdown = (value_log_rows(damage.damage_bonus.get_breakdown())
+                damage_bonus_breakdown = (value_log_rows(value_breakdown(damage.damage_bonus))
                                           if damage and damage.damage_bonus else [])
                 num_dice = len(dice_results)
                 dice_size = damage.damage_dice if damage else 6
@@ -4559,24 +4562,25 @@ def resolve_spell_attack_values(caster:Entity,target:Entity|BaseItem,parent_even
         casting_ability=casting_ability,
     )
     ac_value = (target.armor_class_value(ValueRead(target.uuid, caster.uuid)) if isinstance(target, Entity)
-        else ModifiableValue.create(source_entity_uuid=target.uuid, base_value=target.armor_class, value_name="Object AC"))
+        else parts(ModifiableValue(source_entity_uuid=target.uuid, base=target.armor_class, name="Object AC",
+                                   use_register=False)))
     context = {"attack_origin_position": attack_origin_position} if attack_origin_position is not None else None
-    for modifier in extra_advantage_modifiers:
-        add_modifier(attack_value, Channel.SELF_STATIC, Kind.ADVANTAGE, modifier)
+    attack_value = with_rows(attack_value, tuple(Row(Channel.SELF_STATIC, Kind.ADVANTAGE, modifier)
+                                                 for modifier in extra_advantage_modifiers))
 
     is_threatened = ranged and caster.is_threatened()
     if is_threatened:
-        add_modifier(attack_value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
+        attack_value = with_rows(attack_value, (Row(Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name="Threatened (Ranged)",
                 value=AdvantageStatus.DISADVANTAGE,
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid,
-            ))
+            )),))
 
     attack_bonus = read_value(attack_value, ValueRead(caster.uuid, target.uuid, context,
-        outgoing_of((ac_value,), context)))
+        outgoing_of(ac_value, context)))
     target_ac = read_value(ac_value, ValueRead(target.uuid, caster.uuid, context,
-        outgoing_of((attack_value,), context)))
+        outgoing_of(attack_value, context)))
     dice_roll = caster.roll_d20(
         attack_bonus,
         RollType.ATTACK,

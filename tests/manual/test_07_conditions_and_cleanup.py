@@ -11,7 +11,7 @@ from dnd.core.condition_types import DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue, Channel, Kind, add_modifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 
 
 class TutorialActor(BaseBlock):
@@ -28,15 +28,15 @@ def create_tutorial_actor(name: str) -> TutorialActor:
         name=name,
         source_entity_uuid=actor_id,
         allow_events_conditions=True,
-        guard_bonus=ModifiableValue.create(
+        guard_bonus=ModifiableValue(
             source_entity_uuid=actor_id,
-            value_name=f"{name} Guard",
-            base_value=10,
+            name=f"{name} Guard",
+            base=10,
         ),
-        focus_bonus=ModifiableValue.create(
+        focus_bonus=ModifiableValue(
             source_entity_uuid=actor_id,
-            value_name=f"{name} Focus",
-            base_value=1,
+            name=f"{name} Focus",
+            base=1,
         ),
     )
 
@@ -47,7 +47,7 @@ def reset_condition_state() -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseCondition._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     EventQueue.set_combat_log_callback(None)
 
 

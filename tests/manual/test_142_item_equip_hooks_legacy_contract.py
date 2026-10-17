@@ -294,15 +294,15 @@ def _create_cloak_of_protection(owner_uuid: UUID) -> _CloakOfProtection:
         name="Cloak of Protection",
         type=ArmorType.CLOTH,
         body_part=BodyPart.CLOAK,
-        ac=ModifiableValue.create(
+        ac=ModifiableValue(
             source_entity_uuid=owner_uuid,
-            base_value=0,
-            value_name="Cloak Armor Class",
+            base=0,
+            name="Cloak Armor Class",
         ),
-        max_dex_bonus=ModifiableValue.create(
+        max_dex_bonus=ModifiableValue(
             source_entity_uuid=owner_uuid,
-            base_value=99,
-            value_name="Cloak Maximum Dexterity Bonus",
+            base=99,
+            name="Cloak Maximum Dexterity Bonus",
         ),
     )
 

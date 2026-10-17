@@ -35,7 +35,7 @@ from dnd.core.events import Event, EventHandler, EventPhase, EventType, Trigger
 from dnd.core.events import EventQueue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.proficiency_types import ProficiencyMode
-from dnd.core.values import BaseValue, Channel, Kind, add_modifier, modifier_of, modifiers_of
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, modifier_of, modifiers_of
 from dnd.entity import Entity, EntityConfig
 from dnd.conditions import Charmed, Frightened
 from dnd.runtime_reset import reset_engine_runtime
@@ -196,7 +196,7 @@ def test_barbarian_berserker_applies_1_to_20_and_removes_exactly() -> None:
         capacity_policy="maximum",
     )
     baseline_blocks = set(BaseBlock._registry)
-    baseline_values = set(BaseValue._registry)
+    baseline_values = set(ModifiableValue._registry)
     baseline_objects = set(BaseObject._registry)
 
     receipts = tuple(
@@ -275,7 +275,7 @@ def test_barbarian_berserker_applies_1_to_20_and_removes_exactly() -> None:
     }
     assert entity.action_economy.resources["rage"].maximum == 1
     assert set(BaseBlock._registry) == baseline_blocks
-    assert set(BaseValue._registry) == baseline_values
+    assert set(ModifiableValue._registry) == baseline_values
     assert set(BaseObject._registry) == baseline_objects
 
 
@@ -399,7 +399,7 @@ def test_failed_frenzy_replacement_restores_exact_rage_owner(
         for feature_id, sources in entity.feature_sources.items()
     }
     block_registry = set(BaseBlock._registry)
-    value_registry = set(BaseValue._registry)
+    value_registry = set(ModifiableValue._registry)
     object_registry = set(BaseObject._registry)
     register_action = Entity.register_action
 
@@ -436,7 +436,7 @@ def test_failed_frenzy_replacement_restores_exact_rage_owner(
     ) == rage_configuration
     assert entity.feature_sources == feature_sources
     assert set(BaseBlock._registry) == block_registry
-    assert set(BaseValue._registry) == value_registry
+    assert set(ModifiableValue._registry) == value_registry
     assert set(BaseObject._registry) == object_registry
 
 
@@ -610,7 +610,7 @@ def test_failed_raging_root_admission_releases_each_owned_artifact(
     )
     handler_uuids = set(entity.event_handlers)
     block_registry = set(BaseBlock._registry)
-    value_registry = set(BaseValue._registry)
+    value_registry = set(ModifiableValue._registry)
     object_registry = set(BaseObject._registry)
 
     if failure_mode == "handler_admission":
@@ -659,7 +659,7 @@ def test_failed_raging_root_admission_releases_each_owned_artifact(
     ) == action_rows
     assert set(entity.event_handlers) == handler_uuids
     assert set(BaseBlock._registry) == block_registry
-    assert set(BaseValue._registry) == value_registry
+    assert set(ModifiableValue._registry) == value_registry
     added_objects = set(BaseObject._registry) - object_registry
     assert object_registry - set(BaseObject._registry) == set()
     assert len(added_objects) == 1
@@ -896,7 +896,7 @@ def test_barbarian_owner_failure_rolls_back_only_the_partial_level() -> None:
     existing = entity.action_economy.resources["rage"]
     block_registry_before = set(BaseBlock._registry)
     object_registry_before = set(BaseObject._registry)
-    value_registry_before = set(BaseValue._registry)
+    value_registry_before = set(ModifiableValue._registry)
 
     with pytest.raises(ValueError, match="already uses short_rest recharge"):
         apply_barbarian_level(entity, _barbarian_level(1))
@@ -913,7 +913,7 @@ def test_barbarian_owner_failure_rolls_back_only_the_partial_level() -> None:
     assert (existing.current, existing.maximum) == (7, 7)
     assert set(BaseBlock._registry) == block_registry_before
     assert set(BaseObject._registry) == object_registry_before
-    assert set(BaseValue._registry) == value_registry_before
+    assert set(ModifiableValue._registry) == value_registry_before
 
 
 def test_barbarian_root_cleanup_uses_receipt_identity_not_semantic_key() -> None:

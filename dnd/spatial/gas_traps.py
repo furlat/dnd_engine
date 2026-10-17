@@ -21,7 +21,7 @@ from typing import ClassVar
 
 from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.transitions import bind_spatial_interactions
@@ -100,11 +100,11 @@ class GasCloud(AreaCondition):
                 effect_tags=(SavingThrowEffectTag.POISON,)))
         _, _, saved = entity.saving_throw(request)
         if not saved or self.half_damage_on_success:
-            bonus = ModifiableValue.create(source_entity_uuid=self.uuid,
-                base_value=0, value_name="Gas damage")
+            bonus = ModifiableValue(source_entity_uuid=self.uuid,
+                base=0, name="Gas damage")
             damage = Damage(name=self.name, source_entity_uuid=self.uuid, target_entity_uuid=entity.uuid,
                 damage_dice=self.damage.dice_sides, dice_numbers=self.damage.dice_count,
-                damage_bonus=bonus, damage_type=self.damage.damage_type)
+                damage_bonus=parts(bonus), damage_type=self.damage.damage_type)
             roll = damage.get_dice(AttackOutcome.HIT).roll
             amount = roll.total // 2 if saved else roll.total
             if amount > 0:
