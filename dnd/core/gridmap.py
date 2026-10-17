@@ -15,7 +15,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from dnd.types.event_facts import LandingKind
-from dnd.core.geometry import (ROUTE_TABLE_RADIUS, circle_positions, supercover_line, supercover_cells_relative,
+from dnd.core.geometry import (ROUTE_TABLE_RADIUS, circle_positions, grid_distance_feet, supercover_line, supercover_cells_relative,
     supercover_route_table,
     supercover_slope_order, supercover_incoming_ranges, supercover_incoming_rank_ranges)
 from dnd.core.elevation import support_distance_feet
@@ -2785,6 +2785,30 @@ class GridMap:
         chunks = {self._spatial_chunk(position) for position in positions}
         return {position for chunk in chunks
                 for position in self._contact_candidate_cells.get(chunk, ()) if position in positions}
+
+    def _entity_cells_in_bounds(
+        self, bounds: Tuple[int, int, int, int],
+    ) -> List[Tuple[Tuple[int, int], Tuple[UUID, ...]]]:
+        """Occupied cells in inclusive bounds with their str-ordered entities, by position; one chunk walk."""
+        min_x, min_y, max_x, max_y = bounds
+        return sorted(((position, row[0])
+            for x in range(min_x // SPATIAL_CHUNK_SIZE, max_x // SPATIAL_CHUNK_SIZE + 1)
+            for y in range(min_y // SPATIAL_CHUNK_SIZE, max_y // SPATIAL_CHUNK_SIZE + 1)
+            for position, row in self._contact_candidate_cells.get((x, y), {}).items()
+            if row[0] and min_x <= position[0] <= max_x and min_y <= position[1] <= max_y),
+            key=lambda cell: cell[0])
+
+    def get_entities_in_bounds(self, bounds: Tuple[int, int, int, int]) -> Tuple[UUID, ...]:
+        """Tile occupants (any life state) in inclusive (min_x, min_y, max_x, max_y),
+        ordered by (position, str(uuid)); visits only overlapping chunks."""
+        return tuple(identity for _, entities in self._entity_cells_in_bounds(bounds) for identity in entities)
+
+    def get_entities_within(self, center: Tuple[int, int], radius_feet: int) -> Tuple[UUID, ...]:
+        """Tile occupants whose cell is within `radius_feet` by range admission's metric, same order."""
+        reach = radius_feet // 5
+        cells = self._entity_cells_in_bounds((center[0] - reach, center[1] - reach, center[0] + reach, center[1] + reach))
+        return tuple(identity for position, entities in cells
+                     if grid_distance_feet(center, position) <= radius_feet for identity in entities)
 
     def get_entities_at(self, position: Tuple[int, int]) -> Set[UUID]:
         """Return a defensive UUID snapshot from one authoritative Tile."""

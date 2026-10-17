@@ -4511,31 +4511,6 @@ class Entity(BaseBlock):
                 allies[entity_uuid] = contact.position
         return allies
 
-    @classmethod
-    def get_entities_by_faction(cls, faction: str) -> List['Entity']:
-        """Get all entities with the given faction.
-
-        Args:
-            faction: Faction identifier.
-
-        Returns:
-            Registered entities with that faction.
-        """
-        return [e for e in cls._entity_registry.values() if e.faction == faction]
-
-    @classmethod
-    def get_alive_by_faction(cls, faction: str) -> List['Entity']:
-        """Get all alive entities with the given faction.
-
-        Args:
-            faction: Faction identifier.
-
-        Returns:
-            Registered entities with that faction and positive HP.
-        """
-        return [e for e in cls._entity_registry.values()
-                if e.faction == faction and e.has_hp]
-
     def roll_d20(
         self,
         bonus: ModifiableValue,
@@ -5771,7 +5746,8 @@ class Entity(BaseBlock):
             cast_levels=description_facts.cast_levels,
             is_spell_variant=description_facts.is_spell_variant,
             requires_concentration=template.requires_concentration,
-            num_projectiles=template.get_multi_target_count() if target_type == TargetType.MULTI_ENTITY else None,
+            num_projectiles=((len(valid_targets) if template.any_number_of_targets else template.get_multi_target_count())
+                if target_type == TargetType.MULTI_ENTITY else None),
             allow_same_target=template.allow_same_target if target_type == TargetType.MULTI_ENTITY else None,
             is_item_use=is_item_use,
             source_item_uuid=source_item_uuid or template.source_item_uuid,

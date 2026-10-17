@@ -23,7 +23,7 @@ from dnd.core.events import (
     HealRollResultEvent,
     EventPhase,
 )
-from dnd.core.geometry import grid_distance_feet
+from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 
@@ -109,10 +109,8 @@ class PreserveLife(BaseAction):
             if event.application is None:
                 targets = [
                     target.uuid
-                    for target in Entity.get_all_entities()
-                    if target.is_deployed
-                    and target.faction == actor.faction
-                    and grid_distance_feet(actor.position, target.position) <= 30
+                    for target in map(Entity.get, get_map().get_entities_within(actor.position, 30))
+                    if target.faction == actor.faction
                     and target.creature_type
                     not in (CreatureType.UNDEAD, CreatureType.CONSTRUCT)
                 ]

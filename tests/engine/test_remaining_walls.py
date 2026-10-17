@@ -14,7 +14,7 @@ from dnd.core.base_tiles import Tile
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import DamageAppliedEvent, EventHandler, EventPhase, EventQueue, EventType, Trigger
+from dnd.core.events import DamageAppliedEvent, EventHandler, EventPhase, EventQueue, EventType, SavingThrowEvent, Trigger
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.spells.wall_constructions import FrigidAirZone, WallOfIce, WallOfIceZone, WallOfForce, WallOfForceZone, WallOfStone, WallOfStoneZone
@@ -279,6 +279,23 @@ def test_stone_enclosure_escape_spends_reaction_not_normal_movement(succeeds):
     assert (target.position != (7, 7)) is succeeds
     assert target.action_economy.reactions.normalized_score == (0 if succeeds else 1)
     assert target.action_economy.movement_remaining() == 0
+
+
+def test_stone_enclosure_save_is_offered_only_inside_the_wall_box():
+    caster = scene(5)
+    enclosed = actor((7, 7))
+    outside = actor((12, 7))
+    force_save_result(enclosed, "dexterity", succeeds=True)
+    cursor = EventQueue.event_cursor()
+    with fixed_dice_faces(*([10] * 20)):
+        result = WallOfStone(source_entity_uuid=caster.uuid, end_position=(5, 5),
+            extra_target_positions=[(9, 5), (9, 9), (5, 9), (5, 5)]).apply()
+    assert result is not None and not result.canceled
+    savers = {event.target_entity_uuid for _, event in EventQueue.iter_events_since(cursor)
+              if isinstance(event, SavingThrowEvent) and event.phase is EventPhase.COMPLETION}
+    assert savers == {enclosed.uuid}
+    assert enclosed.position != (7, 7)
+    assert outside.position == (12, 7)
 
 
 def test_disintegrate_known_force_section_retires_complete_wall():

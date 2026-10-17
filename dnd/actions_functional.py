@@ -527,7 +527,9 @@ def validated_extra_target_uuids(
     if not extra_target_uuids:
         return []
     template = template if template is not None else action_info.execution_template
-    limit = template.get_multi_target_count() if template is not None else action_info.num_projectiles
+    # An unbounded set's count is the row's admitted recipients (any level).
+    limit = (action_info.num_projectiles if template is None or template.any_number_of_targets
+             else template.get_multi_target_count())
     if action_info.target_type != TargetType.MULTI_ENTITY or limit is None:
         raise ValueError("Additional targets require a multi-entity action")
     if len(extra_target_uuids) + 1 > limit:
@@ -741,7 +743,8 @@ def preview_available_selection(
     try:
         pool = secondary_candidates(entity, action_info, scan)
         next_targets: list[AvailableTarget] = []
-        if action_info.target_type is TargetType.MULTI_ENTITY and len(selected_targets) < (template.get_multi_target_count() or 1):
+        limit = action_info.num_projectiles if template.any_number_of_targets else template.get_multi_target_count()
+        if action_info.target_type is TargetType.MULTI_ENTITY and len(selected_targets) < (limit or 1):
             for candidate in pool:
                 try:
                     candidate_extras = validated_extra_target_uuids(action_info, primary,

@@ -277,10 +277,8 @@ def turning_targets(
 ) -> list[UUID]:
     return [
         target.uuid
-        for target in Entity.get_all_entities()
-        if target.is_deployed
-        and target.creature_type in creature_types
-        and grid_distance_feet(actor.position, target.position) <= 30
+        for target in map(Entity.get, get_map().get_entities_within(actor.position, 30))
+        if target.creature_type in creature_types
         and (
             target.uuid == actor.uuid
             or (contact := target.senses.entities.get(actor.uuid)) is not None
