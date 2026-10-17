@@ -17,7 +17,7 @@ from dnd.core.modifiers import (
     ResistanceModifier,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import BaseValue, ModifiableValue, ValueRead, outgoing_of, read_value
 
 
 def reset_value_state() -> None:
@@ -75,10 +75,10 @@ def test_first_value_example_prints_visible_breakdown(capsys) -> None:
     )
 
     breakdown = armor_class.get_breakdown()
-    breakdown_names = ", ".join(entry["name"] for entry in breakdown)
+    breakdown_names = ", ".join(entry.name for entry in breakdown)
     modifier_text = (
-        f"{breakdown[1]['name']} +{breakdown[1]['value']}, "
-        f"{breakdown[2]['name']} +{breakdown[2]['value']}"
+        f"{breakdown[1].name} +{breakdown[1].value}, "
+        f"{breakdown[2].name} +{breakdown[2].value}"
     )
     lookup_state = (
         "same live value"
@@ -87,7 +87,7 @@ def test_first_value_example_prints_visible_breakdown(capsys) -> None:
     )
     readout_lines = [
         f"value: {armor_class.name}",
-        f"base score: {breakdown[0]['value']}",
+        f"base score: {breakdown[0].value}",
         f"rule modifiers: {modifier_text}",
         f"final score: {armor_class.score}",
         f"breakdown names: {breakdown_names}",
@@ -146,13 +146,13 @@ def test_base_values_modifiers_normalization_and_breakdown(capsys) -> None:
     assert combined_attack_bonus.score == 18
     assert combined_attack_bonus.normalized_score == 5
     combined_breakdown = combined_attack_bonus.get_breakdown()
-    assert combined_breakdown == [
-        {"name": "STR", "value": 3, "source": "self"},
-        {"name": "Base", "value": 1, "source": "self"},
-        {"name": "Magic Weapon", "value": 1, "source": "self"},
+    assert [(entry.name, entry.value, entry.source) for entry in combined_breakdown] == [
+        ("STR", 3, "self"),
+        ("Base", 1, "self"),
+        ("Magic Weapon", 1, "self"),
     ]
     breakdown_parts = [
-        f"{entry['name']}={entry['value']}"
+        f"{entry.name}={entry.value}"
         for entry in combined_breakdown
     ]
 
@@ -343,7 +343,6 @@ def test_contextual_modifiers_print_current_context_results(capsys) -> None:
 
     ranged_attack_bonus = ModifiableValue.create(
         source_entity_uuid=hero_id,
-        target_entity_uuid=goblin_id,
         value_name="Ranged Attack Bonus",
         base_value=5,
     )
@@ -359,32 +358,23 @@ def test_contextual_modifiers_print_current_context_results(capsys) -> None:
     score_without_context = ranged_attack_bonus.score
     assert score_without_context == 5
 
-    ranged_attack_bonus.set_context({"has_high_ground": True})
-    score_with_high_ground = ranged_attack_bonus.score
+    high_ground = read_value(ranged_attack_bonus, ValueRead(hero_id, goblin_id, {"has_high_ground": True}))
+    score_with_high_ground = high_ground.score
     assert score_with_high_ground == 7
-    assert {
-        "name": "High Ground",
-        "value": 2,
-        "source": "self_contextual",
-        "contextual": True,
-    } in ranged_attack_bonus.get_full_breakdown()
-    contextual_breakdown_has_high_ground = any(
-        entry["name"] == "High Ground"
-        for entry in ranged_attack_bonus.get_full_breakdown()
-    )
+    static_breakdown_lists_high_ground = any(row.name == "High Ground" for row in high_ground.breakdown)
 
-    ranged_attack_bonus.set_context({"has_high_ground": False})
-    score_after_context_cleared = ranged_attack_bonus.score
+    level_ground = read_value(ranged_attack_bonus, ValueRead(hero_id, goblin_id, {"has_high_ground": False}))
+    score_after_context_cleared = level_ground.score
     assert score_after_context_cleared == 5
 
     context_lines = [
         f"score without context: {score_without_context}",
         f"score with high ground: {score_with_high_ground}",
         (
-            "contextual breakdown contains High Ground: "
-            f"{contextual_breakdown_has_high_ground}"
+            "static breakdown lists High Ground: "
+            f"{static_breakdown_lists_high_ground}"
         ),
-        f"score after clearing context: {score_after_context_cleared}",
+        f"score in another context: {score_after_context_cleared}",
     ]
 
     print("\n".join(context_lines))
@@ -392,28 +382,26 @@ def test_contextual_modifiers_print_current_context_results(capsys) -> None:
     expected_context_lines = [
         "score without context: 5",
         "score with high ground: 7",
-        "contextual breakdown contains High Ground: True",
-        "score after clearing context: 5",
+        "static breakdown lists High Ground: False",
+        "score in another context: 5",
     ]
     assert context_lines == expected_context_lines
     assert capsys.readouterr().out.splitlines() == expected_context_lines
 
 
-def test_target_propagation_prints_imported_modifiers_then_reset(capsys) -> None:
-    """A value prints imported target modifiers and reset state."""
+def test_opposed_read_prints_the_opponent_outgoing_modifiers(capsys) -> None:
+    """A value read against an opponent includes the opponent's outgoing modifiers; a plain read does not."""
     reset_value_state()
     hero_id = uuid4()
     blinded_goblin_id = uuid4()
 
     hero_attack = ModifiableValue.create(
         source_entity_uuid=hero_id,
-        target_entity_uuid=blinded_goblin_id,
         value_name="Attack Bonus",
         base_value=5,
     )
     goblin_defense = ModifiableValue.create(
         source_entity_uuid=blinded_goblin_id,
-        target_entity_uuid=hero_id,
         value_name="Armor Class",
         base_value=13,
     )
@@ -440,23 +428,15 @@ def test_target_propagation_prints_imported_modifiers_then_reset(capsys) -> None
     assert score_before_import == 5
     assert advantage_before_import == AdvantageStatus.NONE
 
-    hero_attack.set_from_target(goblin_defense)
-
-    score_during_import = hero_attack.score
-    advantage_during_import = hero_attack.advantage
+    opposed = read_value(hero_attack, ValueRead(hero_id, blinded_goblin_id,
+                                                opponent=outgoing_of([goblin_defense])))
+    score_during_import = opposed.score
+    advantage_during_import = opposed.advantage
     assert score_during_import == 7
     assert advantage_during_import == AdvantageStatus.ADVANTAGE
-    assert {
-        "name": "Exposed Target",
-        "value": 2,
-        "source": "from_target",
-    } in hero_attack.get_breakdown()
-    imported_breakdown_has_exposed_target = any(
-        entry["name"] == "Exposed Target"
-        for entry in hero_attack.get_breakdown()
-    )
-
-    hero_attack.reset_from_target()
+    assert any(row.name == "Exposed Target" and row.value == 2 and row.source == "from_target"
+               for row in opposed.breakdown)
+    imported_breakdown_has_exposed_target = any(row.name == "Exposed Target" for row in opposed.breakdown)
 
     score_after_reset = hero_attack.score
     advantage_after_reset = hero_attack.advantage
@@ -465,11 +445,11 @@ def test_target_propagation_prints_imported_modifiers_then_reset(capsys) -> None
 
     target_lines = [
         (
-            "before import: "
+            "before the opposed read: "
             f"score={score_before_import}, advantage={advantage_before_import.value}"
         ),
         (
-            "during import: "
+            "opposed read: "
             f"score={score_during_import}, advantage={advantage_during_import.value}"
         ),
         (
@@ -477,7 +457,7 @@ def test_target_propagation_prints_imported_modifiers_then_reset(capsys) -> None
             f"{imported_breakdown_has_exposed_target}"
         ),
         (
-            "after reset: "
+            "plain read: "
             f"score={score_after_reset}, advantage={advantage_after_reset.value}"
         ),
     ]
@@ -485,10 +465,10 @@ def test_target_propagation_prints_imported_modifiers_then_reset(capsys) -> None
     print("\n".join(target_lines))
 
     expected_target_lines = [
-        "before import: score=5, advantage=None",
-        "during import: score=7, advantage=Advantage",
+        "before the opposed read: score=5, advantage=None",
+        "opposed read: score=7, advantage=Advantage",
         "imported breakdown contains Exposed Target: True",
-        "after reset: score=5, advantage=None",
+        "plain read: score=5, advantage=None",
     ]
     assert target_lines == expected_target_lines
     assert capsys.readouterr().out.splitlines() == expected_target_lines

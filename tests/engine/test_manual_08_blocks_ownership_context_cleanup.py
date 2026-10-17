@@ -122,8 +122,8 @@ def test_blocks_discover_direct_children_values_and_deep_values() -> None:
     assert sheet.blocks_dict_name_uuid == {"Tutorial Leaf": sheet.leaf.uuid}
 
 
-def test_constructor_normalizes_source_target_and_context_into_the_block_tree() -> None:
-    """A parent block normalizes explicit child fields to its own identity."""
+def test_constructor_normalizes_owner_identity_into_the_block_tree() -> None:
+    """A parent block normalizes explicit child fields to its own owner identity."""
     reset_block_state()
     hero_id = uuid4()
     old_owner_id = uuid4()
@@ -150,48 +150,6 @@ def test_constructor_normalizes_source_target_and_context_into_the_block_tree() 
     assert sheet.armor_class.source_entity_uuid == hero_id
     assert sheet.leaf.source_entity_uuid == hero_id
     assert sheet.leaf.leaf_value.source_entity_uuid == hero_id
-    assert sheet.armor_class.target_entity_uuid == goblin_id
-    assert sheet.leaf.target_entity_uuid == goblin_id
-    assert sheet.leaf.leaf_value.target_entity_uuid == goblin_id
-    assert sheet.armor_class.context == context
-    assert sheet.leaf.context == context
-    assert sheet.leaf.leaf_value.context == context
-
-
-def test_target_and_context_propagation_reaches_values_and_children() -> None:
-    """Target and context changes propagate through a block's owned tree."""
-    reset_block_state()
-    hero_id = uuid4()
-    goblin_id = uuid4()
-    context = {"range": "melee"}
-    sheet = create_tutorial_sheet(hero_id)
-
-    sheet.set_target_entity(goblin_id, "Goblin")
-    sheet.set_context(context)
-
-    assert sheet.target_entity_uuid == goblin_id
-    assert sheet.armor_class.target_entity_uuid == goblin_id
-    assert sheet.armor_class.self_static.target_entity_uuid == goblin_id
-    assert sheet.armor_class.to_target_contextual.target_entity_uuid == goblin_id
-    assert sheet.leaf.target_entity_uuid == goblin_id
-    assert sheet.leaf.leaf_value.target_entity_uuid == goblin_id
-
-    assert sheet.context is context
-    assert sheet.armor_class.context is context
-    assert sheet.armor_class.self_contextual.context is context
-    assert sheet.armor_class.to_target_contextual.context is context
-    assert sheet.armor_class.self_static.context is None
-    assert sheet.leaf.context is context
-    assert sheet.leaf.leaf_value.context is context
-
-    sheet.clear()
-
-    assert sheet.target_entity_uuid is None
-    assert sheet.armor_class.target_entity_uuid is None
-    assert sheet.armor_class.from_target_static is None
-    assert sheet.context is None
-    assert sheet.armor_class.self_contextual.context is None
-    assert sheet.leaf.leaf_value.context is None
 
 
 def test_condition_lifecycle_is_opt_in_and_cleanup_removes_owned_modifiers() -> None:

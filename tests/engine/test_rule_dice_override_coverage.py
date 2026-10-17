@@ -5,6 +5,7 @@ from uuid import UUID
 
 import pytest
 
+from dnd.core.values import ValueRead, read_value
 from dnd.actions import Attack
 from dnd.blocks.health import HealthConfig
 from dnd.classes.fighter import GreatWeaponFighting
@@ -28,6 +29,11 @@ from tests.engine.test_roster_support_spells import game as game  # noqa: PLC041
 from tests.manual.spell_regression_support import force_save_result
 
 
+def reading(value, target_uuid=None):
+    """The value read by its owner against an optional target."""
+    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+
+
 @pytest.fixture(autouse=True, params=[0, 1], ids=["seed0", "seed1"])
 def seeded_rng(request):
     previous = random.getstate()
@@ -43,12 +49,12 @@ def bonus(owner):
 
 
 def ordinary_roll(owner, *, sides=20, count=1, roll_type=RollType.HEAL, **kwargs):
-    return Dice(count=count, value=sides, bonus=bonus(owner), roll_type=roll_type, **kwargs).roll
+    return Dice(count=count, value=sides, bonus=reading(bonus(owner)), roll_type=roll_type, **kwargs).roll
 
 
 def d20(owner, category):
     roll, event = owner.roll_d20_event(
-        bonus(owner), category,
+        reading(bonus(owner)), category,
         **({"ability_name": "wisdom"} if category is RollType.SAVE else
            {"skill_name": "perception"} if category is RollType.CHECK else {}),
     )
@@ -274,7 +280,7 @@ def test_ordinary_dice_advantage_stays_on_the_same_face_queue(game, advantage, e
     modifier = bonus(owner)
     modifier.self_static.add_advantage_modifier(AdvantageModifier(source_entity_uuid=owner.uuid, value=advantage))
     with fixed_dice_faces(2, 18):
-        result = Dice(count=1, value=20, bonus=modifier, roll_type=RollType.SAVE).roll
+        result = Dice(count=1, value=20, bonus=reading(modifier), roll_type=RollType.SAVE).roll
     assert result.results == [2, 18] and result.total == expected
 
 

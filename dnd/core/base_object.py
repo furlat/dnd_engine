@@ -198,33 +198,6 @@ class BaseObject(BaseModel):
         if self.source_entity_uuid != source_id:
             raise ValueError("Source entity UUIDs do not match")
 
-    def validate_target_id(self, target_id: UUID) -> None:
-        """Validate that a UUID matches this object's target entity UUID.
-
-        Args:
-            target_id: Target UUID to validate.
-
-        Raises:
-            ValueError: If the UUIDs do not match.
-        """
-        if self.target_entity_uuid != target_id:
-            raise ValueError("Target entity UUIDs do not match")
-
-    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str] = None) -> None:
-        """Set the target entity identity for this object.
-
-        Args:
-            target_entity_uuid: UUID of the target entity.
-            target_entity_name: Optional display name of the target entity.
-        """
-        self.target_entity_uuid = target_entity_uuid
-        self.target_entity_name = target_entity_name
-
-    def clear_target_entity(self) -> None:
-        """Clear target entity identity from this object."""
-        self.target_entity_uuid = None
-        self.target_entity_name = None
-
     def set_context(self, context: Dict[str, Any]) -> None:
         """Set runtime context for this object.
 
@@ -233,6 +206,3 @@ class BaseObject(BaseModel):
         """
         self.context = context
 
-    def clear_context(self) -> None:
-        """Clear runtime context from this object."""
-        self.context = None

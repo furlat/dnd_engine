@@ -70,7 +70,7 @@ from dnd.core.condition_types import (
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 from dnd.core.dice import AttackOutcome, Dice, RollType
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, ValueRead, read_value
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, ExposedFlameEvent, SpatialChangeEvent, SpatialEffectInteractionEvent
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
@@ -4617,7 +4617,8 @@ class EatFromFeast(BaseAction):
         if effect.canceled:
             return effect
         roll = Dice(count=2, value=10, roll_type=RollType.HEAL,
-            bonus=ModifiableValue.create(source_entity_uuid=entity.uuid, base_value=0, value_name="Feast HP")).roll
+            bonus=read_value(ModifiableValue.create(source_entity_uuid=entity.uuid, base_value=0, value_name="Feast HP"),
+                             ValueRead(entity.uuid))).roll
         source = HeroesFeastSource(source_entity_uuid=self.caster_uuid, target_entity_uuid=entity.uuid,
             feast_uuid=feast.uuid, hp_bonus=roll.total, effect_origin=feast.effect_origin)
         result = entity.add_condition(source, parent_event=effect)

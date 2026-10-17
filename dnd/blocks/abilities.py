@@ -1,7 +1,7 @@
 from typing import Dict, Optional, List, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field,  computed_field
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, ValueRead, value_score
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
 
@@ -56,16 +56,6 @@ class Ability(BaseBlock):
             Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
         get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
             Searches through attributes and returns all BaseBlock instances that are attributes of this class.
-        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
-            Set the target entity for all the values contained in this Block instance.
-        clear_target_entity() -> None: (Inherited from BaseBlock)
-            Clear the target entity for all the values contained in this Block instance.
-        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
-            Set the context for all the values contained in this Block instance.
-        clear_context() -> None: (Inherited from BaseBlock)
-            Clear the context for all the values contained in this Block instance.
-        clear() -> None: (Inherited from BaseBlock)
-            Clear the source, target, and context for all the values contained in this Block instance.
 
     Computed Fields:
         modifier (int): The calculated ability modifier, combining the normalized ability score and any bonuses.
@@ -133,10 +123,11 @@ class Ability(BaseBlock):
         """
         return ability_score_normalizer(self.ability_score.score) + self.modifier_bonus.normalized_score
 
-    def get_combined_values(self, *, use_register: bool = True) -> ModifiableValue:
-        """Build a modifiable value representing this ability's modifier.
+    def combined_value(self, read: ValueRead, *, use_register: bool = True) -> ModifiableValue:
+        """Build this ability's modifier as a value, its score read in `read`.
 
         Args:
+            read: The read the ability modifier takes part in.
             use_register: Register the returned value and its temporary components.
 
         Returns:
@@ -146,15 +137,17 @@ class Ability(BaseBlock):
         ability_modifier = ModifiableValue.create(
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
-            target_entity_uuid=self.target_entity_uuid,
-            target_entity_name=self.target_entity_name,
-            base_value=self.ability_score.score,
+            base_value=value_score(self.ability_score, read, normalized=False),
             value_name=f"{self.name} Ability Modifier",
             score_normalizer=ability_score_normalizer,
             use_register=use_register,
         )
         ability_modifier.generated_from.append(self.ability_score.uuid)
         return ability_modifier.combine_values([self.modifier_bonus], use_register=use_register)
+
+    def get_combined_values(self, *, use_register: bool = True) -> ModifiableValue:
+        """This ability's modifier as a value, read with no target or context."""
+        return self.combined_value(ValueRead(self.source_entity_uuid), use_register=use_register)
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,
@@ -239,16 +232,6 @@ class AbilityScores(BaseBlock):
             Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
         get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
             Searches through attributes and returns all BaseBlock instances that are attributes of this class.
-        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
-            Set the target entity for all the values contained in this Block instance.
-        clear_target_entity() -> None: (Inherited from BaseBlock)
-            Clear the target entity for all the values contained in this Block instance.
-        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
-            Set the context for all the values contained in this Block instance.
-        clear_context() -> None: (Inherited from BaseBlock)
-            Clear the context for all the values contained in this Block instance.
-        clear() -> None: (Inherited from BaseBlock)
-            Clear the source, target, and context for all the values contained in this Block instance.
 
     Computed Fields:
         abilities_list (List[Ability]): A list of all Ability instances in this AbilityScores block.

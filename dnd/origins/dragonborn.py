@@ -203,7 +203,6 @@ class DragonbornBreathWeapon(BaseAction):
             dice_numbers=self.damage_dice_count,
             damage_bonus=ModifiableValue.create(
                 source_entity_uuid=source.uuid,
-                target_entity_uuid=target.uuid,
                 base_value=0,
                 value_name="Dragonborn Breath Weapon damage bonus",
             ),

@@ -65,7 +65,7 @@ from dnd.core.base_conditions import BaseCondition, Duration, SpellProtectionReg
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import bind_runtime_action_before_admission
 from dnd.core.condition_types import ConditionCategory, ConditionRemovalTrigger, ConditionTag, DurationType, HazardFilter
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, ValueRead, read_value
 from dnd.core.dice import AttackOutcome, Dice, RollType, roll_die_face
 from dnd.core.effect_types import EffectOrigin, EffectOriginKind, EffectEndpoint, EffectPropagationLink, ApplicationMembership
 from dnd.core.life_types import LifeState
@@ -5038,8 +5038,8 @@ class SorcerousBurst(SpellAction):
         pending=sum(face==8 for face in faces)
         extra=0
         while pending and extra<cap:
-            bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,base_value=0,value_name="Burst extra die")
-            extra_roll=Dice(count=1,value=8,bonus=bonus,roll_type=RollType.DAMAGE,attack_outcome=AttackOutcome.HIT).roll
+            bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0,value_name="Burst extra die")
+            extra_roll=Dice(count=1,value=8,bonus=read_value(bonus,ValueRead(caster.uuid,target.uuid)),roll_type=RollType.DAMAGE,attack_outcome=AttackOutcome.HIT).roll
             face=extra_roll.results[0] if isinstance(extra_roll.results,list) else extra_roll.results
             faces.append(face)
             pending=pending-1+int(face==8)

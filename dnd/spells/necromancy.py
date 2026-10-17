@@ -42,7 +42,7 @@ from dnd.core.modifiers import (
     NumericalModifier,
     ContextualAdvantageModifier,
 )
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, ValueRead, read_value
 from functools import partial
 from typing import Any, Dict
 from dnd.entity import Entity
@@ -106,7 +106,7 @@ class FalseLife(SpellAction):
         dice = Dice(
             count=1,
             value=4,
-            bonus=bonus_value,
+            bonus=read_value(bonus_value, ValueRead(caster.uuid)),
             roll_type=RollType.CHECK
         )
         temp_hp_roll = dice.roll

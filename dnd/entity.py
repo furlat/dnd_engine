@@ -1,17 +1,17 @@
 from dnd.core.effect_types import EventResolutionRef, EffectOrigin
 from dnd.core.damage import DamageResolution
 from dnd.core.attack_types import NaturalWeaponSpec
-from typing import cast, Callable, AbstractSet, DefaultDict, Dict, FrozenSet, Hashable, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
+from typing import cast, Callable, AbstractSet, DefaultDict, Dict, FrozenSet, Hashable, Mapping, Optional, Any, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
-from contextlib import contextmanager
 from functools import cache
 import time
 
 from dnd.action_timing import action_timing_enabled, record_action_count, record_action_elapsed, record_action_timing
-from dnd.core.values import BaseValue, ModifiableValue, AdvantageStatus, composed_passive_score
+from dnd.core.values import (BaseValue, ModifiableValue, AdvantageStatus, ValueRead, ValueReading,
+    composed_passive_score, outgoing_of, read_value, value_score)
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.elevation import support_distance_feet
@@ -224,14 +224,14 @@ def get_natural_roll(roll: DiceRoll) -> int:
 
 def determine_attack_outcome(
     roll: DiceRoll,
-    ac: Union[int, ModifiableValue],
+    ac: Union[int, ValueReading],
     crit_threshold: int = 20
 ) -> AttackOutcome:
         """Determine current engine d20 outcome from a roll and target number.
 
         Args:
             roll: D20 roll result.
-            ac: Target number or modifiable target number.
+            ac: Target number or evaluated armor class.
             crit_threshold: Minimum natural attack roll that upgrades a hit to
                 a critical hit.
 
@@ -239,7 +239,7 @@ def determine_attack_outcome(
             Engine outcome for the roll. Attack rolls use natural 1/critical
             semantics; saving throws and checks compare total against DC.
         """
-        target_ac = ac.normalized_score if isinstance(ac, ModifiableValue) else ac
+        target_ac = ac if isinstance(ac, int) else ac.normalized_score
 
         if roll.roll_type != RollType.ATTACK:
             return AttackOutcome.HIT if roll.total >= target_ac else AttackOutcome.MISS
@@ -2090,44 +2090,6 @@ class Entity(BaseBlock):
         """Move through the objective spatial-event path."""
         Entity.update_entity_position(self, new_position)
 
-    def get_target_entity(self, copy: bool = False) -> Optional['Entity']:
-        """Return the currently targeted entity.
-
-        Args:
-            copy: Whether to return a deep copy instead of the live entity.
-
-        Returns:
-            The targeted entity, a copy of it, or `None` when no target is set.
-        """
-        if self.target_entity_uuid is None:
-            return None
-        target_entity = Entity.get(self.target_entity_uuid)
-        assert isinstance(target_entity, Entity)
-        return target_entity if not copy else target_entity.model_copy(deep=True)
-
-    @contextmanager
-    def _temporary_target(self, target_entity_uuid: UUID) -> Iterator[None]:
-        """Bind one cross-entity evaluation target and restore prior context.
-
-        Args:
-            target_entity_uuid: Entity UUID used while contextual values are evaluated.
-
-        Yields:
-            Control while this entity and its child values target the supplied entity.
-        """
-        previous_uuid = self.target_entity_uuid
-        previous_name = self.target_entity_name
-        changed = previous_uuid != target_entity_uuid
-        if changed:
-            self.set_target_entity(target_entity_uuid)
-        try:
-            yield
-        finally:
-            if changed:
-                self.clear_target_entity()
-                if previous_uuid is not None:
-                    self.set_target_entity(previous_uuid, previous_name)
-
     def check_condition_immunity(self, condition_name: str, condition: Optional[BaseCondition] = None) -> bool:
         """Evaluate static and contextual immunity for a condition.
 
@@ -2137,18 +2099,18 @@ class Entity(BaseBlock):
                 checks.
 
         Returns:
-            True when the entity is immune in its current target/context state.
+            True when a static or contextual immunity applies to the condition.
         """
         for static_immunity in self.condition_immunities:
             if static_immunity[0] == condition_name and self.condition_immunity_contributes(static_immunity[1]):
                 return True
         condition_contextual_immunities = self.contextual_condition_immunities.get(condition_name, [])
-        immunity_context = dict(self.context or {})
+        immunity_context: Dict[str, Any] = {}
         if condition is not None:
-            immunity_context.setdefault("condition", condition)
-            immunity_context.setdefault("condition_tags", condition.tags)
+            immunity_context["condition"] = condition
+            immunity_context["condition_tags"] = condition.tags
         for source_name, immunity_check in condition_contextual_immunities:
-            if self.condition_immunity_contributes(source_name) and immunity_check(self, self.get_target_entity(), immunity_context):
+            if self.condition_immunity_contributes(source_name) and immunity_check(self, immunity_context):
                 return True
         return False
 
@@ -2861,9 +2823,8 @@ class Entity(BaseBlock):
         )
         event = event.phase_to(EventPhase.EXECUTION)
 
-        bonus = self.health.death_save_bonus
         roll, roll_event = self.roll_d20_event(
-            bonus,
+            read_value(self.health.death_save_bonus, ValueRead(self.uuid)),
             RollType.SAVE,
             context={"death_save": True},
             parent_event=event.uuid,
@@ -3075,20 +3036,20 @@ class Entity(BaseBlock):
 
         return event
 
-    def _get_bonuses_for_skill(self, skill_name: SkillName, *, use_register: bool = True) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
-        """Return component values that make up an entity skill bonus.
+    def _get_bonuses_for_skill(self, skill_name: SkillName, read: ValueRead, *,
+                               use_register: bool = True) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
+        """Return component values that make up an entity skill bonus in one read.
 
         Args:
             skill_name: Skill to assemble.
+            read: The read the components take part in.
+            use_register: Register the temporary ability modifier value.
 
         Returns:
             Normalized proficiency, skill bonus, and ability modifier values.
         """
-        proficiency_bonus = self.proficiency_bonus
         skill = self.skill_set.get_skill(skill_name)
-        skill_bonus = skill.skill_bonus
-        ability_name = skill.ability
-        ability = self.ability_scores.get_ability(ability_name)
+        ability = self.ability_scores.get_ability(skill.ability)
         skill_proficiency_converter = skill._get_proficiency_converter()
 
         def proficiency_bonus_multiplier_callable(bonus: int) -> int:
@@ -3097,48 +3058,44 @@ class Entity(BaseBlock):
                 ability.check_proficiency_sources.apply(bonus),
             )
 
-        ability_bonus = ability.get_combined_values(use_register=use_register)
-        normalized_proficiency_bonus = proficiency_bonus.model_copy(deep=True)
-        normalized_proficiency_bonus.update_normalizers(proficiency_bonus_multiplier_callable)
-        return normalized_proficiency_bonus, skill_bonus, ability_bonus
+        ability_bonus = ability.combined_value(read, use_register=use_register)
+        return (self.proficiency_bonus.renormalized(proficiency_bonus_multiplier_callable),
+                skill.skill_bonus, ability_bonus)
 
     def _get_bonuses_for_ability_check(
         self,
         ability_name: AbilityName,
+        read: ValueRead,
     ) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
-        """Return proficiency, ability modifier and check-only contributions."""
+        """Return proficiency, ability modifier and check-only contributions in one read."""
         ability = self.ability_scores.get_ability(ability_name)
-        normalized_proficiency_bonus = self.proficiency_bonus.model_copy(
-            deep=True,
-        )
-        normalized_proficiency_bonus.update_normalizers(
-            ability.check_proficiency_sources.converter(),
-        )
-        return normalized_proficiency_bonus, ability.get_combined_values(), ability.check_bonus
+        return (self.proficiency_bonus.renormalized(ability.check_proficiency_sources.converter()),
+                ability.combined_value(read), ability.check_bonus)
 
-    def _get_bonuses_for_saving_throw(self, ability_name: AbilityName) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
-        """Return component values that make up an entity saving throw bonus.
+    def _get_bonuses_for_saving_throw(
+        self,
+        ability_name: AbilityName,
+        read: ValueRead,
+    ) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
+        """Return component values that make up an entity saving throw bonus in one read.
 
         Args:
             ability_name: Ability save to assemble.
+            read: The read the components take part in.
 
         Returns:
             Normalized proficiency, save bonus, and ability modifier values.
         """
         saving_throw = self.saving_throws.get_saving_throw(ability_name)
-        saving_throw_bonus = saving_throw.bonus
-        proficiency_bonus_multiplier_callable = saving_throw._get_proficiency_converter()
-        proficiency_bonus = self.proficiency_bonus
-        ability_bonus = self.ability_scores.get_ability(ability_name).get_combined_values()
+        ability_bonus = self.ability_scores.get_ability(ability_name).combined_value(read)
+        return (self.proficiency_bonus.renormalized(saving_throw._get_proficiency_converter()),
+                saving_throw.bonus, ability_bonus)
 
-        normalized_proficiency_bonus = proficiency_bonus.model_copy(deep=True)
-        normalized_proficiency_bonus.update_normalizers(proficiency_bonus_multiplier_callable)
-        return normalized_proficiency_bonus, saving_throw_bonus, ability_bonus
-
-    def _get_attack_bonuses(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Tuple[ModifiableValue, ModifiableValue, List[ModifiableValue], List[ModifiableValue], Range]:
-        """Return component values that make up a weapon attack bonus.
+    def _get_attack_bonuses(self, read: ValueRead, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Tuple[ModifiableValue, ModifiableValue, List[ModifiableValue], List[ModifiableValue], Range]:
+        """Return component values that make up a weapon attack bonus in one read.
 
         Args:
+            read: The attack's read: attacker and target.
             weapon_slot: Equipment slot used for the attack.
             override_ability: Optional ability to use instead of weapon rules.
 
@@ -3150,6 +3107,7 @@ class Entity(BaseBlock):
             self.equipment.get_attack_bonus_components(
                 self.ability_scores,
                 weapon_slot,
+                read,
                 override_ability,
                 natural_weapon=natural_weapon,
             )
@@ -3160,114 +3118,83 @@ class Entity(BaseBlock):
             weapon.properties if weapon is not None else None,
             weapon.item_id if weapon is not None else None,
         ):
-            proficiency_bonus = proficiency_bonus.model_copy(deep=True)
-            proficiency_bonus.update_normalizers(lambda _bonus: 0)
+            proficiency_bonus = proficiency_bonus.renormalized(lambda _bonus: 0)
 
         if natural_weapon is not None and natural_weapon.fixed_attack_bonus is not None:
-            intrinsic = ModifiableValue.create(source_entity_uuid=self.uuid, target_entity_uuid=self.target_entity_uuid, value_name="Intrinsic attack bonus",
+            intrinsic = ModifiableValue.create(source_entity_uuid=self.uuid, value_name="Intrinsic attack bonus",
                 base_value=natural_weapon.fixed_attack_bonus)
             # Keep independent actor/target effects; fixed baseline replaces STR/proficiency.
             weapon_bonus = weapon_bonus.combine_values([intrinsic])
-            proficiency_bonus = ModifiableValue.create(source_entity_uuid=self.uuid, target_entity_uuid=self.target_entity_uuid, value_name="Intrinsic proficiency", base_value=0)
+            proficiency_bonus = ModifiableValue.create(source_entity_uuid=self.uuid, value_name="Intrinsic proficiency", base_value=0)
             ability_bonuses = []
         return proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range
 
-    def saving_throw_bonus(self, target_entity_uuid: Optional[UUID], ability_name: AbilityName) -> ModifiableValue:
-        """Build the complete saving throw bonus for an ability.
+    def _opposed_reading(
+        self,
+        target_entity_uuid: Optional[UUID],
+        components: Callable[['Entity', ValueRead], Tuple[ModifiableValue, ...]],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> ValueReading:
+        """Read one composed d20 bonus against a target whose matching components export modifiers.
+
+        A missing target, the reader itself, or a tile reads without opponent
+        channels; the target still reaches the reader's contextual rows. A
+        retained effect can outlive its source: its recorded DC still applies,
+        but only a present opponent contributes outgoing modifiers.
+        """
+        target_entity = Entity.get(target_entity_uuid) if target_entity_uuid is not None else None
+        opponent = None
+        if (target_entity is not None and target_entity.uuid != self.uuid
+                and get_map().get_tile_by_uuid(target_entity.uuid) is None):
+            opponent = outgoing_of(components(target_entity, ValueRead(target_entity.uuid, self.uuid)))
+        read = ValueRead(self.uuid, target_entity_uuid, context, opponent)
+        bonuses = components(self, ValueRead(self.uuid, target_entity_uuid))
+        return read_value(bonuses[0].combine_values(list(bonuses[1:])), read)
+
+    def saving_throw_bonus(self, target_entity_uuid: Optional[UUID], ability_name: AbilityName,
+                           context: Optional[Dict[str, Any]] = None) -> ValueReading:
+        """Read the complete saving throw bonus for an ability against an opposing entity.
 
         Args:
             target_entity_uuid: Optional opposing entity whose outgoing
-                modifiers should be propagated.
+                modifiers apply.
             ability_name: Saving throw ability.
+            context: The save's situation (condition and cause facts).
 
         Returns:
-            Combined saving throw bonus.
+            The evaluated saving throw bonus.
         """
-        target_entity = Entity.get(target_entity_uuid) if target_entity_uuid is not None else None
-        # A retained effect can outlive its source. Its recorded DC still applies;
-        # only a currently present opponent can contribute outgoing modifiers.
-        if (target_entity_uuid is None or target_entity is None or target_entity_uuid == self.uuid
-                or get_map().get_tile_by_uuid(target_entity_uuid) is not None):
-            bonuses = self._get_bonuses_for_saving_throw(ability_name)
-            return bonuses[0].combine_values(list(bonuses)[1:]).model_copy(deep=True)
-
-        with self._temporary_target(target_entity_uuid), target_entity._temporary_target(self.uuid):
-            source_bonuses = self._get_bonuses_for_saving_throw(ability_name)
-            target_bonuses = target_entity._get_bonuses_for_saving_throw(ability_name)
-            for source_bonus, target_bonus in zip(source_bonuses, target_bonuses):
-                source_bonus.set_from_target(target_bonus)
-            try:
-                return source_bonuses[0].combine_values(list(source_bonuses)[1:]).model_copy(deep=True)
-            finally:
-                for source_bonus in source_bonuses:
-                    source_bonus.reset_from_target()
+        return self._opposed_reading(target_entity_uuid,
+            lambda entity, read: entity._get_bonuses_for_saving_throw(ability_name, read), context)
 
     def ability_check_bonus(
         self,
         target_entity_uuid: Optional[UUID],
         ability_name: AbilityName,
-    ) -> ModifiableValue:
-        """Build the complete bonus for a raw ability check."""
-        if target_entity_uuid is None or target_entity_uuid == self.uuid:
-            bonuses = self._get_bonuses_for_ability_check(ability_name)
-            return bonuses[0].combine_values(list(bonuses)[1:]).model_copy(
-                deep=True,
-            )
-
-        target_entity = Entity.get(target_entity_uuid)
-        if not isinstance(target_entity, Entity):
+    ) -> ValueReading:
+        """Read the complete bonus for a raw ability check against an optional opposing entity."""
+        if target_entity_uuid is not None and target_entity_uuid != self.uuid and not isinstance(
+                Entity.get(target_entity_uuid), Entity):
             raise ValueError(f"Target entity {target_entity_uuid} not found")
+        return self._opposed_reading(target_entity_uuid,
+            lambda entity, read: entity._get_bonuses_for_ability_check(ability_name, read))
 
-        with (
-            self._temporary_target(target_entity_uuid),
-            target_entity._temporary_target(self.uuid),
-        ):
-            source_bonuses = self._get_bonuses_for_ability_check(ability_name)
-            target_bonuses = target_entity._get_bonuses_for_ability_check(
-                ability_name,
-            )
-            for source_bonus, target_bonus in zip(
-                source_bonuses,
-                target_bonuses,
-            ):
-                source_bonus.set_from_target(target_bonus)
-            try:
-                return source_bonuses[0].combine_values(
-                    list(source_bonuses)[1:],
-                ).model_copy(deep=True)
-            finally:
-                for source_bonus in source_bonuses:
-                    source_bonus.reset_from_target()
-
-    def skill_bonus(self, target_entity_uuid: Optional[UUID], skill_name: SkillName) -> ModifiableValue:
-        """Build the complete skill bonus for a skill.
+    def skill_bonus(self, target_entity_uuid: Optional[UUID], skill_name: SkillName) -> ValueReading:
+        """Read the complete skill bonus against an optional opposing entity.
 
         Args:
             target_entity_uuid: Optional opposing entity whose outgoing
-                modifiers should be propagated.
+                modifiers apply.
             skill_name: Skill to assemble.
 
         Returns:
-            Combined skill bonus.
+            The evaluated skill bonus.
         """
-        if target_entity_uuid is None or target_entity_uuid == self.uuid:
-            bonuses = self._get_bonuses_for_skill(skill_name)
-            return bonuses[0].combine_values(list(bonuses)[1:]).model_copy(deep=True)
-
-        target_entity = Entity.get(target_entity_uuid)
-        if not isinstance(target_entity, Entity):
+        if target_entity_uuid is not None and target_entity_uuid != self.uuid and not isinstance(
+                Entity.get(target_entity_uuid), Entity):
             raise ValueError(f"Target entity {target_entity_uuid} not found")
-
-        with self._temporary_target(target_entity_uuid), target_entity._temporary_target(self.uuid):
-            source_bonuses = self._get_bonuses_for_skill(skill_name)
-            target_bonuses = target_entity._get_bonuses_for_skill(skill_name)
-            for source_bonus, target_bonus in zip(source_bonuses, target_bonuses):
-                source_bonus.set_from_target(target_bonus)
-            try:
-                return source_bonuses[0].combine_values(list(source_bonuses)[1:]).model_copy(deep=True)
-            finally:
-                for source_bonus in source_bonuses:
-                    source_bonus.reset_from_target()
+        return self._opposed_reading(target_entity_uuid,
+            lambda entity, read: entity._get_bonuses_for_skill(skill_name, read))
 
     def passive_skill(self, skill_name: SkillName) -> int:
         """Calculate passive skill score for a skill.
@@ -3296,7 +3223,7 @@ class Entity(BaseBlock):
                 record_action_timing(f"passive_skill.{skill_name}.scalar_ms", started)
             return scalar
 
-        skill_bonuses = self._get_bonuses_for_skill(skill_name, use_register=False)
+        skill_bonuses = self._get_bonuses_for_skill(skill_name, ValueRead(self.uuid), use_register=False)
         skill_bonus = skill_bonuses[0].combine_values(list(skill_bonuses[1:]), use_register=False)
         if timing:
             record_action_timing(f"passive_skill.{skill_name}.skill_bonus_ms", started)
@@ -3334,24 +3261,17 @@ class Entity(BaseBlock):
         """Entity relays to its Senses block for sense modes."""
         return self.senses.get_sense_modes()
 
-    def ac_bonus(self, target_entity_uuid: Optional[UUID]=None, *, use_register: bool = True) -> ModifiableValue:
-        """Build the entity's armor class value.
+    def armor_class_value(self, read: ValueRead, *, use_register: bool = True) -> ModifiableValue:
+        """Compose the entity's armor class value for one read.
 
         Args:
-            target_entity_uuid: Optional entity targeting this armor class.
-            use_register: Register temporary combined values for later UUID lookup.
+            read: The armor class read: this entity and the attacker it is read against.
+            use_register: Register combined values for later UUID lookup.
 
         Returns:
-            Combined armor class value.
+            Composed armor class value.
         """
-        should_clear_target = False
-        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
-
-        formula = self.equipment.resolve_armor_class_formula_candidate(
-            self.ability_scores
-        )
+        formula = self.equipment.resolve_armor_class_formula_candidate(self.ability_scores, read)
         denies_dexterity = any(condition.contributions_active() and condition.denies_dexterity_ac
             for condition in self.active_conditions_by_uuid.values())
         formula_ac: Optional[ModifiableValue] = None
@@ -3359,7 +3279,7 @@ class Entity(BaseBlock):
             unarmored_values = self.equipment.get_unarmored_ac_values(formula, use_register=use_register)
             abilities = [ability for ability in self.equipment.get_unarmored_abilities(formula)
                 if not (denies_dexterity and ability == "dexterity")]
-            ability_bonuses = [self.ability_scores.get_ability(cast(AbilityName, ability)).get_combined_values(use_register=use_register) for ability in abilities]
+            ability_bonuses = [self.ability_scores.get_ability(cast(AbilityName, ability)).combined_value(read, use_register=use_register) for ability in abilities]
             formula_ac = unarmored_values[0].combine_values(
                 unarmored_values[1:] + ability_bonuses, use_register=use_register
             )
@@ -3367,48 +3287,56 @@ class Entity(BaseBlock):
         if self.equipment.is_unarmored():
             if formula_ac is None:
                 raise RuntimeError("unarmored entity has no Armor Class formula")
+            return formula_ac
+        armored_values = self.equipment.get_armored_ac_values()
+        max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
+        combined_dexterity_bonus = self.ability_scores.get_ability("dexterity").combined_value(read, use_register=use_register)
+
+        if denies_dexterity:
+            combined_dexterity_bonus = ModifiableValue.create(source_entity_uuid=self.uuid,base_value=0,use_register=use_register)
+        if (max_dexterity_bonus is not None and value_score(combined_dexterity_bonus, read, normalized=True)
+                > value_score(max_dexterity_bonus, read, normalized=True)):
+            combined_dexterity_bonus = max_dexterity_bonus
+
+        ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus], use_register=use_register)
+        if (
+            formula_ac is not None
+            and value_score(formula_ac, read, normalized=True) > value_score(ac_bonus, read, normalized=True)
+        ):
             ac_bonus = formula_ac
-        else:
-            armored_values = self.equipment.get_armored_ac_values()
-            max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
-            combined_dexterity_bonus = self.ability_scores.get_ability("dexterity").get_combined_values(use_register=use_register)
-
-            if denies_dexterity:
-                combined_dexterity_bonus = ModifiableValue.create(source_entity_uuid=self.uuid,base_value=0,use_register=use_register)
-            if max_dexterity_bonus is not None and combined_dexterity_bonus.normalized_score > max_dexterity_bonus.normalized_score:
-                combined_dexterity_bonus = max_dexterity_bonus
-
-            ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus], use_register=use_register)
-            if (
-                formula_ac is not None
-                and formula_ac.normalized_score > ac_bonus.normalized_score
-            ):
-                ac_bonus = formula_ac
-
-        if should_clear_target:
-            self.clear_target_entity()
         return ac_bonus
 
-    def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> ModifiableValue:
-        """Build the entity's weapon attack bonus.
+    def ac_bonus(self, target_entity_uuid: Optional[UUID]=None, *, use_register: bool = True) -> ValueReading:
+        """Read the entity's armor class against an optional attacker.
 
         Args:
-            weapon_slot: Equipment slot used for the attack.
-            target_entity_uuid: Optional target entity.
-            override_ability: Optional ability to use instead of weapon rules.
+            target_entity_uuid: Optional entity targeting this armor class.
+            use_register: Register temporary combined values for later UUID lookup.
 
         Returns:
-            Combined weapon attack bonus.
+            The evaluated armor class.
         """
-        weapon=None if natural_weapon else self.equipment.get_weapon(weapon_slot)
+        read = ValueRead(self.uuid, target_entity_uuid)
+        return read_value(self.armor_class_value(read, use_register=use_register), read)
+
+    def weapon_attack_value(self, read: ValueRead, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
+                            override_ability: Optional[AbilityName] = None,
+                            natural_weapon: Optional[NaturalWeaponSpec] = None,
+                            ) -> Tuple[ModifiableValue, Optional[Dict[str, Any]]]:
+        """Compose the weapon attack bonus for one read, with the context its own rows read.
+
+        Args:
+            read: The attack's read: this entity and its target.
+            weapon_slot: Equipment slot used for the attack.
+            override_ability: Optional ability to use instead of weapon rules.
+            natural_weapon: Optional natural weapon used instead of equipment.
+
+        Returns:
+            Composed attack value and its attack context (None for a spell-attack weapon).
+        """
+        weapon = None if natural_weapon else self.equipment.get_weapon(weapon_slot)
         if weapon is not None and weapon.spell_attack_profile is not None:
-            return self.spell_attack_bonus(target_entity_uuid,casting_ability=weapon.spell_attack_profile.casting_ability)
-
-        should_clear_target = False
-        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
-
+            return self.spell_attack_value(read, casting_ability=weapon.spell_attack_profile.casting_ability), None
         (
             proficiency_bonus,
             weapon_bonus,
@@ -3416,13 +3344,13 @@ class Entity(BaseBlock):
             ability_bonuses,
             weapon_range,
         ) = self._get_attack_bonuses(
+            read,
             weapon_slot,
             override_ability=override_ability,
             natural_weapon=natural_weapon,
         )
         bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
-        source_attack_bonus = proficiency_bonus.combine_values(bonuses)
-        source_attack_bonus.set_context({
+        return proficiency_bonus.combine_values(bonuses), {
             "attack_ability": self.equipment.get_weapon_attack_ability_name(
                 self.ability_scores,
                 weapon_slot,
@@ -3430,11 +3358,22 @@ class Entity(BaseBlock):
                 natural_weapon=natural_weapon,
             ),
             "range_type": weapon_range.type.value,
-        })
+        }
 
-        if should_clear_target:
-            self.clear_target_entity()
-        return source_attack_bonus
+    def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> ValueReading:
+        """Read the entity's weapon attack bonus against an optional target.
+
+        Args:
+            weapon_slot: Equipment slot used for the attack.
+            target_entity_uuid: Optional target entity.
+            override_ability: Optional ability to use instead of weapon rules.
+
+        Returns:
+            The evaluated weapon attack bonus.
+        """
+        value, context = self.weapon_attack_value(ValueRead(self.uuid, target_entity_uuid), weapon_slot,
+                                                  override_ability, natural_weapon)
+        return read_value(value, ValueRead(self.uuid, target_entity_uuid, context))
 
     def weapon_attack_outcome_baseline(
         self,
@@ -3592,11 +3531,8 @@ class Entity(BaseBlock):
                 damage_dice=weapon.damage_dice,dice_numbers=weapon.dice_numbers,damage_type=weapon.damage_type,
                 damage_bonus=self.get_spell_damage_bonus(),effect_origin=weapon.spell_attack_profile.effect_origin)]
 
-        should_clear_target = False
-        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
-        damages = self.equipment.get_damages(weapon_slot, self.ability_scores, override_ability=override_ability, natural_weapon=natural_weapon)
+        damages = self.equipment.get_damages(weapon_slot, self.ability_scores, ValueRead(self.uuid, target_entity_uuid),
+                                             override_ability=override_ability, natural_weapon=natural_weapon)
         size_dice = self.get_size_damage_dice(weapon_slot, natural_weapon=natural_weapon)
         if size_dice > 0 and damages:
             primary_type = damages[0].damage_type
@@ -3607,14 +3543,12 @@ class Entity(BaseBlock):
             )
             damages.append(Damage(
                 source_entity_uuid=self.uuid,
-                target_entity_uuid=target_entity_uuid or self.target_entity_uuid,
+                target_entity_uuid=target_entity_uuid,
                 damage_dice=4,
                 dice_numbers=size_dice,
                 damage_bonus=size_damage_bonus,
                 damage_type=primary_type,
             ))
-        if should_clear_target:
-            self.clear_target_entity()
         return damages
 
     def take_damage(self, damages: List[Damage], attack_outcome: AttackOutcome) -> List[DiceRoll]:
@@ -4181,43 +4115,50 @@ class Entity(BaseBlock):
                                           from_position=step[0], to_position=step[1])
                 for index, step in sorted(first.items())]
 
+    def spell_attack_value(
+        self,
+        read: ValueRead,
+        *,
+        spellcasting_source_id: Optional[UUID] = None,
+        casting_ability: AbilityName | None = None,
+    ) -> ModifiableValue:
+        """Compose the spell attack bonus for one read.
+
+        Args:
+            read: The attack's read: this entity and its target.
+
+        Returns:
+            Composed spell attack value.
+        """
+        ability = self.ability_scores.get_ability(
+            casting_ability or self.spellcasting.resolve_spellcasting_ability(
+                spellcasting_source_id
+            )
+        )
+        return self.proficiency_bonus.combine_values([
+            ability.combined_value(read),
+            self.equipment.attack_bonus,
+            self.spellcasting.spell_attack_bonus,
+        ])
+
     def spell_attack_bonus(
         self,
         target_entity_uuid: Optional[UUID] = None,
         *,
         spellcasting_source_id: Optional[UUID] = None,
         casting_ability: AbilityName | None = None,
-    ) -> ModifiableValue:
-        """Build combined spell attack bonus.
+    ) -> ValueReading:
+        """Read the spell attack bonus against an optional target.
 
         Args:
-            target_entity_uuid: Optional target for cross-propagation.
+            target_entity_uuid: Optional target of the attack.
 
         Returns:
-            Combined spell attack bonus.
+            The evaluated spell attack bonus.
         """
-        should_clear_target = False
-        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
-
-        ability = self.ability_scores.get_ability(
-            casting_ability or self.spellcasting.resolve_spellcasting_ability(
-                spellcasting_source_id
-            )
-        )
-        ability_bonus = ability.get_combined_values()
-
-        combined = self.proficiency_bonus.combine_values([
-            ability_bonus,
-            self.equipment.attack_bonus,
-            self.spellcasting.spell_attack_bonus,
-        ])
-
-        if should_clear_target:
-            self.clear_target_entity()
-
-        return combined
+        read = ValueRead(self.uuid, target_entity_uuid)
+        return read_value(self.spell_attack_value(read, spellcasting_source_id=spellcasting_source_id,
+                                                  casting_ability=casting_ability), read)
 
     def spell_attack_outcome_baseline(
         self,
@@ -4539,7 +4480,7 @@ class Entity(BaseBlock):
 
     def roll_d20(
         self,
-        bonus: ModifiableValue,
+        bonus: ValueReading,
         roll_type: RollType = RollType.ATTACK,
         context: Optional[Dict[str, Any]] = None,
         ability_name: Optional[AbilityName] = None,
@@ -4554,7 +4495,7 @@ class Entity(BaseBlock):
         ability, or skill metadata is attached when the rule supplies it.
 
         Args:
-            bonus: Modifiable value used as the d20 bonus.
+            bonus: The evaluated d20 bonus.
             roll_type: Attack, save, check, or generic d20 category.
             context: Optional handler context.
             ability_name: Ability context for saving throws.
@@ -4614,7 +4555,7 @@ class Entity(BaseBlock):
 
     def roll_d20_event(
         self,
-        bonus: ModifiableValue,
+        bonus: ValueReading,
         roll_type: RollType = RollType.CHECK,
         context: Optional[Dict[str, Any]] = None,
         ability_name: Optional[AbilityName] = None,
@@ -4629,7 +4570,7 @@ class Entity(BaseBlock):
         before completion collects combat-log subentries.
 
         Args:
-            bonus: Modifiable value used as the d20 bonus.
+            bonus: The evaluated d20 bonus.
             roll_type: Attack, save, check, or generic d20 category.
             context: Optional handler context.
             ability_name: Ability context for saving throws.
@@ -4709,16 +4650,12 @@ class Entity(BaseBlock):
             Declaration-phase saving throw event.
         """
         if isinstance(dc, UUID):
-            self.set_target_entity(dc)
-            new_dc = ModifiableValue.get(dc)
-            if new_dc is None or new_dc.source_entity_uuid != self.uuid:
+            dc_value = ModifiableValue.get(dc)
+            if dc_value is None or dc_value.source_entity_uuid != self.uuid:
                 raise ValueError("DC is not coming from self oir not present")
-            new_dc = new_dc.model_copy(deep=True)
-            new_dc.set_target_entity(target_entity_uuid)
-            int_dc = new_dc.normalized_score
+            int_dc = value_score(dc_value, ValueRead(self.uuid, target_entity_uuid), normalized=True)
         else:
             int_dc = dc
-        self.clear_target_entity()
 
         target_entity = Entity.get(target_entity_uuid)
         target_entity_name = target_entity.name if target_entity else None
@@ -4767,19 +4704,12 @@ class Entity(BaseBlock):
             Declaration-phase skill check event.
         """
         if isinstance(dc, UUID):
-            self.set_target_entity(dc)
             dc_modifier = ModifiableValue.get(dc)
             if dc_modifier is None or dc_modifier.source_entity_uuid != self.uuid:
                 raise ValueError(f"not present {dc_modifier is None} or not coming from self")
-            if target_entity_uuid != dc_modifier.target_entity_uuid:
-                new_dc = dc_modifier.model_copy(deep=True)
-                new_dc.set_target_entity(target_entity_uuid)
-            else:
-                new_dc = dc_modifier
-            int_dc = new_dc.normalized_score
+            int_dc = value_score(dc_modifier, ValueRead(self.uuid, target_entity_uuid), normalized=True)
         else:
             int_dc = dc
-        self.clear_target_entity()
 
         target_entity = Entity.get(target_entity_uuid)
         target_entity_name = target_entity.name if target_entity else None
@@ -4806,9 +4736,6 @@ class Entity(BaseBlock):
         if request.target_entity_uuid != self.uuid:
             raise ValueError("Target entity uuid does not match")
 
-        self.set_target_entity(request.source_entity_uuid)
-
-        save_bonus = self.saving_throw_bonus(request.source_entity_uuid, request.ability_name)
         save_context: Dict[str, Any] = {}
         if request.condition_context is not None:
             save_context["condition_context"] = request.condition_context
@@ -4816,8 +4743,7 @@ class Entity(BaseBlock):
             save_context[SAVING_THROW_CONTEXT_KEY] = (
                 request.saving_throw_context
             )
-        save_bonus.set_context(save_context)
-        save_bonus.set_event_lineage(request.lineage_uuid)
+        save_bonus = self.saving_throw_bonus(request.source_entity_uuid, request.ability_name, save_context)
         dc = request.get_dc()
         if dc is None:
             raise ValueError(f"DC is not set for {request.ability_name} saving throw with event id {request.uuid}")
@@ -4850,10 +4776,6 @@ class Entity(BaseBlock):
             status_message=f"{request.ability_name} save complete"
         )
 
-        save_bonus.clear_event_lineage()
-        save_bonus.clear_context()
-        self.clear_target_entity()
-
         final_roll = completion_event.dice_roll or roll
         final_success = completion_event.result if completion_event.result is not None else success
         final_outcome = outcome
@@ -4876,7 +4798,6 @@ class Entity(BaseBlock):
         """
         if request.target_entity_uuid != self.uuid:
             raise ValueError("Target entity uuid does not match")
-        self.set_target_entity(request.source_entity_uuid)
         skill_check_bonus = self.skill_bonus(request.source_entity_uuid, request.skill_name)
         dc = request.get_dc()
         if dc is None:
@@ -4910,7 +4831,6 @@ class Entity(BaseBlock):
             status_message=f"{request.skill_name} check complete"
         )
 
-        self.clear_target_entity()
         return final_outcome, final_roll, final_success
 
     def _blocks_walking_without_origin_traversal(

@@ -51,6 +51,7 @@ from dnd.spells.evocation import (
 from dnd.spells.illusion import Blur, Fear, HypnoticPattern, Invisibility
 from dnd.spells.necromancy import BlindnessDeafness, NecroticBless
 from dnd.spells.transmutation import ExpeditiousRetreat, JumpSpell
+from dnd.core.values import ValueRead, outgoing_of, read_value
 from tests.engine.support import get_hp, has_condition, set_hp
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
@@ -899,14 +900,12 @@ def test_blur_and_blindness_deafness_execute_distinct_lifecycles() -> None:
     assert not blur_result.canceled
     assert has_condition(blur_caster, "Blur")
     assert has_condition(blur_caster, "Concentrating")
-    attack_bonus = attacker.attack_bonus(
-        WeaponSlot.MELEE_MAIN,
-        blur_caster.uuid,
-    )
-    target_ac = blur_caster.ac_bonus(attacker.uuid)
-    attack_bonus.set_from_target(target_ac)
+    attack_value, attack_context = attacker.weapon_attack_value(
+        ValueRead(attacker.uuid, blur_caster.uuid), WeaponSlot.MELEE_MAIN)
+    target_ac = blur_caster.armor_class_value(ValueRead(blur_caster.uuid, attacker.uuid))
+    attack_bonus = read_value(attack_value, ValueRead(attacker.uuid, blur_caster.uuid, attack_context,
+                                                      outgoing_of([target_ac])))
     assert attack_bonus.advantage is AdvantageStatus.DISADVANTAGE
-    attack_bonus.reset_from_target()
 
     blur_caster.remove_condition("Concentrating")
 

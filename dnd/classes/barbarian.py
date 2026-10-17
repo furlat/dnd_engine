@@ -21,6 +21,7 @@ Level 20: Primal Champion
 
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.values import ValueRead, read_value
 from dnd.types.class_features import RelentlessRageIntervention
 from dnd.core.condition_types import DurationType
 from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
@@ -557,7 +558,6 @@ class FastMovement(BaseCondition):
 
 def mindless_rage_immunity_check(
     entity: 'BaseBlock',
-    target_entity: Optional['BaseBlock'],
     context: Optional[dict]
 ) -> bool:
     """
@@ -565,7 +565,7 @@ def mindless_rage_immunity_check(
 
     Returns True (immune) only if the entity is currently raging.
     """
-    _ = target_entity, context
+    _ = context
 
     if "Raging" in entity.active_conditions or "Frenzied" in entity.active_conditions:
         return True
@@ -772,7 +772,7 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
 
     con_save = entity.saving_throws.get_saving_throw("constitution")
     dice_roll = entity.roll_d20(
-        con_save.bonus,
+        read_value(con_save.bonus, ValueRead(entity.uuid)),
         RollType.SAVE,
         ability_name="constitution",
         parent_event=event.uuid,

@@ -178,8 +178,8 @@ def test_monster_parry_activates_exact_reaction_and_spends_one_reaction() -> Non
     assert isinstance(event, AttackEvent)
     assert event.ac is not None
     assert any(
-        row["name"] == "Parry" and row["value"] == 2
-        for row in event.ac.get_breakdown()
+        row.name == "Parry" and row.value == 2
+        for row in event.ac.breakdown
     )
     assert defender.action_economy.reactions.normalized_score == 0
 

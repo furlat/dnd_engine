@@ -66,7 +66,7 @@ from dnd.core.modifiers import (
     ContextualAdvantageModifier,
     NumericalModifier,
 )
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, ValueRead, read_value, reading_with_value_row
 from dnd.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
 from dnd.core.condition_types import ConditionCategory, DurationType
@@ -775,7 +775,7 @@ class BonusDamageFeature(BaseCondition):
             return None
         damage_type = self.damage_type or event.damage_packets[0].damage.damage_type
         bonus = ModifiableValue.create(source_entity_uuid=owner.uuid, base_value=0, value_name=f"{self.name} Bonus")
-        dice = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=bonus, roll_type=RollType.DAMAGE, attack_outcome=event.attack_outcome)
+        dice = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=read_value(bonus, ValueRead(owner.uuid)), roll_type=RollType.DAMAGE, attack_outcome=event.attack_outcome)
         roll = dice.roll
         damage = Damage(
             damage_type=damage_type,
@@ -1142,16 +1142,15 @@ class ParryFeature(BaseCondition):
             return event
         if event.ac is None:
             return event
-        event.ac.self_static.add_value_modifier(
-            NumericalModifier(
-                name="Parry",
-                value=self.ac_bonus,
-                source_entity_uuid=defender.uuid,
-                target_entity_uuid=defender.uuid,
-            )
-        )
+        parried = reading_with_value_row(event.ac, NumericalModifier(
+            name="Parry",
+            value=self.ac_bonus,
+            source_entity_uuid=defender.uuid,
+            target_entity_uuid=defender.uuid,
+        ))
         defender.action_economy.consume("reactions", 1)
         return event.with_updates(
+            ac=parried,
             status_message=(
                 f"{defender.name} uses Parry for +{self.ac_bonus} AC"
             ),
@@ -1380,7 +1379,7 @@ class LeadershipAura(AreaCondition):
         if roller.position not in self.affected_positions:
             return None
         roll = event.get_effective_roll()
-        d4 = Dice(count=1, value=4, bonus=ModifiableValue.create(source_entity_uuid=leader.uuid, base_value=0, value_name="Leadership"), roll_type=roll.roll_type).roll
+        d4 = Dice(count=1, value=4, bonus=read_value(ModifiableValue.create(source_entity_uuid=leader.uuid, base_value=0, value_name="Leadership"), ValueRead(leader.uuid)), roll_type=roll.roll_type).roll
         new_roll = roll.model_copy(update={"total": roll.total + d4.total})
         return event.replace_roll(
             new_roll,

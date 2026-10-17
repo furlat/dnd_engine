@@ -99,7 +99,7 @@ class GasCloud(AreaCondition):
                 effect_tags=(SavingThrowEffectTag.POISON,)))
         _, _, saved = entity.saving_throw(request)
         if not saved or self.half_damage_on_success:
-            bonus = ModifiableValue.create(source_entity_uuid=self.uuid, target_entity_uuid=entity.uuid,
+            bonus = ModifiableValue.create(source_entity_uuid=self.uuid,
                 base_value=0, value_name="Gas damage")
             damage = Damage(name=self.name, source_entity_uuid=self.uuid, target_entity_uuid=entity.uuid,
                 damage_dice=self.damage.dice_sides, dice_numbers=self.damage.dice_count,

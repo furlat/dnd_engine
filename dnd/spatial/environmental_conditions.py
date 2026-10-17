@@ -302,7 +302,6 @@ class FireSurface(AreaCondition):
         """Deal this surface's typed entry or turn-start damage."""
         damage_bonus = ModifiableValue.create(
             source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=entity.uuid,
             base_value=0,
             value_name="Fire Surface Damage",
         )
@@ -749,7 +748,6 @@ class ElectrifiedWater(WetAreaCondition):
     def _deal_damage(self, entity: Entity, parent_event: Event) -> None:
         damage_bonus = ModifiableValue.create(
             source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=entity.uuid,
             base_value=0,
             value_name="Electrified Water Damage",
         )
@@ -1124,7 +1122,7 @@ class SpikeTrap(SpatialCondition):
         for component in self.payload.damages:
             bonus = ModifiableValue.create(
                 source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=entity.uuid, base_value=0,
+                base_value=0,
                 value_name="Spike Trap Damage",
             )
             damage = Damage(

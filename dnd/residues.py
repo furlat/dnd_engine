@@ -136,7 +136,6 @@ def _damage_entrant(profile: ResidueProfile, payload: ResidueDamage, tile: Tile,
         damage_type=payload.damage_type,
         damage_bonus=ModifiableValue.create(
             source_entity_uuid=tile.uuid,
-            target_entity_uuid=entity.uuid,
             base_value=0,
             value_name=f"{profile.name} Damage",
         ),

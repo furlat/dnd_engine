@@ -23,6 +23,7 @@ import logging
 
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, RollType
+from dnd.core.values import ValueRead, read_value
 from dnd.types.event_facts import GroupEntryKind
 from dnd.core.events import (
     Event, EventPhase, EventQueue,
@@ -539,7 +540,7 @@ class Encounter(BaseObject):
         entity = combatant.entity
         if entity is None:
             return
-        roll = Dice(count=1, value=20, bonus=entity.initiative, roll_type=RollType.CHECK).roll
+        roll = Dice(count=1, value=20, bonus=read_value(entity.initiative, ValueRead(entity.uuid)), roll_type=RollType.CHECK).roll
         combatant.initiative_roll = roll.results if isinstance(roll.results, int) else roll.results[0]
         combatant.initiative_total = roll.total
 

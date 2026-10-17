@@ -160,6 +160,20 @@ COMBAT_CONDITION_LEGACY_CASES: dict[str, LegacyCoverage] = {
 }
 
 
+from dnd.core.values import ModifiableValue, ValueRead, outgoing_of, read_value
+
+
+def situated(value, target_uuid):
+    """The value read against a target."""
+    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+
+
+def outgoing_read(value, reader_uuid):
+    """What a value's outgoing rows give a reader: an empty reader value read against the owner."""
+    probe = ModifiableValue.create(source_entity_uuid=reader_uuid, use_register=False)
+    return read_value(probe, ValueRead(reader_uuid, value.source_entity_uuid, opponent=outgoing_of([value])))
+
+
 def test_combat_condition_manifest_accounts_for_all_18_cases() -> None:
     """Every archived combat-condition case has a reviewed live disposition."""
     assert len(COMBAT_CONDITION_LEGACY_CASES) == 18
@@ -190,9 +204,8 @@ def test_dashing_and_dodging_apply_and_clean_their_exact_modifiers() -> None:
         target.saving_throws.get_saving_throw("dexterity").bonus.advantage
         is AdvantageStatus.ADVANTAGE
     )
-    target.equipment.ac_bonus.set_target_entity(attacker.uuid)
     assert (
-        target.equipment.ac_bonus.outgoing_advantage
+        outgoing_read(target.equipment.ac_bonus, attacker.uuid).advantage
         is AdvantageStatus.DISADVANTAGE
     )
     target.remove_condition("Dodging")
@@ -200,7 +213,7 @@ def test_dashing_and_dodging_apply_and_clean_their_exact_modifiers() -> None:
         target.saving_throws.get_saving_throw("dexterity").bonus.advantage
         is AdvantageStatus.NONE
     )
-    assert target.equipment.ac_bonus.outgoing_advantage is AdvantageStatus.NONE
+    assert outgoing_read(target.equipment.ac_bonus, attacker.uuid).advantage is AdvantageStatus.NONE
 
 
 def test_condition_modifiers_compose_and_clean_up_by_independent_owner() -> None:
@@ -220,10 +233,11 @@ def test_condition_modifiers_compose_and_clean_up_by_independent_owner() -> None
 
     apply_to_target(Poisoned, source, attacker)
     apply_to_target(Prone, source, target)
-    attack_bonus = attacker.attack_bonus(target_entity_uuid=target.uuid)
-    attack_bonus.set_from_target(target.ac_bonus(attacker.uuid))
+    attack_value, attack_context = attacker.weapon_attack_value(ValueRead(attacker.uuid, target.uuid))
+    armor_class = target.armor_class_value(ValueRead(target.uuid, attacker.uuid))
+    attack_bonus = read_value(attack_value, ValueRead(attacker.uuid, target.uuid, attack_context,
+                                                      outgoing_of([armor_class])))
     assert attack_bonus.advantage is AdvantageStatus.NONE
-    attack_bonus.reset_from_target()
 
     apply_to_target(Restrained, attacker, target)
     assert target.action_economy.movement_remaining() == 0

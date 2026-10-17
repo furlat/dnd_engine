@@ -1317,7 +1317,7 @@ class PurityOfSpirit(BaseCondition):
     def _apply(self, event):
         target = Entity.get(self.target_entity_uuid)
 
-        def prevents(_entity, _selected, context):
+        def prevents(_entity, context):
             incoming = (context or {}).get("condition")
             source = (
                 Entity.get(incoming.source_entity_uuid)

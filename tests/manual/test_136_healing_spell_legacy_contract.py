@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 
+from dnd.core.values import ValueRead, read_value
 from dnd.actions import SpellEvent
 from dnd.conditions import (
     Blinded,
@@ -41,6 +42,11 @@ from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     reset_spell_regression_arena,
 )
+
+
+def reading(value, target_uuid=None):
+    """The value read by its owner against an optional target."""
+    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
 
 
 def _healing_caster(
@@ -83,7 +89,7 @@ def test_heal_roll_type_accepts_and_preserves_multiple_dice() -> None:
     dice = Dice(
         count=3,
         value=8,
-        bonus=bonus,
+        bonus=reading(bonus),
         roll_type=RollType.HEAL,
     )
 
