@@ -360,6 +360,11 @@ class BaseBlock(BaseModel):
         """Admit ordinary contacts; composed objects can share an existing discovery owner."""
         return True
 
+    def observability_reads_the_world(self) -> bool:
+        """Whether `is_observable_to` reads state beyond this block's own facts (then perception
+        asks it again at every settlement)."""
+        return False
+
     def appears_in_entity_contacts(self) -> bool:
         """Whether a GridMap entity occupant belongs in perceived contacts."""
         return True

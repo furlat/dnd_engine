@@ -532,6 +532,10 @@ class BaseItem(BaseBlock):
         return condition is not None and condition.get_spatial_observation(
             {self.position}, observer_uuid=observer_uuid) is not None
 
+    def observability_reads_the_world(self) -> bool:
+        """A perception condition's observation decides this item's observability."""
+        return self.perception_condition_uuid is not None
+
     def get_door_mechanism(self) -> DoorMechanism | None:
         return None
 
