@@ -1,4 +1,4 @@
-# Single-pass change propagation — analysis and plan (v3.11)
+# Single-pass change propagation — analysis and plan (v3.12)
 
 Date: 2026-10-16. Status: **APPROVED by the human 2026-10-17 (incl. D7c, Q7 EXECUTION convention, temp-HP record-only).** **v3.5 adds available-actions discovery (§14, PD1/PD2) per the human's 2026-10-17 decisions (model approved 2026-10-17).** **v3.6 folds in the §14 antislop/antiOOP reviews and the whole-world-scan redesign. v3.7 folds in the v3.6 re-reviews, the human's answers (D14 approved; Q-W1, Q-W3, Q-W4 decided) and the first P0a measurements; open items are in §14.10.** Implementation is at P0a.
 
@@ -643,6 +643,10 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 - Object and entity contact changes are packed uuid deltas. The client derives nothing.
 - **Multi-observer seats** (human: "handle the per seat scenario per observer but of course when shared we should optimize"): each changed cell, body and item is sent once per seat, and each observer gets a bit list over the seat's shared cells. A one-observer seat is plain per-observer.
 - No retained client-side state for cells out of view (human: "a bad idea to keep 2 states"). Cells coming back into view carry their light and hazard values, packed.
+- **Combat log** (Fireball: ~160 KB of blue's 1,000 KB update, ~156 KB of amber's 351 KB):
+  - the root log does not repeat its children's entries (14 of 14 repeated today); it refers to them by index;
+  - each entry sends its structured `data` once, and the SDK renders `compact` / `verbose` / `detailed` from it (all three strings are sent today).
+- **Version rows** (355 per Fireball update, 126 B each): indexes into the update's events instead of `event_uuid` / `lineage_uuid` strings.
 - **Gate:** every update ≤100 KB on every row.
 
 **PV3 — bodies and items as patches.**
@@ -653,12 +657,19 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 - **Items:** the client can't know items in advance (human). A seat receives an item's full record the first time it sees that `item_uuid`, then only patches. `EquipmentFact` becomes an item patch. The `PlayerActor` / `VisualItem` types change, not just the encoder.
 - **Gate:** no body bytes for unchanged re-acquisitions; the D16-C replica test passes.
 
+**P7b — capture by reference.**
+
+- The capture deep-copies every retained event (`capture.py:_retained_event` / `_detach_retained_event`; ~16 % of a sampled Fireball op).
+- Stored versions are held by reference as frozen values, after proving that nothing mutates a stored version once it is stored.
+- **Gate:** no `deepcopy` in capture; the wire is byte-identical.
+
 **PT — turn start** (human: "of course bro it is unacepptable").
 
 - First AI Advance, sampled under load:
   - AI knowledge catch-up ~48 %, folding every event since the AI's last turn: P7's AI item, plus PV1, since its indexes become arrays;
   - AI discovery ~33 %, mostly object-contact checks that build a pydantic object per contact, plus object HP reads: PD1b / PD2;
   - turn-start navigation ~11 %.
+- **AI catch-up:** `AIKnowledge` starts at cursor 0 and folds the whole history on the assignment's first decision (~193 ms in the GC). It is folded when the assignment is created (encounter start, a load step), and each decision then folds only the events since the last one. Knowledge at every decision is identical, because the same events are folded once.
 - **Navigation:** one path search over a cost grid with a predecessor array. `walkable`, `paths`, `path_costs`, `safe_*` and `collision_blocked` stop being per-cell dicts and sets.
 - **Gate:** the turn-start rows within the ceiling.
 
@@ -701,7 +712,8 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 | **PV1** | Perception as arrays end to end (§6b): owned world grids, one pure view function, one settlement path, packed cell sets through snapshot, event and wire; P4a's obscurement and light items folded in; spike first | §6b PV1 gate |
 | **PV2** | The rest of the wire (§6b); after P7 | §6b PV2 gate; every update ≤100 KB |
 | **PV3** | Bodies and items as patches (§6b); after P7 | §6b PV3 gate |
-| **PT** | Turn start (§6b): navigation as a cost grid with a predecessor array | turn-start rows within the ceiling |
+| **P7b** | Capture by reference (§6b) | no deepcopy in capture; wire byte-identical |
+| **PT** | Turn start (§6b): AI knowledge folded at assignment creation; navigation as a cost grid with a predecessor array | turn-start rows within the ceiling |
 | **PC** | *(other repo; human)* NDClientGodot SDK schema 9 → 11; grouped world boundaries | — |
 | **Exit** | Whole-action targets (§6a, D18): every operation of every GC case re-timed after each merged batch | every run of every row ≤100 ms and every seat update ≤100 KB; acceptable and goal tiers reported per row; a miss blocks the exit until the human decides |
 
@@ -907,6 +919,12 @@ worktree. The rest is static reading.
 | AI discovery | `ai/runtime/decision_epoch.py:148-157, 819-845, 948-971` |
 
 ## 12. Changes
+
+**v3.11 → v3.12** (Fireball payload and publication sample):
+
+- PV2 adds the combat log (no repeated child entries; `data` only, rendered by the SDK) and the version rows (indexes).
+- P7b: capture by reference.
+- PT: the AI catch-up folded at assignment creation.
 
 **v3.10 → v3.11** (v3.9 antislop review):
 
