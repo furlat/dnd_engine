@@ -5325,7 +5325,7 @@ class Entity(BaseBlock):
                 target_type = template.effective_target_type
                 if target_type in (TargetType.POSITION, TargetType.POSITION_LOS):
                     contract = template.position_discovery
-                    if ((contract is None and target_type is TargetType.POSITION)
+                    if ((contract is None and target_type is TargetType.POSITION and template.is_movement)
                             or (contract is not None and contract.candidate_source == "reachable")):
                         return True
                 elif (target_type is TargetType.POSITION_PATH
@@ -6632,17 +6632,20 @@ class Entity(BaseBlock):
                     continue
 
                 valid_positions: List[AvailableTarget] = []
-                if target_type == TargetType.POSITION and template.position_discovery is not None:
+                if target_type == TargetType.POSITION and (template.position_discovery is not None
+                                                           or not template.is_movement):
+                    # A point without a declared contract is one in range the actor sees.
+                    contract = template.position_discovery or PositionDiscoveryContract()
                     candidates = self._collect_declared_position_targets(
                         template,
-                        template.position_discovery,
+                        contract,
                         caster_visible_positions,
                     )
                     # Only movement lists its destinations (D13); any other
-                    # declared position is a free-aim region (plan §14.4).
+                    # position is a free-aim region (plan §14.4).
                     valid_positions = (self._filter_targets_by_selected_cost(
                         template,
-                        template.position_discovery,
+                        contract,
                         candidates,
                         scan,
                     ) if template.is_movement else [])
