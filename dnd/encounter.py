@@ -4,7 +4,7 @@ An encounter owns initiative order, round and turn boundaries, controller
 coordination, combat-log capture, and end-of-combat detection.
 """
 
-from typing import AbstractSet, Any, Optional, Dict, List, ClassVar, Set, Tuple, Callable
+from typing import Any, FrozenSet, Optional, Dict, List, ClassVar, Set, Tuple, Callable
 
 __all__ = [
     "EncounterState",
@@ -91,14 +91,14 @@ def _compute_perceivers(event: Event) -> Set[str]:
     return {str(uuid) for uuid in perceivers}
 
 
-def _compute_identified_entity_observers(event: Event) -> Dict[str, AbstractSet[str]]:
+def _compute_identified_entity_observers(event: Event) -> Dict[str, FrozenSet[str]]:
     """Capture which observers identify each entity participating in an event.
 
     A participant identifies itself; an observer subscribed to its cell
     identifies it when the participant is among that observer's contacts.
     """
     grid = get_map()
-    grants: Dict[str, AbstractSet[str]] = {}
+    grants: Dict[str, FrozenSet[str]] = {}
     participant_uuids = {
         entity_uuid
         for entity_uuid in event.get_participant_entity_uuids()

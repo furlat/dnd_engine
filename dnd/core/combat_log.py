@@ -5,7 +5,7 @@ display payloads near the event data that produced them.
 """
 
 from enum import Enum
-from typing import Annotated, Any, Dict, List, Literal, Optional, Self, Set, Tuple
+from typing import Annotated, Any, Dict, FrozenSet, List, Literal, Optional, Self, Set, Tuple
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
@@ -855,7 +855,7 @@ class CombatLogEntry(BaseModel):
         description="Entity UUIDs revealed during this event chain.",
         json_schema_extra={"uniqueItems": True},
     )
-    identified_entity_observer_uuids: Dict[str, Set[str]] = Field(
+    identified_entity_observer_uuids: Dict[str, FrozenSet[str]] = Field(
         default_factory=dict,
         exclude=True,
         description=(
@@ -863,7 +863,7 @@ class CombatLogEntry(BaseModel):
             "identified them when the event occurred."
         ),
     )
-    located_entity_observer_uuids: Dict[str, Set[str]] = Field(
+    located_entity_observer_uuids: Dict[str, FrozenSet[str]] = Field(
         default_factory=dict,
         exclude=True,
         description=(
@@ -871,7 +871,7 @@ class CombatLogEntry(BaseModel):
             "located them exactly when this event occurred."
         ),
     )
-    located_position_observer_uuids: Dict[str, Set[str]] = Field(
+    located_position_observer_uuids: Dict[str, FrozenSet[str]] = Field(
         default_factory=dict,
         exclude=True,
         description=(

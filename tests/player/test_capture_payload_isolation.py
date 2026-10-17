@@ -61,9 +61,9 @@ def test_captured_sensory_lineage_detaches_containers_and_mutable_extensions():
             effective_light_levels_changed={'1,2': 3}, hazardous_cells_changed={'1,2': False},
             sense_modes=[SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)],
         ).phase_to(EventPhase.COMPLETION)
-        event.identified_entity_observer_uuids[str(subject)] = {str(observer)}
-        event.located_entity_observer_uuids[str(subject)] = {str(observer)}
-        event.located_position_observer_uuids['1,2'] = {str(observer)}
+        event.identified_entity_observer_uuids[str(subject)] = frozenset({str(observer)})
+        event.located_entity_observer_uuids[str(subject)] = frozenset({str(observer)})
+        event.located_position_observer_uuids['1,2'] = frozenset({str(observer)})
         cursor = EventQueue.event_cursor()
         retained = capture_lineage(event, observer_uuid=observer).root
         expected = deepcopy(retained)
@@ -71,9 +71,9 @@ def test_captured_sensory_lineage_detaches_containers_and_mutable_extensions():
         event.children_events.append(uuid4())
         event.children_lineages.append(uuid4())
         event.lineage_children_events.append(uuid4())
-        event.identified_entity_observer_uuids[str(subject)].clear()
-        event.located_entity_observer_uuids[str(subject)].clear()
-        event.located_position_observer_uuids['1,2'].clear()
+        event.identified_entity_observer_uuids[str(subject)] = frozenset()
+        event.located_entity_observer_uuids[str(subject)] = frozenset()
+        event.located_position_observer_uuids['1,2'] = frozenset()
         event.visible_cells_added.clear()
         event.seen_cells_added.clear()
         event.effective_light_levels_changed['1,2'] = 0
