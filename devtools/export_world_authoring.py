@@ -31,11 +31,11 @@ def main() -> None:
     world = _world_initialized_event(built, grid)
     tiles = world.tiles
     objects = tuple(PlayerObject(placement=o.placement, item=_floor_item(o.item, ())) for o in world.objects)
-    observer, event, lineage, generation = uuid4(), uuid4(), uuid4(), uuid4()
+    observer, generation = uuid4(), uuid4()
     positions = tuple(t.position for t in tiles)
     sensory = SensoryFact(observer_uuid=observer, initial=True, observer_position=positions[0],
         observer_position_changed=True, effective_light_levels_changed={f"{x},{y}": 3 for x, y in positions},
-        cause_event_uuid=None, visible_cells_added=positions, visible_cells_removed=(), seen_cells_added=positions,
+        cause_occurrence=None, visible_cells_added=positions, visible_cells_removed=(), seen_cells_added=positions,
         entity_contacts_changed={}, entity_contacts_removed=frozenset(),
         object_contacts_changed={o.item.item_uuid: PerceivedContact(position=o.placement.position, visual=True) for o in objects},
         object_contacts_removed=frozenset(), sense_modes_changed=True, sense_modes=(),
@@ -43,10 +43,10 @@ def main() -> None:
     sequence = PlayerSequence(initialization=PlayerInitialization(generation=generation, observer_uuid=observer,
         world=PlayerWorld(battlefield_id=world.battlefield_id, battlefield_name=world.battlefield_name,
                           bounds=world.bounds, width=world.width, height=world.height),
-        nodes=(PlayerNode(uuid=event, lineage_uuid=lineage, parent_event=None, parent_lineage=None,
+        nodes=(PlayerNode(occurrence=0, lineage=0, parent_event=None, parent_lineage=None,
                           children_lineages=(), phase=EventPhase.COMPLETION, canceled=False, fact=sensory),),
-        version_rows=(VersionRow(source_index=0, event_uuid=event, lineage_uuid=lineage),), end_cursor=0,
-        observations=(), world_updates=(WorldUpdate(event_uuid=event, tiles=tiles, objects=objects,
+        version_rows=(VersionRow(source_index=0, lineage=0),), end_cursor=0,
+        observations=(), world_updates=(WorldUpdate(occurrence=0, tiles=tiles, objects=objects,
                                                    objects_removed=(), connectors=world.connectors),),
         audience=PlayerAudience(controlled=(), observers=(observer,), revision=0)), lineages=())
     args.output.mkdir(parents=True, exist_ok=True)

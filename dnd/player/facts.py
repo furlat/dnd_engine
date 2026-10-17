@@ -7,7 +7,7 @@ engine constructors, executable state, audience grant maps, or diagnostic rows.
 from dnd.core.content.descriptors import ContentDescriptor
 
 from dataclasses import dataclass, field
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypedDict
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -17,19 +17,23 @@ from dnd.player.audience import AudiencePerception, PlayerAudience, resolve_audi
 from dnd.types.appearance import AppearanceConfig
 from dnd.types.world import MovementProvocationPolicy
 from dnd.core.action_types import AvailableHandlerInfo
-from dnd.core.combat_log import CombatLogEntry
-from dnd.core.content.identities import HandlerDispatchOutcome
+from dnd.core.combat_log import CombatLogData, CombatLogEntryType
+from dnd.core.content.identities import ContentRef, HandlerDispatchOutcome
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.creature_types import AttackOutcome
-from dnd.core.effect_types import ObjectSectionVolume, ObservedChangeRef, ApplicationMembership, ResolutionRef, EffectPropagationLink
+from dnd.core.effect_types import ObjectSectionVolume, ApplicationMembership, ResolutionRef, EffectPropagationLink
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.types.event_facts import EventPhase, EventType, LandingKind, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState, WorldTileChanges
 from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot, ItemResourceChange, ItemEffectPresentationState,
-    ItemIntegrity, ItemPresentationKind, ItemPresentationState, ItemRemnantState)
+    ItemIntegrity, ItemPresentationKind, ItemRarity, ItemRemnantState)
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
-from dnd.core.presentation_geometry import AoEPresentationGeometry
+from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState
-from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesSnapshot
+from dnd.types.senses import (PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesSnapshot,
+    VolumeSurfaceSight)
+from dnd.core.condition_types import ConditionDurationSummary
+from dnd.types.class_features import DraconicPresenceMode
+from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.spatial_effects import AreaPropagation, SpatialDamageSource, SpatialEffectChangeOperation, SpatialEffectInteractionOperation
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.traps import TrapState
@@ -91,29 +95,194 @@ class PlayerHUDSnapshot:
     sheets: tuple[PlayerCharacterSheet, ...]
 
 
+class SheetChanges(TypedDict, total=False):
+    """Present fields replace the seat's sheet values; against no sheet every field is present."""
+
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
+    species: Species | None
+    species_variant: SpeciesVariant | None
+    background: Background | None
+    origin: AppliedOriginState | None
+    class_levels: tuple[AppliedClassLevel, ...]
+    abilities: tuple[tuple[AbilityName, int], ...]
+    skills: tuple[str, ...]
+    expertise: tuple[str, ...]
+    saves: tuple[str, ...]
+    proficiency_bonus: int
+    resources: tuple[PlayerResource, ...]
+    name: str
+    portrait_key: str | None
+    normal_hp: int
+    maximum_hp: int
+    compatible_item_slots: tuple[tuple[UUID, tuple[str, ...]], ...]
+    handler_details: tuple[AvailableHandlerInfo, ...]
+    scribed_spell_ids: tuple[str, ...]
+    permanent_feature_uses: tuple[str, ...]
+    prepared_spell_selections: tuple[PreparedSpellSelection, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SheetPatch:
+    actor_uuid: UUID
+    changes: SheetChanges
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlayerHUDPatch:
+    """The seat's operation-end display as a patch against its last one.
+
+    It always carries the revision; the initiative and the sheet order only
+    when they changed, and the sheets that changed. Against no display it
+    carries all of them.
+    """
+
+    generation: UUID
+    observer_uuid: UUID
+    revision: int
+    initiative: tuple[UUID, ...] | None = None
+    sheet_order: tuple[UUID, ...] | None = None
+    sheets: tuple[SheetPatch, ...] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlayerLogEntry:
+    """One disclosed combat-log entry, rendered for its seat, without nested copies.
+
+    An entry's children are composed from its node's lineage: in
+    `children_lineages` order, each child lineage's own entry, or, for a child
+    without one, that child's children (the native collection rule). A
+    multi-entity entry's `target_entry_indices` index those children.
+    """
+
+    entry_type: CombatLogEntryType
+    source_name: str
+    source_uuid: str
+    target_name: str | None
+    target_uuid: str | None
+    compact: str
+    verbose: str
+    detailed: str
+    data: CombatLogData
+    success: bool | None
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CombatLogAppend:
     generation: UUID
     observer_uuid: UUID
     encounter_log_index: int
     operation_end_cursor: int
-    entry: CombatLogEntry
+    entry: PlayerLogEntry
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class VisualItem:
-    slot: str
-    item_uuid: UUID
-    item_id: str
+class ItemLook:
+    """What any viewer of an equipped item sees of it; `is_lit` travels in its layer."""
+
+    item_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")]
     item_kind: ItemPresentationKind
     visual_item_name: str
     visual_variant_id: str | None
     equipped_visual_policy: EquippedVisualPolicy
-    item_effects: tuple[ItemEffectPresentationState, ...] = ()
+    item_effects: tuple[ItemEffectPresentationState, ...]
+    very_bright_radius_feet: Annotated[int, Field(ge=0)] | None
+    bright_radius_feet: Annotated[int, Field(ge=0)] | None
+    dim_radius_feet: Annotated[int, Field(ge=0)] | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ItemProfile:
+    """What a controlled item is: the fields its use does not change."""
+
+    name: str
+    description: str | None
+    rarity: ItemRarity
+    weight: float
+    value: int
+    tags: tuple[str, ...]
+    is_pickable: bool
+    is_equippable: bool
+    is_usable: bool
+    is_targetable: bool
+    door_mechanism: DoorMechanism | None
+    door_swing: DoorSwing | None
+    stack_id: str | None
+    damage_dice: str | None
+    damage_type: str | None
+    weapon_properties: tuple[str, ...]
+    armor_type: str | None
+    armor_ac: int | None
+    shield_ac_bonus: int | None
+    max_charges: Annotated[int, Field(ge=-1)] | None
+    max_stack: Annotated[int, Field(ge=1)]
+    is_consumable: bool
+    map_char: str
+    include_in_senses_objects: bool
+    include_in_adjacent_senses_objects: bool
+    include_in_available_object_actions: bool
+    maximum_hit_points: Annotated[int, Field(ge=0)] | None
+    concentration_capacity: Annotated[int, Field(ge=0)]
+    boundary_structure: BoundaryStructure | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ItemState:
+    """What a controlled item's use and the world change."""
+
+    stack_count: Annotated[int, Field(ge=0)]
+    charges: Annotated[int, Field(ge=-1)] | None
+    integrity: ItemIntegrity
+    destruction_outcome: str | None
+    remnant_state: ItemRemnantState | None
+    current_hit_points: Annotated[int, Field(ge=0)] | None
+    concentration_slots: tuple[ItemConcentrationSlot, ...]
+    construction_owner_uuid: UUID | None
+    construction_geometry: AoEPresentationGeometry | None
+    construction_suppressions: tuple[SpellSuppression, ...]
+    known_to_creator: bool
+    supported_by_uuid: UUID | None
+    contact_passage: ContactPassage
+    surface_residues: tuple[ObjectResidueState, ...]
+    linked_spatial_condition_uuid: UUID | None
+    is_open: bool | None
+    is_engaged: bool | None
+    blocks_movement: bool
+    blocks_optics: bool
+    blocks_propagation: bool
+    is_lit: bool | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlayerItem:
+    """What a seat knows of one item instance: its look and, once it controlled the item, its profile and state.
+
+    The profile and state are current while the item is in a controlled inventory.
+    """
+
+    look: ItemLook
+    profile: ItemProfile | None = None
+    state: ItemState | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ItemPatch:
+    """One item's components new to the seat: all it may know the first time, then the components that changed."""
+
+    item_uuid: UUID
+    look: ItemLook | None = None
+    profile: ItemProfile | None = None
+    state: ItemState | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class VisualItem:
+    """One equipped layer; the item's look is in the seat's record of `item_uuid`."""
+
+    slot: str
+    item_uuid: UUID
+    item_id: str
     is_lit: bool | None = None
-    very_bright_radius_feet: Annotated[int, Field(ge=0)] | None = None
-    bright_radius_feet: Annotated[int, Field(ge=0)] | None = None
-    dim_radius_feet: Annotated[int, Field(ge=0)] | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -137,7 +306,8 @@ class PlayerActor:
     armor_class: int
     conditions: tuple[ConditionFact, ...] = ()
     last_visual_position: tuple[int, int] | None = None
-    controlled_items: tuple[ItemPresentationState, ...] | None = None
+    # A controlled actor's inventory, in order; its records are in `PlayerState.items`.
+    controlled_items: tuple[UUID, ...] | None = None
     occupancy_layer: OccupancyLayer | None = None
     temporary_hp_grant: TemporaryHitPointsGrant | None = None
     resolved_size: Size | None = None
@@ -149,11 +319,48 @@ class PlayerActor:
     spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT
 
 
+class ActorChanges(TypedDict, total=False):
+    """Present fields replace the seat's known body values; omitted fields are unchanged.
+
+    Against an absent body (first acquisition) every field is present.
+    """
+
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
+    name: str
+    character_body_id: str | None
+    creature_content_ref: str | None
+    appearance: AppearanceConfig
+    visual_loadout: VisualLoadout
+    normal_hp: int
+    maximum_hp: int
+    temporary_hp: int
+    life_state: LifeState
+    armor_class: int
+    conditions: tuple[ConditionFact, ...]
+    last_visual_position: tuple[int, int] | None
+    controlled_items: tuple[UUID, ...] | None
+    occupancy_layer: OccupancyLayer | None
+    temporary_hp_grant: TemporaryHitPointsGrant | None
+    resolved_size: Size | None
+    structural_base_size: Size | None
+    manifestation: SummonManifestation | None
+    faction: str | None
+    present: bool
+    remains_disposition: RemainsDisposition
+    spatial_disposition: SpatialDisposition
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerObservation:
-    event_uuid: UUID
-    actor: PlayerActor
+    """One actor's observed body at an event, as a patch against what the seat holds,
+    with the patches of the items that body discloses."""
+
+    occurrence: int
+    actor_uuid: UUID
+    changes: ActorChanges
     contact: PerceivedContact | None
+    items: tuple[ItemPatch, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -231,8 +438,8 @@ class AreaReachFact:
     kind: Literal["area_reach"] = "area_reach"
     stage_index: int
     newly_reached_positions: tuple[tuple[int, int], ...]
-    previous_reach_lineage_uuid: UUID | None
-    prerequisite_destruction_lineages: tuple[UUID, ...]
+    previous_reach_lineage: int | None
+    prerequisite_destruction_lineages: tuple[int, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -392,11 +599,12 @@ class DeathSaveFact:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class EquipmentFact:
+    """A holder's equipment change: its body patch (loadout, armor class, inventory) and its items' patches."""
+
     kind: Literal["equipment"] = "equipment"
     source_entity_uuid: UUID
-    visual_loadout: VisualLoadout
-    armor_class: int
-    controlled_items: tuple[ItemPresentationState, ...] | None = None
+    changes: ActorChanges
+    items: tuple[ItemPatch, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -421,7 +629,7 @@ class ItemEffectChangeFact:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CreationWitness:
     """Observed first placement tied to its exact recorded native birth."""
-    birth_event_uuid: UUID
+    birth_occurrence: int
     manifestation: SummonManifestation
 
 
@@ -432,7 +640,7 @@ class SpatialFact:
     entity_uuid: UUID | None
     position: tuple[int, int]
     object_uuid: UUID | None = None
-    commit_event_uuid: UUID | None = None
+    commit_occurrence: int | None = None
     previous_occupancy_layer: OccupancyLayer | None = None
     occupancy_layer: OccupancyLayer | None = None
     terminal_departure: bool = False
@@ -472,7 +680,7 @@ class ItemChargeFact:
 class ActionReaction:
     """Disclosed reaction result and its native triggering lineage."""
 
-    triggered_lineage_uuid: UUID | None
+    triggered_lineage: int | None
     succeeded: bool
     automatic: bool
 
@@ -490,15 +698,67 @@ class ActionFact:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class SpatialEffectContent:
+    """A spatial effect's static content; a seat receives it once per effect."""
+
+    content_ref: ContentRef
+    name: str
+    description: str
+
+
+class SpatialEffectSighting(BaseModel):
+    """One observation of a spatial effect without its static content (`PerceivedSpatialEffect`'s other fields)."""
+
+    model_config = ConfigDict(frozen=True)
+    duration: ConditionDurationSummary | None = None
+    positions: tuple[tuple[int, int], ...]
+    owner_revision: int | None = Field(default=None, ge=0)
+    apparent_presence: bool = False
+    trap_state: TrapState | None = None
+    pressed: bool | None = None
+    direction: tuple[int, int] | None = None
+    anchor_item_uuid: UUID | None = None
+    anchor_entity_uuid: UUID | None = None
+    energy_type: DamageType | None = None
+    presence_mode: DraconicPresenceMode | None = None
+    sustainer_item_uuid: UUID | None = None
+    concentration_slot_uuid: UUID | None = None
+    anchor_position: tuple[int, int] | None = None
+    anchor_elevation_steps: int | None = None
+    area_geometry: AoEPresentationGeometry | None = None
+    construction_sections: tuple[WallAssemblyPresentationGeometry, ...] = ()
+    area_propagation: AreaPropagation | None = None
+    deposit_source: MaterialDepositSource | None = None
+    visible_volume_positions: tuple[tuple[int, int], ...] = ()
+    upper_volume_surfaces: tuple[VolumeSurfaceSight, ...] = ()
+    suppressions: tuple[SpellSuppression, ...] = ()
+
+
+def joined_effect(sighting: SpatialEffectSighting, content: SpatialEffectContent) -> PerceivedSpatialEffect:
+    """The perceived effect of a sighting and its content (both already validated)."""
+    return PerceivedSpatialEffect.model_construct(duration=sighting.duration, content_ref=content.content_ref,
+        name=content.name, description=content.description, positions=sighting.positions,
+        owner_revision=sighting.owner_revision, apparent_presence=sighting.apparent_presence,
+        trap_state=sighting.trap_state, pressed=sighting.pressed, direction=sighting.direction,
+        anchor_item_uuid=sighting.anchor_item_uuid, anchor_entity_uuid=sighting.anchor_entity_uuid,
+        energy_type=sighting.energy_type, presence_mode=sighting.presence_mode,
+        sustainer_item_uuid=sighting.sustainer_item_uuid, concentration_slot_uuid=sighting.concentration_slot_uuid,
+        anchor_position=sighting.anchor_position, anchor_elevation_steps=sighting.anchor_elevation_steps,
+        area_geometry=sighting.area_geometry, construction_sections=sighting.construction_sections,
+        area_propagation=sighting.area_propagation, deposit_source=sighting.deposit_source,
+        visible_volume_positions=sighting.visible_volume_positions,
+        upper_volume_surfaces=sighting.upper_volume_surfaces, suppressions=sighting.suppressions)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SensoryFact:
     kind: Literal["sensory"] = "sensory"
-    observed_changes: tuple[ObservedChangeRef, ...] = ()
     observer_uuid: UUID
     initial: bool
     observer_position: tuple[int, int]
     observer_position_changed: bool
     effective_light_levels_changed: dict[str, int]
-    cause_event_uuid: UUID | None
+    cause_occurrence: int | None
     visible_cells_added: tuple[tuple[int, int], ...]
     visible_cells_removed: tuple[tuple[int, int], ...]
     seen_cells_added: tuple[tuple[int, int], ...]
@@ -514,10 +774,18 @@ class SensoryFact:
     visual_access: int | None
     paths_dirty: bool
     hazardous_cells_changed: dict[str, bool] = field(default_factory=dict)
-    spatial_effects_changed: dict[UUID, PerceivedSpatialEffect] = field(default_factory=dict)
+    spatial_effect_sightings: dict[UUID, SpatialEffectSighting] = field(default_factory=dict)
+    # The content of each sighted effect the seat does not hold yet; a folded fact holds every sighting's content.
+    spatial_effect_content: dict[UUID, SpatialEffectContent] = field(default_factory=dict)
     spatial_effects_removed: frozenset[UUID] = frozenset()
     light_sources_changed: dict[UUID, PerceivedLightSource] = field(default_factory=dict)
     light_sources_removed: dict[UUID, int] = field(default_factory=dict)
+
+    @property
+    def spatial_effects_changed(self) -> dict[UUID, PerceivedSpatialEffect]:
+        """The perceived effects the shared sensory reducer reads: each sighting with its content."""
+        return {identity: joined_effect(row, self.spatial_effect_content[identity])
+                for identity, row in self.spatial_effect_sightings.items()}
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -595,9 +863,9 @@ class ContentAttribution:
     provided_by_id: str | None = None
     origin_root_id: str | None = None
     source_entity_uuid: UUID | None = None
-    triggering_event_uuid: UUID | None = None
-    triggering_lineage_uuid: UUID | None = None
-    emitted_lineage_uuids: tuple[UUID, ...] = ()
+    triggering_occurrence: int | None = None
+    triggering_lineage: int | None = None
+    emitted_lineages: tuple[int, ...] = ()
     handler_name: str | None = None
     dispatch_index: int | None = None
     outcome: HandlerDispatchOutcome | None = None
@@ -612,17 +880,24 @@ class ActionCancellation:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerNode:
-    uuid: UUID
-    lineage_uuid: UUID
-    parent_event: UUID | None
-    parent_lineage: UUID | None
-    children_lineages: tuple[UUID, ...]
+    """One disclosed event version.
+
+    Versions are identified by the seat's occurrence index (the version
+    row's `source_index`), lineages by the occurrence index of their first
+    version the seat received.
+    """
+
+    occurrence: int
+    lineage: int
+    parent_event: int | None
+    parent_lineage: int | None
+    children_lineages: tuple[int, ...]
     phase: EventPhase
     canceled: bool
     fact: PlayerFact | None
     resolution_ref: ResolutionRef | None = None
     cancellation: ActionCancellation | None = None
-    combat_log: CombatLogEntry | None = None
+    combat_log: PlayerLogEntry | None = None
     turn_execution_id: UUID | None = None
     content_attributions: tuple[ContentAttribution, ...] = ()
 
@@ -630,8 +905,7 @@ class PlayerNode:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class VersionRow:
     source_index: int
-    event_uuid: UUID
-    lineage_uuid: UUID
+    lineage: int
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -687,7 +961,7 @@ class TileFieldUpdate:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorldUpdate:
-    event_uuid: UUID
+    occurrence: int
     tiles: tuple[WorldTileState, ...]
     objects: tuple[PlayerObject, ...]
     objects_removed: tuple[UUID, ...]
@@ -708,21 +982,18 @@ class PlayerWorld:
 class PlayerLineage:
     generation: UUID
     observer_uuid: UUID
-    lineage_uuid: UUID
-    root: PlayerNode | None
+    # The root's lineage, or for a group whose root is undisclosed the lineage of its first version.
+    lineage: int
+    # The root's index in `events`; None when the root itself is not disclosed.
+    root: int | None
     events: tuple[PlayerNode, ...]
     version_rows: tuple[VersionRow, ...]
     start_cursor: int
     end_cursor: int
     observations: tuple[PlayerObservation, ...] = ()
     world_updates: tuple[WorldUpdate, ...] = ()
-    hud_snapshot: PlayerHUDSnapshot | None = None
     audience: PlayerAudience | None = None
 
-    @property
-    def group_uuid(self) -> UUID:
-        """Stable local presentation key, including consequences of an unknown cause."""
-        return self.root.uuid if self.root is not None else self.lineage_uuid
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -735,17 +1006,17 @@ class PlayerInitialization:
     end_cursor: int
     observations: tuple[PlayerObservation, ...]
     world_updates: tuple[WorldUpdate, ...]
-    hud_snapshot: PlayerHUDSnapshot | None = None
+    hud: PlayerHUDPatch | None = None
     audience: PlayerAudience | None = None
 
 
 class PlayerSequence(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal[5] = 5
+    schema_version: Literal[6] = 6
     initialization: PlayerInitialization
     lineages: tuple[PlayerLineage, ...]
     combat_log_appends: tuple[CombatLogAppend, ...] = ()
-    hud_snapshots: tuple[PlayerHUDSnapshot, ...] = ()
+    huds: tuple[PlayerHUDPatch, ...] = ()
 
 
 class PlayerUpdate(BaseModel):
@@ -753,7 +1024,7 @@ class PlayerUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     audience: PlayerAudience
     lineages: tuple[PlayerLineage, ...]
-    hud: PlayerHUDSnapshot | None
+    hud: PlayerHUDPatch | None
     combat_log_appends: tuple[CombatLogAppend, ...]
     content_additions: tuple[ContentDescriptor, ...]
 
@@ -772,6 +1043,10 @@ class PlayerState:
     # Keep spatial commit order across separately timed presentation groups.
     spatial_commit_cursors: dict[UUID, int] = field(default_factory=dict)
     actors: dict[UUID, PlayerActor] = field(default_factory=dict)
+    # The static content of every spatial effect the seat has seen, by effect uuid.
+    spatial_content: dict[UUID, SpatialEffectContent] = field(default_factory=dict)
+    # Every item instance the seat has seen, by uuid.
+    items: dict[UUID, PlayerItem] = field(default_factory=dict)
     current_actor_uuid: UUID | None = None
     round_number: int = 0
     hud_snapshot: PlayerHUDSnapshot | None = None

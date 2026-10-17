@@ -396,9 +396,8 @@ def operation_shape(packet):
     def log_value(entry):
         if entry is None:
             return None
-        return {**{key: entry[key] for key in ('entry_type', 'source_name', 'target_name',
-            'compact', 'verbose', 'detailed', 'success')},
-            'sub_entries': [log_value(child) for child in entry['sub_entries']]}
+        return {key: entry[key] for key in ('entry_type', 'source_name', 'target_name',
+            'compact', 'verbose', 'detailed', 'success')}
     if packet['kind'] == 'initialization':
         return {'kind': 'initialization'}
     return {'kind': packet['kind'],

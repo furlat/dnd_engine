@@ -40,7 +40,7 @@ class ActionLogData(TypedDict):
 
 
 class ActionReaction(TypedDict):
-    triggered_lineage_uuid: str | None
+    triggered_lineage: int | None
     succeeded: bool
     automatic: bool
 
@@ -100,6 +100,9 @@ type ActionWorldEffectScope = Literal[
 type ActionWorldEffectShape = Literal['sphere']
 
 
+type LastVisualPositionItem = int
+
+
 type AdvantageStatus = Literal['None', 'Advantage', 'Disadvantage']
 
 
@@ -147,8 +150,8 @@ class AreaReachFact(TypedDict):
     kind: NotRequired[Literal['area_reach']]
     stage_index: int
     newly_reached_positions: list[list[NewlyReachedPosition]]
-    previous_reach_lineage_uuid: str | None
-    prerequisite_destruction_lineages: list[str]
+    previous_reach_lineage: int | None
+    prerequisite_destruction_lineages: list[int]
 
 
 class AttachmentRequest(TypedDict):
@@ -1213,24 +1216,6 @@ class ObjectSectionVolume(TypedDict):
     base_height_steps: int
 
 
-class ObservedChangeRef(TypedDict):
-    source_event_uuid: str
-    source_index: int
-    resolution_ref: NotRequired[EventResolutionRef | ApplicationResolutionRef | None]
-    field: Literal[
-        'position',
-        'visibility',
-        'light',
-        'hazards',
-        'senses',
-        'paths',
-        'entity_contact',
-        'object_contact',
-        'spatial_effect',
-    ]
-    owner_uuid: str
-
-
 type ObservedPathSegment = int
 
 
@@ -1305,25 +1290,13 @@ class PerceivedLightSource(TypedDict):
     affected_tiles: NotRequired[dict[str, LightLevel]]
 
 
-type AnchorPositionItem = int
-
-
-type VisibleVolumePosition = int
-
-
 type RangeOriginItem = int
-
-
-type LastVisualPositionItem = int
 
 
 class PlayerAudience(TypedDict):
     controlled: list[str]
     observers: list[str]
     revision: NotRequired[int]
-
-
-type Ability = int
 
 
 class PlayerCursor(TypedDict):
@@ -1409,7 +1382,7 @@ class PreviewRequest(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[11]]
+    player_schema_version: NotRequired[Literal[12]]
     schema_digest: str
 
 
@@ -1540,6 +1513,9 @@ type VisibleCellsRemovedItem = int
 type SeenCellsAddedItem = int
 
 
+type Ability = int
+
+
 class ShoveFact(TypedDict):
     kind: NotRequired[Literal['shove']]
     source_entity_uuid: str
@@ -1627,12 +1603,24 @@ type SpatialEffectChangeOperation = Literal[
 ]
 
 
+class SpatialEffectContent(TypedDict):
+    content_ref: ContentRef
+    name: str
+    description: str
+
+
 type SpatialEffectInteractionOperation = Literal[
     'ignite', 'douse', 'freeze', 'electrify', 'vaporize', 'disperse', 'dry'
 ]
 
 
 type SpatialEffectLayer = Literal['ground_surface', 'cloud', 'field']
+
+
+type AnchorPositionItem = int
+
+
+type VisibleVolumePosition = int
 
 
 type RemovedPosition = int
@@ -1912,8 +1900,14 @@ class UnlocatedMovementLogData(TypedDict):
 
 class VersionRow(TypedDict):
     source_index: int
-    event_uuid: str
-    lineage_uuid: str
+    lineage: int
+
+
+class VisualItem(TypedDict):
+    slot: str
+    item_uuid: str
+    item_id: str
+    is_lit: NotRequired[bool | None]
 
 
 type VisualLoadoutSlot = Literal[
@@ -2284,16 +2278,16 @@ class ContentAttribution(TypedDict):
     provided_by_id: NotRequired[str | None]
     origin_root_id: NotRequired[str | None]
     source_entity_uuid: NotRequired[str | None]
-    triggering_event_uuid: NotRequired[str | None]
-    triggering_lineage_uuid: NotRequired[str | None]
-    emitted_lineage_uuids: NotRequired[list[str]]
+    triggering_occurrence: NotRequired[int | None]
+    triggering_lineage: NotRequired[int | None]
+    emitted_lineages: NotRequired[list[int]]
     handler_name: NotRequired[str | None]
     dispatch_index: NotRequired[int | None]
     outcome: NotRequired[HandlerDispatchOutcome | None]
 
 
 class CreationWitness(TypedDict):
-    birth_event_uuid: str
+    birth_occurrence: int
     manifestation: SummonManifestation
 
 
@@ -2410,6 +2404,50 @@ class ItemEffectPresentationState(TypedDict):
     applied_source_event_cursor: NotRequired[int | None]
 
 
+class ItemLook(TypedDict):
+    item_id: str
+    item_kind: ItemPresentationKind
+    visual_item_name: str
+    visual_variant_id: str | None
+    equipped_visual_policy: EquippedVisualPolicy
+    item_effects: list[ItemEffectPresentationState]
+    very_bright_radius_feet: int | None
+    bright_radius_feet: int | None
+    dim_radius_feet: int | None
+
+
+class ItemProfile(TypedDict):
+    name: str
+    description: str | None
+    rarity: ItemRarity
+    weight: float
+    value: int
+    tags: list[str]
+    is_pickable: bool
+    is_equippable: bool
+    is_usable: bool
+    is_targetable: bool
+    door_mechanism: DoorMechanism | None
+    door_swing: DoorSwing | None
+    stack_id: str | None
+    damage_dice: str | None
+    damage_type: str | None
+    weapon_properties: list[str]
+    armor_type: str | None
+    armor_ac: int | None
+    shield_ac_bonus: int | None
+    max_charges: int | None
+    max_stack: int
+    is_consumable: bool
+    map_char: str
+    include_in_senses_objects: bool
+    include_in_adjacent_senses_objects: bool
+    include_in_available_object_actions: bool
+    maximum_hit_points: int | None
+    concentration_capacity: int
+    boundary_structure: BoundaryStructure | None
+
+
 class ItemRemnantState(TypedDict):
     door_open: NotRequired[bool | None]
     door_swing: NotRequired[DoorSwing | None]
@@ -2450,50 +2488,6 @@ class PerceivedContact(TypedDict):
     special_senses: NotRequired[list[SensesType]]
 
 
-class PlayerCharacterSheet(TypedDict):
-    actor_uuid: str
-    species: Species | None
-    species_variant: SpeciesVariant | None
-    background: Background | None
-    origin: AppliedOriginState | None
-    class_levels: list[AppliedClassLevel]
-    abilities: list[
-        list[
-            Literal[
-                'strength',
-                'dexterity',
-                'constitution',
-                'intelligence',
-                'wisdom',
-                'charisma',
-            ]
-            | Ability
-        ]
-    ]
-    skills: list[str]
-    expertise: list[str]
-    saves: list[str]
-    proficiency_bonus: int
-    resources: list[PlayerResource]
-    name: NotRequired[str]
-    portrait_key: NotRequired[str | None]
-    normal_hp: NotRequired[int]
-    maximum_hp: NotRequired[int]
-    compatible_item_slots: NotRequired[list[list[str | list[str]]]]
-    handler_details: NotRequired[list[AvailableHandlerInfo]]
-    scribed_spell_ids: NotRequired[list[str]]
-    permanent_feature_uses: NotRequired[list[str]]
-    prepared_spell_selections: NotRequired[list[PreparedSpellSelection]]
-
-
-class PlayerHUDSnapshot(TypedDict):
-    generation: str
-    observer_uuid: str
-    revision: int
-    initiative: list[str]
-    sheets: list[PlayerCharacterSheet]
-
-
 class PrepareSpellsIntent(TypedDict):
     kind: NotRequired[Literal['prepare_spells']]
     selection: PreparedSpellSelection
@@ -2528,6 +2522,48 @@ class SenseMode(TypedDict):
     range_feet: NotRequired[int]
 
 
+class SheetChanges(TypedDict):
+    species: NotRequired[Species | None]
+    species_variant: NotRequired[SpeciesVariant | None]
+    background: NotRequired[Background | None]
+    origin: NotRequired[AppliedOriginState | None]
+    class_levels: NotRequired[list[AppliedClassLevel]]
+    abilities: NotRequired[
+        list[
+            list[
+                Literal[
+                    'strength',
+                    'dexterity',
+                    'constitution',
+                    'intelligence',
+                    'wisdom',
+                    'charisma',
+                ]
+                | Ability
+            ]
+        ]
+    ]
+    skills: NotRequired[list[str]]
+    expertise: NotRequired[list[str]]
+    saves: NotRequired[list[str]]
+    proficiency_bonus: NotRequired[int]
+    resources: NotRequired[list[PlayerResource]]
+    name: NotRequired[str]
+    portrait_key: NotRequired[str | None]
+    normal_hp: NotRequired[int]
+    maximum_hp: NotRequired[int]
+    compatible_item_slots: NotRequired[list[list[str | list[str]]]]
+    handler_details: NotRequired[list[AvailableHandlerInfo]]
+    scribed_spell_ids: NotRequired[list[str]]
+    permanent_feature_uses: NotRequired[list[str]]
+    prepared_spell_selections: NotRequired[list[PreparedSpellSelection]]
+
+
+class SheetPatch(TypedDict):
+    actor_uuid: str
+    changes: SheetChanges
+
+
 class SpatialChangeLogData(TypedDict):
     kind: NotRequired[Literal['spatial_change']]
     operation: SpatialEffectChangeOperation
@@ -2555,7 +2591,7 @@ class SpatialFact(TypedDict):
     entity_uuid: str | None
     position: list[PositionItem]
     object_uuid: NotRequired[str | None]
-    commit_event_uuid: NotRequired[str | None]
+    commit_occurrence: NotRequired[int | None]
     previous_occupancy_layer: NotRequired[OccupancyLayer | None]
     occupancy_layer: NotRequired[OccupancyLayer | None]
     terminal_departure: NotRequired[bool]
@@ -2607,21 +2643,6 @@ class TileResidueState(TypedDict):
 
 class UnequipItem(TypedDict):
     slot: WeaponSlot | BodyPart | RingSlot
-
-
-class VisualItem(TypedDict):
-    slot: str
-    item_uuid: str
-    item_id: str
-    item_kind: ItemPresentationKind
-    visual_item_name: str
-    visual_variant_id: str | None
-    equipped_visual_policy: EquippedVisualPolicy
-    item_effects: NotRequired[list[ItemEffectPresentationState]]
-    is_lit: NotRequired[bool | None]
-    very_bright_radius_feet: NotRequired[int | None]
-    bright_radius_feet: NotRequired[int | None]
-    dim_radius_feet: NotRequired[int | None]
 
 
 class VisualLoadout(TypedDict):
@@ -2781,50 +2802,6 @@ class AttackLogData(TypedDict):
     is_threatened: NotRequired[bool]
 
 
-class CombatLogEntry(TypedDict):
-    entry_type: CombatLogEntryType
-    source_name: str
-    source_uuid: str
-    target_name: NotRequired[str | None]
-    target_uuid: NotRequired[str | None]
-    compact: str
-    verbose: str
-    detailed: str
-    data: (
-        AttackLogData
-        | MovementLogData
-        | JumpMovementLogData
-        | ConnectorMovementLogData
-        | SavingThrowLogData
-        | SpellSaveLogData
-        | SpellInterruptionLogData
-        | SkillCheckLogData
-        | EntitySpottedLogData
-        | HazardDetectedLogData
-        | DamageTakenLogData
-        | HealLogData
-        | ActionLogData
-        | TurnLogData
-        | MultiEntityLogData
-        | RollModificationLogData
-        | EmptyLogData
-        | ConditionRemovedLogData
-        | DeathLogData
-        | SpellDamageLogData
-        | DeathSaveLogData
-        | ShoveLogData
-        | StepMovementLogData
-        | ForcedMovementLogData
-        | ObservedMovementLogData
-        | UnlocatedMovementLogData
-        | UnknownMovementLogData
-        | SpatialChangeLogData
-        | SpatialInteractionLogData
-    )
-    success: NotRequired[bool | None]
-    sub_entries: NotRequired[list[CombatLogEntry]]
-
-
 class ContentPresentation(TypedDict):
     icon_key: NotRequired[str | None]
     portrait_key: NotRequired[str | None]
@@ -2940,6 +2917,58 @@ class PlayerChoices(TypedDict):
     handler_details: NotRequired[list[AvailableHandlerInfo]]
 
 
+class PlayerHUDPatch(TypedDict):
+    generation: str
+    observer_uuid: str
+    revision: int
+    initiative: NotRequired[list[str] | None]
+    sheet_order: NotRequired[list[str] | None]
+    sheets: NotRequired[list[SheetPatch]]
+
+
+class PlayerLogEntry(TypedDict):
+    entry_type: CombatLogEntryType
+    source_name: str
+    source_uuid: str
+    target_name: str | None
+    target_uuid: str | None
+    compact: str
+    verbose: str
+    detailed: str
+    data: (
+        AttackLogData
+        | MovementLogData
+        | JumpMovementLogData
+        | ConnectorMovementLogData
+        | SavingThrowLogData
+        | SpellSaveLogData
+        | SpellInterruptionLogData
+        | SkillCheckLogData
+        | EntitySpottedLogData
+        | HazardDetectedLogData
+        | DamageTakenLogData
+        | HealLogData
+        | ActionLogData
+        | TurnLogData
+        | MultiEntityLogData
+        | RollModificationLogData
+        | EmptyLogData
+        | ConditionRemovedLogData
+        | DeathLogData
+        | SpellDamageLogData
+        | DeathSaveLogData
+        | ShoveLogData
+        | StepMovementLogData
+        | ForcedMovementLogData
+        | ObservedMovementLogData
+        | UnlocatedMovementLogData
+        | UnknownMovementLogData
+        | SpatialChangeLogData
+        | SpatialInteractionLogData
+    )
+    success: bool | None
+
+
 class PlayerSelectionPreview(TypedDict):
     subjects: NotRequired[list[ChoiceSubject]]
     positions: NotRequired[list[list[Position]]]
@@ -3019,7 +3048,7 @@ class CombatLogAppend(TypedDict):
     observer_uuid: str
     encounter_log_index: int
     operation_end_cursor: int
-    entry: CombatLogEntry
+    entry: PlayerLogEntry
 
 
 class CommandRequest(TypedDict):
@@ -3171,6 +3200,39 @@ class ItemPresentationState(TypedDict):
     dim_radius_feet: NotRequired[int | None]
 
 
+class ItemState(TypedDict):
+    stack_count: int
+    charges: int | None
+    integrity: ItemIntegrity
+    destruction_outcome: str | None
+    remnant_state: ItemRemnantState | None
+    current_hit_points: int | None
+    concentration_slots: list[ItemConcentrationSlot]
+    construction_owner_uuid: str | None
+    construction_geometry: (
+        SpherePresentationGeometry
+        | ConePresentationGeometry
+        | LinePresentationGeometry
+        | CubePresentationGeometry
+        | CylinderPresentationGeometry
+        | WallPresentationGeometry
+        | WallAssemblyPresentationGeometry
+        | None
+    )
+    construction_suppressions: list[SpellSuppression]
+    known_to_creator: bool
+    supported_by_uuid: str | None
+    contact_passage: ContactPassage
+    surface_residues: list[ObjectResidueState]
+    linked_spatial_condition_uuid: str | None
+    is_open: bool | None
+    is_engaged: bool | None
+    blocks_movement: bool
+    blocks_optics: bool
+    blocks_propagation: bool
+    is_lit: bool | None
+
+
 class ObjectDestroyedFact(TypedDict):
     kind: NotRequired[Literal['object_destroyed']]
     object_uuid: str
@@ -3185,11 +3247,14 @@ class ObjectDestroyedFact(TypedDict):
     resulting_placement: NotRequired[WorldObjectPlacement | None]
 
 
-class PerceivedSpatialEffect(TypedDict):
+class PlayerObject(TypedDict):
+    placement: WorldObjectPlacement
+    item: FloorItem
+    contained_items: NotRequired[list[FloorItem] | None]
+
+
+class SpatialEffectSighting(TypedDict):
     duration: NotRequired[ConditionDurationSummary | None]
-    content_ref: ContentRef
-    name: str
-    description: str
     positions: list[list[Position]]
     owner_revision: NotRequired[int | None]
     apparent_presence: NotRequired[bool]
@@ -3222,42 +3287,6 @@ class PerceivedSpatialEffect(TypedDict):
     visible_volume_positions: NotRequired[list[list[VisibleVolumePosition]]]
     upper_volume_surfaces: NotRequired[list[VolumeSurfaceSight]]
     suppressions: NotRequired[list[SpellSuppression]]
-
-
-class PlayerObject(TypedDict):
-    placement: WorldObjectPlacement
-    item: FloorItem
-    contained_items: NotRequired[list[FloorItem] | None]
-
-
-class SensoryFact(TypedDict):
-    kind: NotRequired[Literal['sensory']]
-    observed_changes: NotRequired[list[ObservedChangeRef]]
-    observer_uuid: str
-    initial: bool
-    observer_position: list[ObserverPositionItem]
-    observer_position_changed: bool
-    effective_light_levels_changed: dict[str, int]
-    cause_event_uuid: str | None
-    visible_cells_added: list[list[VisibleCellsAddedItem]]
-    visible_cells_removed: list[list[VisibleCellsRemovedItem]]
-    seen_cells_added: list[list[SeenCellsAddedItem]]
-    entity_contacts_changed: dict[str, PerceivedContact]
-    entity_contacts_removed: list[str]
-    object_contacts_changed: dict[str, PerceivedContact]
-    object_contacts_removed: list[str]
-    sense_modes_changed: bool
-    sense_modes: list[SenseMode] | None
-    passive_perception_changed: bool
-    passive_perception: int | None
-    visual_access_changed: bool
-    visual_access: int | None
-    paths_dirty: bool
-    hazardous_cells_changed: NotRequired[dict[str, bool]]
-    spatial_effects_changed: NotRequired[dict[str, PerceivedSpatialEffect]]
-    spatial_effects_removed: NotRequired[list[str]]
-    light_sources_changed: NotRequired[dict[str, PerceivedLightSource]]
-    light_sources_removed: NotRequired[dict[str, int]]
 
 
 class SpellFact(TypedDict):
@@ -3296,7 +3325,7 @@ class SpellFact(TypedDict):
 
 
 class WorldUpdate(TypedDict):
-    event_uuid: str
+    occurrence: int
     tiles: list[WorldTileState]
     objects: list[PlayerObject]
     objects_removed: list[str]
@@ -3319,29 +3348,57 @@ class ConditionFact(TypedDict):
     consumed: NotRequired[bool]
 
 
-class EquipmentFact(TypedDict):
-    kind: NotRequired[Literal['equipment']]
-    source_entity_uuid: str
-    visual_loadout: VisualLoadout
-    armor_class: int
-    controlled_items: NotRequired[list[ItemPresentationState] | None]
+class ItemPatch(TypedDict):
+    item_uuid: str
+    look: NotRequired[ItemLook | None]
+    profile: NotRequired[ItemProfile | None]
+    state: NotRequired[ItemState | None]
 
 
-class PlayerActor(TypedDict):
-    uuid: str
-    name: str
-    character_body_id: str | None
-    creature_content_ref: str | None
-    appearance: AppearanceConfig
-    visual_loadout: VisualLoadout
-    normal_hp: int
-    maximum_hp: int
-    temporary_hp: int
-    life_state: LifeState
-    armor_class: int
+class SensoryFact(TypedDict):
+    kind: NotRequired[Literal['sensory']]
+    observer_uuid: str
+    initial: bool
+    observer_position: list[ObserverPositionItem]
+    observer_position_changed: bool
+    effective_light_levels_changed: dict[str, int]
+    cause_occurrence: int | None
+    visible_cells_added: list[list[VisibleCellsAddedItem]]
+    visible_cells_removed: list[list[VisibleCellsRemovedItem]]
+    seen_cells_added: list[list[SeenCellsAddedItem]]
+    entity_contacts_changed: dict[str, PerceivedContact]
+    entity_contacts_removed: list[str]
+    object_contacts_changed: dict[str, PerceivedContact]
+    object_contacts_removed: list[str]
+    sense_modes_changed: bool
+    sense_modes: list[SenseMode] | None
+    passive_perception_changed: bool
+    passive_perception: int | None
+    visual_access_changed: bool
+    visual_access: int | None
+    paths_dirty: bool
+    hazardous_cells_changed: NotRequired[dict[str, bool]]
+    spatial_effect_sightings: NotRequired[dict[str, SpatialEffectSighting]]
+    spatial_effect_content: NotRequired[dict[str, SpatialEffectContent]]
+    spatial_effects_removed: NotRequired[list[str]]
+    light_sources_changed: NotRequired[dict[str, PerceivedLightSource]]
+    light_sources_removed: NotRequired[dict[str, int]]
+
+
+class ActorChanges(TypedDict):
+    name: NotRequired[str]
+    character_body_id: NotRequired[str | None]
+    creature_content_ref: NotRequired[str | None]
+    appearance: NotRequired[AppearanceConfig]
+    visual_loadout: NotRequired[VisualLoadout]
+    normal_hp: NotRequired[int]
+    maximum_hp: NotRequired[int]
+    temporary_hp: NotRequired[int]
+    life_state: NotRequired[LifeState]
+    armor_class: NotRequired[int]
     conditions: NotRequired[list[ConditionFact]]
     last_visual_position: NotRequired[list[LastVisualPositionItem] | None]
-    controlled_items: NotRequired[list[ItemPresentationState] | None]
+    controlled_items: NotRequired[list[str] | None]
     occupancy_layer: NotRequired[OccupancyLayer | None]
     temporary_hp_grant: NotRequired[TemporaryHitPointsGrant | None]
     resolved_size: NotRequired[Size | None]
@@ -3353,12 +3410,6 @@ class PlayerActor(TypedDict):
     spatial_disposition: NotRequired[SpatialDisposition]
 
 
-class PlayerObservation(TypedDict):
-    event_uuid: str
-    actor: PlayerActor
-    contact: PerceivedContact | None
-
-
 class ConditionChangeFact(TypedDict):
     kind: NotRequired[Literal['condition']]
     target_entity_uuid: str
@@ -3367,12 +3418,19 @@ class ConditionChangeFact(TypedDict):
     consumed: NotRequired[bool]
 
 
+class EquipmentFact(TypedDict):
+    kind: NotRequired[Literal['equipment']]
+    source_entity_uuid: str
+    changes: ActorChanges
+    items: NotRequired[list[ItemPatch]]
+
+
 class PlayerNode(TypedDict):
-    uuid: str
-    lineage_uuid: str
-    parent_event: str | None
-    parent_lineage: str | None
-    children_lineages: list[str]
+    occurrence: int
+    lineage: int
+    parent_event: int | None
+    parent_lineage: int | None
+    children_lineages: list[int]
     phase: EventPhase
     canceled: bool
     fact: (
@@ -3408,9 +3466,17 @@ class PlayerNode(TypedDict):
     )
     resolution_ref: NotRequired[EventResolutionRef | ApplicationResolutionRef | None]
     cancellation: NotRequired[ActionCancellation | None]
-    combat_log: NotRequired[CombatLogEntry | None]
+    combat_log: NotRequired[PlayerLogEntry | None]
     turn_execution_id: NotRequired[str | None]
     content_attributions: NotRequired[list[ContentAttribution]]
+
+
+class PlayerObservation(TypedDict):
+    occurrence: int
+    actor_uuid: str
+    changes: ActorChanges
+    contact: PerceivedContact | None
+    items: NotRequired[list[ItemPatch]]
 
 
 class PlayerInitialization(TypedDict):
@@ -3422,29 +3488,28 @@ class PlayerInitialization(TypedDict):
     end_cursor: int
     observations: list[PlayerObservation]
     world_updates: list[WorldUpdate]
-    hud_snapshot: NotRequired[PlayerHUDSnapshot | None]
+    hud: NotRequired[PlayerHUDPatch | None]
     audience: NotRequired[PlayerAudience | None]
 
 
 class PlayerLineage(TypedDict):
     generation: str
     observer_uuid: str
-    lineage_uuid: str
-    root: PlayerNode | None
+    lineage: int
+    root: int | None
     events: list[PlayerNode]
     version_rows: list[VersionRow]
     start_cursor: int
     end_cursor: int
     observations: NotRequired[list[PlayerObservation]]
     world_updates: NotRequired[list[WorldUpdate]]
-    hud_snapshot: NotRequired[PlayerHUDSnapshot | None]
     audience: NotRequired[PlayerAudience | None]
 
 
 class PlayerOperation(TypedDict):
     audience: PlayerAudience
     lineages: list[PlayerLineage]
-    hud: PlayerHUDSnapshot | None
+    hud: PlayerHUDPatch | None
     combat_log_appends: list[CombatLogAppend]
     content_additions: list[ContentDescriptor]
     kind: NotRequired[Literal['operation']]

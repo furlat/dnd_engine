@@ -160,7 +160,6 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
             preview=preview_player_selection(session, query.actor_uuid, row, selected, extra_positions,
                 prefer_safe=query.selection.prefer_safe, cast_at_level=query.selection.cast_at_level))
         return Reply(has_response=True), (), response
-    previous_hud = {seat: view.projection.remembered.hud_snapshot for seat, view in runtime.audiences.items()}
     if isinstance(request, Advance):
         operation = advance_controller(session)
         if operation.boundary is not None and operation.boundary.status == 'error':
@@ -201,7 +200,7 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
         next_boundary = boundary(session, seat, previous.state_revision)
         owns_command = isinstance(request, Command) and request.seat_id == seat
         if not (owns_command or update.lineages or update.combat_log_appends or update.content_additions
-                or update.hud != previous_hud[seat] or next_boundary != previous.boundary):
+                or update.hud is not None or next_boundary != previous.boundary):
             continue
         revision = str(uuid4())
         next_boundary = boundary(session, seat, revision)

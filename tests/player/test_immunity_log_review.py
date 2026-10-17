@@ -58,15 +58,16 @@ def test_immunity_log_belongs_to_its_canceled_condition_event_and_replays(nested
                 for seat, audience in session.seats.items()))
         update = capture_application_operation(audiences, operation, catalog)["party"]
         assert update.combat_log_appends == ()
+        occurrence = audiences["party"].projection.public_cursors[EventQueue.get_event_index(canceled.uuid)]
         node = next(node for lineage in update.lineages for node in lineage.events
-            if node.uuid == canceled.uuid)
+            if node.occurrence == occurrence)
         assert node.canceled and node.combat_log is not None
         assert node.combat_log.compact == canceled.combat_log.compact
         assert node.combat_log.target_uuid == str(target.uuid)
         if nested:
             assert node.parent_lineage is not None
-            assert any(parent.lineage_uuid == node.parent_lineage
-                and node.lineage_uuid in parent.children_lineages
+            assert any(parent.lineage == node.parent_lineage
+                and node.lineage in parent.children_lineages
                 for lineage in update.lineages for parent in lineage.events)
         detached = PlayerUpdate.model_validate_json(update.model_dump_json())
         close_session(session)

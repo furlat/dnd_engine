@@ -51,7 +51,7 @@ def test_known_tile_light_updates_carry_only_changed_fields_at_each_event():
         packet = project_event(projection, event, index)
         packets.append(packet)
         update, = packet.world_updates
-        assert update.event_uuid == event.uuid
+        assert update.occurrence == projection.public_cursors[index]
         assert update.tiles == ()
         change, = update.tile_changes
         assert change.position == (1, 0)
