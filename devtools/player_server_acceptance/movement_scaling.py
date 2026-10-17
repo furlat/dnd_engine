@@ -156,6 +156,7 @@ def heap_census(runtime):
             ('event_models', event), ('model_dicts', event.__dict__),
             ('model_field_sets', event.__pydantic_fields_set__),
             ('model_private_dicts', event.__pydantic_private__),
+            # Storage audit: the lists each version holds (later children live in the queue's index).
             ('children_events', event.children_events),
             ('lineage_children_events', event.lineage_children_events),
             ('children_lineages', event.children_lineages),

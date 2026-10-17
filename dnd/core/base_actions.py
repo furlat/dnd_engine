@@ -2657,7 +2657,7 @@ class BaseAction(BaseObject):
             execution_event = execution_event.model_copy(update={
                 "use_register": True,
                 "lineage_children_events": list(
-                    declaration_event.lineage_children_events
+                    EventQueue.child_links(declaration_event)[1]
                 ),
                 "children_events": [],
             })

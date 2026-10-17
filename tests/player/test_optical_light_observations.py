@@ -207,7 +207,7 @@ def test_observer_movement_keeps_stationary_descriptor_until_no_contribution_is_
 
 @pytest.mark.parametrize('footprint', [{}, {'5,5': LightLevel.BRIGHT_LIGHT}],
     ids=['compact-live', 'historical-footprint'])
-def test_capture_detaches_source_dictionary_and_optional_historical_footprint(room, footprint):
+def test_capture_keeps_source_dictionary_and_optional_historical_footprint(room, footprint):
     built, (_, witness), _ = room
     identity = uuid4()
     source = PerceivedLightSource(source_uuid=identity, revision=1, position=(5, 5),
@@ -222,8 +222,6 @@ def test_capture_detaches_source_dictionary_and_optional_historical_footprint(ro
         battlefield_id=built.definition.battlefield_id)
     retained = [lineage.root, next(row for _, row in interval.admitted if row.uuid == event.uuid)]
     expected = source.model_copy(deep=True)
-    event.light_sources_changed[identity].affected_tiles['9,9'] = LightLevel.DIM_LIGHT
-    event.light_sources_changed.clear()
     for captured in retained:
         assert captured.light_sources_changed == {identity: expected}
 

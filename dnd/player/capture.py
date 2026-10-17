@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import ChainMap
 from collections.abc import Collection
-from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Mapping
@@ -585,7 +584,9 @@ def _event_header(event: Event) -> Event:
     Condition details live in ConditionFact. Unsupported payloads retain this
     same causal/diagnostic header and an explicit unsupported disposition.
     Passive validation also preserves absent turn metadata during live capture.
+    The header holds the version's frozen grant values themselves.
     """
+    children, lineage_children = EventQueue.child_links(event)
     header = Event.model_validate(dict(
         name=event.name, uuid=event.uuid, source_entity_uuid=event.source_entity_uuid,
         source_entity_name=event.source_entity_name,
@@ -598,71 +599,15 @@ def _event_header(event: Event) -> Event:
         status_message=event.status_message, outcome_code=event.outcome_code,
         outcome_source_entity_uuid=event.outcome_source_entity_uuid,
         is_first=event.is_first, is_last=event.is_last,
-        lineage_children_events=list(event.lineage_children_events),
-        children_events=list(event.children_events), parent_lineage=event.parent_lineage,
-        children_lineages=list(event.children_lineages),
-        identified_entity_observer_uuids={
-            identity: set(observers) for identity, observers in event.identified_entity_observer_uuids.items()
-        },
-        located_entity_observer_uuids={
-            identity: set(observers) for identity, observers in event.located_entity_observer_uuids.items()
-        },
-        located_position_observer_uuids={
-            position: set(observers) for position, observers in event.located_position_observer_uuids.items()
-        },
+        lineage_children_events=lineage_children,
+        children_events=children, parent_lineage=event.parent_lineage,
+        children_lineages=event.children_lineages,
     ), context=PASSIVE_EVENT_REPLAY)
+    header.identified_entity_observer_uuids = event.identified_entity_observer_uuids
+    header.located_entity_observer_uuids = event.located_entity_observer_uuids
+    header.located_position_observer_uuids = event.located_position_observer_uuids
     header._effective_handler_presentations = event.effective_handler_presentations
     return header
-
-
-def _detach_retained_event(event: Event) -> Event:
-    """Detach mutable containers without rebuilding their immutable contents.
-
-    The remaining payload still uses the native deep-copy contract, including
-    mutable sense modes, spatial effects, costs, logs and subclass fields.
-    """
-    memo = {
-        id(event.lineage_children_events): list(event.lineage_children_events),
-        id(event.children_events): list(event.children_events),
-        id(event.children_lineages): list(event.children_lineages),
-    }
-    # Native identity/provenance metadata is immutable. Keep the generic deep
-    # traversal for payloads and extensions without reconstructing these leaves.
-    for value in (event.uuid, event.source_entity_uuid, event.target_entity_uuid,
-                  event.lineage_uuid, event.parent_event, event.parent_lineage,
-                  event.turn_execution_id, event.outcome_source_entity_uuid,
-                  event.timestamp, event.effective_handler_presentations,
-                  event._recorded_omissions):
-        if value is not None:
-            memo[id(value)] = value
-    for grants in (event.identified_entity_observer_uuids,
-                   event.located_entity_observer_uuids, event.located_position_observer_uuids):
-        memo[id(grants)] = {key: memo.setdefault(id(value), value)
-                           for key, value in grants.items()}
-    match event:
-        case SensoryUpdateEvent():
-            # The native contact schema contains only immutable values. An
-            # extension may add mutable fields and keeps ordinary detachment.
-            for contacts in (event.entity_contacts_changed, event.object_contacts_changed):
-                for contact in contacts.values():
-                    if type(contact) is PerceivedContact:
-                        memo[id(contact)] = contact
-            memo.update({
-                id(value): value for value in (event.visible_cells_added, event.visible_cells_removed,
-                    event.seen_cells_added, event.effective_light_levels_changed, event.hazardous_cells_changed)})
-            memo.update({
-                id(event.entity_contacts_removed): set(event.entity_contacts_removed),
-                id(event.object_contacts_removed): set(event.object_contacts_removed),
-                id(event.spatial_effects_removed): set(event.spatial_effects_removed),
-                id(event.light_sources_changed): {identity: source.model_copy(update={
-                    'affected_tiles': dict(source.affected_tiles)})
-                    for identity, source in event.light_sources_changed.items()},
-                id(event.light_sources_removed): dict(event.light_sources_removed),
-            })
-        case SpatialChangeEvent():
-            if event.light_level_map is not None:
-                memo[id(event.light_level_map)] = dict(event.light_level_map)
-    return deepcopy(event, memo)
 
 
 def _controller_redaction(event: Event, audience: PlayerAudience) -> bool | None:
@@ -709,8 +654,14 @@ def _retained_event(event: Event, audience: PlayerAudience, *, omit_sensory_payl
 
 
 def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload: bool) -> Event:
-    """Copy the selected event families without constructing registered models (no combat log)."""
-    common = {"use_register": False, "context": None, "combat_log": None}
+    """The selected event families' seat body, without constructing registered models (no combat log).
+
+    Stored versions are frozen values (P7b): the body shares the version's payload by reference and
+    carries its child links as of this capture.
+    """
+    children, lineage_children = EventQueue.child_links(event)
+    common = {"use_register": False, "context": None, "combat_log": None,
+              "children_events": children, "lineage_children_events": lineage_children}
     match event:
         case SensoryUpdateEvent() if omit_sensory_payload:
             copied = _event_header(event).model_copy(update=common)
@@ -778,12 +729,12 @@ def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload:
         case _:
             copied = _event_header(event).model_copy(update=common)
     # DiceRoll contains concrete values; model_copy avoids its registering
-    # constructor. Live value/Damage graphs were removed before this deep copy.
+    # constructor. Live value/Damage graphs were removed above.
     if isinstance(copied, ActionEvent):
         copied = copied.model_copy(update={"costs": [
             BaseCost.model_validate_json(cost.model_dump_json()) for cost in copied.costs
         ]})
-    return _detach_retained_event(copied)
+    return copied
 
 
 def _actor_participants(event: Event) -> tuple[UUID, ...]:
@@ -1052,7 +1003,8 @@ def _lineage_graph(root: Event, context: CaptureContext) -> LineageGraph:
             # existing references on the retained header as well as traversing
             # them, so cold consumers receive the same complete causal graph.
             children = []
-            for identity in dict.fromkeys(event.lineage_children_events + event.children_events):
+            children_events, lineage_children = EventQueue.child_links(event)
+            for identity in dict.fromkeys(lineage_children + children_events):
                 child = EventQueue.get_event_by_uuid(identity)
                 if child is None:
                     raise ValueError("canceled lineage is missing a required child")
