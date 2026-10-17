@@ -6,6 +6,8 @@ from pydantic import Field, PrivateAttr
 
 import math
 from dataclasses import dataclass, field, replace
+
+import numpy as np
 from collections import defaultdict
 import time
 
@@ -16,7 +18,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_tiles import Tile
 from dnd.core.gridmap import BoundarySnapshot, OpticalSnapshot, SpatialConditionOwner, boundary_snapshot_covers, get_map
-from dnd.core.geometry import grid_distance_feet, supercover_line
+from dnd.core.geometry import ROUTE_TABLE_RADIUS, grid_distance_feet, supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
 from dnd.core.events import (
@@ -1314,8 +1316,9 @@ class SpatialSensesSystem:
             else:
                 senses.spatial_effects.pop(identity)
         senses.spatial_effects.update(observations)
+        capable = grid.hazard_capable_cells(positions)
         for x, y in positions:
-            senses.hazardous_cells[(x, y)] = grid.is_position_hazardous_for(x, y, observer_uuid)
+            senses.hazardous_cells[(x, y)] = (x, y) in capable and grid.is_position_hazardous_for(x, y, observer_uuid)
         SpatialSensesSystem._index_effect_changes(senses, before)
         return before
 
@@ -1371,6 +1374,7 @@ class SpatialSensesSystem:
                 discovered=True)
             sphere = observation.area_geometry if observation is not None else None
             base = observation.anchor_elevation_steps if observation is not None else None
+            entries = cls._volume_entries(origin, condition, geometry_positions, optics) if optics is not None else {}
             for position in sorted(geometry_positions):
                 planes = ()
                 if position not in candidates:
@@ -1396,20 +1400,26 @@ class SpatialSensesSystem:
                            for x,y in ((position[0]+dx, position[1]+dy)
                                        for dx in (-.5,.5) for dy in (-.5,.5))):
                         continue
-                route = supercover_line(origin, position)
-                entry = next((index for index, cell in enumerate(route)
-                              if condition.get_optical_obscurement_at(cell) is not None), None)
-                if entry is None:
-                    continue
-                light_position = route[entry]
-                if (condition.get_optical_obscurement_at(light_position) is OpticalObscurement.MAGICAL_DARKNESS
-                        and entry > 0):
-                    light_position = route[entry - 1]
+                if position in entries:
+                    resolved = entries[position]
+                    if resolved is None:
+                        continue
+                    light_position, obscurements = resolved
+                else:
+                    route = supercover_line(origin, position)
+                    entry = next((index for index, cell in enumerate(route)
+                                  if condition.get_optical_obscurement_at(cell) is not None), None)
+                    if entry is None:
+                        continue
+                    light_position = route[entry]
+                    if (condition.get_optical_obscurement_at(light_position) is OpticalObscurement.MAGICAL_DARKNESS
+                            and entry > 0):
+                        light_position = route[entry - 1]
+                    obscurements = grid.get_optical_obscurements_on_route(
+                        origin, position, excluded_owner_uuid=identity, snapshot=optics)
                 tile = grid.get_tile(*light_position)
                 if tile is None:
                     continue
-                obscurements = grid.get_optical_obscurements_on_route(
-                    origin, position, excluded_owner_uuid=identity, snapshot=optics)
                 normal, special = cls._visual_route_modes(modes, ordinary_sight,
                     grid_distance_feet(origin, position), obscurements, LightLevel.BRIGHT_LIGHT)
                 if normal or special:
@@ -1422,6 +1432,47 @@ class SpatialSensesSystem:
                     and tile.resolved_light_level.value > LightLevel.DARKNESS.value) for ray in entrances):
                 dependencies.update(owner_dependencies)
         return result, dependencies
+
+    @staticmethod
+    def _volume_entries(
+        origin: Tuple[int, int], condition: SpatialConditionOwner, positions: Iterable[Tuple[int, int]],
+        optics: OpticalSnapshot,
+    ) -> Dict[Tuple[int, int], Optional[Tuple[Tuple[int, int], Set[OpticalObscurement]]]]:
+        """Each tabled route's first cell inside this volume (None if it never enters).
+
+        With it, the cell whose light the entry shows (the cell before a magical
+        darkness entry) and the other owners' obscurements on the whole route,
+        for every route at once.
+        """
+        radius = ROUTE_TABLE_RADIUS
+        side = 2 * radius + 1
+        ox, oy = origin
+        tabled = [(x, y) for x, y in positions if -radius <= x - ox <= radius and -radius <= y - oy <= radius]
+        if not tabled:
+            return {}
+        cells, lengths = supercover_route_table()
+        # The volume's own value per cell: 1 obscured, 2 magical darkness.
+        indices, values = [], []
+        for x, y in condition.affected_positions:
+            if (-radius <= x - ox <= radius and -radius <= y - oy <= radius
+                    and (value := condition.get_optical_obscurement_at((x, y))) is not None):
+                indices.append((x - ox + radius) * side + y - oy + radius)
+                values.append(2 if value is OpticalObscurement.MAGICAL_DARKNESS else 1)
+        codes = np.zeros(side * side + 1, dtype=np.uint8)
+        codes[indices] = values
+        offsets = np.array(tabled, dtype=np.int64) - (ox, oy)
+        rows = (offsets[:, 0] + radius) * side + offsets[:, 1] + radius
+        routes = cells[rows, :int(lengths[rows].max())]
+        found = codes[routes]
+        inside = found != 0
+        entry = inside.argmax(axis=1)
+        picked = np.arange(rows.size)
+        light = routes[picked, np.where((found[picked, entry] == 2) & (entry > 0), entry - 1, entry)]
+        obscurements = get_map().get_optical_obscurements_on_routes(origin, tabled, optics,
+            excluded_owner_uuid=condition.uuid)
+        return {position: ((flat // side - radius + ox, flat % side - radius + oy), obscurements[position])
+                if enters else None
+                for position, enters, flat in zip(tabled, inside.any(axis=1).tolist(), light.tolist())}
 
     @staticmethod
     def _update_volume_light(senses: Senses, owners: Set[UUID]) -> None:
@@ -1684,6 +1735,11 @@ class SpatialSensesSystem:
         elif key in members:
             members.discard(key)
             self._discard_reverse(index, key, observer_uuid)
+
+    def contact_holders(self, subject_uuid: UUID, observers: AbstractSet[UUID]) -> Set[UUID]:
+        """Those observers whose current contacts include this subject (the reverse contact index)."""
+        holders = self.observers_by_entity.get(subject_uuid)
+        return set(observers & holders) if holders else set()
 
     def candidate_observer_uuids(self, event: Event) -> Set[UUID]:
         """Return a conservative indexed observer set for one completion."""

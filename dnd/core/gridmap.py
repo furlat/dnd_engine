@@ -454,6 +454,10 @@ class GridMap:
         """Get all entity UUIDs subscribed to a cell."""
         return self._cell_subscribers.get(position, set()).copy()
 
+    def subscribers_view_at(self, position: Tuple[int, int]) -> AbstractSet[UUID]:
+        """The live subscriber set of a cell, for an immediate read-only query."""
+        return self._cell_subscribers.get(position, frozenset())
+
     def get_subscribers_for_cells(self, cells: Collection[Tuple[int, int]]) -> Set[UUID]:
         """Return the union of subscribers for a batch of cells."""
         subscribers: Set[UUID] = set()
@@ -1831,6 +1835,26 @@ class GridMap:
                 return True
 
         return False
+
+    def hazard_capable_cells(self, positions: Iterable[Tuple[int, int]]) -> Set[Tuple[int, int]]:
+        """Cells where a tile condition, residue, object or spatial condition lies.
+
+        `is_position_hazardous_for` reads only those owners, so every other cell
+        is hazard-free for every entity.
+        """
+        tiles = self._tiles
+        conditions, contacts, boundaries = (self._optical_candidate_cells, self._contact_candidate_cells,
+                                            self._boundary_candidate_cells)
+        residues = set().union(*(field.cells for field in self._residue_fields.values()
+                                 if field.entry_handler_uuid is not None))
+        capable: Set[Tuple[int, int]] = set()
+        for position in positions:
+            chunk = (position[0] // SPATIAL_CHUNK_SIZE, position[1] // SPATIAL_CHUNK_SIZE)
+            tile = tiles.get(position)
+            if (position in residues or position in conditions.get(chunk, ()) or position in contacts.get(chunk, ())
+                    or position in boundaries.get(chunk, ()) or (tile is not None and tile.active_conditions)):
+                capable.add(position)
+        return capable
 
     def has_any_hazards(self) -> bool:
         """Return whether any tile or placed object currently declares a hazard."""
@@ -5568,7 +5592,7 @@ class GridMap:
         origin: Tuple[int, int],
         positions: Iterable[Tuple[int, int]],
         snapshot: OpticalSnapshot,
-        *, exclude_end: bool = False,
+        *, exclude_end: bool = False, excluded_owner_uuid: Optional[UUID] = None,
     ) -> Dict[Tuple[int, int], Set[OpticalObscurement]]:
         """`get_optical_obscurements_on_route` from one origin to many cells.
 
@@ -5581,6 +5605,9 @@ class GridMap:
         result: Dict[Tuple[int, int], Set[OpticalObscurement]] = {}
         tabled: List[Tuple[int, int]] = []
         relative = {(x - ox, y - oy): owners for (x, y), owners in snapshot.items()}
+        if excluded_owner_uuid is not None:
+            relative = {offset: kept for offset, owners in relative.items()
+                        if (kept := {owner: values for owner, values in owners.items() if owner != excluded_owner_uuid})}
         obscured = set(relative)  # a set: `line & obscured` iterates the shorter side in C
         for position in positions:
             dx, dy = position[0] - ox, position[1] - oy
