@@ -18,17 +18,22 @@ class PlayerAudience:
     controlled: tuple[UUID, ...]
     observers: tuple[UUID, ...]
     revision: int = 0
+    # Membership views of the two tuples: one hash per check instead of a tuple scan.
+    _controlled_set: frozenset[UUID] = field(init=False, repr=False, compare=False)
+    _observer_set: frozenset[UUID] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if (not self.observers or len(set(self.observers)) != len(self.observers)
                 or len(set(self.controlled)) != len(self.controlled) or self.revision < 0):
             raise ValueError("Audience requires unique observers/controlled actors and a nonnegative revision")
+        object.__setattr__(self, "_controlled_set", frozenset(self.controlled))
+        object.__setattr__(self, "_observer_set", frozenset(self.observers))
 
     def controls(self, identity: UUID | None) -> bool:
-        return identity in self.controlled
+        return identity in self._controlled_set
 
     def observes(self, identity: UUID | None) -> bool:
-        return identity in self.observers
+        return identity in self._observer_set
 
     def granted(self, observers: set[str]) -> bool:
         return any(str(identity) in observers for identity in self.observers)
