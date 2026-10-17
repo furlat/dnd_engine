@@ -13,6 +13,7 @@ from dnd.action_dispatch import dispatch_available_action
 from dnd.actions_functional import (get_available_actions, get_extra_position_options, is_free_aim,
     preview_available_selection, secondary_candidates, selection_admission_error)
 from dnd.ai.runtime.controller import NativeAIController
+from dnd.ai.runtime.knowledge_system import AIKnowledgeSystem, bind_ai_knowledge, unbind_ai_knowledge
 from dnd.ai.runtime.decision_epoch import clear_epoch_value_caches
 from dnd.content.characters.premades import (
     FIGHTER_PREMADE_ID, SORCERER_PREMADE_ID, create_premade_character,
@@ -91,6 +92,7 @@ class Session:
     player_uuids: tuple[UUID, ...]
     ai_controllers: tuple[NativeAIController, ...]
     births: tuple[EntityCreatedEvent, ...]
+    ai_knowledge: AIKnowledgeSystem
     summoning: SummoningSystem | None = None
     discovery: DiscoveryCache = field(default_factory=DiscoveryCache)
     seats: dict[str, PlayerAudience] = field(default_factory=dict)
@@ -231,10 +233,11 @@ def create_session(
         game.deploy_entity(actor, actor.position)
     Entity.update_all_entities_senses()
     encounter = Encounter(name="Goblin skirmish", source_entity_uuid=uuid4())
+    ai_knowledge = bind_ai_knowledge()
     enemy_controller = NativeAIController.create(
         source_entity_uuid=enemies[0].uuid,
         game_id=str(encounter.uuid), assignment_id=f"{encounter.uuid}:enemies",
-        controlled_entity_uuids=tuple(enemy.uuid for enemy in enemies),
+        controlled_entity_uuids=tuple(enemy.uuid for enemy in enemies), knowledge=ai_knowledge,
     )
     for player in players:
         encounter.add_combatant(player, HumanController(source_entity_uuid=player.uuid))
@@ -244,7 +247,7 @@ def create_session(
     births = tuple(event for _, event in EventQueue.iter_events_since(0)
                    if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
     return _bind_log_capture(Session(game, encounter, battlefield, tuple(player.uuid for player in players), (enemy_controller,), births,
-                   bind_summoning(game, encounter), seats={"party": PlayerAudience(
+                   ai_knowledge, bind_summoning(game, encounter, ai_knowledge), seats={"party": PlayerAudience(
                        tuple(player.uuid for player in players), tuple(player.uuid for player in players))}))
 
 
@@ -302,11 +305,12 @@ def create_authored_session(recipe: EncounterRecipe, *,
             for address in (seat.observers if seat.observers is not None else seat.controlled)))
         for seat in assignments}
     controllers = []
+    ai_knowledge = bind_ai_knowledge()
     for (slot_id, policy), addresses in ai_addresses.items():
         actors = [assembled.entities_by_member_address[address] for address in addresses]
         controller = NativeAIController.create(source_entity_uuid=actors[0].uuid,
             game_id=str(encounter.uuid), assignment_id=f"{encounter.uuid}:{slot_id}:{policy}",
-            controlled_entity_uuids=tuple(actor.uuid for actor in actors), policy_id=policy)
+            controlled_entity_uuids=tuple(actor.uuid for actor in actors), knowledge=ai_knowledge, policy_id=policy)
         controllers.append(controller)
         for actor in actors:
             encounter.set_controller_for(actor.uuid, controller)
@@ -317,7 +321,7 @@ def create_authored_session(recipe: EncounterRecipe, *,
         if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
     return _bind_log_capture(Session(game, encounter, assembled.battlefield,
         tuple(actor.uuid for actor in external.values()), tuple(controllers), births,
-        bind_summoning(game, encounter), seats=seats))
+        ai_knowledge, bind_summoning(game, encounter, ai_knowledge), seats=seats))
 
 
 def _current_player(session: Session, actor_uuid: UUID) -> Entity:
@@ -635,4 +639,5 @@ def close_session(session: Session) -> None:
     for controller in session.ai_controllers:
         controller.close()
     session.game.close()
+    unbind_ai_knowledge(session.ai_knowledge)
     clear_epoch_value_caches()

@@ -22,6 +22,7 @@ from dnd.ai.policy import PolicyDescriptor
 from dnd.ai.registry import PolicyRegistry
 from dnd.ai.runtime.assignment_lifecycle import AIAssignmentState
 from dnd.ai.runtime.controller import NativeAIController
+from dnd.ai.runtime.knowledge_system import bind_ai_knowledge
 from dnd.ai.runtime.decision_epoch import (
     _build_affordance_set_and_execution_authority_from_actions,
 )
@@ -179,11 +180,13 @@ def test_native_assignment_executes_stateful_custom_policy_without_timing_code()
     Entity.update_all_entities_senses()
     sink = BoundedAIInstrumentationSink()
     instrumentation = AIInstrumentation(sink=sink)
+    knowledge = bind_ai_knowledge()
     controller = NativeAIController.create(
         source_entity_uuid=actor.uuid,
         game_id="game",
         assignment_id="side-a",
         controlled_entity_uuids=(actor.uuid,),
+        knowledge=knowledge,
         policy_id=STATEFUL_DESCRIPTOR.policy_id,
         registry=_registry(STATEFUL_DESCRIPTOR, _DashThenEndPolicy),
         instrumentation=instrumentation,
@@ -247,11 +250,13 @@ def test_native_controller_shares_one_side_assignment_but_not_opponent_memory() 
     )
     Entity.update_all_entities_senses()
     registry = _registry(END_DESCRIPTOR, _EndPolicy)
+    knowledge = bind_ai_knowledge()
     side = NativeAIController.create(
         source_entity_uuid=first.uuid,
         game_id="game",
         assignment_id="heroes",
         controlled_entity_uuids=(first.uuid, second.uuid),
+        knowledge=knowledge,
         policy_id=END_DESCRIPTOR.policy_id,
         registry=registry,
     )
@@ -260,6 +265,7 @@ def test_native_controller_shares_one_side_assignment_but_not_opponent_memory() 
         game_id="game",
         assignment_id="monsters",
         controlled_entity_uuids=(opponent.uuid,),
+        knowledge=knowledge,
         policy_id=END_DESCRIPTOR.policy_id,
         registry=registry,
     )
@@ -297,11 +303,13 @@ def test_native_policy_cannot_execute_a_forged_epoch_row() -> None:
     _reset()
     actor = create_tutorial_actor(name="Actor", position=(2, 2))
     Entity.update_all_entities_senses()
+    knowledge = bind_ai_knowledge()
     controller = NativeAIController.create(
         source_entity_uuid=actor.uuid,
         game_id="game",
         assignment_id="forged",
         controlled_entity_uuids=(actor.uuid,),
+        knowledge=knowledge,
         policy_id=FORGED_DESCRIPTOR.policy_id,
         registry=_registry(FORGED_DESCRIPTOR, _ForgedRowPolicy),
     )
@@ -347,11 +355,13 @@ def test_bundled_basic_policy_executes_natively_without_transport() -> None:
         entity.compose_entity()
         Game().deploy_entity(entity, entity.position)
     Entity.update_all_entities_senses()
+    knowledge = bind_ai_knowledge()
     controller = NativeAIController.create(
         source_entity_uuid=actor.uuid,
         game_id="game",
         assignment_id="basic",
         controlled_entity_uuids=(actor.uuid,),
+        knowledge=knowledge,
     )
     controller.start([actor])
 

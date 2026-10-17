@@ -11,6 +11,7 @@ from dnd.actions_functional import execute_by_index, get_available_actions, setu
 from dnd.actor_projection import condition_fact
 from dnd.ai.contracts.observation import KnowledgeState
 from dnd.ai.runtime.knowledge_reduction import AIKnowledge
+from dnd.ai.runtime.knowledge_system import bind_ai_knowledge, open_assignment_knowledge
 from dnd.ai.runtime.movement_revalidation import SubjectiveMovementContinuationGuard
 from dnd.ai.runtime.state_projection import SubjectiveAIStateProjector
 from dnd.blocks.health import HealthConfig, HitDiceConfig
@@ -67,6 +68,15 @@ def move(entity: Entity, position: tuple[int, int]) -> MovementEvent:
     return result
 
 
+def open_projector(assignment_id: str, *observers: Entity) -> SubjectiveAIStateProjector:
+    """An assignment's projector over knowledge opened now in its own AI knowledge system."""
+    knowledge = bind_ai_knowledge()
+    controlled = tuple(observer.uuid for observer in observers)
+    open_assignment_knowledge(knowledge, controlled[0], controlled)
+    return SubjectiveAIStateProjector(assignment_id=assignment_id, controlled_entity_uuids=controlled,
+                                      knowledge=knowledge, knowledge_key=controlled[0])
+
+
 def context(entity: Entity) -> TurnContext:
     return TurnContext(source_entity_uuid=entity.uuid, entity_uuid=entity.uuid,
                        initiative_order=[entity.uuid])
@@ -87,7 +97,7 @@ def test_brief_doorway_observation_is_remembered_between_decisions_and_replays()
     with scene("battlefield.visibility_doorway_open") as game:
         observer = actor(game, "Observer", (5, 7))
         subject = actor(game, "Subject", (8, 4))
-        projector = SubjectiveAIStateProjector(assignment_id="doorway", controlled_entity_uuids=(observer.uuid,))
+        projector = open_projector("doorway", observer)
         initial = projector.project_world(observer, context(observer))
         assert str(subject.uuid) not in initial.known_entities
         move(subject, (8, 10))
@@ -122,7 +132,7 @@ def test_hidden_mutations_and_prebirth_conditions_reacquire_current_cold_values(
             applied = subject.add_condition(condition)
             assert applied is not None and not applied.canceled
         subject.compose_entity()
-        projector = SubjectiveAIStateProjector(assignment_id="discovery", controlled_entity_uuids=(observer.uuid,))
+        projector = open_projector("discovery", observer)
         before = projector.project_world(observer, context(observer))
         assert str(subject.uuid) not in before.known_entities
         subject.receive_damage(7, DamageType.FORCE, source_entity_uuid=subject.uuid)
@@ -156,7 +166,7 @@ def test_shared_observers_keep_visible_actor_when_only_one_observer_loses_it() -
         first = actor(game, "First", (5, 7))
         second = actor(game, "Second", (10, 7))
         subject = actor(game, "Subject", (8, 7))
-        projector = SubjectiveAIStateProjector(assignment_id="shared", controlled_entity_uuids=(first.uuid, second.uuid))
+        projector = open_projector("shared", first, second)
         initial = projector.project_world(first, context(first))
         assert initial.known_entities[str(subject.uuid)].observer_uuids == sorted([str(first.uuid), str(second.uuid)])
         move(first, (5, 4))
@@ -171,7 +181,7 @@ def test_native_movement_guard_learns_at_step_before_movement_root_completes() -
     with scene("battlefield.visibility_doorway_open") as game:
         observer = actor(game, "Observer", (8, 4))
         subject = actor(game, "Hostile", (5, 7))
-        projector = SubjectiveAIStateProjector(assignment_id="guard", controlled_entity_uuids=(observer.uuid,))
+        projector = open_projector("guard", observer)
         initial = projector.project_world(observer, context(observer))
         boundaries: list[int] = []
 

@@ -17,6 +17,7 @@ from dnd.ai.policies.basic import (
 )
 from dnd.ai.registry import PolicyRegistry
 from dnd.ai.runtime.assignment import NativeAIAssignment
+from dnd.ai.runtime.knowledge_system import AIKnowledgeSystem, open_assignment_knowledge
 from dnd.controller import (
     Controller,
     ControllerExecutionMode,
@@ -61,12 +62,13 @@ class NativeAIController(Controller):
         game_id: str,
         assignment_id: str,
         controlled_entity_uuids: tuple[UUID, ...],
+        knowledge: AIKnowledgeSystem,
         policy_id: str = BASIC_POLICY_ID,
         registry: CanonicalPolicyRegistry | None = None,
         instrumentation: AIInstrumentation | None = None,
         maximum_decisions_per_turn: int | None = None,
     ) -> "NativeAIController":
-        """Create one side-owned native controller with fresh live state."""
+        """Create one side-owned native controller and open its assignment's knowledge."""
         controller = cls(
             source_entity_uuid=source_entity_uuid,
             game_id=game_id,
@@ -77,24 +79,36 @@ class NativeAIController(Controller):
         )
         controller._policy_registry = registry or _default_policy_registry()
         controller._instrumentation = instrumentation or AIInstrumentation()
-        controller._assignment = controller._new_assignment()
+        assignment = NativeAIAssignment(
+            game_id=controller.game_id,
+            assignment_id=controller.assignment_id,
+            controlled_entity_uuids=controller.controlled_entity_uuids,
+            policy_id=controller.policy_id,
+            registry=controller._policy_registry,
+            instrumentation=controller._instrumentation,
+            knowledge=knowledge,
+            knowledge_key=controller.uuid,
+            maximum_decisions_per_turn=controller.maximum_decisions_per_turn,
+        )
+        open_assignment_knowledge(knowledge, controller.uuid, assignment.controlled_entity_uuids)
+        controller._assignment = assignment
         return controller
 
     @property
     def assignment(self) -> NativeAIAssignment:
-        """Return the retained assignment, reconstructing only if necessary."""
-        return self._ensure_assignment()
+        """Return the assignment made by `create`."""
+        return self._require_assignment()
 
     @property
     def instrumentation(self) -> AIInstrumentation:
         """Return core-owned instrumentation used by this assignment."""
-        self._ensure_assignment()
+        self._require_assignment()
         assert self._instrumentation is not None
         return self._instrumentation
 
     def start(self, entities: list[Entity]) -> None:
         """Start assignment ownership explicitly and idempotently."""
-        self._ensure_assignment().start(entities)
+        self._require_assignment().start(entities)
 
     def close(self) -> None:
         """Close assignment ownership idempotently."""
@@ -117,34 +131,17 @@ class NativeAIController(Controller):
         context: TurnContext,
     ) -> ControllerStepResult:
         """Delegate the full execution pipeline to the assignment runtime."""
-        return self._ensure_assignment().execute_next_action(entity, context)
+        return self._require_assignment().execute_next_action(entity, context)
 
     def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
         """Let the assignment's bounded decision loop choose when to stop."""
         del entity, context
         return True
 
-    def _ensure_assignment(self) -> NativeAIAssignment:
+    def _require_assignment(self) -> NativeAIAssignment:
         if self._assignment is None:
-            if self._policy_registry is None:
-                self._policy_registry = _default_policy_registry()
-            if self._instrumentation is None:
-                self._instrumentation = AIInstrumentation()
-            self._assignment = self._new_assignment()
+            raise RuntimeError("native AI controllers are made only by NativeAIController.create")
         return self._assignment
-
-    def _new_assignment(self) -> NativeAIAssignment:
-        if self._policy_registry is None or self._instrumentation is None:
-            raise RuntimeError("native AI controller runtime is not initialized")
-        return NativeAIAssignment(
-            game_id=self.game_id,
-            assignment_id=self.assignment_id,
-            controlled_entity_uuids=self.controlled_entity_uuids,
-            policy_id=self.policy_id,
-            registry=self._policy_registry,
-            instrumentation=self._instrumentation,
-            maximum_decisions_per_turn=self.maximum_decisions_per_turn,
-        )
 
 
 def _default_policy_registry() -> CanonicalPolicyRegistry:

@@ -16,6 +16,7 @@ from dnd.spells.evocation import Moonbeam, MoveMoonbeam, FireBolt
 from dnd.spells.summoning import SpiritualWeapon
 from dnd.spells.transmutation import Goodberry
 from dnd.summoning.actions import DismissSummon
+from dnd.ai.runtime.knowledge_system import bind_ai_knowledge
 from dnd.summoning.system import bind_summoning
 from tests.engine.test_bg3_rank_one_two_spells import combatant, game
 from tests.engine.test_summoning_autonomous_turns import autonomous_attack
@@ -55,7 +56,7 @@ def test_items_rider_field_control_and_autonomous_summon_share_native_turns(game
         encounter.add_combatant(actor,HumanController(source_entity_uuid=actor.uuid))
     encounter.initiative_order=[caster.uuid,enemy.uuid,controlled.uuid]
     encounter.start_encounter();encounter.start_turn()
-    system=bind_summoning(game,encounter)
+    system=bind_summoning(game,encounter,bind_ai_knowledge())
     try:
         accepted(Goodberry(source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid))
         berries=[item for item in caster.inventory.items.values() if isinstance(item,GoodberryItem)]
