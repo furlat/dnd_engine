@@ -53,7 +53,8 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
         object_contacts_changed={}, object_contacts_removed=frozenset(),
         sense_modes_changed=False, sense_modes=None, passive_perception_changed=False,
         passive_perception=None, visual_access_changed=False, visual_access=None,
-        hazardous_cells_changed={}, spatial_effects_changed={}, spatial_effects_removed=frozenset())
+        hazardous_cells_changed={}, spatial_effect_sightings={}, spatial_effect_content={},
+            spatial_effects_removed=frozenset())
     lineages = []
     for index, step in enumerate(steps, start=before.reducer_cursor):
         identity, lineage_id = uuid4(), uuid4()

@@ -42,7 +42,7 @@ def initialize_audiences(session: Session, catalog: UIContentManifest
             context=context)
         projection, initial = begin_projection(startup)
         hud, _ = project_after_values(projection, snapshot_player_hud(session, audience=audience), ())
-        initial = replace(initial, hud_snapshot=hud)
+        initial = replace(initial, hud=hud)
         # Startup content is admitted from the client's own first fold.
         projection.remembered.content = admitted_content(catalog, reduce_initialization(initial))
         runtimes[seat] = AudienceRuntime(projection, checkpoint, content_catalog)

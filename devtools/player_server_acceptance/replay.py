@@ -37,8 +37,8 @@ def require(condition: bool, message: str) -> None:
 
 def check_hud(value: dict | None, controlled: set[str]) -> None:
     if value is not None:
-        require({row['actor_uuid'] for row in value['sheets']} <= controlled,
-            'HUD includes a character sheet outside seat control')
+        require({row['actor_uuid'] for row in value['sheets']} <= controlled
+            and set(value['sheet_order'] or ()) <= controlled, 'HUD includes a character sheet outside seat control')
 
 
 def record_log(entry: dict, digest: Any, counts: Counter) -> None:
@@ -92,7 +92,7 @@ def check_group(group: dict, controlled: set[str], events: dict[str, int], linea
         check_body(observation['actor_uuid'], observation['changes'], observation['items'], controlled)
     for update in group['world_updates']:
         require(update['event_uuid'] in events, 'World update references an undisclosed occurrence')
-    check_hud(group.get('hud_snapshot'), controlled)
+    check_hud(group.get('hud'), controlled)
 
 
 def check_body(actor_uuid: str, changes: dict, items: list, controlled: set[str]) -> None:

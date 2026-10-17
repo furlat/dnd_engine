@@ -46,13 +46,14 @@ from dnd.player.facts import (
     ActionCancellation, ActionFact, ActionReaction, ActorChanges, AreaReachFact, AttackFact, ConditionChangeFact, ItemEffectChangeFact, ContentAttribution, DamageRequestFact, DamageResultFact,
     DeathSaveFact, EquipmentFact, FloorItem, ForcedMovementFact, PortalTransferFact, MechanismActivationFact, HealFact, ItemChargeFact, LifeFact,
     MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage,
-    PlayerNode, PlayerObject, PlayerObservation, PlayerState, PlayerHUDSnapshot, CombatLogAppend,
+    PlayerNode, PlayerObject, PlayerObservation, PlayerState, PlayerHUDSnapshot, PlayerHUDPatch, CombatLogAppend,
+    PlayerCharacterSheet, SheetChanges, SheetPatch, SpatialEffectContent, SpatialEffectSighting,
     PlayerWorld, SensoryFact, ShoveFact, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
     VersionRow, VisualItem, VisualLoadout, WorldUpdate, ItemLook, ItemPatch, ItemProfile, ItemState, PlayerItem, TileFieldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
 )
 from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
-from dnd.player.reduction import (apply_body_fact, apply_sensed_fact, apply_world_update, change_membership,
+from dnd.player.reduction import (apply_record_fact, apply_hud, apply_sensed_fact, apply_world_update, change_membership,
     commit_current, observe_body, observed_actor, occurrence_order)
 from dnd.player.compatibility import legacy_damage_reference
 from dnd.world_facts import world_event_objects, world_event_footprints, world_objects_at
@@ -241,6 +242,21 @@ def _gear_observation(event_uuid: UUID, actor: ActorState, observer: PlayerAudie
         contact=None, items=_item_records(actor, observer))
 
 
+def _sighting(effect: PerceivedSpatialEffect) -> SpatialEffectSighting:
+    """A perceived effect without its static content."""
+    return SpatialEffectSighting.model_construct(duration=effect.duration, positions=effect.positions,
+        owner_revision=effect.owner_revision, apparent_presence=effect.apparent_presence,
+        trap_state=effect.trap_state, pressed=effect.pressed, direction=effect.direction,
+        anchor_item_uuid=effect.anchor_item_uuid, anchor_entity_uuid=effect.anchor_entity_uuid,
+        energy_type=effect.energy_type, presence_mode=effect.presence_mode,
+        sustainer_item_uuid=effect.sustainer_item_uuid, concentration_slot_uuid=effect.concentration_slot_uuid,
+        anchor_position=effect.anchor_position, anchor_elevation_steps=effect.anchor_elevation_steps,
+        area_geometry=effect.area_geometry, construction_sections=effect.construction_sections,
+        area_propagation=effect.area_propagation, deposit_source=effect.deposit_source,
+        visible_volume_positions=effect.visible_volume_positions,
+        upper_volume_surfaces=effect.upper_volume_surfaces, suppressions=effect.suppressions)
+
+
 def _sensory_fact(event: SensoryUpdateEvent) -> SensoryFact:
     return SensoryFact(observer_uuid=event.observer_uuid, initial=event.initial,
         observer_position=event.observer_position, observer_position_changed=event.observer_position_changed,
@@ -248,7 +264,9 @@ def _sensory_fact(event: SensoryUpdateEvent) -> SensoryFact:
         hazardous_cells_changed=dict(event.hazardous_cells_changed),
         light_sources_changed=dict(event.light_sources_changed),
         light_sources_removed=dict(event.light_sources_removed),
-        spatial_effects_changed=dict(event.spatial_effects_changed),
+        spatial_effect_sightings={identity: _sighting(effect) for identity, effect in event.spatial_effects_changed.items()},
+        spatial_effect_content={identity: SpatialEffectContent(content_ref=effect.content_ref, name=effect.name,
+            description=effect.description) for identity, effect in event.spatial_effects_changed.items()},
         spatial_effects_removed=frozenset(event.spatial_effects_removed),
         cause_event_uuid=event.cause_event_uuid,
         visible_cells_added=tuple(event.visible_cells_added), visible_cells_removed=tuple(event.visible_cells_removed),
@@ -1495,10 +1513,10 @@ def _public_items(patches: tuple[ItemPatch, ...], cursors: dict[int, int], *, ow
 
 def _observe_spatial_revisions(state: "ProjectionState", nodes: tuple[PlayerNode, ...]) -> None:
     """Correlate member slices privately; count only changes in admitted evidence."""
-    batches: dict[tuple[UUID, int | None], dict[UUID, PerceivedSpatialEffect]] = {}
+    batches: dict[tuple[UUID, int | None], dict[UUID, SpatialEffectSighting]] = {}
     for node in nodes:
         if isinstance(node.fact, SensoryFact):
-            for identity, effect in node.fact.spatial_effects_changed.items():
+            for identity, effect in node.fact.spatial_effect_sightings.items():
                 batches.setdefault((identity, effect.owner_revision), {})[node.fact.observer_uuid] = effect.model_copy(
                     update={"owner_revision": None})
     for (identity, native_revision), observations in batches.items():
@@ -1517,13 +1535,13 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
                         known_removals: frozenset[UUID]
                         ) -> tuple[tuple[PlayerNode, ...], tuple[VersionRow, ...], tuple[PlayerObservation, ...], tuple[WorldUpdate, ...]]:
     """Admit occurrence identities once and remove undisclosed causal links."""
-    nodes = tuple(replace(node, fact=replace(node.fact, spatial_effects_changed={
+    nodes = tuple(replace(node, fact=replace(node.fact, spatial_effect_sightings={
         identity: effect.model_copy(update={"duration": effect.duration if identity in state.owned_spatial_effects else None})
-        for identity, effect in node.fact.spatial_effects_changed.items()}))
+        for identity, effect in node.fact.spatial_effect_sightings.items()}))
         if isinstance(node.fact, SensoryFact) else node for node in nodes)
     touched_spatial = {(node.fact.observer_uuid, identity) for node in nodes
         if isinstance(node.fact, SensoryFact)
-        for identity in node.fact.spatial_effects_changed.keys() | node.fact.spatial_effects_removed}
+        for identity in node.fact.spatial_effect_sightings.keys() | node.fact.spatial_effects_removed}
     previous_spatial = {key: state.spatial_values[key] for key in touched_spatial if key in state.spatial_values}
     previous_revisions = {identity: state.spatial_revisions[identity] for _, identity in touched_spatial
         if identity in state.spatial_revisions}
@@ -1533,23 +1551,25 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
         fact = node.fact
         if isinstance(fact, SensoryFact):
             changed = {}
-            for identity, effect in fact.spatial_effects_changed.items():
+            for identity, effect in fact.spatial_effect_sightings.items():
                 key = fact.observer_uuid, identity
                 value = effect.model_copy(update={"owner_revision": None})
+                content = fact.spatial_effect_content[identity]
                 if (previous_spatial.get(key) != value or previous_revisions.get(identity)
-                        != state.spatial_versions[(identity, effect.owner_revision)]):
+                        != state.spatial_versions[(identity, effect.owner_revision)]
+                        or state.remembered.spatial_content.get(identity, content) != content):
                     changed[identity] = effect
                 previous_spatial[key] = value
             for identity in fact.spatial_effects_removed:
                 previous_spatial.pop((fact.observer_uuid, identity), None)
                 state.spatial_values.pop((fact.observer_uuid, identity), None)
-            fact = replace(fact, spatial_effects_changed=changed)
+            fact = replace(fact, spatial_effect_sightings=changed)
             if not (fact.initial or fact.observer_position_changed or fact.effective_light_levels_changed
                     or fact.visible_cells_added or fact.visible_cells_removed or fact.seen_cells_added
                     or fact.entity_contacts_changed or fact.entity_contacts_removed
                     or fact.object_contacts_changed or fact.object_contacts_removed
                     or fact.sense_modes_changed or fact.passive_perception_changed or fact.visual_access_changed
-                    or fact.hazardous_cells_changed or fact.spatial_effects_changed or fact.spatial_effects_removed
+                    or fact.hazardous_cells_changed or fact.spatial_effect_sightings or fact.spatial_effects_removed
                     or fact.light_sources_changed or fact.light_sources_removed):
                 fact = None
             node = replace(node, fact=fact)
@@ -1589,8 +1609,8 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
         elif isinstance(fact, SensoryFact):
             spatial = {identity: effect.model_copy(update={
                 "owner_revision": state.spatial_versions[(identity, effect.owner_revision)]})
-                for identity, effect in fact.spatial_effects_changed.items()}
-            fact = replace(fact, spatial_effects_changed=spatial)
+                for identity, effect in fact.spatial_effect_sightings.items()}
+            fact = replace(fact, spatial_effect_sightings=spatial)
         elif isinstance(fact, ActionFact) and fact.reaction is not None:
             fact = replace(fact, reaction=replace(fact.reaction, triggered_lineage_uuid=(fact.reaction.triggered_lineage_uuid
                 if fact.reaction.triggered_lineage_uuid in state.disclosed_lineages else None)))
@@ -1648,7 +1668,7 @@ class ProjectionState:
     public_cursors: dict[int, int] = field(default_factory=dict)
     disclosed_turns: set[UUID] = field(default_factory=set)
     owned_spatial_effects: set[UUID] = field(default_factory=set)
-    spatial_values: dict[tuple[UUID, UUID], PerceivedSpatialEffect] = field(default_factory=dict)
+    spatial_values: dict[tuple[UUID, UUID], SpatialEffectSighting] = field(default_factory=dict)
     spatial_versions: dict[tuple[UUID, int | None], int] = field(default_factory=dict)
     spatial_revisions: dict[UUID, int] = field(default_factory=dict)
     next_occurrence: int = 0
@@ -1696,6 +1716,12 @@ def _emit_bodies(remembered: PlayerState, nodes: tuple[PlayerNode, ...], version
                     fact = replace(fact, changes=actor_changes(before, replace(before, **fact.changes)),
                         items=_item_patches(remembered, fact.items))
                     row = replace(row, fact=fact)
+                elif isinstance(fact, SensoryFact):
+                    # Content travels once per seat (again only if it changed).
+                    fact = replace(fact, spatial_effect_content={identity: fact.spatial_effect_content[identity]
+                        for identity in fact.spatial_effect_sightings
+                        if remembered.spatial_content.get(identity) != fact.spatial_effect_content[identity]})
+                    row = replace(row, fact=fact)
                 elif isinstance(fact, ConditionChangeFact) and row.uuid in known_removals:
                     member = next((member for member in remembered.actors[fact.target_entity_uuid].conditions
                         if member.condition_uuid == fact.condition.condition_uuid), None)
@@ -1705,14 +1731,76 @@ def _emit_bodies(remembered: PlayerState, nodes: tuple[PlayerNode, ...], version
                         resulting_max_hp=None, resulting_ac=None, resulting_tile=None, resulting_item=None))
                     row = replace(row, fact=fact)
                 if not row.canceled and fact is not None and row.uuid not in superseded:
-                    apply_body_fact(remembered, fact)
+                    apply_record_fact(remembered, fact)
                 result.append(row)
     return tuple(result), tuple(emitted)
 
 
+def sheet_changes(before: PlayerCharacterSheet | None, after: PlayerCharacterSheet) -> SheetChanges:
+    """The patch that turns the seat's sheet `before` (absent: every field) into `after`."""
+    changes: SheetChanges = {}
+    if before is None or before.species != after.species:
+        changes["species"] = after.species
+    if before is None or before.species_variant != after.species_variant:
+        changes["species_variant"] = after.species_variant
+    if before is None or before.background != after.background:
+        changes["background"] = after.background
+    if before is None or before.origin != after.origin:
+        changes["origin"] = after.origin
+    if before is None or before.class_levels != after.class_levels:
+        changes["class_levels"] = after.class_levels
+    if before is None or before.abilities != after.abilities:
+        changes["abilities"] = after.abilities
+    if before is None or before.skills != after.skills:
+        changes["skills"] = after.skills
+    if before is None or before.expertise != after.expertise:
+        changes["expertise"] = after.expertise
+    if before is None or before.saves != after.saves:
+        changes["saves"] = after.saves
+    if before is None or before.proficiency_bonus != after.proficiency_bonus:
+        changes["proficiency_bonus"] = after.proficiency_bonus
+    if before is None or before.resources != after.resources:
+        changes["resources"] = after.resources
+    if before is None or before.name != after.name:
+        changes["name"] = after.name
+    if before is None or before.portrait_key != after.portrait_key:
+        changes["portrait_key"] = after.portrait_key
+    if before is None or before.normal_hp != after.normal_hp:
+        changes["normal_hp"] = after.normal_hp
+    if before is None or before.maximum_hp != after.maximum_hp:
+        changes["maximum_hp"] = after.maximum_hp
+    if before is None or before.compatible_item_slots != after.compatible_item_slots:
+        changes["compatible_item_slots"] = after.compatible_item_slots
+    if before is None or before.handler_details != after.handler_details:
+        changes["handler_details"] = after.handler_details
+    if before is None or before.scribed_spell_ids != after.scribed_spell_ids:
+        changes["scribed_spell_ids"] = after.scribed_spell_ids
+    if before is None or before.permanent_feature_uses != after.permanent_feature_uses:
+        changes["permanent_feature_uses"] = after.permanent_feature_uses
+    if before is None or before.prepared_spell_selections != after.prepared_spell_selections:
+        changes["prepared_spell_selections"] = after.prepared_spell_selections
+    return changes
+
+
+def hud_patch(before: PlayerHUDSnapshot | None, after: PlayerHUDSnapshot) -> PlayerHUDPatch:
+    """The patch that turns the seat's last display `before` (absent: everything) into `after`."""
+    sheets = {row.actor_uuid: row for row in before.sheets} if before is not None else {}
+    order = tuple(row.actor_uuid for row in after.sheets)
+    return PlayerHUDPatch(generation=after.generation, observer_uuid=after.observer_uuid, revision=after.revision,
+        initiative=after.initiative if before is None or before.initiative != after.initiative else None,
+        sheet_order=order if before is None or order != tuple(row.actor_uuid for row in before.sheets) else None,
+        sheets=tuple(SheetPatch(actor_uuid=row.actor_uuid, changes=changes) for row in after.sheets
+            if (changes := sheet_changes(sheets.get(row.actor_uuid), row))))
+
+
 def project_after_values(state: ProjectionState, hud: PlayerHUDSnapshot | None,
                          appends: tuple[CombatLogAppend, ...]
-                         ) -> tuple[PlayerHUDSnapshot | None, tuple[CombatLogAppend, ...]]:
+                         ) -> tuple[PlayerHUDPatch | None, tuple[CombatLogAppend, ...]]:
+    """Map already-admitted native after-values into this audience's ordering.
+
+    The display travels as the patch against the seat's last one, folded into
+    `remembered` by the client's reducer; an unchanged display sends nothing.
+    """
     """Map already-admitted native after-values into this audience's ordering."""
     def boundary(native_cursor: int) -> int:
         # Public occurrences increase in insertion order, including late
@@ -1729,9 +1817,11 @@ def project_after_values(state: ProjectionState, hud: PlayerHUDSnapshot | None,
     public_logs = tuple(replace(row, encounter_log_index=state.next_log_append + index,
         operation_end_cursor=boundary(row.operation_end_cursor)) for index, row in enumerate(appends))
     state.next_log_append += len(public_logs)
-    if public_hud is not None:
-        state.remembered.hud_snapshot = public_hud
-    return public_hud, public_logs
+    if public_hud is None or public_hud == state.remembered.hud_snapshot:
+        return None, public_logs
+    patch = hud_patch(state.remembered.hud_snapshot, public_hud)
+    apply_hud(state.remembered, patch, end_cursor=state.next_occurrence)
+    return patch, public_logs
 
 
 def begin_projection(initialization: IntervalEnvelope) -> tuple[ProjectionState, PlayerInitialization]:

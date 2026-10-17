@@ -33,14 +33,17 @@ def test_after_values_wait_for_all_disclosed_occurrences(native_order, expected)
     projection = ProjectionState(
         world=PresentationTarget(generation=generation, observer_uuid=observer), actors={},
         remembered=PlayerState(generation=generation, observer_uuid=observer, world=world),
-        public_cursors={native: local for local, native in enumerate(native_order)})
+        public_cursors={native: local for local, native in enumerate(native_order)}, next_occurrence=len(native_order))
     revisions = []
     for native_cursor in (0, 2, 3, 5, 8, 9):
+        before = projection.remembered.hud_snapshot
         hud, logs = project_after_values(projection, PlayerHUDSnapshot(
             generation=generation, observer_uuid=observer, revision=native_cursor,
             initiative=(), sheets=()), ())
-        assert hud is not None and logs == ()
-        revisions.append(hud.revision)
+        assert logs == ()
+        # An unchanged display is not sent again.
+        assert (hud is None) == (before is not None and before.revision == projection.remembered.hud_snapshot.revision)
+        revisions.append(projection.remembered.hud_snapshot.revision)
     assert tuple(revisions) == expected
 
 

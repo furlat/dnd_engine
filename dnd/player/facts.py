@@ -29,7 +29,13 @@ from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy,
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState
-from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesSnapshot
+from dnd.types.senses import (PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesSnapshot,
+    VolumeSurfaceSight)
+from dnd.core.condition_types import ConditionDurationSummary
+from dnd.core.content.identities import ContentRef
+from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry
+from dnd.types.class_features import DraconicPresenceMode
+from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.spatial_effects import AreaPropagation, SpatialDamageSource, SpatialEffectChangeOperation, SpatialEffectInteractionOperation
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.traps import TrapState
@@ -89,6 +95,56 @@ class PlayerHUDSnapshot:
     revision: int
     initiative: tuple[UUID, ...]
     sheets: tuple[PlayerCharacterSheet, ...]
+
+
+class SheetChanges(TypedDict, total=False):
+    """Present fields replace the seat's sheet values; against no sheet every field is present."""
+
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
+    species: Species | None
+    species_variant: SpeciesVariant | None
+    background: Background | None
+    origin: AppliedOriginState | None
+    class_levels: tuple[AppliedClassLevel, ...]
+    abilities: tuple[tuple[AbilityName, int], ...]
+    skills: tuple[str, ...]
+    expertise: tuple[str, ...]
+    saves: tuple[str, ...]
+    proficiency_bonus: int
+    resources: tuple[PlayerResource, ...]
+    name: str
+    portrait_key: str | None
+    normal_hp: int
+    maximum_hp: int
+    compatible_item_slots: tuple[tuple[UUID, tuple[str, ...]], ...]
+    handler_details: tuple[AvailableHandlerInfo, ...]
+    scribed_spell_ids: tuple[str, ...]
+    permanent_feature_uses: tuple[str, ...]
+    prepared_spell_selections: tuple[PreparedSpellSelection, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SheetPatch:
+    actor_uuid: UUID
+    changes: SheetChanges
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlayerHUDPatch:
+    """The seat's operation-end display as a patch against its last one.
+
+    It always carries the revision; the initiative and the sheet order only
+    when they changed, and the sheets that changed. Against no display it
+    carries all of them.
+    """
+
+    generation: UUID
+    observer_uuid: UUID
+    revision: int
+    initiative: tuple[UUID, ...] | None = None
+    sheet_order: tuple[UUID, ...] | None = None
+    sheets: tuple[SheetPatch, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -622,6 +678,59 @@ class ActionFact:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class SpatialEffectContent:
+    """A spatial effect's static content; a seat receives it once per effect."""
+
+    content_ref: ContentRef
+    name: str
+    description: str
+
+
+class SpatialEffectSighting(BaseModel):
+    """One observation of a spatial effect without its static content (`PerceivedSpatialEffect`'s other fields)."""
+
+    model_config = ConfigDict(frozen=True)
+    duration: ConditionDurationSummary | None = None
+    positions: tuple[tuple[int, int], ...]
+    owner_revision: int | None = Field(default=None, ge=0)
+    apparent_presence: bool = False
+    trap_state: TrapState | None = None
+    pressed: bool | None = None
+    direction: tuple[int, int] | None = None
+    anchor_item_uuid: UUID | None = None
+    anchor_entity_uuid: UUID | None = None
+    energy_type: DamageType | None = None
+    presence_mode: DraconicPresenceMode | None = None
+    sustainer_item_uuid: UUID | None = None
+    concentration_slot_uuid: UUID | None = None
+    anchor_position: tuple[int, int] | None = None
+    anchor_elevation_steps: int | None = None
+    area_geometry: AoEPresentationGeometry | None = None
+    construction_sections: tuple[WallAssemblyPresentationGeometry, ...] = ()
+    area_propagation: AreaPropagation | None = None
+    deposit_source: MaterialDepositSource | None = None
+    visible_volume_positions: tuple[tuple[int, int], ...] = ()
+    upper_volume_surfaces: tuple[VolumeSurfaceSight, ...] = ()
+    suppressions: tuple[SpellSuppression, ...] = ()
+
+
+def joined_effect(sighting: SpatialEffectSighting, content: SpatialEffectContent) -> PerceivedSpatialEffect:
+    """The perceived effect of a sighting and its content (both already validated)."""
+    return PerceivedSpatialEffect.model_construct(duration=sighting.duration, content_ref=content.content_ref,
+        name=content.name, description=content.description, positions=sighting.positions,
+        owner_revision=sighting.owner_revision, apparent_presence=sighting.apparent_presence,
+        trap_state=sighting.trap_state, pressed=sighting.pressed, direction=sighting.direction,
+        anchor_item_uuid=sighting.anchor_item_uuid, anchor_entity_uuid=sighting.anchor_entity_uuid,
+        energy_type=sighting.energy_type, presence_mode=sighting.presence_mode,
+        sustainer_item_uuid=sighting.sustainer_item_uuid, concentration_slot_uuid=sighting.concentration_slot_uuid,
+        anchor_position=sighting.anchor_position, anchor_elevation_steps=sighting.anchor_elevation_steps,
+        area_geometry=sighting.area_geometry, construction_sections=sighting.construction_sections,
+        area_propagation=sighting.area_propagation, deposit_source=sighting.deposit_source,
+        visible_volume_positions=sighting.visible_volume_positions,
+        upper_volume_surfaces=sighting.upper_volume_surfaces, suppressions=sighting.suppressions)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SensoryFact:
     kind: Literal["sensory"] = "sensory"
     observer_uuid: UUID
@@ -645,10 +754,18 @@ class SensoryFact:
     visual_access: int | None
     paths_dirty: bool
     hazardous_cells_changed: dict[str, bool] = field(default_factory=dict)
-    spatial_effects_changed: dict[UUID, PerceivedSpatialEffect] = field(default_factory=dict)
+    spatial_effect_sightings: dict[UUID, SpatialEffectSighting] = field(default_factory=dict)
+    # The content of each sighted effect the seat does not hold yet; a folded fact holds every sighting's content.
+    spatial_effect_content: dict[UUID, SpatialEffectContent] = field(default_factory=dict)
     spatial_effects_removed: frozenset[UUID] = frozenset()
     light_sources_changed: dict[UUID, PerceivedLightSource] = field(default_factory=dict)
     light_sources_removed: dict[UUID, int] = field(default_factory=dict)
+
+    @property
+    def spatial_effects_changed(self) -> dict[UUID, PerceivedSpatialEffect]:
+        """The perceived effects the shared sensory reducer reads: each sighting with its content."""
+        return {identity: joined_effect(row, self.spatial_effect_content[identity])
+                for identity, row in self.spatial_effect_sightings.items()}
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -847,7 +964,6 @@ class PlayerLineage:
     end_cursor: int
     observations: tuple[PlayerObservation, ...] = ()
     world_updates: tuple[WorldUpdate, ...] = ()
-    hud_snapshot: PlayerHUDSnapshot | None = None
     audience: PlayerAudience | None = None
 
     @property
@@ -866,17 +982,17 @@ class PlayerInitialization:
     end_cursor: int
     observations: tuple[PlayerObservation, ...]
     world_updates: tuple[WorldUpdate, ...]
-    hud_snapshot: PlayerHUDSnapshot | None = None
+    hud: PlayerHUDPatch | None = None
     audience: PlayerAudience | None = None
 
 
 class PlayerSequence(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal[5] = 5
+    schema_version: Literal[6] = 6
     initialization: PlayerInitialization
     lineages: tuple[PlayerLineage, ...]
     combat_log_appends: tuple[CombatLogAppend, ...] = ()
-    hud_snapshots: tuple[PlayerHUDSnapshot, ...] = ()
+    huds: tuple[PlayerHUDPatch, ...] = ()
 
 
 class PlayerUpdate(BaseModel):
@@ -884,7 +1000,7 @@ class PlayerUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     audience: PlayerAudience
     lineages: tuple[PlayerLineage, ...]
-    hud: PlayerHUDSnapshot | None
+    hud: PlayerHUDPatch | None
     combat_log_appends: tuple[CombatLogAppend, ...]
     content_additions: tuple[ContentDescriptor, ...]
 
@@ -903,6 +1019,8 @@ class PlayerState:
     # Keep spatial commit order across separately timed presentation groups.
     spatial_commit_cursors: dict[UUID, int] = field(default_factory=dict)
     actors: dict[UUID, PlayerActor] = field(default_factory=dict)
+    # The static content of every spatial effect the seat has seen, by effect uuid.
+    spatial_content: dict[UUID, SpatialEffectContent] = field(default_factory=dict)
     # Every item instance the seat has seen, by uuid.
     items: dict[UUID, PlayerItem] = field(default_factory=dict)
     current_actor_uuid: UUID | None = None

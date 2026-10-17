@@ -12,6 +12,8 @@ from uuid import uuid4
 
 import httpx
 
+from dnd.player.facts import PlayerUpdate
+from dnd.player.reduction import reduce_initialization, reduce_operation
 from dnd.types.character_progression import CharacterClass, PreparedSpellSelection
 from server import host as owner
 from server import protocol as wire
@@ -20,6 +22,18 @@ from server.app import create_app
 from server.config import SeatCredential, ServerConfig
 from tests.player.test_compact_choices import rows
 from tests.progression.prepared_class_support import prepared_build
+
+
+def fold(state, operations):
+    """The client's fold of delivered operations; a HUD travels as a patch against the last one."""
+    for row in operations:
+        state = reduce_operation(state, PlayerUpdate(audience=row.audience, lineages=row.lineages, hud=row.hud,
+            combat_log_appends=row.combat_log_appends, content_additions=row.content_additions))
+    return state
+
+
+def sheet_of(state, actor):
+    return next(row for row in state.hud_snapshot.sheets if row.actor_uuid == actor)
 
 
 async def receive_operations(app, headers, *, after, through):
@@ -160,9 +174,11 @@ def test_http_preparation_after_combat_preserves_permanent_use_and_authority(tmp
                 }
                 initial = await client.get(path + "initialization", headers=headers)
                 assert initial.status_code == 200
+                opening = wire.InitializationResponse.model_validate_json(initial.text)
+                state = reduce_initialization(opening.initialization, content_additions=opening.content_additions)
                 head = publication.cursor.sequence
                 if head:
-                    await receive_operations(app, headers, after=0, through=head)
+                    state = fold(state, await receive_operations(app, headers, after=0, through=head))
                 acknowledged = await client.post(
                     path + "ack",
                     headers=headers,
@@ -222,9 +238,8 @@ def test_http_preparation_after_combat_preserves_permanent_use_and_authority(tmp
                     intervention.boundary.state_revision == intervention.state_revision
                 )
                 assert not host.retired
-                sheet = next(
-                    row for row in intervention.hud.sheets if row.actor_uuid == actor
-                )
+                state = fold(state, delivered)
+                sheet = sheet_of(state, actor)
                 assert sheet.permanent_feature_uses == (
                     "class_feature.cleric.divine_intervention",
                 )
@@ -259,9 +274,8 @@ def test_http_preparation_after_combat_preserves_permanent_use_and_authority(tmp
                     through=prepared.cursor.sequence,
                 )
                 updated = delivered[-1]
-                sheet = next(
-                    row for row in updated.hud.sheets if row.actor_uuid == actor
-                )
+                state = fold(state, delivered)
+                sheet = sheet_of(state, actor)
                 assert sheet.prepared_spell_selections == (
                     PreparedSpellSelection(
                         "class.cleric.spellcasting", ("spell.bane",)

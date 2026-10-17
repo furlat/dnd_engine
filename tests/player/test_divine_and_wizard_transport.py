@@ -33,6 +33,13 @@ from tests.player.test_compact_choices import request_choices, rows
 from tests.progression.prepared_class_support import prepared_build, prepared_level
 
 
+def seat_sheet(runtime, seat, actor_uuid):
+    """The sheet in the seat's display: its HUD travels as patches, folded by the seat's
+    projection the way its client folds them (see test_emitted_update_replica)."""
+    return next(row for row in runtime.audiences[seat].projection.remembered.hud_snapshot.sheets
+        if row.actor_uuid == actor_uuid)
+
+
 def worker(build):
     runtime, _, _ = start(
         Start(
@@ -138,11 +145,7 @@ def test_captured_scroll_learning_and_preparation_rebuild_then_real_worker_fireb
             if isinstance(record, PlayerOperation):
                 detached = PlayerOperation.model_validate_json(record.model_dump_json())
                 assert detached == record
-        sheet = next(
-            sheet
-            for sheet in detached.hud.sheets
-            if sheet.actor_uuid == actor.uuid
-        )
+        sheet = seat_sheet(runtime, seat, actor.uuid)
         assert "spell.fireball" in sheet.scribed_spell_ids
         assert sheet.prepared_spell_selections == actor.prepared_spell_selections
     finally:
@@ -274,12 +277,8 @@ def test_worker_item_cast_and_learn_are_distinct_and_captured_book_rebuilds():
         packet = next(
             record for record in records if isinstance(record, PlayerOperation)
         )
-        detached = PlayerOperation.model_validate_json(packet.model_dump_json())
-        sheet = next(
-            sheet
-            for sheet in detached.hud.sheets
-            if sheet.actor_uuid == actor.uuid
-        )
+        assert PlayerOperation.model_validate_json(packet.model_dump_json()) == packet
+        sheet = seat_sheet(runtime, seat, actor.uuid)
         assert "spell.fireball" in sheet.scribed_spell_ids
         assert learn.source_item_uuid not in actor.inventory.items
         rebuilt = create_character(
@@ -480,13 +479,8 @@ def test_worker_outside_combat_recovery_ritual_preparation_and_mastery_study():
         packet = next(
             record for record in records if isinstance(record, PlayerOperation)
         )
-        sheet = next(
-            sheet
-            for sheet in PlayerOperation.model_validate_json(
-                packet.model_dump_json()
-            ).hud.sheets
-            if sheet.actor_uuid == actor.uuid
-        )
+        assert PlayerOperation.model_validate_json(packet.model_dump_json()) == packet
+        sheet = seat_sheet(runtime, seat, actor.uuid)
         rebuilt = create_character(
             replace(
                 build,

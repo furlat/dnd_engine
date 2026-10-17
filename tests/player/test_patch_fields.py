@@ -11,10 +11,12 @@ from uuid import uuid4
 from dnd.core.equipment_types import WeaponSet
 from dnd.core.item_types import ItemPresentationState
 from dnd.core.life_types import LifeState
-from dnd.player.facts import ActorChanges, ItemLook, ItemProfile, ItemState, PlayerActor, PlayerObservation, VisualLoadout
+from dnd.player.facts import (ActorChanges, ItemLook, ItemProfile, ItemState, PlayerActor, PlayerCharacterSheet,
+    PlayerObservation, SheetChanges, SpatialEffectContent, SpatialEffectSighting, VisualLoadout)
 from dnd.player.projection import actor_changes
 from dnd.player.reduction import observed_actor
 from dnd.types.appearance import AppearanceConfig
+from dnd.types.senses import PerceivedSpatialEffect
 
 
 def test_actor_changes_cover_every_body_field():
@@ -35,3 +37,13 @@ def test_item_components_partition_every_item_field():
     components = [{row.name for row in fields(value)} for value in (ItemLook, ItemProfile, ItemState)]
     assert sum(len(names) for names in components) == len(set().union(*components))
     assert set().union(*components) == set(ItemPresentationState.model_fields) - {"item_uuid"}
+
+
+def test_a_sighting_and_its_content_are_every_perceived_effect_field():
+    sighting = set(SpatialEffectSighting.model_fields)
+    content = {row.name for row in fields(SpatialEffectContent)}
+    assert not sighting & content and sighting | content == set(PerceivedSpatialEffect.model_fields)
+
+
+def test_sheet_changes_cover_every_sheet_field():
+    assert set(get_type_hints(SheetChanges)) == {row.name for row in fields(PlayerCharacterSheet)} - {"actor_uuid"}

@@ -85,7 +85,7 @@ def _lineage_content(lineages: tuple[PlayerLineage, ...]) -> set[str]:
             elif isinstance(fact, EquipmentFact):
                 known.update(_patch_content(fact.changes, fact.items))
             elif isinstance(fact, SensoryFact):
-                known.update(row.content_ref.content_id for row in fact.spatial_effects_changed.values())
+                known.update(row.content_ref.content_id for row in fact.spatial_effect_content.values())
             elif isinstance(fact, ObjectDestroyedFact):
                 known.add(fact.item_id)
             elif isinstance(fact, MechanismActivationFact):

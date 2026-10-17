@@ -16,7 +16,7 @@ from dnd.player.audience import (AudienceComposition, apply_current_audience, au
     begin_audience_composition, observe_audience, resolve_audience)
 from dnd.player.facts import (
     AttackFact, ConditionChangeFact, ConditionFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
-    PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
+    PlayerActor, PlayerCharacterSheet, PlayerFact, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SpatialFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact, FactionFact,
 )
 
@@ -77,7 +77,7 @@ STATE_PRESENTATION_KINDS = frozenset({
 def copy_target(target: PlayerState) -> PlayerState:
     senses = target.senses
     return replace(target, tiles=dict(target.tiles), objects=dict(target.objects), actors=dict(target.actors),
-        items=dict(target.items),
+        items=dict(target.items), spatial_content=dict(target.spatial_content),
         spatial_commit_cursors=dict(target.spatial_commit_cursors),
         senses=None if senses is None else copy_senses_snapshot(senses),
         perception=replace(target.perception,
@@ -174,7 +174,7 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: i
     """Fold an already-disclosed committed fact into player memory: its senses and turn part, then its bodies' part."""
     apply_sensed_fact(target, fact, target.actors, source_cursor=source_cursor,
         audience_composition=audience_composition)
-    apply_body_fact(target, fact)
+    apply_record_fact(target, fact)
 
 
 def apply_sensed_fact(target: PlayerState, fact: PlayerFact, known: Collection[UUID], *,
@@ -196,6 +196,10 @@ def apply_sensed_fact(target: PlayerState, fact: PlayerFact, known: Collection[U
                 target.senses = replace(target.senses, position=fact.position)
         case SensoryFact():
             cursor = target.reducer_cursor if source_cursor is None else source_cursor
+            # A sighting of an effect the seat already knows carries no content: take the seat's.
+            fact = replace(fact, spatial_effect_content={identity: fact.spatial_effect_content[identity]
+                if identity in fact.spatial_effect_content else target.spatial_content[identity]
+                for identity in fact.spatial_effect_sightings})
             if audience_composition is None:
                 target.perception = observe_audience(target.perception, target.viewing_audience, fact, cursor)
                 target.senses = audience_view(target.perception, target.observer_uuid)
@@ -210,8 +214,8 @@ def apply_sensed_fact(target: PlayerState, fact: PlayerFact, known: Collection[U
                 target.current_actor_uuid = fact.entity_uuid if fact.event_type is EventType.TURN_START else None
 
 
-def apply_body_fact(target: PlayerState, fact: PlayerFact) -> None:
-    """The bodies' part of a committed fact: it changes `target.actors` and `target.items` only."""
+def apply_record_fact(target: PlayerState, fact: PlayerFact) -> None:
+    """The records' part of a committed fact: it changes `target.actors`, `target.items` and `target.spatial_content` only."""
     match fact:
         case FactionFact():
             actor = target.actors.get(fact.entity_uuid)
@@ -248,6 +252,7 @@ def apply_body_fact(target: PlayerState, fact: PlayerFact) -> None:
                 target.items[fact.item_uuid] = replace(record, state=replace(record.state,
                     charges=fact.charges_after, stack_count=fact.stack_count_after))
         case SensoryFact():
+            target.spatial_content.update(fact.spatial_effect_content)
             if fact.observer_position_changed and fact.observer_uuid in target.actors:
                 target.actors[fact.observer_uuid] = replace(target.actors[fact.observer_uuid], last_visual_position=fact.observer_position)
             for identity, contact in fact.entity_contacts_changed.items():
@@ -393,14 +398,30 @@ def reduce_initialization(initialization: PlayerInitialization, *,
     target = reduce_nodes(target, initialization.nodes, initialization.version_rows,
                      initialization.observations, initialization.world_updates)
     target.reducer_cursor = initialization.end_cursor
-    if initialization.hud_snapshot is not None:
-        snapshot = initialization.hud_snapshot
-        if (snapshot.generation != target.generation or snapshot.observer_uuid != target.observer_uuid
-                or snapshot.revision > initialization.end_cursor):
-            raise ValueError("HUD facts belong to a different or future boundary")
-    target.hud_snapshot = initialization.hud_snapshot
+    if initialization.hud is not None:
+        apply_hud(target, initialization.hud, end_cursor=initialization.end_cursor)
     target.content = tuple(sorted(content_additions, key=lambda row: row.ref.identity_key))
     return target
+
+
+def apply_hud(target: PlayerState, patch: PlayerHUDPatch, *, end_cursor: int) -> None:
+    """Fold a HUD patch into the seat's last display; against no display it is complete."""
+    previous = target.hud_snapshot
+    if (patch.generation != target.generation or patch.observer_uuid != target.observer_uuid
+            or patch.revision > end_cursor or previous is not None and patch.revision < previous.revision):
+        raise ValueError("HUD belongs to a different or future operation")
+    sheets = {row.actor_uuid: row for row in previous.sheets} if previous is not None else {}
+    for row in patch.sheets:
+        before = sheets.get(row.actor_uuid)
+        sheets[row.actor_uuid] = (PlayerCharacterSheet(actor_uuid=row.actor_uuid, **row.changes) if before is None
+            else replace(before, **row.changes))
+    initiative = patch.initiative if patch.initiative is not None else previous.initiative if previous is not None else None
+    order = (patch.sheet_order if patch.sheet_order is not None
+        else tuple(row.actor_uuid for row in previous.sheets) if previous is not None else None)
+    if initiative is None or order is None:
+        raise ValueError("A first HUD requires its initiative and sheet order")
+    target.hud_snapshot = PlayerHUDSnapshot(generation=patch.generation, observer_uuid=patch.observer_uuid,
+        revision=patch.revision, initiative=initiative, sheets=tuple(sheets[identity] for identity in order))
 
 
 def reduce_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
@@ -420,13 +441,6 @@ def _apply_lineage(target: PlayerState, lineage: PlayerLineage, *,
     _apply_nodes(result, lineage.events, lineage.version_rows, lineage.observations, lineage.world_updates,
         audience_composition=audience_composition)
     result.reducer_cursor = lineage.end_cursor
-    if lineage.hud_snapshot is not None:
-        snapshot = lineage.hud_snapshot
-        if (snapshot.generation != result.generation or snapshot.observer_uuid != result.observer_uuid
-                or snapshot.revision > lineage.end_cursor
-                or (result.hud_snapshot is not None and snapshot.revision < result.hud_snapshot.revision)):
-            raise ValueError("HUD facts belong to a different observer or generation")
-        result.hud_snapshot = snapshot
 
 
 def lineage_branch(lineage: PlayerLineage, root: PlayerNode) -> PlayerLineage:
@@ -456,7 +470,7 @@ def lineage_branch(lineage: PlayerLineage, root: PlayerNode) -> PlayerLineage:
     return replace(lineage, root=root, events=nodes, version_rows=versions,
         start_cursor=versions[0].source_index, end_cursor=versions[-1].source_index + 1,
         observations=tuple(row for row in lineage.observations if row.event_uuid in identities),
-        world_updates=tuple(row for row in lineage.world_updates if row.event_uuid in identities), hud_snapshot=None)
+        world_updates=tuple(row for row in lineage.world_updates if row.event_uuid in identities))
 
 
 def encode_player_sequence(sequence: PlayerSequence) -> bytes:
@@ -495,12 +509,7 @@ def reduce_operation(target: PlayerState, update: PlayerUpdate) -> PlayerState:
             composition = begin_audience_composition(result.perception, result.observer_uuid)
         _apply_lineage(result, lineage, audience_composition=composition)
     if update.hud is not None:
-        hud = update.hud
-        if (hud.generation != result.generation or hud.observer_uuid != result.observer_uuid
-                or hud.revision > result.reducer_cursor
-                or result.hud_snapshot is not None and hud.revision < result.hud_snapshot.revision):
-            raise ValueError("HUD belongs to a different or future operation")
-        result.hud_snapshot = hud
+        apply_hud(result, update.hud, end_cursor=result.reducer_cursor)
     for index, row in enumerate(update.combat_log_appends, len(result.combat_log_appends)):
         if (row.generation != result.generation or row.observer_uuid != result.observer_uuid
                 or row.operation_end_cursor > result.reducer_cursor or row.encounter_log_index != index):

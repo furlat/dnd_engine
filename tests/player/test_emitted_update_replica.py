@@ -68,7 +68,8 @@ def operation_since(session: Session, start: int) -> Operation:
 
 
 def what_capture_reads(state: PlayerState) -> tuple:
-    return (state.actors, state.connectors, state.content, state.hud_snapshot, state.tiles, state.objects)
+    return (state.actors, state.items, state.spatial_content, state.connectors, state.content, state.hud_snapshot,
+        state.tiles, state.objects)
 
 
 def check_replica(session: Session, steps: tuple[Step, ...]) -> dict[str, PlayerState]:

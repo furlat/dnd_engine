@@ -116,10 +116,10 @@ def project_sequence(native: RecordedSequence) -> PlayerSequence:
            for row in native.hud_snapshots):
         raise ValueError("HUD snapshot belongs to a different observer or generation")
     starting = next((row for row in native.hud_snapshots if row.revision == native.initialization.end_cursor), None)
-    initial = replace(initial, hud_snapshot=project_after_values(state, starting, ())[0])
+    initial = replace(initial, hud=project_after_values(state, starting, ())[0])
     lineages = tuple(projected for row in native.lineages if (projected := project_lineage(state, row)) is not None)
-    hud = tuple(project_after_values(state, row, ())[0] for row in native.hud_snapshots if row is not starting)
+    huds = tuple(project_after_values(state, row, ())[0] for row in native.hud_snapshots if row is not starting)
     return PlayerSequence(initialization=initial, lineages=lineages,
         combat_log_appends=project_after_values(state, None, native.combat_log_appends)[1],
-        hud_snapshots=tuple(row for row in hud if row is not None))
+        huds=tuple(row for row in huds if row is not None))
 
