@@ -1,109 +1,68 @@
-"""Recorded lineage payloads remain detached from later native mutations."""
+"""A captured lineage keeps its value while later native history is stored.
+
+Stored event versions are frozen values (P7b): capture holds them by reference, and a late
+child of a captured version is linked through the queue, not written into the version.
+"""
 
 from copy import deepcopy
 from uuid import uuid4
 
-from pydantic import Field
-
 from dnd.core.effect_types import EventResolutionRef, ObservedChangeRef
-from dnd.core.events import (EventPhase, EventQueue, SensoryUpdateEvent,
+from dnd.core.events import (Event, EventPhase, EventQueue, EventType, SensoryUpdateEvent,
     SpatialChangeEvent, SpatialChangeType, SensesUpdateHint, StepMovementEvent)
 from dnd.player.capture import capture_lineage
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.senses import PerceivedContact, SenseMode, SensesType
 
 
-class ExtendedContact(PerceivedContact):
-    notes: list[str] = Field(default_factory=list)
+def _step_with_provenance(observer):
+    source = StepMovementEvent(source_entity_uuid=observer,
+        from_position=(0, 0), to_position=(1, 0)).phase_to(EventPhase.COMPLETION)
+    resolution = EventResolutionRef(lineage_uuid=source.lineage_uuid)
+    return SensoryUpdateEvent(source_entity_uuid=observer, observer_uuid=observer, resolution_ref=resolution,
+        observed_changes=(ObservedChangeRef(source_event_uuid=source.uuid,
+            source_index=EventQueue.get_event_index(source.uuid), resolution_ref=resolution,
+            field='position', owner_uuid=observer),),
+    ).phase_to(EventPhase.COMPLETION)
 
 
-class ExtendedSensoryEvent(SensoryUpdateEvent):
-    notes: list[str] = Field(default_factory=list)
+def _sensory_containers(observer):
+    subject = uuid4()
+    return SensoryUpdateEvent(source_entity_uuid=observer, observer_uuid=observer,
+        visible_cells_added=[(1, 2)], seen_cells_added=[(1, 2)],
+        entity_contacts_changed={subject: PerceivedContact(position=(1, 2), visual=True)},
+        effective_light_levels_changed={'1,2': 3}, hazardous_cells_changed={'1,2': False},
+        sense_modes=[SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)],
+    ).phase_to(EventPhase.COMPLETION)
 
 
-class ExtendedResolutionRef(EventResolutionRef):
-    notes: list[str] = Field(default_factory=list)
+def _light_change(observer):
+    return SpatialChangeEvent(source_entity_uuid=observer,
+        change_type=SpatialChangeType.LIGHT_CHANGED, position=(1, 2),
+        light_level_map={'1,2': 3},
+        senses_hint=SensesUpdateHint(light_changed_positions={(1, 2)}),
+    ).phase_to(EventPhase.COMPLETION)
 
 
-def test_captured_native_event_and_provenance_extensions_remain_detached():
+def check_capture_is_stable(build) -> None:
     reset_engine_runtime()
     try:
         observer = uuid4()
-        source = StepMovementEvent(source_entity_uuid=observer,
-            from_position=(0, 0), to_position=(1, 0)).phase_to(EventPhase.COMPLETION)
-        resolution = ExtendedResolutionRef(lineage_uuid=source.lineage_uuid, notes=['observed'])
-        event = ExtendedSensoryEvent(source_entity_uuid=observer, observer_uuid=observer,
-            notes=['original'], resolution_ref=resolution,
-            observed_changes=(ObservedChangeRef(source_event_uuid=source.uuid,
-                source_index=EventQueue.get_event_index(source.uuid), resolution_ref=resolution,
-                field='position', owner_uuid=observer),),
-        ).phase_to(EventPhase.COMPLETION)
+        event = build(observer)
         retained = capture_lineage(event, observer_uuid=observer).root
         expected = deepcopy(retained)
 
-        event.notes.append('later')
-        event.resolution_ref.notes.append('later event provenance')
-        event.observed_changes[0].resolution_ref.notes.append('later observation provenance')
+        late_child = Event(source_entity_uuid=observer, event_type=EventType.TRIGGER_EVENT,
+            phase=EventPhase.DECLARATION, parent_event=event.uuid).phase_to(EventPhase.COMPLETION)
+        build(observer)
 
-        assert retained == expected
+        assert retained == expected, build.__name__
+        assert late_child.uuid not in retained.children_events, build.__name__
+        assert late_child.uuid in EventQueue.child_links(event)[0], build.__name__
     finally:
         reset_engine_runtime()
 
 
-def test_captured_sensory_lineage_detaches_containers_and_mutable_extensions():
-    reset_engine_runtime()
-    try:
-        observer, subject, extension = uuid4(), uuid4(), uuid4()
-        event = SensoryUpdateEvent(source_entity_uuid=observer, observer_uuid=observer,
-            visible_cells_added=[(1, 2)], seen_cells_added=[(1, 2)],
-            entity_contacts_changed={subject: PerceivedContact(position=(1, 2), visual=True),
-                extension: ExtendedContact(position=(2, 2), visual=True, notes=['observed'])},
-            effective_light_levels_changed={'1,2': 3}, hazardous_cells_changed={'1,2': False},
-            sense_modes=[SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)],
-        ).phase_to(EventPhase.COMPLETION)
-        event.identified_entity_observer_uuids[str(subject)] = frozenset({str(observer)})
-        event.located_entity_observer_uuids[str(subject)] = frozenset({str(observer)})
-        event.located_position_observer_uuids['1,2'] = frozenset({str(observer)})
-        cursor = EventQueue.event_cursor()
-        retained = capture_lineage(event, observer_uuid=observer).root
-        expected = deepcopy(retained)
-
-        event.children_events.append(uuid4())
-        event.children_lineages.append(uuid4())
-        event.lineage_children_events.append(uuid4())
-        event.identified_entity_observer_uuids[str(subject)] = frozenset()
-        event.located_entity_observer_uuids[str(subject)] = frozenset()
-        event.located_position_observer_uuids['1,2'] = frozenset()
-        event.visible_cells_added.clear()
-        event.seen_cells_added.clear()
-        event.effective_light_levels_changed['1,2'] = 0
-        event.hazardous_cells_changed['1,2'] = True
-        event.entity_contacts_changed[extension].notes.append('later')
-        event.entity_contacts_changed.clear()
-        event.entity_contacts_removed.add(subject)
-        event.object_contacts_removed.add(subject)
-        event.spatial_effects_removed.add(subject)
-        event.sense_modes[0].range_feet = 120
-
-        assert retained == expected
-        assert EventQueue.event_cursor() == cursor
-    finally:
-        reset_engine_runtime()
-
-
-def test_captured_light_lineage_detaches_light_map_and_hint_sets():
-    reset_engine_runtime()
-    try:
-        observer = uuid4()
-        event = SpatialChangeEvent(source_entity_uuid=observer,
-            change_type=SpatialChangeType.LIGHT_CHANGED, position=(1, 2),
-            light_level_map={'1,2': 3},
-            senses_hint=SensesUpdateHint(light_changed_positions={(1, 2)}),
-        ).phase_to(EventPhase.COMPLETION)
-        retained = capture_lineage(event, observer_uuid=observer).root
-        expected = deepcopy(retained)
-        event.light_level_map['1,2'] = 0
-        event.senses_hint.light_changed_positions.clear()
-        assert retained == expected
-    finally:
-        reset_engine_runtime()
+def test_captured_lineage_is_unchanged_by_later_history():
+    for build in (_step_with_provenance, _sensory_containers, _light_change):
+        check_capture_is_stable(build)

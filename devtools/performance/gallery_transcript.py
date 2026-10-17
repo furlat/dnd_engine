@@ -63,8 +63,13 @@ def record(tree: Path, out: Path) -> None:
     spec.loader.exec_module(gallery)
 
     def dump_event(event):
+        # Child links live in the queue's lineage index (P7b), not in the frozen stored version.
+        children, lineage_children = EventQueue.child_links(event)
+        fields = event.model_dump(mode='json', exclude={'combat_log'})
+        fields.update(children_events=[str(identity) for identity in children],
+                      lineage_children_events=[str(identity) for identity in lineage_children])
         row = {'cls': type(event).__name__,
-               'fields': event.model_dump(mode='json', exclude={'combat_log'}),
+               'fields': fields,
                'identified': {str(k): sorted(map(str, v)) for k, v in event.identified_entity_observer_uuids.items()},
                'located': {str(k): sorted(map(str, v)) for k, v in event.located_entity_observer_uuids.items()},
                'located_pos': {str(k): sorted(map(str, v)) for k, v in event.located_position_observer_uuids.items()},

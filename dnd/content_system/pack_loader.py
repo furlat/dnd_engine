@@ -80,6 +80,7 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 _EVENT_QUEUE_STATE_ATTRIBUTES = (
     "_events_by_lineage",
+    "_lineage_children",
     "_events_by_uuid",
     "_event_indexes_by_uuid",
     "_events_by_type",
