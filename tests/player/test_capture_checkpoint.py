@@ -1,4 +1,4 @@
-"""Resumed capture publishes the same event-time facts as original-history capture."""
+"""Capture from the shared resumed fold publishes the same event-time facts as original-history capture."""
 
 from uuid import uuid4
 
@@ -16,7 +16,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.encounter import Encounter
 from dnd.game import Game
 from dnd.player.audience import PlayerAudience
-from dnd.player.capture import CaptureCheckpoint, capture_interval, capture_lineages
+from dnd.player.capture import CaptureCheckpoint, capture_context, capture_interval, capture_lineages
 from dnd.player.facts import PlayerSequence
 from dnd.player.projection import begin_projection, project_lineage
 from dnd.player.reduction import encode_player_sequence, reduce_initialization, reduce_lineage
@@ -54,11 +54,12 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
         encounter.add_combatant(observer, HumanController(source_entity_uuid=observer.uuid))
     encounter.start_encounter()
     audience = PlayerAudience((first.uuid, second.uuid), (first.uuid, second.uuid))
-    checkpoint = CaptureCheckpoint(EventQueue.generation_id(), audience)
+    checkpoint = CaptureCheckpoint(EventQueue.generation_id(), frozenset(audience.observers))
     arguments = dict(name='checkpoint parity', start_cursor=0, end_cursor=EventQueue.event_cursor(),
         observer_uuid=first.uuid, audience=audience, battlefield_id='battlefield.open_floor_bright')
     original = capture_interval(**arguments)
-    assert capture_interval(**arguments, checkpoint=checkpoint) == original
+    startup = capture_context(checkpoint, end_cursor=arguments['end_cursor'])
+    assert capture_interval(**arguments, context=startup) == original
     hot_projection, initial = begin_projection(original)
     cold_projection, _ = begin_projection(original)
     hot = cold = reduce_initialization(initial)
@@ -71,7 +72,7 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
         arguments = dict(observer_uuid=first.uuid, audience=audience,
             known_actor_uuids=frozenset(hot.actors),
             known_entity_names={str(identity): actor.name for identity, actor in hot.actors.items()})
-        resumed = capture_lineages(roots, **arguments, checkpoint=checkpoint)
+        resumed = capture_lineages(roots, **arguments, context=capture_context(checkpoint, roots))
         original = capture_lineages(roots, **arguments)
         assert resumed == original
         for left, right in zip(resumed, original, strict=True):
@@ -135,18 +136,20 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
     assert all(unseen.uuid not in contacts for contacts in checkpoint.contacts.values())
     assert discovered.actor.normal_hp == 33
 
-    # A historical request after the hot cursor must reconstruct the original
-    # event-time state instead of using the newest actor/contact snapshot.
-    assert capture_lineages(earlier_roots, **earlier_arguments, checkpoint=checkpoint) == earlier_capture
+    # The shared fold never folds history again: a request for roots it has
+    # already passed is refused instead of answered from newer state.
+    with pytest.raises(ValueError, match='precedes the capture checkpoint'):
+        capture_lineages(earlier_roots, **earlier_arguments, context=capture_context(checkpoint, earlier_roots))
+    assert capture_lineages(earlier_roots, **earlier_arguments) == earlier_capture
 
 
-def test_capture_checkpoint_resets_with_event_queue_generation(world):
+def test_capture_checkpoint_belongs_to_one_event_queue_generation(world):
     first = member(world, 'Old generation', (2, 2))
     audience = PlayerAudience((first.uuid,), (first.uuid,))
-    checkpoint = CaptureCheckpoint(EventQueue.generation_id(), audience)
+    checkpoint = CaptureCheckpoint(EventQueue.generation_id(), frozenset(audience.observers))
     capture_interval(name='old', start_cursor=0, end_cursor=EventQueue.event_cursor(),
         observer_uuid=first.uuid, audience=audience, battlefield_id='battlefield.open_floor_bright',
-        checkpoint=checkpoint)
+        context=capture_context(checkpoint, end_cursor=EventQueue.event_cursor()))
     old_event = next(EventQueue.iter_events_since(0))[1]
     assert EventQueue.get_event_index(old_event.uuid) == 0
     world.close()
@@ -157,5 +160,9 @@ def test_capture_checkpoint_resets_with_event_queue_generation(world):
     audience = PlayerAudience((second.uuid,), (second.uuid,))
     arguments = dict(name='new', start_cursor=0, end_cursor=EventQueue.event_cursor(),
         observer_uuid=second.uuid, audience=audience, battlefield_id='battlefield.open_floor_bright')
-    assert capture_interval(**arguments, checkpoint=checkpoint) == capture_interval(**arguments)
-    assert first.uuid not in checkpoint.actors and second.uuid in checkpoint.actors
+    with pytest.raises(ValueError, match='another EventQueue generation'):
+        capture_context(checkpoint, end_cursor=arguments['end_cursor'])
+    renewed = CaptureCheckpoint(EventQueue.generation_id(), frozenset(audience.observers))
+    assert capture_interval(**arguments, context=capture_context(renewed, end_cursor=arguments['end_cursor'])) == (
+        capture_interval(**arguments))
+    assert first.uuid not in renewed.actors and second.uuid in renewed.actors

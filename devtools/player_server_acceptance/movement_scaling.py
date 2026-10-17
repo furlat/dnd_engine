@@ -67,8 +67,8 @@ def census(runtime):
         'seats': len(runtime.audiences),
         'audiences': {seat: {'remembered_tiles': len(owner.projection.remembered.tiles),
             'remembered_objects': len(owner.projection.remembered.objects),
-            'seen': len(owner.latest.senses.seen) if owner.latest.senses else 0,
-            'visible': len(owner.latest.senses.visible) if owner.latest.senses else 0,
+            'seen': len(owner.projection.remembered.senses.seen) if owner.projection.remembered.senses else 0,
+            'visible': len(owner.projection.remembered.senses.visible) if owner.projection.remembered.senses else 0,
             'fields': {runtime.session.game.entities[identity].name: {
                 'max_distance': senses._field.max_distance if senses._field else None,
                 'optical_route_cells': len(senses._field.optical_routes) if senses._field else 0,

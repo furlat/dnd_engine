@@ -75,6 +75,8 @@ def project_actor(actor: ActorState, observers: list[str], *, controlled: bool,
 
 
 Key = TypeVar("Key")
+# Observer row lists in the order of `_snapshot_moves`.
+OBSERVER_VIEWS = ("visible_cells", "seen_cells", "visible_entity_uuids", "visible_object_uuids")
 
 
 def _move_observer(index: dict[Key, set[str]], observer: str, left: AbstractSet[Key], came: AbstractSet[Key]) -> None:
@@ -86,6 +88,20 @@ def _move_observer(index: dict[Key, set[str]], observer: str, left: AbstractSet[
                 del index[key]
     for key in came - left:
         index.setdefault(key, set()).add(observer)
+
+
+def _observer_view(senses: SensesSnapshot, view: str) -> list:
+    """One sorted view list of an observer row (`OBSERVER_VIEWS`)."""
+    match view:
+        case "visible_cells":
+            return sorted(senses.visible)
+        case "seen_cells":
+            return sorted(senses.seen)
+        case "visible_entity_uuids":
+            return sorted(str(identity) for identity in senses.entities)
+        case "visible_object_uuids":
+            return sorted(str(identity) for identity in senses.objects)
+    raise ValueError(f"Unknown observer view {view}")
 
 
 def _snapshot_moves(before: SensesSnapshot, event: SensoryUpdateEvent) -> tuple[tuple[set, set], ...]:
@@ -126,6 +142,8 @@ class AIKnowledge:
     entity_index: dict[UUID, set[str]] = field(default_factory=dict)
     object_index: dict[UUID, set[str]] = field(default_factory=dict)
     dirty_observers: set[UUID] = field(default_factory=set)
+    # The sorted view lists of a dirty observer whose keys changed since its row was projected.
+    observer_changes: dict[UUID, set[str]] = field(default_factory=dict)
     # Visible tiles touched since their last projection; projected once, when they stop
     # being visible or when consumption ends (a visible tile's row is a pure projection).
     dirty_tiles: set[tuple[int, int]] = field(default_factory=set)
@@ -211,12 +229,16 @@ class AIKnowledge:
                         objects.update(changed_objects)
                 parent = ancestor.parent_lineage
             self.senses[event.observer_uuid] = after
+            changes = self.observer_changes.setdefault(event.observer_uuid, set())
             if moves is None:
                 self._reindex(observer, before, after)
+                changes.update(OBSERVER_VIEWS)
             else:
-                for index, (left, came) in zip((self.visible_index, self.seen_index, self.entity_index,
-                                                self.object_index), moves):
+                for index, view, (left, came) in zip((self.visible_index, self.seen_index, self.entity_index,
+                                                      self.object_index), OBSERVER_VIEWS, moves):
                     _move_observer(index, observer, left, came)
+                    if left or came:
+                        changes.add(view)
             self.dirty_observers.add(event.observer_uuid)
             actors = set(event.entity_contacts_changed) | set(event.entity_contacts_removed)
             actors.add(event.observer_uuid)
@@ -265,18 +287,24 @@ class AIKnowledge:
             self.known_entities[str(identity)] = remember_entity(previous)
 
     def _refresh_observer(self, identity: UUID) -> None:
+        """Project the observer row; a view list is re-sorted only when its keys changed."""
         actor = self.actors.get(identity)
         if actor is None:
             return
         senses = self.senses[identity]
-        self.observers[str(identity)] = ObservationObserverState(
-            observer_uuid=str(identity), entity_name=actor.name, position=senses.position,
-            passive_perception=senses.passive_perception,
-            sense_modes=[{"sense_type": mode.sense_type.value, "range_feet": mode.range_feet} for mode in senses.sense_modes],
-            visible_cells=sorted(senses.visible), seen_cells=sorted(senses.seen),
-            visible_entity_uuids=sorted(str(key) for key in senses.entities),
-            visible_object_uuids=sorted(str(key) for key in senses.objects),
-        )
+        key = str(identity)
+        previous = self.observers.get(key)
+        changes = self.observer_changes.pop(identity, set())
+        values = {"entity_name": actor.name, "position": senses.position,
+            "passive_perception": senses.passive_perception,
+            "sense_modes": [{"sense_type": mode.sense_type.value, "range_feet": mode.range_feet}
+                            for mode in senses.sense_modes]}
+        if previous is None:
+            self.observers[key] = ObservationObserverState(observer_uuid=key,
+                **values, **{view: _observer_view(senses, view) for view in OBSERVER_VIEWS})
+        else:
+            values.update((view, _observer_view(senses, view)) for view in changes)
+            self.observers[key] = previous.model_copy(update=values)
 
     def _refresh_world(self, positions: set[tuple[int, int]], objects: set[UUID]) -> None:
         for identity in objects:

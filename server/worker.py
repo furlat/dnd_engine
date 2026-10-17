@@ -81,20 +81,20 @@ def start(request: Start) -> tuple[Runtime, Reply, tuple[BaseModel, ...]]:
         public_content = tuple(descriptor for _, descriptor in catalog.content
             if descriptor.visibility is ContentVisibility.PUBLIC)
         content_revision = sha256(ContentResponse(revision='public', descriptors=public_content).model_dump_json().encode()).hexdigest()
-        audiences, initializations = initialize_audiences(session, catalog, exclusive_current=True)
+        audiences, initializations = initialize_audiences(session, catalog)
         publications = {}
         records = []
         for seat, initial in initializations.items():
-            content = audiences[seat].latest.content
+            remembered = audiences[seat].projection.remembered
             cursor = PlayerCursor(game_id=request.game_id, game_epoch=request.game_epoch,
                 audience_id=request.audience_ids[seat], sequence=0)
             revision = str(uuid4())
             publication = Publication(seat_id=seat, cursor=cursor, state_revision=revision,
-                boundary=boundary(session, seat, revision), audience=audiences[seat].latest.viewing_audience,
+                boundary=boundary(session, seat, revision), audience=remembered.viewing_audience,
                 content_revision=content_revision)
             publications[seat] = publication
             records.append(InitializationResponse(protocol=protocol_identity(), cursor=cursor,
-                content_revision=content_revision, content_additions=content, initialization=initial))
+                content_revision=content_revision, content_additions=remembered.content, initialization=initial))
         return Runtime(session, catalog, audiences, publications), Reply(publications=tuple(publications.values()),
             encounter_name=session.encounter.name, needs_advance=needs_advance(session), has_response=True), tuple(records)
     except BaseException:
@@ -160,7 +160,7 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
             preview=preview_player_selection(session, query.actor_uuid, row, selected, extra_positions,
                 prefer_safe=query.selection.prefer_safe, cast_at_level=query.selection.cast_at_level))
         return Reply(has_response=True), (), response
-    previous_hud = {seat: view.latest.hud_snapshot for seat, view in runtime.audiences.items()}
+    previous_hud = {seat: view.projection.remembered.hud_snapshot for seat, view in runtime.audiences.items()}
     if isinstance(request, Advance):
         operation = advance_controller(session)
         if operation.boundary is not None and operation.boundary.status == 'error':

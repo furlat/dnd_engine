@@ -81,7 +81,7 @@ def main():
             'registered_objects': len(BaseObject._registry),
             'registered_objects_by_type': dict(Counter(type(value).__name__ for value in BaseObject._registry.values())),
             'catalog_descriptors': len(runtime.catalog.content),
-            'audience_content_counts': {seat: len(view.latest.content) for seat, view in runtime.audiences.items()},
+            'audience_content_counts': {seat: len(view.projection.remembered.content) for seat, view in runtime.audiences.items()},
             'census_ms': (perf_counter() - started) * 1000})
         inside_census = False
 
