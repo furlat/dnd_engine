@@ -116,3 +116,24 @@ Hard rules:
     - Sleet over 30 observers: ~20 ms (cast) and ~19 ms (drop), against 248 / 170 ms, plus a 5 ms grid build.
   - **PV1a** (sensory, GridMap and rules readers) has started in codex/single-pass-pv1a.
   - **Merged:** PD1c (whole-world scans → bounded owners; sweep r9 0 new failures), P8 (value-layer reads, resistance once per snapshot), P6 (handler reads once per event, no completion lookup, identity grants from the memo; per-seat transcripts identical on 7 cases).
+- 2026-10-17: **Merged PD2, P5, P7** (sweeps r10 and r11: 0 new failures; r12 for P5 + P7 running).
+  - **PD2.**
+    - Choices are projected from native rows without dump/validate. On a caster miss: `model_dump` 1,998 → 1, `model_validate` 2,198 → 201, `deepcopy` 3,460 → 1,722.
+    - The preview is cached as its frozen projection; choices are encoded once, and a cache hit takes 5.6 → 0.16 ms.
+    - The AI profile key has no per-epoch dumps.
+    - Movement-list collector 82 → 51 ms.
+    - Not adopted: U5 (inexact: equal-length path choice). Open: free-aim declared zones stop at the first legal point (~22 ms of the miss), `BaseCost.model_validate` passthrough, retained-graph release.
+  - **P5.**
+    - Cache entries keep their read boxes, and writes drop only the entries that intersect; wipes go to 0 (Fireball 12, Gust walk 29, Spirit Guardians walk 37).
+    - Path keys hold every requester input. Navigation and entity caches use per-chunk traversal stamps, and the barrier set is maintained.
+    - Exact (every kept answer equals a cold compute over 92 ops); timing unchanged, since the remaining misses are new origins.
+    - Open: `requires_paths` / `paths_dirty` removal (a wire field; goes to PV1b / PT).
+    - **For sign-off:** lit areas behind a newly formed Wall of Stone now go dark (matching a cold solve).
+  - **P7 (D16-C).**
+    - The server mirror is deleted; `projection.remembered` is the one per-seat fold.
+    - One shared capture checkpoint with no history refold (summon_retirement used to refold 2 × 3,572 events per seat). Replica test: `tests/player/test_emitted_update_replica.py`.
+    - Wire output byte-identical on 22 cases.
+    - Publication, loaded: Sleet cast 734 → 201 ms, drop 349 → 230 ms, Fireball 564 → 468 ms; later AI knowledge updates 25 → 3 ms.
+    - GC alarm: a ~300 ms gen-2 pause still lands inside the Fireball and Circle of Death publication.
+  - **Conflict resolution (P5 × PD2, `entity.py` `_position_preview_facts`):** PD2's per-call snapshot was kept. Its context still keys `movement_revision`, which P5 had dropped: correct, possibly over-invalidating.
+  - **Earlier sign-off items (PD1c).** Stone-escape order; Opulent Revival no longer revives off-grid; Turning, Preserve Life, Sunder and Opulent now process targets in (position, uuid) order; the Forcecage preview no longer checks `is_deployed` on perceived contacts.
