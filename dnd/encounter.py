@@ -924,12 +924,12 @@ class Encounter(BaseObject):
         cursor = self.current_turn_started_source_event_cursor
         if cursor is None:
             return set()
-        return {
-            observer
-            for _, event in EventQueue.iter_events_since(max(0, cursor - 1))
-            if event.turn_execution_id == self.current_turn_execution_id
-            for observer in event.identified_entity_observer_uuids.get(str(entity_uuid), ())
-        }
+        key, turn = str(entity_uuid), self.current_turn_execution_id
+        witnesses: Set[str] = set()
+        for _, event in EventQueue.iter_events_since(max(0, cursor - 1)):
+            if event.turn_execution_id == turn:
+                witnesses.update(event.identified_entity_observer_uuids.get(key, ()))
+        return witnesses
 
     def next_turn(self) -> Optional[TurnStartEvent]:
         """
