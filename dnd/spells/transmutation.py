@@ -2480,7 +2480,7 @@ class Goodberry(SpellAction):
     valid_target_filter: str = "self_or_allies"
     include_self: bool = True
     harmful: bool = False
-    _berries: list[BaseItem] = PrivateAttr(default_factory=list)
+    _berries: list[BaseItem] = PrivateAttr(default=[])
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         caster=Entity.get(self.source_entity_uuid)

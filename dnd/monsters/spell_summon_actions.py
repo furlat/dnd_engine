@@ -1534,7 +1534,7 @@ class RagingVortexZone(SilenceZone):
             SpatialEffectTriggerKind.TURN_START,
         }
     )
-    _contacts: set[tuple[UUID, object]] = PrivateAttr(default_factory=set)
+    _contacts: set[tuple[UUID, object]] = PrivateAttr(default=set())
 
     def _admit_trigger(self, kind, identity, event):
         admitted = AreaCondition._admit_trigger(self, kind, identity, event)

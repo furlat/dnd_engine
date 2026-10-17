@@ -76,7 +76,7 @@ class CreatedItemsLifetime(BaseCondition):
     duration: Duration = Field(default_factory=lambda:Duration(duration_type=DurationType.UNTIL_LONG_REST))
     item_uuids: list[UUID] = Field(default_factory=list)
     retiring: bool = False
-    _retirements: list[PreparedItemRetirement] = PrivateAttr(default_factory=list)
+    _retirements: list[PreparedItemRetirement] = PrivateAttr(default=[])
 
     def model_post_init(self,context: object) -> None:
         super().model_post_init(context)

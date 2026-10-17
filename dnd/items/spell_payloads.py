@@ -513,7 +513,7 @@ class SpellPayloadLifetime(BaseCondition):
     )
     tags: set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     rollback: bool = False
-    _seen_turn_ends: set[UUID] = PrivateAttr(default_factory=set)
+    _seen_turn_ends: set[UUID] = PrivateAttr(default=set())
     _retirement: PreparedItemRetirement | None = PrivateAttr(default=None)
     _item: SpellPayloadItem | None = PrivateAttr(default=None)
 

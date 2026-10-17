@@ -279,7 +279,7 @@ class SpellcastingBlock(BaseBlock):
         ),
     )
     _consumed_spell_damage_affinity_executions: dict[UUID, set[UUID]] = (
-        PrivateAttr(default_factory=dict)
+        PrivateAttr(default={})
     )
     spell_attack_bonus: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(

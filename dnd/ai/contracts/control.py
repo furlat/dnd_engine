@@ -799,9 +799,9 @@ class AffordanceSet(ControlModel):
         default_factory=dict,
         description="Deduplicated typed action contracts keyed by affordance semantics reference.",
     )
-    _all_rows: Sequence[ActionAffordance] = PrivateAttr(default_factory=tuple)
-    _row_buckets_by_id: Dict[str, ActionBucketRows] = PrivateAttr(default_factory=dict)
-    _action_sources: Tuple[ActionSourceDefinition, ...] = PrivateAttr(default_factory=tuple)
+    _all_rows: Sequence[ActionAffordance] = PrivateAttr(default=())
+    _row_buckets_by_id: Dict[str, ActionBucketRows] = PrivateAttr(default={})
+    _action_sources: Tuple[ActionSourceDefinition, ...] = PrivateAttr(default=())
 
     @model_validator(mode="before")
     @classmethod

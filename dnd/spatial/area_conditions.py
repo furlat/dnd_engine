@@ -135,7 +135,7 @@ class SpatialCondition(BaseCondition):
     _displaced_footprints: Dict[
         UUID,
         Tuple[Set[Tuple[int, int]], Set[Tuple[int, int]]],
-    ] = PrivateAttr(default_factory=dict)
+    ] = PrivateAttr(default={})
     _removal_operation: SpatialEffectChangeOperation = PrivateAttr(
         default=SpatialEffectChangeOperation.REMOVED,
     )
@@ -1062,7 +1062,7 @@ class AreaCondition(SpatialCondition):
     _terrain_modifiers: Dict[Tuple[int, int], Tuple[UUID, UUID]] = PrivateAttr(
         default_factory=dict,
     )
-    _light_positions: Set[Tuple[int, int]] = PrivateAttr(default_factory=set)
+    _light_positions: Set[Tuple[int, int]] = PrivateAttr(default=set())
     _last_trigger_turn_by_target: Dict[Tuple[UUID, SpatialEffectTriggerKind], UUID] = PrivateAttr(
         default_factory=dict,
     )

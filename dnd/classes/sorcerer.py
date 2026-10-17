@@ -977,7 +977,7 @@ class MetamagicActive(BaseCondition):
         description="Exact metamagic action template owning this root.",
     )
 
-    _modified_uuids: List[UUID] = PrivateAttr(default_factory=list)
+    _modified_uuids: List[UUID] = PrivateAttr(default=[])
 
     def snapshot_state(self) -> ConditionState:
         return super().snapshot_state().model_copy(update={"metamagic_mode": self.metamagic_type})

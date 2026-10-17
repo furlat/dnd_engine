@@ -372,12 +372,12 @@ class ActionEconomy(BaseBlock):
     _attack_multiplicity_grants: Dict[
         UUID,
         AttackMultiplicityGrant,
-    ] = PrivateAttr(default_factory=dict)
-    _attack_multiplicity_limits: Dict[UUID, int] = PrivateAttr(default_factory=dict)
-    _committed_attack_batches: set[UUID] = PrivateAttr(default_factory=set)
-    _action_bonus_exclusion_owners: set[UUID] = PrivateAttr(default_factory=set)
-    _committed_action_channels: set[ActionEconomyCostType] = PrivateAttr(default_factory=set)
-    _action_bonus_lock_modifiers: Dict[ActionEconomyCostType, UUID] = PrivateAttr(default_factory=dict)
+    ] = PrivateAttr(default={})
+    _attack_multiplicity_limits: Dict[UUID, int] = PrivateAttr(default={})
+    _committed_attack_batches: set[UUID] = PrivateAttr(default=set())
+    _action_bonus_exclusion_owners: set[UUID] = PrivateAttr(default=set())
+    _committed_action_channels: set[ActionEconomyCostType] = PrivateAttr(default=set())
+    _action_bonus_lock_modifiers: Dict[ActionEconomyCostType, UUID] = PrivateAttr(default={})
     _normal_spell_slot_capacity_receipt: Optional[
         NormalSpellSlotCapacityReceipt
     ] = PrivateAttr(default=None)

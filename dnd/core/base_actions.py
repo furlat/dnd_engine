@@ -3169,9 +3169,9 @@ class AvailableActionsResult(BaseModel):
         default_factory=list,
         description="Player-toggleable event handlers and their current state.",
     )
-    _inventory_use_action_sources: List[BaseAction] = PrivateAttr(default_factory=list)
-    _registered_action_variants: List[BaseAction] = PrivateAttr(default_factory=list)
-    _item_charge_pools: Dict[UUID, Tuple[int, int]] = PrivateAttr(default_factory=dict)
+    _inventory_use_action_sources: List[BaseAction] = PrivateAttr(default=[])
+    _registered_action_variants: List[BaseAction] = PrivateAttr(default=[])
+    _item_charge_pools: Dict[UUID, Tuple[int, int]] = PrivateAttr(default={})
 
     @property
     def inventory_use_action_sources(self) -> Tuple[BaseAction, ...]:

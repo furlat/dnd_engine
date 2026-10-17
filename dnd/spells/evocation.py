@@ -2634,7 +2634,7 @@ class GustOfWindZone(AreaCondition):
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.NON_SOURCE)
     spell_dc: int = Field(default=10, description="Spell save DC used by gust of wind zone saving throws.")
-    _pushes_in_flight: Set[UUID] = PrivateAttr(default_factory=set)
+    _pushes_in_flight: Set[UUID] = PrivateAttr(default=set())
 
     def get_spatial_observation(
         self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,

@@ -212,7 +212,7 @@ class BaseBlock(BaseModel):
     def is_invisible(self, value: bool) -> None:
         self.intrinsic_invisibility = value
 
-    _attached_light_sources: Set[UUID] = PrivateAttr(default_factory=set)
+    _attached_light_sources: Set[UUID] = PrivateAttr(default=set())
 
     active_conditions: Dict[str, BaseCondition] = Field(
         default_factory=dict,

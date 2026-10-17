@@ -1261,7 +1261,7 @@ class EquippableItem(BaseItem):
     is_pickable: bool = Field(default=True, description="Whether this item can be picked up.")
 
     item_properties: Tuple[ItemProperty, ...] = Field(default=(), frozen=True)
-    _property_contributions: List[ItemPropertyContribution] = PrivateAttr(default_factory=list)
+    _property_contributions: List[ItemPropertyContribution] = PrivateAttr(default=[])
 
     def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
         """Return every slot this concrete item may occupy.

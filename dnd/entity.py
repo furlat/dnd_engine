@@ -605,13 +605,13 @@ class Entity(BaseBlock):
     _fast_move_target_cache: Dict[
         Tuple[Any, ...],
         Tuple[AvailableTarget, ...],
-    ] = PrivateAttr(default_factory=dict)
+    ] = PrivateAttr(default={})
     _position_preview_cache_context: Optional[Tuple[Any, ...]] = PrivateAttr(default=None)
     _position_preview_cache: Dict[
         Tuple[Any, ...],
         Tuple[AvailableTarget, ...],
-    ] = PrivateAttr(default_factory=dict)
-    _life_state_modifier_ownership: ModifierOwnership = PrivateAttr(default_factory=list)
+    ] = PrivateAttr(default={})
+    _life_state_modifier_ownership: ModifierOwnership = PrivateAttr(default=[])
     _runtime_agency_revoked: bool = PrivateAttr(default=False)
     _character_grant_receipts: Dict[str, CharacterGrantReceipt] = PrivateAttr(
         default_factory=dict,

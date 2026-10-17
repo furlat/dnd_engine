@@ -129,9 +129,9 @@ class Tile(BaseBlock):
     _light: TileLight = PrivateAttr(default_factory=TileLight)
     _center_object_bands: Dict[int, TileObjectBand] = PrivateAttr(default={})
     # Residue after-values per material, written by that material's map field (plan §5.9).
-    _residues: Dict[str, TileResidueState] = PrivateAttr(default_factory=dict)
-    _residue_names: Dict[str, str] = PrivateAttr(default_factory=dict)
-    _hazardous_residues: Set[str] = PrivateAttr(default_factory=set)
+    _residues: Dict[str, TileResidueState] = PrivateAttr(default={})
+    _residue_names: Dict[str, str] = PrivateAttr(default={})
+    _hazardous_residues: Set[str] = PrivateAttr(default=set())
     _boundary_object_bands: Dict[
         CardinalDirection,
         Dict[int, TileObjectBand],

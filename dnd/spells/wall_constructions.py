@@ -204,7 +204,7 @@ class SolidWallZone(AreaCondition):
     _prepared_retirements: tuple[PreparedItemRetirement, ...] = PrivateAttr(default=())
 
     _pending_sections: tuple[tuple[WallSection, tuple[int, int]], ...] = PrivateAttr(default=())
-    _formation_displacements: dict[UUID, tuple[int, int]] = PrivateAttr(default_factory=dict)
+    _formation_displacements: dict[UUID, tuple[int, int]] = PrivateAttr(default={})
 
     def _commit_activation_footprint(self, parent_event: Event) -> None:
         """Commit real sections before CREATED can disclose the construction."""

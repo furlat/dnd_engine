@@ -391,7 +391,7 @@ class WindWall(SpellAction):
 
 class BladeBarrierZone(WallFieldZone):
     defer_formation: bool = False
-    _formation_contacts: list[tuple[UUID,Event]] = PrivateAttr(default_factory=list)
+    _formation_contacts: list[tuple[UUID,Event]] = PrivateAttr(default=[])
     def _apply_appearance_effect(self,entity,*,parent_event):
         if self.defer_formation: self._formation_contacts.append((entity.uuid,parent_event))
         else: super()._apply_appearance_effect(entity,parent_event=parent_event)

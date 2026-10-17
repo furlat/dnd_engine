@@ -183,7 +183,7 @@ class OpulentRevival(BaseAction):
     target_type: TargetType = TargetType.SELF
     effect_origin: EffectOrigin = Field(default_factory=intervention_origin)
     costs: list[Cost] = Field(default_factory=intervention_costs)
-    _revivals: list = PrivateAttr(default_factory=list)
+    _revivals: list = PrivateAttr(default=[])
     _living: tuple[UUID, ...] = PrivateAttr(default=())
 
     def apply(self, *args, **kwargs):

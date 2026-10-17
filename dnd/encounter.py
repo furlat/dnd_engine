@@ -252,7 +252,7 @@ class Encounter(BaseObject):
     _encounter_registry: ClassVar[Dict[UUID, 'Encounter']] = {}
     _active_encounter: ClassVar[Optional['Encounter']] = None
     _combat_log_listeners: ClassVar[List[Callable[['Encounter', int, CombatLogEntry, Event], None]]] = []
-    _pending_leaves: Dict[UUID, Event | None] = PrivateAttr(default_factory=dict)
+    _pending_leaves: Dict[UUID, Event | None] = PrivateAttr(default={})
     _membership_execution_depth: int = PrivateAttr(default=0)
     _departed_turn_successor: bool = PrivateAttr(default=False)
 

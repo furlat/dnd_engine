@@ -146,7 +146,7 @@ class Senses(BaseBlock):
     _path_max_distance: Optional[int] = PrivateAttr(default=None)
     _field: Optional[ObserverField] = PrivateAttr(default=None)
     _effects_by_position: Optional[Dict[Tuple[int, int], Set[UUID]]] = PrivateAttr(default=None)
-    _active_effects: Set[UUID] = PrivateAttr(default_factory=set)
+    _active_effects: Set[UUID] = PrivateAttr(default=set())
     _light_epoch: Optional[int] = PrivateAttr(default=None)
 
     @property
