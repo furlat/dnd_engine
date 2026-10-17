@@ -1184,6 +1184,16 @@ class SpatialSensesSystem:
                    shared: SharedValues) -> Dict[UUID, Dict[UUID, Optional[PerceivedSpatialEffect]]]:
         """Recompute the observers' views with one settlement world and one target table."""
         diagnostic = action_timing_enabled()
+        # The passive-perception rule runs before any world read: its contextual inputs may commit
+        # world changes, which this settlement's world and target table then include.
+        started = time.perf_counter() if diagnostic else 0.0
+        passives = {}
+        for observer_uuid in observers:
+            owner = BaseBlock.get(observer_uuid)
+            assert owner is not None
+            passives[observer_uuid] = owner.get_passive_perception()
+        if diagnostic:
+            record_action_timing("sensory.settlement.passive_ms", started)
         started = time.perf_counter() if diagnostic else 0.0
         world = self._world()
         if diagnostic:
@@ -1201,7 +1211,8 @@ class SpatialSensesSystem:
             record_action_timing("sensory.settlement.contact_table_ms", started)
         touched = {}
         for view in views:
-            touched[view.owner.uuid] = self._publish(view, world, table, affected[view.owner.uuid], shared)
+            touched[view.owner.uuid] = self._publish(view, world, table, affected[view.owner.uuid], shared,
+                                                     passives[view.owner.uuid])
         self._identity_grants.clear()
         return touched
 
@@ -1367,7 +1378,7 @@ class SpatialSensesSystem:
             side_array[:, 5] != 0, side_array[:, 6] != 0, side_array[:, 7], side_array[:, 8], side_array[:, 9])
 
     def _publish(self, view: ObserverView, world: SettlementWorld, table: ContactTable,
-                 affected: Optional[Set[Position]], shared: SharedValues,
+                 affected: Optional[Set[Position]], shared: SharedValues, passive: int,
                  ) -> Dict[UUID, Optional[PerceivedSpatialEffect]]:
         """Contacts, hazards, volume sight and fixtures of one view; publish them on its Senses."""
         diagnostic = action_timing_enabled()
@@ -1375,10 +1386,6 @@ class SpatialSensesSystem:
         grid = get_map()
         owner, senses, origin = view.owner, view.senses, view.origin
         observer_uuid = owner.uuid
-        passive = owner.get_passive_perception()
-        if diagnostic:
-            record_action_timing("sensory.recompute.passive_ms", started)
-            started = time.perf_counter()
         entities, objects, contact_rows, contact_uuids, contact_changes = self._contacts(view, table, passive, shared)
         if diagnostic:
             record_action_timing("sensory.recompute.contacts_ms", started)
