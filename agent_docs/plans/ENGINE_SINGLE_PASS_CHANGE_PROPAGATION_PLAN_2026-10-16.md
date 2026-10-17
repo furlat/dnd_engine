@@ -1,4 +1,4 @@
-# Single-pass change propagation — analysis and plan (v3.15)
+# Single-pass change propagation — analysis and plan (v3.16)
 
 Date: 2026-10-16. Status: **APPROVED by the human 2026-10-17 (incl. D7c, Q7 EXECUTION convention, temp-HP record-only).** **v3.5 adds available-actions discovery (§14, PD1/PD2) per the human's 2026-10-17 decisions (model approved 2026-10-17).** **v3.6 folds in the §14 antislop/antiOOP reviews and the whole-world-scan redesign. v3.7 folds in the v3.6 re-reviews, the human's answers (D14 approved; Q-W1, Q-W3, Q-W4 decided) and the first P0a measurements; open items are in §14.10.** Implementation is at P0a.
 
@@ -696,29 +696,19 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 
 **PR — area-spell rules work (Fireball, Circle of Death, Ice Storm).**
 
-After PV1a, Fireball's native time is ~200 ms (loaded), of which perception is ~37 ms. CPU sample `smp_fb2` (loaded, 736 ms op):
-
-| Term | ms |
-| --- | --- |
-| per-target `_apply` | ~195 |
-| saving throws (`saving_throw_bonus`, which sets and clears the target on every value of both creatures, plus deep copies; ~1.2 ms per read, P8) | ~60 |
-| creature damage | ~45 |
-| object damage and destruction (`_apply_destruction`, environment `_on_destroy` builders) | ~75 |
-| event post / register over ~560 versions | ~68 |
-| first-use pydantic schema builds inside the op (`model_rebuild`) | ~30 |
-| enum property reads in hot loops | — |
-
-- **Work:**
-  - The target context of a value read is an argument, not state set and cleared on every value.
-  - No deep copies on the save path.
-  - Per-target damage and destruction do only what the rule needs.
-  - Schemas are built at startup.
-  - Hot enum reads are taken out of the loops.
-  - Each removal is counted.
+- After PV1a, Fireball's native time is ~200 ms (loaded), of which perception is ~37 ms. The CPU sample `smp_fb2` has 98 samples (~7.5 ms each, ±√n), and its rows are nested, so gains are stated in native ms and counts.
+- Saves are ~10 ms in total: 10 saves × ~1.2 ms per `saving_throw_bonus`.
+- **Work** (step 1 of PH item 2):
+  - **One frozen value-read context:** source, target, context, lineage and the opponent's outgoing channels, passed to every value read through the ~13 entry points (the set/clear pairs, `_temporary_target`, `set_from_target`, `get_target_entity`, `set_context`, `set_event_lineage`).
+  - Deleted in the same change: `_temporary_target`, the set/clear tree walks, `set_from_target` / `reset_from_target` and the `from_target_*` fields. An AST ban follows.
+  - Events store evaluated results (total, advantage, breakdown) as frozen records instead of live `ModifiableValue`s (`D20Event.bonus`). The deep copies on the save path then fall away; the transcript difference in `bonus` is expected and stated.
+  - Further terms only at exact, re-sampled sites (`SAMPLE_CHAIN`). `LiquidBarrel._on_destroy` is an authored rule, light refresh belongs to PV1, and event post / register belongs to P6 / D4.
+  - `defer_build` on BaseCondition / BaseAction (a startup trade, commit 804b0f7e0) stays. Its in-op cost is reported to the human.
 - **Gate:**
-  - native ms of Fireball, Circle of Death and Ice Storm before/after;
-  - P6's deterministic transcript (every version's fields, grants, combat logs and seat updates) identical;
-  - counts of value context set/clear calls and deep copies on the save path → 0.
+  - a deterministic transcript tool checked into devtools, identical except for the stated `bonus` form;
+  - a value-read differential: every read over all GC rows equals recordings at the pre-PR commit;
+  - the contextual-modifier suites;
+  - native ms and counts before/after.
 
 **PH — heap: the GC alarm** (human: "reach the point where gc does not trigger or is not meaningfull").
 
@@ -745,10 +735,22 @@ After PV1a, Fireball's native time is ~200 ms (loaded), of which perception is ~
   3. Navigation as arrays (PT): `Senses.paths` becomes a predecessor array.
   4. Perception (PV1a / PV1b): no per-observer field graph; audience per-cell sets become arrays.
   5. Tiles: no empty per-tile containers. Absent means empty, and per-cell state lives in GridMap-owned maps.
-- **Gate:**
-  - 0 gen-2 collections inside any measured op on every GC row, with the default thresholds;
-  - tracked objects before the first op and retained per op reported at each re-time;
-  - retained per op ≤1K.
+- **Gate** (CPython 3.13, thresholds 2000/10/10). A full pass runs when long-lived pending objects exceed a quarter of the long-lived total T. It costs ≈0.47 µs × T.
+  - promotions per op ≤ T / (4 · 30), so a 30-op session has no full pass;
+  - T ≤ ~210K, so any pass stays under 100 ms;
+  - measured per op by the gallery's gc counters (`gc` in each row: generations, ms, young survivors), on a separate ~30-op run with no forced collects;
+  - each stored version is 4–11 tracked objects, which sets a floor until P7b stores versions as compact frozen records;
+  - young-generation time is reported too: ~40 ms per Sleet op today (56 gen-0 and 5 gen-1 passes, ~112K young survivors per op).
+- **Value-layer data form (review).**
+  - One `ModifiableValue` is ~32 tracked objects: 6 pydantic models, each an instance plus `__dict__` plus fields-set, empty `generated_from` lists, UUIDs and a lambda.
+  - The target is one slotted record (uuid, name, source, base, normalizer) plus `modifiers: tuple[Row, ...]`, with channel and kind as columns, held by the value. Contribution lookups stay in `BaseObject._registry`; no new registry.
+  - Empty means an untracked empty dict or `()`, never `None` (a second branch).
+- **Done (PH-1, 43812709f):**
+  - the never-read block handler indexes are deleted;
+  - `generated_from` is a tuple;
+  - the identity normalizer replaces a per-value lambda;
+  - the source index is a plain dict.
+  - Tracked objects before the first op: 587,332 → 536,918.
 
 **Measurement cases to add:** a reaction that pauses for a human seat (an opportunity attack, Counterspell), and a whole AI round (every native-AI combatant's turn in sequence).
 
@@ -999,6 +1001,8 @@ worktree. The rest is static reading.
 | AI discovery | `ai/runtime/decision_epoch.py:148-157, 819-845, 948-971` |
 
 ## 12. Changes
+
+**v3.15 → v3.16:** PR and PH reviews folded in (PR as step 1 of the value-layer rewrite; PH gate on promotions and heap size; PH-1 done; gallery gc counters).
 
 **v3.14 → v3.15:** PR area-spell rules work (no phase owned it after P6 / P8).
 
