@@ -744,8 +744,8 @@ class SettlementWorld:
     light_sources: LightSourceTable
     optical_revision: int
     propagation_revision: int
-    sight_version: int               # advances when the Tile or obscurement grid differs from the last settlement's
-    light_version: int               # advances when the light grid differs from the last settlement's
+    sight_version: int               # GridMap's Tile and obscurement grid revision (advanced by their writers)
+    light_version: int               # GridMap's light grid revision
 
 
 STEALTH_NONE = np.iinfo(np.int64).min
@@ -903,6 +903,7 @@ class SpatialSensesSystem:
         self._pending: Dict[UUID, _GroupSettlement] = {}
         self._settling = False
         self._absorbing_light = False
+        self._settled_with_light = False
         # The identity grants of a creature at a cell, valid while no observer's published
         # perception changes: every perception write (register, unregister, recompute,
         # reset) clears them.
@@ -917,9 +918,6 @@ class SpatialSensesSystem:
         self._table: Optional[ContactTable] = None
         self._table_version = 0
         self._table_changes: Optional[np.ndarray] = None
-        # The last settlement's Tile, obscurement and light grids with their versions: an observer
-        # that read the current versions reads the same grids over its window.
-        self._grids: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, int, int]] = None
         # The last settled group's late-completing facts and its observers. A
         # zone change opened in that group completes right after it (its
         # completion reads settled senses); those observers already settled it.
@@ -944,10 +942,10 @@ class SpatialSensesSystem:
         self._pending.clear()
         self._settling = False
         self._absorbing_light = False
+        self._settled_with_light = False
         self._identity_grants.clear()
         self._target_ids.clear()
         self._light_table = None
-        self._grids = None
         self._table = None
         self._table_version = 0
         self._table_changes = None
@@ -964,13 +962,21 @@ class SpatialSensesSystem:
                 and (self._absorbing_light or not group.settling))
 
     def settle_group(self, group: OpenGroup) -> None:
-        """Publish the group's pending light, then settle every recorded observer once."""
-        root_uuid = group.root_uuid
-        self._absorbing_light = True
+        """Publish the group's pending light and settle every recorded observer once: with the light
+        fact, before it completes (its consumers read the settled view), or after, without one."""
+        self._absorbing_light, self._settled_with_light = True, False
         try:
-            get_map().settle_pending_lights(parent_event=root_uuid)
+            get_map().settle_pending_lights(parent_event=group.root_uuid)
         finally:
             self._absorbing_light = False
+        if not self._settled_with_light or self._pending:
+            covered = self._covered_observers if self._settled_with_light else frozenset()
+            self._settle_recorded(group)
+            self._covered_observers |= covered
+
+    def _settle_recorded(self, group: OpenGroup) -> None:
+        """Settle every observer recorded while the group was open, once, with all its facts."""
+        root_uuid = group.root_uuid
         pending, self._pending = self._pending, {}
         self._covered_facts, self._covered_observers = frozenset(group.completes_after), frozenset(pending)
         # A zone change opened in the group completes right after it and its
@@ -1142,6 +1148,13 @@ class SpatialSensesSystem:
         if self._recording():
             for observer_uuid in self.selected_observers(event):
                 self._pending.setdefault(observer_uuid, _GroupSettlement([])).events.append(event)
+            group = EventQueue.open_group()
+            if self._absorbing_light and group is not None and event.event_type in (
+                    EventType.SPATIAL_LIGHT_CHANGED, EventType.SPATIAL_LIGHT_SOURCES_CHANGED):
+                # The group's own light fact is its last: the group settles with it, before it completes;
+                # what its consumers do then reduces as after the group.
+                self._absorbing_light, self._settled_with_light = False, True
+                self._settle_recorded(group)
             return
         deferred: Set[UUID] = set()
         if event.lineage_uuid in self._covered_facts:
@@ -1293,20 +1306,10 @@ class SpatialSensesSystem:
                 np.array([self._target_key(anchor, False) if anchor is not None else -1
                           for _, anchor, _, _ in light_rows], dtype=np.int64),
                 light_rows)
-        kept = self._grids
-        obscurement, light = grid.cell_obscurement, grid.cell_light
-        sight_version = light_version = 0
-        if kept is not None:
-            same_shape = kept[0].shape == exists.values.shape
-            sight_version = kept[3] + (0 if same_shape and np.array_equal(kept[0], exists.values)
-                                       and np.array_equal(kept[1], obscurement.values) else 1)
-            light_version = kept[4] + (0 if same_shape and np.array_equal(kept[2], light.values) else 1)
-        if kept is None or (sight_version, light_version) != kept[3:]:
-            self._grids = (exists.values.copy(), obscurement.values.copy(), light.values.copy(),
-                           sight_version, light_version)
-        return SettlementWorld(exists, light, grid.obscurement_layers(), obscurement,
+        return SettlementWorld(exists, grid.cell_light, grid.obscurement_layers(), grid.cell_obscurement,
                                hazard_owners, hazard_x, hazard_y, hazard_owner, lights,
-                               grid.optical_revision, grid.propagation_revision, sight_version, light_version)
+                               grid.optical_revision, grid.propagation_revision, grid.sight_grid_revision,
+                               grid.light_grid_revision)
 
     def _recompute(self, observers: Sequence[UUID], affected: Mapping[UUID, Optional[Set[Position]]],
                    shared: SharedValues, table_cells: Optional[Set[Position]],

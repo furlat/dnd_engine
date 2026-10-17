@@ -1,5 +1,6 @@
 """Current-field hazard updates preserve native deltas and parent invalidation."""
 
+from dataclasses import replace
 import pytest
 
 from dnd.blocks.sensory import capture_senses_snapshot
@@ -97,22 +98,21 @@ def test_movement_parent_invalidates_navigation_materialized_after_light_child(w
         Entity.update_entity_position(mover, (1, 1))
     finally:
         EventQueue.remove_on_event_callback(consume_light_boundary)
+    # The step settles with its light fact, before that fact completes: the consumer reads the
+    # arrival's view, and its navigation is materialized from it.
     assert len(materialized) == 1
     assert materialized[0].position == (1, 1) and not materialized[0].paths_dirty
     updates = sensory_since(mover.uuid, cursor)
-    parent_updates = [event for event in updates
-        if EventQueue.get_event_by_uuid(event.cause_event_uuid).event_type is EventType.SPATIAL_ENTITY_ENTERED]
-    assert len(parent_updates) == 1
-    parent = parent_updates[0]
-    assert parent.paths_dirty
-    assert not parent.visible_cells_added and not parent.visible_cells_removed
-    assert not parent.entity_contacts_changed and not parent.object_contacts_changed
-    assert not parent.effective_light_levels_changed and not parent.hazardous_cells_changed
-    assert not parent.spatial_effects_changed and not parent.spatial_effects_removed
+    # One move step settles once: one update, caused by the arrival, carries the whole step.
+    assert len(updates) == 1
+    step = updates[0]
+    assert EventQueue.get_event_by_uuid(step.cause_event_uuid).event_type is EventType.SPATIAL_ENTITY_ENTERED
+    assert step.paths_dirty and step.observer_position == (1, 1)
     replayed = before
     for event in updates:
         replayed = reduce_senses_snapshot(mover.uuid, replayed, decode_event(encode_event(event)))
-    assert replayed == capture_senses_snapshot(mover.senses)
+    # The consumer materialized navigation after the step's update: live paths are clean.
+    assert replace(replayed, paths_dirty=False) == replace(capture_senses_snapshot(mover.senses), paths_dirty=False)
 
 
 def test_stationary_observer_hazards_follow_moving_light_and_hidden_removal():

@@ -165,6 +165,9 @@ class GroupEntryKind(str, Enum):
     PORTAL_TRANSFER = "portal_transfer"
     MATERIAL_INTERACTION = "material_interaction"
     DEPLOYMENT = "deployment"
+    # One creature's move step: its facts (left, entered, the zones and lights that follow it)
+    # settle perception once; it is not simultaneous, so handlers run as without a group.
+    MOVE_STEP = "move_step"
 
 
 class HandlerGroupDispatch(str, Enum):

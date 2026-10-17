@@ -406,7 +406,7 @@ class SummoningSystem:
 
     def __call__(self, event: Event) -> None:
         group = EventQueue.open_group()
-        if group is not None and not group.settling:
+        if group is not None and not group.settling and group.holds_simultaneous_entry():
             # A summon defeated inside a simultaneous group departs after it
             # (plan §5.1 phase B): later targets still resolve against it.
             self._group_events.append(event)

@@ -169,6 +169,11 @@ class OpenGroup:
     # settle (a zone's own change): settled observers need no second pass.
     completes_after: Set[UUID] = field(default_factory=set)
 
+    def holds_simultaneous_entry(self) -> bool:
+        """Whether a simultaneous entry is open. A move step alone only settles perception once:
+        its handlers, departures and reactions run as they would without a group."""
+        return any(kind is not GroupEntryKind.MOVE_STEP for kind in self.kinds)
+
 
 def merge_grants(grants: Dict[str, FrozenSet[str]], added: Mapping[str, FrozenSet[str]]) -> None:
     """Union observer grants into one version's dict; a value is replaced only when the union adds observers."""
@@ -1517,7 +1522,7 @@ class EventQueue:
     def _invoke_handler(cls, handler: BaseHandler, event: Event) -> Optional[Event]:
         """Invoke one matched handler and publish passive effect evidence."""
         group = cls._open_group.get()
-        if (group is not None and not group.settling
+        if (group is not None and not group.settling and group.holds_simultaneous_entry()
                 and handler.group_dispatch is HandlerGroupDispatch.AFTER_GROUP):
             stored = event.model_copy(deep=True)
             group.deferred.append(lambda: cls._replay_handler(handler.uuid, stored))
@@ -1743,6 +1748,10 @@ class EventQueue:
         """
         current = cls._open_group.get()
         if current is not None:
+            if not current.holds_simultaneous_entry() and kind is not GroupEntryKind.ZONE_MOVE:
+                # A move step's facts settle before anything but its own following zones starts
+                # inside it (another step, a transfer, a trap): never across steps.
+                cls._settle_open_group(current)
             current.kinds.append(kind)
             # A nested area shares its own roll inside a group that doesn't.
             widened = shares_damage_rolls and not current.shares_damage_rolls
@@ -1772,6 +1781,18 @@ class EventQueue:
         cls._replay_deferred(group)
 
     @classmethod
+    def _settle_open_group(cls, group: OpenGroup) -> None:
+        """Settle what an open group recorded so far, and keep it open."""
+        group.settling = True
+        try:
+            for system in tuple(cls._pre_completion_systems.values()):
+                system.settle_group(group)
+            for settle in group.settlers:
+                settle(group.root_uuid)
+        finally:
+            group.settling = False
+
+    @classmethod
     def _replay_deferred(cls, group: OpenGroup) -> None:
         """Phase B: deferred work in arrival order, each as its own group (plan §5.1)."""
         root = cls.get_event_by_uuid(group.root_uuid) if group.root_uuid is not None else None
@@ -1783,7 +1804,7 @@ class EventQueue:
     def after_group(cls, run: Callable[[], None]) -> None:
         """Run ``run`` in phase B of the open group, or now when none is open."""
         group = cls._open_group.get()
-        if group is not None and not group.settling:
+        if group is not None and not group.settling and group.holds_simultaneous_entry():
             group.deferred.append(run)
         else:
             run()

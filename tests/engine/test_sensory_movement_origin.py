@@ -72,9 +72,9 @@ def test_movement_range_is_correct_at_every_sensory_completion(sense, attached_l
             and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
             and event.phase is EventPhase.COMPLETION]
         assert len(light_completions) == int(attached_light)
-        if attached_light:
-            assert any(EventQueue.get_event_by_uuid(event.cause_event_uuid).event_type
-                is EventType.SPATIAL_LIGHT_CHANGED for event in observations)
+        # The step's light fact settles with the step: its one update is caused by the arrival.
+        assert all(EventQueue.get_event_by_uuid(event.cause_event_uuid).event_type
+            is EventType.SPATIAL_ENTITY_ENTERED for event in observations)
         # The public full refresh is a reference for retained-field reuse. It
         # may materialize navigation but must not correct perception or emit
         # another sensory delta after the committed movement boundary.
@@ -102,9 +102,9 @@ def test_moving_light_and_explicit_obscurement_with_nonoptical_trap():
         Entity.update_entity_position(carrier, destination)
         assert (target.uuid in observer.senses.entities) is visible
         updates = sensory_since(observer.uuid, cursor)
-        assert updates
-        assert any(EventQueue.get_event_by_uuid(event.cause_event_uuid).event_type
-            is EventType.SPATIAL_LIGHT_CHANGED for event in updates)
+        # The carrier's step, its light fact included, settles the observer once.
+        assert len(updates) == 1
+        assert EventQueue.get_event_by_uuid(updates[0].cause_event_uuid).event_type is EventType.SPATIAL_ENTITY_ENTERED
     fog = FogCloudZone(source_entity_uuid=observer.uuid, position=(3, 1), affected_positions={(3, 1)})
     fog.activate(parent_event=None)
     assert target.uuid not in observer.senses.entities

@@ -1,12 +1,13 @@
 """Central spatial registry for tiles, entities, objects, light, and paths."""
 
 import math
+from contextlib import nullcontext
 import time
 from bisect import bisect_left, bisect_right
 from heapq import heappop, heappush
 from dnd.core.condition_types import ConditionDurationSummary
 
-from typing import Literal, AbstractSet, Collection, Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Set, DefaultDict, Protocol, Union, cast
+from typing import ClassVar, Literal, AbstractSet, Collection, Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Set, DefaultDict, Protocol, Union, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
@@ -14,7 +15,7 @@ from dataclasses import dataclass
 import numpy as np
 from pydantic import BaseModel, Field
 
-from dnd.types.event_facts import LandingKind
+from dnd.types.event_facts import GroupEntryKind, LandingKind
 from dnd.core.geometry import (circle_positions, grid_distance_feet, supercover_line,
     supercover_slope_order, supercover_incoming_ranges, supercover_incoming_rank_ranges)
 from dnd.core.view import Box, CellLayer, boxes_intersect, cell_visible, cells_layer, embed, layer_value, union_box
@@ -317,6 +318,9 @@ class GridMap:
     """
 
     _instance: Optional['GridMap'] = None
+    # One clock for the cell grids' revisions of every map: a revision read from one map never
+    # equals one read from another.
+    _grid_clock: ClassVar[int] = 0
 
     def __init__(self):
         self._tiles: Dict[Tuple[int, int], Tile] = {}
@@ -380,6 +384,8 @@ class GridMap:
         self._obscurement_layers: Dict[UUID, CellLayer] = {}
         self._obscurement_active: Dict[UUID, bool] = {}
         self._cell_obscurement = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
+        self._bump_sight_grids()
+        self._bump_light_grid()
         # Each spatial condition's committed footprint as a bool layer and as cell
         # coordinates (same commit as its cells).
         self._condition_footprints: Dict[UUID, CellLayer] = {}
@@ -477,8 +483,13 @@ class GridMap:
     def publish_committed_spatial_event(
         self,
         event: 'SpatialChangeEvent',
+        settles_with: Optional[GroupEntryKind] = None,
     ) -> Optional['SpatialChangeEvent']:
-        """Publish one non-vetoable fact for already committed spatial state."""
+        """Publish one non-vetoable fact for already committed spatial state.
+
+        With `settles_with`, the fact's effect phase and what follows from it (zones and lights
+        that move with it) are one group of that kind rooted at the fact: perception settles
+        once, before the fact completes."""
         if not self._events_enabled:
             self._pending_committed_events.append(event)
             return None
@@ -497,17 +508,24 @@ class GridMap:
                 ).phase_to(EventPhase.EXECUTION)
             ),
         )
-        current_event = cast(
-            SpatialChangeEvent,
-            EventQueue.publish_committed_phase(
-                current_event.model_copy(
-                    update={"use_register": False},
-                ).phase_to(EventPhase.EFFECT)
-            ),
-        )
-        self._settle_entity_presence_before_completion(current_event)
-        self._settle_object_presence_before_completion(current_event)
-        self._recompute_lights_before_spatial_completion(current_event)
+        with (EventQueue.group(settles_with, root=current_event) if settles_with is not None
+              else nullcontext()) as group:
+            if group is not None:
+                group.completes_after.add(current_event.lineage_uuid)
+            current_event = cast(
+                SpatialChangeEvent,
+                EventQueue.publish_committed_phase(
+                    current_event.model_copy(
+                        update={"use_register": False},
+                    ).phase_to(EventPhase.EFFECT)
+                ),
+            )
+            if group is not None:
+                # What follows the effect (lights, the settled view) attaches to the open effect.
+                group.root_uuid = current_event.uuid
+            self._settle_entity_presence_before_completion(current_event)
+            self._settle_object_presence_before_completion(current_event)
+            self._recompute_lights_before_spatial_completion(current_event)
         return cast(
             SpatialChangeEvent,
             current_event.phase_to(
@@ -552,6 +570,8 @@ class GridMap:
         self._cell_light = CellLayer(target[0], target[1], embed(self._cell_light, target, np.dtype(np.uint8)))
         self._cell_obscurement = CellLayer(target[0], target[1],
                                            embed(self._cell_obscurement, target, np.dtype(np.uint8)))
+        self._bump_sight_grids()
+        self._bump_light_grid()
         slots = self._cell_light_slots
         words = np.zeros((target[2] - target[0] + 1, target[3] - target[1] + 1, slots.values.shape[2]), dtype=np.uint64)
         if slots.values.size:
@@ -560,16 +580,46 @@ class GridMap:
         self._cell_light_slots = CellLayer(target[0], target[1], words)
 
     def _write_cells(self, positions: Iterable[Tuple[int, int]]) -> None:
-        """Write Tile presence and resolved light of cells from their Tiles."""
+        """Write Tile presence and resolved light of cells from their Tiles; a changed value
+        advances its grid's revision."""
         exists, light = self._cell_exists, self._cell_light
         width, height = exists.values.shape
+        exists_changed = light_changed = False
         for x, y in positions:
             tile = self._tiles.get((x, y))
             i, j = x - exists.x0, y - exists.y0
             if not (0 <= i < width and 0 <= j < height):
                 continue  # outside the box no cell holds a Tile
-            exists.values[i, j] = tile is not None
-            light.values[i, j] = tile.resolved_light_level.value if tile is not None else 0
+            present = tile is not None
+            level = tile.resolved_light_level.value if tile is not None else 0
+            if exists.values[i, j] != present:
+                exists.values[i, j] = present
+                exists_changed = True
+            if light.values[i, j] != level:
+                light.values[i, j] = level
+                light_changed = True
+        if exists_changed:
+            self._bump_sight_grids()
+        if light_changed:
+            self._bump_light_grid()
+
+    def _bump_sight_grids(self) -> None:
+        GridMap._grid_clock += 1
+        self._sight_grid_revision = GridMap._grid_clock
+
+    def _bump_light_grid(self) -> None:
+        GridMap._grid_clock += 1
+        self._light_grid_revision = GridMap._grid_clock
+
+    @property
+    def sight_grid_revision(self) -> int:
+        """Advances with every write that changes the Tile presence or the obscurement grid."""
+        return self._sight_grid_revision
+
+    @property
+    def light_grid_revision(self) -> int:
+        """Advances with every write that changes the light grid."""
+        return self._light_grid_revision
 
     @property
     def cell_exists(self) -> CellLayer:
@@ -2866,6 +2916,7 @@ class GridMap:
                 )
             )
         if new_position is not None:
+            # One move step: the arrival and the zones and lights that follow it settle together.
             self.publish_committed_spatial_event(
                 SpatialChangeEvent.entity_entered(
                     new_position,
@@ -2874,7 +2925,8 @@ class GridMap:
                     parent_event=parent_event,
                     previous_occupancy_layer=previous_occupancy_layer,
                     occupancy_layer=occupancy_layer,
-                )
+                ),
+                settles_with=GroupEntryKind.MOVE_STEP,
             )
 
     def get_entity_position(self, entity_uuid: UUID) -> Optional[Tuple[int, int]]:
@@ -5411,7 +5463,10 @@ class GridMap:
         for owner_uuid, layer in self._obscurement_layers.items():
             if self._obscurement_active[owner_uuid] and boxes_intersect(layer.box, clipped):
                 combined |= embed(layer, clipped, np.dtype(np.uint8))
-        grid.values[x0 - grid.x0:x1 - grid.x0 + 1, y0 - grid.y0:y1 - grid.y0 + 1] = combined
+        region = grid.values[x0 - grid.x0:x1 - grid.x0 + 1, y0 - grid.y0:y1 - grid.y0 + 1]
+        if not np.array_equal(region, combined):
+            region[...] = combined
+            self._bump_sight_grids()
 
     def settle_obscurement_activity(self) -> None:
         """Re-derive the boxes of the owners whose activity changed since their last write."""
@@ -6224,6 +6279,8 @@ class GridMap:
         self._obscurement_layers.clear()
         self._obscurement_active.clear()
         self._cell_obscurement = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
+        self._bump_sight_grids()
+        self._bump_light_grid()
         self._condition_footprints.clear()
         self._condition_footprint_cells.clear()
         self._pending_events.clear()
