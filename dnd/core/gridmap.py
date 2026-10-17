@@ -481,9 +481,19 @@ class GridMap:
                 and bounds[1] <= position[1] <= bounds[3])
 
     def get_dependent_observers_for_cells(self, cells: Collection[Tuple[int, int]]) -> Set[UUID]:
-        observers: Set[UUID] = set()
+        """Observers depending on any of the cells; each is tested only until one cell matches."""
+        by_chunk: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
         for position in cells:
-            observers.update(self.get_dependent_observers_at(position))
+            by_chunk[(position[0] // SPATIAL_CHUNK_SIZE, position[1] // SPATIAL_CHUNK_SIZE)].append(position)
+        observers: Set[UUID] = set()
+        for chunk, positions in by_chunk.items():
+            for identity in self._chunk_dependents.get(chunk, ()):
+                if identity in observers:
+                    continue
+                cells_of, bounds = self._observer_dependency_cells[identity], self._observer_dependency_bounds[identity]
+                if any(position in cells_of or bounds is not None and bounds[0] <= position[0] <= bounds[2]
+                       and bounds[1] <= position[1] <= bounds[3] for position in positions):
+                    observers.add(identity)
         return observers
 
     def subscribe_to_cells(
