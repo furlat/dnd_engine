@@ -17,6 +17,7 @@ from dnd.ai.contracts.semantics import (
 )
 from dnd.ai.contracts.immutable import FrozenDict
 from dnd.core.action_types import PositionSelection
+from dnd.core.base_object import read_private_attribute
 
 
 ActionBucket = Literal[
@@ -33,6 +34,7 @@ class ControlModel(BaseModel):
     """Immutable base for controller-facing protocol values."""
 
     model_config = ConfigDict(frozen=True)
+    __getattr__ = read_private_attribute
 
     def model_post_init(self, __context: Any) -> None:
         """Freeze nested protocol collections after validation."""

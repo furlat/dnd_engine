@@ -16,6 +16,20 @@ class ContributionOwner(Protocol):
     def allows_contribution_at(self, position: tuple[int, int] | None) -> bool: ...
 
 
+def read_private_attribute(model: BaseModel, item: str) -> Any:
+    """Pydantic's private-attribute read without its per-read descriptor probe.
+
+    Pydantic returns a private default's ``__get__`` result when the default is a
+    descriptor and the stored value otherwise; no engine private default is a
+    descriptor, so the stored value is read directly. Every other name keeps
+    pydantic's own resolution.
+    """
+    try:
+        return object.__getattribute__(model, '__pydantic_private__')[item]
+    except (AttributeError, KeyError, TypeError):
+        return BaseModel.__getattr__(model, item)  # type: ignore[attr-defined]
+
+
 class BaseObject(BaseModel):
     """Base identity model for UUID-addressable engine objects.
 
@@ -26,6 +40,7 @@ class BaseObject(BaseModel):
 
     _registry: ClassVar[Dict[UUID, ContributionOwner]] = {}
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    __getattr__ = read_private_attribute
 
     name: Optional[str] = Field(
         default=None,

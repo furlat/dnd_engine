@@ -4,7 +4,7 @@ from typing import AbstractSet, Dict, Optional, Any, List, Self, Set, ClassVar, 
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
-from dnd.core.base_object import BaseObject
+from dnd.core.base_object import BaseObject, read_private_attribute
 from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent
 from dnd.core.condition_types import (
     HazardFilter, InvoluntarySustainLoss, SustainLossPolicy,
@@ -147,6 +147,8 @@ class BaseBlock(BaseModel):
     spatial and gameplay hooks while retaining the same registry and cleanup
     contracts.
     """
+
+    __getattr__ = read_private_attribute
 
     name: str = Field(
         default="A Block",

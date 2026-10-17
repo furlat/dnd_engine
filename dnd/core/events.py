@@ -113,7 +113,7 @@ import logging
 import time
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
-from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +220,8 @@ class Event(BaseModel):
     versions. Subclasses add domain-specific payload fields and may override
     `generate_combat_log()`.
     """
+
+    __getattr__ = read_private_attribute
 
     name: str = Field(default="Event", description="Human-readable event label.")
     uuid: UUID = Field(

@@ -27,7 +27,7 @@ from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRe
 from dnd.types.discovery import ActorScan, Relationship, ScanRecord, relationship
 from dnd.types.event_facts import GroupEntryKind
 from dnd.core.events import ActionApplicationCommittedEvent, ActionCostsCommittedEvent, Event, EventType, EventPhase, EventProcessor, Range, EventQueue
-from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute
 from dnd.types.world import MovementMode
 from dnd.types.class_features import FontConversion
 from dnd.core.base_block import BaseBlock, resolution_order_key
@@ -2885,6 +2885,7 @@ def prefers_safe_movement_path(target: AvailableTarget, movement_remaining: int,
 class AvailableActionMetadata(BaseModel):
     """Passive metadata shared by native choices and compact player choices."""
 
+    __getattr__ = read_private_attribute
     discovery_generation: int = 0
     discovery_index: int = 0
     discovery_runtime: UUID | None = None
@@ -3126,6 +3127,8 @@ class AvailableActionsResult(BaseModel):
     Returned by Entity.get_available_actions(). Groups actions by type for
     easy iteration and UI rendering.
     """
+
+    __getattr__ = read_private_attribute
     discovery_generation: int = 0
     entity_uuid: UUID = Field(description="UUID of the entity these actions are for")
     entity_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Actions targeting entities (Attack)")
