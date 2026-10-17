@@ -228,3 +228,15 @@ Hard rules:
   - Assembly deploys as one group: Start ~8.5 → ~5.2 s, seat initialization 4.3 → 1.6 s.
   - The birth fact is built once less.
   - **Finding:** the seat merge (`audience.py:_contacts`) ranks a multi-observer seat's contact by observation cursor, so the merged contact's `special_senses` depends on event history order, not on state. Grouped deploys flip it for two torches in turn_undead. Proposed next-phase fix: a state-based merge (union of the seat's observers' senses).
+- 2026-10-18: **Integrator decision, logged per the human's "log, don't raise": a move step settles perception once (PV1a-3, 753daa151 / 4c4080606).** This supersedes plan §5.2's "each Move step settle per fact" and "Move steps aren't groups".
+  - An arrival opens a MOVE_STEP group; its zone moves and lights settle once per step, never across steps.
+  - Effects:
+    1. one sensory update per observer per step, caused by the arrival (Spirit Guardians 180 → 90 per move);
+    2. a light consumer reads the settled step, in every group;
+    3. phase-B work deferred by a joining zone move runs at the step's close.
+  - Per-step and per-op observer state, objective events and the cold oracle are equal on 7 cases.
+- 2026-10-18: **Event-version census (Fireball, 564 versions, 193 lineages).**
+  - 371 versions are intermediate phases. Rules fetch 8 of them, handlers run on 12, and 97 are a child's parent.
+  - 273 (48 % of all versions) are used by nothing except the machinery (`phase_to` fetching the previous version) and the iterating consumers (capture's version rows, the AI's open-events map).
+  - Next (integrator, after P7b merges): lazy version materialization. The current version stays in a per-lineage slot and is stored only when a child, a handler, a rule fetch or an iterating consumer needs it.
+  - Then area-effect batching: Fireball has 10 blood-residue deposits from damage applications and 5 item-destruction object changes, each its own lineage × 4 phases.
