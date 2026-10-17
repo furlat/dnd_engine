@@ -171,14 +171,21 @@ class OpenGroup:
     completes_after: Set[UUID] = field(default_factory=set)
 
 
-def merge_grants(grants: Dict[str, FrozenSet[str]], added: Mapping[str, FrozenSet[str]]) -> None:
-    """Union observer grants into one version's dict; a value is replaced only when the union adds observers."""
+def merged_grants(grants: Dict[str, FrozenSet[str]], added: Mapping[str, FrozenSet[str]]) -> Dict[str, FrozenSet[str]]:
+    """The union of observer grants, as a shared frozen mapping.
+
+    `grants` itself when `added` adds no observer; otherwise a new mapping in which a value is
+    replaced only where the union adds observers. Neither input is edited.
+    """
+    merged = grants
     for identity, observers in added.items():
-        held = grants.get(identity)
-        if held is None:
-            grants[identity] = observers
-        elif not observers <= held:
-            grants[identity] = held | observers
+        held = merged.get(identity)
+        if held is not None and observers <= held:
+            continue
+        if merged is grants:
+            merged = dict(grants)
+        merged[identity] = observers if held is None else held | observers
+    return merged
 
 
 def value_log_rows(rows: Sequence[ValueBreakdownRow]) -> List[ModifierBreakdown]:
@@ -2173,13 +2180,11 @@ class EventQueue:
         if event.phase not in (EventPhase.EXECUTION, EventPhase.EFFECT):
             raise ValueError("Only execution and effect phases can be committed facts")
 
-        committed = cast(
-            EventT,
-            event.model_copy(update={
-                "use_register": True,
-                "timestamp": datetime.now(UTC),
-            }),
-        )
+        # The owner's unregistered value becomes the stored version itself, as in
+        # publish_preflighted; callers hold only the returned version.
+        committed = event
+        committed.use_register = True
+        committed.timestamp = datetime.now(UTC)
         errors: list[BaseException] = []
         try:
             cls._store_event(committed)
@@ -2317,12 +2322,9 @@ class EventQueue:
             raise ValueError(f"Event UUID collision for {event.uuid}")
         timing = action_timing_enabled()
         total_started = time.perf_counter() if timing else 0.0
-        # Grants are shared frozen values: each version holds one dict of them,
-        # and a union makes a new value only when it adds observers.
-        started = time.perf_counter() if timing else 0.0
-        identified = dict(event.identified_entity_observer_uuids)
-        if timing:
-            record_action_timing("event_queue.store.copy_identified_ms", started)
+        # Grants are shared frozen values: a version keeps its predecessor's mapping
+        # unless a union adds observers, and no stored mapping is ever edited.
+        identified = event.identified_entity_observer_uuids
         if cls._identified_entity_observer_computer is None:
             located = event.located_entity_observer_uuids
         else:
@@ -2332,7 +2334,7 @@ class EventQueue:
             if timing:
                 record_action_timing("event_queue.store.compute_identified_ms", started)
             started = time.perf_counter() if timing else 0.0
-            merge_grants(identified, located)
+            identified = merged_grants(identified, located)
             if timing:
                 record_action_timing("event_queue.store.merge_identified_ms", started)
 
@@ -2343,7 +2345,7 @@ class EventQueue:
                 # Canceled children retain the same causal parent as completed
                 # ones; relationship identity exists before any terminal phase.
                 event.parent_lineage = parent_event.lineage_uuid
-            merge_grants(identified, parent_event.identified_entity_observer_uuids)
+            identified = merged_grants(identified, parent_event.identified_entity_observer_uuids)
         event.identified_entity_observer_uuids = identified
         event.located_entity_observer_uuids = located
         if timing:
