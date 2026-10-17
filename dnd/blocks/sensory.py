@@ -7,7 +7,7 @@ masks. Python runs per observer, per target on hit cells, per hazard owner and p
 spatial condition; never per visible cell.
 """
 
-from typing import AbstractSet, DefaultDict, Dict, FrozenSet, Iterable, List, Mapping, Optional, Self, Sequence, Set, Tuple
+from typing import AbstractSet, Any, DefaultDict, Dict, FrozenSet, Iterable, List, Mapping, Optional, Self, Sequence, Set, Tuple
 from uuid import UUID
 from pydantic import Field, InstanceOf, PrivateAttr
 
@@ -63,6 +63,10 @@ DELTAS = {CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
 OPPOSITE = {CardinalDirection.NORTH: CardinalDirection.SOUTH, CardinalDirection.SOUTH: CardinalDirection.NORTH,
             CardinalDirection.EAST: CardinalDirection.WEST, CardinalDirection.WEST: CardinalDirection.EAST}
 CHANNELS = (WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION)
+# The values one settlement shares between its observers: an immutable contact, emitter
+# descriptor or change reference with the same inputs is built once (discarded after the settlement).
+SharedValues = Dict[Tuple[Any, ...], Any]
+
 
 
 def _empty_seen() -> CellLayer:
@@ -446,12 +450,17 @@ def _cell_delta(before: PublishedSenses, after: PublishedSenses, initial: bool,
 
 
 def _contact_delta(before: Dict[UUID, PerceivedContact], after: Dict[UUID, PerceivedContact], initial: bool,
-                   ) -> Tuple[Dict[UUID, PerceivedContact], Set[UUID]]:
-    """Changed and removed contacts; an unchanged mapping is the same object, an unchanged contact too."""
+                   touched: Optional[FrozenSet[UUID]] = None) -> Tuple[Dict[UUID, PerceivedContact], Set[UUID]]:
+    """Changed and removed contacts; an unchanged mapping is the same object, an unchanged contact too.
+    With `touched`, only those targets can differ (the recompute's own row difference)."""
     if initial:
         return dict(after), set()
     if before is after:
         return {}, set()
+    if touched is not None:
+        return ({uuid: contact for uuid in touched if (contact := after.get(uuid)) is not None
+                 and (previous := before.get(uuid)) is not contact and previous != contact},
+                {uuid for uuid in touched if uuid not in after and uuid in before})
     changed = {uuid: contact for uuid, contact in after.items()
                if (previous := before.get(uuid)) is not contact and previous != contact}
     return changed, set(before) - set(after)
@@ -466,6 +475,10 @@ def emit_sensory_update_delta(
     *,
     register_event: bool = True,
     initial: bool = False,
+    contact_changes: Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]] = None,
+    shared: Optional[SharedValues] = None,
+    contact_deltas: Optional[Tuple[Tuple[Dict[UUID, PerceivedContact], Set[UUID]],
+                                   Tuple[Dict[UUID, PerceivedContact], Set[UUID]]]] = None,
 ) -> Optional[SensoryUpdateEvent]:
     """Emit a completed sensory event for one observer transition.
 
@@ -477,6 +490,9 @@ def emit_sensory_update_delta(
         reason: Typed reason for the sensory transition.
         register_event: Whether to register the completed event immediately.
         initial: Publish the complete after-state without an unrecorded seed.
+        contact_changes: The entities and objects whose contacts can differ, when known.
+        shared: The settlement's shared values: equal change references are built once.
+        contact_deltas: The entity and object contact deltas, when the caller computed them.
 
     Returns:
         The completed sensory event when the perception differs, otherwise None.
@@ -486,8 +502,13 @@ def emit_sensory_update_delta(
     started = time.perf_counter() if timing else 0.0
     visible_added, visible_removed, seen_added, light_changed, hazards_changed = _cell_delta(before, after, initial)
 
-    entity_changed, entity_removed = _contact_delta(before.entities, after.entities, initial)
-    object_changed, object_removed = _contact_delta(before.objects, after.objects, initial)
+    if contact_deltas is None:
+        contact_deltas = (
+            _contact_delta(before.entities, after.entities, initial,
+                           contact_changes[0] if contact_changes is not None else None),
+            _contact_delta(before.objects, after.objects, initial,
+                           contact_changes[1] if contact_changes is not None else None))
+    (entity_changed, entity_removed), (object_changed, object_removed) = contact_deltas
     effects_changed = {
         identity: value for identity, value in after.spatial_effects.items()
         if initial or before.spatial_effects.get(identity) != value
@@ -542,6 +563,7 @@ def emit_sensory_update_delta(
     if timing:
         record_action_timing("sensory_reducer.emit.delta_ms", started)
     started = time.perf_counter() if timing else 0.0
+    entity_changed, object_changed = _sorted_contacts(entity_changed), _sorted_contacts(object_changed)
     observed_changes: list[ObservedChangeRef] = []
     source_index = EventQueue.get_event_index(cause_event.uuid) if cause_event is not None else None
     if cause_event is not None and source_index is not None:
@@ -552,15 +574,20 @@ def emit_sensory_update_delta(
             ("hazards", (owner_uuid,) if hazards_changed else ()),
             ("senses", (owner_uuid,) if passive_changed or sense_modes_changed or visual_access_changed else ()),
             ("paths", (owner_uuid,) if paths_refresh_needed else ()),
-            ("entity_contact", (*entity_changed, *entity_removed)),
-            ("object_contact", (*object_changed, *object_removed)),
+            ("entity_contact", (*entity_changed, *sorted(entity_removed, key=str))),
+            ("object_contact", (*object_changed, *sorted(object_removed, key=str))),
             ("spatial_effect", (*effects_changed, *effects_removed)),
         )
+        references = shared if shared is not None else {}
         for field, owners in fields:
             for identity in owners:
-                observed_changes.append(ObservedChangeRef(source_event_uuid=cause_event.uuid,
-                    source_index=source_index, resolution_ref=cause_event.resolution_ref,
-                    field=field, owner_uuid=identity))
+                key = ("observed", cause_event.uuid, source_index, field, identity)
+                reference = references.get(key)
+                if reference is None:
+                    reference = references[key] = ObservedChangeRef(source_event_uuid=cause_event.uuid,
+                        source_index=source_index, resolution_ref=cause_event.resolution_ref,
+                        field=field, owner_uuid=identity)
+                observed_changes.append(reference)
     sensory_event = SensoryUpdateEvent(
         source_entity_uuid=owner_uuid,
         target_entity_uuid=owner_uuid,
@@ -584,9 +611,9 @@ def emit_sensory_update_delta(
         visible_cells_added=visible_added,
         visible_cells_removed=visible_removed,
         seen_cells_added=seen_added,
-        entity_contacts_changed=_sorted_contacts(entity_changed),
+        entity_contacts_changed=entity_changed,
         entity_contacts_removed=entity_removed,
-        object_contacts_changed=_sorted_contacts(object_changed),
+        object_contacts_changed=object_changed,
         object_contacts_removed=object_removed,
         paths_dirty=paths_refresh_needed,
         passive_perception_changed=passive_changed,
@@ -630,7 +657,9 @@ class ObserverField:
     felt_rows: Tuple[np.ndarray, ...]
     grants: CellLayer                # bool over the window: cells whose facts this observer is granted
     contact_rows: np.ndarray         # the published contacts as rows: kind, uuid halves, x, y, visual, senses
+    contact_uuids: Tuple[UUID, ...]  # each contact row's target
     known_objects: Tuple[Tuple[UUID, Position], ...]
+    contact_changes: Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]  # entities, objects the last recompute touched
     light_values: Dict[UUID, Tuple]  # each published emitter's descriptor inputs
     light_inputs: Optional[Tuple]    # what the published emitters were derived from (reused while equal)
 
@@ -648,6 +677,17 @@ class LightSourceRow:
 
 
 @dataclass(frozen=True)
+class LightSourceTable:
+    """The active emitters of one settlement as columns (frozen, built once)."""
+
+    rows: Tuple[LightSourceRow, ...]
+    slots: np.ndarray                # each emitter's lit-slot bit index
+    anchor_halves: np.ndarray        # (rows, 2) int64 uuid halves of the anchor, zero when unanchored
+    anchored: np.ndarray             # bool
+    key: Tuple                       # every row's inputs, for an unchanged observer's reuse
+
+
+@dataclass(frozen=True)
 class SettlementWorld:
     """The objective inputs every observer of one settlement reads the same (frozen, built once)."""
 
@@ -659,8 +699,7 @@ class SettlementWorld:
     hazard_x: np.ndarray             # the owners' cells, concatenated, with each cell's owner index
     hazard_y: np.ndarray
     hazard_owner: np.ndarray
-    light_sources: Tuple[LightSourceRow, ...]
-    light_key: Tuple                 # the emitters' descriptor inputs, for an unchanged observer's reuse
+    light_sources: LightSourceTable
     optical_revision: int
     propagation_revision: int
 
@@ -838,15 +877,16 @@ class SpatialSensesSystem:
                 settlement = pending[observer_uuid]
                 if settlement.max_distance is not None:
                     self.senses_by_observer[observer_uuid]._perception_max_distance = settlement.max_distance
+            shared: SharedValues = {}
             settled = self._settle(observers, {identity: pending[identity].events for identity in observers},
-                                   cause=root)
+                                   cause=root, shared=shared)
             for observer_uuid in observers:
                 if not pending[observer_uuid].events:
                     before, _ = settled[observer_uuid]
                     self.publish_observer_refresh(observer_uuid, before)
                     continue
                 sensory_event = self._emit_settled(observer_uuid, settled[observer_uuid],
-                                                   pending[observer_uuid].events, root)
+                                                   pending[observer_uuid].events, root, shared)
                 if sensory_event is not None:
                     sensory_events.append(sensory_event)
         finally:
@@ -994,32 +1034,40 @@ class SpatialSensesSystem:
                      if identity not in deferred and identity in self.senses_by_observer]
         if not observers:
             return
-        settled = self._settle(observers, {identity: [event] for identity in observers}, cause=event)
+        shared: SharedValues = {}
+        settled = self._settle(observers, {identity: [event] for identity in observers}, cause=event, shared=shared)
         sensory_events = [sensory_event for observer_uuid in observers
                           if (sensory_event := self._emit_settled(observer_uuid, settled[observer_uuid], [event],
-                                                                  event)) is not None]
+                                                                  event, shared)) is not None]
         if sensory_events:
             EventQueue.register_completion_sequence(sensory_events)
             self.published_observers.update(event.observer_uuid for event in sensory_events)
 
     def _settle(self, observers: Sequence[UUID], events: Mapping[UUID, Sequence[Event]], *,
-                cause: Optional[Event]) -> Dict[UUID, Tuple[PublishedSenses, Dict[UUID, Optional[PerceivedSpatialEffect]]]]:
+                cause: Optional[Event], shared: SharedValues,
+                ) -> Dict[UUID, Tuple[PublishedSenses, Dict[UUID, Optional[PerceivedSpatialEffect]]]]:
         """Recompute every observer of one settlement; returns each one's prior published state
         and the prior values of the fixtures it re-observed."""
         del cause
         befores = {identity: published_senses(self.senses_by_observer[identity]) for identity in observers}
         affected = {identity: self._affected_cells(events[identity]) for identity in observers}
-        touched = self._recompute(observers, affected)
+        touched = self._recompute(observers, affected, shared)
         return {identity: (befores[identity], touched[identity]) for identity in observers}
 
     def _emit_settled(self, observer_uuid: UUID,
                       settled: Tuple[PublishedSenses, Dict[UUID, Optional[PerceivedSpatialEffect]]],
-                      events: Sequence[Event], cause: Optional[Event]) -> Optional[SensoryUpdateEvent]:
+                      events: Sequence[Event], cause: Optional[Event],
+                      shared: SharedValues) -> Optional[SensoryUpdateEvent]:
         """Refresh the observer's light sources and emit the difference of its published perception."""
         senses = self.senses_by_observer[observer_uuid]
         initial = observer_uuid not in self.published_observers
         before, effect_before = settled
         after = published_senses(senses)
+        contact_changes = self.fields[observer_uuid].contact_changes
+        entity_delta = _contact_delta(before.entities, after.entities, initial,
+                                      contact_changes[0] if contact_changes is not None else None)
+        object_delta = _contact_delta(before.objects, after.objects, initial,
+                                      contact_changes[1] if contact_changes is not None else None)
         # Only the fixtures this settlement re-observed can change (an initial update carries all).
         before = _replace_effects(before, {identity: value for identity, value in effect_before.items()
                                            if value is not None})
@@ -1030,8 +1078,8 @@ class SpatialSensesSystem:
             before.position != after.position,
             not _same_cells(before.cells.visible, after.cells.visible),
             not _same_cells(before.seen, after.seen),
-            before.entities is not after.entities and before.entities != after.entities,
-            before.objects is not after.objects and before.objects != after.objects,
+            bool(entity_delta[0] or entity_delta[1]) if not initial else before.entities != after.entities,
+            bool(object_delta[0] or object_delta[1]) if not initial else before.objects != after.objects,
             before.passive_perception != after.passive_perception,
             not _same_cells(before.cells.hazard, after.cells.hazard),
             before.spatial_effects != after.spatial_effects,
@@ -1050,6 +1098,8 @@ class SpatialSensesSystem:
             self._reason_for(events[-1], observer_uuid),
             register_event=False,
             initial=initial,
+            shared=shared,
+            contact_deltas=(entity_delta, object_delta),
         )
 
     def recompute_observer(self, observer_uuid: UUID, *, max_distance: Optional[int] = None) -> None:
@@ -1067,7 +1117,7 @@ class SpatialSensesSystem:
             return
         if max_distance is not None:
             senses._perception_max_distance = max_distance
-        self._recompute([observer_uuid], {observer_uuid: None})
+        self._recompute([observer_uuid], {observer_uuid: None}, {})
 
     def publish_observer_refresh(
         self, observer_uuid: UUID, before: PublishedSenses,
@@ -1107,13 +1157,19 @@ class SpatialSensesSystem:
                 combined |= embed(layer, exists.box, np.dtype(np.uint8))
         hazard_owners, hazard_x, hazard_y, hazard_owner = grid.hazard_owners()
         light_rows = grid.light_source_rows()
+        lights = LightSourceTable(
+            tuple(LightSourceRow(identity, anchor, values) for identity, anchor, _, values in light_rows),
+            np.array([slot for _, _, slot, _ in light_rows], dtype=np.int64),
+            np.array([((anchor.int >> 64), anchor.int & UUID_LOW) if anchor is not None else (0, 0)
+                      for _, anchor, _, _ in light_rows], dtype=np.uint64).reshape(-1, 2).astype(np.int64),
+            np.array([anchor is not None for _, anchor, _, _ in light_rows], dtype=bool),
+            tuple(light_rows))
         return SettlementWorld(exists, grid.cell_light, owners, CellLayer(exists.x0, exists.y0, combined),
-                               hazard_owners, hazard_x, hazard_y, hazard_owner,
-                               tuple(LightSourceRow(identity, anchor, values) for identity, anchor, values in light_rows),
-                               tuple(light_rows), grid.optical_revision, grid.propagation_revision)
+                               hazard_owners, hazard_x, hazard_y, hazard_owner, lights,
+                               grid.optical_revision, grid.propagation_revision)
 
-    def _recompute(self, observers: Sequence[UUID],
-                   affected: Mapping[UUID, Optional[Set[Position]]]) -> Dict[UUID, Dict[UUID, Optional[PerceivedSpatialEffect]]]:
+    def _recompute(self, observers: Sequence[UUID], affected: Mapping[UUID, Optional[Set[Position]]],
+                   shared: SharedValues) -> Dict[UUID, Dict[UUID, Optional[PerceivedSpatialEffect]]]:
         """Recompute the observers' views with one settlement world and one target table."""
         diagnostic = action_timing_enabled()
         started = time.perf_counter() if diagnostic else 0.0
@@ -1133,7 +1189,7 @@ class SpatialSensesSystem:
             record_action_timing("sensory.settlement.contact_table_ms", started)
         touched = {}
         for view in views:
-            touched[view.owner.uuid] = self._publish(view, world, table, affected[view.owner.uuid])
+            touched[view.owner.uuid] = self._publish(view, world, table, affected[view.owner.uuid], shared)
         self.perception_revision += 1
         return touched
 
@@ -1196,7 +1252,8 @@ class SpatialSensesSystem:
         field = ObserverField(origin, window, selection, optical_key, routes, tuple(felt_keys), tuple(felt_rows),
                               CellLayer(window[0], window[1], np.zeros((0, 0), dtype=bool)),
                               previous.contact_rows if previous is not None else NO_CONTACT_ROWS,
-                              previous.known_objects if previous is not None else (),
+                              previous.contact_uuids if previous is not None else (),
+                              previous.known_objects if previous is not None else (), None,
                               previous.light_values if previous is not None else {},
                               previous.light_inputs if previous is not None else None)
         return ObserverView(owner, senses, origin, modes, ordinary_sight, optical_radius if visual_access else 0,
@@ -1279,7 +1336,8 @@ class SpatialSensesSystem:
             side_array[:, 5] != 0, side_array[:, 6] != 0, side_array[:, 7], side_array[:, 8], side_array[:, 9])
 
     def _publish(self, view: ObserverView, world: SettlementWorld, table: ContactTable,
-                 affected: Optional[Set[Position]]) -> Dict[UUID, Optional[PerceivedSpatialEffect]]:
+                 affected: Optional[Set[Position]], shared: SharedValues,
+                 ) -> Dict[UUID, Optional[PerceivedSpatialEffect]]:
         """Contacts, hazards, volume sight and fixtures of one view; publish them on its Senses."""
         diagnostic = action_timing_enabled()
         started = time.perf_counter() if diagnostic else 0.0
@@ -1290,7 +1348,8 @@ class SpatialSensesSystem:
         if diagnostic:
             record_action_timing("sensory.recompute.passive_ms", started)
             started = time.perf_counter()
-        entities, objects, contact_rows, known = self._contacts(view, table, passive)
+        entities, objects, contact_rows, contact_uuids, known, contact_changes = self._contacts(view, table, passive,
+                                                                                               shared)
         if diagnostic:
             record_action_timing("sensory.recompute.contacts_ms", started)
             started = time.perf_counter()
@@ -1350,21 +1409,22 @@ class SpatialSensesSystem:
         if diagnostic:
             record_action_timing("sensory.recompute.grants_ms", started)
             started = time.perf_counter()
-        light_inputs, light_values = self._refresh_light_sources(observer_uuid, senses, world, view.field)
+        light_inputs, light_values = self._refresh_light_sources(observer_uuid, senses, world, view.field,
+                                                                 contact_rows, shared)
         if diagnostic:
             record_action_timing("sensory.recompute.light_sources_ms", started)
             started = time.perf_counter()
         self.fields[observer_uuid] = ObserverField(
             view.field.origin, window, view.field.selection, view.field.optical_key, view.field.routes,
             view.field.felt_keys, view.field.felt_rows, CellLayer(window[0], window[1], window_of(grants, origin, window)),
-            contact_rows, known, light_values, light_inputs)
+            contact_rows, contact_uuids, known, contact_changes, light_values, light_inputs)
         if diagnostic:
             record_action_timing("sensory.recompute.publish_ms", started)
         return effect_before
 
-    def _contacts(self, view: ObserverView, table: ContactTable, passive: int,
-                  ) -> Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray,
-                             Tuple[Tuple[UUID, Position], ...]]:
+    def _contacts(self, view: ObserverView, table: ContactTable, passive: int, shared: SharedValues,
+                  ) -> Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray, Tuple[UUID, ...],
+                             Tuple[Tuple[UUID, Position], ...], Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]]:
         """Entity and object contacts as rows over the settlement's table: the per-target rules
         (hiding, invisibility, boundary evidence) are masks; Python runs per observable target and
         per contact only when the observer's rows changed."""
@@ -1427,10 +1487,13 @@ class SpatialSensesSystem:
                       if (subject := BaseBlock.get(identity)) is not None
                       and (placement := grid.get_object_placement(identity)) is not None
                       and subject.is_object_known_to(observer_uuid))
+        uuids = table.uuids
+        row_uuids = tuple(uuids[target] for target in cell_target[order].tolist()) + tuple(
+            uuids[target] for target in side_target[sides].tolist())
         previous_rows = view.field.contact_rows
         if previous_rows.shape == rows.shape and np.array_equal(previous_rows, rows) \
                 and view.field.known_objects == known:
-            return senses.entities, senses.objects, rows, known
+            return senses.entities, senses.objects, rows, row_uuids, known, (frozenset(), frozenset())
         previous_entities, previous_objects = senses.entities, senses.objects
 
         def contact(position: Position, visual: bool, mask: int, previous: Optional[PerceivedContact],
@@ -1439,25 +1502,41 @@ class SpatialSensesSystem:
             if (type(previous) is PerceivedContact and previous.position == position
                     and previous.visual == visual and previous.special_senses == special):
                 return previous
-            return PerceivedContact(position=position, visual=visual, special_senses=special)
+            key = ("contact", position, visual, special)
+            value = shared.get(key)
+            if value is None:
+                value = shared[key] = PerceivedContact(position=position, visual=visual, special_senses=special)
+            return value
 
         if view.field.known_objects == known and previous_rows.size:
             # Only the targets whose rows changed are resolved again; the others keep their contact.
             new_keys, old_keys = _target_keys(rows), _target_keys(previous_rows)
             new_rows, old_rows = _row_values(rows), _row_values(previous_rows)
-            touched = np.unique(np.concatenate((new_keys[~np.isin(new_rows, old_rows)],
-                                                old_keys[~np.isin(old_rows, new_rows)])))
+            new_changed, old_changed = ~np.isin(new_rows, old_rows), ~np.isin(old_rows, new_rows)
+            touched = np.unique(np.concatenate((new_keys[new_changed], old_keys[old_changed])))
+            entity_touched: Set[UUID] = set()
+            object_touched: Set[UUID] = set()
+            for kind, identity in ([(kind, view.field.contact_uuids[i]) for i, kind in zip(
+                    np.flatnonzero(old_changed).tolist(), previous_rows[old_changed, 0].tolist())]
+                    + [(kind, row_uuids[i]) for i, kind in zip(np.flatnonzero(new_changed).tolist(),
+                                                               rows[new_changed, 0].tolist())]):
+                (entity_touched if kind == ROW_ENTITY else object_touched).add(identity)
             entities, objects = dict(previous_entities), dict(previous_objects)
-            for group, high, low in _key_columns(touched):
-                (entities if group == 0 else objects).pop(UUID(int=(high << 64) | low), None)
+            for identity in entity_touched:
+                entities.pop(identity, None)
+            for identity in object_touched:
+                objects.pop(identity, None)
             selected = np.isin(new_keys, touched)
             cell_selected, side_selected = selected[:order.size], selected[order.size:]
             known_touched = bool(known)
+            changes: Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]] = (frozenset(entity_touched),
+                                                                         frozenset(object_touched))
         else:
             entities, objects = {}, {}
             cell_selected = np.ones(order.size, dtype=bool)
             side_selected = np.ones(sides.size, dtype=bool)
             known_touched = True
+            changes = None
         cells = order[cell_selected]
         for kind, target, x, y, visual, mask in zip(
                 table.cell_kind[cells].tolist(), cell_target[cells].tolist(), table.cell_x[cells].tolist(),
@@ -1476,8 +1555,11 @@ class SpatialSensesSystem:
             established = 0
             for sense in found.special_senses:
                 established |= SENSE_BITS[sense]
-            objects[identity] = PerceivedContact(position=chosen_position, visual=found.visual or visual,
-                                                 special_senses=SENSES_BY_ENUM[established | mask])
+            key = ("contact", chosen_position, found.visual or visual, SENSES_BY_ENUM[established | mask])
+            merged = shared.get(key)
+            if merged is None:
+                merged = shared[key] = PerceivedContact(position=chosen_position, visual=key[2], special_senses=key[3])
+            objects[identity] = merged
         if known_touched:
             for identity, position in known:
                 if identity not in objects:
@@ -1489,7 +1571,7 @@ class SpatialSensesSystem:
                 side_mask[side_rows].tolist()), key=lambda row: str(table.uuids[row[0]])):
             identity = table.uuids[target]
             objects[identity] = contact((x, y), visual, mask, previous_objects.get(identity))
-        return entities, objects, rows, known
+        return entities, objects, rows, row_uuids, known, changes
 
     @staticmethod
     def _open_channels(grid, position: Position, direction: CardinalDirection) -> Tuple[WorldEdgeChannel, ...]:
@@ -1774,45 +1856,58 @@ class SpatialSensesSystem:
 
     @staticmethod
     def _refresh_light_sources(observer_uuid: UUID, senses: Senses, world: SettlementWorld,
-                               field: ObserverField) -> Tuple[Tuple, Dict[UUID, Tuple]]:
+                               field: ObserverField, contact_rows: np.ndarray,
+                               shared: SharedValues) -> Tuple[Tuple, Dict[UUID, Tuple]]:
         """Compact emitter descriptors of the emitters lighting a visible cell; cell illumination has
-        its native events. Returns what they were derived from and each descriptor's inputs."""
+        its native events. An emitter's anchor is disclosed when the observer sees it (its contact
+        rows) or is it. Returns what the descriptors were derived from and each one's inputs."""
         grid = get_map()
+        lights = world.light_sources
         words = grid.light_slots_lit_within(senses.cells.visible)
-        entities, objects = senses.entities, senses.objects
-        inputs = (world.light_key, words.tobytes(), entities, objects)
+        lit = np.zeros(lights.slots.size, dtype=bool)
+        slotted = (lights.slots >= 0) & (lights.slots // 64 < words.size)
+        if slotted.any():
+            slots = lights.slots[slotted]
+            lit[slotted] = ((words[slots // 64] >> (slots % 64).astype(np.uint64)) & np.uint64(1)) != 0
+        visual = contact_rows[:, 5] != 0
+        entity_rows = contact_rows[visual & (contact_rows[:, 0] == ROW_ENTITY)]
+        object_rows = contact_rows[visual & (contact_rows[:, 0] != ROW_ENTITY)]
+        own = np.array([observer_uuid.int >> 64, observer_uuid.int & UUID_LOW], dtype=np.uint64).astype(np.int64)
+        anchors = _row_values(lights.anchor_halves)
+        anchor_entity = lights.anchored & (np.isin(anchors, _row_values(entity_rows[:, 1:3]))
+                                           | (lights.anchor_halves == own).all(axis=1))
+        anchor_item = lights.anchored & np.isin(anchors, _row_values(object_rows[:, 1:3]))
+        inputs = (lights.key, lit.tobytes(), anchor_entity.tobytes(), anchor_item.tobytes())
         known = field.light_inputs
-        if (known is not None and known[2] is entities and known[3] is objects and known[1] == inputs[1]
-                and known[0] == inputs[0]):
+        if known is not None and known[1:] == inputs[1:] and known[0] == inputs[0]:
             return known, field.light_values
-        lit = grid.light_sources_in_slots(words)
         previous = senses.light_sources
         previous_values = field.light_values
         sources: Dict[UUID, PerceivedLightSource] = {}
         values_of: Dict[UUID, Tuple] = {}
         reused = True
-        for row in world.light_sources:
-            identity = row.identity
-            if identity not in lit:
+        for row, row_lit, entity_seen, item_seen in zip(lights.rows, lit.tolist(), anchor_entity.tolist(),
+                                                        anchor_item.tolist()):
+            if not row_lit:
                 continue
-            anchor = row.anchor_uuid
-            actor = entities.get(anchor) if anchor is not None else None
-            item = objects.get(anchor) if anchor is not None else None
-            values = row.values + (
-                anchor if anchor is not None and (anchor == observer_uuid or actor is not None and actor.visual) else None,
-                anchor if item is not None and item.visual else None)
+            identity = row.identity
+            values = row.values + (row.anchor_uuid if entity_seen else None, row.anchor_uuid if item_seen else None)
             old = previous.get(identity)
             if old is not None and not old.affected_tiles and previous_values.get(identity) == values:
                 sources[identity] = old
             else:
                 reused = False
-                revision, position, height, appearance, very_bright, bright, dim, actor_anchored, \
-                    anchor_entity, anchor_item = values
-                sources[identity] = PerceivedLightSource(
-                    source_uuid=identity, revision=revision, position=position, base_height_steps=height,
-                    appearance=appearance, very_bright_radius_feet=very_bright, bright_radius_feet=bright,
-                    dim_radius_feet=dim, actor_anchored=actor_anchored, anchor_entity_uuid=anchor_entity,
-                    anchor_item_uuid=anchor_item)
+                key = ("light", identity, values)
+                descriptor = shared.get(key)
+                if descriptor is None:
+                    revision, position, height, appearance, very_bright, bright, dim, actor_anchored, \
+                        anchor_entity_uuid, anchor_item_uuid = values
+                    descriptor = shared[key] = PerceivedLightSource(
+                        source_uuid=identity, revision=revision, position=position, base_height_steps=height,
+                        appearance=appearance, very_bright_radius_feet=very_bright, bright_radius_feet=bright,
+                        dim_radius_feet=dim, actor_anchored=actor_anchored, anchor_entity_uuid=anchor_entity_uuid,
+                        anchor_item_uuid=anchor_item_uuid)
+                sources[identity] = descriptor
             values_of[identity] = values
         if reused and len(sources) == len(previous):
             return inputs, values_of
@@ -1860,10 +1955,10 @@ class SpatialSensesSystem:
             hint = event.senses_hint
             if hint is None or not hint.requires_paths:
                 return False
-            return (any(cell_visible(senses.cells, position) for position in self._candidate_positions(event))
+            return (_any_visible(senses.cells, self._candidate_positions(event))
                 or (event.object_uuid is not None and event.object_uuid in senses.objects))
         if isinstance(event, SpatialEffectChangeEvent):
-            return any(cell_visible(senses.cells, position) for position in event.get_affected_positions())
+            return _any_visible(senses.cells, event.get_affected_positions())
         return False
 
     @staticmethod
@@ -1911,6 +2006,12 @@ class SpatialSensesSystem:
         return positions
 
 
+def _any_visible(cells: PerceivedCells, positions: Iterable[Position]) -> bool:
+    """Whether any of these cells is visible (one gather)."""
+    positions = list(positions)
+    return bool(positions) and bool(_gather(cells.visible.values, cells.visible.box, positions).any())
+
+
 def _row_values(rows: np.ndarray) -> np.ndarray:
     """Each contact row as one comparable value (its bytes)."""
     rows = np.ascontiguousarray(rows)
@@ -1920,12 +2021,6 @@ def _row_values(rows: np.ndarray) -> np.ndarray:
 def _target_keys(rows: np.ndarray) -> np.ndarray:
     """Each contact row's target key (entity or object, uuid halves) as one comparable value."""
     return _row_values(np.column_stack(((rows[:, 0] != ROW_ENTITY).astype(np.int64), rows[:, 1], rows[:, 2])))
-
-
-def _key_columns(keys: np.ndarray) -> List[Tuple[int, int, int]]:
-    """Target keys back as (group, high, low) with the uuid halves unsigned."""
-    columns = keys.view(np.int64).reshape(-1, 3).tolist()
-    return [(group, high & UUID_LOW, low & UUID_LOW) for group, high, low in columns]
 
 
 def _gather(mask: np.ndarray, box: Box, positions: Sequence[Position] | np.ndarray) -> np.ndarray:

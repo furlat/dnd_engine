@@ -5366,7 +5366,7 @@ class GridMap:
         """Current optical version, retained after an emitter is extinguished."""
         return self._light_source_revisions.get(identity, 0)
 
-    def light_source_rows(self) -> List[Tuple[UUID, Optional[UUID], Tuple[Any, ...]]]:
+    def light_source_rows(self) -> List[Tuple[UUID, Optional[UUID], int, Tuple[Any, ...]]]:
         """Each active emitter's observer-independent descriptor values, with its anchor.
 
         The renderer needs an emitter, not another per-cell illumination map; an
@@ -5378,7 +5378,7 @@ class GridMap:
             source = self._light_sources[identity]
             if not self._is_light_effectively_active(source):
                 continue
-            rows.append((identity, source.anchor_uuid, (
+            rows.append((identity, source.anchor_uuid, self._light_slot_of.get(identity, -1), (
                 source.revision, source.position, source.base_height_steps, source.appearance,
                 source.very_bright_radius_feet, source.bright_radius_feet, source.dim_radius_feet,
                 source.anchor_uuid is not None and self.get_entity_position(source.anchor_uuid) is not None)))
