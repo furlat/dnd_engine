@@ -910,16 +910,14 @@ class SpatialSensesSystem:
                 record_action_count("sensory.recompute.reused_optical_cells", len(optical_candidates) - len(refresh))
                 record_action_count("sensory.recompute.refreshed_optical_cells", len(refresh))
         else:
+            # Every route from this origin against the one obscurement snapshot, in the origin's frame.
+            route_obscurements = grid.get_optical_obscurements_on_routes(origin, optical_candidates, optics) if optics else {}
             for position in optical_candidates:
                 tile = grid.get_tile(*position)
                 if tile is None:
                     continue
                 distance = grid_distance_feet(origin, position) if range_affects_modes else 0
-                obscurements = grid.get_optical_obscurements_on_route(
-                    origin,
-                    position,
-                    snapshot=optics,
-                ) if optics else set()
+                obscurements = route_obscurements[position] if optics else set()
                 route_key = distance, frozenset(obscurements) if obscurements else no_obscurements
                 route_modes = mode_results.get(route_key)
                 if route_modes is None:

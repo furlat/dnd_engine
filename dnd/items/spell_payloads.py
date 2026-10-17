@@ -51,6 +51,7 @@ from dnd.spatial.area_reach import ReachStage, resolve_staged_area
 from dnd.spatial.environmental_conditions import IceSurface
 from dnd.spatial.ignition import apply_elemental_surface_contacts
 from dnd.spells.content_metadata import srd_action_identity
+from dnd.spells.spell_utils import placement_error
 from dnd.types.discovery import ActorScan
 from dnd.types.physical_access import PhysicalAccess
 
@@ -322,19 +323,14 @@ class SpellPayloadItem(UsableItem):
 
 
 def payload_destination_error(
-    actor: Entity, destination: tuple[int, int] | None, limit: int
+    action: BaseAction, scan: ActorScan, selection: ActionSelection
 ) -> str | None:
-    if destination is None:
-        return "Choose an impact position"
-    if (
-        not get_map().has_tile(*destination)
-        or grid_distance_feet(actor.position, destination) > limit
-    ):
-        return "Impact is outside throw range"
-    if not actor.senses.visible.get(destination, False):
-        return "Impact must be visible"
+    """An existing, seen impact tile in throw range that a projectile from the actor reaches."""
+    error = placement_error(action, scan, selection)
+    if error is not None:
+        return error
     if not get_map().can_reach_between(
-        actor.position, destination, PhysicalAccess.PROJECTILE, actor.uuid
+        scan.position, selection.positions[0], PhysicalAccess.PROJECTILE, action.source_entity_uuid, subjective=scan.subjective
     ):
         return "A physical boundary blocks the throw"
     return None
@@ -380,9 +376,7 @@ class ThrowSpellPayload(BaseAction):
             return "Sphere absent"
         if item.payload_kind == "delayed_fire" and item.owner_uuid != actor.uuid:
             return "Touch the floor bead before throwing it"
-        return payload_destination_error(
-            actor, selection.positions[0] if selection.positions else None, self.get_range().normal
-        )
+        return payload_destination_error(self, scan, selection)
 
     def _apply_costs(self, event):
         return entity_action_economy_cost_applier(event, self.source_entity_uuid)
@@ -473,14 +467,13 @@ class TouchDelayedFireball(BaseAction):
             grid_distance_feet(actor.position, center) > 5
             or center not in scan.visible
             or not get_map().can_reach_between(
-                actor.position, center, PhysicalAccess.HAND, actor.uuid
+                actor.position, center, PhysicalAccess.HAND, actor.uuid, subjective=scan.subjective
             )
         ):
             return "Bead is outside visible hand reach"
-        destination = selection.positions[0] if selection.positions else None
         if self.throw_after_touch:
-            return payload_destination_error(actor, destination, 40)
-        if destination is not None:
+            return payload_destination_error(self, scan, selection)
+        if selection.positions:
             return "Choose the touch-and-throw form"
         return None
 

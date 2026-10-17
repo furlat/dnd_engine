@@ -286,6 +286,8 @@ class AudienceComposition:
     perception: AudiencePerception = field(default_factory=AudiencePerception)
     view: SensesSnapshot | None = None
     cell_members: dict[tuple[int, int], set[UUID]] = field(default_factory=dict)
+    # The member whose observation the view shows for each cell (tile_observers' choice).
+    cell_owners: dict[tuple[int, int], UUID] = field(default_factory=dict)
     entity_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     object_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     effect_members: dict[UUID, set[UUID]] = field(default_factory=dict)
@@ -295,6 +297,8 @@ class AudienceComposition:
     visible_effects: dict[UUID, set[UUID]] = field(default_factory=dict)
     dirty_members: set[UUID] = field(default_factory=set)
     contact_overrides: set[UUID] = field(default_factory=set)
+    # The member whose contact the view shows, per (is object, identity), once composed.
+    contact_holders: dict[tuple[bool, UUID], UUID] = field(default_factory=dict)
 
 
 def _membership(index: dict, key, identity: UUID, present: bool) -> None:
@@ -316,7 +320,8 @@ def copy_audience_perception(perception: AudiencePerception) -> AudiencePercepti
 def begin_audience_composition(perception: AudiencePerception, observer_uuid: UUID) -> AudienceComposition:
     """Acquire a detached fold once; ordinary observations never recopy history."""
     perception = copy_audience_perception(perception)
-    current = AudienceComposition(perception=perception, view=audience_view(perception, observer_uuid))
+    current = AudienceComposition(perception=perception, view=audience_view(perception, observer_uuid),
+        cell_owners=tile_observers(perception))
     for observer, senses in perception.members.items():
         for position in senses.visible:
             _membership(current.cell_members, position, observer, True)
@@ -339,17 +344,23 @@ def begin_audience_composition(perception: AudiencePerception, observer_uuid: UU
     return current
 
 
-def _current_contact(current: AudienceComposition, identity: UUID, *, objects: bool) -> PerceivedContact | None:
+def _contact_rank(current: AudienceComposition, observer: UUID, identity: UUID,
+                  contact: PerceivedContact) -> tuple[bool, int, int]:
+    return contact.visual, current.perception.contact_cursors.get((observer, identity), -1), -observer.int
+
+
+def _current_contact(current: AudienceComposition, identity: UUID, *,
+                     objects: bool) -> tuple[PerceivedContact | None, UUID | None]:
     owners = (current.object_members if objects else current.entity_members).get(identity, ())
-    selected = None
+    selected = holder = None
     rank = None
     for observer in owners:
         member = current.perception.members[observer]
         contact = (member.objects if objects else member.entities)[identity]
-        candidate = (contact.visual, current.perception.contact_cursors.get((observer, identity), -1), -observer.int)
+        candidate = _contact_rank(current, observer, identity, contact)
         if rank is None or candidate > rank:
-            rank, selected = candidate, contact
-    return selected
+            rank, selected, holder = candidate, contact, observer
+    return selected, holder
 
 
 def _current_effect(current: AudienceComposition, identity: UUID) -> PerceivedSpatialEffect | None:
@@ -384,7 +395,8 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
     cells = added | removed | prepared.light_levels.keys() | prepared.hazardous_cells.keys()
     contacts = (set(event.entity_contacts_changed) | event.entity_contacts_removed
                 | event.object_contacts_changed.keys() | event.object_contacts_removed)
-    contacts.update(current.contact_overrides)
+    overrides = set(current.contact_overrides)
+    contacts.update(overrides)
     current.contact_overrides.clear()
     effects = set(event.spatial_effects_changed) | event.spatial_effects_removed
     if event.initial and before is not None:
@@ -439,6 +451,12 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
     effect_cursors = {identity: cursor for identity, effect in event.spatial_effects_changed.items()
         if any(visible(position) for position in effect.positions)
         or effect.visible_volume_positions or effect.upper_volume_surfaces}
+    # This delta changes only its own observer: a cell whose visibility, light
+    # and hazard are unchanged for it keeps its membership and composed value.
+    # Record them before the fold mutates the member in place.
+    previous_cells = ({position: (position in before.visible, before.effective_light_levels.get(position),
+                                  before.hazardous_cells.get(position)) for position in cells}
+                      if before is not None and current.view is not None else {})
 
     member = apply_current_senses(before, event, prepared)
     perception.members[observer] = member
@@ -492,15 +510,30 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
             effective_light_levels={}, hazardous_cells={}, spatial_effects={})
     view = current.view
     for position in cells:
+        if previous_cells.get(position) == (position in member.visible, member.effective_light_levels.get(position),
+                                            member.hazardous_cells.get(position)):
+            continue
         owners = current.cell_members.get(position)
         if not owners:
+            current.cell_owners.pop(position, None)
             view.visible.discard(position)
             view.effective_light_levels.pop(position, None)
             view.hazardous_cells.pop(position, None)
             continue
-        owner = max(owners, key=lambda identity: (
-            perception.members[identity].effective_light_levels.get(position, LightLevel.DARKNESS).value,
-            -identity.int))
+
+        def rank(identity: UUID) -> tuple[int, int]:
+            return (perception.members[identity].effective_light_levels.get(position, LightLevel.DARKNESS).value,
+                    -identity.int)
+
+        held = current.cell_owners.get(position)
+        if held is not None and held != observer and held in owners:
+            # Only this observer changed: it takes the cell only by outranking the holder.
+            if observer not in owners or rank(observer) <= rank(held):
+                continue
+            owner = observer
+        else:
+            owner = max(owners, key=rank)
+        current.cell_owners[position] = owner
         source = perception.members[owner]
         view.visible.add(position)
         if position in source.effective_light_levels:
@@ -513,11 +546,26 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
             view.hazardous_cells.pop(position, None)
     for identity in contacts:
         for objects, destination in ((False, view.entities), (True, view.objects)):
-            contact = _current_contact(current, identity, objects=objects)
-            if contact is None:
+            key = objects, identity
+            held = current.contact_holders.get(key)
+            owners = (current.object_members if objects else current.entity_members).get(identity, ())
+            if identity not in overrides and held is not None and held != observer and held in owners:
+                # Only this observer changed: it takes the contact only by outranking the holder.
+                if observer not in owners:
+                    continue
+                mine = (member.objects if objects else member.entities)[identity]
+                theirs = (perception.members[held].objects if objects else perception.members[held].entities)[identity]
+                if _contact_rank(current, observer, identity, mine) <= _contact_rank(current, held, identity, theirs):
+                    continue
+                contact, holder = mine, observer
+            else:
+                contact, holder = _current_contact(current, identity, objects=objects)
+            if contact is None or holder is None:
                 destination.pop(identity, None)
+                current.contact_holders.pop(key, None)
             else:
                 destination[identity] = contact
+                current.contact_holders[key] = holder
     for identity in recompute_effects:
         effect = _current_effect(current, identity)
         if effect is None:

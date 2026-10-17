@@ -48,8 +48,8 @@ def test_chain_primary_scoped_branch_keeps_distant_recipient_and_object_identity
     primary = compact.target_sets[row.target_set]
     assert beyond.uuid not in {compact.subjects[binding.subject].uuid for binding in primary}
     far_binding = next(binding for binding in primary if compact.subjects[binding.subject].uuid == far.uuid)
-    branches = compact.target_sets[far_binding.secondary_set]
-    assert beyond.uuid in {compact.subjects[binding.subject].uuid for binding in branches}
+    # Secondaries are picked on demand (plan §14.4): the selected primary's preview offers
+    # the distant recipient the caster perceives, though it is no primary itself.
     object_binding = next(binding for binding in primary if compact.subjects[binding.subject].uuid == item.uuid)
     assert compact.subjects[object_binding.subject].kind == 'object'
     caster = scene[0]
@@ -58,6 +58,7 @@ def test_chain_primary_scoped_branch_keeps_distant_recipient_and_object_identity
     preview = PlayerSelectionPreview.model_validate_json(project_selection_preview(expected).model_dump_json())
     assert [native_value(preview, target) for target in preview.target_sets[preview.next_target_set]] == [
         target.model_dump() for target in expected.next_targets]
+    assert beyond.uuid in {target.target_uuid for target in expected.next_targets}
 
 
 def test_repeated_missiles_preserve_fill_primary_and_ordered_preview(scene):

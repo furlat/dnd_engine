@@ -41,6 +41,7 @@ from dnd.blocks.action_economy import RechargeType
 from dnd.classes.rage import Rage
 from dnd.spells.enchantment import CalmEmotions, DissonantFearEffect
 from dnd.spells.abjuration import PassWithoutTrace
+from tests.engine.support import admitted_in_discovery
 
 def combatant(game, name="Caster", position=(2,2), faction="heroes", *, intelligence=18,
               creature_type=CreatureType.HUMANOID, slots=None):
@@ -305,7 +306,7 @@ def test_calm_removes_fear_and_blocks_native_rage_before_payment(game):
     assert result is not None
     assert "Dissonant Whispers Fear" not in set(target.active_conditions)
     action=Rage(source_entity_uuid=target.uuid)
-    assert action.validate_requirements_for_discovery() is False
+    assert not admitted_in_discovery(action)
     result=action.apply()
     assert result is not None
     canceled=result.canceled

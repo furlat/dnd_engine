@@ -383,3 +383,10 @@ __all__ = [
     "get_save_natural_roll",
     "print_combat_state",
 ]
+
+
+def admitted_in_discovery(action) -> bool:
+    """The one discovery admission (plan §14.3b): the action's own selection on its actor's perceived scan."""
+    actor = Entity.get(action.source_entity_uuid)
+    return actor is not None and action.discovery_error(
+        actor.action_scan(subjective=True), action.current_selection()) is None

@@ -630,7 +630,7 @@ class LayOnHands(BaseAction):
             return effect
         actor, target = (
             Entity.get(self.source_entity_uuid),
-            Entity.get(self.target_entity_uuid),
+            Entity.get(event.target_entity_uuid),
         )
         if self._cures is not None:
             with BaseBlock.condition_removal_scope():
@@ -1276,13 +1276,13 @@ class SacredWeapon(BaseAction):
             return "Sacred Weapon requires a held weapon"
         return None
 
-    def _validate(self, event):
+    def _create_declaration_event(self, parent_event=None, use_register=True):
         """Remember the exact weapon this declaration admits; `_apply` refuses a swapped one."""
+        event = super()._create_declaration_event(parent_event, use_register)
         actor = Entity.get(self.source_entity_uuid)
         weapon = actor.equipment.get_weapon(self.weapon_slot) if actor is not None else None
-        if weapon is not None:
-            self.selected_weapon_uuid = weapon.uuid
-        return super()._validate(event)
+        self.selected_weapon_uuid = weapon.uuid if weapon is not None else None
+        return event
 
     def _apply_costs(self, event):
         return entity_action_economy_cost_applier(event, self.source_entity_uuid)

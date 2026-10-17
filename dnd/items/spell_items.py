@@ -63,6 +63,7 @@ from dnd.spells.evocation import (
 )
 from dnd.spells.illusion import Invisibility
 from dnd.spells.transmutation import SpikeGrowth
+from dnd.spells.spell_utils import seen_point_error
 
 
 class SpellGrantingItem(UsableItem):
@@ -311,20 +312,7 @@ class _AcidFlaskSpell(SpellAction):
         return self.spell_range
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return "Caster not found"
-
-        if not selection.positions:
-            return "No target position specified"
-        target_pos = selection.positions[0]
-        if target_pos not in scan.visible:
-            return f"Target position {target_pos} not in line of sight"
-
-        distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
-            return f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
-        return None
+        return seen_point_error(self, scan, selection)
 
     def _apply(
         self,
@@ -332,8 +320,8 @@ class _AcidFlaskSpell(SpellAction):
     ) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
         target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid
+            Entity.get(execution_event.target_entity_uuid)
+            if execution_event.target_entity_uuid
             else None
         )
         if not caster or not target:

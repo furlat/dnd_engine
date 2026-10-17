@@ -223,7 +223,7 @@ class BookMultiTargetConcentrationSpell(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if caster is None:
             return execution_event.cancel(status_message="Caster not found")
         if target is None:

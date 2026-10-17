@@ -607,7 +607,7 @@ class ConstructWall(SpellAction):
         return self.wall_geometry()
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
-        return self._placement_error(selection, subjective=False)
+        return self._placement_error(selection, subjective=scan.subjective)
 
     def _placement_error(self, selection: ActionSelection, *, subjective: bool) -> str | None:
         geometry = self._wall_geometry(selection)
@@ -887,14 +887,24 @@ def forcecage_geometry(center: tuple[int,int], side_feet: int) -> WallAssemblyPr
         width_feet=1/48,height_feet=side_feet)
 
 
-def forcecage_displacements(caster: Entity, center: tuple[int,int],side_feet:int) -> dict[UUID,tuple[int,int]] | None:
+def forcecage_displacements(caster: Entity, center: tuple[int,int],side_feet:int,*,subjective:bool) -> dict[UUID,tuple[int,int]] | None:
+    """Where each partially enclosed creature is pushed out; None when one cannot be.
+
+    Subjective (discovery) knows only the creatures, positions and blockers the
+    caster perceives; objective (execution) knows the world.
+    """
     half=side_feet/10
     used=set()
     result={}
+    grid=get_map()
+    known=caster.senses.entities
+    occupied={contact.position for contact in known.values()}|{caster.position} if subjective else set()
     for entity in sorted(Entity.get_all_entities(),key=lambda actor:str(actor.uuid)):
         if not entity.is_deployed: continue
+        if subjective and entity.uuid!=caster.uuid and entity.uuid not in known: continue
+        position=known[entity.uuid].position if subjective and entity.uuid!=caster.uuid else entity.position
         space={Size.TINY:2.5,Size.SMALL:5,Size.MEDIUM:5,Size.LARGE:10,Size.HUGE:15,Size.GARGANTUAN:20}[entity.size]/10
-        dx,dy=abs(entity.position[0]-center[0]),abs(entity.position[1]-center[1])
+        dx,dy=abs(position[0]-center[0]),abs(position[1]-center[1])
         if dx-space>=half or dy-space>=half: continue
         if dx+space<=half and dy+space<=half: continue
         candidates=[]
@@ -902,13 +912,15 @@ def forcecage_displacements(caster: Entity, center: tuple[int,int],side_feet:int
             for y in range(center[1]-6,center[1]+7):
                 point=(x,y)
                 if max(abs(x-center[0])-space,abs(y-center[1])-space)<half or point in used: continue
-                tile=get_map().get_tile(*point)
-                if tile is None or tile.height!=get_map().get_support_elevation_feet(center)//5 or not get_map().is_walkable_for(*point,entity.uuid): continue
-                if get_map().get_entities_at(point)-{entity.uuid}: continue
-                if not get_map().can_reach_between(entity.position,point,PhysicalAccess.BODY,entity.uuid): continue
+                tile=grid.get_tile(*point)
+                if tile is None or tile.height!=grid.get_support_elevation_feet(center)//5: continue
+                if not grid.is_walkable_for(*point,caster.uuid if subjective else entity.uuid,subjective=subjective): continue
+                if (point in occupied and point!=position) if subjective else grid.get_entities_at(point)-{entity.uuid}: continue
+                if not grid.can_reach_between(position,point,PhysicalAccess.BODY,entity.uuid,subjective=subjective,
+                        knowledge_observer_uuid=caster.uuid if subjective else None): continue
                 candidates.append(point)
         if not candidates:return None
-        destination=min(candidates,key=lambda p:(hypot(p[0]-entity.position[0],p[1]-entity.position[1]),p))
+        destination=min(candidates,key=lambda p:(hypot(p[0]-position[0],p[1]-position[1]),p))
         used.add(destination);result[entity.uuid]=destination
     return result
 
@@ -937,10 +949,10 @@ class Forcecage(SpellAction):
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
         side=20 if self.cage_form=="cage" else 10
         center=selection.positions[0] if selection.positions else None
-        error=selection_wall_support_error(self,selection,forcecage_geometry(center,side) if center else None,subjective=False)
+        error=selection_wall_support_error(self,selection,forcecage_geometry(center,side) if center else None,subjective=scan.subjective)
         if error is not None:return error
         caster=Entity.get(self.source_entity_uuid)
-        if caster is None or center is None or forcecage_displacements(caster,center,side) is None:
+        if caster is None or center is None or forcecage_displacements(caster,center,side,subjective=scan.subjective) is None:
             return "Forcecage cannot displace a partially enclosed creature"
         return None
 
@@ -953,7 +965,7 @@ class Forcecage(SpellAction):
         geometry=self.get_selection_geometry()
         if caster is None or geometry is None or self.end_position is None:return event.cancel(status_message="Cage placement absent")
         side=20 if self.cage_form=="cage" else 10
-        displacements=forcecage_displacements(caster,self.end_position,side)
+        displacements=forcecage_displacements(caster,self.end_position,side,subjective=False)
         sections=construction_sections(geometry)
         if displacements is None or sections is None:return event.cancel(status_message="Cage formation is impossible")
         effect=event.phase_to(EventPhase.EFFECT)

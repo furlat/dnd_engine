@@ -6,7 +6,7 @@ from bisect import bisect_left, bisect_right
 from heapq import heappop, heappush
 from dnd.core.condition_types import ConditionDurationSummary
 
-from typing import Literal, AbstractSet, Collection, Any, Dict, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
+from typing import Literal, AbstractSet, Collection, Any, Dict, Iterable, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel, Field
 
 from dnd.types.event_facts import LandingKind
-from dnd.core.geometry import (circle_positions, supercover_line,
+from dnd.core.geometry import (circle_positions, supercover_line, supercover_line_relative,
     supercover_slope_order, supercover_incoming_ranges, supercover_incoming_rank_ranges)
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
@@ -283,6 +283,9 @@ class GridMap:
 
         self._spatial_revision: int = 0
         self._optical_revision: int = 0
+        # Center optical blocking per cell, valid for one optical revision (like the FOV caches).
+        self._optics_blocking: Dict[Tuple[int, int], bool] = {}
+        self._optics_blocking_revision: int = -1
         self._movement_revision: int = 0
         self._connector_revision: int = 0
         self._occupancy_revision: int = 0
@@ -1865,7 +1868,20 @@ class GridMap:
         return True
 
     def is_blocking_optics(self, x: int, y: int) -> bool:
-        """Return whether a Tile center blocks ordinary light and sight."""
+        """Return whether a Tile center blocks ordinary light and sight.
+
+        Every input (tile, center objects, conditions) changes only with an
+        optical revision bump, so the answer is kept for the current revision.
+        """
+        if self._optics_blocking_revision != self._optical_revision:
+            self._optics_blocking.clear()
+            self._optics_blocking_revision = self._optical_revision
+        blocked = self._optics_blocking.get((x, y))
+        if blocked is None:
+            blocked = self._optics_blocking[(x, y)] = self._center_blocks_optics(x, y)
+        return blocked
+
+    def _center_blocks_optics(self, x: int, y: int) -> bool:
         tile = self._tiles.get((x, y))
         if tile is None or tile.blocks_optics_at_center():
             return True
@@ -5492,12 +5508,36 @@ class GridMap:
         if snapshot is not None:
             if not snapshot:
                 return set()
+            # Only the route's cells inside the snapshot contribute; find them with
+            # one C-level membership pass instead of one call per route cell.
+            return {value for position in supercover_line(start, end) if position in snapshot
+                    for owner, values in snapshot[position].items()
+                    if owner != excluded_owner_uuid for value in values}
         elif not self._optical_obscurements_by_position and not self._spatial_conditions:
             return set()
         result: Set[OpticalObscurement] = set()
         for position in supercover_line(start, end):
             result.update(self.get_optical_obscurements_at(
                 position, excluded_owner_uuid=excluded_owner_uuid, snapshot=snapshot))
+        return result
+
+    def get_optical_obscurements_on_routes(
+        self,
+        origin: Tuple[int, int],
+        positions: Iterable[Tuple[int, int]],
+        snapshot: OpticalSnapshot,
+    ) -> Dict[Tuple[int, int], Set[OpticalObscurement]]:
+        """`get_optical_obscurements_on_route` from one origin to many cells.
+
+        The snapshot moves into the origin's frame once, so each route is its
+        cached relative line checked against it without translating any cell.
+        """
+        ox, oy = origin
+        relative = {(x - ox, y - oy): owners for (x, y), owners in snapshot.items()}
+        result: Dict[Tuple[int, int], Set[OpticalObscurement]] = {}
+        for position in positions:
+            result[position] = {value for offset in supercover_line_relative(position[0] - ox, position[1] - oy)
+                                if offset in relative for values in relative[offset].values() for value in values}
         return result
 
     def _publish_optical_obscurement_change(

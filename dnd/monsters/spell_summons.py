@@ -213,7 +213,7 @@ class FlamingSphereRam(SpellAction):
 
     def _apply(self,event):
         effect=event.phase_to(EventPhase.EFFECT)
-        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         if not effect.canceled and target is not None and self._sphere_is_present():
             _sphere_damage(self.original_caster_uuid,target,dc=self.spell_dc,dice_count=self.dice_count,event=effect,origin=self.effect_origin)
         return effect

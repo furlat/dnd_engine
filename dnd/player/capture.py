@@ -666,20 +666,41 @@ def _detach_retained_event(event: Event) -> Event:
     return deepcopy(event, memo)
 
 
+def _controller_redaction(event: Event, audience: PlayerAudience) -> bool | None:
+    """Whether this seat controls the source, for the families that redact non-controllers; None otherwise."""
+    match event:
+        case SpellbookChangedEvent() | SpellMasteryStudiedEvent() | PermanentFeatureUsedEvent() | SpellPreparationChangedEvent():
+            return audience.controls(event.source_entity_uuid)
+    return None
+
+
 def _retained_event(event: Event, audience: PlayerAudience,
                     known_entity_names: Mapping[str, str] | None = None,
                     known_connector_uuids: frozenset[str] = frozenset(),
                     known_content_ids: frozenset[str] = frozenset(),
                     retained_entries: dict[int, CombatLogEntry | None] | None = None,
-                    *, omit_sensory_payload: bool = False) -> Event:
-    """Copy the selected event families without constructing registered models."""
+                    *, omit_sensory_payload: bool = False,
+                    bodies: dict[tuple[UUID, bool, bool | None], Event] | None = None) -> Event:
+    """The seat's retained copy: the shared detached body plus this seat's combat log."""
     projected_log = project_combat_log(
         event.combat_log, known_entity_names=known_entity_names, retained_entries=retained_entries,
         known_connector_uuids=known_connector_uuids, known_content_ids=known_content_ids,
         controlled_entity_uuids=frozenset(map(str, audience.controlled)),
         observer_entity_uuids=frozenset(map(str, audience.observers)),
     )
-    common = {"use_register": False, "context": None, "combat_log": projected_log}
+    controls = _controller_redaction(event, audience)
+    key = (event.uuid, omit_sensory_payload, controls)
+    body = bodies.get(key) if bodies is not None else None
+    if body is None:
+        body = _retained_body(event, controls, omit_sensory_payload=omit_sensory_payload)
+        if bodies is not None:
+            bodies[key] = body
+    return body.model_copy(update={"combat_log": deepcopy(projected_log)})
+
+
+def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload: bool) -> Event:
+    """Copy the selected event families without constructing registered models (no combat log)."""
+    common = {"use_register": False, "context": None, "combat_log": None}
     match event:
         case SensoryUpdateEvent() if omit_sensory_payload:
             copied = _event_header(event).model_copy(update=common)
@@ -706,16 +727,16 @@ def _retained_event(event: Event, audience: PlayerAudience,
             copied = event.model_copy(update={**common,"context":{},"damage":event.damage.model_copy(
                 update={"use_register":False,"context":None,"damage_bonus":None})})
         case SpellbookChangedEvent():
-            copied = event.model_copy(update=common if audience.controls(event.source_entity_uuid) else {
+            copied = event.model_copy(update=common if controls else {
                 **common,"scribed_spell_ids":(),"learned_spell_id":""})
         case SpellMasteryStudiedEvent():
-            copied = event.model_copy(update=common if audience.controls(event.source_entity_uuid) else {
+            copied = event.model_copy(update=common if controls else {
                 **common,"applied_class_levels":()})
         case PermanentFeatureUsedEvent():
-            copied = event.model_copy(update=common if audience.controls(event.source_entity_uuid) else {
+            copied = event.model_copy(update=common if controls else {
                 **common,"permanent_feature_uses":()})
         case SpellPreparationChangedEvent():
-            copied = event.model_copy(update=common if audience.controls(event.source_entity_uuid) else {
+            copied = event.model_copy(update=common if controls else {
                 **common,"prepared_spell_selections":(),"casting_source_id":""})
         case HealRollResultEvent():
             copied = event.model_copy(update={**common, "context": {}})
@@ -908,10 +929,15 @@ def capture_lineage(
 
 @dataclass(frozen=True, slots=True)
 class CaptureContext:
-    """A native generation/cursor boundary over the EventQueue's existing indexes."""
+    """A native generation/cursor boundary over the EventQueue's existing indexes.
+
+    `bodies` holds each retained event's detached, seat-independent body for
+    this operation: every seat shares it and adds only its own combat log.
+    """
 
     generation: UUID
     end_cursor: int
+    bodies: dict[tuple[UUID, bool, bool | None], Event] = field(default_factory=dict)
 
 
 def capture_context() -> CaptureContext:
@@ -1025,7 +1051,7 @@ def _capture_lineage(
             names[str(admission.actor.uuid)] = admission.actor.name
         if event.uuid == nodes[event.lineage_uuid].uuid:
             retained_values.append(_retained_event(nodes[event.lineage_uuid], audience, names, known_connector_uuids, known_content_ids,
-                retained_logs, omit_sensory_payload=event.uuid in omitted_sensory))
+                retained_logs, omit_sensory_payload=event.uuid in omitted_sensory, bodies=context.bodies))
     retained = tuple(retained_values)
     retained_root = next(event for event in retained if event.uuid == root.uuid)
     conditions = tuple(fact for _, event in indexed
@@ -1052,7 +1078,7 @@ def _capture_lineage(
         conditions=conditions,
         dispositions=dispositions,
         admissions=admissions,
-        observed_sources=tuple(_retained_event(event, audience)
+        observed_sources=tuple(_retained_event(event, audience, bodies=context.bodies)
             for _, event in indexed
             if event.uuid in observed_source_ids and event.uuid not in retained_ids),
     )

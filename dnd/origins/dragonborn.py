@@ -169,8 +169,8 @@ class DragonbornBreathWeapon(BaseAction):
     ) -> DragonbornBreathWeaponEvent:
         source = Entity.get(self.source_entity_uuid)
         target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid is not None
+            Entity.get(execution_event.target_entity_uuid)
+            if execution_event.target_entity_uuid is not None
             else None
         )
         if not isinstance(source, Entity) or not isinstance(target, Entity):

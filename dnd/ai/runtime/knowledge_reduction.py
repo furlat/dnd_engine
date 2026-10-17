@@ -1,7 +1,8 @@
 """Assignment knowledge reduced from recorded source facts, without world queries."""
 
 from dataclasses import dataclass, field, replace
-from collections.abc import Iterable
+from collections.abc import Iterable, Set as AbstractSet
+from typing import TypeVar
 from uuid import UUID
 
 from dnd.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact, condition_fact
@@ -72,6 +73,20 @@ def project_actor(actor: ActorState, observers: list[str], *, controlled: bool,
     )
 
 
+Key = TypeVar("Key")
+
+
+def _move_observer(index: dict[Key, set[str]], observer: str, old: AbstractSet[Key], new: AbstractSet[Key]) -> None:
+    """Keep one inverted index of an observer's snapshot in step with its change."""
+    for key in old - new:
+        if (observers := index.get(key)) is not None:
+            observers.discard(observer)
+            if not observers:
+                del index[key]
+    for key in new - old:
+        index.setdefault(key, set()).add(observer)
+
+
 @dataclass(slots=True)
 class AIKnowledge:
     """One assignment's current recorded facts and observer-attributed memory."""
@@ -87,6 +102,11 @@ class AIKnowledge:
     known_tiles: dict[str, ObservationTileFact] = field(default_factory=dict)
     pending_conditions: dict[UUID, dict[UUID, ConditionFact]] = field(default_factory=dict)
     open_events: dict[UUID, Event] = field(default_factory=dict)
+    # Inverted views of `senses` (observer uuid strings), updated where a snapshot changes.
+    visible_index: dict[tuple[int, int], set[str]] = field(default_factory=dict)
+    seen_index: dict[tuple[int, int], set[str]] = field(default_factory=dict)
+    entity_index: dict[UUID, set[str]] = field(default_factory=dict)
+    object_index: dict[UUID, set[str]] = field(default_factory=dict)
 
     def consume(self, rows: Iterable[tuple[int, Event, ConditionFact | None]]) -> None:
         """Apply an exact recorded prefix; context/decision authority stays outside."""
@@ -144,6 +164,7 @@ class AIKnowledge:
             before = self.senses.get(event.observer_uuid)
             self.senses[event.observer_uuid] = reduce_senses_snapshot(event.observer_uuid, before, event)
             after = self.senses[event.observer_uuid]
+            self._reindex(str(event.observer_uuid), before, after)
             self._refresh_observer(event.observer_uuid)
             actors = set(event.entity_contacts_changed) | set(event.entity_contacts_removed)
             actors.add(event.observer_uuid)
@@ -170,12 +191,18 @@ class AIKnowledge:
                 self._refresh_entity(identity)
             self._refresh_world(positions, objects)
 
+    def _reindex(self, observer: str, before: SensesSnapshot | None, after: SensesSnapshot) -> None:
+        _move_observer(self.visible_index, observer, before.visible if before else set(), after.visible)
+        _move_observer(self.seen_index, observer, before.seen if before else set(), after.seen)
+        _move_observer(self.entity_index, observer, before.entities.keys() if before else set(), after.entities.keys())
+        _move_observer(self.object_index, observer, before.objects.keys() if before else set(), after.objects.keys())
+
     def _refresh_entity(self, identity: UUID) -> None:
         actor = self.actors.get(identity)
         if actor is None:
             return
-        observer_ids = sorted(str(observer) for observer, senses in self.senses.items()
-                              if observer == identity or identity in senses.entities)
+        observer_ids = sorted(self.entity_index.get(identity, set()) | (
+            {str(identity)} if identity in self.senses else set()))
         controlled = identity in self.controlled_entity_uuids
         if observer_ids or controlled:
             if (own := self.senses.get(identity)) is not None:
@@ -203,7 +230,7 @@ class AIKnowledge:
 
     def _refresh_world(self, positions: set[tuple[int, int]], objects: set[UUID]) -> None:
         for identity in objects:
-            observers = sorted(str(observer) for observer, senses in self.senses.items() if identity in senses.objects)
+            observers = sorted(self.object_index.get(identity, ()))
             if observers:
                 contact = self.senses[UUID(observers[0])].objects[identity]
                 fact = project_object(self.world, identity, contact.position, observers)
@@ -214,8 +241,8 @@ class AIKnowledge:
                     "knowledge_state": KnowledgeState.REMEMBERED, "observer_uuids": [],
                 })
         for position in positions:
-            visible = sorted(str(observer) for observer, senses in self.senses.items() if position in senses.visible)
-            seen = sorted(str(observer) for observer, senses in self.senses.items() if position in senses.seen)
+            visible = sorted(self.visible_index.get(position, ()))
+            seen = sorted(self.seen_index.get(position, ()))
             key = f"{position[0]},{position[1]}"
             if visible:
                 self.known_tiles[key] = project_tile(self.world, position, visible, self.senses)

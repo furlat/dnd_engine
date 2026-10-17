@@ -10,7 +10,8 @@ from collections import OrderedDict
 from uuid import UUID, uuid4
 
 from dnd.action_dispatch import dispatch_available_action
-from dnd.actions_functional import get_available_actions, get_extra_position_options, is_free_aim, preview_available_selection
+from dnd.actions_functional import (get_available_actions, get_extra_position_options, is_free_aim,
+    preview_available_selection, secondary_candidates)
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.ai.runtime.decision_epoch import clear_epoch_value_caches
 from dnd.ai.runtime.subjective_projection import clear_subjective_projection_fact_cache
@@ -420,8 +421,9 @@ def preview_player_selection(session: Session, actor_uuid: UUID, action: Availab
     if key not in cache:
         primary = next((target for target in original.valid_targets if selected and target.index == selected[0].index),
                        selected[0] if selected and is_free_aim(original, selected[0]) else None)
-        pool = (primary.secondary_targets if primary is not None and primary.secondary_targets is not None
-                else original.valid_targets)
+        # The row's targets, then anything else the actor perceives, by the same
+        # numbering preview offers them (secondaries are picked on demand, plan §14.4).
+        pool = secondary_candidates(actor, original, actor.action_scan(subjective=True))
         by_index = {target.index: target for target in pool}
         if any(chosen.index not in by_index for chosen in selected[1:]):
             raise CommandRejected("This allocation is not admitted")
@@ -488,7 +490,7 @@ def execute_player_action(
                     target if is_free_aim(original, target) else None)
     if retained is None:
         raise CommandRejected("selected target does not belong to the discovered action")
-    pool = retained.secondary_targets if retained.secondary_targets is not None else original.valid_targets
+    pool = secondary_candidates(actor, original, actor.action_scan(subjective=True))
     by_uuid = {candidate.target_uuid: candidate for candidate in pool}
     if any(identity not in by_uuid for identity in extra_target_uuids):
         raise CommandRejected("This allocation is not admitted")

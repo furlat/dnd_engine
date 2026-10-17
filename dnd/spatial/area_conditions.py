@@ -57,9 +57,12 @@ class SpatialRemovalPublication:
 class SpatialCondition(BaseCondition):
     """One condition that directly owns its world footprint and mechanics."""
 
-    # None keeps arbitrary crossing predicates global. A declared channel set
-    # promises that only segments touching the committed footprint can block.
-    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = None
+    # The channels whose segments this condition's `blocks_crossing_between` can
+    # block, only where they touch its committed footprint. The base predicate
+    # blocks nothing, so the base declares none; a class that overrides the
+    # predicate declares its own channels (tests/architecture), and None would
+    # make the predicate global (every ray consults it, FOV leaves its sparse path).
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
 
     name: str = Field(default="Spatial Condition")
     content_ref: ContentRef = Field(

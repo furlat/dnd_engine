@@ -81,18 +81,8 @@ class AegisSpark(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Range, visibility, and ally targeting."""
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
-        if caster is None or target is None:
-            return "Aegis Spark caster or target not found"
-        record = scan.creatures.get(target.uuid)
-        if target.uuid != caster.uuid and (record is None or not record.visual):
-            return "Aegis Spark target is not visible"
-        if caster.senses.get_feet_distance(target.position) > self.effective_range:
-            return "Aegis Spark target is out of range"
-        if not caster.is_ally(target):
-            return "Aegis Spark can only target allies"
-        return None
+        return (self.single_recipient_error(scan, selection)
+                or self._target_filter_error(scan, list(selection.target_uuids)))
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply the Aegis Spark condition to the selected target.
@@ -104,7 +94,7 @@ class AegisSpark(SpellAction):
             Completion event after the ward is applied.
         """
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if caster is None or target is None:
             return execution_event.cancel(status_message="Aegis Spark caster or target not found")
 

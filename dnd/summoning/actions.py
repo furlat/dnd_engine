@@ -43,8 +43,8 @@ class DismissSummon(BaseAction):
         return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
-        existence = self._existence(self.target_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        existence = self._existence(execution_event.target_entity_uuid)
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if existence is None or target is None:
             return execution_event.cancel(status_message="Summon control has ended")
         release = existence.terminal_release(SummonDepartureCause.DISMISSED, execution_event.uuid)

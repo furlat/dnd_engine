@@ -1,4 +1,6 @@
 """One real cast selects each branch from the primary, never a nearest-neighbor chain."""
+from dataclasses import replace
+
 import pytest
 
 from dnd.actions import SpellEvent
@@ -32,6 +34,13 @@ def scene():
     reset_engine_runtime()
 
 
+def admitted(caster, row, *targets):
+    """Secondaries are picked by uuid and admitted on demand by the action's rule (plan §14.4)."""
+    template = row.execution_template
+    selection = replace(template.current_selection(), target_uuids=tuple(target.uuid for target in targets))
+    return template.discovery_error(caster.action_scan(subjective=True), selection) is None
+
+
 def choice(caster, target, slot=6):
     row = next(row for row in get_available_actions(caster).entity_actions
                if row.behavior_id == 'spell.chain_lightning' and row.cast_at_level == slot)
@@ -44,9 +53,8 @@ def test_upcast_adds_selected_recipients_not_damage_or_extra_casts(scene, slot):
     caster, (primary, secondary, distant, other) = scene
     row, option = choice(caster, primary, slot)
     assert row.num_projectiles == slot - 2 and row.allow_same_target is False
-    assert option.secondary_targets is not None
-    offered = {target.target_uuid for target in option.secondary_targets}
-    assert secondary.uuid in offered and other.uuid in offered and distant.uuid not in offered and primary.uuid not in offered
+    assert admitted(caster, row, primary, secondary) and admitted(caster, row, primary, other)
+    assert not admitted(caster, row, primary, distant) and not admitted(caster, row, primary, primary)
     hp = {entity.uuid: entity.get_normal_hp() for entity in (primary, secondary, distant, other)}
     cursor = EventQueue.event_cursor()
     with fixed_dice_faces(*([2] * 100)):
@@ -107,8 +115,7 @@ def test_secondary_uses_primary_contact_across_caster_diagonal(scene):
     force_save_result(secondary, 'dexterity', succeeds=False)
     Entity.update_all_entities_senses(max_distance=300)
     row, option = choice(caster, primary)
-    assert option.secondary_targets is not None
-    assert secondary.uuid in {target.target_uuid for target in option.secondary_targets}
+    assert admitted(caster, row, primary, secondary)
     before = primary.get_normal_hp(), secondary.get_normal_hp()
     cursor = EventQueue.event_cursor()
     with fixed_dice_faces(*([2] * 100)):
@@ -135,7 +142,7 @@ def test_ai_receives_and_validates_the_same_primary_dependent_branches(scene):
     state = projector.project_decision(caster, context, reason=DecisionEpochReason.SNAPSHOT)
     row = next(row for row in state.epoch_build.epoch.affordances.all_rows
                if row.targets and row.targets[0].target_uuid == str(primary.uuid)
-               and row.targets[0].secondary_targets is not None)
+               and row.num_projectiles is not None and row.num_projectiles > 1)
     cursor = EventQueue.event_cursor()
     for targets in ((str(distant.uuid),), (str(primary.uuid),), (str(secondary.uuid), str(secondary.uuid))):
         with pytest.raises(AIDecisionValidationError):

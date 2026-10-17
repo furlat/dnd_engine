@@ -578,18 +578,18 @@ class MultiattackAction(BaseAction):
                 "registered_template_uuid":self.registered_template_uuid or self.uuid}) for variant in tuple(variants)]
         return variants
 
-    def _selected_attacks(self) -> list[Attack]:
+    def _selected_attacks(self, target_uuid: Optional[UUID]) -> list[Attack]:
         result: list[Attack] = []
         replacement = self.attack_replacement if self.use_attack_substitution else None
         for entry_index, (slot,count) in enumerate(self.attack_sequence):
             for attack_index in range(count):
                 if replacement is not None and entry_index == replacement.sequence_index and attack_index < replacement.max_replacements:
                     result.append(replacement.action.model_copy(deep=True,update={"uuid":uuid4(),
-                        "source_entity_uuid":self.source_entity_uuid,"target_entity_uuid":self.target_entity_uuid,
+                        "source_entity_uuid":self.source_entity_uuid,"target_entity_uuid":target_uuid,
                         "costs":[],"template":False,"use_register":False}))
                 else:
                     result.append(Attack(name=f"{self.name}: Attack",source_entity_uuid=self.source_entity_uuid,
-                        target_entity_uuid=self.target_entity_uuid,weapon_slot=slot,costs=[],use_register=False,
+                        target_entity_uuid=target_uuid,weapon_slot=slot,costs=[],use_register=False,
                         behavior_binding=BehaviorBinding(behavior_id="action.attack",
                             provided_by_id="action.monster.multiattack", runtime_owner_uuid=self.source_entity_uuid)))
         return result
@@ -601,7 +601,7 @@ class MultiattackAction(BaseAction):
         if actor is None:
             return None
         profiles: list[ActionOutcomeProfile] = []
-        for attack in self._selected_attacks():
+        for attack in self._selected_attacks(self.target_entity_uuid):
             profile = attack.get_outcome_profile()
             if profile is None:
                 return None
@@ -617,33 +617,30 @@ class MultiattackAction(BaseAction):
             "applications": len(profiles),
         })
 
-    def physical_access_error(self, *, subjective: bool = False) -> Optional[str]:
-        for slot, count in self.attack_sequence:
-            if count <= 0:
-                continue
-            attack = Attack(source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid, weapon_slot=slot,
-                costs=[], use_register=False)
-            if attack.validate_requirements_for_discovery(subjective=subjective):
-                return None
-        return "No legal attacks for Multiattack"
-
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """An available substitution, and some attack of the sequence that is legal against the target."""
         actor = Entity.get(self.source_entity_uuid)
         if actor is None:
             return "Multiattack actor missing"
         if self.use_attack_substitution and not self._substitution_available(actor):
             return "Selected Multiattack substitution unavailable"
-        return None
+        for slot, count in self.attack_sequence:
+            if count <= 0:
+                continue
+            attack = Attack(source_entity_uuid=self.source_entity_uuid, weapon_slot=slot, costs=[], use_register=False)
+            sub_selection = ActionSelection(template_uuid=attack.uuid, target_uuids=selection.target_uuids[:1])
+            if attack._requirements_error(scan, sub_selection) is None:
+                return None
+        return "No legal attacks for Multiattack"
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         actor = Entity.get(self.source_entity_uuid)
-        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = BaseBlock.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if actor is None or not isinstance(target, (Entity, BaseItem)):
             return execution_event.cancel(status_message="Multiattack actor or target missing")
         effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} uses {self.name}")
         if effect_event.canceled:return effect_event
-        for attack in self._selected_attacks():
+        for attack in self._selected_attacks(target.uuid):
             if target.get_hp() <= 0:
                 break
             if attack.pre_validate():

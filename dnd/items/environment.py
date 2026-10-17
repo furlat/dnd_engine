@@ -7,7 +7,7 @@ from pydantic import Field, PrivateAttr
 
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.core.action_types import ActionSelection
-from dnd.core.base_actions import BaseAction, ActionEvent, Cost, TargetType
+from dnd.core.base_actions import BaseAction, ActionEvent, Cost, TargetType, cell_occupied
 from dnd.core.base_block import BaseBlock
 from dnd.core.item_types import DoorMechanism, DoorSwing, ItemDestructionProfile, ItemIntegrity
 from dnd.core.events import Event, EventPhase, EventQueue, EventType, SpatialHandler
@@ -195,7 +195,8 @@ class CloseDirectionalDoorAction(BaseAction):
             return "Door not found"
         if not door.is_open:
             return "Door already closed"
-        if door._doorway_occupied():
+        position = get_map().get_object_position(door.uuid)
+        if position is not None and cell_occupied(scan, position):
             return "Can't close door - someone is standing in the doorway"
         return None
 

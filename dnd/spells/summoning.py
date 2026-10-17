@@ -43,7 +43,7 @@ class SummonSpell(SpellAction):
         return EventQueue.preflight(SummonAdmissionEvent(source_entity_uuid=self.source_entity_uuid,
             selection=self.selection(), subjective=subjective))
 
-    def position_placement_error(self, *, subjective: bool = False) -> str | None:
+    def handler_admission_error(self, *, subjective: bool) -> str | None:
         try:
             proposal = self.admission(subjective=subjective)
         except ValueError as error:

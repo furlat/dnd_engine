@@ -73,6 +73,23 @@ def test_shared_light_contact_ties_and_member_reset_keep_other_evidence():
     assert current.view.visible == {(0, 0), (2, 0)}
 
 
+def test_owner_handover_matches_the_cold_composition():
+    """A cell's composed light follows its brightest member as members change and leave."""
+    dim, bright = LightLevel.DIM_LIGHT.value, LightLevel.BRIGHT_LIGHT.value
+    current = check([
+        (0, delta(FIRST, initial=True, visible_cells_added=[(0, 0), (1, 0)],
+            effective_light_levels_changed={'0,0': dim, '1,0': dim})),
+        (1, delta(SECOND, initial=True, visible_cells_added=[(0, 0), (1, 0)],
+            effective_light_levels_changed={'0,0': bright, '1,0': bright})),
+        (2, delta(FIRST, effective_light_levels_changed={'0,0': LightLevel.DARKNESS.value})),
+        (3, delta(SECOND, visible_cells_removed=[(0, 0)])),
+        (4, delta(FIRST, visible_cells_removed=[(1, 0)])),
+        (5, delta(SECOND, initial=True, visible_cells_added=[(0, 0)],
+            effective_light_levels_changed={'0,0': dim})),
+    ])
+    assert current.view.visible == {(0, 0)}
+
+
 def test_empty_delta_renews_absence_against_older_positive_evidence():
     current = check([
         (0, delta(FIRST, initial=True, visible_cells_added=[(0, 0)],

@@ -107,56 +107,9 @@ from dnd.types.spatial_effects import (
     SpatialEffectTriggerKind,
 )
 from dnd.spells.content_metadata import srd_condition_identity, srd_action_identity, srd_spell_identity
-from dnd.spells.spell_utils import deliver_spell_damage, spell_valid_positions, fire_heal_roll_result
+from dnd.spells.spell_utils import (deliver_spell_damage, spell_valid_positions, fire_heal_roll_result,
+    living_recipients_error, placement_error, seen_point_error, selected_cast_level, target_count_error)
 from dnd.types.discovery import ActorScan
-
-
-def _seen_recipient_error(action: SpellAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-    """The one selected creature: the caster when allowed, otherwise seen and within spell range."""
-    if not selection.target_uuids:
-        return "Caster or target not found"
-    identity = selection.target_uuids[0]
-    if identity == scan.actor_uuid:
-        return None if action.include_self else "This spell does not allow self targeting"
-    record = scan.creatures.get(identity)
-    if record is None or not record.visual:
-        return f"Target entity not in line of sight for {action.name}"
-    if action.get_target_distance(record.facts.position) > action.effective_range:
-        return "Target is out of spell range"
-    return None
-
-
-def _living_recipients_error(action: SpellAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-    """Every selected recipient alive, passing the relationship filter, seen (or the caster) and in range."""
-    if not selection.target_uuids:
-        return "Recipient absent"
-    error = action._target_filter_error(scan, list(selection.target_uuids))
-    if error is not None:
-        return error
-    for identity in selection.target_uuids:
-        target = Entity.get(identity)
-        if target is None or target.health.life_state is LifeState.DEAD:
-            return "Living recipient required"
-        if identity == scan.actor_uuid:
-            if not action.include_self:
-                return "Self targeting is not allowed"
-        elif (record := scan.creatures.get(identity)) is None or not record.visual:
-            return "Recipient must be visible"
-        if (error := action.target_position_error(target.position)) is not None:
-            return error
-    return None
-
-
-def _placement_error(action: SpellAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-    """An existing tile within range, visible unless it is the caster's own."""
-    position = selection.positions[0] if selection.positions else None
-    if position is None or not get_map().has_tile(*position):
-        return "Choose an existing spell placement"
-    if (error := action.target_position_error(position)) is not None:
-        return error
-    if position != scan.position and position not in scan.visible:
-        return "Choose a visible spell placement"
-    return None
 
 
 SPIKE_GROWTH_ZONE_CONTENT_REF = ContentRef(
@@ -303,15 +256,7 @@ class SpikeGrowth(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Validate target position is in range and visible."""
-        if not selection.positions:
-            return "No target position specified"
-        target_pos = selection.positions[0]
-        if target_pos not in scan.visible:
-            return f"Position {target_pos} not visible"
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return f"Position out of range ({distance}ft > {self.effective_range}ft)"
-        return None
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Cast Spike Growth - create zone and apply concentration."""
@@ -567,20 +512,12 @@ class Slow(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Validate target position is in LOS and range."""
-        if not selection.positions:
-            return "No target position"
-        target_pos = selection.positions[0]
-        if target_pos not in scan.visible:
-            return f"Position {target_pos} not in LOS"
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return f"Out of range ({distance}ft)"
-        return None
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Slow to current target (called per target via convolution)."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -595,7 +532,7 @@ class Slow(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "wisdom").normalized_score
+        save_bonus = save_roll.bonus  # the bonus the save applied
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -823,21 +760,12 @@ class Haste(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Validate target is in LOS and range."""
-        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
-        if not target:
-            return "No target"
-        record = scan.creatures.get(target.uuid)
-        if target.uuid != scan.actor_uuid and (record is None or not record.visual):
-            return f"{target.name} not visible"
-        distance = self.get_target_distance(target.position)
-        if distance > self.effective_range:
-            return f"Out of range ({distance}ft)"
-        return None
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Haste to the target."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -953,7 +881,7 @@ class DarkvisionSpell(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -1015,15 +943,10 @@ class Disintegrate(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """A seen creature in range, or an active, reachable, seen, nonmagical placed object."""
+        error = self.single_recipient_error(scan, selection)
         recipient = BaseBlock.get(selection.target_uuids[0]) if selection.target_uuids else None
-        if not isinstance(recipient, BaseItem):
-            return _seen_recipient_error(self, scan, selection)
-        if not recipient.is_active:
-            return "This spell cannot target this object"
-        if get_map().attack_object_contact(scan.actor_uuid, recipient.uuid,
-                range_feet=self.effective_range, access=self.get_physical_access() or PhysicalAccess.PROJECTILE,
-                subjective=True, origin=self.get_target_origin()) is None:
-            return "Object is out of spell reach"
+        if error is not None or not isinstance(recipient, BaseItem):
+            return error
         source = Entity.get(self.source_entity_uuid)
         contact = source.senses.objects.get(recipient.uuid) if source is not None else None
         if contact is None or not contact.visual:
@@ -1031,7 +954,7 @@ class Disintegrate(SpellAction):
         return recipient.disintegration_error()
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        recipient = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        recipient = BaseBlock.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if isinstance(recipient, BaseItem):
             effect = execution_event.phase_to(EventPhase.EFFECT)
             if effect.canceled:
@@ -1039,7 +962,7 @@ class Disintegrate(SpellAction):
             return (effect.with_updates(status_message=f"{recipient.name} disintegrated")
                     if recipient.disintegrate(effect) else effect.cancel(status_message="Object retirement was refused"))
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -1154,20 +1077,11 @@ class JumpSpell(SpellAction):
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
-        if not target:
-            return "Caster or target not found"
-        record = scan.creatures.get(target.uuid)
-        if target.uuid != scan.actor_uuid and (record is None or not record.visual):
-            return "Target not visible"
-        distance = self.get_target_distance(target.position)
-        if distance > self.effective_range:
-            return f"Target out of touch range ({distance}ft)"
-        return None
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -1396,33 +1310,22 @@ class EnhanceAbility(SpellAction):
     def _create_declaration_event(
         self, parent_event: Optional[Event] = None, use_register: bool = True,
     ) -> Optional[Event]:
+        """An absent or missing recipient defaults to the caster, before the declaration names it."""
+        if self.target_entity_uuid is None or Entity.get(self.target_entity_uuid) is None:
+            self.target_entity_uuid = self.source_entity_uuid
         event = super()._create_declaration_event(parent_event, use_register)
         if isinstance(event, SpellEvent):
             event.effect_id = f"support.enhance_ability.{self.enhance_ability_type}"
         return event
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        if not target:
-            target = caster
-            self.target_entity_uuid = caster.uuid
-
-        if target.uuid != caster.uuid:
-            distance = self.get_target_distance(target.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Touch range for the recipient; no recipient means the caster."""
+        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
+        return self.target_position_error(target.position) if target is not None else None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else caster
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
@@ -1565,17 +1468,11 @@ class EnlargeReduce(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
-        if not target:
-            return "No target specified"
-        if target.uuid != scan.actor_uuid:
-            distance = self.get_target_distance(target.position)
-            if distance > self.effective_range:
-                return f"Target out of range ({distance}ft)"
-        return None
+        return self.target_position_error(target.position) if target is not None else "No target specified"
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
@@ -1793,7 +1690,7 @@ class TelekinesisMove(BaseAction):
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if caster is None or target is None or self.end_position is None:
             return execution_event.cancel(status_message="Creature or destination no longer available")
         effect = execution_event.phase_to(EventPhase.EFFECT)
@@ -1847,7 +1744,7 @@ class Telekinesis(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if caster is None or target is None or self.end_position is None:
             return execution_event.cancel(status_message="Creature or destination no longer available")
         effect = execution_event.phase_to(EventPhase.EFFECT)
@@ -1955,20 +1852,11 @@ class Regenerate(SpellAction):
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
-        if not target:
-            return "Caster or target not found"
-        record = scan.creatures.get(target.uuid)
-        if target.uuid != scan.actor_uuid and (record is None or not record.visual):
-            return "Target not in line of sight"
-        distance = self.get_target_distance(target.position)
-        if distance > self.effective_range:
-            return f"Out of range ({distance}ft > {self.effective_range}ft)"
-        return None
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
@@ -2047,15 +1935,12 @@ class Longstrider(SpellAction):
         return self.alt_target_count or max(1, self.cast_at_level)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        level = selection.cast_at_level if selection.cast_at_level is not None else self.cast_at_level
-        if len(selection.target_uuids) > (self.alt_target_count or max(1, level)):
-            return "Too many recipients for this Longstrider slot"
-        return None
+        return target_count_error(self, selection, self.alt_target_count or max(1, selected_cast_level(self, selection)))
 
     def _apply(self, event: SpellEvent):
         effect_event = event.phase_to(EventPhase.EFFECT)
         return self.apply_owned_condition( effect_event, LongstriderEffect(
-            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid))
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=event.target_entity_uuid))
 
 
 class BarkskinEffect(BaseCondition):
@@ -2089,7 +1974,7 @@ class Barkskin(SpellAction):
 
     def _apply(self, event: SpellEvent):
         return self.apply_owned_condition( event.phase_to(EventPhase.EFFECT), BarkskinEffect(
-            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid))
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=event.target_entity_uuid))
 
 
 class FlyEffect(BaseCondition):
@@ -2134,7 +2019,7 @@ class Fly(SpellAction):
 
     def _apply(self, event: SpellEvent):
         return self.apply_owned_condition( event.phase_to(EventPhase.EFFECT), FlyEffect(
-            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid))
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=event.target_entity_uuid))
 
 
 class ShillelaghEffect(BaseCondition):
@@ -2303,8 +2188,8 @@ class MagicWeapon(SpellAction):
         return spell_condition_profile(self,actor,key="magic_weapon",condition_type=MagicWeaponEffect,beneficial=True,
             save_ability=None,fact=None,)
 
-    def _selected_weapon(self) -> Weapon | None:
-        recipient=Entity.get(self.target_entity_uuid or self.source_entity_uuid)
+    def _selected_weapon(self, recipient_uuid: UUID | None) -> Weapon | None:
+        recipient=Entity.get(recipient_uuid or self.source_entity_uuid)
         return recipient.equipment.get_weapon(self.weapon_slot) if recipient is not None else None
 
     def get_variant_facets(self):
@@ -2315,18 +2200,23 @@ class MagicWeapon(SpellAction):
         return [variant.model_copy(update={"uuid":uuid4(),"weapon_slot":slot})
             for variant in super().get_discovery_variants(entity) for slot in WeaponSlot]
 
-    def _validate(self,event: SpellEvent):
-        checked=self.validate_single_recipient(event)
-        if checked is None or checked.canceled:
-            return checked
-        weapon=self._selected_weapon()
+    def _create_declaration_event(self,parent_event: Event | None=None,use_register: bool=True):
+        event=super()._create_declaration_event(parent_event,use_register)
+        weapon=self._selected_weapon(self.target_entity_uuid)
+        self.selected_weapon_uuid=weapon.uuid if weapon is not None else None
+        return event
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        error=self.single_recipient_error(scan, selection)
+        if error is not None:
+            return error
+        weapon=self._selected_weapon(selection.target_uuids[0])
         if weapon is None or weapon.is_body_attack:
-            return event.cancel(status_message="Selected recipient must hold an eligible weapon")
-        self.selected_weapon_uuid=weapon.uuid
-        return checked.phase_to(EventPhase.EXECUTION)
+            return "Selected recipient must hold an eligible weapon"
+        return None
 
     def _apply(self,event: SpellEvent):
-        weapon=self._selected_weapon()
+        weapon=self._selected_weapon(event.target_entity_uuid)
         if weapon is None or weapon.uuid!=self.selected_weapon_uuid:
             return event.cancel(status_message="Exact selected weapon is no longer held")
         return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),MagicWeaponEffect(
@@ -2367,7 +2257,7 @@ class PlantGrowth(SpellAction):
         return spell_valid_positions(self)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _placement_error(self, scan, selection)
+        return placement_error(self, scan, selection)
 
     def _apply(self,event: SpellEvent):
         caster=Entity.get(self.source_entity_uuid)
@@ -2433,13 +2323,13 @@ class CreateOrDestroyWater(SpellAction):
         return spell_valid_positions(self)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _placement_error(self, scan, selection)
+        return placement_error(self, scan, selection)
 
     def _apply(self,event: SpellEvent):
         effect=event.phase_to(EventPhase.EFFECT)
         if effect.canceled:
             return effect
-        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         if self.mode=="create" and target is not None:
             target.add_condition(RainWetEffect(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,
                 source_spatial_condition_uuid=event.lineage_uuid),parent_event=effect)
@@ -2526,7 +2416,7 @@ class ExhaleDragonsBreath(SpellAction):
         if not self._grant_active():
             return event.cancel(status_message="Dragon's Breath grant has ended or is suppressed")
         caster=Entity.get(self.original_caster_uuid)
-        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         if caster is None or target is None:
             return event.cancel(status_message="Breath source or recipient is absent")
         effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="dexterity",dc=self.spell_dc)
@@ -2576,11 +2466,11 @@ class DragonsBreath(SpellAction):
         recipient=Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if caster is None or recipient is None or (recipient.uuid!=caster.uuid and not caster.is_ally(recipient)):
             return "Choose yourself or a willing ally"
-        return _seen_recipient_error(self, scan, selection)
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self,event: SpellEvent):
         caster=Entity.get(self.source_entity_uuid)
-        recipient=Entity.get(self.target_entity_uuid or self.source_entity_uuid)
+        recipient=Entity.get(event.target_entity_uuid or self.source_entity_uuid)
         if caster is None or recipient is None:
             return event.cancel(status_message="Breath recipient is absent")
         marker=DragonsBreathEffect(source_entity_uuid=caster.uuid,target_entity_uuid=recipient.uuid,
@@ -2619,7 +2509,7 @@ class Goodberry(SpellAction):
         recipient=Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if caster is None or recipient is None or (recipient.uuid!=caster.uuid and not caster.is_ally(recipient)):
             return "Choose yourself or a willing ally"
-        return _seen_recipient_error(self, scan, selection)
+        return self.single_recipient_error(scan, selection)
 
     def _apply_costs(self,event):
         recipient=Entity.get(self.target_entity_uuid or self.source_entity_uuid)
@@ -2630,7 +2520,7 @@ class Goodberry(SpellAction):
 
     def _apply(self,event: SpellEvent):
         caster=Entity.get(self.source_entity_uuid)
-        recipient=Entity.get(self.target_entity_uuid or self.source_entity_uuid)
+        recipient=Entity.get(event.target_entity_uuid or self.source_entity_uuid)
         if caster is None or recipient is None or not recipient.inventory.can_add_all(self._berries):
             return event.cancel(status_message="Berry inventory admission changed")
         batch=GoodberryBatch(source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid,
@@ -2723,11 +2613,11 @@ class FleshToStone(SpellAction):
         if target is not None and (target.flesh_body is False or target.flesh_body is None and
                 target.creature_type in {CreatureType.CONSTRUCT, CreatureType.ELEMENTAL, CreatureType.PLANT, CreatureType.OOZE, CreatureType.UNDEAD}):
             return "Target has no flesh to petrify"
-        return _living_recipients_error(self, scan, selection)
+        return living_recipients_error(self, scan, selection.target_uuids)
 
     def _apply(self, event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         if caster is None or target is None: return event.cancel(status_message="Petrification recipient absent")
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         effect, _, saved = self.resolve_saving_throw(event, caster=caster, target=target, ability_name="constitution", dc=dc)

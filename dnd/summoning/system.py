@@ -81,7 +81,7 @@ class SummoningSystem:
             {EventType.CONDITION_REMOVAL, EventType.TAKE_DAMAGE, EventType.DEATH, EventType.INSTANT_DEATH})
         game.add_close_callback(self.close)
 
-    def placement_error(self, caster_uuid: UUID, selection: SummonSelection, *, subjective: bool) -> str | None:
+    def summon_placement_error(self, caster_uuid: UUID, selection: SummonSelection, *, subjective: bool) -> str | None:
         """Validate the chosen creature and its one destination without allocating it."""
         try:
             selected_form(selection)
@@ -112,7 +112,7 @@ class SummoningSystem:
         del source_uuid
         if not isinstance(event, SummonAdmissionEvent) or event.source_entity_uuid not in self.game.entities:
             return None
-        error = self.placement_error(event.source_entity_uuid, event.selection, subjective=event.subjective)
+        error = self.summon_placement_error(event.source_entity_uuid, event.selection, subjective=event.subjective)
         return event.cancel(status_message=error) if error else event.model_copy(update={"binding_uuid": self.uuid})
 
     def _cast(self, event: Event, source_uuid: UUID) -> Event | None:
@@ -127,7 +127,7 @@ class SummoningSystem:
         action = SpellAction.get(application.action_uuid)
         if not isinstance(action, SpellAction) or action.source_entity_uuid != event.source_entity_uuid:
             raise RuntimeError("Summon effect has no exact live executable spell")
-        error = self.placement_error(event.source_entity_uuid, application.selection, subjective=False)
+        error = self.summon_placement_error(event.source_entity_uuid, application.selection, subjective=False)
         if error:
             return event.cancel(status_message=error)
         if not self.create_summon(application.selection, parent_event=event,
@@ -151,7 +151,7 @@ class SummoningSystem:
             raise ValueError("Authored sustain requires a concentration-capable action")
         if concentration_action is not None and concentration_action.source_entity_uuid != parent_event.source_entity_uuid:
             raise ValueError("Sustainer action must belong to the creating source")
-        if self.placement_error(parent_event.source_entity_uuid, selection, subjective=False):
+        if self.summon_placement_error(parent_event.source_entity_uuid, selection, subjective=False):
             return False
         prepared = self._prepare(selection, concentration_action, parent_event, rules)
         if prepared is None:
@@ -244,7 +244,7 @@ class SummoningSystem:
                 shared_resistance=admitted_resistance
                 existence.add_linked_condition(caster.uuid,resistance.uuid)
             birth = entity.prepare_birth(initial_conditions=initial, parent_event=event, summon_origin=origin)
-            error = self.placement_error(caster.uuid, selection, subjective=False)
+            error = self.summon_placement_error(caster.uuid, selection, subjective=False)
             if error:
                 raise ValueError(error)
             self.game.validate_prepared_deployment(deployment)

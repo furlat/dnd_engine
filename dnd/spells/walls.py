@@ -241,7 +241,7 @@ class WallOfFire(SpellAction):
         return self.wall_geometry()
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
-        return self._placement_error(selection, subjective=False)
+        return self._placement_error(selection, subjective=scan.subjective)
 
     def _placement_error(self, selection: ActionSelection, *, subjective: bool) -> str | None:
         caster = Entity.get(self.source_entity_uuid)

@@ -32,7 +32,7 @@ from dnd.types.event_facts import HandlerGroupDispatch
 from dnd.core.events import (
     Event, EventPhase, EventType,
     Trigger, EventHandler,
-    DamageAppliedEvent, RangeType, TakeDamageEvent, SkillCheckEvent
+    DamageAppliedEvent, Range, RangeType, TakeDamageEvent, SkillCheckEvent
 )
 from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.modifiers import (
@@ -52,6 +52,7 @@ from pydantic import Field
 from typing import Any, Optional, List, Tuple, cast
 from dnd.core.action_types import ActionSelection
 from dnd.types.discovery import ActorScan
+from dnd.spells.spell_utils import seen_recipients_error
 from uuid import UUID, uuid4
 from functools import partial
 
@@ -1361,36 +1362,24 @@ class IntimidatingPresence(BaseAction):
                 return True
         return False
 
+    def get_range(self) -> Range:
+        return Range(type=RangeType.RANGE, normal=30)
+
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return "Entity not found"
-
-        if not selection.target_uuids:
-            return "No target specified"
-
+        """A seen creature within 30 feet that has not resisted this barbarian in the last 24 hours."""
+        error = seen_recipients_error(self, scan, selection.target_uuids)
+        if error is not None:
+            return error
         target = Entity.get(selection.target_uuids[0])
-        if not target:
-            return "Target not found"
-
-        distance = grid_distance_feet(entity.position, target.position)
-        if distance > 30:
-            return "Target beyond 30ft"
-
-        record = scan.creatures.get(target.uuid)
-        if record is None or not record.visual:
-            return "Target not visible"
-
-        if self._is_target_immune(target):
+        if target is not None and self._is_target_immune(target):
             return "Target is immune (saved within 24h)"
-
         return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
-        if not entity or not target or not self.target_entity_uuid:
+        if not entity or not target:
             return execution_event.cancel(status_message="Entity or target not found")
 
         proficiency = entity.proficiency_bonus.normalized_score
@@ -1398,7 +1387,7 @@ class IntimidatingPresence(BaseAction):
         dc = 8 + proficiency + cha_mod
 
         request = entity.create_saving_throw_request(
-            target_entity_uuid=self.target_entity_uuid,
+            target_entity_uuid=target.uuid,
             ability_name="wisdom",
             dc=dc
         )
@@ -1407,7 +1396,7 @@ class IntimidatingPresence(BaseAction):
         if success:
             immunity = IntimidatingPresenceImmunity(
                 source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid
+                target_entity_uuid=target.uuid
             )
             target.add_condition(immunity, parent_event=execution_event)
 
@@ -1418,7 +1407,7 @@ class IntimidatingPresence(BaseAction):
         else:
             frightened = Frightened(
                 source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid
+                target_entity_uuid=target.uuid
             )
             frightened.duration.duration_type = DurationType.ROUNDS
             frightened.duration.duration = 1
@@ -1426,7 +1415,7 @@ class IntimidatingPresence(BaseAction):
             target.add_condition(frightened, parent_event=execution_event)
 
             end_handler = create_intimidating_presence_end_handler(
-                source_entity_uuid=self.target_entity_uuid,
+                source_entity_uuid=target.uuid,
                 barbarian_uuid=self.source_entity_uuid
             )
             target.add_event_handler(end_handler)
@@ -1504,34 +1493,22 @@ class ExtendIntimidatingPresence(BaseAction):
             return False
         return frightened.source_entity_uuid == self.source_entity_uuid
 
+    def get_range(self) -> Range:
+        return Range(type=RangeType.RANGE, normal=30)
+
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return "Entity not found"
-
-        if not selection.target_uuids:
-            return "No target specified"
-
+        """A seen creature within 30 feet that this barbarian frightens."""
+        error = seen_recipients_error(self, scan, selection.target_uuids)
+        if error is not None:
+            return error
         target = Entity.get(selection.target_uuids[0])
-        if not target:
-            return "Target not found"
-
-        distance = grid_distance_feet(entity.position, target.position)
-        if distance > 30:
-            return "Target beyond 30ft"
-
-        record = scan.creatures.get(target.uuid)
-        if record is None or not record.visual:
-            return "Target not visible"
-
-        if not self._is_frightened_by_me(target):
+        if target is not None and not self._is_frightened_by_me(target):
             return "Target not frightened by you"
-
         return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not entity or not target:
             return execution_event.cancel(status_message="Entity or target not found")

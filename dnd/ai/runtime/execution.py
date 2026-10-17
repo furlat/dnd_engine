@@ -7,7 +7,7 @@ from typing import Callable
 from uuid import UUID
 
 from dnd.action_dispatch import ActionDispatchResult, dispatch_available_action
-from dnd.actions_functional import get_extra_position_options
+from dnd.actions_functional import get_extra_position_options, validated_extra_target_uuids
 from dnd.ai.contracts.control import ActionAffordance, END_TURN_ROW_ID
 from dnd.ai.contracts.decision import EndTurnIntent, ExecuteIntent, PolicyIntent
 from dnd.ai.contracts.observation import SubjectiveWorldState
@@ -162,6 +162,12 @@ def validate_policy_intent(
         extra_targets = affordance.validated_extra_target_uuids(
             intent.extra_target_uuids
         )
+        actor = Entity.get(UUID(epoch.actor_uuid))
+        if extra_targets and actor is not None:
+            # The whole allocation passes the action's own admission on the actor's
+            # perceived scan, the same check Command makes (plan §14.3b).
+            validated_extra_target_uuids(binding.action_info, binding.target,
+                                         list(extra_targets), actor.action_scan(subjective=True))
     except ValueError as error:
         raise AIDecisionValidationError(
             str(error),

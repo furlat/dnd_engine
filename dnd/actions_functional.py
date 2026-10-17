@@ -5,6 +5,7 @@ The functional layer keeps action construction and execution routes out of
 with registered templates manually.
 """
 
+from dataclasses import replace
 from typing import Any, Callable, Dict, Optional, List, Tuple, cast
 from uuid import UUID, uuid4
 
@@ -24,6 +25,7 @@ from dnd.blocks.equipment import Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.core.equipment_types import WeaponSlot
 from dnd.types.world import MovementMode
 from dnd.core.action_types import ActionAffordance
+from dnd.types.discovery import ActorScan
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.entity import Entity
 from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, AllyHelp, Hide, Attack, Jump, Shove, PickUp, Drop, SpellAction, TraverseConnector
@@ -514,12 +516,17 @@ def get_extra_position_options(
     return template.get_valid_extra_target_positions(target.position, extra_target_positions or ())
 
 
-def _validated_extra_target_uuids(
+def validated_extra_target_uuids(
     action_info: AvailableActionInfo,
     primary_target: AvailableTarget,
     extra_target_uuids: Optional[List[str]],
+    scan: ActorScan,
 ) -> List[UUID]:
-    """Validate additional targets against one exact engine discovery row."""
+    """Validate additional targets against one exact engine discovery row.
+
+    Membership in the row's pool is the shape check; the complete allocation
+    then passes the action's own admission on the actor's perceived scan.
+    """
     if not extra_target_uuids:
         return []
     if action_info.target_type != TargetType.MULTI_ENTITY or action_info.num_projectiles is None:
@@ -530,12 +537,10 @@ def _validated_extra_target_uuids(
         selected = [UUID(target_uuid) for target_uuid in extra_target_uuids]
     except ValueError as exc:
         raise ValueError("Additional target UUID is invalid") from exc
-    legal_target_uuids = {
-        target.target_uuid
-        for target in (primary_target.secondary_targets if primary_target.secondary_targets is not None
-                       else action_info.valid_targets)
-        if target.target_uuid is not None
-    }
+    # Secondary recipients are any listed target or anything the actor perceives,
+    # picked by uuid (plan §14.1, §14.4); the admission below decides legality.
+    legal_target_uuids = {target.target_uuid for target in action_info.valid_targets if target.target_uuid is not None}
+    legal_target_uuids.update(scan.creatures, scan.objects, (scan.actor_uuid,))
     if any(target_uuid not in legal_target_uuids for target_uuid in selected):
         raise ValueError("Additional target is absent from the discovered target options")
     allocation = [
@@ -544,7 +549,28 @@ def _validated_extra_target_uuids(
     ]
     if action_info.allow_same_target is False and len(set(allocation)) != len(allocation):
         raise ValueError("Action requires unique target allocation")
+    template = action_info.execution_template
+    if template is not None:
+        reason = template.discovery_error(scan, replace(template.current_selection(), target_uuids=tuple(allocation)))
+        if reason is not None:
+            raise ValueError(reason)
     return selected
+
+
+def secondary_candidates(entity: Entity, action_info: AvailableActionInfo, scan: ActorScan) -> List[AvailableTarget]:
+    """The row's listed targets, then every other creature and object the actor perceives (one primary's preview)."""
+    listed = list(action_info.valid_targets)
+    known = {target.target_uuid for target in listed}
+    for kind, records in (("creature", scan.creatures), ("object", scan.objects)):
+        for identity in sorted(records, key=str):
+            if identity in known:
+                continue
+            block = BaseBlock.get(identity)
+            position = records[identity].position
+            listed.append(AvailableTarget(index=len(listed), target_uuid=identity, target_kind=kind,
+                target_name=block.name if block is not None else None, position=position,
+                distance=entity.senses.get_feet_distance(position)))
+    return listed
 
 
 def free_aim_target(action_info: AvailableActionInfo, position: Tuple[int, int]) -> AvailableTarget:
@@ -570,11 +596,12 @@ def execute_available_action(
     extra_target_positions: Optional[List[Tuple[int, int]]] = None,
 ) -> Optional[Event]:
     """Execute one exact discovery row without name lookup or target mutation."""
-    validated_extras = _validated_extra_target_uuids(
+    validated_extras = validated_extra_target_uuids(
         action_info,
         target,
         extra_target_uuids,
-    )
+        entity.action_scan(subjective=True),
+    ) if extra_target_uuids else []
     bound_target = target.model_copy(
         deep=True,
         update={"extra_target_uuids": validated_extras or None},
@@ -636,8 +663,9 @@ def preview_available_selection(
     if template is None:
         raise ValueError("Selection preview requires the original discovery row")
     try:
-        extras = _validated_extra_target_uuids(action_info, primary,
-            [str(target.target_uuid) for target in selected_targets[1:]])
+        scan = entity.action_scan(subjective=True)
+        extras = validated_extra_target_uuids(action_info, primary,
+            [str(target.target_uuid) for target in selected_targets[1:]], scan)
         if action_info.target_type is not TargetType.MULTI_ENTITY and len(selected_targets) != 1:
             raise ValueError("This action selects one target")
         selection = template.get_position_selection()
@@ -651,18 +679,15 @@ def preview_available_selection(
             update.update(end_position=extra_target_positions[0] if extra_target_positions else None,
                           extra_target_positions=[])
         bound = template.model_copy(deep=False, update=update)
-        reason = bound.selection_preview_error()
-        if reason is None and free_aim:
-            # A free aim was never listed: preview checks it through the one admission path.
-            reason = template.discovery_error(entity.action_scan(), bound.current_selection())
-        pool = (primary.secondary_targets if primary.secondary_targets is not None
-                else action_info.valid_targets)
+        # Preview admits the whole selection through the one admission path (plan §14.3b).
+        reason = bound.selection_preview_error() or template.discovery_error(scan, bound.current_selection())
+        pool = secondary_candidates(entity, action_info, scan)
         next_targets: list[AvailableTarget] = []
         if action_info.target_type is TargetType.MULTI_ENTITY and len(selected_targets) < (action_info.num_projectiles or 1):
             for candidate in pool:
                 try:
-                    candidate_extras = _validated_extra_target_uuids(action_info, primary,
-                        [str(target.target_uuid) for target in (*selected_targets[1:], candidate)])
+                    candidate_extras = validated_extra_target_uuids(action_info, primary,
+                        [str(target.target_uuid) for target in (*selected_targets[1:], candidate)], scan)
                 except ValueError:
                     continue
                 proposal = bound.model_copy(deep=False, update={"extra_target_entity_uuids": candidate_extras})

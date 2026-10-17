@@ -1259,19 +1259,6 @@ class TraverseConnector(BaseAction):
     costs: List[Cost] = Field(default_factory=list)
     connector_traversal: Optional[ConnectorTraversalDiscovery] = None
 
-    def physical_access_error(self, *, subjective: bool = False) -> Optional[str]:
-        source = Entity.get(self.source_entity_uuid)
-        discovery = self.connector_traversal
-        if source is None or discovery is None:
-            return "Connector traversal requires a current selection"
-        connector = get_map().get_connector(discovery.command.connector_uuid)
-        if connector is None or get_map().connector_movement_cost(
-            connector, source.position, source.uuid, source.size, subjective=subjective,
-            ignore_difficult_terrain=source.ignore_difficult_terrain,
-        ) != discovery.movement_cost_feet:
-            return "Connector passage is not accessible"
-        return None
-
     @staticmethod
     def _oriented_connector(
         connector: TraversalConnector,
@@ -1398,7 +1385,7 @@ class TraverseConnector(BaseAction):
     def _current_connector(
         self,
         source: Entity,
-        *, check_passage: bool = True,
+        *, subjective: bool,
     ) -> Optional[TraversalConnector]:
         """The connector exactly as this traversal declared it, or None once it changed."""
         discovery = self.connector_traversal
@@ -1416,8 +1403,8 @@ class TraverseConnector(BaseAction):
             or connector.presentation_key != discovery.presentation_key
             or connector.revision != command.connector_revision
             or connector.objective_digest != command.connector_digest
-            or check_passage and grid.connector_movement_cost(
-                connector, source.position, source.uuid, source.size,
+            or grid.connector_movement_cost(
+                connector, source.position, source.uuid, source.size, subjective=subjective,
                 ignore_difficult_terrain=source.ignore_difficult_terrain) != discovery.movement_cost_feet
             or connector.action_cost_type is not discovery.action_cost_type
             or connector.action_cost_amount != discovery.action_cost_amount
@@ -1478,13 +1465,13 @@ class TraverseConnector(BaseAction):
         )
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        """A living, acting traverser at the declared connector endpoint."""
+        """A living, acting traverser at the declared connector endpoint, whose passage still costs what it declared."""
         source = Entity.get(self.source_entity_uuid)
         if (
             source is None
             or source.health.life_state is not LifeState.ALIVE
             or not source.can_take_actions()
-            or self._current_connector(source, check_passage=False) is None
+            or self._current_connector(source, subjective=scan.subjective) is None
         ):
             return "Connector traversal is no longer valid"
         return None
@@ -1524,7 +1511,7 @@ class TraverseConnector(BaseAction):
         )
         if effect.canceled:
             return effect
-        connector = self._current_connector(source)
+        connector = self._current_connector(source, subjective=False)
         destination = effect.requested_end_position
         grid = get_map()
         if connector is None:
@@ -1591,7 +1578,7 @@ class TraverseConnector(BaseAction):
                 effect, source, MovementTerminationReason.STEP_CANCELED
             )
         if (
-            self._current_connector(source) is None
+            self._current_connector(source, subjective=False) is None
             or not grid.is_walkable_for(
                 destination[0], destination[1], source.uuid
             )
@@ -2516,7 +2503,11 @@ class Attack(BaseAction):
         grant_weapon_attack_batch(self.source_entity_uuid,declaration,execution)
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        """Create the declaration event for the attack action."""
+        """Create the declaration event for the attack action, with the weapon's range facts.
+
+        The attack roll reads `range`, `is_long_range`, `target_position` and
+        `is_threatened` from the execution event.
+        """
         event = create_weapon_attack_declaration_event(
             action_name=self.declaration_name or self.name,
             source_entity_uuid=self.source_entity_uuid,
@@ -2534,9 +2525,16 @@ class Attack(BaseAction):
                 "weapon_name": natural.name, "attack_source_kind": "natural",
                 "source_item_uuid": None, "source_item_presentation": None,
                 "damage_types": [natural.damage_type], "attack_is_magical": natural.magical})
-        return event.model_copy(update={
+        update: dict = {
             "additional_damages": list(self.additional_damages),
-            "damage_types": list(dict.fromkeys([*event.damage_types, *(damage.damage_type for damage in self.additional_damages)]))})
+            "damage_types": list(dict.fromkeys([*event.damage_types, *(damage.damage_type for damage in self.additional_damages)]))}
+        source = Entity.get(self.source_entity_uuid)
+        if source is not None:
+            _, weapon_range, target_position, is_long_range = weapon_reach(source, self.weapon_slot, natural,
+                event.target_entity_uuid, self.declaration_name or self.name)
+            update.update(target_position=target_position, range=weapon_range, is_long_range=is_long_range,
+                is_threatened=weapon_range is not None and weapon_range.type == RangeType.RANGE and source.is_threatened())
+        return event.model_copy(update=update)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Weapon and hand permission, range or reach, and sight of a creature target."""
@@ -2545,23 +2543,6 @@ class Attack(BaseAction):
             return "Declared weapon or hand permission is unavailable"
         return weapon_attack_error(scan, source, self.weapon_slot, self.get_natural_weapon(),
             selection.target_uuids[0] if selection.target_uuids else None, self.declaration_name or self.name)
-
-    def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
-        """Admit through the shared path, then record the weapon's range facts and ranged conditions.
-
-        The attack roll reads `range`, `is_long_range`, `target_position` and
-        `is_threatened` from the execution event, so this enrichment stays here.
-        """
-        admitted = cast(Optional[AttackEvent], super()._validate(declaration_event))
-        source = Entity.get(self.source_entity_uuid)
-        if admitted is None or admitted.canceled or source is None:
-            return admitted
-        _, weapon_range, target_position, is_long_range = weapon_reach(source, self.weapon_slot, self.get_natural_weapon(),
-            declaration_event.target_entity_uuid, self.declaration_name or self.name)
-        return admitted.with_updates(
-            target_position=target_position, range=weapon_range, is_long_range=is_long_range,
-            is_threatened=weapon_range is not None and weapon_range.type == RangeType.RANGE and source.is_threatened(),
-        )
 
     def _apply(self, execution_event: AttackEvent) -> Optional[AttackEvent]:
         """Apply the attack action."""
@@ -2937,7 +2918,7 @@ class ShakeAwake(BaseAction):
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply external assistance to every condition that declares support."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if not target:
             return execution_event.cancel(status_message="Target not found")
         wakeable_condition_uuids = self._wakeable_condition_uuids(target)
@@ -3048,12 +3029,14 @@ class Hide(BaseAction):
         for sub_uuid in subscribers:
             if sub_uuid == entity.uuid:
                 continue
+            if scan.subjective and sub_uuid not in scan.creatures:
+                continue  # An enemy the hider does not perceive cannot be known to see it.
             sub = Entity.get(sub_uuid)
             if sub and entity.is_enemy(sub):
                 if (
                     (contact := sub.senses.entities.get(entity.uuid)) is not None
                     and contact.visual
-                    and not entity.is_obscured_by_larger_creature_from(sub)
+                    and not entity.is_obscured_by_larger_creature_from(sub, subjective=scan.subjective)
                 ):
                     return "Cannot hide - visible to enemies"
         return None
@@ -3535,7 +3518,7 @@ class Jump(BaseAction):
         if distance > max_range:
             return f"Position {end_pos} out of jump range ({distance}ft > {max_range}ft)"
 
-        if not grid.is_walkable_for(end_pos[0], end_pos[1], source_entity.uuid):
+        if not grid.is_walkable_for(end_pos[0], end_pos[1], source_entity.uuid, subjective=scan.subjective):
             return f"Position {end_pos} not walkable or occupied"
 
         if not grid.raycast_clear(source_entity.position, end_pos, channel=WorldEdgeChannel.PROPAGATION):
@@ -5658,7 +5641,7 @@ class PickUp(BaseAction):
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
-        item = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        item = BaseBlock.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not entity or not isinstance(item, BaseItem):
             return execution_event.cancel(status_message="Entity or item not found")

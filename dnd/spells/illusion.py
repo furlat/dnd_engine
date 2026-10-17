@@ -4,7 +4,8 @@ Implemented here: Blur, Fear, Hypnotic Pattern, Color Spray, Invisibility,
 Greater Invisibility, Mirror Image, and Silence.
 """
 from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
-from dnd.spells.spell_utils import spell_condition_profile, condition_save, condition_damage, target_turn_expiry_handler
+from dnd.spells.spell_utils import (spell_condition_profile, condition_save, condition_damage, target_turn_expiry_handler,
+    living_recipients_error, placement_error, seen_point_error)
 from dnd.spells.enchantment import DissonantFearEffect
 
 
@@ -36,8 +37,6 @@ from dnd.core.condition_types import (
     HazardFilter,
 )
 from dnd.core.creature_types import DamageType
-from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
 from dnd.core.events import Damage, DamageAppliedEvent, EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event, EventQueue
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier, ResistanceModifier, ResistanceStatus
 from dnd.core.saving_throw_types import SavingThrowEffectTag
@@ -61,42 +60,6 @@ from dnd.types.spatial_effects import (
     SpatialEffectTriggerKind,
 )
 from dnd.types.discovery import ActorScan
-
-
-def _seen_recipient_error(action: SpellAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-    """The one selected creature: the caster when allowed, otherwise seen and within spell range."""
-    if not selection.target_uuids:
-        return "Caster or target not found"
-    identity = selection.target_uuids[0]
-    if identity == scan.actor_uuid:
-        return None if action.include_self else "This spell does not allow self targeting"
-    record = scan.creatures.get(identity)
-    if record is None or not record.visual:
-        return f"Target entity not in line of sight for {action.name}"
-    if action.get_target_distance(record.facts.position) > action.effective_range:
-        return "Target is out of spell range"
-    return None
-
-
-def _living_recipients_error(action: SpellAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-    """Every selected recipient alive, passing the relationship filter, seen (or the caster) and in range."""
-    if not selection.target_uuids:
-        return "Recipient absent"
-    error = action._target_filter_error(scan, list(selection.target_uuids))
-    if error is not None:
-        return error
-    for identity in selection.target_uuids:
-        target = Entity.get(identity)
-        if target is None or target.health.life_state is LifeState.DEAD:
-            return "Living recipient required"
-        if identity == scan.actor_uuid:
-            if not action.include_self:
-                return "Self targeting is not allowed"
-        elif (record := scan.creatures.get(identity)) is None or not record.visual:
-            return "Recipient must be visible"
-        if (error := action.target_position_error(target.position)) is not None:
-            return error
-    return None
 
 
 class BlurEffect(BaseCondition):
@@ -387,7 +350,7 @@ class Fear(SpellAction):
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Fear to current target."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -402,7 +365,7 @@ class Fear(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "wisdom").normalized_score
+        save_bonus = save_roll.bonus  # the bonus the save applied
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -605,20 +568,12 @@ class HypnoticPattern(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """The cube's center is a visible position within range."""
-        if not selection.positions:
-            return "No target position"
-        target_pos = selection.positions[0]
-        if target_pos not in scan.visible:
-            return f"Position {target_pos} not in LOS"
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return f"Out of range ({distance}ft)"
-        return None
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Hypnotic Pattern to current target."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -633,7 +588,7 @@ class HypnoticPattern(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "wisdom").normalized_score
+        save_bonus = save_roll.bonus  # the bonus the save applied
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -826,7 +781,7 @@ class ColorSpray(SpellAction):
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Color Spray blindness to current target (called once per target by convolution)."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -910,13 +865,7 @@ class Invisibility(SpellAction):
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Validate touch range (5ft)."""
         target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
-        if not target:
-            return "Target not found"
-        if target.uuid != scan.actor_uuid:
-            distance = self.get_target_distance(target.position)
-            if distance > self.effective_range:
-                return f"Target out of range ({distance}ft, max {self.effective_range}ft)"
-        return None
+        return self.target_position_error(target.position) if target is not None else "Target not found"
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Invisibility to target."""
@@ -924,7 +873,7 @@ class Invisibility(SpellAction):
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
 
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else caster
         if not target or not isinstance(target, Entity):
             return execution_event.cancel(status_message="Target not found")
 
@@ -993,13 +942,7 @@ class GreaterInvisibility(SpellAction):
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Validate touch range (5ft)."""
         target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
-        if not target:
-            return "Target not found"
-        if target.uuid != scan.actor_uuid:
-            distance = self.get_target_distance(target.position)
-            if distance > self.effective_range:
-                return f"Target out of range ({distance}ft, max {self.effective_range}ft)"
-        return None
+        return self.target_position_error(target.position) if target is not None else "Target not found"
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Greater Invisibility to target."""
@@ -1007,7 +950,7 @@ class GreaterInvisibility(SpellAction):
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
 
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else caster
         if not target or not isinstance(target, Entity):
             return execution_event.cancel(status_message="Target not found")
 
@@ -1542,11 +1485,11 @@ class PhantasmalForce(SpellAction):
             save_ability='intelligence',fact=None,)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _seen_recipient_error(self, scan, selection)
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self,event: SpellEvent):
         caster=Entity.get(self.source_entity_uuid)
-        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         if caster is None or target is None:
             return event.cancel(status_message="Caster or illusion recipient is absent")
         dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
@@ -1616,11 +1559,11 @@ class PhantasmalKiller(SpellAction):
             save_ability="wisdom", fact="selected_target.condition.frightened")
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _living_recipients_error(self, scan, selection)
+        return living_recipients_error(self, scan, selection.target_uuids)
 
     def _apply(self, event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         if caster is None or target is None: return event.cancel(status_message="Illusion recipient absent")
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         effect, _, saved = self.resolve_saving_throw(event, caster=caster, target=target, ability_name="wisdom", dc=dc)
@@ -1689,14 +1632,7 @@ class Weird(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """An existing tile within range, visible unless it is the caster's own."""
-        position = selection.positions[0] if selection.positions else None
-        if position is None or not get_map().has_tile(*position):
-            return "Choose an existing spell placement"
-        if (error := self.target_position_error(position)) is not None:
-            return error
-        if position != scan.position and position not in scan.visible:
-            return "Choose a visible spell placement"
-        return None
+        return placement_error(self, scan, selection)
 
     def get_target_effect_profile(self):
         actor = Entity.get(self.source_entity_uuid)
@@ -1706,7 +1642,7 @@ class Weird(SpellAction):
 
     def _apply(self, event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         if caster is None or target is None: return event.cancel(status_message="Weird recipient absent")
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         effect, _, saved = self.resolve_saving_throw(event, caster=caster, target=target, ability_name="wisdom", dc=dc)

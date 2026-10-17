@@ -582,12 +582,6 @@ class Entity(BaseBlock):
     )
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
 
-    _aoe_preview_cache_context: Optional[Tuple[Any, ...]] = PrivateAttr(default=None)
-    _aoe_preview_cache: Dict[
-        Tuple[Any, ...],
-        Tuple[AvailableTarget, ...],
-    ] = PrivateAttr(default_factory=dict)
-    _aoe_contact_alive: Dict[UUID, bool] = PrivateAttr(default_factory=dict)
     _fast_move_target_cache_revision: Optional[Tuple[int, int]] = PrivateAttr(default=None)
     _fast_move_target_cache: Dict[
         Tuple[Any, ...],
@@ -597,13 +591,6 @@ class Entity(BaseBlock):
     _position_preview_cache: Dict[
         Tuple[Any, ...],
         Tuple[AvailableTarget, ...],
-    ] = PrivateAttr(default_factory=dict)
-    _visible_position_cache: Dict[int, Tuple[Tuple[int, int], ...]] = PrivateAttr(
-        default_factory=dict
-    )
-    _aoe_nearby_candidates_cache: Dict[
-        Tuple[Tuple[Tuple[int, int], ...], int],
-        frozenset[Tuple[int, int]],
     ] = PrivateAttr(default_factory=dict)
     _life_state_modifier_ownership: ModifierOwnership = PrivateAttr(default_factory=list)
     _runtime_agency_revoked: bool = PrivateAttr(default=False)
@@ -2020,8 +2007,12 @@ class Entity(BaseBlock):
     def is_obscured_by_larger_creature_from(
         self,
         observer: "Entity",
+        *, subjective: bool,
     ) -> bool:
-        """Return whether Naturally Stealthy has exact intervening cover."""
+        """Return whether Naturally Stealthy has exact intervening cover.
+
+        Subjective (discovery) counts only the larger creatures this creature perceives.
+        """
         if not self.has_origin_capability(
             OriginCapability.NATURALLY_STEALTHY,
         ):
@@ -2045,6 +2036,7 @@ class Entity(BaseBlock):
             )
             if any(
                 candidate is not None
+                and (not subjective or candidate.uuid in self.senses.entities)
                 and candidate.health.life_state is not LifeState.DEAD
                 and size_order.index(candidate.size) > own_size_index
                 for candidate in candidates
@@ -4413,10 +4405,13 @@ class Entity(BaseBlock):
             life_state=self.health.life_state, condition_names=frozenset(self.active_conditions),
             blocks_external_contact=any(condition.blocks_external_contact and condition.contributions_active()
                 for condition in self.active_conditions_by_uuid.values()),
-            faction=self.faction, size=self.size)
+            faction=self.faction, size=self.size, has_positive_hp=self._has_positive_normal_hp_for_discovery(self))
 
-    def action_scan(self, *, with_navigation: bool = False) -> ActorScan:
+    def action_scan(self, *, subjective: bool, with_navigation: bool = False) -> ActorScan:
         """Everything the admission checks read, built once per discovery call or action (plan §14.2).
+
+        `subjective` is stated by every caller: discovery and preview read what
+        this creature perceives, execution reads the world.
 
         Admission reads perception, grants and charges. Navigation (reachable
         costs, the reach mask, threat domains) is built only when discovery
@@ -4433,15 +4428,18 @@ class Entity(BaseBlock):
         x, y = self.position
         reach_cells = frozenset(cell for cell in ((x + dx, y + dy) for dx in range(-2, 3) for dy in range(-2, 3))
             if cell != self.position and grid.has_tile(*cell)
-            and grid.can_reach_between(self.position, cell, PhysicalAccess.HAND, self.uuid)) if with_navigation else frozenset()
+            and grid.can_reach_between(self.position, cell, PhysicalAccess.HAND, self.uuid,
+                                       subjective=subjective)) if with_navigation else frozenset()
         carried = (*self.inventory.items.values(), *self.equipment.get_all_equipped_items())
         return ActorScan(
             actor_uuid=self.uuid,
+            subjective=subjective,
             position=self.position,
             visible=frozenset(position for position, visible in self.senses.visible.items() if visible),
             creatures=creatures,
             objects={identity: ObjectRecord(uuid=identity, position=contact.position)
                      for identity, contact in self.senses.objects.items()},
+            carried_items=frozenset(item.uuid for item in carried),
             reachable_costs=dict(self.senses.path_costs) if with_navigation else {},
             reach_cells=reach_cells,
             threat_domains=({reactor.uuid: frozenset(cells) for reactor, cells in self._visible_hostile_threat_domains()}
@@ -5753,12 +5751,8 @@ class Entity(BaseBlock):
             fixed_healing=template.get_fixed_healing(self),
             loot_item_uuid=description_facts.loot_item_uuid,
         )
-        for target in valid_targets:
-            if target.target_uuid is not None:
-                secondary = template.get_secondary_target_options(target.target_uuid)
-                target.secondary_targets = None if secondary is None else [
-                    option.model_copy(update={"index": len(valid_targets) + index})
-                    for index, option in enumerate(secondary)]
+        # Secondary recipients are perceived creatures and objects picked by uuid and admitted
+        # on demand by the action's rule (plan §14.4); rows carry no per-primary pool.
         action_info.set_execution_template(template)
         return action_info
 
@@ -5908,7 +5902,7 @@ class Entity(BaseBlock):
                 if action_range is not None and access is not None:
                     contact = get_map().attack_object_contact(self.uuid, target_uuid,
                         range_feet=action_range.long or action_range.normal, access=access,
-                        subjective=True, origin=template.get_target_origin())
+                        subjective=scan.subjective, origin=template.get_target_origin())
                     if contact is not None:
                         target_pos = contact
             valid_targets.append(AvailableTarget(
@@ -5989,6 +5983,7 @@ class Entity(BaseBlock):
         caster_visible_positions: AbstractSet[Tuple[int, int]],
         footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
         idx: int,
+        scan: ActorScan,
     ) -> Optional[AvailableTarget]:
         """Compute the subjective AoE hit set of one candidate aim.
 
@@ -6035,9 +6030,12 @@ class Entity(BaseBlock):
 
         template_include_dead = template.include_dead
         if not template_include_dead and not include_dead:
+            # Perceived occupants' HP is a scan fact, computed once per creature per call.
             affected_uuids = [
                 uid for uid in affected_uuids
-                if self._aoe_contact_alive.get(uid, False)
+                if ((record := scan.creatures.get(uid)) is not None and record.facts.has_positive_hp)
+                or (record is None and (other := Entity.get(uid)) is not None
+                    and self._has_positive_normal_hp_for_discovery(other))
             ]
 
         if not affected_uuids and template.aoe_require_targets:
@@ -6059,36 +6057,6 @@ class Entity(BaseBlock):
             affected_positions=sorted(positions),
         )
 
-    def _aoe_discovery_cache_key(
-        self,
-        template: BaseAction,
-        valid_positions: List[Tuple[int, int]],
-        include_dead: bool,
-        include_aoe_preview: bool = True,
-    ) -> Tuple[Any, ...]:
-        """Build a per-query cache key for AoE preview discovery.
-
-        Args:
-            template: AoE action template or generated spell variant.
-            valid_positions: Candidate centers accepted by range and visibility.
-            include_dead: Whether dead entities are included by the query.
-
-        Returns:
-            Hashable key for the geometry and target filters that affect
-            subjective AoE preview rows.
-        """
-        return (
-            template.aoe_shape,
-            template.get_target_origin(),
-            tuple(valid_positions),
-            template.valid_target_filter,
-            template.include_self,
-            template.include_dead,
-            include_dead,
-            template.aoe_require_targets,
-            include_aoe_preview or template.aoe_require_targets,
-        )
-
     def preview_aoe_target(
         self, template: BaseAction, target: AvailableTarget, *,
         include_dead: bool = False,
@@ -6097,9 +6065,9 @@ class Entity(BaseBlock):
         shape = template.aoe_shape
         if shape is None or target.position is None:
             raise ValueError("Area preview requires a shape and selected aim")
-        visible_positions = self._prepare_aoe_caches()
+        visible_positions = self._visible_cells()
         result = self._compute_aoe_at_position(template, shape, target.position, include_dead,
-            visible_positions, {}, target.index)
+            visible_positions, {}, target.index, self.action_scan(subjective=True))
         if result is None:
             raise ValueError("The selected aim has no admitted recipients")
         return target.model_copy(deep=True, update={
@@ -6109,120 +6077,16 @@ class Entity(BaseBlock):
             "affected_positions": result.affected_positions,
         })
 
-    def _prepare_aoe_caches(
+    def _visible_cells(
         self,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
     ) -> frozenset[Tuple[int, int]]:
-        """Invalidate AoE caches and return the query visibility snapshot."""
-        grid = get_map()
-        visible_position_set = frozenset(
+        """The query's visibility snapshot."""
+        return frozenset(
             caster_visible_positions
             if caster_visible_positions is not None
-            else (
-                position
-                for position, visible in self.senses.visible.items()
-                if visible
-            )
+            else (position for position, visible in self.senses.visible.items() if visible)
         )
-        visible_positions = tuple(sorted(visible_position_set))
-        topology_context = (
-            self.position,
-            grid.propagation_revision,
-        )
-
-        contact_facts: List[Tuple[Any, ...]] = []
-        contact_alive: Dict[UUID, bool] = {
-            self.uuid: self._has_positive_normal_hp_for_discovery(self)
-        }
-        for entity_uuid, contact in self.senses.entities.items():
-            perceived_position = contact.position
-            entity = Entity.get(entity_uuid)
-            if entity is None:
-                contact_facts.append(
-                    (str(entity_uuid), perceived_position, None, None, None)
-                )
-                continue
-            alive = self._has_positive_normal_hp_for_discovery(entity)
-            contact_alive[entity_uuid] = alive
-            contact_facts.append(
-                (
-                    str(entity_uuid),
-                    perceived_position,
-                    entity.name,
-                    entity.faction,
-                    alive,
-                )
-            )
-        self._aoe_contact_alive = contact_alive
-        contact_facts.sort(key=lambda fact: fact[0])
-        preview_context = (
-            topology_context,
-            visible_positions,
-            self.name,
-            self.faction,
-            self._has_positive_normal_hp_for_discovery(self),
-            tuple(contact_facts),
-        )
-        if preview_context != self._aoe_preview_cache_context:
-            self._aoe_preview_cache_context = preview_context
-            self._aoe_preview_cache.clear()
-            self._aoe_nearby_candidates_cache.clear()
-        return visible_position_set
-
-    def _aoe_required_target_prefilter_positions(
-        self,
-        template: BaseAction,
-        include_dead: bool,
-    ) -> Set[Tuple[int, int]]:
-        """Return visible positions that can satisfy an AoE target requirement.
-
-        Args:
-            template: Position-AoE action whose required targets are being
-                discovered.
-            include_dead: Discovery-level dead-target override.
-
-        Returns:
-            Visible positions that can contribute at least one affected entity
-            after the action relationship filter is applied.
-        """
-        positions: Set[Tuple[int, int]] = set()
-        target_filter = template.valid_target_filter
-        allow_dead = include_dead or template.include_dead
-
-        for entity_uuid, contact in self.senses.entities.items():
-            perceived_position = contact.position
-            entity = Entity.get(entity_uuid)
-            if entity is None:
-                if target_filter == "all":
-                    positions.add(perceived_position)
-                continue
-            if not allow_dead and not self._has_positive_normal_hp_for_discovery(entity):
-                continue
-
-            if target_filter == "enemies":
-                matches = self.is_enemy(entity)
-            elif target_filter == "allies":
-                matches = self.is_ally(entity)
-            elif target_filter == "self_or_allies":
-                matches = self.is_ally(entity)
-            elif target_filter == "all":
-                matches = True
-            else:
-                matches = True
-
-            if matches:
-                positions.add(perceived_position)
-
-        if template.include_self and (allow_dead or self._has_positive_normal_hp_for_discovery(self)):
-            if target_filter in {"all", "allies", "self_or_allies"} or target_filter not in {
-                "enemies",
-                "allies",
-                "self_or_allies",
-                "all",
-            }:
-                positions.add(self.position)
-
-        return positions
 
     def _collect_self_actions(
         self,
@@ -6642,20 +6506,16 @@ class Entity(BaseBlock):
             return
         self._position_preview_cache_context = context
         self._position_preview_cache.clear()
-        self._visible_position_cache.clear()
 
     def _get_subjective_visible_positions(
         self,
         template: BaseAction,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
     ) -> Tuple[Tuple[int, int], ...]:
-        """Return cached visible candidate cells within an action's range."""
+        """Return the visible candidate cells within an action's range."""
         action_range = template.get_range()
         max_range = action_range.normal if action_range is not None else 0
-        cached = self._visible_position_cache.get(max_range)
-        if cached is not None:
-            return cached
-        positions = tuple(
+        return tuple(
             sorted(
                 position
                 for position in (
@@ -6674,8 +6534,6 @@ class Entity(BaseBlock):
                 )
             )
         )
-        self._visible_position_cache[max_range] = positions
-        return positions
 
     def _is_subjectively_walkable_position(self, position: Tuple[int, int]) -> bool:
         """Return whether perceived terrain and objects allow walking."""
@@ -6713,6 +6571,8 @@ class Entity(BaseBlock):
         """
         grid = get_map()
         actions: List[AvailableActionInfo] = []
+        threat_domains: Optional[List[Tuple['Entity', Set[Tuple[int, int]]]]] = None  # once per call
+        hazard: Dict[Tuple[int, int], bool] = {}  # per cell, once per call: paths share their steps
         for registered_template in self.registered_actions:
             variants = (
                 discovery_variants.get(registered_template.uuid)
@@ -6811,7 +6671,7 @@ class Entity(BaseBlock):
                             self.senses.position,
                             requesting_entity_uuid=self.uuid,
                             movement_mode=movement_mode,
-                            subjective=True,
+                            subjective=scan.subjective,
                             ignore_difficult_terrain=self.ignore_difficult_terrain,
                         )
                         paths_by_position = {
@@ -6838,8 +6698,12 @@ class Entity(BaseBlock):
                             else int(rules_route_exists)
                         )
                     else:
-                        threat_domains = self._visible_hostile_threat_domains()
+                        if threat_domains is None:
+                            threat_domains = self._visible_hostile_threat_domains()
                         base = template.current_selection()
+                        # Costs that do not depend on the destination are checked once per template.
+                        fixed_cost = (None if template.target_dependent_costs else (template.check_costs(), sum(
+                            cost.cost for cost in template.effective_costs if cost.cost_type == "movement")))
                         for position, normal_path in paths_by_position.items():
                             if position == self.senses.position:
                                 continue
@@ -6848,19 +6712,18 @@ class Entity(BaseBlock):
                             if template.discovery_error(scan, selection) is not None:
                                 continue
                             rules_valid_count += 1
-                            executable = (template.with_selection(selection) if template.target_dependent_costs
-                                          else template)
-                            if not executable.check_costs():
+                            if fixed_cost is None:
+                                executable = template.with_selection(selection)
+                                affordable = executable.check_costs()
+                                path_cost = sum(cost.cost for cost in executable.effective_costs
+                                                if cost.cost_type == "movement")
+                            else:
+                                affordable, path_cost = fixed_cost
+                            if not affordable:
                                 continue
-                            path_cost = sum(
-                                cost.cost
-                                for cost in executable.effective_costs
-                                if cost.cost_type == "movement"
-                            )
                             is_hazardous = any(
-                                grid.is_position_hazardous_for(
-                                    step[0], step[1], self.uuid,
-                                )
+                                hazard[step] if step in hazard else hazard.setdefault(
+                                    step, grid.is_position_hazardous_for(step[0], step[1], self.uuid))
                                 for step in normal_path[1:]
                             )
                             safe_path_list: Optional[List[Tuple[int, int]]] = None
@@ -7150,6 +7013,11 @@ class Entity(BaseBlock):
     ) -> List[AvailableActionInfo]:
         """Collect line-of-sight position actions."""
         actions: List[AvailableActionInfo] = []
+        seen = caster_visible_positions if caster_visible_positions is not None else frozenset(
+            position for position, visible in self.senses.visible.items() if visible)
+        # A region is open when one seen cell is in range: decided once per registered
+        # action (range does not vary with the level row), stopping at the first cell.
+        region_open: Dict[UUID, bool] = {}
         for registered_template in self.registered_actions:
             variants = (
                 discovery_variants.get(registered_template.uuid)
@@ -7218,12 +7086,14 @@ class Entity(BaseBlock):
 
                 # A free-aim region, not a list of cells (plan §14.4): the row
                 # carries `position_region`; preview validates the chosen aim.
-                availability_status = (
-                    ActionAvailabilityStatus.REQUIREMENTS_UNMET
-                    if not (template.contributions_active() and template.validate_source_requirements_for_discovery())
-                    else ActionAvailabilityStatus.AVAILABLE if template.get_valid_positions()
-                    else ActionAvailabilityStatus.NO_VALID_TARGETS
-                )
+                if not (template.contributions_active() and template.validate_source_requirements_for_discovery()):
+                    availability_status = ActionAvailabilityStatus.REQUIREMENTS_UNMET
+                else:
+                    if registered_template.uuid not in region_open:
+                        region_open[registered_template.uuid] = any(
+                            template.target_position_error(cell) is None for cell in seen)
+                    availability_status = (ActionAvailabilityStatus.AVAILABLE if region_open[registered_template.uuid]
+                                           else ActionAvailabilityStatus.NO_VALID_TARGETS)
                 if legal_only and (
                     availability_status is not ActionAvailabilityStatus.AVAILABLE
                 ):
@@ -7242,6 +7112,7 @@ class Entity(BaseBlock):
     def _collect_aoe_actions(
         self,
         include_dead: bool,
+        scan: ActorScan,
         footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
         discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
@@ -7260,8 +7131,7 @@ class Entity(BaseBlock):
             Available AoE action metadata.
         """
         actions: List[AvailableActionInfo] = []
-        grid = get_map()
-        visible_position_set = self._prepare_aoe_caches(caster_visible_positions)
+        visible_position_set = self._visible_cells(caster_visible_positions)
         self._prepare_position_preview_cache(visible_position_set)
 
         for registered_template in self.registered_actions:
@@ -7310,54 +7180,12 @@ class Entity(BaseBlock):
                 else:
                     valid_pos_list = template.get_valid_positions()
 
-                if template.aoe_require_targets:
-                    prefilter_positions = self._aoe_required_target_prefilter_positions(
-                        template,
-                        include_dead,
-                    )
-                    if prefilter_positions:
-                        radius = shape.max_radius_tiles()
-                        nearby_key = (tuple(sorted(prefilter_positions)), radius)
-                        candidates = self._aoe_nearby_candidates_cache.get(nearby_key)
-                        if candidates is None:
-                            candidates = frozenset(
-                                grid.get_positions_near_entities(
-                                    prefilter_positions,
-                                    radius,
-                                )
-                            )
-                            self._aoe_nearby_candidates_cache[nearby_key] = candidates
-                        valid_pos_list = [pos for pos in valid_pos_list if pos in candidates]
-                    else:
-                        if not legal_only:
-                            actions.append(self._make_action_info(
-                                template_name=template_name,
-                                target_type=TargetType.POSITION_AOE,
-                                valid_targets=[],
-                                can_afford=True,
-                                availability_status=(
-                                    ActionAvailabilityStatus.NO_VALID_TARGETS
-                                ),
-                                template=template,
-                                display_name=display_name,
-                            ))
-                        continue
-
                 valid_pos_list = self._aoe_aim_points(valid_pos_list)
-                cache_key = self._aoe_discovery_cache_key(
-                    template,
-                    valid_pos_list,
-                    include_dead,
-                    include_aoe_preview,
-                )
-                if cache_key in self._aoe_preview_cache:
-                    valid_positions = list(self._aoe_preview_cache[cache_key])
-                elif not include_aoe_preview and not template.aoe_require_targets:
+                if not include_aoe_preview and not template.aoe_require_targets:
                     valid_positions = [AvailableTarget(
                         index=index, position=position,
                         distance=template.get_target_distance(position),
                     ) for index, position in enumerate(valid_pos_list)]
-                    self._aoe_preview_cache[cache_key] = tuple(valid_positions)
                 else:
                     valid_positions = []
                     for pos in valid_pos_list:
@@ -7368,11 +7196,10 @@ class Entity(BaseBlock):
                             include_dead,
                             visible_position_set,
                             footprints,
-                            len(valid_positions),
+                            len(valid_positions), scan,
                         )
                         if target is not None:
                             valid_positions.append(target)
-                    self._aoe_preview_cache[cache_key] = tuple(valid_positions)
 
                 availability_status = (
                     ActionAvailabilityStatus.AVAILABLE
@@ -7511,7 +7338,7 @@ class Entity(BaseBlock):
             footprints: Call-local footprint table, keyed by footprint identity.
         """
         grid = get_map()
-        visible_position_set = self._prepare_aoe_caches(caster_visible_positions)
+        visible_position_set = self._visible_cells(caster_visible_positions)
         target_pool_cache: Dict[Tuple[str, bool, bool], Dict[UUID, Tuple[int, int]]] = {}
 
         use_sources: List[
@@ -7542,26 +7369,26 @@ class Entity(BaseBlock):
                 template_name=f"{action.get_discovery_template_name()}__item_{identity}",
                 configured_action_ref=action.configured_action_ref, variant_facets=action.get_variant_facets(),
                 contact_positions=tuple(sorted(position for position in candidates
-                    if grid.manual_object_contact(self.uuid, identity, subjective=True, origin=position) is not None))))
+                    if grid.manual_object_contact(self.uuid, identity, subjective=scan.subjective, origin=position) is not None))))
         for identity in self.senses.objects:
             item = BaseBlock.get(identity)
             if isinstance(item, BaseItem) and item.is_pickable:
                 descriptors.append(AvailableWorldInteraction(subject_uuid=identity, behavior_id="action.pick_up",
                     label="Pick up", contact_positions=tuple(sorted(position for position in candidates
-                        if grid.manual_object_contact(self.uuid, identity, subjective=True, origin=position) is not None))))
+                        if grid.manual_object_contact(self.uuid, identity, subjective=scan.subjective, origin=position) is not None))))
         for connector in grid.get_all_connectors():
             if connector.aperture is None or connector.aperture.frame_uuid not in self.senses.objects:
                 continue
             endpoints = connector.endpoints if connector.bidirectional else connector.endpoints[:1]
             admitted = tuple(endpoint.position for endpoint in endpoints if endpoint.position in candidates
                 and connector.enabled and grid.connector_movement_cost(connector, endpoint.position,
-                    self.uuid, self.size, subjective=True, ignore_difficult_terrain=self.ignore_difficult_terrain) is not None)
+                    self.uuid, self.size, subjective=scan.subjective, ignore_difficult_terrain=self.ignore_difficult_terrain) is not None)
             descriptors.append(AvailableWorldInteraction(subject_uuid=connector.aperture.frame_uuid,
                 behavior_id="action.traverse_connector", label="Crawl through", connector_uuid=connector.uuid,
                 contact_positions=admitted, reason=None if admitted else "Passage is blocked or out of reach"))
         result.world_interactions = tuple(descriptors)
         for use_template, obj_uuid, item_name in observed_sources:
-            if grid.manual_object_contact(self.uuid, obj_uuid, subjective=True) is not None:
+            if grid.manual_object_contact(self.uuid, obj_uuid, subjective=scan.subjective) is not None:
                 use_sources.append((use_template, obj_uuid, item_name, None, False))
 
         for (
@@ -7679,80 +7506,7 @@ class Entity(BaseBlock):
                 if use_shape_template is None:
                     continue
 
-                valid_pos_list = use_template.get_valid_positions()
-
-                if use_template.aoe_require_targets:
-                    prefilter_positions = self._aoe_required_target_prefilter_positions(
-                        use_template,
-                        include_dead,
-                    )
-                    if prefilter_positions:
-                        radius = use_shape_template.max_radius_tiles()
-                        nearby_key = (tuple(sorted(prefilter_positions)), radius)
-                        candidates = self._aoe_nearby_candidates_cache.get(nearby_key)
-                        if candidates is None:
-                            candidates = frozenset(
-                                grid.get_positions_near_entities(
-                                    prefilter_positions,
-                                    radius,
-                                )
-                            )
-                            self._aoe_nearby_candidates_cache[nearby_key] = candidates
-                        valid_pos_list = [pos for pos in valid_pos_list if pos in candidates]
-                    else:
-                        if is_inventory_source and not legal_only:
-                            self._append_unavailable_item_use_action(
-                                result,
-                                template=use_template,
-                                template_name=template_name,
-                                display_name=display_name,
-                                source_item_uuid=item_uuid,
-                                item_stack_count=stack_count_field,
-                                availability_status=(
-                                    ActionAvailabilityStatus.NO_VALID_TARGETS
-                                ),
-                                can_afford=True,
-                            )
-                        continue
-
-                valid_pos_list = self._aoe_aim_points(valid_pos_list)
-                cache_key = self._aoe_discovery_cache_key(
-                    use_template,
-                    valid_pos_list,
-                    include_dead,
-                    include_aoe_preview,
-                )
-                if cache_key in self._aoe_preview_cache:
-                    cached_targets = self._aoe_preview_cache[cache_key]
-                    if cached_targets:
-                        result.position_actions.append(self._make_action_info(
-                            template_name=template_name,
-                            target_type=TargetType.POSITION_AOE,
-                            valid_targets=list(cached_targets),
-                            can_afford=True,
-                            availability_status=(
-                                ActionAvailabilityStatus.AVAILABLE
-                            ),
-                            template=use_template,
-                            display_name=display_name,
-                            is_item_use=True,
-                            source_item_uuid=item_uuid,
-                            item_stack_count=stack_count_field,
-                        ))
-                    elif is_inventory_source and not legal_only:
-                        self._append_unavailable_item_use_action(
-                            result,
-                            template=use_template,
-                            template_name=template_name,
-                            display_name=display_name,
-                            source_item_uuid=item_uuid,
-                            item_stack_count=stack_count_field,
-                            availability_status=(
-                                ActionAvailabilityStatus.NO_VALID_TARGETS
-                            ),
-                            can_afford=True,
-                        )
-                    continue
+                valid_pos_list = self._aoe_aim_points(use_template.get_valid_positions())
 
                 use_valid_positions: List[AvailableTarget] = []
                 use_idx = 0
@@ -7770,12 +7524,11 @@ class Entity(BaseBlock):
                             include_dead,
                             visible_position_set,
                             footprints,
-                            use_idx,
+                            use_idx, scan,
                         )
                         if target is not None:
                             use_valid_positions.append(target)
                             use_idx += 1
-                self._aoe_preview_cache[cache_key] = tuple(use_valid_positions)
                 if use_valid_positions:
                     result.position_actions.append(self._make_action_info(
                         template_name=template_name,
@@ -7961,7 +7714,7 @@ class Entity(BaseBlock):
             record_action_timing("available_actions.potential_targets_ms", started)
 
         # One actor scan for this call; every candidate is checked against it.
-        scan = self.action_scan()
+        scan = self.action_scan(subjective=True)
 
         started = time.perf_counter() if timing else 0.0
         result.self_actions = self._collect_self_actions(scan, discovery_variants, legal_only)
@@ -8037,6 +7790,7 @@ class Entity(BaseBlock):
         result.position_actions.extend(
             self._collect_aoe_actions(
                 include_dead,
+                scan,
                 footprints,
                 discovery_variants,
                 caster_visible_positions,

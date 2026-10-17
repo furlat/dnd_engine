@@ -22,52 +22,15 @@ from dnd.core.base_actions import (
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.base_block import SensesType, SenseMode
-from dnd.core.life_types import LifeState
 from dnd.types.discovery import ActorScan
 from dnd.core.events import Event, EventPhase, Range, RangeType, EventType, EventHandler, Trigger, D20RollResultEvent
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
 from dnd.spells.content_metadata import srd_action_identity
-from dnd.spells.spell_utils import spell_condition_profile
+from dnd.spells.spell_utils import living_recipients_error, spell_condition_profile
 from dnd.core.base_conditions import Duration
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.blocks.skills import all_skills
-
-
-def _seen_recipient_error(action: SpellAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-    """The one selected creature: the caster when allowed, otherwise seen and within spell range."""
-    if not selection.target_uuids:
-        return "Caster or target not found"
-    identity = selection.target_uuids[0]
-    if identity == scan.actor_uuid:
-        return None if action.include_self else "This spell does not allow self targeting"
-    record = scan.creatures.get(identity)
-    if record is None or not record.visual:
-        return f"Target entity not in line of sight for {action.name}"
-    if action.get_target_distance(record.facts.position) > action.effective_range:
-        return "Target is out of spell range"
-    return None
-
-
-def _living_recipients_error(action: SpellAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-    """Every selected recipient alive, passing the relationship filter, seen (or the caster) and in range."""
-    if not selection.target_uuids:
-        return "Recipient absent"
-    error = action._target_filter_error(scan, list(selection.target_uuids))
-    if error is not None:
-        return error
-    for identity in selection.target_uuids:
-        target = Entity.get(identity)
-        if target is None or target.health.life_state is LifeState.DEAD:
-            return "Living recipient required"
-        if identity == scan.actor_uuid:
-            if not action.include_self:
-                return "Self targeting is not allowed"
-        elif (record := scan.creatures.get(identity)) is None or not record.visual:
-            return "Recipient must be visible"
-        if (error := action.target_position_error(target.position)) is not None:
-            return error
-    return None
 
 
 class SeeInvisibilityEffect(BaseCondition):
@@ -280,7 +243,7 @@ class TrueSeeing(SpellAction):
             missing.
         """
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -420,7 +383,7 @@ class Guidance(SpellAction):
             Completed spell event, or a canceled event if the caster is missing.
         """
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
@@ -503,13 +466,13 @@ class HuntersMark(SpellAction):
         evaluator=entity_action_economy_cost_evaluator)])
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _seen_recipient_error(self, scan, selection)
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self,event: SpellEvent):
-        if self.target_entity_uuid is None:
+        if event.target_entity_uuid is None:
             return event.cancel(status_message="Quarry is absent")
         return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),HuntersMarkEffect(
-            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.source_entity_uuid,quarry_uuid=self.target_entity_uuid))
+            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.source_entity_uuid,quarry_uuid=event.target_entity_uuid))
 
 
 class ForesightEffect(BaseCondition):
@@ -576,10 +539,10 @@ class Foresight(SpellAction):
         return spell_condition_profile(self, actor, key="foresight", condition_type=ForesightEffect, beneficial=True)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _living_recipients_error(self, scan, selection)
+        return living_recipients_error(self, scan, selection.target_uuids)
 
     def _apply(self, event: SpellEvent):
-        if self.target_entity_uuid is None: return event.cancel(status_message="Recipient absent")
+        if event.target_entity_uuid is None: return event.cancel(status_message="Recipient absent")
         return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT), ForesightOwner(
             source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.source_entity_uuid,
-            recipient_uuid=self.target_entity_uuid))
+            recipient_uuid=event.target_entity_uuid))

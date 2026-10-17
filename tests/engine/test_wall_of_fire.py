@@ -23,6 +23,7 @@ from dnd.spells.walls import WallOfFire, WallOfFireZone
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.world import CardinalDirection, OccupancyLayer
 from tests.manual.spell_regression_support import create_spell_regression_actor, force_save_result, reset_spell_regression_arena
+from tests.engine.support import admitted_in_discovery
 
 
 def scene(*, level=4):
@@ -363,8 +364,7 @@ def test_discovered_first_point_does_not_substitute_a_witness_for_missing_extra_
     template = WallOfFire(source_entity_uuid=caster.uuid, template=True)
     anchor = (15, 5)
     partial = template.instantiate(end_position=anchor)
-    assert partial.validate_requirements_for_discovery(allow_partial_position=True)
-    assert not partial.validate_requirements_for_discovery()
+    assert not admitted_in_discovery(partial)
     result = partial.apply()
     assert result is not None and result.canceled
     assert caster.action_economy.actions.normalized_score == 1 and caster.has_spell_slot(4)

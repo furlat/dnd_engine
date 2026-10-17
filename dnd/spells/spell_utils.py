@@ -7,7 +7,8 @@ from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
 from dnd.core.events import SavingThrowEvent
 from dnd.types.abilities import AbilityName
 from dnd.core.values import ModifiableValue
-from typing import Literal, cast
+from collections.abc import Sequence
+from typing import Literal
 from dnd.core.creature_types import DamageType
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 
@@ -20,7 +21,7 @@ from uuid import UUID
 from dnd.core.dice import DiceRoll
 from dnd.core.events import EventPhase, Healing, HealRollResultEvent, Event
 from dnd.entity import Entity
-from dnd.actions import SpellEvent, PreparedSpellConcentration
+from dnd.actions import SpellAction, SpellEvent, PreparedSpellConcentration
 from dnd.core.base_actions import BaseAction, ActionTargetEffectProfile, ActionTargetEffectBranchProfile, OutcomeResolution, TargetEffectDisposition
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.gridmap import get_map
@@ -29,31 +30,8 @@ from dnd.core.events import Damage, DamageRollPacket, DamageRollResultEvent
 from dnd.core.dice import AttackOutcome
 from dnd.core.base_block import BaseBlock
 from dnd.core.damage import DamageResolution
+from dnd.core.action_types import ActionSelection
 from dnd.types.discovery import ActorScan
-
-
-def validate_line_of_sight(declaration_event: SpellEvent, source_entity_uuid: UUID) -> Optional[SpellEvent]:
-    """Validate if the source entity and target entity are in line of sight."""
-    source_entity = Entity.get(source_entity_uuid)
-    if not source_entity:
-        return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
-    if not isinstance(source_entity, Entity):
-        return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
-    if not declaration_event.target_entity_uuid:
-        return declaration_event.cancel(status_message=f"Target entity uuid not present for {declaration_event.name}")
-    target_entity = Entity.get(declaration_event.target_entity_uuid)
-    if not target_entity:
-        return declaration_event.cancel(status_message=f"Target entity not found for {declaration_event.name}")
-    if not isinstance(target_entity, Entity):
-        return declaration_event.cancel(status_message=f"Target entity not found for {declaration_event.name}")
-
-    contact = source_entity.senses.entities.get(target_entity.uuid)
-    if contact is None or not contact.visual:
-        return declaration_event.cancel(status_message=f"Target entity not in line of sight for {declaration_event.name}")
-    return declaration_event.phase_to(
-        new_phase=EventPhase.EXECUTION,
-        status_message=f"Validated line of sight for {declaration_event.name}"
-    )
 
 
 def line_of_sight_error(scan: ActorScan, target_uuid: Optional[UUID]) -> Optional[str]:
@@ -65,6 +43,68 @@ def line_of_sight_error(scan: ActorScan, target_uuid: Optional[UUID]) -> Optiona
     record = scan.creatures.get(target_uuid)
     if record is None or not record.visual:
         return "Target entity not in line of sight"
+    return None
+
+
+def selected_cast_level(action: SpellAction, selection: ActionSelection) -> int:
+    """The slot level a selection casts at; an executable instance carries its own."""
+    return selection.cast_at_level if selection.cast_at_level is not None else action.cast_at_level
+
+
+def target_count_error(action: BaseAction, selection: ActionSelection, limit: int) -> Optional[str]:
+    """A selection naming more creatures than the action admits."""
+    return f"{action.name} can target at most {limit} creatures" if len(selection.target_uuids) > limit else None
+
+
+def seen_recipients_error(action: BaseAction, scan: ActorScan, targets: Sequence[UUID]) -> Optional[str]:
+    """Every named creature is seen (or is the caster, when allowed) and within range."""
+    if not targets:
+        return "Recipient absent"
+    for identity in dict.fromkeys(targets):
+        target = Entity.get(identity)
+        if target is None:
+            return "Target entity not found"
+        if identity == scan.actor_uuid:
+            if not action.include_self:
+                return "Self targeting is not allowed"
+        elif (record := scan.creatures.get(identity)) is None or not record.visual:
+            return f"{target.name} not in line of sight"
+        if (error := action.target_position_error(target.position)) is not None:
+            return error
+    return None
+
+
+def living_recipients_error(action: BaseAction, scan: ActorScan, targets: Sequence[UUID]) -> Optional[str]:
+    """Named recipients pass the relationship filter, are not dead, are seen and are in range."""
+    if not targets:
+        return "Recipient absent"
+    if (error := action._target_filter_error(scan, list(targets))) is not None:
+        return error
+    if any((target := Entity.get(identity)) is not None and target.health.life_state is LifeState.DEAD
+           for identity in targets):
+        return "Living recipient required"
+    return seen_recipients_error(action, scan, targets)
+
+
+def seen_point_error(action: BaseAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+    """The selected point is within range and seen by the actor."""
+    if not selection.positions:
+        return "No target position specified"
+    position = selection.positions[0]
+    if (error := action.target_position_error(position)) is not None:
+        return error
+    return None if position in scan.visible else f"Target position {position} not in line of sight"
+
+
+def placement_error(action: BaseAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+    """The selected placement is an existing tile in range that the actor sees or stands on."""
+    position = selection.positions[0] if selection.positions else None
+    if position is None or not get_map().has_tile(*position):
+        return "Choose an existing spell placement"
+    if (error := action.target_position_error(position)) is not None:
+        return error
+    if position != scan.position and position not in scan.visible:
+        return "Choose a visible spell placement"
     return None
 
 
@@ -185,18 +225,6 @@ def deliver_spell_damage(event: SpellEvent,target: BaseBlock,damage: Damage,roll
     return event.with_updates(damages=damages,damage_rolls=rolls,total_damage=total)
 
 
-def spell_position_error(action: BaseAction) -> str | None:
-    caster=Entity.get(action.source_entity_uuid)
-    position=action.end_position
-    if caster is None or position is None or not get_map().has_tile(*position):
-        return "Choose an existing spell placement"
-    if (error:=action.target_position_error(position)) is not None:
-        return error
-    if position!=caster.position and not caster.senses.visible.get(position,False):
-        return "Choose a visible spell placement"
-    return None
-
-
 def spell_valid_positions(action: BaseAction):
     positions=BaseAction.get_valid_positions(action)
     caster=Entity.get(action.source_entity_uuid)
@@ -256,28 +284,6 @@ def condition_damage(owner: BaseCondition, target: Entity, boundary: Event, *,
     target.receive_damage(roll.total, damage_type, source, damages=[damage], damage_rolls=[roll],
         parent_event=boundary.uuid, effect_origin=owner.effect_origin,
         independent_resolution=True, source_condition_uuid=owner.uuid)
-
-
-def validate_spell_recipients(action: BaseAction, declaration: SpellEvent) -> SpellEvent | None:
-    """Validate the selected recipients before payment, using native targeting."""
-    caster = Entity.get(action.source_entity_uuid)
-    if caster is None: return declaration.cancel(status_message="Caster absent")
-    targets = action.get_all_targets()
-    if not targets: return declaration.cancel(status_message="Recipient absent")
-    error = action._validate_target_filter(targets)
-    if error is not None: return declaration.cancel(status_message=error)
-    for identity in targets:
-        target = Entity.get(identity)
-        if target is None or target.health.life_state is LifeState.DEAD:
-            return declaration.cancel(status_message="Living recipient required")
-        if target.uuid == caster.uuid:
-            if not action.include_self: return declaration.cancel(status_message="Self targeting is not allowed")
-        else:
-            contact = caster.senses.entities.get(target.uuid)
-            if contact is None or not contact.visual: return declaration.cancel(status_message="Recipient must be visible")
-        if (error := action.target_position_error(target.position)) is not None:
-            return declaration.cancel(status_message=error)
-    return cast(SpellEvent | None, BaseAction._validate(action, declaration))
 
 
 def apply_concentrating_zone(action, event: SpellEvent, zone) -> SpellEvent:

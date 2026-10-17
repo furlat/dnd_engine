@@ -1,5 +1,5 @@
 """Native attack components and caster-owned quarry state for Mark and Hex."""
-from typing import Callable, ClassVar, Literal, cast
+from typing import Callable, ClassVar, Literal
 from uuid import UUID, uuid4
 
 from pydantic import Field, PrivateAttr
@@ -19,6 +19,7 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.life_types import LifeState
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
+from dnd.spells.spell_utils import seen_recipients_error
 from dnd.types.discovery import ActorScan
 
 
@@ -119,14 +120,8 @@ class ReapplyQuarry(BaseAction):
         sustain=BaseCondition.get(self.sustain_uuid)
         if not isinstance(sustain,QuarrySustain) or not sustain.applied or not sustain.contributions_active() or not sustain.reapply_available():
             return "The current quarry must first be defeated"
-        target=Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
-        caster=Entity.get(self.source_entity_uuid)
-        if target is None or caster is None or caster.senses.get_feet_distance(target.position)>60:
-            return "Quarry is outside mark range"
-        record=scan.creatures.get(target.uuid)
-        if record is None or not record.visual:
-            return "Quarry must be visible"
-        return self._target_filter_error(scan,[target.uuid])
+        return (seen_recipients_error(self,scan,selection.target_uuids)
+            or self._target_filter_error(scan,list(selection.target_uuids)))
 
     def _cancel_quarry_admission(self) -> None:
         application=self._quarry_application
@@ -242,13 +237,13 @@ class AttackBackedSpell(SpellAction):
         return weapon_attack_error(scan,caster,self.weapon_slot,None,
             selection.target_uuids[0] if selection.target_uuids else None,"Attack")
 
-    def _validate(self,event: SpellEvent) -> SpellEvent | None:
+    def _create_declaration_event(self,parent_event: Event | None=None,use_register: bool=True):
         """Remember the exact weapon this declaration admits; the hit payload refuses a swapped one."""
+        event=super()._create_declaration_event(parent_event,use_register)
         caster=Entity.get(self.source_entity_uuid)
         weapon=caster.equipment.get_weapon(self.weapon_slot) if caster is not None else None
-        if weapon is not None:
-            self.selected_weapon_uuid=weapon.uuid
-        return cast(SpellEvent | None,super()._validate(event))
+        self.selected_weapon_uuid=weapon.uuid if weapon is not None else None
+        return event
 
     def _on_costs_committed(self,declaration: ActionEvent,execution: ActionEvent) -> None:
         super()._on_costs_committed(declaration,execution)
@@ -279,7 +274,7 @@ class AttackBackedSpell(SpellAction):
         if caster is None or (weapon:=caster.equipment.get_weapon(self.weapon_slot)) is None or weapon.uuid!=self.selected_weapon_uuid:
             return effect.cancel(status_message="Declared caster or exact weapon is absent")
         attack=create_weapon_attack_declaration_event(action_name=self.name or "Weapon spell",source_entity_uuid=caster.uuid,
-            target_entity_uuid=self.target_entity_uuid,weapon_slot=self.weapon_slot,costs=[],parent_event=effect,use_register=False)
+            target_entity_uuid=event.target_entity_uuid,weapon_slot=self.weapon_slot,costs=[],parent_event=effect,use_register=False)
         attack=attack.phase_to(EventPhase.EXECUTION,use_register=True)
         def on_hit(hit: AttackEvent) -> AttackEvent:
             if not caster.action_economy.can_afford("bonus_actions",1) or not caster.action_economy.can_afford(spell_slot_cost_type(self.cast_at_level),1):
@@ -297,7 +292,7 @@ class AttackBackedSpell(SpellAction):
 
 def hit_spell_payload_allowed(spell: SpellAction,event: SpellEvent) -> bool:
     caster=Entity.get(spell.source_entity_uuid)
-    target=Entity.get(spell.target_entity_uuid) if spell.target_entity_uuid else None
+    target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
     if caster is None or target is None:
         return False
     origin=event.get_effect_origin()

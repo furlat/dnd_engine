@@ -14,6 +14,7 @@ from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
 
 from dnd.core.base_actions import (
+    cell_occupied,
     ActionCategory,
     ActionEvent,
     ActionInformationOperation,
@@ -123,32 +124,7 @@ from dnd.core.effect_types import EffectOrigin
 from dnd.core.elevation import support_distance_feet
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 from dnd.core.events import DamageAppliedEvent, TakeDamageEvent, SavingThrowEvent, PortalTransferEvent
-from dnd.spells.spell_utils import deliver_spell_damage
-
-
-def _call_lightning_target_error(spell: SpellAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-    if not selection.positions:
-        return "Strike point missing"
-    point = selection.positions[0]
-    error = spell.target_position_error(point)
-    if error is not None:
-        return error
-    if point not in scan.visible:
-        return "Strike point is not visible"
-    return None
-
-
-def _visible_point_error(spell: SpellAction, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-    """The selected point is one the caster sees, within the spell's range."""
-    if not selection.positions:
-        return "No target position specified"
-    target_pos = selection.positions[0]
-    if target_pos not in scan.visible:
-        return f"Position {target_pos} not visible"
-    distance = spell.get_target_distance(target_pos)
-    if distance > spell.effective_range:
-        return f"Position out of range ({distance}ft > {spell.effective_range}ft)"
-    return None
+from dnd.spells.spell_utils import deliver_spell_damage, seen_point_error, seen_recipients_error, target_count_error
 
 
 def _acid_splash_spread_error(positions: List[Tuple[int, int]]) -> Optional[str]:
@@ -173,7 +149,7 @@ def _call_lightning_positions(spell: SpellAction) -> List[Tuple[int, int]]:
 def _apply_call_lightning(spell: SpellAction, event: SpellEvent, *, dc: int) -> SpellEvent:
     """One initial or repeated bolt application through ordinary spell results."""
     caster = Entity.get(spell.source_entity_uuid)
-    target = Entity.get(spell.target_entity_uuid) if spell.target_entity_uuid else None
+    target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
     if caster is None or target is None:
         return event.cancel(status_message="Caster or target not found")
     effect, _, success = spell.resolve_saving_throw(
@@ -234,7 +210,7 @@ class CallLightningStrike(SpellAction):
         return self._resolve_area_targets()
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        error = _call_lightning_target_error(self, scan, selection)
+        error = seen_point_error(self, scan, selection)
         if error is not None:
             return error
         caster = Entity.get(self.source_entity_uuid)
@@ -277,7 +253,7 @@ class CallLightning(SpellAction):
         return self._resolve_area_targets()
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _call_lightning_target_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, event: SpellEvent) -> SpellEvent:
         caster = Entity.get(self.source_entity_uuid)
@@ -332,21 +308,12 @@ class PoisonSpray(SpellAction):
     valid_target_filter: str = Field(default="enemies", description="Relationship filter used when collecting valid targets for poison spray.")
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        """A seen target within 10ft."""
-        if not selection.target_uuids:
-            return f"Target entity uuid not present for {self.name}"
-        record = scan.creatures.get(selection.target_uuids[0])
-        if record is None or not record.visual:
-            return f"Target entity not in line of sight for {self.name}"
-        distance = self.get_target_distance(record.facts.position)
-        if distance > self.effective_range:
-            return f"Out of range ({distance}ft > {self.effective_range}ft)"
-        return None
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """CON save or poison damage."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Entity not found")
@@ -440,25 +407,16 @@ class AcidSplash(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """At most two seen targets in range, within 5ft of each other."""
-        if len(selection.target_uuids) > 2:
-            return "Acid Splash targets at most two creatures"
-        positions: List[Tuple[int, int]] = []
-        for target_uuid in selection.target_uuids:
-            target = Entity.get(target_uuid)
-            record = scan.creatures.get(target_uuid)
-            name = target.name if target is not None else str(target_uuid)
-            if record is None or not record.visual:
-                return f"{name} not in line of sight"
-            distance = self.get_target_distance(record.facts.position)
-            if distance > self.effective_range:
-                return f"{name} out of range ({distance}ft > {self.effective_range}ft)"
-            positions.append(record.facts.position)
-        return _acid_splash_spread_error(positions)
+        error = target_count_error(self, selection, 2) or seen_recipients_error(self, scan, selection.target_uuids)
+        if error is not None:
+            return error
+        return _acid_splash_spread_error([target.position for identity in selection.target_uuids
+                                          if (target := Entity.get(identity)) is not None])
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply acid splash damage to current target."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -473,7 +431,7 @@ class AcidSplash(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+        save_bonus = save_roll.bonus  # the bonus the save applied
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -554,18 +512,14 @@ class MistyStep(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """The destination is visible, within range, unoccupied and walkable."""
-        if not selection.positions:
-            return "No destination specified"
+        error = seen_point_error(self, scan, selection)
+        if error is not None:
+            return error
         target_pos = selection.positions[0]
-        if target_pos not in scan.visible:
-            return f"Destination {target_pos} not visible"
-        distance = self.get_target_distance(target_pos)
-        if distance > self.get_range().normal:
-            return f"Destination out of range ({distance}ft > {self.get_range().normal}ft)"
         grid = get_map()
-        if grid.get_entities_at(target_pos):
+        if cell_occupied(scan, target_pos):
             return f"Destination {target_pos} is occupied"
-        if not grid.is_walkable_for(target_pos[0], target_pos[1], self.source_entity_uuid):
+        if not grid.is_walkable_for(target_pos[0], target_pos[1], self.source_entity_uuid, subjective=scan.subjective):
             return f"Destination {target_pos} is not accessible"
         return None
 
@@ -805,7 +759,7 @@ class Grease(SpellAction):
         )
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _visible_point_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Cast Grease - create zone, apply to creatures already there, concentration."""
@@ -1157,7 +1111,7 @@ class Web(SpellAction):
         )
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _visible_point_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Cast Web - create zone, restrain creatures already there, concentration."""
@@ -1353,7 +1307,7 @@ class Entangle(SpellAction):
         )
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _visible_point_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1636,7 +1590,7 @@ class EvardsBlackTentacles(SpellAction):
         )
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _visible_point_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1960,7 +1914,7 @@ class Cloudkill(SpellAction):
     ], description="Action economy costs paid to execute cloudkill.")
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _visible_point_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Cast Cloudkill and establish its independent cloud condition."""
@@ -2571,7 +2525,7 @@ class FogCloud(SpellAction):
         )
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _visible_point_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2752,7 +2706,7 @@ class Darkness(SpellAction):
         )
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _visible_point_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2935,15 +2889,9 @@ class Daylight(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """A seen point, or a magical darkness Daylight may dispel, within range."""
-        if not selection.positions:
-            return "No target position specified"
-        target_pos = selection.positions[0]
-        if target_pos not in scan.visible and not _is_daylight_targetable_darkness(target_pos):
-            return f"Position {target_pos} not visible"
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return f"Position out of range ({distance}ft > {self.effective_range}ft)"
-        return None
+        if selection.positions and _is_daylight_targetable_darkness(selection.positions[0]):
+            return self.target_position_error(selection.positions[0])
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3162,7 +3110,7 @@ class InsectPlague(SpellAction):
     ], description="Action economy costs paid to execute insect plague.")
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _visible_point_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3436,7 +3384,7 @@ class IncendiaryCloud(SpellAction):
     ], description="Action economy costs paid to execute incendiary cloud.")
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _visible_point_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3686,7 +3634,7 @@ class StinkingCloud(SpellAction):
     ], description="Action economy costs paid to execute stinking cloud.")
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _visible_point_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -4020,7 +3968,7 @@ class SleetStorm(SpellAction):
     ], description="Action economy costs paid to execute sleet storm.")
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        return _visible_point_error(self, scan, selection)
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -4419,7 +4367,8 @@ class GuardianOfFaith(SpellAction):
         for dx, dy in GUARDIAN_FOOTPRINT_OFFSETS:
             cell = (pos[0] + dx, pos[1] + dy)
             if (not grid.has_tile(*cell) or cell not in scan.visible
-                    or not grid.is_walkable_for(*cell) or grid.get_entities_at(cell)
+                    or not grid.is_walkable_for(*cell, scan.actor_uuid, subjective=scan.subjective)
+                    or cell_occupied(scan, cell)
                     or grid.get_support_elevation_feet(cell) != height):
                 return "Guardian requires a visible unoccupied Large space"
         return None
@@ -4832,22 +4781,14 @@ class ProduceFlame(SpellAction):
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Another creature the caster sees, within the flame's range."""
-        target_uuid = selection.target_uuids[0] if selection.target_uuids else None
-        if target_uuid is None or target_uuid == self.source_entity_uuid:
-            return "Flame requires another creature"
-        record = scan.creatures.get(target_uuid)
-        if record is None or not record.visual:
-            return f"Target entity not in line of sight for {self.name}"
-        if self.get_target_distance(record.facts.position) > self.effective_range:
-            return "Target is out of spell range"
-        return None
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self, event: SpellEvent):
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         if caster is None or target is None or target.uuid == caster.uuid:
             return event.cancel(status_message="Flame requires another creature")
-        if (error := self.physical_access_error()) is not None:
+        if (error := self.target_access_error(target.uuid)) is not None:
             return event.cancel(status_message=error)
         resolution = self.resolve_spell_attack(caster, target, event.uuid)
         effect = event.phase_to(EventPhase.EFFECT, attack_bonus=resolution.attack_bonus,
@@ -4901,7 +4842,7 @@ class EnsnaringStrike(AttackBackedSpell):
 
     def apply_hit(self,event: SpellEvent,attack: AttackEvent) -> AttackEvent:
         caster=Entity.get(self.source_entity_uuid)
-        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         if caster is None or target is None:
             return attack
         effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="strength",

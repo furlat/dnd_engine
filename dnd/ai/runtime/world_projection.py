@@ -13,13 +13,15 @@ from dnd.types.world import MovementMode, WorldEdgeChannel
 from dnd.world_facts import CARDINAL_DELTAS, OPPOSITE_DIRECTION, WorldFacts
 
 
+ADJACENT_DELTAS = tuple((offset, offset.delta) for offset in AdjacentOffset)
+
+
 def adjacent_domain(world: WorldFacts, position: tuple[int, int]) -> dict[AdjacentOffset, SpatialDomainKnowledge]:
     """Preserve the existing local boundary disclosure without terrain contents."""
+    x, y = position
     return {offset: (
-        SpatialDomainKnowledge.UNKNOWN
-        if (position[0] + offset.delta[0], position[1] + offset.delta[1]) in world.tiles
-        else SpatialDomainKnowledge.INVALID
-    ) for offset in AdjacentOffset}
+        SpatialDomainKnowledge.UNKNOWN if (x + dx, y + dy) in world.tiles else SpatialDomainKnowledge.INVALID
+    ) for offset, (dx, dy) in ADJACENT_DELTAS}
 
 
 def project_tile(

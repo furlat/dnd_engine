@@ -15,6 +15,7 @@ from dnd.core.events import (
 )
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.entity import Entity
+from dnd.spells.spell_utils import seen_recipients_error
 from dnd.types.discovery import ActorScan
 from dnd.actions import entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.conditions import Concentrating
@@ -203,23 +204,9 @@ class MarkTargetAction(BaseAction):
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Mark Target's cooldown, line of sight and range."""
         source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
-
-        if not source or not target:
-            return "Source or target not found"
-
-        if "Mark Cooldown" in source.active_conditions:
+        if source is not None and "Mark Cooldown" in source.active_conditions:
             return "Mark Target is unavailable until the cooldown ends"
-
-        record = scan.creatures.get(target.uuid)
-        if record is None or not record.visual:
-            return "Target not in line of sight"
-
-        distance = source.senses.get_feet_distance(target.position)
-        if distance > self.spell_range.normal:
-            return f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
-
-        return None
+        return seen_recipients_error(self, scan, selection.target_uuids)
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply Mark Target's concentration, linked mark, and cooldown.
@@ -232,7 +219,7 @@ class MarkTargetAction(BaseAction):
             event.
         """
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")

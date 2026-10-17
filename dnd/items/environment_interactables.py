@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from pydantic import Field
 
 from dnd.core.base_actions import (
+    cell_occupied,
     BaseAction,
     ActionEvent,
     TargetType,
@@ -112,7 +113,7 @@ class CloseDoorAction(BaseAction):
             return "Door already closed"
         grid = get_map()
         door_pos = grid.get_object_position(door.uuid)
-        if door_pos and grid.get_entities_at(door_pos):
+        if door_pos and cell_occupied(scan, door_pos):
             return "Can't close door — someone is standing in the doorway"
         return None
 

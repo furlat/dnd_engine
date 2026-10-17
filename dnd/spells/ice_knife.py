@@ -78,7 +78,7 @@ class IceKnife(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> SpellEvent | None:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid is not None else None
         if caster is None or target is None:
             return execution_event.cancel(status_message="Caster or target not found")
         center = target.position

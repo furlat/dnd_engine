@@ -114,6 +114,8 @@ from dnd.spells.spell_utils import (
     condition_damage,
     condition_save,
     fire_heal_roll_result,
+    seen_point_error,
+    target_count_error,
     target_turn_expiry_handler,
 )
 from dnd.spells.transmutation import HasteEffect
@@ -563,9 +565,7 @@ class NativeSaveBurst(BaseAction):
             actor is None or destination != actor.position
         ):
             return "This technique is centered on its actor"
-        return technique_destination_error(
-            self, destination, self.cone_feet or self.range_feet
-        )
+        return technique_destination_error(self, scan, selection)
 
     def get_outcome_profile(self):
         return ActionOutcomeProfile(
@@ -603,12 +603,8 @@ class NativeSaveBurst(BaseAction):
 
     def _apply(self, event: ActionEvent):
         target = (
-            (
-                Entity.get(self.target_entity_uuid)
-                if self.target_entity_uuid is not None
-                else None
-            )
-            if self.target_entity_uuid
+            Entity.get(event.target_entity_uuid)
+            if event.target_entity_uuid is not None
             else None
         )
         actor = Entity.get(self.source_entity_uuid)
@@ -742,17 +738,11 @@ class ElementalWarp(BaseAction):
         return Range(type=RangeType.RANGE, normal=self.range_feet)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
-        actor = Entity.get(self.source_entity_uuid)
-        if actor is None or not selection.positions:
-            return "Choose a destination"
-        destination = selection.positions[0]
-        if (
-            destination not in scan.visible
-            or grid_distance_feet(actor.position, destination) > self.range_feet
-        ):
-            return "Choose a visible destination in range"
+        error = seen_point_error(self, scan, selection)
+        if error is not None:
+            return error
         if not get_map().is_walkable_for(
-            *destination, requesting_entity_uuid=actor.uuid
+            *selection.positions[0], requesting_entity_uuid=self.source_entity_uuid, subjective=scan.subjective
         ):
             return "Destination is occupied or blocked"
         return None
@@ -847,14 +837,16 @@ class GushingAir(NativeSaveBurst):
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
         actor = Entity.get(self.source_entity_uuid)
         targets = selection.target_uuids
-        if actor is None or not targets or len(targets) > 2:
+        if actor is None or not targets:
             return "Choose one or two jet recipients"
+        if (error := target_count_error(self, selection, 2)) is not None:
+            return error
         if any(
             (target := Entity.get(identity)) is None
             or grid_distance_feet(actor.position, target.position) > 60
             or identity not in scan.creatures
             or not get_map().can_reach_between(
-                actor.position, target.position, PhysicalAccess.PROJECTILE, actor.uuid
+                actor.position, target.position, PhysicalAccess.PROJECTILE, actor.uuid, subjective=scan.subjective
             )
             for identity in targets
         ):
@@ -1023,9 +1015,7 @@ class ElementalContactBurst(BaseAction):
         return Range(type=RangeType.RANGE, normal=self.range_feet)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
-        return technique_destination_error(
-            self, selection.positions[0] if selection.positions else None, self.range_feet
-        )
+        return technique_destination_error(self, scan, selection)
 
     def _resolve_execution_targets(self):
         return technique_area(self)
@@ -1078,8 +1068,8 @@ class ElementalContactBurst(BaseAction):
 
     def _apply(self, event):
         target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid is not None
+            Entity.get(event.target_entity_uuid)
+            if event.target_entity_uuid is not None
             else None
         )
         effect = event.phase_to(EventPhase.EFFECT)
@@ -1261,22 +1251,17 @@ class ExplosiveIcicle(ElementalContactBurst):
 
 
 def technique_destination_error(
-    action: BaseAction, destination: tuple[int, int] | None, range_feet: int, *, subjective=False
-):
-    actor = Entity.get(action.source_entity_uuid)
-    if actor is None or destination is None:
-        return "Choose an impact position"
-    if (
-        not actor.senses.visible.get(destination, False)
-        or grid_distance_feet(actor.position, destination) > range_feet
-    ):
-        return "Choose a visible impact in range"
+    action: BaseAction, scan: ActorScan, selection: ActionSelection
+) -> str | None:
+    """A seen impact point in range that a projectile from the actor reaches."""
+    error = seen_point_error(action, scan, selection)
+    if error is not None:
+        return error
     if not get_map().can_reach_between(
-        actor.position,
-        destination,
+        scan.position,
+        selection.positions[0],
         PhysicalAccess.PROJECTILE,
-        actor.uuid,
-        subjective=subjective,
+        action.source_entity_uuid, subjective=scan.subjective
     ):
         return "Impact is behind a physical boundary"
     return None
@@ -1292,8 +1277,8 @@ class MyrmidonStrike(Attack):
         if actor is None:
             return event.cancel(status_message="Actor absent")
         target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid is not None
+            Entity.get(event.target_entity_uuid)
+            if event.target_entity_uuid is not None
             else None
         )
         if target is None:
@@ -1497,8 +1482,8 @@ class HealingVapours(NativeSaveBurst):
         if actor is None:
             return event.cancel(status_message="Actor absent")
         target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid is not None
+            Entity.get(event.target_entity_uuid)
+            if event.target_entity_uuid is not None
             else None
         )
         if effect.canceled or target is None:
@@ -1616,7 +1601,7 @@ class RagingVortex(ElementalWarp):
     )
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
-        return technique_destination_error(self, selection.positions[0] if selection.positions else None, 60)
+        return technique_destination_error(self, scan, selection)
 
     def _apply(self, event):
         if self.end_position is None:
@@ -1759,7 +1744,7 @@ class SweetplumGales(ElementalWarp):
     )
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
-        return technique_destination_error(self, selection.positions[0] if selection.positions else None, 60)
+        return technique_destination_error(self, scan, selection)
 
     def _apply(self, event):
         if self.end_position is None:
@@ -1939,8 +1924,8 @@ class DrainingKiss(BaseAction):
     def _apply(self, event):
         effect = event.phase_to(EventPhase.EFFECT)
         target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid is not None
+            Entity.get(event.target_entity_uuid)
+            if event.target_entity_uuid is not None
             else None
         )
         if effect.canceled or target is None:

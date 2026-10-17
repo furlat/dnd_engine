@@ -133,6 +133,11 @@ def supercover_line(
     return list(_supercover_line_cached(start, end))
 
 
+def supercover_line_relative(dx: int, dy: int) -> Tuple[Tuple[int, int], ...]:
+    """The supercover line from the origin to (dx, dy), as offsets from the origin."""
+    return _supercover_line_relative_cached(dx, dy)
+
+
 @lru_cache(maxsize=8192)
 def _supercover_line_cached(
     start: Tuple[int, int],
@@ -201,9 +206,10 @@ def supercover_slope_order(
     extent = max(max(x, y) for x, y in targets)
     scale = extent * (2 * extent + 1) + 1
     vertical = scale * (2 * extent + 2)
-    ranked = [(scale * y // x if x else vertical, (x, y)) for x, y in targets]
-    ranked.sort(key=lambda row: row[0])
-    return [position for _, position in ranked], [rank for rank, _ in ranked], scale
+    # Tuples sort in C. Equal ranks are collinear endpoints, which every incoming
+    # interval admits or rejects together, so their relative order is immaterial.
+    ranked = sorted([(scale * y // x if x else vertical, x, y) for x, y in targets])
+    return [(x, y) for _, x, y in ranked], [rank for rank, _, _ in ranked], scale
 
 
 def supercover_incoming_ranges(
