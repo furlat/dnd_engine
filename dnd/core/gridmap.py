@@ -15,9 +15,9 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from dnd.types.event_facts import LandingKind
-from dnd.core.geometry import (ROUTE_TABLE_RADIUS, circle_positions, grid_distance_feet, supercover_line, supercover_cells_relative,
-    supercover_route_table,
+from dnd.core.geometry import (circle_positions, grid_distance_feet, supercover_line,
     supercover_slope_order, supercover_incoming_ranges, supercover_incoming_rank_ranges)
+from dnd.core.view import Box, CellLayer, cell_visible, cells_layer, embed, layer_value, union_box
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.shadowcast import compute_fov
@@ -59,13 +59,12 @@ from dnd.core.world_edges import (
 from dnd.types.world import (
     EDGE_CHANNEL_REVISIONS,
     CardinalDirection,
-    ObserverRevisions,
     OccupancyLayer,
     SpatialChannel,
     WorldEdgeChannel,
     edge_revision_channels,
 )
-from dnd.types.senses import (OBSCUREMENT_BITS, OBSCUREMENT_SETS, OpticalObscurement, PerceivedContact,
+from dnd.types.senses import (OBSCUREMENT_BITS, OpticalObscurement, PerceivedContact,
     PerceivedLightSource, PerceivedSpatialEffect)
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.residues import ResidueFieldState
@@ -85,9 +84,9 @@ from dnd.types.world_placement import (
 )
 from dnd.action_timing import action_timing_enabled, record_action_count, record_action_elapsed, record_action_timing
 
-OpticalSnapshot = Dict[Tuple[int, int], Dict[UUID, frozenset[OpticalObscurement]]]
-
 SPATIAL_CHUNK_SIZE = 16
+# Cell grids grow by this margin past a new tile, so a map built tile by tile reallocates rarely.
+CELL_GRID_MARGIN = 16
 FOV_CACHE_ORIGINS = 64
 
 DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
@@ -97,28 +96,9 @@ ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "entity.world_presence.absent"
 OBJECT_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "object.world_presence.absent"
 
 
-@dataclass(frozen=True, slots=True)
-class BoundarySnapshot:
-    """Detached native side layers and provider values for one query batch."""
-
-    layers: Dict[Tuple[int, int], Dict[CardinalDirection, Tuple[UUID, ...]]]
-    structures: Dict[UUID, Optional[BoundaryStructure]]
-    placements: Dict[UUID, Optional[WorldObjectPlacement]]
-    coverage_base: frozenset[Tuple[int, int]]
-    routes: Dict[Tuple[int, int], Tuple[CardinalDirection, ...]]
-
-
 def revision_edge_channels(channels: AbstractSet[SpatialChannel]) -> Tuple[WorldEdgeChannel, ...]:
     """Return the structural channels whose revision channel is in ``channels``."""
     return tuple(edge for edge, revision in EDGE_CHANNEL_REVISIONS.items() if revision in channels)
-
-
-def boundary_snapshot_covers(snapshot: BoundarySnapshot, position: Tuple[int, int]) -> bool:
-    """Exact batch coverage: input cells plus their four incident neighbors."""
-    cells = snapshot.coverage_base
-    x, y = position
-    return (position in cells or (x - 1, y) in cells or (x + 1, y) in cells
-            or (x, y - 1) in cells or (x, y + 1) in cells)
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,9 +150,9 @@ class SpatialConditionOwner(Protocol):
         mode: MovementMode = MovementMode.WALKING,
     ) -> bool: ...
 
-    def get_optical_obscurement_at(
-        self, position: Tuple[int, int],
-    ) -> Optional[OpticalObscurement]: ...
+    def optical_obscurement_value(self) -> Optional[OpticalObscurement]: ...
+
+    def contributions_active(self) -> bool: ...
 
     def blocks_physical_optics_at(self, position: Tuple[int, int]) -> bool: ...
 
@@ -216,7 +196,7 @@ class GridMap:
     """Singleton-like manager for grid state and spatial queries.
 
     The map owns Tile storage, Tile-backed occupancy, object placement, event-backed
-    spatial changes, cell subscriptions, light sources, FOV, and pathfinding.
+    spatial changes, the objective cell grids, light sources, FOV, and pathfinding.
     """
 
     _instance: Optional['GridMap'] = None
@@ -257,13 +237,6 @@ class GridMap:
             List[UUID],
         ] = defaultdict(list)
 
-        self._cell_subscribers: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
-        self._entity_subscriptions: DefaultDict[UUID, Set[Tuple[int, int]]] = defaultdict(set)
-        self._observer_revisions: Dict[UUID, ObserverRevisions] = {}
-        self._observer_dependency_chunks: Dict[UUID, Set[Tuple[int, int]]] = {}
-        self._observer_dependency_cells: Dict[UUID, frozenset[Tuple[int, int]]] = {}
-        self._observer_dependency_bounds: Dict[UUID, Optional[Tuple[int, int, int, int]]] = {}
-        self._chunk_dependents: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
         self._optical_candidate_cells: DefaultDict[Tuple[int, int], Set[Tuple[int, int]]] = defaultdict(set)
         self._boundary_candidate_cells: DefaultDict[
             Tuple[int, int], Dict[Tuple[int, int], Dict[CardinalDirection, Tuple[UUID, ...]]]
@@ -274,18 +247,19 @@ class GridMap:
 
         self._light_sources: Dict[UUID, LightSourceData] = {}
         self._light_source_revisions: Dict[UUID, int] = {}
-        # Every emitter revision in order (epoch, emitter); never reset, so an
-        # observer's last epoch names exactly the emitters changed since.
-        self._light_epoch = 0
-        self._light_changes: List[Tuple[int, UUID]] = []
-        self._subscription_revision = 0
         self._block_light_suppressions: DefaultDict[UUID, Set[str]] = defaultdict(set)
-        self._optical_obscurements_by_position: DefaultDict[
-            Tuple[int, int], Dict[UUID, OpticalObscurement]
-        ] = defaultdict(dict)
-        self._optical_obscurement_positions_by_source: Dict[
-            UUID, Set[Tuple[int, int]]
-        ] = {}
+        # Cell grids over a box covering every Tile (plan §6b "World grids"), written at
+        # their commits: Tile presence, resolved objective light, and each emitter's lit
+        # cells as one bit of a slot word.
+        self._cell_exists = CellLayer(0, 0, np.zeros((0, 0), dtype=bool))
+        self._cell_light = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
+        self._cell_light_slots = CellLayer(0, 0, np.zeros((0, 0, 1), dtype=np.uint64))
+        self._light_slot_of: Dict[UUID, int] = {}
+        # Each optical obscurement owner's cells as OBSCUREMENT_BITS, written at its
+        # membership commit; a condition owner contributes only while active.
+        self._obscurement_layers: Dict[UUID, CellLayer] = {}
+        # Each spatial condition's committed footprint as a bool layer (same commit as its cells).
+        self._condition_footprints: Dict[UUID, CellLayer] = {}
 
         self._events_enabled: bool = True
         self._pending_events: List['SpatialChangeEvent'] = []
@@ -324,8 +298,6 @@ class GridMap:
             bool,
         ] = {}
         self._propagation_blocking_cache: Dict[Tuple[int, int], bool] = {}
-        self._obscurement_index: Dict[Tuple[int, int], Dict[UUID, frozenset[OpticalObscurement]]] = {}
-        self._obscurement_index_key: Optional[Tuple[int, int]] = None
         self._pending_light_positions: Set[Tuple[int, int]] = set()
         self._pending_light_sources: Set[Tuple[int, int]] = set()
         self._pending_light_parent: Optional[UUID] = None
@@ -448,146 +420,111 @@ class GridMap:
         """Disable event firing (for batch operations)."""
         self._events_enabled = False
 
-    def get_subscribers_at(self, position: Tuple[int, int]) -> Set[UUID]:
-        """Get all entity UUIDs subscribed to a cell."""
-        return self._cell_subscribers.get(position, set()).copy()
-
-    @property
-    def subscription_revision(self) -> int:
-        """Advanced whenever any cell's subscriber set changes."""
-        return self._subscription_revision
-
-    def subscribers_view_at(self, position: Tuple[int, int]) -> AbstractSet[UUID]:
-        """The live subscriber set of a cell, for an immediate read-only query."""
-        return self._cell_subscribers.get(position, frozenset())
-
-    def get_subscribers_for_cells(self, cells: Collection[Tuple[int, int]]) -> Set[UUID]:
-        """Return the union of subscribers for a batch of cells."""
-        subscribers: Set[UUID] = set()
-        for cell in cells:
-            subscribers.update(self._cell_subscribers.get(cell, set()))
-        return subscribers
-
     @staticmethod
     def _spatial_chunk(position: Tuple[int, int]) -> Tuple[int, int]:
         return position[0] // SPATIAL_CHUNK_SIZE, position[1] // SPATIAL_CHUNK_SIZE
 
-    def get_dependent_observers_at(self, position: Tuple[int, int]) -> Set[UUID]:
-        """Return conservative sensory dependencies, never observation grants."""
-        return {identity for identity in self._chunk_dependents.get(self._spatial_chunk(position), ())
-                if self._observer_depends_on(identity, position)}
+    # ------------------------------------------------------------ cell grids (plan §6b)
 
-    def _observer_depends_on(self, observer_uuid: UUID, position: Tuple[int, int]) -> bool:
-        bounds = self._observer_dependency_bounds[observer_uuid]
-        return (position in self._observer_dependency_cells[observer_uuid]
-                or bounds is not None and bounds[0] <= position[0] <= bounds[2]
-                and bounds[1] <= position[1] <= bounds[3])
-
-    def get_dependent_observers_for_cells(self, cells: Collection[Tuple[int, int]]) -> Set[UUID]:
-        """Observers depending on any of the cells; each is tested only until one cell matches."""
-        by_chunk: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
-        for position in cells:
-            by_chunk[(position[0] // SPATIAL_CHUNK_SIZE, position[1] // SPATIAL_CHUNK_SIZE)].append(position)
-        observers: Set[UUID] = set()
-        for chunk, positions in by_chunk.items():
-            for identity in self._chunk_dependents.get(chunk, ()):
-                if identity in observers:
-                    continue
-                cells_of, bounds = self._observer_dependency_cells[identity], self._observer_dependency_bounds[identity]
-                if any(position in cells_of or bounds is not None and bounds[0] <= position[0] <= bounds[2]
-                       and bounds[1] <= position[1] <= bounds[3] for position in positions):
-                    observers.add(identity)
-        return observers
-
-    def subscribe_to_cells(
-        self, entity_uuid: UUID, cells: Set[Tuple[int, int]], *,
-        dependency_cells: Optional[Collection[Tuple[int, int]]] = None,
-        dependency_bounds: Optional[Tuple[int, int, int, int]] = None,
-    ) -> None:
-        """Subscribe an entity to a set of cells.
-
-        Replaces any existing subscriptions for this entity.
-        ``cells`` retains the established encounter/action observation grants.
-        Sensory dependencies may include an inclusive (min_x, min_y, max_x, max_y)
-        rectangle and extra cells. Their coarse memberships never grant knowledge.
-        """
-        old_cells = self._entity_subscriptions.get(entity_uuid, set())
-        if old_cells != cells:
-            self._subscription_revision += 1
-
-        for cell in old_cells - cells:
-            self._cell_subscribers[cell].discard(entity_uuid)
-            if not self._cell_subscribers[cell]:
-                del self._cell_subscribers[cell]
-
-        for cell in cells - old_cells:
-            self._cell_subscribers[cell].add(entity_uuid)
-
-        self._entity_subscriptions[entity_uuid] = cells.copy()
-        self._observer_revisions.setdefault(entity_uuid, ObserverRevisions())
-        extra_cells = frozenset(cells if dependency_cells is None else dependency_cells)
-        self._observer_dependency_cells[entity_uuid] = extra_cells
-        self._observer_dependency_bounds[entity_uuid] = dependency_bounds
-        dependency_chunks = {self._spatial_chunk(position) for position in extra_cells}
-        if dependency_bounds is not None:
-            min_x, min_y, max_x, max_y = dependency_bounds
-            dependency_chunks.update((x, y)
-                for x in range(min_x // SPATIAL_CHUNK_SIZE, max_x // SPATIAL_CHUNK_SIZE + 1)
-                for y in range(min_y // SPATIAL_CHUNK_SIZE, max_y // SPATIAL_CHUNK_SIZE + 1))
-        old_chunks = self._observer_dependency_chunks.get(entity_uuid, set())
-        for chunk in old_chunks - dependency_chunks:
-            self._chunk_dependents[chunk].discard(entity_uuid)
-            if not self._chunk_dependents[chunk]:
-                del self._chunk_dependents[chunk]
-        for chunk in dependency_chunks - old_chunks:
-            self._chunk_dependents[chunk].add(entity_uuid)
-        self._observer_dependency_chunks[entity_uuid] = dependency_chunks
-
-    def unsubscribe_entity(self, entity_uuid: UUID) -> None:
-        """Remove all subscriptions for an entity."""
-        cells = self._entity_subscriptions.pop(entity_uuid, set())
-        self._subscription_revision += 1
-        self._observer_revisions.pop(entity_uuid, None)
-        self._observer_dependency_cells.pop(entity_uuid, None)
-        self._observer_dependency_bounds.pop(entity_uuid, None)
-        for chunk in self._observer_dependency_chunks.pop(entity_uuid, set()):
-            self._chunk_dependents[chunk].discard(entity_uuid)
-            if not self._chunk_dependents[chunk]:
-                del self._chunk_dependents[chunk]
-        for cell in cells:
-            self._cell_subscribers[cell].discard(entity_uuid)
-            if not self._cell_subscribers[cell]:
-                del self._cell_subscribers[cell]
-
-    def get_entity_subscriptions(self, entity_uuid: UUID) -> Set[Tuple[int, int]]:
-        """Get all cells an entity is subscribed to."""
-        return self._entity_subscriptions.get(entity_uuid, set()).copy()
-
-    def observer_spatial_revisions(self, observer_uuid: UUID) -> ObserverRevisions:
-        """Return this subscriber's optical, illumination, propagation and occupancy revisions."""
-        return self._observer_revisions.get(observer_uuid, ObserverRevisions())
-
-    def _bump_observer_revisions(
-        self, channels: frozenset[SpatialChannel], positions: Optional[Collection[Tuple[int, int]]],
-    ) -> None:
-        optical = int(SpatialChannel.OPTICAL in channels)
-        illumination = int(SpatialChannel.ILLUMINATION in channels)
-        propagation = int(SpatialChannel.PROPAGATION in channels)
-        occupancy = int(SpatialChannel.OCCUPANCY in channels)
-        obscurement = int(SpatialChannel.OBSCUREMENT in channels)
-        if not (optical or illumination or propagation or occupancy or obscurement):
+    def _cover_cells(self, box: Box) -> None:
+        """Grow the cell grids to cover an inclusive box (never shrinks)."""
+        current = self._cell_exists
+        if current.values.size and all(current.box[i] <= box[i] for i in (0, 1)) and all(
+                current.box[i] >= box[i] for i in (2, 3)):
             return
-        observers = (self._observer_revisions if positions is None
-                     else self.get_dependent_observers_for_cells(positions))
-        for observer_uuid in observers:
-            current = self._observer_revisions[observer_uuid]
-            self._observer_revisions[observer_uuid] = ObserverRevisions(
-                optical=current.optical + optical,
-                illumination=current.illumination + illumination,
-                propagation=current.propagation + propagation,
-                occupancy=current.occupancy + occupancy,
-                obscurement=current.obscurement + obscurement,
-            )
+        target = box if not current.values.size else union_box(current.box, box)
+        target = (target[0] - CELL_GRID_MARGIN, target[1] - CELL_GRID_MARGIN,
+                  target[2] + CELL_GRID_MARGIN, target[3] + CELL_GRID_MARGIN)
+        self._cell_exists = CellLayer(target[0], target[1], embed(current, target, np.dtype(bool)))
+        self._cell_light = CellLayer(target[0], target[1], embed(self._cell_light, target, np.dtype(np.uint8)))
+        slots = self._cell_light_slots
+        words = np.zeros((target[2] - target[0] + 1, target[3] - target[1] + 1, slots.values.shape[2]), dtype=np.uint64)
+        if slots.values.size:
+            sx0, sy0, sx1, sy1 = slots.box
+            words[sx0 - target[0]:sx1 - target[0] + 1, sy0 - target[1]:sy1 - target[1] + 1] = slots.values
+        self._cell_light_slots = CellLayer(target[0], target[1], words)
+
+    def _write_cells(self, positions: Iterable[Tuple[int, int]]) -> None:
+        """Write Tile presence and resolved light of cells from their Tiles."""
+        exists, light = self._cell_exists, self._cell_light
+        width, height = exists.values.shape
+        for x, y in positions:
+            tile = self._tiles.get((x, y))
+            i, j = x - exists.x0, y - exists.y0
+            if not (0 <= i < width and 0 <= j < height):
+                continue  # outside the box no cell holds a Tile
+            exists.values[i, j] = tile is not None
+            light.values[i, j] = tile.resolved_light_level.value if tile is not None else 0
+
+    @property
+    def cell_exists(self) -> CellLayer:
+        """Tile presence over the cell box (read-only: GridMap writes it at Tile commits)."""
+        return self._cell_exists
+
+    @property
+    def cell_light(self) -> CellLayer:
+        """Resolved objective LightLevel over the cell box (written at every illumination commit)."""
+        return self._cell_light
+
+    def _set_light_footprint(self, source: LightSourceData, affected: Dict[Tuple[int, int], LightLevel]) -> None:
+        """Assign an emitter's lit cells and its slot bit in the cell grid."""
+        slots = self._cell_light_slots
+        slot = self._light_slot_of.get(source.uuid)
+        if slot is None:
+            used = set(self._light_slot_of.values())
+            slot = next(index for index in range(len(used) + 1) if index not in used)
+            self._light_slot_of[source.uuid] = slot
+            if slot // 64 >= slots.values.shape[2]:
+                grown = np.zeros(slots.values.shape[:2] + (slot // 64 + 1,), dtype=np.uint64)
+                grown[:, :, :slots.values.shape[2]] = slots.values
+                slots = self._cell_light_slots = CellLayer(slots.x0, slots.y0, grown)
+        word, bit = slot // 64, np.uint64(1) << np.uint64(slot % 64)
+        for x, y in source.affected_tiles.keys() - affected.keys():
+            slots.values[x - slots.x0, y - slots.y0, word] &= ~bit
+        for x, y in affected.keys() - source.affected_tiles.keys():
+            slots.values[x - slots.x0, y - slots.y0, word] |= bit
+        source.affected_tiles = affected
+
+    def _release_light_slot(self, source: LightSourceData) -> None:
+        self._set_light_footprint(source, {})
+        self._light_slot_of.pop(source.uuid, None)
+
+    def light_sources_lit_within(self, visible: CellLayer) -> Set[UUID]:
+        """Emitters whose lit cells include any visible cell of a bool layer."""
+        slots = self._cell_light_slots
+        if not self._light_slot_of or not visible.values.size:
+            return set()
+        lx0, ly0, lx1, ly1 = visible.box
+        sx0, sy0 = slots.x0, slots.y0
+        words = slots.values[lx0 - sx0:lx1 - sx0 + 1, ly0 - sy0:ly1 - sy0 + 1][visible.values]
+        if not words.size:
+            return set()
+        lit = np.bitwise_or.reduce(words, axis=0).tolist()
+        return {identity for identity, slot in self._light_slot_of.items() if lit[slot // 64] >> (slot % 64) & 1}
+
+    def contact_cells_in_box(self, box: Box) -> List[Tuple[Tuple[int, int], Tuple[Tuple[UUID, ...], Tuple[UUID, ...]]]]:
+        """Occupied cells in an inclusive box with their str-ordered entities and center objects."""
+        min_x, min_y, max_x, max_y = box
+        return [(position, row)
+                for cx in range(min_x // SPATIAL_CHUNK_SIZE, max_x // SPATIAL_CHUNK_SIZE + 1)
+                for cy in range(min_y // SPATIAL_CHUNK_SIZE, max_y // SPATIAL_CHUNK_SIZE + 1)
+                for position, row in self._contact_candidate_cells.get((cx, cy), {}).items()
+                if min_x <= position[0] <= max_x and min_y <= position[1] <= max_y]
+
+    def boundary_sides_in_box(self, box: Box) -> List[Tuple[Tuple[int, int], CardinalDirection, Tuple[UUID, ...]]]:
+        """Occupied boundary sides owned by Tiles in an inclusive box, with their str-ordered objects."""
+        min_x, min_y, max_x, max_y = box
+        return [(position, direction, identities)
+                for cx in range(min_x // SPATIAL_CHUNK_SIZE, max_x // SPATIAL_CHUNK_SIZE + 1)
+                for cy in range(min_y // SPATIAL_CHUNK_SIZE, max_y // SPATIAL_CHUNK_SIZE + 1)
+                for position, sides in self._boundary_candidate_cells.get((cx, cy), {}).items()
+                if min_x <= position[0] <= max_x and min_y <= position[1] <= max_y
+                for direction, identities in sides.items() if identities]
+
+    def boundary_side_objects(self, position: Tuple[int, int], direction: CardinalDirection) -> Tuple[UUID, ...]:
+        """The str-ordered objects on one owner Tile's side."""
+        sides = self._boundary_candidate_cells.get(self._spatial_chunk(position), {}).get(position)
+        return sides.get(direction, ()) if sides is not None else ()
 
     @property
     def optical_revision(self) -> int:
@@ -636,8 +573,9 @@ class GridMap:
 
     def spatial_condition_changed(self, condition: SpatialConditionOwner) -> None:
         """Invalidate a condition's own channels after a state change that kept its footprint."""
-        self._bump_spatial_revisions(condition.spatial_channels(),
-            set(self._spatial_condition_positions.get(condition.uuid, set())))
+        positions = set(self._spatial_condition_positions.get(condition.uuid, set()))
+        self._write_condition_obscurement(condition, positions)
+        self._bump_spatial_revisions(condition.spatial_channels(), positions)
 
     def commit_object_blocking(
         self,
@@ -656,7 +594,6 @@ class GridMap:
         record_action_count("cache.clear.path", 1)
         self._occupancy_revision += 1
         self._path_cache.clear()
-        self._bump_observer_revisions(frozenset({SpatialChannel.OCCUPANCY}), positions)
 
     def _on_perceivability_changed(self, event: Event) -> None:
         """Invalidate subjective occupancy paths when a blocker can appear or vanish.
@@ -679,7 +616,6 @@ class GridMap:
         """Advance channel revisions and clear dependent query caches."""
         if not channels:
             return
-        self._bump_observer_revisions(channels, positions)
         self._spatial_revision += 1
         if SpatialChannel.OPTICAL in channels:
             record_action_count("cache.clear.fov", 1)
@@ -691,6 +627,8 @@ class GridMap:
             self._path_cache.clear()
         if SpatialChannel.ILLUMINATION in channels:
             self._light_revision += 1
+            # The resolved light of every committed illumination change is written here.
+            self._write_cells(self._tiles if positions is None else positions)
         if SpatialChannel.PROPAGATION in channels:
             record_action_count("cache.clear.propagation", 1)
             self._propagation_revision += 1
@@ -917,6 +855,8 @@ class GridMap:
             self._seed_replacement_tile_light(tile, old_illuminations, old_caps, old_dimmers)
         self._tiles[position] = tile
         self._tiles_by_uuid[tile.uuid] = position
+        self._cover_cells((x, y, x, y))
+        self._write_cells((position,))
         self._index_support_position(position)
         if old_tile is None:
             self._refresh_missing_support_frontier(position)
@@ -935,8 +875,6 @@ class GridMap:
         if illumination_changed:
             revision_channels.add(SpatialChannel.ILLUMINATION)
         self._bump_spatial_revisions(frozenset(revision_channels), {position})
-        if support_changed and SpatialChannel.OPTICAL not in revision_channels:
-            self._bump_observer_revisions(frozenset({SpatialChannel.OPTICAL}), {position})
 
         if effect is not None:
             self._complete_event_effect(effect)
@@ -1068,6 +1006,7 @@ class GridMap:
 
         self._tiles_by_uuid.pop(tile.uuid, None)
         del self._tiles[position]
+        self._write_cells((position,))
         support_key = (x, y // SPATIAL_CHUNK_SIZE)
         support = self._support_columns[support_key]
         support.remove(position)
@@ -1554,7 +1493,6 @@ class GridMap:
         tile.elevation_surface_kind = surface_kind
         tile.slope_axis = slope_axis
         self._bump_spatial_revisions(frozenset({SpatialChannel.MOVEMENT}), {position})
-        self._bump_observer_revisions(frozenset({SpatialChannel.OPTICAL}), {position})
         if effect is not None:
             self._complete_event_effect(effect)
         return True
@@ -1661,6 +1599,8 @@ class GridMap:
                 layer,
             )
         self._refresh_optical_candidate_cells(previous_positions | normalized)
+        self._condition_footprints[condition.uuid] = cells_layer(normalized, True)
+        self._write_condition_obscurement(condition, normalized)
         self._bump_spatial_revisions(condition.spatial_channels(), previous_positions | normalized)
 
     def publish_tile_state_changed(
@@ -1765,6 +1705,8 @@ class GridMap:
                         layer,
                     )
         condition = self._spatial_conditions.pop(condition_uuid, None)
+        self._obscurement_layers.pop(condition_uuid, None)
+        self._condition_footprints.pop(condition_uuid, None)
         self._global_crossing_owners.discard(condition_uuid)
         for owners in self._local_crossing_owners.values():
             owners.discard(condition_uuid)
@@ -2542,6 +2484,8 @@ class GridMap:
                 self.validate_tile_detachment(position)
         events_were_enabled = self._events_enabled
         self.disable_events()
+        if width > 0 and height > 0:
+            self._cover_cells((x, y, x + width - 1, y + height - 1))
         try:
             for tx in range(x, x + width):
                 for ty in range(y, y + height):
@@ -2567,6 +2511,7 @@ class GridMap:
                     self._seed_replacement_tile_light(tile, old_illuminations, old_caps, old_dimmers)
                     self._tiles[(tx, ty)] = tile
                     self._tiles_by_uuid[tile.uuid] = (tx, ty)
+                    self._write_cells(((tx, ty),))
                     self._index_support_position((tx, ty))
                     if old_tile is None:
                         self._refresh_missing_support_frontier((tx, ty))
@@ -3026,7 +2971,7 @@ class GridMap:
             if contact is not None and not creator_knows:
                 positions = {position for position in positions
                              if position == contact.position or position == origin
-                             or (senses is not None and senses.visible.get(position, False))}
+                             or (senses is not None and cell_visible(senses.cells, position))}
 
         def distance(position: Tuple[int, int]) -> int:
             return support_distance_feet(origin, source_tile.height * 5,
@@ -3345,18 +3290,11 @@ class GridMap:
 
     def _bump_object_revisions(self, object_uuid: UUID, channels: frozenset[SpatialChannel],
                                positions: Collection[Tuple[int, int]]) -> None:
-        """Invalidate existing blocker caches, and side structures in observers' boundary snapshots.
-
-        A center object's contact is re-read by its own published change; only a
-        side structure is retained in every covering observer's field.
-        """
+        """Invalidate existing blocker caches."""
         self._bump_spatial_revisions(channels, positions)
         # A retained boundary can have no occupied bands. Its placement identity
         # still participates in the native global directional-solver decision.
         self._refresh_directional_blocker_owners(revision_edge_channels(channels), (object_uuid,))
-        provider = BaseBlock.get(object_uuid)
-        if provider is None or provider.get_world_placement_spec().kind is WorldPlacementKind.BOUNDARY:
-            self._bump_observer_revisions(frozenset({SpatialChannel.OPTICAL}) - channels, positions)
 
     def _object_revision_channels(self, obj: BaseBlock) -> frozenset[SpatialChannel]:
         """Return the revision channels of everything one placed object blocks."""
@@ -4277,176 +4215,11 @@ class GridMap:
             if not self._boundary_candidate_cells[chunk]:
                 del self._boundary_candidate_cells[chunk]
 
-    def capture_boundary_snapshot(self, positions: Collection[Tuple[int, int]], *,
-                                  previous: Optional[BoundarySnapshot] = None) -> BoundarySnapshot:
-        """Capture occupied sides, retaining overlap from unchanged native geometry.
-
-        A caller supplying ``previous`` must have verified that its covered
-        geometry has not changed. New coverage always reads the current owner.
-        Returned mappings stay detached and contain only this query's halo.
-        """
-        # Temporary phase evidence for the movement rework.
-        diagnostic = action_timing_enabled()
-        phase_started = time.perf_counter() if diagnostic else 0.0
-        cells = frozenset(positions)
-        layers = {}
-        structures: Dict[UUID, Optional[BoundaryStructure]] = {}
-        placements: Dict[UUID, Optional[WorldObjectPlacement]] = {}
-        resolved_providers = 0
-        incident: DefaultDict[Tuple[int, int], Set[CardinalDirection]] = defaultdict(set)
-        deltas = {CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
-                  CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0)}
-        snapshot = BoundarySnapshot(layers, structures, placements, cells, {})
-        if previous is not None:
-            layers.update((position, dict(sides)) for position, sides in previous.layers.items()
-                          if boundary_snapshot_covers(snapshot, position))
-        added_cells = cells if previous is None else cells - previous.coverage_base
-        base_chunks = {self._spatial_chunk(position) for position in added_cells}
-        chunks = base_chunks | {(x + dx, y + dy) for x, y in base_chunks
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))}
-        if diagnostic:
-            record_action_timing("grid.boundary_snapshot.coverage_ms", phase_started)
-            phase_started = time.perf_counter()
-        for chunk in chunks:
-            for position, sides in self._boundary_candidate_cells.get(chunk, {}).items():
-                if not boundary_snapshot_covers(snapshot, position):
-                    continue
-                if previous is not None and boundary_snapshot_covers(previous, position):
-                    continue
-                # Current side tuples belong to committed Tile bands. Detach
-                # the mapping; later commits replace the indexed value.
-                layers[position] = dict(sides)
-        same_layers = previous is not None and layers == previous.layers
-        if same_layers:
-            # Coverage can move without changing any incident boundary input.
-            # Reuse that derived evidence while keeping every mapping detached.
-            structures = dict(previous.structures)
-            placements = dict(previous.placements)
-        else:
-            for position, sides in layers.items():
-                for direction, identities in sides.items():
-                    if not identities:
-                        continue
-                    incident[position].add(direction)
-                    dx, dy = deltas[direction]
-                    incident[(position[0] + dx, position[1] + dy)].add(self._opposite_direction(direction))
-                    for identity in identities:
-                        if identity not in structures:
-                            if previous is not None and identity in previous.structures:
-                                structures[identity] = previous.structures[identity]
-                                placements[identity] = previous.placements[identity]
-                            else:
-                                provider = BaseBlock.get(identity)
-                                structures[identity] = provider.get_boundary_structure() if provider is not None else None
-                                placements[identity] = self._object_placements.get(identity)
-                                resolved_providers += 1
-        if diagnostic:
-            record_action_timing("grid.boundary_snapshot.native_sides_and_providers_ms", phase_started)
-            phase_started = time.perf_counter()
-        if same_layers:
-            routes = dict(previous.routes)
-        else:
-            routes = {position: tuple(direction for direction in CardinalDirection if direction in directions)
-                      for position, directions in incident.items()}
-        snapshot = BoundarySnapshot(layers, structures, placements, cells, routes)
-        if diagnostic:
-            record_action_timing("grid.boundary_snapshot.incident_routes_ms", phase_started)
-            record_action_count("grid.boundary_snapshot.coverage_base_cells", len(cells))
-            record_action_count("grid.boundary_snapshot.occupied_cells", len(layers))
-            record_action_count("grid.boundary_snapshot.providers", len(structures))
-            record_action_count("grid.boundary_snapshot.resolved_providers", resolved_providers)
-            record_action_count("grid.boundary_snapshot.reused_providers", len(structures) - resolved_providers)
-        return snapshot
-
-    def shift_observer_boundaries(self, positions: Collection[Tuple[int, int]],
-                                   previous: BoundarySnapshot) -> BoundarySnapshot:
-        """Reconcile a private observer field after unchanged native geometry.
-
-        The caller uses the same local-revision gate as snapshot overlap reuse.
-        Both fields only read their shared inner side dictionaries. Public
-        snapshots continue to detach every mapping through capture_boundary_snapshot.
-        """
-        cells = frozenset(positions)
-        if not cells or previous.coverage_base.isdisjoint(cells):
-            return self.capture_boundary_snapshot(cells, previous=previous)
-        diagnostic = action_timing_enabled()
-        phase_started = time.perf_counter() if diagnostic else 0.0
-        layers = dict(previous.layers)
-        structures = dict(previous.structures)
-        placements = dict(previous.placements)
-        routes = dict(previous.routes)
-        snapshot = BoundarySnapshot(layers, structures, placements, cells, routes)
-        deltas = {CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
-                  CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0)}
-        changed_cells = cells ^ previous.coverage_base
-        candidates = set(changed_cells)
-        for x, y in changed_cells:
-            candidates.update(((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)))
-        if diagnostic:
-            record_action_timing("grid.boundary_snapshot.coverage_ms", phase_started)
-            phase_started = time.perf_counter()
-        changed_layers = set()
-        resolved_providers = 0
-        for position in candidates:
-            sides = self._boundary_candidate_cells.get(self._spatial_chunk(position), {}).get(position)
-            if position not in previous.layers and sides is None:
-                continue
-            covered = boundary_snapshot_covers(snapshot, position)
-            if covered == boundary_snapshot_covers(previous, position):
-                continue
-            if covered:
-                if sides is None:
-                    continue
-                layers[position] = dict(sides)
-                for identities in sides.values():
-                    for identity in identities:
-                        provider = BaseBlock.get(identity)
-                        structures[identity] = provider.get_boundary_structure() if provider is not None else None
-                        placements[identity] = self._object_placements.get(identity)
-                        resolved_providers += 1
-            else:
-                departed = layers.pop(position, None)
-                if departed is None:
-                    continue
-                # A native boundary placement owns exactly one Tile and side.
-                # Remove only this field's provider values, never world placement.
-                for identities in departed.values():
-                    for identity in identities:
-                        structures.pop(identity, None)
-                        placements.pop(identity, None)
-            changed_layers.add(position)
-        if diagnostic:
-            record_action_timing("grid.boundary_snapshot.native_sides_and_providers_ms", phase_started)
-            phase_started = time.perf_counter()
-        touched_routes = set(changed_layers)
-        for x, y in changed_layers:
-            touched_routes.update(((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)))
-        for position in touched_routes:
-            x, y = position
-            directions = tuple(direction for direction, (dx, dy) in deltas.items()
-                if layers.get(position, {}).get(direction)
-                or layers.get((x + dx, y + dy), {}).get(self._opposite_direction(direction)))
-            if directions:
-                routes[position] = directions
-            else:
-                routes.pop(position, None)
-        if diagnostic:
-            record_action_timing("grid.boundary_snapshot.incident_routes_ms", phase_started)
-            record_action_count("grid.boundary_snapshot.coverage_base_cells", len(cells))
-            record_action_count("grid.boundary_snapshot.occupied_cells", len(layers))
-            record_action_count("grid.boundary_snapshot.providers", len(structures))
-            record_action_count("grid.boundary_snapshot.resolved_providers", resolved_providers)
-            record_action_count("grid.boundary_snapshot.reused_providers", len(structures) - resolved_providers)
-            record_action_count("grid.boundary_snapshot.changed_layers", len(changed_layers))
-            record_action_count("grid.boundary_snapshot.rebuilt_routes", len(touched_routes))
-        return snapshot
-
     def get_boundary_route_layers(
         self,
         source: Tuple[int, int],
         direction: CardinalDirection,
         channel: WorldEdgeChannel,
-        *, snapshot: Optional[BoundarySnapshot] = None,
     ) -> Tuple[Tuple[UUID, ...], Tuple[UUID, ...]]:
         """Return boundary objects reached from one perceivable endpoint."""
         if source not in self._tiles:
@@ -4458,9 +4231,7 @@ class GridMap:
             WorldEdgeChannel.PROPAGATION,
         }:
             raise ValueError("boundary route channel must be optical or propagation")
-        exit_layer = (snapshot.layers.get(source, {}).get(direction, ())
-            if snapshot is not None and boundary_snapshot_covers(snapshot, source) else
-            tuple(sorted(self.get_boundary_objects_at(source, direction), key=str)))
+        exit_layer = tuple(sorted(self.get_boundary_objects_at(source, direction), key=str))
         delta = {
             CardinalDirection.NORTH: (0, 1),
             CardinalDirection.SOUTH: (0, -1),
@@ -4471,18 +4242,13 @@ class GridMap:
         if destination not in self._tiles:
             return exit_layer, ()
         entry_direction = self._opposite_direction(direction)
-        entry_layer = (snapshot.layers.get(destination, {}).get(entry_direction, ())
-            if snapshot is not None and boundary_snapshot_covers(snapshot, destination) else
-            tuple(sorted(self.get_boundary_objects_at(destination, entry_direction), key=str)))
+        entry_layer = tuple(sorted(self.get_boundary_objects_at(destination, entry_direction), key=str))
         if not entry_layer:
             return exit_layer, ()
         # Optical and propagation channels use the existing XY blocking policy.
         for object_uuid in exit_layer:
-            if snapshot is not None and object_uuid in snapshot.structures:
-                structure = snapshot.structures[object_uuid]
-            else:
-                provider = BaseBlock.get(object_uuid)
-                structure = provider.get_boundary_structure() if provider is not None else None
+            provider = BaseBlock.get(object_uuid)
+            structure = provider.get_boundary_structure() if provider is not None else None
             if structure is not None and channel in structure.blocked_channels:
                 return exit_layer, ()
         return exit_layer, entry_layer
@@ -4963,7 +4729,6 @@ class GridMap:
 
     def upper_volume_sight_planes(
         self, origin: Tuple[int, int], destination: Tuple[int, int],
-        *, snapshot: Optional[BoundarySnapshot] = None,
     ) -> Tuple[Tuple[float, float, float], ...]:
         """Clearance over finite optical boundaries, from existing support height.
 
@@ -4979,21 +4744,14 @@ class GridMap:
         for cell in route:
             for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
                 nearby = cell[0] + dx, cell[1] + dy
-                if snapshot is not None and boundary_snapshot_covers(snapshot, nearby):
-                    for identities in snapshot.layers.get(nearby, {}).values():
-                        providers.update(identities)
-                else:
-                    for direction in CardinalDirection:
-                        providers.update(self.get_boundary_objects_at(nearby, direction))
+                for identities in self._boundary_candidate_cells.get(self._spatial_chunk(nearby), {}).get(
+                        nearby, {}).values():
+                    providers.update(identities)
         planes: Set[Tuple[float, float, float]] = set()
         for identity in providers:
-            if snapshot is not None and identity in snapshot.structures:
-                placement = snapshot.placements[identity]
-                structure = snapshot.structures[identity]
-            else:
-                provider = BaseBlock.get(identity)
-                placement = self.get_object_placement(identity)
-                structure = provider.get_boundary_structure() if provider is not None else None
+            provider = BaseBlock.get(identity)
+            placement = self.get_object_placement(identity)
+            structure = provider.get_boundary_structure() if provider is not None else None
             if (placement is None or structure is None
                     or WorldEdgeChannel.OPTICAL not in structure.blocked_channels):
                 continue
@@ -5457,269 +5215,65 @@ class GridMap:
             self._bump_spatial_revisions(frozenset({SpatialChannel.ILLUMINATION}), changed)
         return changed
 
-    def apply_optical_obscurement(
-        self,
-        source_uuid: UUID,
-        positions: Set[Tuple[int, int]],
-        obscurement: OpticalObscurement,
-        *,
-        parent_event: Optional[UUID] = None,
-    ) -> Set[Tuple[int, int]]:
-        """Install one source-owned conditional optical contribution."""
-        normalized = {
-            position for position in positions if position in self._tiles
-        }
-        previous = set(self._optical_obscurement_positions_by_source.get(
-            source_uuid,
-            set(),
-        ))
-        changed = {
-            position
-            for position in normalized
-            if self._optical_obscurements_by_position[position].get(source_uuid)
-            != obscurement
-        }
-        for position in normalized:
-            self._optical_obscurements_by_position[position][source_uuid] = obscurement
-        owned = previous | normalized
-        if owned:
-            self._optical_obscurement_positions_by_source[source_uuid] = owned
-        self._refresh_optical_candidate_cells(normalized)
-        if changed:
-            self._publish_optical_obscurement_change(
-                source_uuid,
-                changed,
-                parent_event,
-            )
-        return changed
-
-    def remove_optical_obscurement(
-        self,
-        source_uuid: UUID,
-        *,
-        positions: Optional[Set[Tuple[int, int]]] = None,
-        parent_event: Optional[UUID] = None,
-    ) -> Set[Tuple[int, int]]:
-        """Remove all or part of one source-owned optical contribution."""
-        owned = set(self._optical_obscurement_positions_by_source.get(source_uuid, set()))
-        removed = owned if positions is None else owned & positions
-        for position in removed:
-            contributions = self._optical_obscurements_by_position.get(position)
-            if contributions is not None:
-                contributions.pop(source_uuid, None)
-                if not contributions:
-                    self._optical_obscurements_by_position.pop(position, None)
-        retained = owned - removed
-        if retained:
-            self._optical_obscurement_positions_by_source[source_uuid] = retained
-        else:
-            self._optical_obscurement_positions_by_source.pop(source_uuid, None)
-        self._refresh_optical_candidate_cells(removed)
-        if removed:
-            self._publish_optical_obscurement_change(
-                source_uuid,
-                removed,
-                parent_event,
-            )
-        return removed
-
     def _refresh_optical_candidate_cells(self, positions: Collection[Tuple[int, int]]) -> None:
-        """Index candidate membership only; contribution activity remains owner-native."""
-        # An explicit contribution can change without a spatial revision (on
-        # removed support), so the shared index is rebuilt on its next read.
-        self._obscurement_index_key = None
+        """Index the cells holding a spatial condition reference (a negative membership test)."""
         for position in positions:
             tile = self._tiles.get(position)
             chunk = self._spatial_chunk(position)
-            if (self._optical_obscurements_by_position.get(position)
-                    or tile is not None and tile.get_spatial_condition_uuids()):
+            if tile is not None and tile.get_spatial_condition_uuids():
                 self._optical_candidate_cells[chunk].add(position)
             elif chunk in self._optical_candidate_cells:
                 self._optical_candidate_cells[chunk].discard(position)
                 if not self._optical_candidate_cells[chunk]:
                     del self._optical_candidate_cells[chunk]
 
-    def capture_optical_obscurements(
-        self, origin: Tuple[int, int], radius: float,
-    ) -> OpticalSnapshot:
-        """Capture native conditional optics once over a bounded ray domain.
+    # ------------------------------------------------------------ optical obscurement (plan §6b)
 
-        The square includes diagonal and supercover cells. Each source keeps all
-        its values so excluding a volume owner removes only that owner's facts.
-        This detached input belongs to one solve and is never retained by the map.
-        """
-        index = self._objective_obscurement_index()
-        extent = math.ceil(radius)
-        min_x, max_x = origin[0] - extent, origin[0] + extent
-        min_y, max_y = origin[1] - extent, origin[1] + extent
-        return {position: values for position, values in index.items()
-                if min_x <= position[0] <= max_x and min_y <= position[1] <= max_y}
-
-    def _objective_obscurement_index(self) -> Dict[Tuple[int, int], Dict[UUID, frozenset[OpticalObscurement]]]:
-        """Every Tile's conditional optics, built once per revision and shared by observers (plan P4a).
-
-        Obscurement is objective: it does not depend on who looks. Condition
-        changes bump the spatial revision and explicit contributions reset the
-        key, so the index is rebuilt only when the world changed, not once per
-        observer solve.
-        """
-        key = (self._optical_revision, self._spatial_revision)
-        if self._obscurement_index_key == key:
-            return self._obscurement_index
-        index: Dict[Tuple[int, int], Dict[UUID, frozenset[OpticalObscurement]]] = {}
-        for cells in self._optical_candidate_cells.values():
-            for position in cells:
-                values = {owner: {value} for owner, value in
-                          self._optical_obscurements_by_position.get(position, {}).items()}
-                for condition in self.get_spatial_conditions_at(position):
-                    value = condition.get_optical_obscurement_at(position)
-                    if value is not None:
-                        values.setdefault(condition.uuid, set()).add(value)
-                if values:
-                    index[position] = {owner: frozenset(contributions)
-                                       for owner, contributions in values.items()}
-        self._obscurement_index = index
-        self._obscurement_index_key = key
-        record_action_count("cache.build.obscurement_index", 1)
-        return index
-
-    def get_optical_obscurements_at(
-        self,
-        position: Tuple[int, int],
-        *, excluded_owner_uuid: Optional[UUID] = None,
-        snapshot: Optional[OpticalSnapshot] = None,
-    ) -> Set[OpticalObscurement]:
-        """Return conditional optical facts currently covering one Tile."""
-        if snapshot is not None:
-            return {value for owner, values in snapshot.get(position, {}).items()
-                    if owner != excluded_owner_uuid for value in values}
-        result = {value for owner, value in self._optical_obscurements_by_position.get(position, {}).items()
-                  if owner != excluded_owner_uuid}
-        result.update(
-            obscurement
-            for condition in self.get_spatial_conditions_at(position)
-            if condition.uuid != excluded_owner_uuid and (
-                obscurement := condition.get_optical_obscurement_at(position)
-            ) is not None
-        )
-        return result
-
-    def get_optical_obscurements_on_route(
-        self,
-        start: Tuple[int, int],
-        end: Tuple[int, int],
-        *, excluded_owner_uuid: Optional[UUID] = None,
-        snapshot: Optional[OpticalSnapshot] = None,
-    ) -> Set[OpticalObscurement]:
-        """Return conditional optical facts intersecting one optical ray."""
-        if snapshot is not None:
-            if not snapshot:
-                return set()
-            # Only the route's cells inside the snapshot contribute; find them with
-            # one C-level membership pass instead of one call per route cell.
-            return {value for position in supercover_line(start, end) if position in snapshot
-                    for owner, values in snapshot[position].items()
-                    if owner != excluded_owner_uuid for value in values}
-        elif not self._optical_obscurements_by_position and not self._spatial_conditions:
-            return set()
-        result: Set[OpticalObscurement] = set()
-        for position in supercover_line(start, end):
-            result.update(self.get_optical_obscurements_at(
-                position, excluded_owner_uuid=excluded_owner_uuid, snapshot=snapshot))
-        return result
-
-    def get_optical_obscurements_on_routes(
-        self,
-        origin: Tuple[int, int],
-        positions: Iterable[Tuple[int, int]],
-        snapshot: OpticalSnapshot,
-        *, exclude_end: bool = False, excluded_owner_uuid: Optional[UUID] = None,
-    ) -> Dict[Tuple[int, int], Set[OpticalObscurement]]:
-        """`get_optical_obscurements_on_route` from one origin to many cells.
-
-        ``exclude_end`` leaves out the target cell itself (the route before it).
-        """
-        positions = list(positions)
-        masks = self.get_optical_route_masks(origin, positions, snapshot,
-            exclude_end=exclude_end, excluded_owner_uuid=excluded_owner_uuid)
-        return {position: set(OBSCUREMENT_SETS[mask]) for position, mask in zip(positions, masks)}
-
-    def get_optical_route_masks(
-        self,
-        origin: Tuple[int, int],
-        positions: Sequence[Tuple[int, int]],
-        snapshot: OpticalSnapshot,
-        *, exclude_end: bool = False, excluded_owner_uuid: Optional[UUID] = None,
-    ) -> List[int]:
-        """Each route's obscurement values as `OBSCUREMENT_BITS`, aligned with the positions.
-
-        Tabled routes are resolved together: each cell's values as bits,
-        gathered along the routes and OR-reduced (the endpoint dropped first
-        when excluded). Longer routes check their cached relative line.
-        """
-        ox, oy = origin
-        radius = ROUTE_TABLE_RADIUS
-        relative = {(x - ox, y - oy): owners for (x, y), owners in snapshot.items()}
-        if excluded_owner_uuid is not None:
-            relative = {offset: kept for offset, owners in relative.items()
-                        if (kept := {owner: values for owner, values in owners.items() if owner != excluded_owner_uuid})}
-        result = [0] * len(positions)
-        tabled: List[int] = []
-        obscured = set(relative)  # a set: `line & obscured` iterates the shorter side in C
-        for index, (x, y) in enumerate(positions):
-            dx, dy = x - ox, y - oy
-            if -radius <= dx <= radius and -radius <= dy <= radius:
-                tabled.append(index)
-                continue
-            crossed = supercover_cells_relative(dx, dy) & obscured
-            if exclude_end and crossed:
-                crossed = crossed - {(dx, dy)}
-            result[index] = sum({OBSCUREMENT_BITS[value] for offset in crossed
-                                 for values in relative[offset].values() for value in values})
-        if not tabled or not relative:
-            return result
-        side = 2 * radius + 1
-        cells, lengths = supercover_route_table()
-        indices, masks = [], []
-        for (dx, dy), owners in relative.items():
-            if -radius <= dx <= radius and -radius <= dy <= radius:
-                indices.append((dx + radius) * side + dy + radius)
-                masks.append(sum({OBSCUREMENT_BITS[value] for values in owners.values() for value in values}))
-        grid = np.zeros(side * side + 1, dtype=np.uint8)
-        grid[indices] = masks
-        offsets = np.array([positions[index] for index in tabled], dtype=np.int64) - (ox, oy)
-        rows = (offsets[:, 0] + radius) * side + offsets[:, 1] + radius
-        row_lengths = lengths[rows]
-        crossed = grid[cells[rows, :int(row_lengths.max())]]
-        if exclude_end:
-            crossed[np.arange(rows.size), row_lengths - 1] = 0
-        for index, mask in zip(tabled, np.bitwise_or.reduce(crossed, axis=1).tolist()):
-            result[index] = mask
-        return result
-
-    def _publish_optical_obscurement_change(
-        self,
-        source_uuid: UUID,
-        positions: Set[Tuple[int, int]],
-        parent_event: Optional[UUID],
-    ) -> None:
-        """Publish one committed batch fact for a conditional optical change."""
-        live = {position for position in positions if position in self._tiles}
-        if not live:
-            self._bump_observer_revisions(frozenset({SpatialChannel.OBSCUREMENT}), positions)
+    def _write_condition_obscurement(self, condition: SpatialConditionOwner,
+                                     positions: Collection[Tuple[int, int]]) -> None:
+        """Replace a condition's obscurement layer at its membership commit (suppressed cells excluded)."""
+        value = condition.optical_obscurement_value()
+        suppressed = {cell for suppression in condition.spatial_suppressions for cell in suppression.positions}
+        cells = [position for position in positions if position not in suppressed] if value is not None else []
+        if not cells or value is None:
+            self._obscurement_layers.pop(condition.uuid, None)
             return
-        self._bump_spatial_revisions(frozenset({SpatialChannel.OBSCUREMENT}), positions)
-        representative = min(live)
-        event = SpatialChangeEvent.tile_changed(
-            representative,
-            source_entity_uuid=source_uuid,
-            senses_hint=SensesUpdateHint(
-                requires_fov=True,
-                directional_positions=live,
-            ),
-            parent_event=parent_event,
-        )
-        self.publish_committed_spatial_event(event)
+        self._obscurement_layers[condition.uuid] = cells_layer(cells, OBSCUREMENT_BITS[value])
+
+    def obscurement_layers(self) -> Tuple[Tuple[UUID, CellLayer], ...]:
+        """Each contributing owner's obscurement layer: a condition contributes while it is active."""
+        return tuple((owner_uuid, layer) for owner_uuid, layer in self._obscurement_layers.items()
+                     if self._spatial_conditions[owner_uuid].contributions_active())
+
+    def condition_footprint(self, condition_uuid: UUID) -> Optional[CellLayer]:
+        """A spatial condition's committed footprint as a bool layer."""
+        return self._condition_footprints.get(condition_uuid)
+
+    def hazard_owners(self) -> List[Tuple[SpatialConditionOwner | BaseBlock, CellLayer]]:
+        """Every owner whose hazard rule `is_position_hazardous_for` reads, with the cells it covers.
+
+        Spatial conditions with their footprints, Tiles holding a condition or a
+        residue, and placed objects holding a condition on the cells where a
+        cell's object lookup finds them.
+        """
+        owners: List[Tuple[SpatialConditionOwner | BaseBlock, CellLayer]] = [
+            (self._spatial_conditions[identity], layer) for identity, layer in self._condition_footprints.items()]
+        residue_cells = {cell for field in self._residue_fields.values() for cell in field.cells}
+        for position, tile in self._tiles.items():
+            if tile.active_conditions or position in residue_cells:
+                owners.append((tile, cells_layer((position,), True)))
+        for block in self.get_objects_with_conditions():
+            placement = self._object_placements[block.uuid]
+            owners.append((block, cells_layer(placement.positions if placement.boundary_direction is None
+                                              else (placement.position,), True)))
+        return owners
+
+    def optical_obscurement_bits_at(self, position: Tuple[int, int]) -> int:
+        """The OBSCUREMENT_BITS covering one cell, from every contributing owner."""
+        bits = 0
+        for _, layer in self.obscurement_layers():
+            bits |= layer_value(layer, position)
+        return bits
 
     def add_light_source(self, position: Tuple[int, int], bright_radius_feet: int,
                          dim_radius_feet: int, anchor_uuid: Optional[UUID] = None,
@@ -5779,61 +5333,28 @@ class GridMap:
         source.revision += 1
         source.base_height_steps = self._light_height(source)
         self._light_source_revisions[source.uuid] = source.revision
-        self._light_epoch += 1
-        self._light_changes.append((self._light_epoch, source.uuid))
-
-    @property
-    def light_epoch(self) -> int:
-        """The latest emitter revision's position in the change order."""
-        return self._light_epoch
-
-    def light_sources_changed_since(self, epoch: int) -> Set[UUID]:
-        """Emitters revised after this epoch; its observer's refresh keeps it retained."""
-        start = bisect_right(self._light_changes, epoch, key=lambda row: row[0])
-        return {identity for _, identity in self._light_changes[start:]}
-
-    def forget_light_changes_through(self, epoch: int) -> None:
-        """Drop revisions every observer has already refreshed past."""
-        del self._light_changes[:bisect_right(self._light_changes, epoch, key=lambda row: row[0])]
-
-    def light_sources_at(self, positions: Iterable[Tuple[int, int]]) -> Set[UUID]:
-        """Emitters currently contributing illumination at these cells."""
-        tiles = self._tiles
-        return {identity for position in positions if (tile := tiles.get(position)) is not None
-                for identity in tile._light.illuminations}
 
     def light_source_revision(self, identity: UUID) -> int:
         """Current optical version, retained after an emitter is extinguished."""
         return self._light_source_revisions.get(identity, 0)
 
-    def observe_light_sources(self, observer_uuid: UUID, visible: AbstractSet[Tuple[int, int]],
+    def observe_light_sources(self, observer_uuid: UUID, visible: CellLayer,
             entities: Dict[UUID, PerceivedContact], objects: Dict[UUID, PerceivedContact],
             previous: Optional[Dict[UUID, PerceivedLightSource]] = None,
-            *, candidates: Optional[Set[UUID]] = None,
             ) -> Dict[UUID, PerceivedLightSource]:
         """Expose contributing emitter descriptors, never hidden inventory IDs.
 
         The renderer needs an emitter, not another per-cell illumination map.
-        Existing tile contributions bound discovery when remote sources grow.
-        With ``candidates``, only those emitters are re-observed: every other
-        previous descriptor is kept, its inputs unchanged.
+        An emitter is observed when its lit cells reach a visible cell (one
+        gather of the lit-slot grid over the visible layer, per observer).
         """
         result = {}
-        if candidates is not None:
-            result = {identity: source for identity, source in (previous or {}).items() if identity not in candidates}
-        elif len(self._light_sources) <= len(visible):
-            candidates = set(self._light_sources)
-        else:
-            candidates = set()
-            for position in visible:
-                tile = self._tiles.get(position)
-                if tile is not None:
-                    candidates.update(tile._light.illuminations)
-        for identity in candidates:
-            source = self._light_sources.get(identity)
-            if source is None or not self._is_light_effectively_active(source):
+        lit = self.light_sources_lit_within(visible)
+        for identity in set(self._light_sources):
+            if identity not in lit:
                 continue
-            if source.affected_tiles.keys().isdisjoint(visible):
+            source = self._light_sources[identity]
+            if not self._is_light_effectively_active(source):
                 continue
             actor = entities.get(source.anchor_uuid)
             item = objects.get(source.anchor_uuid)
@@ -5879,6 +5400,7 @@ class GridMap:
             parent_event=parent_event,
             publish_event=publish_event,
         )
+        self._release_light_slot(source)
 
         if source.anchor_uuid:
             anchor = BaseBlock.get(source.anchor_uuid)
@@ -6004,7 +5526,7 @@ class GridMap:
         source_changed = (source.position != new_position or old_affected != new_affected
             or source.base_height_steps != self._light_height(source))
         source.position = new_position
-        source.affected_tiles = new_affected
+        self._set_light_footprint(source, new_affected)
         if source_changed:
             self._revise_light_source(source)
 
@@ -6071,7 +5593,7 @@ class GridMap:
         if not self._is_light_effectively_active(source):
             return
         previous = source.affected_tiles
-        source.affected_tiles = self._compute_light_tiles(source)
+        self._set_light_footprint(source, self._compute_light_tiles(source))
         source_changed = previous != source.affected_tiles or source.revision == 0
         if source_changed:
             self._revise_light_source(source)
@@ -6099,7 +5621,7 @@ class GridMap:
                 if tile._remove_light_modifier(source.uuid):
                     changed_positions.append(pos)
         previous = set(source.affected_tiles)
-        source.affected_tiles = {}
+        self._set_light_footprint(source, {})
         if previous:
             self._revise_light_source(source)
         if publish_event:
@@ -6334,7 +5856,7 @@ class GridMap:
 
             source_changed = (old_affected != new_affected
                 or source.base_height_steps != self._light_height(source))
-            source.affected_tiles = new_affected
+            self._set_light_footprint(source, new_affected)
             if source_changed:
                 self._revise_light_source(source)
             all_changed.update(changed_positions)
@@ -6449,7 +5971,7 @@ class GridMap:
         return reached
 
     def clear(self) -> None:
-        """Clear all tiles, entity positions, object positions, subscriptions, and light sources."""
+        """Clear all tiles, entity positions, object positions, cell grids, and light sources."""
         if any(tile.get_entity_uuids() for tile in self._tiles.values()):
             raise ValueError("cannot clear GridMap while entities are deployed")
         if self._spatial_conditions:
@@ -6484,30 +6006,23 @@ class GridMap:
         self._connectors_by_uuid.clear()
         self._connector_uuid_by_authored_id.clear()
         self._connector_uuids_by_endpoint.clear()
-        self._cell_subscribers.clear()
-        self._entity_subscriptions.clear()
-        self._subscription_revision += 1
-        self._observer_revisions.clear()
-        self._observer_dependency_chunks.clear()
-        self._observer_dependency_cells.clear()
-        self._observer_dependency_bounds.clear()
-        self._chunk_dependents.clear()
         self._optical_candidate_cells.clear()
         self._boundary_candidate_cells.clear()
         self._contact_candidate_cells.clear()
         self._light_sources.clear()
         self._light_source_revisions.clear()
-        self._light_changes.clear()
         self._block_light_suppressions.clear()
-        self._optical_obscurements_by_position.clear()
-        self._optical_obscurement_positions_by_source.clear()
+        self._cell_exists = CellLayer(0, 0, np.zeros((0, 0), dtype=bool))
+        self._cell_light = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
+        self._cell_light_slots = CellLayer(0, 0, np.zeros((0, 0, 1), dtype=np.uint64))
+        self._light_slot_of.clear()
+        self._obscurement_layers.clear()
+        self._condition_footprints.clear()
         self._pending_events.clear()
         self._pending_committed_events.clear()
         self._pending_light_positions.clear()
         self._pending_light_sources.clear()
         self._pending_light_parent = None
-        self._obscurement_index = {}
-        self._obscurement_index_key = None
         self._bounds_dirty = True
         # Revisions stay monotonic: caches outside GridMap key on them, so a
         # rebuilt world must never repeat a value the previous world used.

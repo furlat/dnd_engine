@@ -213,13 +213,9 @@ class SpatialCondition(BaseCondition):
         """Verify activity against the authoritative map collection."""
         return get_map().get_spatial_condition(self.uuid) is self
 
-    def get_optical_obscurement_at(
-        self,
-        position: Tuple[int, int],
-    ) -> Optional[OpticalObscurement]:
-        """Return this condition's optical contribution in its footprint."""
-        if position not in self.affected_positions or not self.allows_contribution_at(position):
-            return None
+    def optical_obscurement_value(self) -> Optional[OpticalObscurement]:
+        """This condition's optical contribution over its committed, unsuppressed footprint
+        (GridMap writes it as the condition's obscurement layer; it counts while active)."""
         return self.optical_obscurement
 
     def blocks_physical_optics_at(self, position: Tuple[int, int]) -> bool:

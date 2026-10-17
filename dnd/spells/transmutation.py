@@ -85,6 +85,7 @@ from dnd.core.modifiers import (
 from dnd.core.values import ModifiableValue
 from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.core.gridmap import get_map
+from dnd.core.view import cell_visible
 from dnd.entity import Entity
 from dnd.conditions import Dashing, ConcentrationActionMarker, Prone
 from dnd.creature_transforms import apply_incapacitated_transform, remove_modifier_ownership
@@ -1539,7 +1540,7 @@ def _telekinesis_selection_error(caster: Entity, target: Entity | None,
     contact = caster.senses.entities.get(target.uuid)
     if target.uuid != caster.uuid and (contact is None or not contact.visual):
         return "Target is not visible"
-    if not caster.senses.visible.get(destination, False):
+    if not cell_visible(caster.senses.cells, destination):
         return "Destination is not visible"
     grid = get_map()
     if grid.get_tile(*destination) is None:

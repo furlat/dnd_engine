@@ -55,14 +55,12 @@ def _empty_boundary_object_bands() -> Dict[
 
 @dataclass(slots=True)
 class TileLight:
-    """Current objective light inputs and their resolved value."""
+    """Current objective light inputs; GridMap's light grid holds the resolved value."""
 
     illuminations: Dict[UUID, LightLevel] = field(default_factory=dict)
     caps: Dict[UUID, LightLevel] = field(default_factory=dict)
     # Sources lowering the lit level one step; any number count once.
     dimmers: Set[UUID] = field(default_factory=set)
-    default: Optional[LightLevel] = None
-    resolved: LightLevel = LightLevel.BRIGHT_LIGHT
 
 
 class Tile(BaseBlock):
@@ -422,27 +420,21 @@ class Tile(BaseBlock):
         old = self.resolved_light_level
         light = self._light
         light.illuminations[source_uuid] = level
-        light.resolved = _resolve_light_contributions(light, self.default_light)
-        light.default = self.default_light
-        return light.resolved != old
+        return self.resolved_light_level != old
 
     def _add_illumination_cap(self, source_uuid: UUID, level: LightLevel) -> bool:
         """Install one GridMap-owned source cap on objective illumination."""
         old = self.resolved_light_level
         light = self._light
         light.caps[source_uuid] = level
-        light.resolved = _resolve_light_contributions(light, self.default_light)
-        light.default = self.default_light
-        return light.resolved != old
+        return self.resolved_light_level != old
 
     def _add_illumination_dimmer(self, source_uuid: UUID) -> bool:
         """Install one GridMap-owned one-step reduction of objective illumination."""
         old = self.resolved_light_level
         light = self._light
         light.dimmers.add(source_uuid)
-        light.resolved = _resolve_light_contributions(light, self.default_light)
-        light.default = self.default_light
-        return light.resolved != old
+        return self.resolved_light_level != old
 
     def _remove_light_modifier(self, source_uuid: UUID) -> bool:
         """Remove one GridMap-owned illumination contribution, cap or dimmer."""
@@ -451,18 +443,12 @@ class Tile(BaseBlock):
         light.illuminations.pop(source_uuid, None)
         light.caps.pop(source_uuid, None)
         light.dimmers.discard(source_uuid)
-        light.resolved = _resolve_light_contributions(light, self.default_light)
-        light.default = self.default_light
-        return light.resolved != old
+        return self.resolved_light_level != old
 
     @property
     def resolved_light_level(self) -> LightLevel:
         """Objective light level (no observer). Lights brighten, darkness overrides."""
-        light = self._light
-        if light.default is not self.default_light:
-            light.resolved = _resolve_light_contributions(light, self.default_light)
-            light.default = self.default_light
-        return light.resolved
+        return _resolve_light_contributions(self._light, self.default_light)
 
     def directions_toward(self, other_position: Tuple[int, int]) -> Tuple[str, ...]:
         """Return tile-relative cardinal directions touched by a transition."""

@@ -18,6 +18,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import Damage, Event, EventHandler, EventPhase, EventType, Range, RangeType, SpatialChangeEvent, Trigger
 from dnd.core.gridmap import get_map
+from dnd.core.view import cell_visible
 from dnd.core.presentation_geometry import WallPresentationGeometry, WallRing, WallSegment
 from dnd.core.wall_geometry import wall_shell_cells, wall_side_cells
 from dnd.entity import Entity
@@ -252,7 +253,7 @@ class WallOfFire(SpellAction):
         range_error = self.target_position_error(end_position)
         if range_error is not None:
             return range_error
-        if not caster.senses.visible.get(end_position, False):
+        if not cell_visible(caster.senses.cells, end_position):
             return "Wall origin is not visible"
         allowed_sides = {"left", "right"} if self.wall_form == "segment" else {"inside", "outside"}
         if self.hot_side not in allowed_sides:

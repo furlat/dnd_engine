@@ -78,6 +78,7 @@ from dnd.core.traversal_connectors import (
 )
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
+from dnd.core.view import cell_visible, visible_positions
 from dnd.core.geometry import grid_distance_feet, position_in_sector
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.naming import normalize_spell_id
@@ -104,6 +105,7 @@ from dnd.blocks.action_economy import (
     NamedResourceCost,
 )
 from dnd.blocks.base_item import BaseItem
+from dnd.blocks.sensory import spatial_senses_system
 from dnd.conditions import ExtraAttacksGranted, Dashing, Dodging, Disengaging, Prone, Hidden, Concentrating
 
 
@@ -1295,7 +1297,7 @@ class TraverseConnector(BaseAction):
         entity: Entity,
         destination: Tuple[int, int],
     ) -> ConnectorDestinationStatus:
-        if not entity.senses.visible.get(destination, False):
+        if not cell_visible(entity.senses.cells, destination):
             return ConnectorDestinationStatus.UNKNOWN
         if get_map().is_walkable_for(
             destination[0],
@@ -3025,7 +3027,7 @@ class Hide(BaseAction):
             if light.value <= LightLevel.DIM_LIGHT.value:
                 return None
 
-        subscribers = grid.get_subscribers_at(entity.position)
+        subscribers = spatial_senses_system.observers_granted((entity.position,))
         for sub_uuid in subscribers:
             if sub_uuid == entity.uuid:
                 continue
@@ -3392,9 +3394,7 @@ class Jump(BaseAction):
         grid = get_map()
         valid: List[Tuple[int, int]] = []
 
-        for pos, is_visible in entity.senses.visible.items():
-            if not is_visible:
-                continue
+        for pos in visible_positions(entity.senses.cells):
             if pos == entity.senses.position:
                 continue
 
@@ -5723,9 +5723,7 @@ class Drop(BaseAction):
         if entity is None:
             return []
         valid: List[Tuple[int, int]] = [entity.position]
-        for pos, is_visible in entity.senses.visible.items():
-            if not is_visible:
-                continue
+        for pos in visible_positions(entity.senses.cells):
             if pos == entity.position:
                 continue
             if entity.senses.get_feet_distance(pos) <= 5:

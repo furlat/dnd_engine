@@ -85,7 +85,7 @@ def _compute_perceivers(event: Event) -> Set[str]:
             if pos:
                 positions.add(pos)
 
-    perceivers = grid.get_subscribers_for_cells(positions)
+    perceivers = spatial_senses_system.observers_granted(positions)
     perceivers.update(uuid for uuid in participant_uuids if uuid)
     return {str(uuid) for uuid in perceivers}
 
