@@ -658,7 +658,7 @@ def _detach_retained_event(event: Event) -> Event:
             memo[id(value)] = value
     for grants in (event.identified_entity_observer_uuids,
                    event.located_entity_observer_uuids, event.located_position_observer_uuids):
-        memo[id(grants)] = {key: memo.setdefault(id(value), set(value))
+        memo[id(grants)] = {key: memo.setdefault(id(value), value)
                            for key, value in grants.items()}
     match event:
         case SensoryUpdateEvent():

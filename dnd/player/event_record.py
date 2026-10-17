@@ -66,7 +66,7 @@ EVENT_MODELS[ITEM_RESOURCE_WIRE_TYPE] = EVENT_MODELS.pop(
     "dnd.blocks.base_item.ItemResourceChangeEvent")
 LOG = TypeAdapter(CombatLogEntry | None)
 HANDLERS = TypeAdapter(tuple[EffectiveHandlerPresentation, ...])
-GRANTS = TypeAdapter(dict[str, set[str]])
+GRANTS = TypeAdapter(dict[str, frozenset[str]])
 
 
 def _encode_recorded_log(entry: CombatLogEntry | None) -> dict[str, Any] | None:
