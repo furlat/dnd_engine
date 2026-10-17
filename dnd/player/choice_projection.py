@@ -1,6 +1,5 @@
-"""Capture one native admission and factor its public lookup domains."""
+"""Project one native admission into its public lookup domains."""
 
-from copy import deepcopy
 from dataclasses import dataclass, field
 
 from dnd.core.aoe import snapshot_aoe_aiming_geometry
@@ -80,36 +79,24 @@ def target_set(tables: ChoiceTables, targets: list[AvailableTarget] | tuple[Avai
     return reference
 
 
-def capture_target(target: AvailableTarget, memo: dict[int, AvailableTarget]) -> AvailableTarget:
-    """Detach each native option once, retaining existing variant/branch sharing."""
-    owned = memo.get(id(target))
-    if owned is None:
-        values = target.model_dump(exclude={'secondary_targets'}, exclude_defaults=True)
-        if target.secondary_targets is not None:
-            values['secondary_targets'] = [capture_target(child, memo) for child in target.secondary_targets]
-        owned = AvailableTarget.model_validate(values)
-        memo[id(target)] = owned
-    return owned
+def project_choices(original: AvailableActionsResult, actor_position: tuple[int, int]) -> PlayerChoices:
+    """Project one native discovery into its compact wire domains; templates are never serialized.
 
-
-def capture_choices(original: AvailableActionsResult, actor_position: tuple[int, int]) -> tuple[AvailableActionsResult, PlayerChoices]:
-    """Own native values once; retain templates privately, never serialize them."""
+    The session retains `original` itself: its rows are fresh per discovery
+    call and no reader mutates a row's targets after discovery (execution binds
+    a deep copy, rich callers receive a validated copy), so nothing is detached
+    here. Rows are read through their field values, never dumped and validated.
+    """
     tables = ChoiceTables()
-    target_copies: dict[int, AvailableTarget] = {}
 
-    def capture_rows(rows: list[AvailableActionInfo]) -> tuple[list[AvailableActionInfo], tuple[PlayerAction, ...]]:
-        retained = []
+    def project_rows(rows: list[AvailableActionInfo]) -> tuple[PlayerAction, ...]:
         projected = []
         for row in rows:
-            metadata = row.model_dump(exclude={'valid_targets'})
-            targets = [capture_target(target, target_copies) for target in row.valid_targets]
-            owned = AvailableActionInfo.model_validate(dict(metadata, valid_targets=targets))
-            owned.set_execution_template(row.execution_template)
-            owned._aoe_include_dead = row._aoe_include_dead
-            retained.append(owned)
+            metadata = dict(row)
+            del metadata['valid_targets']
             template = row.execution_template
             area = row.target_type == TargetType.POSITION_AOE
-            projected.append(PlayerAction(**metadata, target_set=target_set(tables, targets),
+            projected.append(PlayerAction(**metadata, target_set=target_set(tables, row.valid_targets),
                 area_preview='deferred' if area else 'not_applicable',
                 aiming=(snapshot_aoe_aiming_geometry(template.aoe_shape, actor_position)
                     if area and template is not None and template.aoe_shape is not None else None),
@@ -117,21 +104,17 @@ def capture_choices(original: AvailableActionsResult, actor_position: tuple[int,
                 area_include_self=template.include_self if area and template is not None else None,
                 area_target_filter=template.valid_target_filter if area and template is not None else None,
                 area_include_dead=(template.include_dead or row._aoe_include_dead) if area and template is not None else None))
-        return retained, tuple(projected)
+        return tuple(projected)
 
-    entities, entity_rows = capture_rows(original.entity_actions)
-    positions, position_rows = capture_rows(original.position_actions)
-    selves, self_rows = capture_rows(original.self_actions)
-    objects, object_rows = capture_rows(original.object_actions)
-    retained = original.model_copy(update=dict(entity_actions=entities, position_actions=positions,
-        self_actions=selves, object_actions=objects,
-        handler_details=deepcopy(original.handler_details), world_interactions=deepcopy(original.world_interactions)))
-    compact = PlayerChoices(discovery_generation=original.discovery_generation, entity_uuid=original.entity_uuid,
+    entity_rows = project_rows(original.entity_actions)
+    position_rows = project_rows(original.position_actions)
+    self_rows = project_rows(original.self_actions)
+    object_rows = project_rows(original.object_actions)
+    return PlayerChoices(discovery_generation=original.discovery_generation, entity_uuid=original.entity_uuid,
         subjects=tuple(tables.subjects), positions=tuple(tables.positions), target_sets=tuple(tables.target_sets),
         entity_actions=entity_rows, position_actions=position_rows, self_actions=self_rows, object_actions=object_rows,
-        remaining_movement=original.remaining_movement, handler_details=deepcopy(original.handler_details),
-        world_interactions=deepcopy(original.world_interactions))
-    return retained, compact
+        remaining_movement=original.remaining_movement, handler_details=tuple(original.handler_details),
+        world_interactions=original.world_interactions)
 
 
 def project_selection_preview(preview: AvailableSelectionPreview) -> PlayerSelectionPreview:
