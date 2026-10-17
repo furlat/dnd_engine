@@ -1663,7 +1663,10 @@ class SpatialSensesSystem:
         # fixtures stand.
         surfaces = {position for positions in volumes.values() for position in positions}
         surfaces.update(row.position for rows in upper.values() for row in rows)
+        # An observation also reads the observer's contacts (a fixture's anchor) and its passive
+        # perception (hazard perception): any contact change or a passive change re-runs the stage.
         fixtures_kept = (view.published and cells.visible is before_visible and affected is not None
+                         and contact_changes == (frozenset(), frozenset()) and field.passive == passive
                          and volumes == field.volumes and upper == field.upper
                          and not any(cell_visible(cells, position) or position in surfaces for position in affected))
         effect_before = {} if fixtures_kept else self._refresh_spatial_effects(
