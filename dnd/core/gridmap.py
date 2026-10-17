@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from dnd.types.event_facts import LandingKind
 from dnd.core.geometry import (circle_positions, grid_distance_feet, supercover_line,
     supercover_slope_order, supercover_incoming_ranges, supercover_incoming_rank_ranges)
-from dnd.core.view import Box, CellLayer, cell_visible, cells_layer, embed, layer_value, union_box
+from dnd.core.view import Box, CellLayer, boxes_intersect, cell_visible, cells_layer, embed, layer_value, union_box
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.shadowcast import compute_fov
@@ -291,12 +291,6 @@ class SpatialConditionOwner(Protocol):
     def snapshot_mechanism_state(self) -> Optional[TrapState]: ...
 
 
-def _holds_ground_hazard(block: BaseBlock) -> bool:
-    """Whether a block holds a condition that can make its cells hazardous on the ground layer."""
-    return any(condition.hazard_filter is not None and condition.affects_occupancy_layer(OccupancyLayer.GROUND)
-               for condition in block.active_conditions.values())
-
-
 class LightSourceData(BaseModel):
     """Tracks a light source and its affected tiles."""
 
@@ -379,10 +373,17 @@ class GridMap:
         self._cell_light_slots = CellLayer(0, 0, np.zeros((0, 0, 1), dtype=np.uint64))
         self._light_slot_of: Dict[UUID, int] = {}
         # Each optical obscurement owner's cells as OBSCUREMENT_BITS, written at its
-        # membership commit; a condition owner contributes only while active.
+        # membership commit, and the combined bits of the active owners derived in the
+        # same write. Activity is the owner graph's live rule (`contributions_active`):
+        # the activity each owner was last derived with is kept, and a flip re-derives
+        # that owner's box (`settle_obscurement_activity`).
         self._obscurement_layers: Dict[UUID, CellLayer] = {}
-        # Each spatial condition's committed footprint as a bool layer (same commit as its cells).
+        self._obscurement_active: Dict[UUID, bool] = {}
+        self._cell_obscurement = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
+        # Each spatial condition's committed footprint as a bool layer and as cell
+        # coordinates (same commit as its cells).
         self._condition_footprints: Dict[UUID, CellLayer] = {}
+        self._condition_footprint_cells: Dict[UUID, Tuple[np.ndarray, np.ndarray]] = {}
 
         self._events_enabled: bool = True
         self._pending_events: List['SpatialChangeEvent'] = []
@@ -549,6 +550,8 @@ class GridMap:
                   target[2] + CELL_GRID_MARGIN, target[3] + CELL_GRID_MARGIN)
         self._cell_exists = CellLayer(target[0], target[1], embed(current, target, np.dtype(bool)))
         self._cell_light = CellLayer(target[0], target[1], embed(self._cell_light, target, np.dtype(np.uint8)))
+        self._cell_obscurement = CellLayer(target[0], target[1],
+                                           embed(self._cell_obscurement, target, np.dtype(np.uint8)))
         slots = self._cell_light_slots
         words = np.zeros((target[2] - target[0] + 1, target[3] - target[1] + 1, slots.values.shape[2]), dtype=np.uint64)
         if slots.values.size:
@@ -1757,7 +1760,9 @@ class GridMap:
                 layer,
             )
         self._refresh_optical_candidate_cells(previous_positions | normalized)
-        self._condition_footprints[condition.uuid] = cells_layer(normalized, True)
+        footprint = self._condition_footprints[condition.uuid] = cells_layer(normalized, True)
+        cell_xs, cell_ys = np.nonzero(footprint.values)
+        self._condition_footprint_cells[condition.uuid] = (cell_xs + footprint.x0, cell_ys + footprint.y0)
         self._write_condition_obscurement(condition, normalized)
         channels = condition.spatial_channels()
         self._bump_spatial_revisions(channels, previous_positions | normalized)
@@ -1876,8 +1881,12 @@ class GridMap:
                         layer,
                     )
         condition = self._spatial_conditions.pop(condition_uuid, None)
-        self._obscurement_layers.pop(condition_uuid, None)
+        obscurement = self._obscurement_layers.pop(condition_uuid, None)
+        self._obscurement_active.pop(condition_uuid, None)
+        if obscurement is not None:
+            self._derive_obscurement(obscurement.box)
         self._condition_footprints.pop(condition_uuid, None)
+        self._condition_footprint_cells.pop(condition_uuid, None)
         self._global_crossing_owners.discard(condition_uuid)
         for owners in self._local_crossing_owners.values():
             owners.discard(condition_uuid)
@@ -5364,15 +5373,48 @@ class GridMap:
         value = condition.optical_obscurement_value()
         suppressed = {cell for suppression in condition.spatial_suppressions for cell in suppression.positions}
         cells = [position for position in positions if position not in suppressed] if value is not None else []
-        if not cells or value is None:
-            self._obscurement_layers.pop(condition.uuid, None)
+        old = self._obscurement_layers.pop(condition.uuid, None)
+        self._obscurement_active.pop(condition.uuid, None)
+        if cells and value is not None:
+            layer = self._obscurement_layers[condition.uuid] = cells_layer(cells, OBSCUREMENT_BITS[value])
+            self._obscurement_active[condition.uuid] = condition.contributions_active()
+            self._derive_obscurement(layer.box if old is None else union_box(old.box, layer.box))
+        elif old is not None:
+            self._derive_obscurement(old.box)
+
+    def _derive_obscurement(self, box: Box) -> None:
+        """Re-derive the combined obscurement bits over a box from the active owners' layers."""
+        grid = self._cell_obscurement
+        if not grid.values.size:
             return
-        self._obscurement_layers[condition.uuid] = cells_layer(cells, OBSCUREMENT_BITS[value])
+        x0, y0 = max(box[0], grid.x0), max(box[1], grid.y0)
+        x1, y1 = min(box[2], grid.box[2]), min(box[3], grid.box[3])
+        if x0 > x1 or y0 > y1:
+            return
+        clipped = (x0, y0, x1, y1)
+        combined = np.zeros((x1 - x0 + 1, y1 - y0 + 1), dtype=np.uint8)
+        for owner_uuid, layer in self._obscurement_layers.items():
+            if self._obscurement_active[owner_uuid] and boxes_intersect(layer.box, clipped):
+                combined |= embed(layer, clipped, np.dtype(np.uint8))
+        grid.values[x0 - grid.x0:x1 - grid.x0 + 1, y0 - grid.y0:y1 - grid.y0 + 1] = combined
+
+    def settle_obscurement_activity(self) -> None:
+        """Re-derive the boxes of the owners whose activity changed since their last write."""
+        for owner_uuid, layer in self._obscurement_layers.items():
+            active = self._spatial_conditions[owner_uuid].contributions_active()
+            if active is not self._obscurement_active[owner_uuid]:
+                self._obscurement_active[owner_uuid] = active
+                self._derive_obscurement(layer.box)
 
     def obscurement_layers(self) -> Tuple[Tuple[UUID, CellLayer], ...]:
-        """Each contributing owner's obscurement layer: a condition contributes while it is active."""
+        """Each contributing owner's obscurement layer, as of the last settled activity."""
         return tuple((owner_uuid, layer) for owner_uuid, layer in self._obscurement_layers.items()
-                     if self._spatial_conditions[owner_uuid].contributions_active())
+                     if self._obscurement_active[owner_uuid])
+
+    @property
+    def cell_obscurement(self) -> CellLayer:
+        """The active owners' combined OBSCUREMENT_BITS over the cell box, as of the last settled activity."""
+        return self._cell_obscurement
 
     def condition_footprint(self, condition_uuid: UUID) -> Optional[CellLayer]:
         """A spatial condition's committed footprint as a bool layer."""
@@ -5388,38 +5430,47 @@ class GridMap:
         the inputs of `BaseBlock.is_hazardous_for` and `Tile.is_hazardous_for`.
         """
         owners: List[SpatialConditionOwner | BaseBlock] = []
-        xs: List[int] = []
-        ys: List[int] = []
-        owner_of: List[int] = []
-
-        def add(owner: SpatialConditionOwner | BaseBlock, cell_xs: List[int], cell_ys: List[int]) -> None:
-            owner_of.extend([len(owners)] * len(cell_xs))
-            owners.append(owner)
-            xs.extend(cell_xs)
-            ys.extend(cell_ys)
-
-        for identity, layer in self._condition_footprints.items():
-            cells_x, cells_y = np.nonzero(layer.values)
-            add(self._spatial_conditions[identity], (cells_x + layer.x0).tolist(), (cells_y + layer.y0).tolist())
-        residue_cells = {cell for field in self._residue_fields.values()
-                         if field.entry_handler_uuid is not None for cell in field.cells}
-        for position, tile in self._tiles.items():
-            if position in residue_cells or (tile.active_conditions and _holds_ground_hazard(tile)):
-                add(tile, [position[0]], [position[1]])
-        for block in self.get_objects_with_conditions():
-            if _holds_ground_hazard(block):
-                placement = self._object_placements[block.uuid]
-                cells = placement.positions if placement.boundary_direction is None else (placement.position,)
-                add(block, [cell[0] for cell in cells], [cell[1] for cell in cells])
-        return (tuple(owners), np.array(xs, dtype=np.int64), np.array(ys, dtype=np.int64),
-                np.array(owner_of, dtype=np.int64))
+        xs: List[np.ndarray] = []
+        ys: List[np.ndarray] = []
+        for identity, (cell_xs, cell_ys) in self._condition_footprint_cells.items():
+            owners.append(self._spatial_conditions[identity])
+            xs.append(cell_xs)
+            ys.append(cell_ys)
+        # Tiles and placed objects: those under a hazardous residue (the field's cells) and the
+        # ground-hazard holders BaseBlock keeps at its condition membership commits.
+        blocks: Dict[UUID, Tuple[BaseBlock, Collection[Tuple[int, int]]]] = {}
+        for field in self._residue_fields.values():
+            if field.entry_handler_uuid is not None:
+                for cell in field.cells:
+                    tile = self._tiles.get(cell)
+                    if tile is not None:
+                        blocks[tile.uuid] = (tile, (cell,))
+        for identity in BaseBlock.ground_hazard_holders:
+            if identity in blocks:
+                continue
+            position = self._tiles_by_uuid.get(identity)
+            if position is not None:
+                blocks[identity] = (self._tiles[position], (position,))
+                continue
+            placement = self._object_placements.get(identity)
+            block = BaseBlock.get(identity)
+            if placement is not None and block is not None:
+                blocks[identity] = (block, placement.positions if placement.boundary_direction is None
+                                    else (placement.position,))
+        for block, cells in blocks.values():
+            owners.append(block)
+            xs.append(np.array([cell[0] for cell in cells], dtype=np.int64))
+            ys.append(np.array([cell[1] for cell in cells], dtype=np.int64))
+        if not owners:
+            empty = np.zeros(0, dtype=np.int64)
+            return (), empty, empty, empty
+        owner_of = np.repeat(np.arange(len(owners), dtype=np.int64), [len(cell_xs) for cell_xs in xs])
+        return (tuple(owners), np.concatenate(xs).astype(np.int64), np.concatenate(ys).astype(np.int64), owner_of)
 
     def optical_obscurement_bits_at(self, position: Tuple[int, int]) -> int:
         """The OBSCUREMENT_BITS covering one cell, from every contributing owner."""
-        bits = 0
-        for _, layer in self.obscurement_layers():
-            bits |= layer_value(layer, position)
-        return bits
+        self.settle_obscurement_activity()
+        return layer_value(self._cell_obscurement, position)
 
     def add_light_source(self, position: Tuple[int, int], bright_radius_feet: int,
                          dim_radius_feet: int, anchor_uuid: Optional[UUID] = None,
@@ -6156,7 +6207,10 @@ class GridMap:
         self._cell_light_slots = CellLayer(0, 0, np.zeros((0, 0, 1), dtype=np.uint64))
         self._light_slot_of.clear()
         self._obscurement_layers.clear()
+        self._obscurement_active.clear()
+        self._cell_obscurement = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
         self._condition_footprints.clear()
+        self._condition_footprint_cells.clear()
         self._pending_events.clear()
         self._pending_committed_events.clear()
         self._pending_light_positions.clear()

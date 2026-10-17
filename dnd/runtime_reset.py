@@ -48,6 +48,7 @@ def reset_engine_runtime(
 
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
+    BaseBlock.ground_hazard_holders.clear()
     BaseValue._registry.clear()
     Dice._registry.clear()
     DiceRoll._registry.clear()

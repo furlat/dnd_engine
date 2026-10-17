@@ -1142,11 +1142,7 @@ class SpatialSensesSystem:
     def _world(self) -> SettlementWorld:
         grid = get_map()
         exists = grid.cell_exists
-        owners = grid.obscurement_layers()
-        combined = np.zeros(exists.values.shape, dtype=np.uint8)
-        if exists.values.size:
-            for _, layer in owners:
-                combined |= embed(layer, exists.box, np.dtype(np.uint8))
+        grid.settle_obscurement_activity()
         hazard_owners, hazard_x, hazard_y, hazard_owner = grid.hazard_owners()
         light_rows = grid.light_source_rows()
         lights = LightSourceTable(
@@ -1156,7 +1152,7 @@ class SpatialSensesSystem:
                       for _, anchor, _, _ in light_rows], dtype=np.uint64).reshape(-1, 2).astype(np.int64),
             np.array([anchor is not None for _, anchor, _, _ in light_rows], dtype=bool),
             tuple(light_rows))
-        return SettlementWorld(exists, grid.cell_light, owners, CellLayer(exists.x0, exists.y0, combined),
+        return SettlementWorld(exists, grid.cell_light, grid.obscurement_layers(), grid.cell_obscurement,
                                hazard_owners, hazard_x, hazard_y, hazard_owner, lights,
                                grid.optical_revision, grid.propagation_revision)
 
