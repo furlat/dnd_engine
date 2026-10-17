@@ -1199,6 +1199,10 @@ class BaseAction(BaseObject):
         default=True,
         description="Whether a multi-entity action can target the same entity more than once.",
     )
+    any_number_of_targets: bool = Field(
+        default=False,
+        description="Whether a multi-entity action may pick each of its admitted recipients once, however many.",
+    )
     multi_target_objects: bool = False
     valid_target_filter: str = Field(
         default="enemies",
@@ -1225,6 +1229,13 @@ class BaseAction(BaseObject):
     # Compile a behavior's validation schema when it is first used, not merely
     # because the built-in catalog imports its definition.
     model_config = ConfigDict(arbitrary_types_allowed=True, defer_build=True)
+
+    @model_validator(mode="after")
+    def _validate_any_number_of_targets(self) -> "BaseAction":
+        """An unbounded recipient set picks each recipient once."""
+        if self.any_number_of_targets and self.allow_same_target:
+            raise ValueError("any_number_of_targets requires allow_same_target=False")
+        return self
 
     def model_post_init(self, __context: Any) -> None:
         """Capture an item source before the action can outlive that item."""

@@ -2,8 +2,11 @@
 
 from dataclasses import replace
 
+import pytest
+
 from dnd.classes.cleric import TurnUndead, PreserveLife
 from dnd.classes.divine import Turned
+from dnd.conditions import Invisible
 from dnd.content.characters.builds import create_character
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.dice import fixed_dice_faces
@@ -87,6 +90,38 @@ def test_supreme_healing_maximizes_spell_dice(game):
         result = action.instantiate(target_entity_uuid=ally.uuid).apply()
     assert result is not None and not result.canceled
     assert ally.get_hp() == old + 8 + actor.ability_scores.wisdom.modifier + 3
+
+
+@pytest.mark.parametrize(
+    "case, position, cleric_invisible, suspended, turned",
+    [
+        ("seeing at 25 ft", (7, 2), False, False, True),
+        ("at 35 ft", (9, 2), False, False, False),
+        ("cannot see the invisible cleric", (7, 2), True, False, False),
+        ("suspended with retained coordinate 5 ft away", (3, 2), False, True, False),
+    ],
+)
+def test_turning_reaches_undead_within_30_feet_that_see_the_cleric(
+    game, case, position, cleric_invisible, suspended, turned
+):
+    actor = cleric(game, 5)
+    undead = combatant(game, "Undead", position, creature_type=CreatureType.UNDEAD)
+    force_save_result(undead, "wisdom", succeeds=False)
+    if cleric_invisible:
+        actor.add_condition(Invisible(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid))
+    if suspended:
+        undead.suspend_spatial_presence()
+    Entity.update_all_entities_senses()
+    action = next(
+        action for action in actor.registered_actions if isinstance(action, TurnUndead)
+    )
+    with fixed_dice_faces(*([2] * 20)):
+        result = action.instantiate().apply()
+    assert result is not None and not result.canceled
+    assert any(
+        isinstance(condition, Turned)
+        for condition in undead.active_conditions_by_uuid.values()
+    ) is turned, case
 
 
 def test_turning_is_separate_from_fear_and_destroy_damage_does_not_end_new_turning(

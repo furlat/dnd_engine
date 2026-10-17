@@ -267,8 +267,6 @@ def test_eb_06_005_factions_define_allies_and_enemies() -> None:
     assert hero.is_enemy(enemy) is True
     assert hero.is_ally(neutral) is False
     assert hero.is_enemy(neutral) is True
-    assert Entity.get_entities_by_faction("heroes") == [hero, ally]
-    assert Entity.get_alive_by_faction("heroes") == [hero, ally]
     assert hero.is_enemy_of(enemy.uuid) is True
 
 

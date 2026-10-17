@@ -4,9 +4,12 @@ from uuid import uuid4
 
 import pytest
 
+from dnd.controller import HumanController
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.dice import fixed_dice_faces
+from dnd.core.events import EventPhase, EventQueue, SavingThrowEvent
 from dnd.core.modifiers import AdvantageStatus
+from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.spells.abjuration import GreaterRestoration
 from dnd.spells.enchantment import (
@@ -71,6 +74,44 @@ def test_charm_monster_general_creatures_and_source_damage_break(game, creature_
     assert "Charm Monster" in conditions(victim)
     victim.receive_damage(1, DamageType.FORCE, caster.uuid)
     assert "Charm Monster" not in conditions(victim)
+
+
+@pytest.mark.parametrize(
+    "case, rosters, ally_dead, advantage",
+    [
+        ("the caster's ally fights it", (("ally", "target", "bystander"),), False,
+         AdvantageStatus.ADVANTAGE),
+        ("the ally fights in another encounter", (("ally", "bystander"), ("target", "other")), False,
+         AdvantageStatus.NONE),
+        ("the ally is dead", (("ally", "target", "bystander"),), True, AdvantageStatus.NONE),
+    ],
+)
+def test_charm_monster_save_advantage_reads_the_target_encounter_roster(
+    game, case, rosters, ally_dead, advantage
+):
+    caster = high_actor(game)
+    actors = {
+        "ally": high_actor(game, "Ally", (3, 3)),
+        "target": high_actor(game, "Target", (5, 2), "foes"),
+        "bystander": high_actor(game, "Bystander", (6, 5), "wanderers"),
+        "other": high_actor(game, "Other", (8, 5), "wanderers"),
+    }
+    for names in rosters:
+        encounter = Encounter(name=case, source_entity_uuid=uuid4())
+        for name in names:
+            encounter.add_combatant(actors[name], HumanController(source_entity_uuid=actors[name].uuid))
+        encounter.start_encounter()
+    target = actors["target"]
+    if ally_dead:
+        actors["ally"].receive_damage(1000, DamageType.FORCE, target.uuid)
+    force_save_result(target, "wisdom", succeeds=False)
+    cursor = EventQueue.event_cursor()
+    with fixed_dice_faces(*([10] * 4)):
+        cast(CharmMonster, caster, target)
+    saves = [event for _, event in EventQueue.iter_events_since(cursor)
+             if isinstance(event, SavingThrowEvent) and event.target_entity_uuid == target.uuid
+             and event.phase is EventPhase.COMPLETION]
+    assert [save.dice_roll.advantage_status for save in saves] == [advantage], case
 
 
 def test_charm_monster_upcast_independent_recipients_and_calm_cure(game):

@@ -284,6 +284,19 @@ def test_forcecage_blocks_contact_and_paid_escape_failure_then_success(
     assert prisoner.position == (11, 4)
 
 
+def test_forcecage_ejects_a_straddler_and_leaves_a_far_creature_untouched(game):
+    caster = high_actor(game)
+    straddler = high_actor(game, "Straddler", (6, 3), "foes")
+    far = high_actor(game, "Far", (14, 4), "foes")
+    cursor = EventQueue.event_cursor()
+    cast(Forcecage, caster, end_position=(8, 4))
+    pushed = {event.target_entity_uuid for _, event in EventQueue.iter_events_since(cursor)
+              if isinstance(event, ForcedMovementEvent) and event.phase is EventPhase.COMPLETION}
+    assert pushed == {straddler.uuid}
+    assert straddler.position != (6, 3) and straddler.is_deployed
+    assert far.position == (14, 4)
+
+
 def test_forcecage_formation_second_ejection_veto_preserves_both_positions(game):
     caster = high_actor(game)
     left = high_actor(game, "Left", (6, 3), "foes")

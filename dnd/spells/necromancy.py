@@ -2669,10 +2669,12 @@ class Revivify(SpellAction):
 
     def get_additional_target_candidates(self):
         caster=Entity.get(self.source_entity_uuid)
-        if caster is None:
+        origin=self.get_target_origin()
+        if caster is None or origin is None:
             return {}
-        return {target.uuid:target.position for target in Entity.get_all_entities()
-            if target.is_player_companion and caster.is_ally(target) and target.is_deployed
+        # Objective radius; the caster's sight mask is the only perception witness (dead bodies aren't contacts).
+        return {target.uuid:target.position for target in map(Entity.get,get_map().get_entities_within(origin,30))
+            if target.is_player_companion and caster.is_ally(target)
             and target.health.life_state in (LifeState.DEAD,LifeState.DYING,LifeState.STABLE)
             and caster.senses.visible.get(target.position,False)}
 
