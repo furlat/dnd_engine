@@ -15,7 +15,7 @@ from dataclasses import dataclass
 import numpy as np
 from pydantic import BaseModel, Field
 
-from dnd.types.event_facts import GroupEntryKind, LandingKind
+from dnd.types.event_facts import GroupEntryKind, LandingKind, KeyedResidueChange, KeyedTileChange, KeyedTileFields
 from dnd.core.geometry import circle_positions, grid_distance_feet, supercover_line
 from dnd.core.view import (CARDINAL_DIRECTIONS, CARDINAL_STEPS, EDGE_SHIFTS, NO_POSITIONS, OPPOSITE_CARDINAL, Box,
     CellLayer, boxes_intersect, cell_visible, cells_layer, compact_window_groups, covering_box, embed, entered_by,
@@ -1973,39 +1973,55 @@ class GridMap:
         self._residue_fields[field.residue_id] = field
 
     def publish_tiles_state_changed(
-        self, positions: Collection[Tuple[int, int]], *, source_entity_uuid: UUID,
+        self, changes: Collection[KeyedTileChange], *, source_entity_uuid: UUID,
         parent_event: Optional[UUID] = None,
     ) -> Optional[SpatialChangeEvent]:
-        """One inert after-value fact for many tiles, without invalidating traversal."""
-        changed = sorted(position for position in set(positions) if position in self._tiles)
+        """One inert keyed fact for many tiles, without invalidating traversal."""
+        changed = self._existing_keyed_changes(changes)
         if not changed:
             return None
         return self.publish_committed_spatial_event(SpatialChangeEvent.tiles_changed(
-            tuple(self._tiles[position].to_world_tile_state() for position in changed),
-            source_entity_uuid=source_entity_uuid, parent_event=parent_event, inert=True))
+            changed, source_entity_uuid=source_entity_uuid, parent_event=parent_event, inert=True))
 
     def commit_tile_mechanics(
         self,
-        positions: Collection[Tuple[int, int]],
+        changes: Collection[KeyedTileChange],
         *,
         source_entity_uuid: UUID,
         parent_event: Optional[UUID] = None,
         publish: bool = True,
     ) -> Optional[SpatialChangeEvent]:
-        """Invalidate traversal at the write and return one fact for every changed Tile.
+        """Invalidate traversal at the write and return one keyed fact for every changed Tile.
 
         Owners of Tile movement contributions call this once per batch, right
-        after their writes. With ``publish=False`` the caller publishes the
-        returned fact later (removal publications keep their committed order).
+        after their writes, with the keys they changed. With ``publish=False``
+        the caller publishes the returned fact later (removal publications keep
+        their committed order).
         """
-        changed = sorted(position for position in set(positions) if position in self._tiles)
+        changed = self._existing_keyed_changes(changes)
         if not changed:
             return None
-        self._bump_spatial_revisions(frozenset({SpatialChannel.MOVEMENT}), set(changed))
-        fact = SpatialChangeEvent.tiles_changed(
-            tuple(self._tiles[position].to_world_tile_state() for position in changed),
-            source_entity_uuid=source_entity_uuid, parent_event=parent_event)
+        self._bump_spatial_revisions(frozenset({SpatialChannel.MOVEMENT}), {change.position for change in changed})
+        fact = SpatialChangeEvent.tiles_changed(changed, source_entity_uuid=source_entity_uuid,
+            parent_event=parent_event)
         return self.publish_committed_spatial_event(fact) if publish else fact
+
+    def _existing_keyed_changes(self, changes: Collection[KeyedTileChange]) -> Tuple[KeyedTileChange, ...]:
+        """One writer's keyed changes on existing tiles, in cell order."""
+        return tuple(sorted((change for change in changes if change.position in self._tiles),
+                            key=lambda change: change.position))
+
+    def _keyed_tile_change_after(self, change: KeyedTileChange) -> KeyedTileChange:
+        """The same keys, with the tile's after-values read now (plan Q4 (W))."""
+        tile = self._tiles[change.position]
+        fields: KeyedTileFields = {}
+        if "walking_cost" in change.fields:
+            fields["walking_cost"] = tile.get_movement_cost(MovementMode.WALKING)
+        if "condition_names" in change.fields:
+            fields["condition_names"] = tile.condition_names()
+        return KeyedTileChange(position=change.position, fields=fields, residues=tuple(
+            KeyedResidueChange(residue_id=row.residue_id, contribution_index=row.contribution_index,
+                               state=tile.residue_state(row.residue_id)) for row in change.residues))
 
     def validate_spatial_condition_positions(
         self,
@@ -3655,8 +3671,8 @@ class GridMap:
         if not isinstance(event, SpatialChangeEvent):
             return {}
         if event.change_type is SpatialChangeType.TILES_CHANGED:
-            return {"tile_states": tuple(self._tiles[row.position].to_world_tile_state()
-                for row in event.tile_states if row.position in self._tiles)}
+            return {"keyed_tile_changes": tuple(self._keyed_tile_change_after(change)
+                for change in event.keyed_tile_changes if change.position in self._tiles)}
         if event.change_type is SpatialChangeType.TILE_CHANGED:
             tile = self._tiles.get(event.position)
             if tile is None:

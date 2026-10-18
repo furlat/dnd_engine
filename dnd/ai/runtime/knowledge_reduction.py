@@ -5,7 +5,7 @@ from collections.abc import Iterable, Set as AbstractSet
 from typing import TypeVar
 from uuid import UUID
 
-from dnd.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact, condition_fact
+from dnd.actor_projection import actor_fact_change, actor_fact_owner, actor_from_birth, apply_actor_fact_change, condition_fact
 from dnd.ai.contracts.observation import (
     KnowledgeState, ObservationConditionFact, ObservationEffectProtection,
     ObservationEntityFact, ObservationObjectFact, ObservationObserverState,
@@ -203,10 +203,12 @@ class AIKnowledge:
                 self.dirty_observers.add(event.entity_uuid)
 
         owner = actor_fact_owner(event)
+        known_owner = owner is not None and owner in self.actors
+        # The AI folds its own record: its condition fact carries the version's source cursor.
+        if (change := actor_fact_change(event, condition)) is not None:
+            apply_actor_fact_change(self.actors, change)
         if owner is not None:
-            actor = self.actors.get(owner)
-            if actor is not None:
-                self.actors[owner] = apply_actor_fact(actor, event, condition)
+            if known_owner:
                 self._refresh_entity(owner)
             elif condition is not None and condition.resulting_stats is not None:
                 pending = self.pending_conditions.setdefault(owner, {})

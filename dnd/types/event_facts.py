@@ -248,6 +248,35 @@ class WorldTileChanges(TypedDict, total=False):
     residues: tuple[TileResidueState, ...]
 
 
+class KeyedTileFields(TypedDict, total=False):
+    """The Tile fields a keyed change can carry: present fields replace the recorded values."""
+
+    walking_cost: Annotated[StrictInt, Field(ge=0)]
+    condition_names: Tuple[str, ...]
+
+
+class KeyedResidueChange(BaseModel):
+    """One material's keyed change on one Tile: the writer names the key, completion reads its after-value."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    residue_id: str
+    # The contribution row the deposit appended or grew; None when no contribution row changed.
+    contribution_index: Optional[StrictInt] = Field(default=None, ge=0)
+    # The material's after-value on the tile; None once it is removed.
+    state: Optional[TileResidueState] = None
+
+
+class KeyedTileChange(BaseModel):
+    """One Tile's keyed change (plan Q4 (W)): the fields and materials one writer changed, with their after-values."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    position: Tuple[int, int]
+    fields: KeyedTileFields = Field(default_factory=lambda: KeyedTileFields())
+    residues: Tuple[KeyedResidueChange, ...] = ()
+
+
 
 class WorldConnectorState(BaseModel):
     """Complete renderer-neutral state of one admitted connector."""
