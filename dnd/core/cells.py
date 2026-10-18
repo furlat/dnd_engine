@@ -352,14 +352,19 @@ def zeros_left_out(values: CellValues, cells: CellMask) -> CellValues:
 
 
 def shared_cells(masks: Sequence[CellMask]) -> tuple[CellMask, list[RowBits]]:
-    """One row table of every cell the sets name (their union, in cell order) and each set as a subset of it."""
-    box = union_box(*(mask_box(mask) for mask in masks))
+    """One row table of every cell the sets name (their union, in cell order) and each set as a subset of it.
+
+    Equal sets are one subset (many observers send the same cells).
+    """
+    distinct = [mask for mask in dict.fromkeys(masks) if mask.width]
+    box = union_box(*(mask_box(mask) for mask in distinct))
     if box is None:
         return EMPTY_CELLS, [NO_ROWS for _ in masks]
-    grids = [mask_array(mask, box) for mask in masks]
+    grids = [mask_array(mask, box) for mask in distinct]
     union = np.logical_or.reduce(grids)
     rank = (np.cumsum(union.ravel()) - 1).reshape(union.shape)
-    return pack_mask(box[0], box[1], union), [row_bits(rank[grid]) for grid in grids]
+    bits = {mask: row_bits(rank[grid]) for mask, grid in zip(distinct, grids)}
+    return pack_mask(box[0], box[1], union), [bits.get(mask, NO_ROWS) for mask in masks]
 
 
 def shared_values(values: Sequence[CellValues]) -> tuple[tuple[CellValues, ...], list[RowBits]]:
@@ -367,12 +372,13 @@ def shared_values(values: Sequence[CellValues]) -> tuple[tuple[CellValues, ...],
 
     Layer k holds, for each cell with more than k distinct values among the
     sets, its (k+1)-th smallest. Rows are by cell in cell order, then by value
-    (`layer_rows`).
+    (`layer_rows`). Equal sets are one subset.
     """
-    box = union_box(*(mask_box(row.cells) for row in values))
+    distinct = [row for row in dict.fromkeys(values) if row.cells.width]
+    box = union_box(*(mask_box(row.cells) for row in distinct))
     if box is None:
         return (), [NO_ROWS for _ in values]
-    held = [values_array(row, box) for row in values]
+    held = [values_array(row, box) for row in distinct]
     domain = np.unique(np.concatenate([levels[cells] for cells, levels in held]))
     shape = held[0][0].shape
     present = np.zeros((domain.size, *shape), dtype=bool)
@@ -388,11 +394,11 @@ def shared_values(values: Sequence[CellValues]) -> tuple[tuple[CellValues, ...],
         for index, value in enumerate(domain):
             levels[present[index] & (below[index] == layer)] = value
         layers.append(pack_values(box[0], box[1], counts > layer, levels))
-    bits = []
-    for cells, levels in held:
+    bits = {}
+    for row, (cells, levels) in zip(distinct, held):
         xs, ys = np.nonzero(cells)
-        bits.append(row_bits(offsets[xs, ys] + below[np.searchsorted(domain, levels[xs, ys]), xs, ys]))
-    return tuple(layers), bits
+        bits[row] = row_bits(offsets[xs, ys] + below[np.searchsorted(domain, levels[xs, ys]), xs, ys])
+    return tuple(layers), [bits.get(row, NO_ROWS) for row in values]
 
 
 __all__ = ["CellRows", "mask_rows", "layer_rows", "row_bits", "flag_bits", "bit_rows", "selected_mask", "selected_values",

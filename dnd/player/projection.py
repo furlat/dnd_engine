@@ -316,6 +316,8 @@ class SensoryTable:
     light_removal_revisions: list[int] = field(default_factory=list)
     removed_uuids: list[UUID] = field(default_factory=list)
     facts: list[FactRow] = field(default_factory=list)
+    # Each effect's sightings built so far in the group, with the perceived value each was built from.
+    built_sightings: dict[UUID, list[tuple[PerceivedSpatialEffect, SpatialEffectSighting]]] = field(default_factory=dict)
 
 
 Row = TypeVar("Row")
@@ -338,6 +340,17 @@ def _effect_content(effect: PerceivedSpatialEffect) -> SpatialEffectContent:
     return SpatialEffectContent(content_ref=effect.content_ref, name=effect.name, description=effect.description)
 
 
+def _group_sighting(table: SensoryTable, identity: UUID, effect: PerceivedSpatialEffect) -> SpatialEffectSighting:
+    """An effect's sighting, built once per equal perceived value in the group (observers often see the same)."""
+    built = table.built_sightings.setdefault(identity, [])
+    for perceived, sighting in built:
+        if perceived is effect or perceived == effect:
+            return sighting
+    sighting = _sighting(effect)
+    built.append((effect, sighting))
+    return sighting
+
+
 def _sensory_fact(event: SensoryUpdateEvent, keys: "NativeKeys", table: SensoryTable) -> SensoryFact:
     """The public fact of an observed sensory event; its observer, cells, changed and removed values are rows appended to `table`."""
     observer = _appended(table.facts, (FactRow(observer_uuid=event.observer_uuid,
@@ -349,7 +362,7 @@ def _sensory_fact(event: SensoryUpdateEvent, keys: "NativeKeys", table: SensoryT
         light_sources_changed=_appended(table.light_sources, event.light_sources_changed.values()),
         light_sources_removed=_keyed(table.light_removal_uuids, table.light_removal_revisions, event.light_sources_removed),
         spatial_effect_sightings=_keyed(table.sighting_uuids, table.sightings,
-            {identity: _sighting(effect) for identity, effect in event.spatial_effects_changed.items()}),
+            {identity: _group_sighting(table, identity, effect) for identity, effect in event.spatial_effects_changed.items()}),
         spatial_effect_content={identity: _effect_content(effect) for identity, effect in event.spatial_effects_changed.items()},
         spatial_effects_removed=_appended(table.removed_uuids, event.spatial_effects_removed),
         cause_occurrence=_version_key(keys, event.cause_event_uuid),
