@@ -5,25 +5,28 @@ import json
 from types import MappingProxyType
 from typing import Collection, Iterator, Mapping, Sequence
 from dnd.types.actor import SpatialDisposition
-from dnd.core.cells import (CellRows, bit_rows, layer_rows, mask_positions, mask_rows, selected_mask, selected_values,
-    values_items)
-from dnd.core.sensory_fold import copy_senses_snapshot
+from dnd.core.cells import (CellRows, bit_rows, layer_rows, mask_positions, mask_rows, mask_union, selected_mask,
+    selected_values, update_cells, values_items)
+from dnd.core.sensory_fold import copy_senses_snapshot, sense_modes_hash
 from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.descriptors import ContentDescriptor
-from dnd.types.cells import CellMask, CellValues
+from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues, cell_in
 from dnd.types.event_facts import EventType, SpatialChangeType
 from dnd.types.world import LightLevel
-from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensoryDelta
+from dnd.types.senses import (PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesSnapshot,
+    SensoryDelta)
 from dnd.player.audience import (AudienceComposition, apply_current_audience, audience_view,
     begin_audience_composition, observe_audience, resolve_audience)
 from dnd.player.facts import (
     AttackFact, ConditionChangeFact, ConditionFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
     ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
-    VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact,
+    VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact, PlayerLightSource,
 )
+from dnd.player.sensory_facts import (LightPatch, LightRow as ComposedLightRow, SensoryFact as ComposedSensoryFact,
+    SensoryRows as ComposedSensoryRows, SpatialEffectPatch, SpatialEffectSighting as ComposedSighting)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -126,7 +129,10 @@ def copy_target(target: PlayerState) -> PlayerState:
             members={identity: copy_senses_snapshot(value) for identity, value in target.perception.members.items()},
             contact_cursors=dict(target.perception.contact_cursors),
             effect_cursors=dict(target.perception.effect_cursors),
-            effect_absences=dict(target.perception.effect_absences)))
+            effect_absences=dict(target.perception.effect_absences)),
+        entity_members=dict(target.entity_members), object_members=dict(target.object_members),
+        effect_members=dict(target.effect_members), light_sources=dict(target.light_sources),
+        remembered_effects=dict(target.remembered_effects))
 
 
 def apply_world_update(target: PlayerState, update: WorldUpdate) -> None:
@@ -680,3 +686,250 @@ def reduce_operation(target: PlayerState, update: PlayerUpdate) -> PlayerState:
             raise ValueError("Standalone log append is out of order or belongs to another audience")
     result.combat_log_appends += update.combat_log_appends
     return result
+
+
+# Schema 16: a seat's composed perception, one change per settlement (plan §3.1, §3.2). Staged beside the
+# schema-15 fold until the projector switch, when its wire types move into facts.py and replace the schema-15 ones
+# (and `composed_values` replaces `contact_values` / `sensory_values`).
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class ComposedValues:
+    """A schema-16 group's rows as the fold reads them, resolved once per group: contact values and cell tables."""
+
+    rows: ComposedSensoryRows
+    contacts: tuple[PerceivedContact, ...]
+    cells: CellRows
+    light_levels: CellRows
+    hazards: CellRows
+
+
+def composed_values(rows: ComposedSensoryRows) -> ComposedValues:
+    visual = set(bit_rows(rows.contact_visual, len(rows.contact_positions)).tolist())
+    senses = rows.contact_special_senses or ((),) * len(rows.contact_positions)
+    contacts = tuple(PerceivedContact.model_construct(position=position, visual=index in visual,
+        special_senses=senses[index]) for index, position in enumerate(rows.contact_positions))
+    return ComposedValues(rows, contacts, mask_rows(rows.cells), layer_rows(rows.light_levels), layer_rows(rows.hazards))
+
+
+def _row_members(column: tuple[int, ...], index: int, observers: int) -> int:
+    """A row's member bitset; a one-observer seat's rows leave it out (they are that observer's)."""
+    if column:
+        return column[index]
+    if observers != 1:
+        raise ValueError("A seat with several observers names the members of each row")
+    return 1
+
+
+def _sighted_effect(sighting: ComposedSighting, content: SpatialEffectContent) -> PerceivedSpatialEffect:
+    """The perceived effect of an entering sighting and its content (both validated); its cell sets in cell order."""
+    return PerceivedSpatialEffect.model_construct(duration=sighting.duration, content_ref=content.content_ref,
+        name=content.name, description=content.description, positions=tuple(mask_positions(sighting.positions)),
+        owner_revision=None, apparent_presence=sighting.apparent_presence,
+        trap_state=sighting.trap_state, pressed=sighting.pressed, direction=sighting.direction,
+        anchor_item_uuid=sighting.anchor_item_uuid, anchor_entity_uuid=sighting.anchor_entity_uuid,
+        energy_type=sighting.energy_type, presence_mode=sighting.presence_mode,
+        sustainer_item_uuid=sighting.sustainer_item_uuid, concentration_slot_uuid=sighting.concentration_slot_uuid,
+        anchor_position=sighting.anchor_position, anchor_elevation_steps=sighting.anchor_elevation_steps,
+        area_geometry=sighting.area_geometry, construction_sections=sighting.construction_sections,
+        area_propagation=sighting.area_propagation, deposit_source=sighting.deposit_source,
+        visible_volume_positions=tuple(mask_positions(sighting.visible_volume_positions)),
+        upper_volume_surfaces=sighting.upper_volume_surfaces, suppressions=sighting.suppressions)
+
+
+def _changed_cells(held: tuple[tuple[int, int], ...], added: CellMask, removed: CellMask) -> tuple[tuple[int, int], ...]:
+    """A held cell set after a change that removes held cells and adds new ones."""
+    cells, gone, new = set(held), set(mask_positions(removed)), set(mask_positions(added))
+    if not gone <= cells or new & cells:
+        raise ValueError("A patch removes only held cells and adds only new ones")
+    return tuple(sorted((cells - gone) | new))
+
+
+def _patched_effect(before: PerceivedSpatialEffect, patch: SpatialEffectPatch) -> PerceivedSpatialEffect:
+    """A perceived effect after its patch: cell sets changed, upper surfaces changed by key, changed fields replaced."""
+    removed = set(patch.upper_removed)
+    upper = {(row.position, row.lower_height_planes): row for row in before.upper_volume_surfaces}
+    if not removed <= upper.keys():
+        raise ValueError("A patch removes only held volume surfaces")
+    for key in removed:
+        del upper[key]
+    upper.update(((row.position, row.lower_height_planes), row) for row in patch.upper_added)
+    return before.model_copy(update={**patch.changes,
+        "positions": _changed_cells(before.positions, patch.positions_added, patch.positions_removed),
+        "visible_volume_positions": _changed_cells(before.visible_volume_positions, patch.volume_added,
+                                                   patch.volume_removed),
+        "upper_volume_surfaces": tuple(upper[key] for key in sorted(upper))})
+
+
+def _light_source(row: ComposedLightRow, uuids: tuple[UUID, ...]) -> PlayerLightSource:
+    return PlayerLightSource(source_uuid=uuids[row.source], position=row.position,
+        base_height_steps=row.base_height_steps, very_bright_radius_feet=row.very_bright_radius_feet,
+        bright_radius_feet=row.bright_radius_feet, dim_radius_feet=row.dim_radius_feet, appearance=row.appearance,
+        actor_anchored=row.actor_anchored,
+        anchor_entity_uuid=uuids[row.anchor_entity] if row.anchor_entity is not None else None,
+        anchor_item_uuid=uuids[row.anchor_item] if row.anchor_item is not None else None)
+
+
+def _patched_light(before: PlayerLightSource, patch: LightPatch, uuids: tuple[UUID, ...]) -> PlayerLightSource:
+    """A perceived light source with its patch's changed fields; anchors name `uuids` (None: undisclosed)."""
+    changes = patch.changes
+    entity, item = changes.get("anchor_entity"), changes.get("anchor_item")
+    return replace(before,
+        position=changes.get("position", before.position),
+        base_height_steps=changes.get("base_height_steps", before.base_height_steps),
+        very_bright_radius_feet=changes.get("very_bright_radius_feet", before.very_bright_radius_feet),
+        bright_radius_feet=changes.get("bright_radius_feet", before.bright_radius_feet),
+        dim_radius_feet=changes.get("dim_radius_feet", before.dim_radius_feet),
+        appearance=changes.get("appearance", before.appearance),
+        actor_anchored=changes.get("actor_anchored", before.actor_anchored),
+        anchor_entity_uuid=(uuids[entity] if entity is not None else None) if "anchor_entity" in changes
+            else before.anchor_entity_uuid,
+        anchor_item_uuid=(uuids[item] if item is not None else None) if "anchor_item" in changes
+            else before.anchor_item_uuid)
+
+
+def _remember_effects(memory: dict[UUID, PerceivedSpatialEffect], effects: Mapping[UUID, PerceivedSpatialEffect],
+                      left: Mapping[UUID, tuple[PerceivedSpatialEffect, set[tuple[int, int]]]],
+                      retired: Mapping[UUID, set[tuple[int, int]]], visible: CellMask) -> None:
+    """The client's effect memory after a change (plan §3.2, decision D1 (a)).
+
+    Cells that left an effect's visible part are remembered with the effect as last perceived. A remembered
+    cell is forgotten when it is in the effect's visible part again (it is perceived), when a member saw the
+    effect leave it (`retired`), or, for an apparent effect, when the cell is seen without it: anyone seeing an
+    apparent effect's cell perceives it there. A concealed effect's cell seen by a member that never found it
+    stays remembered.
+    """
+    for identity, (row, cells) in left.items():
+        held = memory.get(identity)
+        if cells or held is not None:
+            memory[identity] = row.model_copy(update={
+                "positions": tuple(sorted(cells | set(held.positions if held is not None else ()))),
+                "visible_volume_positions": (), "upper_volume_surfaces": ()})
+    for identity in tuple(memory):
+        row = memory[identity]
+        current = effects.get(identity)
+        perceived = set(current.positions) if current is not None else set()
+        gone = retired.get(identity, set())
+        apparent = (current if current is not None else row).apparent_presence
+        kept = tuple(position for position in row.positions if position not in perceived and position not in gone
+                     and not (apparent and cell_in(visible, position)))
+        if not kept:
+            del memory[identity]
+        elif kept != row.positions:
+            memory[identity] = row.model_copy(update={"positions": kept})
+
+
+def fold_composed_sensory(target: PlayerState, fact: ComposedSensoryFact, values: ComposedValues) -> None:
+    """Fold one settlement's change of the seat's composed perception (a received fact of the group `values`).
+
+    It updates what the seat perceives now (`senses`: cells, contacts, effects and the anchor's scalars), the
+    members perceiving each contact and effect, the light sources perceived now, and the client's memory: seen
+    cells are every cell seen visible; effects keep their remembered cells (`_remember_effects`). Visual
+    contacts place the bodies the seat holds. A list naming a record the seat does not hold (or, for an entering
+    record, does hold) raises ValueError.
+    """
+    rows = values.rows
+    uuids = rows.uuids
+    observers = len(target.viewing_audience.observers)
+    held = target.senses
+    if fact.initial:
+        if held is not None:
+            raise ValueError("A seat's perception enters once")
+        if fact.observer_position is None or fact.passive_perception is None or fact.visual_access is None:
+            raise ValueError("An initial sensory fact carries the position and every capability after-value")
+        held = SensesSnapshot(position=fact.observer_position, visible=EMPTY_CELLS, seen=EMPTY_CELLS, entities={},
+            objects={}, effective_light_levels=EMPTY_VALUES, paths_dirty=False,
+            passive_perception=fact.passive_perception, sense_modes_hash=sense_modes_hash(()), sense_modes=(),
+            visual_access=fact.visual_access)
+    elif held is None:
+        raise ValueError("A sensory change requires the seat's entered perception")
+    added = selected_mask(values.cells, fact.visible_cells_added)
+    visible, light, hazard = update_cells(held.visible, held.effective_light_levels, held.hazardous_cells,
+        selected_mask(values.cells, fact.visible_cells_removed), added,
+        selected_values(values.light_levels, fact.effective_light_levels_changed),
+        selected_values(values.hazards, fact.hazardous_cells_changed))
+
+    entities, objects = dict(held.entities), dict(held.objects)
+    for contacts, members, changed, gone in (
+            (entities, target.entity_members, fact.entity_contacts_changed, fact.entity_contacts_removed),
+            (objects, target.object_members, fact.object_contacts_changed, fact.object_contacts_removed)):
+        for identity in _unique(dict.fromkeys(uuids[index] for index in gone), gone):
+            if identity not in contacts:
+                raise ValueError("A removed contact is one the seat perceives")
+            del contacts[identity]
+            del members[identity]
+        for index in changed:
+            identity = uuids[rows.contact_uuid_index[index]]
+            contacts[identity] = values.contacts[index]
+            members[identity] = _row_members(rows.contact_members, index, observers)
+        _unique(dict.fromkeys(uuids[rows.contact_uuid_index[index]] for index in changed), changed)
+
+    target.spatial_content.update(fact.spatial_effect_content)
+    effects = dict(held.spatial_effects)
+    # Each effect whose visible part lost cells: its row as last perceived and those cells.
+    left: dict[UUID, tuple[PerceivedSpatialEffect, set[tuple[int, int]]]] = {}
+    for identity in _unique(dict.fromkeys(uuids[index] for index in fact.spatial_effects_removed),
+                            fact.spatial_effects_removed):
+        row = effects.pop(identity, None)
+        if row is None:
+            raise ValueError("A removed effect is one the seat perceives")
+        del target.effect_members[identity]
+        left[identity] = row, set(row.positions)
+    for index in fact.spatial_effects_patched:
+        identity = uuids[rows.patch_uuid_index[index]]
+        before = effects.get(identity)
+        if before is None:
+            raise ValueError("A patched effect is one the seat perceives")
+        patch = rows.sighting_patches[index]
+        effects[identity] = after = _patched_effect(before, patch)
+        if patch.members is not None:
+            target.effect_members[identity] = patch.members
+        left[identity] = after, set(mask_positions(patch.positions_removed))
+    _unique(dict.fromkeys(uuids[rows.patch_uuid_index[index]] for index in fact.spatial_effects_patched),
+            fact.spatial_effects_patched)
+    for index in fact.spatial_effects_added:
+        identity = uuids[rows.sighting_uuid_index[index]]
+        if identity in effects:
+            raise ValueError("An entering effect is one the seat does not perceive")
+        content = target.spatial_content.get(identity)
+        if content is None:
+            raise ValueError("An entering effect's content was sent before or with it")
+        effects[identity] = _sighted_effect(rows.sightings[index], content)
+        target.effect_members[identity] = _row_members(rows.sighting_members, index, observers)
+    retired = _unique({uuids[rows.retired_uuid_index[index]]: set(mask_positions(rows.retired_cells[index]))
+                       for index in fact.spatial_effect_cells_retired}, fact.spatial_effect_cells_retired)
+    _remember_effects(target.remembered_effects, effects, left, retired, visible)
+
+    lights = target.light_sources
+    for identity in _unique(dict.fromkeys(uuids[index] for index in fact.light_sources_removed),
+                            fact.light_sources_removed):
+        if lights.pop(identity, None) is None:
+            raise ValueError("A removed light source is one the seat perceives")
+    for index in fact.light_sources_patched:
+        patch = rows.light_patches[index]
+        before_light = lights.get(uuids[patch.source])
+        if before_light is None:
+            raise ValueError("A patched light source is one the seat perceives")
+        lights[uuids[patch.source]] = _patched_light(before_light, patch, uuids)
+    for index in fact.light_sources_added:
+        source = rows.light_sources[index]
+        if uuids[source.source] in lights:
+            raise ValueError("An entering light source is one the seat does not perceive")
+        lights[uuids[source.source]] = _light_source(source, uuids)
+
+    modes = (tuple(mode.model_copy(deep=True) for mode in fact.sense_modes)
+             if fact.sense_modes_changed and fact.sense_modes is not None else None)
+    target.senses = replace(held, visible=visible, seen=mask_union(held.seen, added), entities=entities,
+        objects=objects, effective_light_levels=light, hazardous_cells=hazard, spatial_effects=effects,
+        position=fact.observer_position if fact.observer_position is not None else held.position,
+        paths_dirty=held.paths_dirty or fact.paths_dirty,
+        passive_perception=(fact.passive_perception if fact.passive_perception_changed
+            and fact.passive_perception is not None else held.passive_perception),
+        sense_modes=modes if modes is not None else held.sense_modes,
+        sense_modes_hash=sense_modes_hash(modes) if modes is not None else held.sense_modes_hash,
+        visual_access=(fact.visual_access if fact.visual_access_changed
+            and fact.visual_access is not None else held.visual_access))
+    for index in fact.entity_contacts_changed:
+        identity, contact = uuids[rows.contact_uuid_index[index]], values.contacts[index]
+        if contact.visual and identity in target.actors and target.actors[identity].present:
+            target.actors[identity] = replace(target.actors[identity], last_visual_position=contact.position)

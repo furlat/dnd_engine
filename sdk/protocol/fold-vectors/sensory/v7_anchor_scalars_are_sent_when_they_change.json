@@ -1,0 +1,273 @@
+{
+ "name": "v7_anchor_scalars_are_sent_when_they_change",
+ "rule": "The first fact carries the position and every capability; later facts carry a scalar only when it changed (the rest keep their values); paths stay dirty once dirty.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "sensory_rows": {
+    "cells": {
+     "x0": 0,
+     "y0": 0,
+     "width": 1,
+     "height": 1,
+     "bits": "AQ=="
+    },
+    "light_levels": [
+     {
+      "cells": {
+       "x0": 0,
+       "y0": 0,
+       "width": 1,
+       "height": 1,
+       "bits": "AQ=="
+      },
+      "values": "Aw=="
+     }
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "initial": true,
+    "observer_position": [
+     0,
+     0
+    ],
+    "visible_cells_added": {
+     "start": 0,
+     "bits": "AQ=="
+    },
+    "effective_light_levels_changed": {
+     "start": 0,
+     "bits": "AQ=="
+    },
+    "sense_modes_changed": true,
+    "sense_modes": [
+     {
+      "sense_type": "Darkvision",
+      "range_feet": 60
+     }
+    ],
+    "passive_perception_changed": true,
+    "passive_perception": 10,
+    "visual_access_changed": true,
+    "visual_access": 2
+   },
+   "expected": {
+    "visible": [
+     [
+      0,
+      0
+     ]
+    ],
+    "seen": [
+     [
+      0,
+      0
+     ]
+    ],
+    "light": {
+     "0,0": 3
+    },
+    "hazard": {},
+    "position": [
+     0,
+     0
+    ],
+    "passive_perception": 10,
+    "visual_access": 2,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {},
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {}
+   }
+  },
+  {
+   "sensory_rows": {},
+   "fact": {
+    "kind": "sensory",
+    "passive_perception_changed": true,
+    "passive_perception": 13
+   },
+   "expected": {
+    "visible": [
+     [
+      0,
+      0
+     ]
+    ],
+    "seen": [
+     [
+      0,
+      0
+     ]
+    ],
+    "light": {
+     "0,0": 3
+    },
+    "hazard": {},
+    "position": [
+     0,
+     0
+    ],
+    "passive_perception": 13,
+    "visual_access": 2,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {},
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {}
+   }
+  },
+  {
+   "sensory_rows": {
+    "cells": {
+     "x0": 1,
+     "y0": 0,
+     "width": 1,
+     "height": 1,
+     "bits": "AQ=="
+    },
+    "light_levels": [
+     {
+      "cells": {
+       "x0": 1,
+       "y0": 0,
+       "width": 1,
+       "height": 1,
+       "bits": "AQ=="
+      },
+      "values": "Aw=="
+     }
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "observer_position": [
+     1,
+     0
+    ],
+    "visible_cells_added": {
+     "start": 0,
+     "bits": "AQ=="
+    },
+    "effective_light_levels_changed": {
+     "start": 0,
+     "bits": "AQ=="
+    },
+    "visual_access_changed": true,
+    "visual_access": 1,
+    "paths_dirty": true
+   },
+   "expected": {
+    "visible": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ]
+    ],
+    "seen": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ]
+    ],
+    "light": {
+     "0,0": 3,
+     "1,0": 3
+    },
+    "hazard": {},
+    "position": [
+     1,
+     0
+    ],
+    "passive_perception": 13,
+    "visual_access": 1,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": true,
+    "entities": {},
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {}
+   }
+  },
+  {
+   "sensory_rows": {},
+   "fact": {
+    "kind": "sensory",
+    "sense_modes_changed": true,
+    "sense_modes": []
+   },
+   "expected": {
+    "visible": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ]
+    ],
+    "seen": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ]
+    ],
+    "light": {
+     "0,0": 3,
+     "1,0": 3
+    },
+    "hazard": {},
+    "position": [
+     1,
+     0
+    ],
+    "passive_perception": 13,
+    "visual_access": 1,
+    "sense_modes": [],
+    "paths_dirty": true,
+    "entities": {},
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {}
+   }
+  }
+ ]
+}

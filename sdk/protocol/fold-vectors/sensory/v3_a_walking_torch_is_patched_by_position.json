@@ -1,0 +1,446 @@
+{
+ "name": "v3_a_walking_torch_is_patched_by_position",
+ "rule": "A light source enters whole, then travels as its changed fields only (a carried torch: its position, its anchor once undisclosed), and leaves by key; light sources carry no members.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a",
+  "00000000-0000-4000-8000-00000000000b"
+ ],
+ "steps": [
+  {
+   "sensory_rows": {
+    "uuids": [
+     "00000000-0000-4000-8000-000000001001",
+     "00000000-0000-4000-8000-000000004001"
+    ],
+    "contact_uuid_index": [
+     0
+    ],
+    "contact_positions": [
+     [
+      5,
+      5
+     ]
+    ],
+    "contact_visual": {
+     "start": 0,
+     "bits": "AQ=="
+    },
+    "contact_members": [
+     3
+    ],
+    "light_sources": [
+     {
+      "source": 1,
+      "position": [
+       5,
+       5
+      ],
+      "very_bright_radius_feet": 0,
+      "bright_radius_feet": 20,
+      "dim_radius_feet": 40,
+      "appearance": "torch",
+      "anchor_entity": 0
+     }
+    ],
+    "cells": {
+     "x0": 5,
+     "y0": 5,
+     "width": 3,
+     "height": 1,
+     "bits": "Bw=="
+    },
+    "light_levels": [
+     {
+      "cells": {
+       "x0": 5,
+       "y0": 5,
+       "width": 3,
+       "height": 1,
+       "bits": "Bw=="
+      },
+      "values": "AwMD"
+     }
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "initial": true,
+    "observer_position": [
+     4,
+     5
+    ],
+    "visible_cells_added": {
+     "start": 0,
+     "bits": "Bw=="
+    },
+    "effective_light_levels_changed": {
+     "start": 0,
+     "bits": "Bw=="
+    },
+    "entity_contacts_changed": [
+     0
+    ],
+    "sense_modes_changed": true,
+    "sense_modes": [
+     {
+      "sense_type": "Darkvision",
+      "range_feet": 60
+     }
+    ],
+    "passive_perception_changed": true,
+    "passive_perception": 12,
+    "visual_access_changed": true,
+    "visual_access": 1,
+    "light_sources_added": [
+     0
+    ]
+   },
+   "expected": {
+    "visible": [
+     [
+      5,
+      5
+     ],
+     [
+      6,
+      5
+     ],
+     [
+      7,
+      5
+     ]
+    ],
+    "seen": [
+     [
+      5,
+      5
+     ],
+     [
+      6,
+      5
+     ],
+     [
+      7,
+      5
+     ]
+    ],
+    "light": {
+     "5,5": 3,
+     "6,5": 3,
+     "7,5": 3
+    },
+    "hazard": {},
+    "position": [
+     4,
+     5
+    ],
+    "passive_perception": 12,
+    "visual_access": 1,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {
+     "00000000-0000-4000-8000-000000001001": {
+      "position": [
+       5,
+       5
+      ],
+      "visual": true,
+      "members": 3
+     }
+    },
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {
+     "00000000-0000-4000-8000-000000004001": {
+      "position": [
+       5,
+       5
+      ],
+      "bright": 20,
+      "dim": 40,
+      "anchor_entity": "00000000-0000-4000-8000-000000001001"
+     }
+    }
+   }
+  },
+  {
+   "sensory_rows": {
+    "uuids": [
+     "00000000-0000-4000-8000-000000001001",
+     "00000000-0000-4000-8000-000000004001"
+    ],
+    "contact_uuid_index": [
+     0
+    ],
+    "contact_positions": [
+     [
+      6,
+      5
+     ]
+    ],
+    "contact_visual": {
+     "start": 0,
+     "bits": "AQ=="
+    },
+    "contact_members": [
+     3
+    ],
+    "light_patches": [
+     {
+      "source": 1,
+      "changes": {
+       "position": [
+        6,
+        5
+       ]
+      }
+     }
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "entity_contacts_changed": [
+     0
+    ],
+    "light_sources_patched": [
+     0
+    ]
+   },
+   "expected": {
+    "visible": [
+     [
+      5,
+      5
+     ],
+     [
+      6,
+      5
+     ],
+     [
+      7,
+      5
+     ]
+    ],
+    "seen": [
+     [
+      5,
+      5
+     ],
+     [
+      6,
+      5
+     ],
+     [
+      7,
+      5
+     ]
+    ],
+    "light": {
+     "5,5": 3,
+     "6,5": 3,
+     "7,5": 3
+    },
+    "hazard": {},
+    "position": [
+     4,
+     5
+    ],
+    "passive_perception": 12,
+    "visual_access": 1,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {
+     "00000000-0000-4000-8000-000000001001": {
+      "position": [
+       6,
+       5
+      ],
+      "visual": true,
+      "members": 3
+     }
+    },
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {
+     "00000000-0000-4000-8000-000000004001": {
+      "position": [
+       6,
+       5
+      ],
+      "bright": 20,
+      "dim": 40,
+      "anchor_entity": "00000000-0000-4000-8000-000000001001"
+     }
+    }
+   }
+  },
+  {
+   "sensory_rows": {
+    "uuids": [
+     "00000000-0000-4000-8000-000000001001",
+     "00000000-0000-4000-8000-000000004001"
+    ],
+    "light_patches": [
+     {
+      "source": 1,
+      "changes": {
+       "anchor_entity": null
+      }
+     }
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "entity_contacts_removed": [
+     0
+    ],
+    "light_sources_patched": [
+     0
+    ]
+   },
+   "expected": {
+    "visible": [
+     [
+      5,
+      5
+     ],
+     [
+      6,
+      5
+     ],
+     [
+      7,
+      5
+     ]
+    ],
+    "seen": [
+     [
+      5,
+      5
+     ],
+     [
+      6,
+      5
+     ],
+     [
+      7,
+      5
+     ]
+    ],
+    "light": {
+     "5,5": 3,
+     "6,5": 3,
+     "7,5": 3
+    },
+    "hazard": {},
+    "position": [
+     4,
+     5
+    ],
+    "passive_perception": 12,
+    "visual_access": 1,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {},
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {
+     "00000000-0000-4000-8000-000000004001": {
+      "position": [
+       6,
+       5
+      ],
+      "bright": 20,
+      "dim": 40,
+      "anchor_entity": null
+     }
+    }
+   }
+  },
+  {
+   "sensory_rows": {
+    "uuids": [
+     "00000000-0000-4000-8000-000000004001"
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "light_sources_removed": [
+     0
+    ]
+   },
+   "expected": {
+    "visible": [
+     [
+      5,
+      5
+     ],
+     [
+      6,
+      5
+     ],
+     [
+      7,
+      5
+     ]
+    ],
+    "seen": [
+     [
+      5,
+      5
+     ],
+     [
+      6,
+      5
+     ],
+     [
+      7,
+      5
+     ]
+    ],
+    "light": {
+     "5,5": 3,
+     "6,5": 3,
+     "7,5": 3
+    },
+    "hazard": {},
+    "position": [
+     4,
+     5
+    ],
+    "passive_perception": 12,
+    "visual_access": 1,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {},
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {}
+   }
+  }
+ ]
+}

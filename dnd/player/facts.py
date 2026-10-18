@@ -30,7 +30,7 @@ from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposi
 from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, NO_ROWS, CellMask, CellMaskField, CellValues, CellValuesField, RowBitsField
-from dnd.types.senses import PerceivedContact, SenseMode, SensesSnapshot, SensesType, VolumeSurfaceSight
+from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SenseMode, SensesSnapshot, SensesType, VolumeSurfaceSight
 from dnd.core.condition_types import ConditionDurationSummary
 from dnd.types.class_features import DraconicPresenceMode
 from dnd.types.material_deposits import MaterialDepositSource
@@ -1177,6 +1177,22 @@ class PlayerUpdate(BaseModel):
     content_additions: tuple[ContentDescriptor, ...]
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlayerLightSource:
+    """A light source the seat perceives now (a schema-16 light row resolved): an emitter lighting a cell it sees."""
+
+    source_uuid: UUID
+    position: tuple[int, int]
+    base_height_steps: int
+    very_bright_radius_feet: int
+    bright_radius_feet: int
+    dim_radius_feet: int
+    appearance: Literal["torch", "neutral"]
+    actor_anchored: bool
+    anchor_entity_uuid: UUID | None
+    anchor_item_uuid: UUID | None
+
+
 @dataclass(slots=True, kw_only=True)
 class PlayerState:
     generation: UUID
@@ -1202,6 +1218,16 @@ class PlayerState:
     perception: AudiencePerception = field(default_factory=AudiencePerception)
     content: tuple[ContentDescriptor, ...] = ()
     combat_log_appends: tuple[CombatLogAppend, ...] = ()
+    # Schema 16 (composed perception, plan §3.1, Q1 (a)): the members perceiving each contact and effect the seat
+    # perceives now, bit i the audience's `observers[i]`.
+    entity_members: dict[UUID, int] = field(default_factory=dict)
+    object_members: dict[UUID, int] = field(default_factory=dict)
+    effect_members: dict[UUID, int] = field(default_factory=dict)
+    # The light sources the seat perceives now (schema 16; `senses` holds no light sources then).
+    light_sources: dict[UUID, PlayerLightSource] = field(default_factory=dict)
+    # The client's effect memory (plan §3.2): each effect as last perceived, with its remembered cells: those seen
+    # with it, outside its current visible part, and not since seen without it.
+    remembered_effects: dict[UUID, PerceivedSpatialEffect] = field(default_factory=dict)
 
     @property
     def viewing_audience(self) -> PlayerAudience:
