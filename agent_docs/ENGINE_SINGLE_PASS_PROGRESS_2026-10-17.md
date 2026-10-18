@@ -907,3 +907,12 @@ Hard rules:
     - `construction_geometry` moves to `ObjectState`: accepted. It fixes a bug merged with e85b4af33: after a Disintegrate cut, a seat kept drawing the uncut wall.
     - `player_schema_version` stays 16, although the wire and the protocol digest changed: accepted, because the E-series is unreleased.
     - No squash. Commit 3 alone fails `test_recorded_world_object_queries`; commit 4 fixes it.
+- 2026-10-18: **Shared-vision prototype (Q5; test-only, codex/shared-vision-proto 09b97617f..8da90b428, NOT merged).**
+  - **What it adds:** the `--seats character-shared` layout (one seat per character, observers = the side), a 3-faction roster, and a dedupe that composes once per audience in the event-major walk.
+  - **Gates:** exactness against the naive shared run (every seat's frames and client digests identical); O1–O4 equal; 0 controller-only leaks to teammates.
+  - **Publication ms (G1 / G2 / naive shared / deduped shared, loaded machine):**
+    - Fireball 67 / 463 / 934 / 452;
+    - CoD 60 / 437 / 824 / 486;
+    - SG step 53 / 177 / 1057 / 276.
+  - **Deduped ≈ G2, not G1.** Occurrence numbering and controller-only nodes are per seat, so encoding and the per-seat node walk can't be shared. The per-seat combat log is 413 of 1,478 profiled ms (Q8 addresses it).
+  - **Proposal for the human:** per-side occurrence numbering plus a per-seat controller-only overlay. That makes a side's publication ≈ G1 plus the overlay. It is a wire change after E3-sensory.
