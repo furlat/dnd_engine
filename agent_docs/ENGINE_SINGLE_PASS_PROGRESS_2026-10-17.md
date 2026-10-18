@@ -831,3 +831,28 @@ Hard rules:
     - O1 on portal_plate: `cells:field:hazard` 6/90/21 → 0 on G1/G2/G3. `body.normal_hp` (E3-bodies) is counted at one more checkpoint, the published setup.
     - Test: `test_live_connector_edits_and_mechanism_installs_publish_to_every_seat`. It raised before the fix.
     - The 12 gallery cases are byte-identical apart from portal_plate's published updates (its setup is now published). The trap tests and tests/player, ai and architecture match r29.
+- 2026-10-18: **E3-world merged into codex/event-native-deltas (e85b4af33; lane head 3fb491bc9).**
+  - **What it does:** the schema-16 world wire. The server keeps no per-seat world copy.
+    - Keyed rows come from E2's `AppliedWorldFact`; entering rows are read from `SessionProjection`'s world as of the occurrence. Static rows go once per seat.
+    - Compact placement and content-addressed boundary structures.
+    - Overlapping roots form one walk group, which fixes the stale Prone.
+    - Mechanism installs and connector edits are now published, which closes E1's open item and E0's portal finding.
+  - **Gates vs E0's base:**
+    - O1 classes equal the base: Prone 41 → 0, portal hazard → 0;
+    - O2 27/27;
+    - O3 equal except the Prone fix;
+    - O4 bounded;
+    - transcripts identical except Fireball's repeat-write nodes (accepted);
+    - sweep = r29;
+    - pyright 0 new.
+  - **Largest seat KB (non-log), base → new:**
+
+    | Row | G1 | G2 | G3 |
+    |---|---|---|---|
+    | Fireball | 202 → 161 | 179 → 137 | 188 → 146 |
+    | Sleet drop | 86 → 89 | 39 → 116 | 58 → 140 |
+    | Daylight | 84 → 92 | 45 → 140 | 66 → 95 |
+    | mass_healing_word | – | 759 → 383 | – |
+
+  - **Follow-ups, encoding only:** content-addressed tile static rows and columnar object rows (measured: Sleet drop G2 → 79, Daylight G2 → 102), plus tests T6, T8 and T9.
+  - **Native follow-up:** `BaseItem.destroy` and the torch's `put_out` write the same object's FLOOR fact two or three times.
