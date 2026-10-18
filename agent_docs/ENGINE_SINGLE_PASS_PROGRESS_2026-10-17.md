@@ -606,3 +606,11 @@ Hard rules:
     - 0 unconsulted zones that would block.
   - Decision (integrator): no change; the gain is zero.
   - Open: whatever made navigation take Python per-step checks in Gust is something else (to look at in the native study).
+- 2026-10-18: **E1 merged into codex/event-native-deltas (78ecee85c … ae39ca050).**
+  - **Startup:** capture admits LIGHT_CHANGED and TILES_CHANGED, so seats no longer start with stale light (lantern crypt: 49 first-seen tiles were DARKNESS against BRIGHT) or without startup residues. This is player-visible.
+  - **Connectors:** the projector reads the recorded connectors instead of the init event's, so changes after init reach seats at the projection boundary. **Open:** on the live path a connector edit still raises "Unprojected committed state" (application.py ~77; `TraversalConnectorChangeEvent` is an unsupported header). Nothing edits connectors outside tests today. Assigned to E3-world.
+  - **Strict xfails** (hand-built facts, latent on head) for the temp-HP/INTERNAL fold disagreement and the destroyed-item ghost layer. Kept as the "client fold == engine fold" contract; they turn green with E3-bodies.
+  - **Transcript differences**, all classified: a constant occurrence shift (amber +28, blue +44, from the larger initialization), removed light corrections, true first-sight light, and no residue re-sends.
+  - **O3 baselines** must be recorded on this head.
+  - Not admitted at startup (out of scope): TILE_CHANGED / TILE_REMOVED.
+- 2026-10-18: **FOV-rows merge re-gated by the integrator:** recorder 0 differences on 6 cases; transcripts byte-identical; sweep = r21.
