@@ -260,7 +260,8 @@ def seat_view(audience, actor: ActorState) -> PlayerState:
     """A client holding `actor`'s body as it enters this seat's view."""
     seat = PlayerState(generation=uuid4(), observer_uuid=audience.observers[0], world=PlayerWorld(
         battlefield_id="rows", battlefield_name="Rows", bounds=(0, 0, 1, 1), width=2, height=2), audience=audience)
-    enter_body(seat, entering_body(0, actor, audience, visual=True, birth=True, sent=StaticSent(), pending=StaticSent()))
+    enter_body(seat, entering_body(0, actor, audience, visual=True, birth=True, sent=StaticSent(), pending=StaticSent(),
+        loadout_ids={}))
     return seat
 
 

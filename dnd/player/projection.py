@@ -57,7 +57,7 @@ from dnd.player.facts import (
     SightingChanges, LightChanges, LightPatch, VolumeSurfaceKey,
     PlayerWorld, PlayerResolution, LightRow, SensoryFact, SensoryRows, ShoveFact, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
     VersionRows, WorldUpdate, ItemRecord, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
-    Column, ContainedItem, ObjectState,
+    Column, ContainedItem, ObjectState, VisualLoadout,
 )
 from dnd.player.capture import (CompletedLineage, IntervalEnvelope, ObjectiveRow, SharedLogEntries,
     recorded_actor_change, seat_log_entry)
@@ -1280,19 +1280,21 @@ def _fold_actors(actors: dict[UUID, ActorState], names: dict[UUID, str],
 
 
 def _enter_body(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", actors: Mapping[UUID, ActorState],
-                event: Event, identity: UUID, visual: bool) -> None:
-    """A body entering the seat's view at this event, whole; its birth and its items' static parts the first time."""
+                loadout_ids: dict[VisualLoadout, str], event: Event, identity: UUID, visual: bool) -> None:
+    """A body entering the seat's view at this event, whole; its birth, its loadout's value and its items' static
+    parts the first time."""
     actor = actors.get(identity)
     if actor is None:
         return
     record = entering_body(group.indexes[event.uuid], actor, state.audience, visual=visual,
-        birth=identity not in walk.known, sent=state.static_sent, pending=walk.pending)
+        birth=identity not in walk.known, sent=state.static_sent, pending=walk.pending, loadout_ids=loadout_ids)
     walk.bodies.append(record)
     walk.known.add(identity)
     walk.names[str(identity)] = actor.name
     walk.entered.add(identity)
     walk.pending.item_looks.update(row.item_uuid for row in record.items if row.look is not None)
     walk.pending.item_profiles.update(row.item_uuid for row in record.items if row.profile is not None)
+    walk.pending.visual_loadouts.add(record.body.visual_loadout_id)
 
 
 def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", world: WorldFacts,
@@ -1328,7 +1330,8 @@ def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", w
 
 
 def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", world: WorldFacts,
-                 digests: TileDigests, actors: Mapping[UUID, ActorState], event: Event,
+                 digests: TileDigests, actors: Mapping[UUID, ActorState], loadout_ids: dict[VisualLoadout, str],
+                 event: Event,
                  applied: AppliedWorldFact | None,
                  folded: Mapping[UUID, AppliedWorldFact | None], step: BodiesStep) -> None:
     """A seat's part of an event after the session folds took its after-values (`applied`: what the world fold
@@ -1358,12 +1361,12 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
                 for identity in entering:
                     contact = view.entities.get(identity)
                     if contact is not None:
-                        _enter_body(walk, group, state, actors, event, identity, contact.visual)
+                        _enter_body(walk, group, state, actors, loadout_ids, event, identity, contact.visual)
         _publish_world(walk, group, state, world, digests, event, applied, folded, before, settlement)
     for identity in observer.controlled:
         # A controlled body is always perceived: it enters once the session holds it.
         if identity not in walk.known and identity in actors:
-            _enter_body(walk, group, state, actors, event, identity, True)
+            _enter_body(walk, group, state, actors, loadout_ids, event, identity, True)
     view = state.audience_composition.view
     observed_objects = walk.observed_objects
     if (isinstance(event, ActionEvent) and event.source_item_uuid is not None
@@ -1746,6 +1749,8 @@ class SessionProjection:
     actors: dict[UUID, ActorState] = field(default_factory=dict)
     # Every born actor's name, never popped: the names a seat's combat log may show (its bodies').
     names: dict[UUID, str] = field(default_factory=dict)
+    # The content id of every visual loadout a body entered with, by value (a memo: each value digested once).
+    loadout_ids: dict[VisualLoadout, str] = field(default_factory=dict)
     walked: set[UUID] = field(default_factory=set)
 
 
@@ -1948,7 +1953,7 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
         applied = _fold_version(session, folded, event, condition)
         for seat, row in due:
             _leave_event(walks[seat], group, states[seat], session.world, session.tile_digests,
-                         session.actors, row, applied, folded, step)
+                         session.actors, session.loadout_ids, row, applied, folded, step)
     return tuple(_emit_initialization(group, state, initialization, walk, world)
         for state, initialization, walk, world in zip(states, initializations, walks, worlds, strict=True))
 
@@ -2021,7 +2026,7 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
         applied = _fold_version(session, folded, event, condition)
         for walk, state in zip(walks, states):
             _leave_event(walk, group, state, session.world, session.tile_digests, session.actors,
-                         walk.events[position], applied, folded, step)
+                         session.loadout_ids, walk.events[position], applied, folded, step)
     return tuple(_emit_lineage(group, state, lineage, walk, start_cursor)
         for state, lineage, walk, start_cursor in zip(states, lineages, walks, start_cursors))
 

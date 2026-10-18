@@ -4032,6 +4032,17 @@
           "body": {
             "$ref": "#/components/schemas/BodyState"
           },
+          "loadout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisualLoadout"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "items": {
             "default": [],
             "items": {
@@ -4212,8 +4223,9 @@
       "BodyState": {
         "description": "Every changeable field of a body, current at its record's occurrence.",
         "properties": {
-          "visual_loadout": {
-            "$ref": "#/components/schemas/VisualLoadout"
+          "visual_loadout_id": {
+            "title": "Visual Loadout Id",
+            "type": "string"
           },
           "normal_hp": {
             "title": "Normal Hp",
@@ -4321,7 +4333,7 @@
           }
         },
         "required": [
-          "visual_loadout",
+          "visual_loadout_id",
           "normal_hp",
           "maximum_hp",
           "temporary_hp",

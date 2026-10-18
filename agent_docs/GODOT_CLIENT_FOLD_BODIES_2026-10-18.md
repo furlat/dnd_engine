@@ -22,20 +22,26 @@ Every other fact (damage, heal, temporary HP, life, faction, spatial, attack sta
 
 ## 2. A body entering view: `BodyRecord`
 
-`{occurrence, actor_uuid, birth?, body, items?}`, folded in occurrence order before the nodes at or after its
+`{occurrence, actor_uuid, birth?, body, loadout?, items?}`, folded in occurrence order before the nodes at or after its
 occurrence (as observations were).
 
 - `birth` (`name`, `character_body_id`, `creature_content_ref`, `appearance`, `structural_base_size?`,
   `manifestation?`): present only the first time the seat receives this body. A record without `birth` for a
   body the client does not hold is an error.
-- `body` (`BodyState`): every changeable field, current. Replace them all: `visual_loadout`, `normal_hp`,
+- `body` (`BodyState`): every changeable field, current. Replace them all: the visual loadout (below), `normal_hp`,
   `maximum_hp`, `temporary_hp`, `temporary_hp_grant` (absent: none), `life_state`, `armor_class`, `conditions`
   (absent: none), `controlled_items` (the controller's inventory; absent: not controlled), `occupancy_layer`
   (absent: none; sent to the controller or a visual contact), `resolved_size` (absent: none), `faction` (absent: none), `remains_disposition` (absent: intact), `spatial_disposition`
   (absent: present).
 - Keep `last_visual_position` (contacts set it) and `present`. A body whose lifetime ended (`present` false)
   ignores every later record and row.
-- `items`: the records of the items the body shows the seat (§4).
+- `body.visual_loadout_id` names the body's visual loadout by content id. `loadout` carries its value
+  (`active_weapon_set`, `layers`) the first time the seat receives that id; keep a table `{id: value}`, never
+  pruned, and set the body's loadout to the value of its id. Later `layer` and `active_weapon_set` rows change the
+  body's own value, not the table.
+- `items`: the records of the items the body shows the seat (§4), except those that carry nothing new (look
+  already sent, no state, no effects). Each item the body shows (its `controlled_items`, else its loadout's
+  layers) that has no record here has no effects: clear them.
 
 A body is sent whole whenever it enters the seat's composed view, also again after leaving it: the record
 replaces what the client remembered.

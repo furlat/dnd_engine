@@ -2102,7 +2102,7 @@ export type HasBeard = boolean;
  * RGB tint applied to the beard overlay when present.
  */
 export type BeardTint = number;
-export type Layers = VisualItem[];
+export type VisualLoadoutId = string;
 export type NormalHp = number;
 export type MaximumHp = number;
 export type TemporaryHp = number;
@@ -2115,6 +2115,7 @@ export type Faction = string | null;
  */
 export type RemainsDisposition2 = "intact" | "disintegrated";
 export type SpatialDisposition1 = "present" | "absent" | "return_pending" | "home_plane";
+export type Layers = VisualItem[];
 export type Items1 = ItemRecord[];
 export type Bodies = BodyRecord[];
 export type Occurrence2 = number;
@@ -5285,6 +5286,7 @@ export interface BodyRecord {
   actor_uuid: ActorUuid1;
   birth?: ActorBirth | null;
   body: BodyState;
+  loadout?: VisualLoadout | null;
   items?: Items1;
 }
 /**
@@ -5315,7 +5317,7 @@ export interface AppearanceConfig {
  * Every changeable field of a body, current at its record's occurrence.
  */
 export interface BodyState {
-  visual_loadout: VisualLoadout;
+  visual_loadout_id: VisualLoadoutId;
   normal_hp: NormalHp;
   maximum_hp: MaximumHp;
   temporary_hp: TemporaryHp;

@@ -14,8 +14,11 @@ audience, the bodies it holds (`born`), its composed view and what static conten
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from hashlib import sha256
 from types import MappingProxyType
 from uuid import UUID
+
+from pydantic import TypeAdapter
 
 from dnd.actor_projection import actor_fact_owner
 from dnd.core.condition_types import ConditionCategory
@@ -157,6 +160,14 @@ def _without_duration(member: ConditionMember) -> ConditionMember:
     if member.state is None or member.state.duration is None:
         return member
     return replace(member, state=member.state.model_copy(update={"duration": None}))
+
+
+LOADOUT = TypeAdapter(VisualLoadout)
+
+
+def loadout_id(loadout: VisualLoadout) -> str:
+    """A visual loadout's content id: a digest of its canonical encoding."""
+    return sha256(LOADOUT.dump_json(loadout)).hexdigest()[:16]
 
 
 def visual_loadout(actor: ActorState) -> VisualLoadout:
@@ -406,12 +417,18 @@ def item_record(item: ItemPresentationState, view: View, *, sent: StaticSent, pe
         state=item_state(item) if controlled else None, effects=_shown_effects(item.item_effects, view))
 
 
+def _carries(record: ItemRecord) -> bool:
+    return (record.look is not None or record.profile is not None or record.state is not None
+            or bool(record.effects))
+
+
 def entering_items(actor: ActorState, view: View, *, sent: StaticSent, pending: StaticSent
                    ) -> tuple[ItemRecord, ...]:
-    """The records of the items a body shows a seat."""
+    """The records of the items a body shows a seat, except those carrying nothing (their look sent, no state
+    and no effects): the client derives those from the body (a shown item without a record has no effects)."""
     items = {item.item_uuid: item for item in actor.items}
-    return tuple(item_record(items[identity], view, sent=sent, pending=pending)
-                 for identity in shown_items(actor, view))
+    return tuple(record for identity in shown_items(actor, view)
+                 if _carries(record := item_record(items[identity], view, sent=sent, pending=pending)))
 
 
 def change_fact(event: Event, views: tuple[ActorChangeViews, ...], audience: PlayerAudience, born: Collection[UUID],
@@ -434,15 +451,20 @@ def change_fact(event: Event, views: tuple[ActorChangeViews, ...], audience: Pla
 
 
 def entering_body(occurrence: int, actor: ActorState, audience: PlayerAudience, *, visual: bool, birth: bool,
-                  sent: StaticSent, pending: StaticSent) -> BodyRecord:
-    """A body entering a seat's view, whole: every changeable field, its birth if the seat has none, the records of
-    the items it shows. Occupancy is disclosed to its controller or a visual contact; INTERNAL memberships are never
-    held."""
+                  sent: StaticSent, pending: StaticSent, loadout_ids: dict[VisualLoadout, str]) -> BodyRecord:
+    """A body entering a seat's view, whole: every changeable field, its birth if the seat has none, its visual
+    loadout by content id (its value if the seat has none of that id), the records of the items it shows.
+    Occupancy is disclosed to its controller or a visual contact; INTERNAL memberships are never held.
+    `loadout_ids` is the session's memo of content ids by value: each value is digested once."""
     view = View.CONTROLLER if audience.controls(actor.uuid) else View.OBSERVER
     controlled = view is View.CONTROLLER
     conditions = tuple(condition_member(fact) if controlled else _without_duration(condition_member(fact))
                        for fact in actor.conditions if fact.category is not ConditionCategory.INTERNAL)
-    body = BodyState(visual_loadout=visual_loadout(actor), normal_hp=actor.normal_hp, maximum_hp=actor.maximum_hp,
+    loadout = visual_loadout(actor)
+    identity = loadout_ids.get(loadout)
+    if identity is None:
+        identity = loadout_ids[loadout] = loadout_id(loadout)
+    body = BodyState(visual_loadout_id=identity, normal_hp=actor.normal_hp, maximum_hp=actor.maximum_hp,
         temporary_hp=actor.temporary_hp, life_state=actor.life_state, armor_class=actor.armor_class,
         temporary_hp_grant=actor.temporary_hp_grant, conditions=conditions,
         controlled_items=tuple(item.item_uuid for item in actor.items) if controlled else None,
@@ -455,4 +477,6 @@ def entering_body(occurrence: int, actor: ActorState, audience: PlayerAudience, 
             structural_base_size=actor.structural_base_size,
             manifestation=actor.summon_origin.manifestation if actor.summon_origin is not None else None)
             if birth else None,
-        body=body, items=entering_items(actor, view, sent=sent, pending=pending))
+        body=body, loadout=loadout if identity not in sent.visual_loadouts and identity not in pending.visual_loadouts
+            else None,
+        items=entering_items(actor, view, sent=sent, pending=pending))

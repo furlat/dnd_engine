@@ -18,14 +18,19 @@ from dnd.player.facts import (ActorBirth, BodyRecord, BodyState, ItemLook, ItemP
 from dnd.player.audience import PlayerAudience
 from dnd.types.item_parts import ItemStateChanges
 from dnd.player.projection import _sighting
+from dnd.player.bodies import loadout_id
 from dnd.player.reduction import _sighted_effect, enter_body
 from dnd.types.appearance import AppearanceConfig
 from dnd.types.senses import PerceivedSpatialEffect
 
 
+EMPTY = VisualLoadout(active_weapon_set=WeaponSet.NONE, layers=())
+
+
 def test_a_body_record_carries_every_body_field_once():
     birth = {row.name for row in fields(ActorBirth)}
-    body = {row.name for row in fields(BodyState)}
+    # The body names its visual loadout by content id (the value travels once per seat).
+    body = {row.name for row in fields(BodyState)} - {"visual_loadout_id"} | {"visual_loadout"}
     # The last visual position is perception (contacts set it); presence ends only with a lifetime.
     assert not birth & body and birth | body == {row.name for row in fields(PlayerActor)} - {
         "uuid", "last_visual_position", "present"}
@@ -34,8 +39,8 @@ def test_a_body_record_carries_every_body_field_once():
     seat.audience = PlayerAudience(observers=(seat.observer_uuid,), controlled=(seat.observer_uuid,))
     record = BodyRecord(occurrence=0, actor_uuid=uuid4(), birth=ActorBirth(name="Witness", character_body_id=None,
         creature_content_ref=None, appearance=AppearanceConfig()), body=BodyState(
-        visual_loadout=VisualLoadout(active_weapon_set=WeaponSet.NONE, layers=()), normal_hp=7, maximum_hp=9,
-        temporary_hp=0, life_state=LifeState.ALIVE, armor_class=12))
+        visual_loadout_id=loadout_id(EMPTY), normal_hp=7, maximum_hp=9,
+        temporary_hp=0, life_state=LifeState.ALIVE, armor_class=12), loadout=EMPTY)
     enter_body(seat, record)
     assert seat.actors[record.actor_uuid] == PlayerActor(uuid=record.actor_uuid, name="Witness",
         character_body_id=None, creature_content_ref=None, appearance=AppearanceConfig(),

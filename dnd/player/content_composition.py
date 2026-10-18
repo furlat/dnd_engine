@@ -16,10 +16,11 @@ from dnd.player.facts import (
 from dnd.types.actor_facts import ConditionMember, ConditionRow, ItemEffectsRow, LayerRow
 
 
-def _body_content(creature_content_ref: str | None, visual_loadout: VisualLoadout,
+def _body_content(creature_content_ref: str | None, visual_loadout: VisualLoadout | None,
                   conditions: tuple[ConditionMember, ...]) -> set[str]:
     known = {creature_content_ref} if creature_content_ref is not None else set()
-    known.update(row.item_id for row in visual_loadout.layers)
+    if visual_loadout is not None:
+        known.update(row.item_id for row in visual_loadout.layers)
     known.update(row.behavior_id for row in conditions if row.behavior_id is not None)
     return known
 
@@ -40,9 +41,9 @@ def _record_content(record: ItemRecord) -> set[str]:
 
 
 def _body_record_content(record: BodyRecord) -> set[str]:
-    """Identities a body entering view discloses; its birth's only the first time it is sent."""
+    """Identities a body entering view discloses; its birth's and its loadout's only the first time they are sent."""
     known = _body_content(record.birth.creature_content_ref if record.birth is not None else None,
-        record.body.visual_loadout, record.body.conditions)
+        record.loadout, record.body.conditions)
     for row in record.items:
         known.update(_record_content(row))
     return known

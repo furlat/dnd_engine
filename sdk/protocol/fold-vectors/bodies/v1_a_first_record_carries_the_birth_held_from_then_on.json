@@ -32,17 +32,7 @@
      "structural_base_size": "Medium"
     },
     "body": {
-     "visual_loadout": {
-      "active_weapon_set": "melee",
-      "layers": [
-       {
-        "slot": "MELEE_MAIN",
-        "item_uuid": "00000000-0000-4000-8000-000000001001",
-        "item_id": "weapon.dagger",
-        "is_lit": null
-       }
-      ]
-     },
+     "visual_loadout_id": "423c316b002d63cf",
      "normal_hp": 7,
      "maximum_hp": 10,
      "temporary_hp": 0,
@@ -78,6 +68,17 @@
      ],
      "remains_disposition": "intact",
      "spatial_disposition": "present"
+    },
+    "loadout": {
+     "active_weapon_set": "melee",
+     "layers": [
+      {
+       "slot": "MELEE_MAIN",
+       "item_uuid": "00000000-0000-4000-8000-000000001001",
+       "item_id": "weapon.dagger",
+       "is_lit": null
+      }
+     ]
     },
     "items": [
      {
@@ -161,17 +162,7 @@
     "occurrence": 4,
     "actor_uuid": "00000000-0000-4000-8000-00000000000b",
     "body": {
-     "visual_loadout": {
-      "active_weapon_set": "melee",
-      "layers": [
-       {
-        "slot": "MELEE_MAIN",
-        "item_uuid": "00000000-0000-4000-8000-000000001001",
-        "item_id": "weapon.dagger",
-        "is_lit": null
-       }
-      ]
-     },
+     "visual_loadout_id": "423c316b002d63cf",
      "normal_hp": 3,
      "maximum_hp": 10,
      "temporary_hp": 0,
@@ -179,6 +170,17 @@
      "armor_class": 12,
      "remains_disposition": "intact",
      "spatial_disposition": "present"
+    },
+    "loadout": {
+     "active_weapon_set": "melee",
+     "layers": [
+      {
+       "slot": "MELEE_MAIN",
+       "item_uuid": "00000000-0000-4000-8000-000000001001",
+       "item_id": "weapon.dagger",
+       "is_lit": null
+      }
+     ]
     },
     "items": [
      {

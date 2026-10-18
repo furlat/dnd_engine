@@ -45,7 +45,8 @@ def copy_target(target: PlayerState) -> PlayerState:
         static=StaticStore(tiles=dict(target.static.tiles), tile_looks=dict(target.static.tile_looks),
             residues=dict(target.static.residues),
             object_looks=dict(target.static.object_looks),
-            boundary_structures=dict(target.static.boundary_structures)), actors=dict(target.actors),
+            boundary_structures=dict(target.static.boundary_structures),
+            visual_loadouts=dict(target.static.visual_loadouts)), actors=dict(target.actors),
         items=dict(target.items), spatial_content=dict(target.spatial_content),
         spatial_commit_cursors=dict(target.spatial_commit_cursors),
         senses=None if senses is None else copy_senses_snapshot(senses),
@@ -79,7 +80,9 @@ def _birth(actor: PlayerActor) -> ActorBirth:
 def enter_body(target: PlayerState, record: BodyRecord) -> None:
     """A body entering the seat's view: every changeable field replaced, its birth held from the first record.
 
-    The last visual position stays perception (contacts set it); a terminal lifetime ignores the record.
+    Its visual loadout is the value of its content id (sent with the record the first time, then held). The items
+    it shows without a record have no effects. The last visual position stays perception (contacts set it); a
+    terminal lifetime ignores the record.
     """
     previous = target.actors.get(record.actor_uuid)
     if previous is not None and not previous.present:
@@ -88,10 +91,14 @@ def enter_body(target: PlayerState, record: BodyRecord) -> None:
     if birth is None:
         raise ValueError("A body's first record requires its birth")
     body = record.body
+    loadouts = target.static.visual_loadouts
+    if record.loadout is not None and loadouts.setdefault(body.visual_loadout_id, record.loadout) != record.loadout:
+        raise ValueError("A visual loadout id names one value")
+    loadout = loadouts[body.visual_loadout_id]
     target.actors[record.actor_uuid] = PlayerActor(uuid=record.actor_uuid, name=birth.name,
         character_body_id=birth.character_body_id, creature_content_ref=birth.creature_content_ref,
         appearance=birth.appearance, structural_base_size=birth.structural_base_size,
-        manifestation=birth.manifestation, visual_loadout=body.visual_loadout, normal_hp=body.normal_hp,
+        manifestation=birth.manifestation, visual_loadout=loadout, normal_hp=body.normal_hp,
         maximum_hp=body.maximum_hp, temporary_hp=body.temporary_hp, temporary_hp_grant=body.temporary_hp_grant,
         life_state=body.life_state, armor_class=body.armor_class, conditions=body.conditions,
         controlled_items=body.controlled_items, occupancy_layer=body.occupancy_layer,
@@ -100,6 +107,12 @@ def enter_body(target: PlayerState, record: BodyRecord) -> None:
         last_visual_position=previous.last_visual_position if previous is not None else None)
     for item in record.items:
         enter_item(target, item)
+    recorded = {item.item_uuid for item in record.items}
+    shown = (body.controlled_items if body.controlled_items is not None
+             else tuple(dict.fromkeys(layer.item_uuid for layer in loadout.layers)))
+    for identity in shown:
+        if identity not in recorded and (held := target.items.get(identity)) is not None and held.effects:
+            target.items[identity] = replace(held, effects=())
 
 
 def _condition_key(member: ConditionMember) -> UUID:

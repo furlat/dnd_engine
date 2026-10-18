@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 
 from dnd.core.events import EventPhase
+from dnd.player.bodies import loadout_id
 from dnd.player.audience import PlayerAudience
 from dnd.player.capture import capture_interval
 from dnd.core.events import EventQueue
@@ -63,10 +64,10 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
             # The witness's body entering view again, hurt: every changeable field, its birth held.
             held = before.actors[witness.uuid]
             bodies = (BodyRecord(occurrence=index, actor_uuid=witness.uuid, body=BodyState(
-                visual_loadout=held.visual_loadout, normal_hp=1, maximum_hp=held.maximum_hp,
+                visual_loadout_id=loadout_id(held.visual_loadout), normal_hp=1, maximum_hp=held.maximum_hp,
                 temporary_hp=held.temporary_hp, life_state=held.life_state, armor_class=held.armor_class,
                 conditions=held.conditions, occupancy_layer=held.occupancy_layer, faction=held.faction,
-                resolved_size=held.resolved_size)),)
+                resolved_size=held.resolved_size), loadout=held.visual_loadout),)
         node = PlayerNode(occurrence=index, parent_event=None,
             parent_lineage=None, children_lineages=(), phase=EventPhase.COMPLETION,
             canceled=step == 'canceled', fact=fact)

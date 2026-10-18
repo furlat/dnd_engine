@@ -28,6 +28,8 @@ class StaticSent:
     item_profiles: set[UUID] = field(default_factory=set)
     # Spatial effects whose static content (`SpatialEffectContent`) the seat was sent, by effect uuid.
     spatial_content: set[UUID] = field(default_factory=set)
+    # Body visual loadouts the seat was sent, by content id.
+    visual_loadouts: set[str] = field(default_factory=set)
 
 
 def merge_static_sent(sent: StaticSent, emitted: StaticSent) -> None:
@@ -42,3 +44,4 @@ def merge_static_sent(sent: StaticSent, emitted: StaticSent) -> None:
     sent.item_looks.update(emitted.item_looks)
     sent.item_profiles.update(emitted.item_profiles)
     sent.spatial_content.update(emitted.spatial_content)
+    sent.visual_loadouts.update(emitted.visual_loadouts)
