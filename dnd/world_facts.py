@@ -8,7 +8,7 @@ from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemoval
 from dnd.core.events import (
     Event, SpatialChangeEvent, SpatialChangeType, SpatialEffectChangeEvent, TileElevationChangeEvent,
     WorldConnectorState, WorldInitializedEvent, WorldModifiedEvent, WorldObjectState,
-    WorldTileState, SensoryUpdateEvent,
+    WorldTileState,
 )
 from dnd.types.event_facts import AppliedWorldFact, KeyedTileChange, KeyedTileFields
 from dnd.core.item_types import ItemLocation
@@ -134,33 +134,6 @@ def _remove_contained_item(world: WorldFacts, identity: UUID, written: _Written)
     return changed
 
 
-def world_event_objects(
-    world: WorldFacts, event: Event, condition: ConditionFact | None = None,
-) -> set[UUID]:
-    """Explicit subjects and containing owners, including objects with no surviving bands."""
-    identities: set[UUID] = set()
-    if condition is not None and condition.resulting_item is not None:
-        identities.add(condition.resulting_item.item_uuid)
-    match event:
-        case WorldInitializedEvent():
-            return set(world.objects) | {obj.item.item_uuid for obj in event.objects}
-        case WorldModifiedEvent() | SpatialChangeEvent():
-            if event.object_uuid is not None:
-                identities.add(event.object_uuid)
-        case ItemLocationStateEvent():
-            identities.add(event.item_state.item_uuid)
-            if event.owner_uuid is not None:
-                identities.add(event.owner_uuid)
-        case ItemHoldingsReleasedEvent() | ItemResourceChangeEvent():
-            identities.add(event.item_uuid)
-        case ConditionApplicationEvent() | ConditionRemovalEvent():
-            if event.resulting_item is not None:
-                identities.add(event.resulting_item.item_uuid)
-    for identity in tuple(identities):
-        identities.update(world.containers_by_item.get(identity, ()))
-    return identities
-
-
 def world_event_positions(
     world: WorldFacts, event: Event, condition: ConditionFact | None = None,
 ) -> set[tuple[int, int]]:
@@ -220,24 +193,6 @@ def world_event_positions(
     return positions | {
         (x + dx, y + dy) for x, y in positions for dx, dy in CARDINAL_DELTAS.values()
     }
-
-
-def world_event_footprints(
-    world: WorldFacts, event: Event, condition: ConditionFact | None = None,
-) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
-    """Separate Tile after-values from object/incident-support observation inputs."""
-    if isinstance(event, SensoryUpdateEvent):
-        return set(), set()
-    if (isinstance(event, SpatialChangeEvent)
-            and event.change_type is SpatialChangeType.LIGHT_CHANGED
-            and (condition is None or condition.resulting_tile is None and condition.resulting_item is None)):
-        positions = {tuple(map(int, key.split(",", maxsplit=1))) for key in event.light_level_map or {}}
-        if event.new_light_level is not None:
-            positions.add(event.position)
-        # This fact changes no placement, object value or observation grant.
-        return positions, set()
-    positions = world_event_positions(world, event, condition)
-    return positions, set(positions)
 
 
 def apply_keyed_tile_change(previous: WorldTileState, change: KeyedTileChange) -> WorldTileState:
@@ -462,6 +417,13 @@ def _put_tile(world: WorldFacts, tile: WorldTileState, written: _Written) -> Non
 
 
 def _resulting_tile(world: WorldFacts, tile: WorldTileState, written: _Written) -> None:
-    """A condition fact's tile after-value: the tile's own condition names change (its residues' follow them)."""
+    """A condition fact's tile after-value: the tile's own condition names (its residues' follow them) and every
+    changeable scalar it carries (a tile condition may change its costs or optics)."""
     world.tiles[tile.position] = tile
     written.tile_conditions[tile.position] = tile.condition_names[:len(tile.condition_names) - len(tile.residues)]
+    written.tile_fields.append((tile.position, KeyedTileFields(walking_cost=tile.walking_cost,
+        flying_cost=tile.flying_cost, swimming_cost=tile.swimming_cost, burrowing_cost=tile.burrowing_cost,
+        blocks_optics=tile.blocks_optics, blocks_propagation=tile.blocks_propagation,
+        elevation_steps=tile.elevation_steps, surface_kind=tile.surface_kind, slope_axis=tile.slope_axis,
+        default_light=tile.default_light)))
+    written.light[tile.position] = tile.resolved_light
