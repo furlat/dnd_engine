@@ -81,6 +81,7 @@ from dnd.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.spatial.area_conditions import AreaCondition
+from dnd.core.base_object import empty_set, empty_tuple
 from dnd.types.spatial_effects import (
     SpatialEffectAnchorKind,
     SpatialEffectLayer,
@@ -385,7 +386,7 @@ class ConditionalSaveAdvantageFeature(BaseCondition):
 
     name: str = Field(default="Conditional Save Advantage", description="Condition name.")
     description: str = Field(default="Advantage on specific saving throws.", description="Rules summary.")
-    condition_contexts: tuple[str, ...] = Field(default_factory=tuple, description="Condition contexts that gain advantage.")
+    condition_contexts: tuple[str, ...] = Field(default_factory=empty_tuple, description="Condition contexts that gain advantage.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         owner = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -455,7 +456,7 @@ class KeenPerceptionFeature(BaseCondition):
 
     name: str = Field(default="Keen Perception", description="Condition name.")
     description: str = Field(default="Advantage on Perception with configured senses.", description="Rules summary.")
-    modes: tuple[str, ...] = Field(default_factory=tuple, description="Sense modes that activate the trait.")
+    modes: tuple[str, ...] = Field(default_factory=empty_tuple, description="Sense modes that activate the trait.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         owner = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -553,7 +554,7 @@ class MultiattackAction(BaseAction):
     target_type: TargetType = Field(default=TargetType.CREATURE_OR_OBJECT, description="Multiattack targets one entity for v1.")
     action_category: ActionCategory = Field(default=ActionCategory.ATTACK, description="Attack category.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Multiattack Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="One action cost.")
-    attack_sequence: tuple[tuple[WeaponSlot, int], ...] = Field(default_factory=tuple, description="Weapon slots and counts.")
+    attack_sequence: tuple[tuple[WeaponSlot, int], ...] = Field(default_factory=empty_tuple, description="Weapon slots and counts.")
     attack_replacement: AttackReplacement | None = None
     use_attack_substitution: bool = False
 
@@ -903,11 +904,11 @@ class HitSaveRiderFeature(BaseCondition):
         ),
         description="Rules-facing summary for the hit-triggered saving throw rider.",
     )
-    weapon_item_ids: tuple[str, ...] = Field(default_factory=tuple, description="Exact item identities that trigger the rider.")
+    weapon_item_ids: tuple[str, ...] = Field(default_factory=empty_tuple, description="Exact item identities that trigger the rider.")
     save_ability: str = Field(default="strength", description="Saving throw ability.")
     save_dc: int = Field(default=10, description="Saving throw DC.")
     condition_name: str = Field(default="Prone", description="Condition to apply.")
-    excluded_creature_types: tuple[str, ...] = Field(default_factory=tuple, description="Creature types excluded from the rider.")
+    excluded_creature_types: tuple[str, ...] = Field(default_factory=empty_tuple, description="Creature types excluded from the rider.")
 
     def get_action_target_effect_profile(self, action: object) -> Optional[ActionTargetEffectProfile]:
         """Declare the save-based rider carried by matching attack actions."""
@@ -1597,7 +1598,7 @@ class InnateFlight(BaseCondition):
     description: str = "Authored innate flying speed; supported movement without hovering."
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.PERMANENT))
     flying_speed: int = Field(default=40,gt=0)
-    tags: set[ConditionTag] = Field(default_factory=set)
+    tags: set[ConditionTag] = Field(default_factory=empty_set)
 
     def _apply(self, event: Event):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None

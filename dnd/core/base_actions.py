@@ -25,7 +25,7 @@ from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRe
 from dnd.types.discovery import ActorScan, Relationship, ScanRecord, relationship
 from dnd.types.event_facts import GroupEntryKind
 from dnd.core.events import ActionApplicationCommittedEvent, ActionCostsCommittedEvent, Event, EventType, EventPhase, EventProcessor, Range, EventQueue
-from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute, empty_list
 from dnd.types.world import MovementMode
 from dnd.types.class_features import FontConversion
 from dnd.core.base_block import BaseBlock, resolution_order_key
@@ -1023,7 +1023,7 @@ class BaseAction(BaseObject):
             "implementation identity."
         ),
     )
-    costs: List[Cost] = Field(default_factory=list, description="Runtime costs required by this action.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="Runtime costs required by this action.")
     harmful: bool | None = False
     object_target_policy: Literal["damageable", "active"] = "damageable"
     include_owned_item_targets: bool = Field(default=False,
@@ -1180,7 +1180,7 @@ class BaseAction(BaseObject):
         description="Grid position selected for position-targeted actions.",
     )
     extra_target_positions: List[Tuple[int, int]] = Field(
-        default_factory=list, description="Ordered additional positions for path selection.",
+        default_factory=empty_list, description="Ordered additional positions for path selection.",
     )
     discovery_target_types: tuple[TargetType,...] = ()
 
@@ -1193,7 +1193,7 @@ class BaseAction(BaseObject):
         description="Shape template used to resolve affected cells and entities for AoE actions.",
     )
     extra_target_entity_uuids: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Additional target UUIDs beyond the primary target for multi-entity actions.",
     )
     allow_same_target: bool = Field(
@@ -1222,7 +1222,7 @@ class BaseAction(BaseObject):
         description="Whether preterminal action settlement invokes concentration cleanup.",
     )
     alt_cost_type: Optional[str] = Field(default=None, description="Temporary replacement for primary action cost type.")
-    alt_extra_costs: List[Cost] = Field(default_factory=list, description="Temporary additional costs.")
+    alt_extra_costs: List[Cost] = Field(default_factory=empty_list, description="Temporary additional costs.")
     alt_target_type: Optional[TargetType] = Field(default=None, description="Temporary replacement target type.")
     alt_target_count: Optional[int] = Field(default=None, description="Temporary multi-target count override.")
     alt_skip_slot: bool = Field(default=False, description="Whether temporary overrides skip spell-slot costs.")

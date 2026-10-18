@@ -117,7 +117,7 @@ import logging
 import time
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
-from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute, empty_list
 
 logger = logging.getLogger(__name__)
 
@@ -348,12 +348,12 @@ class Event(BaseModel):
         description="Whether this is the last event at this phase in its lineage.",
     )
     lineage_children_events: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description=("Child event UUIDs accumulated across this lineage's earlier phases, as stored; "
                      "later children are read through EventQueue.child_links."),
     )
     children_events: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description=("Child event UUIDs attached during this event version's phase, as stored; "
                      "later children are read through EventQueue.child_links."),
     )
@@ -362,7 +362,7 @@ class Event(BaseModel):
         description="Stable lineage UUID of the parent, resolved during completion.",
     )
     children_lineages: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Stable child lineage UUIDs resolved during completion.",
     )
     combat_log: Optional[CombatLogEntry] = Field(

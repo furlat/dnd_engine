@@ -16,7 +16,7 @@ from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Lite
 
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.creature_types import CreatureType
-from dnd.core.base_object import BaseObject
+from dnd.core.base_object import BaseObject, empty_frozenset, empty_list, empty_set, empty_tuple
 from dnd.core.values import ModifiableValue, remove_modifier
 from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue, SpatialChangeEvent, WorldTileState
 from dnd.core.combat_log import ConditionRemovedLogData, EmptyLogData
@@ -601,23 +601,23 @@ class BaseCondition(BaseObject):
         description="Same-block parent condition UUID, if this is a subcondition."
     )
     additional_parent_conditions: Set[UUID] = Field(
-        default_factory=set,
+        default_factory=empty_set,
         description="Additional same-block owners sharing this effective condition.",
     )
     sub_conditions: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Same-block child condition UUIDs removed with this condition."
     )
     event_handlers_uuids: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Owned trigger-handler UUIDs removed with this condition."
     )
     spatial_handler_uuids: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Owned spatial-handler UUIDs removed with this condition."
     )
     linked_conditions: List[Tuple[UUID, UUID]] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Cross-block child condition pairs as (target_block_uuid, condition_uuid)."
     )
     parent_link: Optional[Tuple[UUID, UUID]] = Field(
@@ -641,15 +641,15 @@ class BaseCondition(BaseObject):
         description="Perception DC to detect this condition on a tile. None = always visible."
     )
     tags: Set[ConditionTag] = Field(
-        default_factory=set,
+        default_factory=empty_set,
         description="Condition tags such as MAGICAL, CURSE, DISEASE, POISON, EXHAUSTION, PETRIFICATION, ability-score reduction, and hit-point-maximum reduction.",
     )
     outcome_protections: Tuple[OutcomeProtection, ...] = Field(
-        default_factory=tuple,
+        default_factory=empty_tuple,
         description="Typed effect protections active while this condition is applied.",
     )
     removal_triggers: frozenset[ConditionRemovalTrigger] = Field(
-        default_factory=frozenset,
+        default_factory=empty_frozenset,
         description="Typed state transitions that remove this condition.",
     )
     agency_denial: ConditionAgencyDenial = Field(
