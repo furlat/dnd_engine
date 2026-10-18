@@ -82,7 +82,7 @@ from dnd.core.modifiers import (
     AdvantageModifier,
     AdvantageStatus,
 )
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts, Row, with_rows
 from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.core.gridmap import get_map
 from dnd.core.view import cell_visible
@@ -200,9 +200,9 @@ class SpikeGrowthZone(AreaCondition):
                 raise ValueError(f"Invalid damage dice: {damage_dice!r}")
             count, value = int(count_text), int(value_text)
             caster = Entity.get(source_uuid)
-            dmg_bonus = caster.get_spell_damage_bonus() if caster else ModifiableValue.create(
-                source_entity_uuid=source_uuid, base_value=0, value_name="Spell Damage"
-            )
+            dmg_bonus = caster.get_spell_damage_bonus() if caster else parts(ModifiableValue(
+                source_entity_uuid=source_uuid, base=0, name="Spell Damage"
+            ))
             damage_obj = Damage(
                 source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid,
                 damage_dice=type_cast(Literal[4, 6, 8, 10, 12, 20], value), dice_numbers=count, damage_bonus=dmg_bonus,
@@ -346,7 +346,7 @@ class SlowedEffect(BaseCondition):
             for speed in target.action_economy.speed_values:
                 modifier = ArithmeticFactor(name="Slowed", numerator=1, denominator=2,
                     source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid)
-                speed.self_static.add_factor(modifier)
+                add_modifier(speed, Channel.SELF_STATIC, Kind.FACTOR, modifier)
                 outs.append((speed.uuid, modifier.uuid))
 
         ac_mod = NumericalModifier(
@@ -355,7 +355,7 @@ class SlowedEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid
         )
-        target.equipment.ac_bonus.self_static.add_value_modifier(ac_mod)
+        add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, ac_mod)
         outs.append((target.equipment.ac_bonus.uuid, ac_mod.uuid))
 
         dex_save = target.saving_throws.get_saving_throw("dexterity")
@@ -365,17 +365,15 @@ class SlowedEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid
         )
-        dex_save.bonus.self_static.add_value_modifier(dex_mod)
+        add_modifier(dex_save.bonus, Channel.SELF_STATIC, Kind.VALUE, dex_mod)
         outs.append((dex_save.bonus.uuid, dex_mod.uuid))
 
-        reaction_constraint_uuid = target.action_economy.reactions.self_static.add_max_constraint(
-            constraint=NumericalModifier(
+        reaction_constraint_uuid = add_modifier(target.action_economy.reactions, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(
                 name="Slowed",
                 value=0,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid
-            )
-        )
+            ))
         outs.append((target.action_economy.reactions.uuid, reaction_constraint_uuid))
 
         target.action_economy.add_action_bonus_exclusion(self.uuid)
@@ -650,7 +648,7 @@ class HasteEffect(BaseCondition):
         for speed in target.action_economy.speed_values:
             modifier = ArithmeticFactor(name="Haste", numerator=2, denominator=1,
                 source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid)
-            speed.self_static.add_factor(modifier)
+            add_modifier(speed, Channel.SELF_STATIC, Kind.FACTOR, modifier)
             outs.append((speed.uuid, modifier.uuid))
 
         ac_mod = NumericalModifier(
@@ -659,7 +657,7 @@ class HasteEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid
         )
-        target.equipment.ac_bonus.self_static.add_value_modifier(ac_mod)
+        add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, ac_mod)
         outs.append((target.equipment.ac_bonus.uuid, ac_mod.uuid))
 
         dex_save = target.saving_throws.get_saving_throw("dexterity")
@@ -669,7 +667,7 @@ class HasteEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid
         )
-        dex_mod_uuid = dex_save.bonus.self_static.add_advantage_modifier(dex_adv)
+        dex_mod_uuid = add_modifier(dex_save.bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, dex_adv)
         outs.append((dex_save.bonus.uuid, dex_mod_uuid))
 
         try:
@@ -1010,10 +1008,9 @@ class Disintegrate(SpellAction):
                 status_message=f"{target.name} dodges the ray"
             )
 
-        damage_bonus = caster.get_spell_damage_bonus()
-        damage_bonus.self_static.add_value_modifier(NumericalModifier(
+        damage_bonus = with_rows(caster.get_spell_damage_bonus(), (Row(Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
-            name="Disintegrate flat damage", value=self.base_damage_bonus))
+            name="Disintegrate flat damage", value=self.base_damage_bonus)),))
         force_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -1066,7 +1063,7 @@ class JumpEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid or target.uuid,
             target_entity_uuid=target.uuid
         )
-        mod_uuid = target.jump_distance_multiplier.self_static.add_value_modifier(mod)
+        mod_uuid = add_modifier(target.jump_distance_multiplier, Channel.SELF_STATIC, Kind.VALUE, mod)
         outs.append((target.jump_distance_multiplier.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -1259,14 +1256,12 @@ class EnhanceAbilityEffect(BaseCondition):
         outs: List[Tuple[UUID, UUID]] = []
 
         ability = target.ability_scores.get_ability(self.ability_type)
-        mod_uuid = ability.ability_score.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        mod_uuid = add_modifier(ability.ability_score, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name=f"Enhance Ability ({self.ability_type.title()})",
                 value=AdvantageStatus.ADVANTAGE,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=target.uuid
-            )
-        )
+            ))
         outs.append((ability.ability_score.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -1284,9 +1279,9 @@ class EnhanceAbilityEffect(BaseCondition):
             healing = Healing(
                 source_entity_uuid=self.source_entity_uuid,
                 healing_dice=6, dice_numbers=2,
-                healing_bonus=ModifiableValue.create(
-                    source_entity_uuid=self.source_entity_uuid, base_value=0, value_name="Bear's Endurance"
-                )
+                healing_bonus=parts(ModifiableValue(
+                    source_entity_uuid=self.source_entity_uuid, base=0, name="Bear's Endurance"
+                ))
             )
             temp_hp = healing.get_dice().roll.total
             target.health.add_temporary_hit_points(temp_hp, self.source_entity_uuid, parent_event=effect_event.uuid)
@@ -1395,25 +1390,21 @@ class EnlargeReduceEffect(BaseCondition):
             adv_value = AdvantageStatus.DISADVANTAGE
 
         str_ability = target.ability_scores.get_ability("strength")
-        mod_uuid = str_ability.ability_score.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        mod_uuid = add_modifier(str_ability.ability_score, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name=f"{'Enlarge' if self.mode == 'enlarge' else 'Reduce'} (STR checks)",
                 value=adv_value,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=target.uuid
-            )
-        )
+            ))
         outs.append((str_ability.ability_score.uuid, mod_uuid))
 
         str_save = target.saving_throws.get_saving_throw("strength")
-        save_mod_uuid = str_save.bonus.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        save_mod_uuid = add_modifier(str_save.bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name=f"{'Enlarge' if self.mode == 'enlarge' else 'Reduce'} (STR saves)",
                 value=adv_value,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=target.uuid
-            )
-        )
+            ))
         outs.append((str_save.bonus.uuid, save_mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -1612,7 +1603,7 @@ def _resolve_telekinetic_transfer(caster: Entity, target: Entity,
             (8, 4, DamageType.FORCE), (6, 2, DamageType.BLUDGEONING))
         for sides, count, damage_type in packets:
             damage = Damage(name="Telekinesis impact", source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, damage_dice=sides, dice_numbers=count,
-                damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0), damage_type=damage_type)
+                damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid, base=0)), damage_type=damage_type)
             roll = roll_spell_damage(damage, parent_event=parent, effect_origin=None, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             target.receive_damage(roll.total, damage_type, source_entity_uuid=caster.uuid,
                 damage_rolls=[roll], damages=[damage], parent_event=landing.uuid,
@@ -1868,11 +1859,11 @@ class Regenerate(SpellAction):
             source_entity_uuid=caster.uuid,
             healing_dice=8,
             dice_numbers=4,
-            healing_bonus=ModifiableValue.create(
+            healing_bonus=parts(ModifiableValue(
                 source_entity_uuid=caster.uuid,
-                base_value=15,
-                value_name="Regenerate Healing"
-            )
+                base=15,
+                name="Regenerate Healing"
+            ))
         )
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1918,7 +1909,7 @@ class LongstriderEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid)
         owned = []
         for speed in target.action_economy.speed_values:
-            speed.self_static.add_value_modifier(modifier)
+            add_modifier(speed, Channel.SELF_STATIC, Kind.VALUE, modifier)
             owned.append((speed.uuid, modifier.uuid))
         return owned, [], [], [], event.phase_to(EventPhase.EFFECT)
 
@@ -1960,7 +1951,7 @@ class BarkskinEffect(BaseCondition):
         value = target.equipment.ac_bonus
         modifier = NumericalModifier(name=self.name, value=16,
             source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid)
-        value.self_static.add_min_constraint(modifier)
+        add_modifier(value, Channel.SELF_STATIC, Kind.MIN, modifier)
         return [(value.uuid, modifier.uuid)], [], [], [], event.phase_to(EventPhase.EFFECT)
 
 
@@ -2163,7 +2154,7 @@ class MagicWeaponEffect(BaseCondition):
         for value in (weapon.attack_bonus,weapon.damage_bonus):
             if value is None:
                 continue
-            identity=value.self_contextual.add_value_modifier(ContextualNumericalModifier(name="Magic Weapon",
+            identity=add_modifier(value, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(name="Magic Weapon",
                 source_entity_uuid=weapon.uuid,target_entity_uuid=self.source_entity_uuid,callable=strongest))
             modifiers.append((value.uuid,identity))
         return modifiers,[],[],[],event.phase_to(EventPhase.EFFECT)
@@ -2433,7 +2424,7 @@ class ExhaleDragonsBreath(SpellAction):
             return effect
         damage=Damage(name="Dragon's Breath",source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
             damage_type=self.spell_damage_type,damage_dice=6,dice_numbers=1+self.cast_at_level,
-            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0))
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)))
         roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         return deliver_spell_damage(effect,target,damage,roll,amount=roll.total//2 if saved else roll.total)
 

@@ -68,7 +68,7 @@ from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.core.dice import AttackOutcome
 from dnd.core.creature_types import DamageType
 from dnd.core.item_types import ItemEffectPresentationState
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.spells.divination import TrueSeeingEffect
 from dnd.spells.transmutation import HasteEffect
@@ -139,7 +139,7 @@ def append_saved_poison(event: DamageRollResultEvent, *, dc: int,
     if saved:
         return event
     damage = Damage(name=name,source_entity_uuid=attacker.uuid,target_entity_uuid=target.uuid,
-        damage_dice=die,dice_numbers=1,damage_type=DamageType.POISON,damage_bonus=bonus)
+        damage_dice=die,dice_numbers=1,damage_type=DamageType.POISON,damage_bonus=parts(bonus))
     return event.append_damage_roll(damage,damage.get_dice(AttackOutcome.HIT).roll,
         name,"Failed poison Constitution save")
 
@@ -318,7 +318,7 @@ class _DrinkHealingPotionAction(_PotionDrinkAction):
         amount = self.heal_amount
         if self.healing_dice_count:
             healing=Healing(source_entity_uuid=entity.uuid,target_entity_uuid=entity.uuid,healing_dice=4,
-                dice_numbers=self.healing_dice_count,healing_bonus=ModifiableValue.create(source_entity_uuid=entity.uuid,base_value=self.heal_amount))
+                dice_numbers=self.healing_dice_count,healing_bonus=parts(ModifiableValue(source_entity_uuid=entity.uuid,base=self.heal_amount)))
             amount=fire_heal_roll_result(entity.uuid,entity.uuid,healing,execution_event,"Healing Potion").total
         entity.receive_healing(
             amount,
@@ -472,8 +472,8 @@ class _WeaponCoatCondition(BaseCondition):
             )
 
         handlers = []
-        bonus_mv = ModifiableValue.create(source_entity_uuid=weapon.uuid,
-            base_value=0, value_name=f"{self.name} Bonus")
+        bonus_mv = ModifiableValue(source_entity_uuid=weapon.uuid,
+            base=0, name=f"{self.name} Bonus")
         self.damage_contribution_uuid = bonus_mv.uuid
         if self.coat_save_dc is None:
             weapon.extra_damage_dices.append(self.coat_damage_die)
@@ -511,13 +511,13 @@ class _WeaponCoatCondition(BaseCondition):
                         weapon.extra_damage_dices.pop(index)
                         weapon.extra_damage_dices_numbers.pop(index)
                         bonus = weapon.extra_damage_bonus.pop(index)
-                        bonus.remove_from_register()
+                        ModifiableValue.unregister(bonus.uuid)
                         weapon.extra_damage_type.pop(index)
                         break
         if self.coat_save_dc is not None and self.damage_contribution_uuid is not None:
             bonus = ModifiableValue.get(self.damage_contribution_uuid)
             if bonus is not None:
-                bonus.remove_from_register()
+                ModifiableValue.unregister(bonus.uuid)
         self.damage_contribution_uuid = None
         super()._release_owned_runtime_state(parent_event=parent_event)
 

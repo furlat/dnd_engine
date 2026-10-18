@@ -17,7 +17,7 @@ from dnd.core.equipment_types import WeaponProperty, WeaponSlot
 from dnd.core.events import Range, RangeType
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, ValueRead, value_score
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.monsters.bestiary import create_goblin as build_goblin
@@ -39,10 +39,10 @@ def _create_light_dagger(source_uuid: UUID) -> Weapon:
         damage_type=DamageType.PIERCING,
         properties=[WeaponProperty.LIGHT, WeaponProperty.FINESSE],
         range=Range(type=RangeType.REACH, normal=5),
-        attack_bonus=ModifiableValue.create(
+        attack_bonus=ModifiableValue(
             source_entity_uuid=source_uuid,
-            base_value=0,
-            value_name="Legacy Light Dagger Attack Bonus",
+            base=0,
+            name="Legacy Light Dagger Attack Bonus",
         ),
     )
 
@@ -57,10 +57,10 @@ def _create_non_light_sword(source_uuid: UUID) -> Weapon:
         damage_type=DamageType.SLASHING,
         properties=[],
         range=Range(type=RangeType.REACH, normal=5),
-        attack_bonus=ModifiableValue.create(
+        attack_bonus=ModifiableValue(
             source_entity_uuid=source_uuid,
-            base_value=0,
-            value_name="Legacy Non-Light Sword Attack Bonus",
+            base=0,
+            name="Legacy Non-Light Sword Attack Bonus",
         ),
     )
 
@@ -86,7 +86,7 @@ def _damage_bonus(
     damages = entity.get_damages(slot, target.uuid)
     assert damages
     assert damages[0].damage_bonus is not None
-    return damages[0].damage_bonus.normalized_score
+    return value_score(damages[0].damage_bonus, ValueRead(damages[0].source_entity_uuid), normalized=True)
 
 
 def _apply_two_weapon_style(entity: Entity) -> None:

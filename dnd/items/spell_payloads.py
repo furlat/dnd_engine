@@ -43,7 +43,7 @@ from dnd.core.events import (
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.gridmap import PreparedObjectPlacement, get_map
 from dnd.core.saving_throw_types import SavingThrowContext
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.core.spell_damage import roll_spell_damage
 from dnd.core.effect_applications import admit_effect_application
 from dnd.entity import Entity
@@ -142,9 +142,9 @@ def payload_blast(
                 dice_numbers=dice_count,
                 damage_type=damage_type,
                 effect_origin=emitted,
-                damage_bonus=ModifiableValue.create(
-                    source_entity_uuid=source_uuid, base_value=0
-                ),
+                damage_bonus=parts(ModifiableValue(
+                    source_entity_uuid=source_uuid, base=0
+                )),
             )
             roll = roll_spell_damage(damage, parent_event=effect, attack_outcome=AttackOutcome.HIT, effect_origin=emitted)
             amount = roll.total // 2 if success else roll.total

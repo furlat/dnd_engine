@@ -24,6 +24,7 @@ from dnd.types.materials import Material
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 from tests.engine.support import set_hp
 from tests.manual.spell_regression_support import create_spell_regression_actor, force_save_result, reset_spell_regression_arena
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.fixture
@@ -116,7 +117,7 @@ def test_native_defenses_that_preserve_normal_hp_prevent_dust(scene, protection)
     if protection == 'temporary_hp':
         target.health.add_temporary_hit_points(20, target.uuid)
     elif protection == 'resistance':
-        target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+        add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
             name='Force resistance', damage_type=DamageType.FORCE, value=ResistanceStatus.RESISTANCE))
     else:

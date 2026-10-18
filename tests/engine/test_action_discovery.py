@@ -32,7 +32,7 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.items.consumables import build_healing_potion
@@ -73,7 +73,7 @@ def reset_action_state() -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, 20, 20)
     _action_game = Game()
 

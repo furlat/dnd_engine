@@ -47,6 +47,7 @@ from dnd.spells.transmutation import (
 from tests.engine.test_high_level_spell_controls import high_actor
 from tests.engine.test_roster_support_spells import game as game  # noqa: PLC0414 - pytest fixture export
 from tests.manual.spell_regression_support import force_save_result
+from dnd.core.values import Channel, Kind, add_modifier
 
 TARGET_SPELLS = (
     AcidSplash, Aid, Bane, BeaconOfHope, BlindnessDeafness, Bless, BurningHands,
@@ -369,9 +370,7 @@ def test_real_retained_repeat_action_honors_each_target_admission(game, spell_ty
 def test_mass_heal_refused_recipient_does_not_spend_later_recipients_pool(game, boundary):
     caster, first, second = prepare_targets(game, MassHeal)
     for target in (first, second):
-        target.health.max_hit_points_bonus.self_static.add_value_modifier(
-            NumericalModifier(source_entity_uuid=target.uuid, value=1000)
-        )
+        add_modifier(target.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(source_entity_uuid=target.uuid, value=1000))
         target.receive_damage(860, DamageType.FORCE, caster.uuid)
     before = first.get_hp(), second.get_hp()
     first.add_condition(Blinded(source_entity_uuid=first.uuid, target_entity_uuid=first.uuid))

@@ -68,6 +68,7 @@ from tests.engine.support import (
     reset_combat_state,
     set_hp,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 THIS_FILE = "tests/manual/test_131_inventory_use_actions_legacy_contract.py"
@@ -283,9 +284,7 @@ def force_save(
         name=f"Inventory regression {ability_name} save",
         value=100 if succeeds else -100,
     )
-    target.saving_throws.get_saving_throw(ability_name).bonus.self_static.add_value_modifier(
-        modifier
-    )
+    add_modifier(target.saving_throws.get_saving_throw(ability_name).bonus, Channel.SELF_STATIC, Kind.VALUE, modifier)
 
 
 def put_in_inventory(entity: Entity, item: BaseItem) -> None:

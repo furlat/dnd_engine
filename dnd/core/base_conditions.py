@@ -17,7 +17,7 @@ from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Lite
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.creature_types import CreatureType
 from dnd.core.base_object import BaseObject
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, remove_modifier
 from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue, SpatialChangeEvent, WorldTileState
 from dnd.core.combat_log import ConditionRemovedLogData, EmptyLogData
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
@@ -1140,7 +1140,7 @@ class BaseCondition(BaseObject):
             if value is None:
                 raise ValueError(f"Trying to remove value with UUID {value_uuid} not found")
             for modifier_uuid in modifiers_uuids:
-                value.remove_modifier(modifier_uuid)
+                remove_modifier(value, modifier_uuid)
         return True
 
     def add_linked_condition(self, target_block_uuid: UUID, condition_uuid: UUID) -> None:

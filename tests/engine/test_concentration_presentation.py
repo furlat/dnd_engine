@@ -10,6 +10,7 @@ from dnd.core.events import EventHandler, EventPhase, EventQueue, EventType, Tri
 from dnd.core.modifiers import NumericalModifier
 from tests.manual.test_device_concentration import setup_device
 from tests.manual.test_131_inventory_use_actions_legacy_contract import force_save
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def committed_states(cursor, owner):
@@ -20,7 +21,7 @@ def committed_states(cursor, owner):
 
 def two_spells():
     caster,targets,_=setup_device()
-    caster.max_concentration_slots.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(caster.max_concentration_slots, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name='Two native slots',value=1,source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid))
     force_save(targets[1],'wisdom',succeeds=False)
     for name in ('Web','Hold Person'):

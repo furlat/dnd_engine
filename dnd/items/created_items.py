@@ -18,7 +18,7 @@ from dnd.core.equipment_types import WeaponProperty
 from dnd.core.gridmap import get_map
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.events import EventPhase, Healing
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.spells.spell_utils import fire_heal_roll_result
@@ -46,7 +46,7 @@ class EatGoodberry(BaseAction):
         if actor is None:
             return effect.cancel(status_message="Berry user is absent")
         healing=Healing(source_entity_uuid=actor.uuid,target_entity_uuid=actor.uuid,healing_dice=4,dice_numbers=1,
-            healing_bonus=ModifiableValue.create(source_entity_uuid=actor.uuid,base_value=0))
+            healing_bonus=parts(ModifiableValue(source_entity_uuid=actor.uuid,base=0)))
         roll=fire_heal_roll_result(actor.uuid,actor.uuid,healing,effect,"Goodberry")
         actor.receive_healing(roll.total,actor.uuid,source_description="Goodberry",parent_event=effect.uuid)
         return effect
@@ -134,7 +134,7 @@ class FlameBladeItem(Weapon):
 
 def build_flame_blade(source_entity_uuid: UUID,*,profile: SpellWeaponProfile,dice_numbers: int=3) -> FlameBladeItem:
     return FlameBladeItem(source_entity_uuid=source_entity_uuid,item_id="weapon.flame_blade",spell_attack_profile=profile,
-        dice_numbers=dice_numbers,damage_bonus=ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=0))
+        dice_numbers=dice_numbers,damage_bonus=ModifiableValue(source_entity_uuid=source_entity_uuid,base=0))
 
 
 class FlameBladeLifetime(CreatedItemsLifetime):

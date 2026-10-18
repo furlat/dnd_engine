@@ -21,6 +21,7 @@ from dnd.core.world_edges import ElevationSurfaceKind
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor, force_save_result, reset_spell_regression_arena,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.fixture
@@ -255,7 +256,7 @@ def test_fall_absorbed_by_temporary_hp_still_knocks_prone_unless_no_damage(scene
     raise_support([(3, 2), (4, 2)], 10)
     target.health.add_temporary_hit_points(10, target.uuid)
     if immune:
-        target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+        add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             name='No bludgeoning damage', value=ResistanceStatus.IMMUNITY,
             damage_type=DamageType.BLUDGEONING, source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid))
@@ -388,7 +389,7 @@ def test_repeat_uses_original_dc_and_damage_origin(scene):
     repeat = caster.get_action_template("Telekinesis: Move")
     assert repeat is not None
     origin = caster.active_conditions["Telekinesis"].effect_origin
-    caster.spellcasting.spell_dc_bonus.self_static.add_value_modifier(NumericalModifier.create(
+    add_modifier(caster.spellcasting.spell_dc_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
         source_entity_uuid=caster.uuid, name="Changed DC", value=5))
     assert caster.spell_save_dc() == original_dc + 5
     target.faction = "enemies"
@@ -425,7 +426,7 @@ def test_fall_defenses_prevent_ordinary_prone_when_no_damage_is_taken(scene):
     target.faction = caster.faction
     Entity.update_entity_position(caster, (3, 2))
     raise_support([(3, 2), (4, 2)], 10)
-    target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
         source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
         damage_type=DamageType.BLUDGEONING, value=ResistanceStatus.IMMUNITY, name="Test immunity"))
     Entity.update_all_entities_senses(max_distance=125)

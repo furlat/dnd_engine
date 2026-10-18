@@ -40,7 +40,14 @@ from dnd.core.equipment_types import (
 from dnd.core.events import Range, RangeType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import (
+    ModifiableValue,
+    Channel,
+    Kind,
+    add_modifier,
+    modifier_of,
+    remove_modifier,
+)
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.proficiency_types import ProficiencyMode
 from dnd.entity import Entity, EntityConfig
@@ -234,9 +241,9 @@ def test_each_fighting_style_has_direct_exact_reversible_ownership(
             damage_type=DamageType.PIERCING,
             properties=[WeaponProperty.RANGED, WeaponProperty.LIGHT],
             range=Range(type=RangeType.RANGE, normal=30, long=120),
-            attack_bonus=ModifiableValue.create(
+            attack_bonus=ModifiableValue(
                 source_entity_uuid=entity.uuid,
-                value_name="Light Ranged Off Hand Attack Bonus",
+                name="Light Ranged Off Hand Attack Bonus",
             ),
         )
         assert entity.equipment.equip(melee, WeaponSlot.MELEE_OFF)
@@ -244,7 +251,7 @@ def test_each_fighting_style_has_direct_exact_reversible_ownership(
 
     baseline_handlers = set(entity.event_handlers)
     baseline_blocks = set(BaseBlock._registry)
-    baseline_values = set(BaseValue._registry)
+    baseline_values = set(ModifiableValue._registry)
     baseline_objects = set(BaseObject._registry)
     receipt = apply_fighter_level(entity, _fighter_level(1, first_style=style))
     applied_objects = set(BaseObject._registry)
@@ -287,7 +294,7 @@ def test_each_fighting_style_has_direct_exact_reversible_ownership(
     assert entity.equipment.ranged_attack_bonus.normalized_score == 0
     assert not entity.feature_sources
     assert set(BaseBlock._registry) == baseline_blocks
-    assert set(BaseValue._registry) == baseline_values
+    assert set(ModifiableValue._registry) == baseline_values
     assert set(BaseObject._registry) == baseline_objects
 
 
@@ -299,16 +306,14 @@ def test_fighter_champion_applies_1_to_20_and_removes_20_to_1_exactly() -> None:
         name="Sibling ranged bonus",
         value=1,
     )
-    entity.equipment.ranged_attack_bonus.self_static.add_value_modifier(
-        sibling_modifier,
-    )
+    add_modifier(entity.equipment.ranged_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, sibling_modifier)
     entity.skill_set.athletics.add_proficiency_source(
         sibling_source,
         ProficiencyMode.FULL,
     )
     entity.add_feature_source("class_feature.fighter.second_wind", sibling_source)
     baseline_blocks = set(BaseBlock._registry)
-    baseline_values = set(BaseValue._registry)
+    baseline_values = set(ModifiableValue._registry)
     baseline_objects = set(BaseObject._registry)
 
     receipts = tuple(
@@ -382,7 +387,7 @@ def test_fighter_champion_applies_1_to_20_and_removes_20_to_1_exactly() -> None:
         "class_feature.fighter.second_wind": {sibling_source},
     }
     assert set(BaseBlock._registry) == baseline_blocks
-    assert set(BaseValue._registry) == baseline_values
+    assert set(ModifiableValue._registry) == baseline_values
     assert set(BaseObject._registry) == baseline_objects
 
 
@@ -493,7 +498,7 @@ def test_fighter_owner_failure_rolls_back_only_the_partial_level() -> None:
     existing = entity.action_economy.resources["second_wind"]
     block_registry_before = set(BaseBlock._registry)
     object_registry_before = set(BaseObject._registry)
-    value_registry_before = set(BaseValue._registry)
+    value_registry_before = set(ModifiableValue._registry)
 
     with pytest.raises(ValueError, match="already uses long_rest recharge"):
         apply_fighter_level(entity, _fighter_level(1))
@@ -510,7 +515,7 @@ def test_fighter_owner_failure_rolls_back_only_the_partial_level() -> None:
     assert (existing.current, existing.maximum) == (7, 7)
     assert set(BaseBlock._registry) == block_registry_before
     assert set(BaseObject._registry) == object_registry_before
-    assert set(BaseValue._registry) == value_registry_before
+    assert set(ModifiableValue._registry) == value_registry_before
 
 
 def test_asi_shapes_and_cap_are_validated_before_owner_mutation() -> None:
@@ -548,12 +553,9 @@ def test_fighter_removal_rejects_a_modifier_moved_to_a_foreign_channel() -> None
     level = _fighter_level(1)
     receipt = apply_fighter_level(entity, level)
     modifier_uuid = receipt.ranged_attack_bonus_modifier_ids[0]
-    modifier = entity.equipment.ranged_attack_bonus.self_static.value_modifiers.pop(
-        modifier_uuid,
-    )
-    entity.equipment.crit_threshold_melee.self_static.value_modifiers[
-        modifier_uuid
-    ] = modifier
+    modifier = modifier_of(entity.equipment.ranged_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier_uuid)
+    remove_modifier(entity.equipment.ranged_attack_bonus, modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
+    add_modifier(entity.equipment.crit_threshold_melee, Channel.SELF_STATIC, Kind.VALUE, modifier)
     action_order = tuple(action.uuid for action in entity.registered_actions)
 
     with pytest.raises(RuntimeError, match="modifier ownership changed"):

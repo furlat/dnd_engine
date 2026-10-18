@@ -42,7 +42,7 @@ from dnd.core.events import (
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import AdvantageStatus
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.encounter import Encounter
 from dnd.entity import Entity
@@ -454,7 +454,7 @@ def reset_stealth_world(
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Encounter.clear_registry()
     get_map().create_rectangle(0, 0, width, height, default_light=default_light)
 

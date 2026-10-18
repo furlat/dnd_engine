@@ -4,7 +4,19 @@ from typing import AbstractSet, Optional, List, Tuple, Dict, Union, Sequence
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, StrictInt
-from dnd.core.values import ModifiableValue
+from dnd.core.values import (
+    ModifiableValue,
+    Channel,
+    Kind,
+    add_modifier,
+    remove_modifier,
+    modifier_of,
+    modifiers_of,
+    normalized_base,
+    ValueRead,
+    parts,
+    value_score,
+)
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.base_actions import CostType, spell_slot_cost_type
 from dnd.core.action_types import ActionEconomyCostType, HasteActionPolicy, RestrictedActionGrant
@@ -270,92 +282,92 @@ class ActionEconomy(BaseBlock):
 
     name: str = Field(default="ActionEconomy", description="Display name for this action economy block.")
     actions: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=uuid4(),
-            base_value=1,
-            value_name="Actions"
+            base=1,
+            name="Actions"
         ),
         description="Standard action count available this turn.",
     )
     bonus_actions: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=uuid4(),
-            base_value=1,
-            value_name="Bonus Actions"
+            base=1,
+            name="Bonus Actions"
         ),
         description="Bonus action count available this turn.",
     )
     reactions: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=uuid4(),
-            base_value=1,
-            value_name="Reactions"
+            base=1,
+            name="Reactions"
         ),
         description="Reaction count available before recharge.",
     )
     walking_speed: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=uuid4(),
-            base_value=30,
-            value_name="Movement"
+            base=30,
+            name="Movement"
         ),
         description="Walking speed before turn expenditure.",
     )
     flying_speed: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Flying Speed"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), base=0, name="Flying Speed"),
         description="Flying speed; its base is owned by movement grants.",
     )
 
     action_permission: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=uuid4(),
-            base_value=1,
-            value_name="Action Permission",
+            base=1,
+            name="Action Permission",
         ),
         description="Neutral 1/0 gate for whether this entity may take actions.",
     )
     provokes_opportunity_attacks: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=uuid4(),
-            base_value=1,
-            value_name="Provokes Opportunity Attacks",
+            base=1,
+            name="Provokes Opportunity Attacks",
         ),
         description="Neutral 1/0 gate for voluntary-movement opportunity attacks.",
     )
     spell_slot_1: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 1"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), base=0, name="Spell Slot 1"),
         description="Available level 1 spell slots.",
     )
     spell_slot_2: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 2"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), base=0, name="Spell Slot 2"),
         description="Available level 2 spell slots.",
     )
     spell_slot_3: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 3"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), base=0, name="Spell Slot 3"),
         description="Available level 3 spell slots.",
     )
     spell_slot_4: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 4"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), base=0, name="Spell Slot 4"),
         description="Available level 4 spell slots.",
     )
     spell_slot_5: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 5"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), base=0, name="Spell Slot 5"),
         description="Available level 5 spell slots.",
     )
     spell_slot_6: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 6"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), base=0, name="Spell Slot 6"),
         description="Available level 6 spell slots.",
     )
     spell_slot_7: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 7"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), base=0, name="Spell Slot 7"),
         description="Available level 7 spell slots.",
     )
     spell_slot_8: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 8"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), base=0, name="Spell Slot 8"),
         description="Available level 8 spell slots.",
     )
     spell_slot_9: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 9"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), base=0, name="Spell Slot 9"),
         description="Available level 9 spell slots.",
     )
     resources: Dict[str, Resource] = Field(
@@ -573,17 +585,15 @@ class ActionEconomy(BaseBlock):
                 desired.add(ActionEconomyCostType.ACTIONS)
         for channel, modifier_uuid in tuple(self._action_bonus_lock_modifiers.items()):
             if channel not in desired:
-                channels[channel].self_static.remove_max_constraint(modifier_uuid)
+                remove_modifier(channels[channel], modifier_uuid, Channel.SELF_STATIC, Kind.MAX)
                 del self._action_bonus_lock_modifiers[channel]
         for channel in desired - self._action_bonus_lock_modifiers.keys():
-            self._action_bonus_lock_modifiers[channel] = channels[channel].self_static.add_max_constraint(
-                NumericalModifier(
+            self._action_bonus_lock_modifiers[channel] = add_modifier(channels[channel], Channel.SELF_STATIC, Kind.MAX, NumericalModifier(
                     name="Action/bonus exclusion",
                     value=0,
                     source_entity_uuid=self.source_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                ),
-            )
+                ))
 
     def get_attack_multiplicity_grants(
         self,
@@ -805,7 +815,7 @@ class ActionEconomy(BaseBlock):
             return
         for rank, modifier_uuid in receipt.capacity_modifier_uuids:
             value = self.spell_slot_value(rank)
-            if modifier_uuid not in value.self_static.value_modifiers:
+            if modifier_of(value, Channel.SELF_STATIC, Kind.VALUE, modifier_uuid) is None:
                 raise RuntimeError(
                     "installed normal spell-slot capacity lost an owned "
                     f"modifier for rank {rank}"
@@ -816,7 +826,7 @@ class ActionEconomy(BaseBlock):
         value = self.spell_slot_value(rank)
         existing_uuid = self._normal_spell_slot_floor_modifier_uuids.get(rank)
         if existing_uuid is not None:
-            existing = value.self_static.min_constraints.get(existing_uuid)
+            existing = modifier_of(value, Channel.SELF_STATIC, Kind.MIN, existing_uuid)
             if (
                 existing is None
                 or existing.name != "Normal Spell Slot Availability Floor"
@@ -836,7 +846,7 @@ class ActionEconomy(BaseBlock):
             name="Normal Spell Slot Availability Floor",
             value=0,
         )
-        value.self_static.add_min_constraint(floor)
+        add_modifier(value, Channel.SELF_STATIC, Kind.MIN, floor)
         self._normal_spell_slot_floor_modifier_uuids[rank] = floor.uuid
         return floor.uuid
 
@@ -850,7 +860,7 @@ class ActionEconomy(BaseBlock):
             if self.get_cost_modifiers(spell_slot_cost_type(rank)):
                 continue
             value = self.spell_slot_value(rank)
-            floor = value.self_static.min_constraints.get(floor_uuid)
+            floor = modifier_of(value, Channel.SELF_STATIC, Kind.MIN, floor_uuid)
             if (
                 floor is None
                 or floor.name != "Normal Spell Slot Availability Floor"
@@ -860,7 +870,7 @@ class ActionEconomy(BaseBlock):
                     "normal spell-slot availability floor ownership conflict "
                     f"for rank {rank}"
                 )
-            value.self_static.remove_min_constraint(floor_uuid)
+            remove_modifier(value, floor_uuid, Channel.SELF_STATIC, Kind.MIN)
             floor.remove_from_register()
             self._normal_spell_slot_floor_modifier_uuids.pop(rank)
 
@@ -907,16 +917,12 @@ class ActionEconomy(BaseBlock):
             old_handle = old_handles.get(rank)
             if old_handle is not None:
                 excluded_modifier_uuids.add(old_handle)
-            baselines[rank] = self.spell_slot_value(
-                rank
-            ).normalized_score_excluding_static_modifiers(
-                excluded_modifier_uuids
-            )
+            slot = self.spell_slot_value(rank)
+            baselines[rank] = value_score(parts(slot), ValueRead(slot.source_entity_uuid), normalized=True,
+                                          excluded=frozenset(excluded_modifier_uuids))
 
         for rank, modifier_uuid in old_handles.items():
-            self.spell_slot_value(rank).self_static.remove_value_modifier(
-                modifier_uuid
-            )
+            remove_modifier(self.spell_slot_value(rank), modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
             NumericalModifier.unregister(modifier_uuid)
 
         new_handles: List[Tuple[int, UUID]] = []
@@ -934,9 +940,7 @@ class ActionEconomy(BaseBlock):
                 ),
                 value=desired_by_rank.get(rank, 0) - baselines[rank],
             )
-            self.spell_slot_value(rank).self_static.add_value_modifier(
-                capacity_modifier
-            )
+            add_modifier(self.spell_slot_value(rank), Channel.SELF_STATIC, Kind.VALUE, capacity_modifier)
             new_handles.append((rank, capacity_modifier.uuid))
 
         receipt = NormalSpellSlotCapacityReceipt(
@@ -965,9 +969,7 @@ class ActionEconomy(BaseBlock):
             return False
         self._validate_installed_normal_spell_slot_capacity()
         for rank, modifier_uuid in receipt.capacity_modifier_uuids:
-            self.spell_slot_value(rank).self_static.remove_value_modifier(
-                modifier_uuid
-            )
+            remove_modifier(self.spell_slot_value(rank), modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
             NumericalModifier.unregister(modifier_uuid)
         self._normal_spell_slot_capacity_receipt = None
         self._release_unused_normal_spell_slot_floors()
@@ -992,23 +994,22 @@ class ActionEconomy(BaseBlock):
     def get_base_value(self, cost_type: CostType) -> int:
         """Get the base value for a given action type."""
         value = self._get_value_for_cost_type(cost_type)
-        base_mod = value.get_base_modifier()
-        return base_mod.normalized_value if base_mod else 0
+        return normalized_base(value)
 
     def channel_capacity(self, cost_type: CostType) -> int:
         """Resolve the native channel with expenditure omitted, preserving grants and constraints."""
         if cost_type == "movement":
             return self.current_speed() * (1 + self.dash_count)
         value = self._get_value_for_cost_type(cost_type)
-        return max(0, value.normalized_score_excluding_static_modifiers(
-            {modifier.uuid for modifier in self.get_cost_modifiers(cost_type)}))
+        return max(0, value_score(parts(value), ValueRead(value.source_entity_uuid), normalized=True,
+            excluded=frozenset(modifier.uuid for modifier in self.get_cost_modifiers(cost_type))))
 
     def get_cost_modifiers(self, cost_type: CostType) -> List[NumericalModifier]:
         """Get all cost modifiers (negative values) for a given action type."""
         if cost_type == "movement":
             raise ValueError("Movement expenditure is not a speed modifier")
         value = self._get_value_for_cost_type(cost_type)
-        return [mod for mod in value.self_static.value_modifiers.values()
+        return [mod for mod in modifiers_of(value, Channel.SELF_STATIC, Kind.VALUE)
                 if mod.name is not None and "cost" in mod.name]
 
     @property
@@ -1027,10 +1028,9 @@ class ActionEconomy(BaseBlock):
         self._update_flying_base()
 
     def _update_flying_base(self) -> None:
-        base = self.flying_speed.get_base_modifier()
-        if base is None:
+        if self.flying_speed.base is None:
             raise RuntimeError("Flying speed is missing its base value")
-        base.value = max((grant.get(MovementMode.FLYING, 0)
+        self.flying_speed.base = max((grant.get(MovementMode.FLYING, 0)
             for identity, grant in self.movement_speed_grants.items()
             if (owner := BaseObject.get(identity)) is not None and owner.contributions_active()), default=0)
 
@@ -1073,7 +1073,7 @@ class ActionEconomy(BaseBlock):
         for cost_type in turn_based_types:
             value = self._get_value_for_cost_type(cost_type)
             for modifier in self.get_cost_modifiers(cost_type):
-                value.self_static.remove_value_modifier(modifier.uuid)
+                remove_modifier(value, modifier.uuid, Channel.SELF_STATIC, Kind.VALUE)
 
     def reset_spell_slot_costs(self) -> None:
         """Reset spell slot costs (restore all spell slots).
@@ -1084,7 +1084,7 @@ class ActionEconomy(BaseBlock):
             cost_type = spell_slot_cost_type(level)
             value = self.spell_slot_value(level)
             for modifier in self.get_cost_modifiers(cost_type):
-                value.self_static.remove_value_modifier(modifier.uuid)
+                remove_modifier(value, modifier.uuid, Channel.SELF_STATIC, Kind.VALUE)
                 modifier.remove_from_register()
         self._release_unused_normal_spell_slot_floors()
 
@@ -1102,7 +1102,7 @@ class ActionEconomy(BaseBlock):
             modifier.value += restored
             remaining -= restored
             if modifier.value == 0:
-                value.self_static.remove_value_modifier(modifier.uuid)
+                remove_modifier(value, modifier.uuid, Channel.SELF_STATIC, Kind.VALUE)
                 modifier.remove_from_register()
             if not remaining:
                 break
@@ -1199,7 +1199,7 @@ class ActionEconomy(BaseBlock):
                 )
                 pending_modifier = modifier
                 pending_cost_type = cost.cost_type
-                value.self_static.add_value_modifier(modifier)
+                add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, modifier)
                 installed.append(ActionEconomyDebitHandle(
                     cost_type=cost.cost_type,
                     modifier_uuid=modifier.uuid,
@@ -1211,19 +1211,16 @@ class ActionEconomy(BaseBlock):
         except Exception:
             if pending_modifier is not None and pending_cost_type is not None:
                 pending_value = self._get_value_for_cost_type(pending_cost_type)
-                pending_value.self_static.remove_value_modifier(
-                    pending_modifier.uuid
-                )
+                remove_modifier(pending_value, pending_modifier.uuid, Channel.SELF_STATIC, Kind.VALUE)
                 pending_modifier.remove_from_register()
             for handle in reversed(installed):
                 if handle.cost_type == "movement":
                     self.movement_debits.pop(handle.modifier_uuid, None)
                     continue
                 value = self._get_value_for_cost_type(handle.cost_type)
-                modifier = value.self_static.value_modifiers.get(
-                    handle.modifier_uuid
+                modifier = modifier_of(value, Channel.SELF_STATIC, Kind.VALUE, handle.modifier_uuid
                 )
-                value.self_static.remove_value_modifier(handle.modifier_uuid)
+                remove_modifier(value, handle.modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
                 if modifier is not None:
                     modifier.remove_from_register()
             raise
@@ -1285,7 +1282,7 @@ class ActionEconomy(BaseBlock):
                     raise ValueError("Movement debit receipt no longer names exact spent feet")
                 continue
             value = self._get_value_for_cost_type(handle.cost_type)
-            modifier = value.self_static.value_modifiers.get(handle.modifier_uuid)
+            modifier = modifier_of(value, Channel.SELF_STATIC, Kind.VALUE, handle.modifier_uuid)
             if (
                 type(modifier) is not NumericalModifier
                 or modifier.name != handle.modifier_name
@@ -1302,7 +1299,7 @@ class ActionEconomy(BaseBlock):
                 del self.movement_debits[handle.modifier_uuid]
         for handle, modifier in exact_modifiers:
             value = self._get_value_for_cost_type(handle.cost_type)
-            value.self_static.remove_value_modifier(handle.modifier_uuid)
+            remove_modifier(value, handle.modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
             modifier.remove_from_register()
         self._release_unused_normal_spell_slot_floors()
     def commit_fixed_costs_without_dispatch(
@@ -1371,37 +1368,37 @@ class ActionEconomy(BaseBlock):
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
-            actions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.actions, value_name="Actions")
+            actions = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.actions, name="Actions")
             for modifier in config.actions_modifiers:
-                actions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(actions, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
-            bonus_actions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.bonus_actions, value_name="Bonus Actions")
+            bonus_actions = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.bonus_actions, name="Bonus Actions")
             for modifier in config.bonus_actions_modifiers:
-                bonus_actions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(bonus_actions, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
-            reactions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.reactions, value_name="Reactions")
+            reactions = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.reactions, name="Reactions")
             for modifier in config.reactions_modifiers:
-                reactions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(reactions, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
-            movement = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.movement, value_name="Movement")
+            movement = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.movement, name="Movement")
             for modifier in config.movement_modifiers:
-                movement.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(movement, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
-            spell_slot_1 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(1, 0), value_name="Spell Slot 1")
-            spell_slot_2 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(2, 0), value_name="Spell Slot 2")
-            spell_slot_3 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(3, 0), value_name="Spell Slot 3")
-            spell_slot_4 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(4, 0), value_name="Spell Slot 4")
-            spell_slot_5 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(5, 0), value_name="Spell Slot 5")
-            spell_slot_6 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(6, 0), value_name="Spell Slot 6")
-            spell_slot_7 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(7, 0), value_name="Spell Slot 7")
-            spell_slot_8 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(8, 0), value_name="Spell Slot 8")
-            spell_slot_9 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(9, 0), value_name="Spell Slot 9")
+            spell_slot_1 = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.spell_slots.get(1, 0), name="Spell Slot 1")
+            spell_slot_2 = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.spell_slots.get(2, 0), name="Spell Slot 2")
+            spell_slot_3 = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.spell_slots.get(3, 0), name="Spell Slot 3")
+            spell_slot_4 = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.spell_slots.get(4, 0), name="Spell Slot 4")
+            spell_slot_5 = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.spell_slots.get(5, 0), name="Spell Slot 5")
+            spell_slot_6 = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.spell_slots.get(6, 0), name="Spell Slot 6")
+            spell_slot_7 = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.spell_slots.get(7, 0), name="Spell Slot 7")
+            spell_slot_8 = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.spell_slots.get(8, 0), name="Spell Slot 8")
+            spell_slot_9 = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.spell_slots.get(9, 0), name="Spell Slot 9")
 
             return cls(
                 source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                 target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
                 actions=actions, bonus_actions=bonus_actions, reactions=reactions, walking_speed=movement,
-                flying_speed=ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=0, value_name="Flying Speed"),
+                flying_speed=ModifiableValue(source_entity_uuid=source_entity_uuid, base=0, name="Flying Speed"),
                 spell_slot_1=spell_slot_1, spell_slot_2=spell_slot_2, spell_slot_3=spell_slot_3,
                 spell_slot_4=spell_slot_4, spell_slot_5=spell_slot_5, spell_slot_6=spell_slot_6,
                 spell_slot_7=spell_slot_7, spell_slot_8=spell_slot_8, spell_slot_9=spell_slot_9,

@@ -15,6 +15,7 @@ from dnd.core.events import DamageRollResultEvent, EventQueue, EventType
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.core.values import ValueRead, value_score
 
 
 @pytest.fixture(autouse=True)

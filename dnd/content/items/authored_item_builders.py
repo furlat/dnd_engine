@@ -24,7 +24,7 @@ from dnd.core.events import (
     Range,
     RangeType,
 )
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.content.items.authored_item_definitions import (
     ACOLYTE_GEAR_DEFINITIONS,
     CHEST_DEFINITIONS,
@@ -168,15 +168,15 @@ def _build_weapon(
             normal=definition.normal_range_feet,
             long=definition.long_range_feet,
         ),
-        attack_bonus=ModifiableValue.create(
+        attack_bonus=ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=definition.attack_bonus,
-            value_name="Attack Bonus",
+            base=definition.attack_bonus,
+            name="Attack Bonus",
         ),
-        damage_bonus=ModifiableValue.create(
+        damage_bonus=ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=definition.damage_bonus,
-            value_name="Damage Bonus",
+            base=definition.damage_bonus,
+            name="Damage Bonus",
         ),
         extra_damage_dices=[packet.die for packet in packets],
         extra_damage_dices_numbers=[packet.count for packet in packets],
@@ -184,21 +184,19 @@ def _build_weapon(
         extra_damage_type=[packet.damage_type for packet in packets],
     )
     if definition.attack_disadvantage:
-        weapon.attack_bonus.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        add_modifier(weapon.attack_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 source_entity_uuid=source_entity_uuid,
                 name="Rusty Blade",
                 value=AdvantageStatus.DISADVANTAGE,
-            ),
-        )
+            ))
     return weapon
 
 
 def _armor_value(source_entity_uuid: UUID, name: str, value: int) -> ModifiableValue:
-    return ModifiableValue.create(
+    return ModifiableValue(
         source_entity_uuid=source_entity_uuid,
-        base_value=value,
-        value_name=name,
+        base=value,
+        name=name,
     )
 
 

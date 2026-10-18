@@ -28,7 +28,7 @@ from dnd.core.events import (
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import create_test_entity, reset_combat_state
 
@@ -38,7 +38,7 @@ def reset_combat_tutorial_state(width: int = 8, height: int = 8) -> None:
     reset_combat_state()
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     BaseBlock._registry.clear()
     Dice._registry.clear()
     DiceRoll._registry.clear()

@@ -57,6 +57,7 @@ from tests.engine.test_high_level_spell_controls import high_actor
 from tests.engine.test_summoning_autonomous_turns import autonomous_attack
 from tests.engine.test_summoning_lifecycle import battle
 from tests.manual.spell_regression_support import force_save_result
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def summon(battle, key, *, slot=None, position=(4, 2), **values):
@@ -210,9 +211,7 @@ def test_special_offense_real_paid_action_damage_and_rider(
     Entity.update_entity_position(enemy, (5, 2))
     member = summon(battle, body)
     actor = member.entity
-    enemy.equipment.ac_bonus.self_static.add_value_modifier(
-        NumericalModifier(name="Easy target", value=-5, source_entity_uuid=enemy.uuid)
-    )
+    add_modifier(enemy.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name="Easy target", value=-5, source_entity_uuid=enemy.uuid))
     for ability in ("strength", "dexterity", "constitution"):
         force_save_result(enemy, ability, succeeds=False)
     Entity.update_all_entities_senses()
@@ -470,11 +469,9 @@ def test_independent_summon_long_rest_ends_body(battle, key):
 def test_every_body_acts_through_native_autonomous_advance(battle, body):
     _, encounter, _, caster, enemy = battle
     Entity.update_entity_position(enemy, (5, 2))
-    enemy.equipment.ac_bonus.self_static.add_value_modifier(
-        NumericalModifier(
+    add_modifier(enemy.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name="Deterministic attack target", value=-10, source_entity_uuid=enemy.uuid
-        )
-    )
+        ))
     if body.key == "cambion":
         enemy.creature_type = CreatureType.UNDEAD
     actor = summon(battle, body.key).entity
@@ -593,9 +590,7 @@ def test_grounded_thunder_fixed_nine_not_doubled_on_critical(
     _, _, _, _, enemy = battle
     Entity.update_entity_position(enemy, (5, 2))
     actor = summon(battle, "earth_myrmidon").entity
-    enemy.equipment.ac_bonus.self_static.add_value_modifier(
-        NumericalModifier(name="Easy target", value=-5, source_entity_uuid=enemy.uuid)
-    )
+    add_modifier(enemy.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name="Easy target", value=-5, source_entity_uuid=enemy.uuid))
     force_save_result(enemy, "constitution", succeeds=True)
     Entity.update_all_entities_senses()
     hp = enemy.get_hp()
@@ -614,9 +609,7 @@ def test_water_slam_typed_fixed_and_cold_packet_affinities(battle):
     _, _, _, _, enemy = battle
     Entity.update_entity_position(enemy, (5, 2))
     actor = summon(battle, "water_elemental").entity
-    enemy.equipment.ac_bonus.self_static.add_value_modifier(
-        NumericalModifier(name="Easy target", value=-5, source_entity_uuid=enemy.uuid)
-    )
+    add_modifier(enemy.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name="Easy target", value=-5, source_entity_uuid=enemy.uuid))
     enemy.health.nonmagical_attack_resistances = frozenset({DamageType.BLUDGEONING})
     # Intrinsic Water Slam is magical; its fixed packet remains five and Chilled applies after this hit.
     hp = enemy.get_hp()
@@ -631,9 +624,7 @@ def test_nonmagical_bps_resistance_uses_actual_natural_attack_flag(
     _, _, _, caster, enemy = battle
     target = summon(battle, "earth_elemental").entity
     Entity.update_entity_position(enemy, (5, 2))
-    target.equipment.ac_bonus.self_static.add_value_modifier(
-        NumericalModifier(name="Easy target", value=-5, source_entity_uuid=target.uuid)
-    )
+    add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name="Easy target", value=-5, source_entity_uuid=target.uuid))
     Entity.update_all_entities_senses()
     hp = target.get_hp()
     action = NaturalAttack(

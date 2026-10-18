@@ -73,6 +73,7 @@ from dnd.spells.abjuration import (
     register_counterspell_reaction,
     register_shield_reaction,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class IncompatibleEncounterError(ValueError):
@@ -300,15 +301,13 @@ def _apply_immediate_setup_effect(
         _apply_behavior_grant(entity, effect)
         return
     if isinstance(effect, RosterDamageAffinity):
-        entity.health.damage_reduction.self_static.add_resistance_modifier(
-            ResistanceModifier(
+        add_modifier(entity.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
                 value=_RESISTANCE_STATUS_BY_SETUP[effect.status.value],
                 damage_type=effect.damage_type,
                 name=effect.label,
-            ),
-        )
+            ))
         return
     if isinstance(effect, (RosterStartingDamage, RosterStartingCondition)):
         return

@@ -26,7 +26,14 @@ from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.progression import FULL_CASTER_SPELL_SLOTS
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import (
+    ModifiableValue,
+    Channel,
+    Kind,
+    add_modifier,
+    modifier_of,
+    remove_modifier,
+)
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
@@ -160,7 +167,7 @@ def _registry_ids() -> tuple[frozenset[object], ...]:
     return (
         frozenset(BaseObject._registry),
         frozenset(BaseBlock._registry),
-        frozenset(BaseValue._registry),
+        frozenset(ModifiableValue._registry),
         frozenset(ModifiableValue._registry),
     )
 
@@ -743,12 +750,9 @@ def test_sorcerer_removal_rejects_a_modifier_moved_to_a_foreign_channel() -> Non
     level = _level(1)
     receipt = apply_sorcerer_level(entity, level)
     modifier_uuid = receipt.maximum_hit_point_modifier_ids[0]
-    modifier = entity.health.max_hit_points_bonus.self_static.value_modifiers.pop(
-        modifier_uuid,
-    )
-    entity.ability_scores.charisma.ability_score.self_static.value_modifiers[
-        modifier_uuid
-    ] = modifier
+    modifier = modifier_of(entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier_uuid)
+    remove_modifier(entity.health.max_hit_points_bonus, modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
+    add_modifier(entity.ability_scores.charisma.ability_score, Channel.SELF_STATIC, Kind.VALUE, modifier)
     action_order = tuple(action.uuid for action in entity.registered_actions)
 
     with pytest.raises(RuntimeError, match="modifier ownership changed"):

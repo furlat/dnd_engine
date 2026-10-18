@@ -36,7 +36,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import ResistanceStatus
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.types.world import CardinalDirection, LightLevel, MovementMode
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.entity import Entity, EntityConfig
@@ -903,7 +903,7 @@ def test_failed_birth_validation_discards_the_provisional_aggregate() -> None:
     )
     assert not any(
         value.source_entity_uuid == entity.uuid
-        for value in BaseValue._registry.values()
+        for value in ModifiableValue._registry.values()
     )
     assert not any(
         event.event_type is EventType.ENTITY_CREATED for event in _events()
@@ -1082,7 +1082,7 @@ def _assert_provisional_scenario_was_discarded(
         )
         assert not any(
             value.source_entity_uuid == entity_uuid
-            for value in BaseValue._registry.values()
+            for value in ModifiableValue._registry.values()
         )
 
 

@@ -39,7 +39,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, DiceRoll
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.encounter import Encounter
 from dnd.player.reduction import reduce_initialization, reduce_operation
 from server import connection as worker_connection, worker
@@ -130,7 +130,7 @@ def heap_census(runtime):
             EventQueue._events_by_type, EventQueue._events_by_phase,
             EventQueue._events_by_source, EventQueue._events_by_target],
         'native_current': [get_map(), BaseBlock._registry, BaseObject._registry,
-            BaseValue._registry, Dice._registry, DiceRoll._registry, runtime.session],
+            ModifiableValue._registry, Dice._registry, DiceRoll._registry, runtime.session],
         'audience_current': [runtime.catalog, *runtime.audiences.values()],
     }
     reached, summaries = {}, {}
@@ -194,7 +194,7 @@ def heap_census(runtime):
         'tracked_outside_owner_union': len(collectible - union),
         'native_event_metadata': {name: row for name, (_, row) in metadata.items()},
         'registries': {'blocks': len(BaseBlock._registry),
-            'objects': len(BaseObject._registry), 'values': len(BaseValue._registry),
+            'objects': len(BaseObject._registry), 'values': len(ModifiableValue._registry),
             'dice': len(Dice._registry), 'rolls': len(DiceRoll._registry)},
         'elapsed_ms': (perf_counter_ns() - started) / 1e6,
     }

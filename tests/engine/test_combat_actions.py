@@ -49,7 +49,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import AdvantageStatus, BaseValue, ModifiableValue
+from dnd.core.values import AdvantageStatus, ModifiableValue, Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.monsters.bestiary import (
@@ -105,7 +105,7 @@ def reset_core_action_state() -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, 20, 20)
     _combat_game = Game()
 
@@ -1079,7 +1079,7 @@ def test_eb_10_016_mixed_weapon_damage_applies_resistance_per_component() -> Non
     weapon.extra_damage_dices.append(6)
     weapon.extra_damage_dices_numbers.append(1)
     weapon.extra_damage_bonus.append(
-        ModifiableValue.create(source_entity_uuid=attacker.uuid, value_name="Fire Bonus", base_value=0)
+        ModifiableValue(source_entity_uuid=attacker.uuid, name="Fire Bonus", base=0)
     )
     weapon.extra_damage_type.append(DamageType.FIRE)
     Entity.update_all_entities_senses(max_distance=20)
@@ -1156,7 +1156,7 @@ def test_eb_10_019_mixed_weapon_damage_applies_vulnerability_and_immunity_per_co
         weapon.extra_damage_dices.append(6)
         weapon.extra_damage_dices_numbers.append(1)
         weapon.extra_damage_bonus.append(
-            ModifiableValue.create(source_entity_uuid=attacker.uuid, value_name="Fire Bonus", base_value=0)
+            ModifiableValue(source_entity_uuid=attacker.uuid, name="Fire Bonus", base=0)
         )
         weapon.extra_damage_type.append(DamageType.FIRE)
         Entity.update_all_entities_senses(max_distance=20)
@@ -1230,14 +1230,12 @@ def test_eb_10_010_natural_rolls_drive_crit_and_crit_miss_outcomes() -> None:
     reset_core_action_state()
     attacker = create_goblin(name="Nat 20 Attacker", position=(5, 5), faction="heroes")
     target = create_skeleton(name="Unreachable AC", position=(6, 5), faction="monsters")
-    target.equipment.ac_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
             name="Unreachable AC",
             value=100,
-        )
-    )
+        ))
     Entity.update_all_entities_senses(max_distance=20)
 
     with fixed_dice(20):
@@ -1256,14 +1254,12 @@ def test_eb_10_010_natural_rolls_drive_crit_and_crit_miss_outcomes() -> None:
     reset_core_action_state()
     attacker = create_goblin(name="Nat 1 Attacker", position=(5, 5), faction="heroes")
     target = create_skeleton(name="Low AC", position=(6, 5), faction="monsters")
-    target.equipment.ac_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
             name="Low AC",
             value=-100,
-        )
-    )
+        ))
     Entity.update_all_entities_senses(max_distance=20)
 
     with fixed_dice(1):

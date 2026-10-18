@@ -28,6 +28,7 @@ from server.protocol import EndTurnIntent, CommandRequest, ExecuteSelectionInten
 from server.worker import dispatch, needs_advance
 from server.worker_protocol import Advance, Command, Preview
 from tests.player.test_compact_choices import world, request_choices, rows
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.mark.parametrize('spell,behavior',[
@@ -113,13 +114,13 @@ def test_worker_mixed_spell_encounter_returns_to_human_with_owned_effects_cleane
     """One real server sequence combines items, summon, control, field and Hex."""
     runtime,seat,_=world
     actor=runtime.session.game.entities[runtime.publications[seat].boundary.input_actor_uuid]
-    actor.equipment.ac_bonus.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(actor.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name='Durable integration caster armor',value=100,source_entity_uuid=actor.uuid))
-    actor.max_concentration_slots.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(actor.max_concentration_slots, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name='Existing three-slot concentration fixture',value=2,source_entity_uuid=actor.uuid))
     enemies=[entity for entity in runtime.session.game.entities.values() if actor.is_enemy(entity)]
     for enemy in enemies:
-        enemy.health.max_hit_points_bonus.self_static.add_value_modifier(NumericalModifier(
+        add_modifier(enemy.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name='Durable integration opponent',value=200,source_entity_uuid=enemy.uuid))
         force_save_result(enemy,'constitution',succeeds=False)
         force_save_result(enemy,'wisdom',succeeds=False)

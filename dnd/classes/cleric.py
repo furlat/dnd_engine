@@ -24,7 +24,7 @@ from dnd.core.events import (
     EventPhase,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 
 
@@ -204,9 +204,9 @@ def divine_strike(event, source_uuid):
         damage_dice=8,
         dice_numbers=2 if level >= 14 else 1,
         damage_type=DamageType.RADIANT,
-        damage_bonus=ModifiableValue.create(
-            source_entity_uuid=source_uuid, base_value=0
-        ),
+        damage_bonus=parts(ModifiableValue(
+            source_entity_uuid=source_uuid, base=0
+        )),
         effect_origin=EffectOrigin(
             kind=EffectOriginKind.ACTION, source_id="class_feature.cleric.divine_strike"
         ),
@@ -248,9 +248,9 @@ def destroy_undead(event, source_uuid):
             dice_numbers=4,
             damage_type=DamageType.RADIANT,
             effect_origin=origin,
-            damage_bonus=ModifiableValue.create(
-                source_entity_uuid=source_uuid, base_value=0
-            ),
+            damage_bonus=parts(ModifiableValue(
+                source_entity_uuid=source_uuid, base=0
+            )),
         )
         roll = damage.get_dice(AttackOutcome.HIT).roll
         target.receive_damage(

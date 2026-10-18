@@ -40,6 +40,7 @@ from tests.spell_test_exports import (
     ScorchingRay,
     Thunderwave,
 )
+from dnd.core.values import ValueRead, value_score
 
 
 def test_eldritch_blast_discloses_independent_beam_outcomes() -> None:
@@ -661,14 +662,14 @@ def test_spell_numbers_compose_from_ability_proficiency_and_modifiers(capsys) ->
 
     assert caster.spell_attack_bonus().normalized_score == 9
     assert caster.spell_save_dc() == 16
-    assert caster.get_spell_damage_bonus().normalized_score == 3
+    assert value_score(caster.get_spell_damage_bonus(), ValueRead(caster.uuid), normalized=True) == 3
     assert caster.get_spell_crit_threshold() == 19
     assert caster.get_spell_crit_extra_dice() == 2
     number_lines = [
         f"spell ability: {caster.spellcasting.spellcasting_ability}",
         f"spell attack bonus: {caster.spell_attack_bonus().normalized_score}",
         f"spell save dc: {caster.spell_save_dc()}",
-        f"spell damage bonus: {caster.get_spell_damage_bonus().normalized_score}",
+        f"spell damage bonus: {value_score(caster.get_spell_damage_bonus(), ValueRead(caster.uuid), normalized=True)}",
         f"spell crit threshold: {caster.get_spell_crit_threshold()}",
         f"spell crit extra dice: {caster.get_spell_crit_extra_dice()}",
     ]

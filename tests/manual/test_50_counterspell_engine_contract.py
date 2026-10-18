@@ -11,7 +11,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.gridmap import get_map
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from tests.spell_test_exports import MagicMissile
 from dnd.spells.abjuration import register_counterspell_reaction
@@ -24,7 +24,7 @@ def reset_counterspell_state(*, width: int = 40, height: int = 8) -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, width, height)
 
 

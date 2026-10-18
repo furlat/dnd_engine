@@ -56,6 +56,7 @@ from dnd.types.character_progression import (
 )
 from dnd.types.character_receipts import OriginGrantReceipt
 from dnd.types.senses import SenseMode, SensesType
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, modifier_of
 
 
 ORIGIN_STEP_ID = "origin.character"
@@ -146,9 +147,9 @@ def _add_saving_advantage(
                 requires_magical=requires_magical,
             ),
         )
-        entity.saving_throws.get_saving_throw(
+        add_modifier(entity.saving_throws.get_saving_throw(
             ability,
-        ).bonus.self_contextual.add_advantage_modifier(modifier)
+        ).bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier)
         rows.append((ability, modifier_id))
 
 
@@ -169,7 +170,7 @@ def _add_resistance(
         value=ResistanceStatus.RESISTANCE,
         damage_type=damage_type,
     )
-    entity.health.damage_reduction.self_static.add_resistance_modifier(modifier)
+    add_modifier(entity.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, modifier)
     rows.append((damage_type.value, modifier_id))
 
 
@@ -424,9 +425,9 @@ def apply_origin(
                 name=f"Character creation {ability} bonus",
                 value=amount,
             )
-            entity.ability_scores.get_ability(
+            add_modifier(entity.ability_scores.get_ability(
                 ability,
-            ).ability_score.self_static.add_value_modifier(modifier)
+            ).ability_score, Channel.SELF_STATIC, Kind.VALUE, modifier)
             ability_modifiers.append((ability, modifier_id))
 
         size_id = _source(entity, "physical.size")
@@ -444,7 +445,7 @@ def apply_origin(
                 name=f"{resolved.species.value} walking speed",
                 value=speed_delta,
             )
-            entity.action_economy.walking_speed.self_static.add_value_modifier(modifier)
+            add_modifier(entity.action_economy.walking_speed, Channel.SELF_STATIC, Kind.VALUE, modifier)
             speed_modifiers.append(modifier_id)
 
         for language_id in resolved.languages:
@@ -574,9 +575,7 @@ def apply_origin(
                 name="Half-Orc Savage Attacks",
                 value=1,
             )
-            entity.equipment.crit_extra_dice_melee.self_static.add_value_modifier(
-                modifier,
-            )
+            add_modifier(entity.equipment.crit_extra_dice_melee, Channel.SELF_STATIC, Kind.VALUE, modifier)
             critical_modifiers.append(modifier_id)
             resource_id = _source(entity, "species.half_orc.relentless_endurance")
             entity.action_economy.add_resource_contribution(
@@ -683,7 +682,7 @@ def apply_origin(
                 name="Dwarven Toughness",
                 value=character_level,
             )
-            entity.health.max_hit_points_bonus.self_static.add_value_modifier(modifier)
+            add_modifier(entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier)
             maximum_hp_modifiers.append(modifier_id)
 
         _install_base_innate_spells(
@@ -835,38 +834,35 @@ def _validate_origin_receipt_ownership(
             raise RuntimeError("origin sense ownership changed")
 
     numerical_owners = (
-        (entity.action_economy.walking_speed.self_static.value_modifiers,
+        (entity.action_economy.walking_speed, Channel.SELF_STATIC, Kind.VALUE,
          receipt.walking_speed_modifier_ids),
-        (entity.health.max_hit_points_bonus.self_static.value_modifiers,
+        (entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE,
          receipt.maximum_hit_point_modifier_ids),
-        (entity.equipment.crit_extra_dice_melee.self_static.value_modifiers,
+        (entity.equipment.crit_extra_dice_melee, Channel.SELF_STATIC, Kind.VALUE,
          receipt.melee_critical_extra_dice_modifier_ids),
     )
-    for modifiers, modifier_ids in numerical_owners:
+    for value, channel, kind, modifier_ids in numerical_owners:
         for modifier_id in modifier_ids:
-            modifier = modifiers.get(modifier_id)
+            modifier = modifier_of(value, channel, kind, modifier_id)
             if modifier is None or NumericalModifier.get(modifier_id) is not modifier:
                 raise RuntimeError("origin numerical modifier ownership changed")
     for ability, modifier_id in receipt.ability_score_modifier_ids:
-        modifiers = entity.ability_scores.get_ability(
+        modifier = modifier_of(entity.ability_scores.get_ability(
             ability,
-        ).ability_score.self_static.value_modifiers
-        modifier = modifiers.get(modifier_id)
+        ).ability_score, Channel.SELF_STATIC, Kind.VALUE, modifier_id)
         if modifier is None or NumericalModifier.get(modifier_id) is not modifier:
             raise RuntimeError("origin ability modifier ownership changed")
     for ability, modifier_id in receipt.saving_throw_advantage_modifier_ids:
-        modifiers = entity.saving_throws.get_saving_throw(
+        modifier = modifier_of(entity.saving_throws.get_saving_throw(
             ability,
-        ).bonus.self_contextual.advantage_modifiers
-        modifier = modifiers.get(modifier_id)
+        ).bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier_id)
         if (
             modifier is None
             or ContextualAdvantageModifier.get(modifier_id) is not modifier
         ):
             raise RuntimeError("origin save modifier ownership changed")
     for _damage_type, modifier_id in receipt.damage_resistance_modifier_ids:
-        modifiers = entity.health.damage_reduction.self_static.resistance_modifiers
-        modifier = modifiers.get(modifier_id)
+        modifier = modifier_of(entity.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, modifier_id)
         if modifier is None or ResistanceModifier.get(modifier_id) is not modifier:
             raise RuntimeError("origin resistance modifier ownership changed")
     for source_id in receipt.creature_proficiency_source_ids:
@@ -926,25 +922,23 @@ def _remove_origin_receipt(entity: Entity, receipt: OriginGrantReceipt) -> None:
         if not entity.senses.remove_sense_mode_source(sense_source):
             raise RuntimeError("origin sense source is missing")
     for modifier_id in reversed(receipt.walking_speed_modifier_ids):
-        entity.action_economy.walking_speed.self_static.remove_value_modifier(modifier_id)
+        remove_modifier(entity.action_economy.walking_speed, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.maximum_hit_point_modifier_ids):
-        entity.health.max_hit_points_bonus.self_static.remove_value_modifier(modifier_id)
+        remove_modifier(entity.health.max_hit_points_bonus, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.melee_critical_extra_dice_modifier_ids):
-        entity.equipment.crit_extra_dice_melee.self_static.remove_value_modifier(
-            modifier_id,
-        )
+        remove_modifier(entity.equipment.crit_extra_dice_melee, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for _, modifier_id in reversed(receipt.damage_resistance_modifier_ids):
-        entity.health.damage_reduction.self_static.remove_resistance_modifier(modifier_id)
+        remove_modifier(entity.health.damage_reduction, modifier_id, Channel.SELF_STATIC, Kind.RESISTANCE)
         ResistanceModifier.unregister(modifier_id)
     for ability, modifier_id in reversed(
         receipt.saving_throw_advantage_modifier_ids,
     ):
-        entity.saving_throws.get_saving_throw(
+        remove_modifier(entity.saving_throws.get_saving_throw(
             ability,
-        ).bonus.self_contextual.remove_advantage_modifier(modifier_id)
+        ).bonus, modifier_id, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE)
         ContextualAdvantageModifier.unregister(modifier_id)
     for creature_source in reversed(receipt.creature_proficiency_source_ids):
         if not entity.creature_proficiencies.remove_source(creature_source):
@@ -955,9 +949,9 @@ def _remove_origin_receipt(entity: Entity, receipt: OriginGrantReceipt) -> None:
         ):
             raise RuntimeError("origin skill source is missing")
     for ability, modifier_id in reversed(receipt.ability_score_modifier_ids):
-        entity.ability_scores.get_ability(
+        remove_modifier(entity.ability_scores.get_ability(
             ability,
-        ).ability_score.self_static.remove_value_modifier(modifier_id)
+        ).ability_score, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
 
 
@@ -1029,8 +1023,7 @@ def reconcile_origin_total_level(
     _validate_origin_receipt_ownership(entity, receipt)
 
     for modifier_id in receipt.maximum_hit_point_modifier_ids:
-        modifier = entity.health.max_hit_points_bonus.self_static.value_modifiers.get(
-            modifier_id,
+        modifier = modifier_of(entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier_id,
         )
         if modifier is None:
             raise RuntimeError("Dwarven Toughness modifier is missing")

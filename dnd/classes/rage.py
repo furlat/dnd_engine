@@ -45,6 +45,7 @@ from dnd.actions import (
 from pydantic import Field
 from typing import Any, ClassVar, Optional, List, Tuple, cast
 from uuid import UUID
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def _child_binding(parent_binding, behavior_id: str, runtime_owner_uuid: UUID):
@@ -383,9 +384,7 @@ class Raging(BaseCondition):
             target_entity_uuid=self.target_entity_uuid
         )
         try:
-            mod_uuid = athletics.skill_bonus.self_static.add_advantage_modifier(
-                str_adv_mod,
-            )
+            mod_uuid = add_modifier(athletics.skill_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, str_adv_mod)
         except BaseException:
             str_adv_mod.remove_from_register()
             raise
@@ -399,9 +398,7 @@ class Raging(BaseCondition):
             target_entity_uuid=self.target_entity_uuid
         )
         try:
-            mod_uuid = str_save.bonus.self_static.add_advantage_modifier(
-                str_save_adv,
-            )
+            mod_uuid = add_modifier(str_save.bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, str_save_adv)
         except BaseException:
             str_save_adv.remove_from_register()
             raise
@@ -415,8 +412,7 @@ class Raging(BaseCondition):
         )
         try:
             mod_uuid = (
-                target.equipment.melee_damage_bonus.self_contextual
-                .add_value_modifier(rage_dmg_mod)
+                add_modifier(target.equipment.melee_damage_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, rage_dmg_mod)
             )
         except BaseException:
             rage_dmg_mod.remove_from_register()
@@ -433,8 +429,7 @@ class Raging(BaseCondition):
             )
             try:
                 mod_uuid = (
-                    target.health.damage_reduction.self_static
-                    .add_resistance_modifier(resist_mod)
+                    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, resist_mod)
                 )
             except BaseException:
                 resist_mod.remove_from_register()

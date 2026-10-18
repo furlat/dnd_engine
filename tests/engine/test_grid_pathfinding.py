@@ -26,7 +26,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.actions import Jump, Move, Shove
 from dnd.entity import Entity
 from dnd.game import Game
@@ -72,13 +72,11 @@ class PerceptionBoost(BaseCondition):
             return [], [], [], [], None
 
         skill = target.skill_set.get_skill("perception")
-        modifier_uuid = skill.skill_bonus.self_static.add_value_modifier(
-            NumericalModifier.create(
+        modifier_uuid = add_modifier(skill.skill_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid,
                 name="Perception Boost",
                 value=self.boost_amount,
-            )
-        )
+            ))
         effect_event = declaration_event.phase_to(EventPhase.EFFECT)
         return [(skill.skill_bonus.uuid, modifier_uuid)], [], [], [], effect_event
 
@@ -126,7 +124,7 @@ def reset_grid_state(width: int = 8, height: int = 8, x: int = 0, y: int = 0) ->
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(x, y, width, height)
     _grid_game = Game()
 
@@ -182,13 +180,11 @@ def test_eb_11_003_dijkstra_paths_sum_tile_costs_and_can_ignore_difficult_terrai
     grid = get_map()
     difficult_tile = grid.get_tile(2, 0)
     assert difficult_tile is not None
-    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(difficult_tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Difficult Terrain",
             value=1,
-        )
-    )
+        ))
 
     distances, paths = grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING)
     easy_distances, _ = grid.compute_paths(
@@ -303,13 +299,11 @@ def test_eb_11_004_move_action_converts_tile_cost_units_to_feet() -> None:
     grid = get_map()
     difficult_tile = grid.get_tile(2, 0)
     assert difficult_tile is not None
-    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(difficult_tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Difficult Terrain",
             value=1,
-        )
-    )
+        ))
     entity = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -833,13 +827,11 @@ def test_eb_11_010_walkability_is_derived_from_the_mode_cost() -> None:
     assert tile.get_movement_cost(MovementMode.WALKING) == 1
     assert grid.is_walkable(1, 0)
 
-    tile.edit_movement_cost(MovementMode.WALKING).self_static.add_max_constraint(
-        NumericalModifier.create(
+    add_modifier(tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.MAX, NumericalModifier.create(
             source_entity_uuid=tile.uuid,
             name="Closed",
             value=0,
-        )
-    )
+        ))
     assert not grid.is_walkable(1, 0)
 
 

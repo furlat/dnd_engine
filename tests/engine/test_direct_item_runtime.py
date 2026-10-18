@@ -63,6 +63,7 @@ from dnd.types.world import CardinalDirection
 from dnd.types.materials import Material
 from dnd.types.world_placement import WorldPlacementKind
 from dnd.entity import Entity, EntityConfig
+from dnd.core.values import Channel, Kind, modifiers_of
 
 
 @pytest.fixture(autouse=True)
@@ -328,10 +329,7 @@ def test_initial_loadout_validation_and_failure_cleanup_leave_no_residue() -> No
 
     staff_modifiers = tuple(
         modifier
-        for modifier in (
-            hook_owner.spellcasting.spell_attack_bonus.self_static
-            .value_modifiers.values()
-        )
+        for modifier in modifiers_of(hook_owner.spellcasting.spell_attack_bonus, Channel.SELF_STATIC, Kind.VALUE)
         if modifier.source_entity_uuid == equipped_staff.uuid
     )
     assert len(staff_modifiers) == 1
