@@ -73,6 +73,7 @@ e260e92e1 removes imports and a map lookup that the perception merges left unuse
 Items the integrator assigned after the census. Each is done exactly or skipped with its reason. Gallery transcripts (fireball, circle_of_death, sleet_storm, wall_of_stone, spirit_guardians_walk, choices_caster, ai_decision) are compared with the base after each item.
 
 - **Dead code.** `GridMap.publish_tile_state_changed` had no callers and is deleted. `PlayerCausalIndex` / `index_player_lineage` (dnd/player/reduction.py) were called only from `game_obsolete/`. Nothing live or under `tests/` imports `game_obsolete`, and the package cannot be imported anyway (its modules import `game.*`, which no longer exists), so both are deleted.
+- **Forcecage crossing query.** `ForcecageZone.blocks_crossing_between` built its admitted-cell set once per section; it is now built once per query, as `SolidWallZone` does (4c66092b2). `allows_contribution_at` only reads. The ground-band `model_copy` stays per section: it copies that section's own geometry, and keeping a banded copy between queries would be a stored derived value on the condition (§6a), refreshed whenever a breach rewrites `sections`.
 
 ## How to re-run
 

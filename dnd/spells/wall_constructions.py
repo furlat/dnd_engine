@@ -832,11 +832,11 @@ class ForcecageZone(SolidWallZone):
 
     def blocks_crossing_between(self,start,end,channel,requester_uuid,mode,terminal_provider_uuid=None):
         if channel is WorldEdgeChannel.PROPAGATION and self.cage_form == "cage": return False
+        admitted={cell for cell in self.affected_positions if self.allows_contribution_at(cell)}
         # Rays and creature crossings on the supported floor use the remaining
         # ground band. A 10-foot breach need not erase the bars above it.
         return any(identity != terminal_provider_uuid and wall_path_contact(
-            geometry.model_copy(update={"height_feet":5}),start,end,
-            {cell for cell in self.affected_positions if self.allows_contribution_at(cell)}) is not None
+            geometry.model_copy(update={"height_feet":5}),start,end,admitted) is not None
             for identity,geometry in self.sections.items())
 
     def _apply(self,event: Event):
