@@ -305,3 +305,17 @@ Hard rules:
     - Light recompute is ~40 ms (`resolved_light_level`, 10,040 calls).
     - `stone_enclosure_escapes` is ~21 ms (rule geometry).
   - **PV1a-4 started (plan §6b):** the wall FOV as route × edge-grid arrays, one path, equal to the scalar path by oracle. Then per-tile light resolution as array reads.
+- 2026-10-18: **Unfinished plan items, measured (integrator; probes in scratchpad residuals/dup_probe.py, settle_probe.py).**
+  - **Choices: use-object contacts.** `_collect_use_actions` (entity.py:7272–7281) calls `manual_object_contact` from every Move destination for every usable or pickable object: ~2,900–4,000 calls per menu or AI decision, nearly all with distinct arguments, so sharing per pair saves nothing.
+    - Exact cut: skip candidates farther than the object's reach (5 ft, or 0 for boundary handles) in plain grid distance from every surface cell. `support_distance_feet` = max(grid distance, vertical) ≥ grid distance, and the loop already skips surfaces beyond reach.
+    - Estimate: Choices ~20 ms, AI first decision ~35 ms.
+  - **Choices: AoE previews.** 326 aim-point footprints cost ~28 ms. Free-aim legal regions (`get_valid_positions` of zone spells) cost ~10 ms (was 22). `BaseCost.model_validate` is ~0 ms now; nothing left there.
+  - **AI first decision:** discovery as above, plus `materialize_navigation` at turn start (~40 ms, PT's cost grid).
+  - **Spirit Guardians move (~175 ms real):** all 30 observers change on every step (torch 30/30, aura 30/30, caster contact 29/30), so no observer can be skipped. The cost is the same change built 30 times:
+    - seat fold `apply_current_audience`, 90 calls: ~35 ms (sent to the PV2 agent);
+    - per-observer `_publish` and `_emit_settled`: ~32 ms (aura refresh ~10, torch ~4, cell deltas ~4);
+    - identity grants (`identifying_observers` / `observers_granted`): ~11 ms;
+    - version grants: ~12 ms;
+    - the mover's wall FOV: ~6 ms (PV1a-4);
+    - navigation after the move: ~6 ms;
+    - HUD sheets: ~7 ms.
