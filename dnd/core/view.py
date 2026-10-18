@@ -350,6 +350,7 @@ class RouteSight:
     at_cell: np.ndarray          # OBSCUREMENT_BITS at each row's cell
     before: np.ndarray           # OBSCUREMENT_BITS on the route before each row's cell
     near: np.ndarray             # the route cell before each row's cell (OFF for the origin)
+    eligibility: np.ndarray      # the range bits the obscurement on and before each row's cell lets through
 
 
 @dataclass(frozen=True)
@@ -370,8 +371,8 @@ def route_sight(routes: RouteRows, modes: Mapping[SensesType, int], ordinary_sig
     keep = exists[routes.rows]
     rows = routes.rows[keep]
     before = routes_or(routes, obscurement)[keep] if obscurement.any() else np.zeros(rows.size, dtype=np.uint8)
-    return RouteSight(rows, range_bits(modes, ordinary_sight, FRAME_DISTANCE_FEET[rows]), obscurement[rows],
-                      before, routes.near[keep])
+    in_range, at_cell = range_bits(modes, ordinary_sight, FRAME_DISTANCE_FEET[rows]), obscurement[rows]
+    return RouteSight(rows, in_range, at_cell, before, routes.near[keep], in_range & SURVIVORS[before | at_cell])
 
 
 def lit_view(sight: RouteSight, exists: np.ndarray, light: np.ndarray) -> OpticalView:
@@ -382,8 +383,7 @@ def lit_view(sight: RouteSight, exists: np.ndarray, light: np.ndarray) -> Optica
     before it: its own cloud does not hide its surface; under magical darkness the light
     comes from the previous route cell.
     """
-    rows, at_cell, before, in_range = sight.rows, sight.at_cell, sight.before, sight.in_range
-    eligibility = in_range & SURVIVORS[before | at_cell]
+    rows, at_cell, before, in_range, eligibility = sight.rows, sight.at_cell, sight.before, sight.in_range, sight.eligibility
     effective = LIGHT_TABLE[eligibility, light[rows]]
     visible = effective != UNSEEN
     surface = ~visible & (at_cell != 0)
@@ -395,6 +395,34 @@ def lit_view(sight: RouteSight, exists: np.ndarray, light: np.ndarray) -> Optica
     established = surface_eligibility != 0
     return OpticalView(rows[visible], effective[visible], eligibility[visible], surface_rows[established],
                        surface_light[established], surface_eligibility[established])
+
+
+def relit_view(view: OpticalView, sight: RouteSight, changed: np.ndarray, light: np.ndarray) -> Optional[OpticalView]:
+    """`view` (the `lit_view` of `sight`) after the objective light became `light` (LightLevel values) at the
+    `changed` sight rows (sorted), when that changes only the effective light of rows seen before and after;
+    None when a row becomes seen or unseen there, or one of them carries obscurement (a first-surface
+    candidate): `lit_view` then runs in full.
+
+    Exact: `lit_view` judges each row from its own eligibility and its own cell's light, and a row without
+    obscurement is never a surface; the view's rows, eligibility and surfaces are then those before.
+    """
+    at = np.searchsorted(sight.rows, changed)
+    if sight.at_cell[at].any():
+        return None
+    effective = LIGHT_TABLE[sight.eligibility[at], light]
+    seen = effective != UNSEEN
+    if not view.rows.size:
+        return None if seen.any() else view
+    place = np.minimum(np.searchsorted(view.rows, changed), view.rows.size - 1)
+    if not np.array_equal(view.rows[place] == changed, seen):
+        return None
+    place, effective = place[seen], effective[seen]
+    if np.array_equal(view.light[place], effective):
+        return view
+    lit = view.light.copy()
+    lit[place] = effective
+    return OpticalView(view.rows, lit, view.eligibility, view.surface_rows, view.surface_light_rows,
+                       view.surface_eligibility)
 
 
 # ---------------------------------------------------------------- the wall FOV

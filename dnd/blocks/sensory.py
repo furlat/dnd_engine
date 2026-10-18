@@ -31,7 +31,7 @@ from dnd.core.values import ModifiableValue
 from dnd.core.view import (FRAME_DISTANCE_FEET, MAGICAL_DARKNESS_BIT, NO_CELLS, NO_POSITIONS, OFF, PLAIN, R,
     SIDE, SPECIAL, SURVIVORS, Box, CellLayer, OpticalView, PerceivedCells, Position, RouteRows, RouteSight,
     boxes_intersect, cell_visible, embed, frame_box, frame_index, frame_of, frame_rows, lit_view,
-    range_bits, route_rows, route_sight, rows_positions, sense_radius_cells, union_box, window_of)
+    range_bits, relit_view, route_rows, route_sight, rows_positions, sense_radius_cells, union_box, window_of)
 from dnd.core.events import (
     Event, EventType, EventPhase, SpatialChangeEvent,
     SpatialEffectChangeEvent, DeathEvent, EventQueue, OpenGroup, SensoryUpdateEvent,
@@ -388,26 +388,40 @@ class CellChange:
 
 
 NO_CELL_CHANGE = CellChange(EMPTY_CELLS, EMPTY_CELLS, EMPTY_CELLS, EMPTY_VALUES, EMPTY_VALUES, False, False, False)
+# One observer's settlement as emission reads it (`SpatialSensesSystem._settle`): its published perception before,
+# the prior values of the fixtures it re-observed, and the box its published cells changed in (None: anywhere).
+ObserverSettled = Tuple[PublishedSenses, Dict[UUID, Optional[PerceivedSpatialEffect]], Optional[Box]]
 
 
-def _cell_change(before: PublishedSenses, after: PublishedSenses, initial: bool) -> CellChange:
+def _clipped(box: Box, within: Optional[Box]) -> Optional[Box]:
+    """A box cut to another one (None: not cut); None when nothing is left."""
+    if within is None:
+        return box
+    cut = (max(box[0], within[0]), max(box[1], within[1]), min(box[2], within[2]), min(box[3], within[3]))
+    return cut if cut[0] <= cut[2] and cut[1] <= cut[3] else None
+
+
+def _cell_change(before: PublishedSenses, after: PublishedSenses, initial: bool,
+                 within: Optional[Box] = None) -> CellChange:
     """Visible cells added and removed, seen cells added, and changed light / hazard after-values,
     with whether the visible, seen and hazard cells differ at all.
 
-    Each is one mask difference over the union of the two windows, so the cost follows the window,
-    not the changed cells; published cells that did not change are the same object. Each is packed
-    straight from the arrays. An initial observer's delta is against no cells; its flags compare
-    with what it held before.
+    Each is one mask difference over the union of the two windows, cut to `within` when the
+    settlement states that the cells and seen cells differ nowhere outside it, so the cost follows
+    that box; published cells that did not change are the same object. Each is packed straight
+    from the arrays (packing trims to the set cells, so a cut box packs the same sets). An initial
+    observer's delta is against no cells; its flags compare with what it held before.
     """
     if not initial and before.cells is after.cells and before.seen is after.seen:
         return NO_CELL_CHANGE
+    if initial:
+        within = None
     seen_added, seen_differs = EMPTY_CELLS, False
     if initial or before.seen is not after.seen:
         if not before.seen.values.size or not after.seen.values.size:
             seen_differs = bool(before.seen.values.any() or after.seen.values.any())
             seen_added = pack_mask(after.seen.x0, after.seen.y0, after.seen.values.astype(bool))
-        else:
-            seen_box = union_box(before.seen.box, after.seen.box)
+        elif (seen_box := _clipped(union_box(before.seen.box, after.seen.box), within)) is not None:
             seen_before = embed(before.seen, seen_box, np.dtype(bool))
             seen_after = embed(after.seen, seen_box, np.dtype(bool))
             # The seen cells only grow (each recompute ORs its visible cells in).
@@ -418,16 +432,20 @@ def _cell_change(before: PublishedSenses, after: PublishedSenses, initial: bool)
         return CellChange(EMPTY_CELLS, EMPTY_CELLS, seen_added, EMPTY_VALUES, EMPTY_VALUES, False, seen_differs, False)
     if not initial and b.visible is a.visible and b.light is a.light:
         # Only hazards can differ, on the visible cells.
-        if b.hazard is a.hazard:
+        hazard_box = _clipped(a.visible.box, within)
+        if b.hazard is a.hazard or hazard_box is None:
             return CellChange(EMPTY_CELLS, EMPTY_CELLS, seen_added, EMPTY_VALUES, EMPTY_VALUES, False, seen_differs,
                               False)
-        box = a.visible.box
-        moved = embed(b.hazard, box, np.dtype(bool)) != a.hazard.values
+        after_hazard = embed(a.hazard, hazard_box, np.dtype(bool))
+        moved = embed(b.hazard, hazard_box, np.dtype(bool)) != after_hazard
         return CellChange(EMPTY_CELLS, EMPTY_CELLS, seen_added, EMPTY_VALUES,
-                          pack_values(box[0], box[1], a.visible.values.astype(bool) & moved,
-                                      a.hazard.values.astype(np.uint8)), False, seen_differs, bool(moved.any()))
-    box = (a.visible.box if not b.visible.values.size else b.visible.box if not a.visible.values.size
-           else union_box(b.visible.box, a.visible.box))
+                          pack_values(hazard_box[0], hazard_box[1], embed(a.visible, hazard_box, np.dtype(bool)) & moved,
+                                      after_hazard.astype(np.uint8)), False, seen_differs, bool(moved.any()))
+    union = (a.visible.box if not b.visible.values.size else b.visible.box if not a.visible.values.size
+             else union_box(b.visible.box, a.visible.box))
+    box = _clipped(union, within)
+    if box is None:
+        return CellChange(EMPTY_CELLS, EMPTY_CELLS, seen_added, EMPTY_VALUES, EMPTY_VALUES, False, seen_differs, False)
     after_visible = embed(a.visible, box, np.dtype(bool))
     after_light = embed(a.light, box, np.dtype(np.uint8))
     after_hazard = embed(a.hazard, box, np.dtype(bool))
@@ -658,9 +676,23 @@ def _same_sight_inputs(first: SightInputs, second: SightInputs) -> bool:
             and np.array_equal(first.obscurement, second.obscurement))
 
 
-def _held_values(kept: np.ndarray, kept_version: int, version: int, layer: CellLayer, window: Box) -> np.ndarray:
-    """A grid's window values: the kept ones while the settlement's grid version holds."""
-    return kept if kept_version == version else _window_values(layer, window)
+@dataclass(frozen=True)
+class LightSnapshot:
+    """The objective light grid at one light-grid version: a read-only copy owned by the system,
+    taken once per version (`SpatialSensesSystem._world`) and held by every field lit with it."""
+
+    version: int                     # GridMap.light_grid_revision when taken
+    layer: CellLayer                 # the resolved LightLevel values over the cell box, read-only
+
+
+def _light_change(lit: LightSnapshot, current: LightSnapshot) -> np.ndarray:
+    """The cells whose objective light differs between two snapshots of one map ((n, 2) positions,
+    x-major). The cell grids only grow, so the earlier box lies inside the current one."""
+    if lit is current:
+        return NO_POSITIONS
+    box = current.layer.box
+    xs, ys = np.nonzero(embed(lit.layer, box, np.dtype(np.uint8)) != current.layer.values)
+    return np.column_stack((xs + box[0], ys + box[1])).astype(np.int64)
 
 
 @dataclass(frozen=True)
@@ -668,10 +700,10 @@ class ObserverField:
     """One observer's settled sight, owned by the system and keyed by observer uuid.
 
     A settlement re-runs a stage only when its inputs changed: the sight stage on
-    `sight_inputs`, the light stage on the objective light over the window (`light`);
-    contacts, hazards, fixtures and emitters read the published view every time. The
-    routes are kept while their key (origin, radius, optical revision) holds; the window
-    and contact rows describe the last published view.
+    `sight_inputs`, the light stage at the cells whose objective light changed since the
+    snapshot it was lit with (`light`); contacts, hazards, fixtures and emitters read the
+    published view every time. The routes are kept while their key (origin, radius, optical
+    revision) holds; the window and contact rows describe the last published view.
     """
 
     origin: Position
@@ -683,8 +715,7 @@ class ObserverField:
     felt_rows: Tuple[np.ndarray, ...]
     sight_inputs: SightInputs
     sight: RouteSight
-    light: np.ndarray                # the objective light over the window the optical view was lit with
-    light_version: int               # the settlement's light-grid version it was read at
+    light: LightSnapshot             # the objective light the optical view was lit with
     optical: OpticalView
     exists_frame: np.ndarray
     felt_frame: np.ndarray
@@ -702,6 +733,9 @@ class ObserverField:
 
 
 NO_CONTACT_ROWS = np.zeros((0, 8), dtype=np.int64)
+# The recent contact-table updates whose changed targets are kept: a view settled within that many updates
+# resolves only the targets they changed (and the ones its own settlement names).
+TABLE_CHANGES_KEPT = 64
 CELL_PACK_LIMIT = 1 << 20
 NO_UUIDS = np.zeros(0, dtype=object)
 
@@ -827,7 +861,7 @@ class SettlementWorld:
     """The objective inputs every observer of one settlement reads the same (frozen, built once)."""
 
     exists: CellLayer
-    light: CellLayer
+    light: LightSnapshot
     obscurement_owners: Tuple[Tuple[UUID, CellLayer], ...]
     obscurement: CellLayer           # OR of the contributing owners' bits over the cell box
     hazard_owners: Tuple[SpatialConditionOwner | BaseBlock, ...]
@@ -838,7 +872,6 @@ class SettlementWorld:
     optical_revision: int
     propagation_revision: int
     sight_version: int               # GridMap's Tile and obscurement grid revision (advanced by their writers)
-    light_version: int               # GridMap's light grid revision
 
 
 STEALTH_NONE = np.iinfo(np.int64).min
@@ -991,6 +1024,31 @@ class SightScope:
 
 
 @dataclass(frozen=True)
+class RelitCells:
+    """A held view's sight cells whose objective light changed, and what it sees there now: its optical
+    view, frames and published cells differ from the published ones at most at these cells (a local
+    value of one settlement)."""
+
+    x: np.ndarray                    # map cells
+    y: np.ndarray
+    visible: np.ndarray              # bool
+    light: np.ndarray                # uint8 effective LightLevel, 0 where unseen
+    eligibility: np.ndarray          # uint8 eligibility bits, 0 where unseen
+
+
+def _rows_lit(optical: OpticalView, rows: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """At sorted frame rows: whether the optical view sees each, and its effective light and eligibility
+    there (0 where unseen)."""
+    if not optical.rows.size:
+        none = np.zeros(rows.size, dtype=np.uint8)
+        return np.zeros(rows.size, dtype=bool), none, none
+    place = np.minimum(np.searchsorted(optical.rows, rows), optical.rows.size - 1)
+    visible = optical.rows[place] == rows
+    return (visible, np.where(visible, optical.light[place], np.uint8(0)),
+            np.where(visible, optical.eligibility[place], np.uint8(0)))
+
+
+@dataclass(frozen=True)
 class ObserverView:
     """One observer's optical and felt cells for one settlement, before contacts and hazards."""
 
@@ -1003,7 +1061,7 @@ class ObserverView:
     field: ObserverField
     published: bool                  # the observer has a settled view (its published contacts are its own)
     lit_kept: bool                   # sight and light inputs held: the published optical view is current
-    frames_kept: bool                # the visible cells and their senses held (what contacts read of the view)
+    relit: Optional[RelitCells]      # with the sight held and its light changed: the only cells it can differ at
     frame_changes: Optional[Set[Position]]  # with the sight held: the cells whose visibility or senses
                                             # changed (contacts read only those); None when the sight changed
     optical: OpticalView
@@ -1110,13 +1168,16 @@ class SpatialSensesSystem:
         self._target_ids: Dict[UUID, int] = {}
         # The last settlement's emitter table, kept while every row holds (compared by value).
         self._light_table: Optional[LightSourceTable] = None
+        # The objective light at the last settlement's light-grid version (replaced when the version moves).
+        self._light: Optional[LightSnapshot] = None
         # The contact target table, kept and updated at the cells each settlement's facts name; its
-        # version advances with every update, and the update's changed target keys are kept.
+        # version advances with every update, and each recent update's changed target keys are kept by
+        # the version it made (`TABLE_CHANGES_KEPT` of them).
         self._table: Optional[ContactTable] = None
         self._table_version = 0
         # The map the fields and tables were read from.
         self._map: Optional[GridMap] = None
-        self._table_changes: Optional[np.ndarray] = None
+        self._table_changes: Dict[int, np.ndarray] = {}
         # The last settled group's late-completing facts and its observers. A
         # zone change opened in that group completes right after it (its
         # completion reads settled senses); those observers already settled it.
@@ -1153,9 +1214,10 @@ class SpatialSensesSystem:
         self.identity_epoch = 0
         self._target_ids.clear()
         self._light_table = None
+        self._light = None
         self._table = None
         self._table_version = 0
-        self._table_changes = None
+        self._table_changes.clear()
         self._map = None
         self._navigation_reads.clear()
 
@@ -1393,9 +1455,9 @@ class SpatialSensesSystem:
 
     def _settle(self, observers: Sequence[UUID], events: Mapping[UUID, Sequence[Event]], *,
                 shared: SharedValues,
-                ) -> Dict[UUID, Tuple[PublishedSenses, Dict[UUID, Optional[PerceivedSpatialEffect]]]]:
-        """Recompute every observer of one settlement; returns each one's prior published state
-        and the prior values of the fixtures it re-observed."""
+                ) -> Dict[UUID, ObserverSettled]:
+        """Recompute every observer of one settlement; returns each one's prior published state,
+        the prior values of the fixtures it re-observed and the box its cells changed in."""
         befores = {identity: published_senses(self.senses_by_observer[identity]) for identity in observers}
         affected = {identity: self._affected_cells(events[identity]) for identity in observers}
         # The target table re-reads the cells the facts name (the same cells as the fixtures).
@@ -1407,10 +1469,10 @@ class SpatialSensesSystem:
                 break
             table_cells |= cells
         touched = self._recompute(observers, affected, shared, table_cells)
-        return {identity: (befores[identity], touched[identity]) for identity in observers}
+        return {identity: (befores[identity], *touched[identity]) for identity in observers}
 
     def _emit_settlement(self, observers: Sequence[UUID],
-                         settled: Mapping[UUID, Tuple[PublishedSenses, Dict[UUID, Optional[PerceivedSpatialEffect]]]],
+                         settled: Mapping[UUID, ObserverSettled],
                          events: Mapping[UUID, Sequence[Event]], cause: Optional[Event],
                          shared: SharedValues) -> List[SensoryUpdateEvent]:
         """Every settled observer's sensory event; an observer settled without facts publishes a
@@ -1422,7 +1484,7 @@ class SpatialSensesSystem:
             after = published_senses(self.senses_by_observer[observer_uuid])
             initial = observer_uuid not in self.published_observers
             started = time.perf_counter() if diagnostic else 0.0
-            change = _cell_change(settled[observer_uuid][0], after, initial)
+            change = _cell_change(settled[observer_uuid][0], after, initial, settled[observer_uuid][2])
             if diagnostic:
                 record_action_timing("sensory.settlement.cell_changes_ms", started)
             if not events[observer_uuid]:
@@ -1435,13 +1497,13 @@ class SpatialSensesSystem:
         return sensory_events
 
     def _emit_settled(self, observer_uuid: UUID,
-                      settled: Tuple[PublishedSenses, Dict[UUID, Optional[PerceivedSpatialEffect]]],
+                      settled: ObserverSettled,
                       after: PublishedSenses, initial: bool, change: CellChange,
                       events: Sequence[Event], cause: Optional[Event],
                       shared: SharedValues) -> Optional[SensoryUpdateEvent]:
         """Emit the difference of one observer's published perception."""
         senses = self.senses_by_observer[observer_uuid]
-        before, effect_before = settled
+        before, effect_before, _ = settled
         contact_changes = self.fields[observer_uuid].contact_changes
         entity_delta = _contact_delta(before.entities, after.entities, initial,
                                       contact_changes[0] if contact_changes is not None else None)
@@ -1541,6 +1603,7 @@ class SpatialSensesSystem:
             self._grants = None
             self._drop_identity_grants()
             self._light_table = None
+            self._light = None
             self._table = None
             self._map = grid
         exists = grid.cell_exists
@@ -1558,15 +1621,23 @@ class SpatialSensesSystem:
                 np.array([self._target_key(anchor, False) if anchor is not None else -1
                           for _, anchor, _, _ in light_rows], dtype=np.int64),
                 light_rows)
-        return SettlementWorld(exists, grid.cell_light, grid.obscurement_layers(), grid.cell_obscurement,
+        light = self._light
+        if light is None or light.version != grid.light_grid_revision:
+            # The grid's light is written in place: a snapshot is a read-only copy.
+            values = grid.cell_light.values.copy()
+            values.setflags(write=False)
+            light = self._light = LightSnapshot(grid.light_grid_revision,
+                                                CellLayer(grid.cell_light.x0, grid.cell_light.y0, values))
+        return SettlementWorld(exists, light, grid.obscurement_layers(), grid.cell_obscurement,
                                hazard_owners, hazard_x, hazard_y, hazard_owner, lights,
-                               grid.optical_revision, grid.propagation_revision, grid.sight_grid_revision,
-                               grid.light_grid_revision)
+                               grid.optical_revision, grid.propagation_revision, grid.sight_grid_revision)
 
     def _recompute(self, observers: Sequence[UUID], affected: Mapping[UUID, Optional[Set[Position]]],
                    shared: SharedValues, table_cells: Optional[Set[Position]],
-                   ) -> Dict[UUID, Dict[UUID, Optional[PerceivedSpatialEffect]]]:
-        """Recompute the observers' views with one settlement world and one target table."""
+                   ) -> Dict[UUID, Tuple[Dict[UUID, Optional[PerceivedSpatialEffect]], Optional[Box]]]:
+        """Recompute the observers' views with one settlement world and one target table. Returns, per
+        observer, the prior values of the fixtures it re-observed and the box its published cells changed
+        in (`_publish_cells`)."""
         diagnostic = action_timing_enabled()
         # The passive-perception rule runs before any world read: its contextual inputs may commit
         # world changes, which this settlement's world and target table then include.
@@ -1588,31 +1659,36 @@ class SpatialSensesSystem:
         if diagnostic:
             record_action_timing("sensory.recompute.wall_fov_ms", started)
         views = []
+        # The objective light change since each snapshot a settled view was lit with, read once.
+        light_changes: Dict[int, np.ndarray] = {}
         for scope, routes in zip(scopes, routes_of):
             record_action_count("sensory.observer_settled", 1)
             started = time.perf_counter() if diagnostic else 0.0
-            views.append(self._view(scope, world, routes))
+            views.append(self._view(scope, world, routes, light_changes))
             if diagnostic:
                 record_action_timing("sensory.recompute.view_ms", started)
         started = time.perf_counter() if diagnostic else 0.0
         previous_table = self._table
         table = self._target_table(world, table_cells)
         if table is not previous_table:
-            self._table_changes = (_changed_targets(previous_table, table) if previous_table is not None
-                                   else np.zeros(0, dtype=np.int64))
             self._table, self._table_version = table, self._table_version + 1
+            if previous_table is not None:
+                self._table_changes[self._table_version] = _changed_targets(previous_table, table)
+            self._table_changes.pop(self._table_version - TABLE_CHANGES_KEPT, None)
         if diagnostic:
             record_action_timing("sensory.settlement.contact_table_ms", started)
         started = time.perf_counter() if diagnostic else 0.0
         named: Dict[FrozenSet[Position], np.ndarray] = {}
+        since: Dict[Optional[int], Optional[np.ndarray]] = {}
         changed: List[Optional[np.ndarray]] = []
         volatile = table.target_key[table.volatile]
         for view in views:
             field, cells = view.field, affected[view.owner.uuid]
-            # The table versions the published contacts can be compared with: the current one, or the
-            # one before it through the update's changed targets.
-            base = (np.zeros(0, dtype=np.int64) if field.table_version == self._table_version
-                    else self._table_changes if field.table_version == self._table_version - 1 else None)
+            # The table the published contacts were resolved against is compared with the current one
+            # through the changed targets of every update since (None when one is no longer kept).
+            if field.table_version not in since:
+                since[field.table_version] = self._table_changes_since(field.table_version)
+            base = since[field.table_version]
             if view.frame_changes is not None and cells is not None and base is not None \
                     and field.passive == passives[view.owner.uuid]:
                 # The sight and passive perception held: only the targets whose rows differ between
@@ -1636,8 +1712,9 @@ class SpatialSensesSystem:
         # wrote for every view, or the objective world, which no stage writes; no fact is stored while
         # they run.
         started = time.perf_counter() if diagnostic else 0.0
-        before_visible = [self._publish_cells(view, world, passives[view.owner.uuid], resolved)
-                          for view, resolved in zip(views, contacts)]
+        published = [self._publish_cells(view, world, passives[view.owner.uuid], resolved)
+                     for view, resolved in zip(views, contacts)]
+        before_visible = [visible for visible, _ in published]
         if diagnostic:
             record_action_timing("sensory.recompute.cells_ms", started)
             started = time.perf_counter()
@@ -1653,23 +1730,34 @@ class SpatialSensesSystem:
         lights = self._refresh_light_sources(views, world, contacts, shared, stack)
         if diagnostic:
             record_action_timing("sensory.recompute.light_sources_ms", started)
-        touched: Dict[UUID, Dict[UUID, Optional[PerceivedSpatialEffect]]] = {}
+        touched: Dict[UUID, Tuple[Dict[UUID, Optional[PerceivedSpatialEffect]], Optional[Box]]] = {}
         grants: Dict[UUID, Optional[CellLayer]] = {}
         for view, (_, _, contact_rows, contact_uuids, contact_changes), (volumes, upper, volume_grants), effect_before, \
-                (light_inputs, light_values) in zip(views, contacts, sights, effects, lights):
+                (light_inputs, light_values), (_, cells_within) in zip(views, contacts, sights, effects, lights, published):
             observer_uuid, field = view.owner.uuid, view.field
             grants[observer_uuid] = _granted_cells(view, volume_grants)
             self.fields[observer_uuid] = ObserverField(
                 field.origin, field.window, field.selection, field.optical_key, field.routes, field.felt_keys,
-                field.felt_rows, field.sight_inputs, field.sight, field.light, field.light_version, field.optical,
+                field.felt_rows, field.sight_inputs, field.sight, field.light, field.optical,
                 field.exists_frame, field.felt_frame, field.seen_frame, field.senses_frame,
                 contact_rows, contact_uuids, contact_changes, self._table_version, passives[observer_uuid],
                 light_values, light_inputs, volumes, upper)
-            touched[observer_uuid] = effect_before
+            touched[observer_uuid] = (effect_before, cells_within)
         # The grants are written once the settlement is published.
         self._grants = _replace_grants(self._grants, grants)
         self._drop_identity_grants()
         return touched
+
+    def _table_changes_since(self, version: Optional[int]) -> Optional[np.ndarray]:
+        """The target keys whose rows any table update after `version` changed: every target whose rows
+        differ between that table and the current one is among them. None when an update since is not
+        kept (or the table never was)."""
+        if version is None:
+            return None
+        updates = [self._table_changes.get(later) for later in range(version + 1, self._table_version + 1)]
+        if any(keys is None for keys in updates):
+            return None
+        return np.unique(np.concatenate([np.zeros(0, dtype=np.int64), *updates]))
 
     def _sight_scope(self, observer_uuid: UUID, world: SettlementWorld) -> SightScope:
         """What one observer's view reads of the observer this settlement."""
@@ -1710,10 +1798,61 @@ class SpatialSensesSystem:
             routes_of.append(routes)
         return routes_of
 
-    def _view(self, scope: SightScope, world: SettlementWorld, routes: RouteRows) -> ObserverView:
+    @staticmethod
+    def _changed_light_rows(previous: Optional[ObserverField], inputs: SightInputs, world: SettlementWorld,
+                            light_changes: Dict[int, np.ndarray]) -> Optional[np.ndarray]:
+        """The fast-path decision: with the observer's sight inputs held, its sight rows whose objective
+        light changed since its view was lit (sorted, maybe none); None (the full path) when it has no
+        settled view or any sight input changed.
+
+        What happened objectively is read once per settlement: the cells whose light differs from each
+        snapshot a settled view was lit with (`_light_change`, shared through `light_changes`), the
+        contact targets whose rows changed (`_table_changes`), the emitter rows that changed
+        (`_light_table_diff`). What each observer has seen of it follows from its own view.
+
+        Every input one observer's settlement reads, and how the fast path stands to it:
+
+        - Read by both paths, every settlement: passive perception; the sight scope (position, perception
+          reach, sense modes, visual access, ordinary sight); the settlement world (Tile presence, light,
+          obscurement owners, hazard owners and cells, emitter rows, revisions); the target table and its
+          facts; observability (`is_observable_to`) and construction knowledge; the hazard rule
+          (`is_hazardous_for`) of every owner reaching a visible cell; volume sight (obscurement owners,
+          footprints, suppressions, the light at entrance cells); spatial conditions and their
+          observations; the lit-slot words and anchor disclosure of the emitters.
+        - Sight inputs, compared here: origin, max distance, sense modes, ordinary sight, visual access,
+          optical and propagation revisions and the window (the scalars), and Tile presence and the
+          combined obscurement over the window by value (`_same_sight_inputs`). They held, so the
+          wall-FOV routes (keyed by origin, reach and optical revision), felt cells (keyed by origin,
+          radius and propagation revision), exists frame and route sight are the published ones, as the
+          full path keeps them.
+        - Objective light: the full path reads it over the whole frame; here only where it differs from
+          the snapshot the view was lit with. `lit_view` reads the light only at sight rows and judges each
+          row from its own eligibility and its own cell's light. So with no changed sight row the published
+          optical view is current; otherwise it differs from the published one at most at the changed
+          rows: `relit_view` updates their effective light when none of them becomes seen or unseen or is
+          a surface candidate, and `lit_view` runs in full otherwise. The frames differ at most there too
+          (`RelitCells`): the changed visibility or senses are the view's `frame_changes`, which the
+          contacts read (with the named cells, the table changes and the volatile targets, as before).
+        - Downstream of the optical view: published cells are patched at those cells (`_publish_cells`;
+          hazards run in full), so emission compares them within their box (`_cell_change`).
+        """
+        if previous is None or not (inputs is previous.sight_inputs
+                                    or _same_sight_inputs(previous.sight_inputs, inputs)):
+            return None
+        record_action_count("sensory.fast_path", 1)
+        cells = light_changes.get(previous.light.version)
+        if cells is None:
+            cells = light_changes[previous.light.version] = _light_change(previous.light, world.light)
+        # x-major cells give sorted frame rows.
+        rows = frame_index(cells[:, 0], cells[:, 1], previous.origin)
+        rows = rows[rows != OFF]
+        return rows[_in_sorted(rows, previous.sight.rows)]
+
+    def _view(self, scope: SightScope, world: SettlementWorld, routes: RouteRows,
+              light_changes: Dict[int, np.ndarray]) -> ObserverView:
         """Optical and felt cells of one observer, as arrays, over its wall-FOV ``routes``
-        (`_wall_fov_routes`): the sight stage runs when its inputs changed, the light stage when
-        the sight or the light over the window changed."""
+        (`_wall_fov_routes`): the sight stage runs when its inputs changed; while they hold, the light
+        stage runs only when the objective light changed at a sight row (`_changed_light_rows`)."""
         owner, senses, origin, max_distance = scope.owner, scope.senses, scope.origin, scope.max_distance
         modes, visual_access, ordinary_sight = scope.modes, scope.visual_access, scope.ordinary_sight
         optical_reach, optical_key = scope.optical_reach, scope.optical_key
@@ -1735,18 +1874,15 @@ class SpatialSensesSystem:
             inputs = held if held.version == world.sight_version else SightInputs(
                 scalars, _window_values(world.exists, window), _window_values(world.obscurement, window),
                 world.sight_version)
-            light = _held_values(previous.light, previous.light_version, world.light_version, world.light, window)
         else:
             inputs = SightInputs(scalars, _window_values(world.exists, window),
                                  _window_values(world.obscurement, window), world.sight_version)
-            light = _window_values(world.light, window)
-        if previous is not None and (inputs is previous.sight_inputs or _same_sight_inputs(previous.sight_inputs, inputs)):
+        relit_rows = self._changed_light_rows(previous, inputs, world, light_changes)
+        if previous is not None and relit_rows is not None:
             # Held sight inputs hold the optical key (the scalars hold all of it): ``routes`` are the field's.
             sight = previous.sight
             felt_keys, felt_rows, felt_frame = previous.felt_keys, previous.felt_rows, previous.felt_frame
             exists = previous.exists_frame
-            lit_kept = light is previous.light or np.array_equal(previous.light, light)
-            sight_kept = True
         else:
             record_action_count("sensory.full_recompute", 1)
             exists = frame_of(world.exists, origin)
@@ -1764,29 +1900,44 @@ class SpatialSensesSystem:
                 rows_of.append(rows)
                 felt_frame[rows] |= bit
             felt_keys, felt_rows = tuple(keys), tuple(rows_of)
-            lit_kept = sight_kept = False
-        frame_changes: Optional[Set[Position]] = set() if sight_kept else None
-        if lit_kept:
+        frame_changes: Optional[Set[Position]] = set() if relit_rows is not None else None
+        lit_kept = previous is not None and relit_rows is not None and not relit_rows.size
+        relit: Optional[RelitCells] = None
+        if previous is not None and lit_kept:
             optical, seen_frame, senses_frame = previous.optical, previous.seen_frame, previous.senses_frame
-            frames_kept = True
+        elif previous is not None and relit_rows is not None:
+            # The optical view and its frames differ from the published ones at most at the re-lit rows.
+            layer = world.light.layer
+            relit_x, relit_y = relit_rows // SIDE - R + origin[0], relit_rows % SIDE - R + origin[1]
+            relit_optical = relit_view(previous.optical, sight, relit_rows,
+                                       layer.values[relit_x - layer.x0, relit_y - layer.y0])
+            if relit_optical is not None:
+                # Only effective light changed: visibility and senses, the frames, are the published ones.
+                optical, seen_frame, senses_frame = relit_optical, previous.seen_frame, previous.senses_frame
+                visible, light_at, eligibility_at = _rows_lit(optical, relit_rows)
+            else:
+                record_action_count("sensory.light_recompute", 1)
+                optical = lit_view(sight, exists, frame_of(layer, origin))
+                visible, light_at, eligibility_at = _rows_lit(optical, relit_rows)
+                senses_at = ELIGIBLE_SENSE_BITS[eligibility_at]
+                moved = (visible != previous.seen_frame[relit_rows]) | (senses_at != previous.senses_frame[relit_rows])
+                if moved.any():
+                    seen_frame, senses_frame = previous.seen_frame.copy(), previous.senses_frame.copy()
+                    seen_frame[relit_rows], senses_frame[relit_rows] = visible, senses_at
+                    frame_changes = set(rows_positions(relit_rows[moved], origin))
+                else:
+                    # A light change that moves no visible cell and no sense keeps the contacts' view.
+                    seen_frame, senses_frame = previous.seen_frame, previous.senses_frame
+            relit = RelitCells(relit_x, relit_y, visible, light_at, eligibility_at)
         else:
             record_action_count("sensory.light_recompute", 1)
-            optical = lit_view(sight, exists, frame_of(world.light, origin))
-            # A light change that moves no visible cell and no eligibility keeps the contacts' view.
-            frames_kept = (sight_kept and np.array_equal(optical.rows, previous.optical.rows)
-                           and np.array_equal(optical.eligibility, previous.optical.eligibility))
-            if frames_kept:
-                seen_frame, senses_frame = previous.seen_frame, previous.senses_frame
-            else:
-                seen_frame = np.zeros(OFF + 1, dtype=bool)
-                seen_frame[optical.rows] = True
-                senses_frame = np.zeros(OFF + 1, dtype=np.uint8)
-                senses_frame[optical.rows] = ELIGIBLE_SENSE_BITS[optical.eligibility]
-                if sight_kept:
-                    moved = np.flatnonzero((seen_frame != previous.seen_frame) | (senses_frame != previous.senses_frame))
-                    frame_changes = set(rows_positions(moved, origin))
+            optical = lit_view(sight, exists, frame_of(world.light.layer, origin))
+            seen_frame = np.zeros(OFF + 1, dtype=bool)
+            seen_frame[optical.rows] = True
+            senses_frame = np.zeros(OFF + 1, dtype=np.uint8)
+            senses_frame[optical.rows] = ELIGIBLE_SENSE_BITS[optical.eligibility]
         field = ObserverField(origin, window, selection, optical_key, routes, felt_keys, felt_rows, inputs, sight,
-                              light, world.light_version, optical, exists, felt_frame, seen_frame, senses_frame,
+                              world.light, optical, exists, felt_frame, seen_frame, senses_frame,
                               previous.contact_rows if previous is not None else NO_CONTACT_ROWS,
                               previous.contact_uuids if previous is not None else NO_UUIDS, None,
                               previous.table_version if previous is not None else None,
@@ -1796,7 +1947,7 @@ class SpatialSensesSystem:
                               previous.volumes if previous is not None else {},
                               previous.upper if previous is not None else {})
         return ObserverView(owner, senses, origin, modes, ordinary_sight, optical_reach,
-                            field, previous is not None, lit_kept, frames_kept, frame_changes, optical, exists,
+                            field, previous is not None, lit_kept, relit, frame_changes, optical, exists,
                             seen_frame,
                             senses_frame, felt_frame)
 
@@ -1908,9 +2059,10 @@ class SpatialSensesSystem:
         return _contact_table_value(box, columns, cell_array, side_array)
 
     def _publish_cells(self, view: ObserverView, world: SettlementWorld, passive: int,
-                       resolved: ResolvedContacts) -> CellLayer:
+                       resolved: ResolvedContacts) -> Tuple[CellLayer, Optional[Box]]:
         """Hazards, cells, seen cells and contacts of one view, published on its Senses.
-        Returns the visible cells it published before."""
+        Returns the visible cells it published before, and the box outside which its published
+        cells and seen cells are the ones before (None: they may differ anywhere)."""
         owner, senses, origin = view.owner, view.senses, view.origin
         observer_uuid = owner.uuid
         entities, objects, _, _, _ = resolved
@@ -1936,8 +2088,23 @@ class SpatialSensesSystem:
             if same_window and np.array_equal(layer.values, values):
                 return layer
             return CellLayer(window[0], window[1], values)
+        relit = view.relit if same_window else None
         if view.lit_kept and same_window:
             visible, light, eligibility = published.visible, published.light, published.eligibility
+        elif relit is not None:
+            # The optical view and its frames changed at most at the re-lit cells: each layer is the
+            # published one with those cells' values, kept when they are the same (as `kept_layer`).
+            at = (relit.x - window[0], relit.y - window[1])
+
+            def kept_cells(values: np.ndarray, layer: CellLayer) -> CellLayer:
+                if np.array_equal(layer.values[at], values):
+                    return layer
+                patched = layer.values.copy()
+                patched[at] = values
+                return CellLayer(window[0], window[1], patched)
+            visible = kept_cells(relit.visible, published.visible)
+            light = kept_cells(relit.light, published.light)
+            eligibility = kept_cells(relit.eligibility, published.eligibility)
         else:
             light_frame = np.zeros(OFF + 1, dtype=np.uint8)
             light_frame[view.optical.rows] = view.optical.light
@@ -1953,11 +2120,22 @@ class SpatialSensesSystem:
         else:
             cells = PerceivedCells(visible, light, eligibility, hazard)
         before_visible = published.visible
+        seen = senses.seen
         if cells.visible is not before_visible:
-            seen = senses.seen
-            seen_box = window if not seen.values.size else union_box(seen.box, window)
-            senses.seen = CellLayer(seen_box[0], seen_box[1], embed(seen, seen_box, np.dtype(bool))
-                                    | embed(cells.visible, seen_box, np.dtype(bool)))
+            sx0, sy0, sx1, sy1 = seen.box
+            if relit is not None and sx0 <= window[0] and sy0 <= window[1] and window[2] <= sx1 and window[3] <= sy1:
+                # The seen cells hold every published visible cell, and the visible cells changed at most
+                # at the re-lit ones: the newly seen are among those.
+                gx, gy = relit.x - sx0, relit.y - sy0
+                newly = relit.visible & ~seen.values[gx, gy]
+                if newly.any():
+                    grown = seen.values.copy()
+                    grown[gx[newly], gy[newly]] = True
+                    senses.seen = CellLayer(sx0, sy0, grown)
+            else:
+                seen_box = window if not seen.values.size else union_box(seen.box, window)
+                senses.seen = CellLayer(seen_box[0], seen_box[1], embed(seen, seen_box, np.dtype(bool))
+                                        | embed(cells.visible, seen_box, np.dtype(bool)))
         # Perception is committed before fixtures are observed: an observation reads the new contacts.
         senses.position = origin
         senses.cells = cells
@@ -1966,7 +2144,9 @@ class SpatialSensesSystem:
         senses._last_passive_perception = passive
         senses._last_sense_modes_key = senses.compute_sense_modes_key()
         senses._last_visual_access = senses.visual_access.normalized_score
-        return before_visible
+        within = ((int(relit.x.min()), int(relit.y.min()), int(relit.x.max()), int(relit.y.max()))
+                  if relit is not None and hazard is published.hazard else None)
+        return before_visible, within
 
     def _contacts(self, views: Sequence[ObserverView], table: ContactTable, passives: Sequence[int],
                   changed: Sequence[Optional[np.ndarray]], shared: SharedValues,
@@ -2160,7 +2340,7 @@ class SpatialSensesSystem:
         grid = get_map()
         origin, modes = view.origin, view.modes
         surface_set = optical.surface_rows
-        light = frame_of(world.light, origin)
+        light = frame_of(world.light.layer, origin)
         exists = frame_of(world.exists, origin)
         candidates = np.zeros(OFF + 1, dtype=bool)
         candidates[view.field.routes.rows] = True
