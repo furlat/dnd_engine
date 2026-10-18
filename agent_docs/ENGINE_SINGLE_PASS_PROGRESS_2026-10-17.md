@@ -960,6 +960,48 @@ Hard rules:
   - **Defaults taken:** `dnd/player/bodies.py`; whole effect tuples per item; duration-only changes as duration rows; `ConditionMember` without event fields; typed row classes per value shape; the log view and the census as scratch devtools (logview.py, bodycensus.py), not repo code.
   - **End reviews:** antislop and anti-OOP. Fixed: both views once per event, ItemsSent gone, the brief's §4 tests, one writer per actor fold, the duration helper, `audience.granted`, the item gate's one definition, stale comment and metric, Godot edge cases. Kept with the reason: healing_blocked and affinities in the table (brief §1.4), E2's server fold untouched, the reviewers' renames.
   - **Open, escalated (brief §1.10/§2.5):** capture still derives each seat's `ActorAdmission`s (`_derive_admissions`, `acquired`, `newly_known`) on the live path; their only live use is the combat log's names, which are identical to the base. Moving the names to the walk needs the native log per node in `CompletedLineage`, a recorded-format change beyond RecordedSequence 6's scope.
+- 2026-10-18: **NPC content merge (codex/npc-merge from 4872892f0; NPC lane codex/npc-abilities-mechanics ef82cb7ba).**
+  - **Commits:**
+    - 75ecbf29e, the merge. Conflicts are resolved onto the integration's structure: Attack's shield attack goes through `weapon_reach`/`weapon_attack_admission`/`rule_admission` with ObjectContact; `weapon_attack_range` takes the shield, so the reach prefilter measures it; ShieldBash overrides `rule_admission`; the `empty_*` factories are kept.
+    - fb17e4422 removes `dnd/core/encounter_facts.py`, a cast over the contribution registry; Encounter now owns `OpeningTurnFacts`.
+    - 9c0f7cdc3, review fixes:
+      - Leadership loses its language gate. No creature data authors languages, so it disabled Leadership for every SRD ally.
+      - Assassinate requires the assassin's own first turn.
+      - The Gladiator numbers move out of core `ShieldAttackSpec` into ShieldBash.
+      - `register_multiattack(attack_replacement=...)`.
+      - Innate casts use `alt_extra_costs`.
+      - Typed `InnateReactionSpell` rows.
+      - One `register_protection`, and Protection is no longer retired.
+      - Data fields replace identity checks.
+    - 2fab113d8, harness (see below).
+    - 03a249f1c, the contract with `encounter_end`.
+  - **Harness:**
+    - What changed: Help Attack is a new standard template on every creature, and its identity draws shifted every later seeded identity. `gallery_transcript.py` now routes identities drawn while a `_POST_BASELINE_TEMPLATES` instance (HelpAttack) is constructed to a fourth seeded generator. The seat oracle records through it.
+    - Result: against the 4872892f0 export, published updates are byte-identical. Events differ only by this branch's new fields: `TakeDamageEvent.critical_hit`/`damage_save` and `AttackEvent.shield_attack`.
+  - **Contract:**
+    - `ConditionRemovalTrigger.ENCOUNTER_END` is on the wire. The schema, identity, openapi, field ledger, Python and TypeScript types were regenerated; `player_schema_version` stays 16.
+    - `devtools/generate_typescript_sdk.py` cannot run, on 4872892f0 too: it imports the retired `server.api_models`. The TypeScript types come from `sdk/player-typescript/tools/generate.mjs`.
+  - **Gates at 03a249f1c:**
+    - **Transcripts (5 cases vs the 4872892f0 export):** published updates are byte-identical. Events differ only by the new fields: 60 TakeDamageEvent versions each in fireball and choices_caster, and 14 AttackEvent versions in ai_decision. spirit_guardians_walk and wall_of_stone are identical.
+    - **Seat oracles (fireball, spirit_guardians_walk × G1/G2):** O3 equal. O4's only leak class is the public `content:` catalog (704 → 877 leaves per seat: the new public NPC declarations). O1 classes equal base.
+    - **Sweep:** 64 failures, all in r30. test_protocol_schema_review passes again.
+    - **NPC suites:** 906 passed, 22 xfailed. pyright: 0 new (474 vs 474). SDK tests: TypeScript 64/64, Python 91/91.
+  - **Follow-ups (deferred, with owners):**
+    - **Published order depends on the seeded uuid stream.** Publication and sensory processing follow identity order, so one extra template draw reorders observers, contacts and forced movements. Owner: publication lanes (E3).
+    - **AttackSource unification.** This branch added `ShieldAttackSpec` beside `NaturalWeaponSpec`, threaded as a second Optional through Attack, Entity and Equipment (including Equipment's hard-coded `"Strength"` damage context). Proposal: one tagged attack-source type on Attack/AttackEvent, read once in Equipment. Owner: combat mechanics / NPC lane.
+    - **Save-for-half carrier.** `TakeDamageEvent.critical_hit`/`damage_save` are new in this branch. About 25 delivery sites halve locally and attach the save by hand; Evasion reads the result in Health. Proposal: callers pass unreduced damage and the save, and one owner applies the fraction, merged with `resolve_saved_spell_damage`. Owner: combat mechanics.
+    - **Recipe scaffolding.** Install chains and dependency chains are kept in sync by hand, and `_equipped` is repeated, across the humanoid, undead and fiend rosters. The author's plan forbids an NPC rules DSL; test_creatable_models and the declaration tests catch drift. Proposal: a shared roster helper if wanted. Owner: NPC lane.
+    - **Shared foundations.** MAGE, BERSERKER, GLADIATOR and ARCHMAGE are defined in both `roster_humanoids` and `undead_roster`, and the SRD stat arrays are copied from `srd_roster`. The undead `archmage`/`wight` flags differ from the humanoid fields. Proposal: one foundation table. Owner: human (product), then NPC lane.
+    - **Zombie Slam.** The NPC zombies use a NaturalAttack Slam; the SRD Zombie has the intrinsic `weapon.creature.zombie_slam`. The numbers are the same. Owner: human (product).
+    - **Leadership gaps.**
+      - No sight check.
+      - "Ends if the knight is incapacitated" is a pause.
+      - "Understand" is not enforced: no language data is authored.
+      Owner: NPC lane; language data is a human content decision.
+    - **Assassin poison.** Coating costs an action, which spends the first turn Assassinate needs. Owner: human (product).
+    - **Shield Bash 1-of-3.** Shield Bash replaces at most one of the Gladiator's three attacks; the SRD allows three melee attacks. This is the author's choice. Owner: human (product).
+    - **NPC test slop.** Recipe-data re-assertions, the coverage test driven by agent_docs CSVs, private-state asserts (`spell_damage_resistance_sources`, handler dispatch counts), and fake provider wiring in `test_innate_reaction_spell_costs`. Owner: NPC lane.
+    - **test_183 icon ledger.** `tests/manual/test_183_content_icon_bindings.py` has no rows for content newly public from the merged lanes (e.g. `creature.oath_captain_devil`, `spell.charm_monster`) and needs regenerating. Owner: content/icon ledger.
 - 2026-10-18: **Revision stamps for re-entry, world part (codex/enp-revision-stamps: 5755b3a56, 7a628ad99; not merged).** Approved by the human.
   - **Rule.** A tile entering perception (an entered cell), or an object entering perception (newly observed, or touching an entered cell), travels whole only when it was written since the seat last had it whole. Otherwise it is sent as `tiles_unchanged` (a cell mask) or `objects_unchanged` (uuids of objects on entered cells), or not sent at all (an object off them).
     - An object is also sent whole when it shows a face the seat's last row of it did not, or when its observing members differ.

@@ -115,6 +115,7 @@ from dnd.core.events import AreaReachEvent
 from dnd.types.spell_suppression import SpellSuppression
 
 from dnd.entity import Entity
+from dnd.core.saving_throw_types import DamageSaveContext
 from dnd.actions import (
     Attack,
     Shove,
@@ -528,7 +529,7 @@ class SacredFlame(SpellAction):
             amount=packet.applied_amount,
             damage_type=DamageType.RADIANT,
             source_entity_uuid=caster.uuid,
-            parent_event=effect_event.uuid
+            parent_event=effect_event.uuid, damages=[radiant_damage], damage_rolls=[damage_roll]
         )
 
         return effect_event.with_updates(
@@ -657,7 +658,7 @@ class MagicMissile(SpellAction):
             amount=damage_roll.total,
             damage_type=DamageType.FORCE,
             source_entity_uuid=caster.uuid,
-            parent_event=effect_event.uuid,
+            parent_event=effect_event.uuid, damages=[dart_damage], damage_rolls=[damage_roll],
             effect_id=MAGIC_MISSILE_DAMAGE_EFFECT_ID,
         )
 
@@ -1012,7 +1013,8 @@ class Fireball(SpellAction):
                     parent_event=effect_event, damage_rolls=[damage_roll], damages=[fire_damage])
             else:
                 target.receive_damage(final_damage, DamageType.FIRE, caster.uuid,
-                    parent_event=effect_event.uuid, damage_rolls=[damage_roll], damages=[fire_damage])
+                    parent_event=effect_event.uuid, damage_rolls=[damage_roll], damages=[fire_damage],
+                    damage_save=DamageSaveContext(ability="dexterity", success=success, success_fraction=0.5))
         save_text = " (saved for half)" if success else ""
         return effect_event.with_updates(damages=[fire_damage], damage_rolls=[damage_roll],
             total_damage=final_damage,
@@ -1155,7 +1157,8 @@ class BurningHands(SpellAction):
                 amount=final_damage,
                 damage_type=DamageType.FIRE,
                 source_entity_uuid=caster.uuid,
-                parent_event=effect_event.uuid
+                parent_event=effect_event.uuid, damages=[fire_damage], damage_rolls=[damage_roll],
+                damage_save=DamageSaveContext(ability="dexterity", success=success, success_fraction=0.5),
             )
 
         save_text = " (saved for half)" if success else ""
@@ -1291,7 +1294,8 @@ class LightningBolt(SpellAction):
                 amount=final_damage,
                 damage_type=DamageType.LIGHTNING,
                 source_entity_uuid=caster.uuid,
-                parent_event=effect_event.uuid
+                parent_event=effect_event.uuid, damages=[lightning_damage], damage_rolls=[damage_roll],
+                damage_save=DamageSaveContext(ability="dexterity", success=success, success_fraction=0.5),
             )
 
         save_text = " (saved for half)" if success else ""
@@ -1456,7 +1460,7 @@ class Thunderwave(SpellAction):
                 amount=final_damage,
                 damage_type=DamageType.THUNDER,
                 source_entity_uuid=caster.uuid,
-                parent_event=effect_event.uuid
+                parent_event=effect_event.uuid, damages=[thunder_damage], damage_rolls=[damage_roll]
             )
 
         push_applied = False
@@ -1621,7 +1625,7 @@ class Shatter(SpellAction):
                 amount=final_damage,
                 damage_type=DamageType.THUNDER,
                 source_entity_uuid=caster.uuid,
-                parent_event=effect_event.uuid
+                parent_event=effect_event.uuid, damages=[thunder_damage], damage_rolls=[damage_roll]
             )
 
         save_text = " (saved for half)" if success else ""
@@ -1842,7 +1846,7 @@ class ConeOfCold(SpellAction):
                 amount=final_damage,
                 damage_type=DamageType.COLD,
                 source_entity_uuid=caster.uuid,
-                parent_event=effect_event.uuid
+                parent_event=effect_event.uuid, damages=[cold_damage], damage_rolls=[damage_roll]
             )
 
         save_text = " (saved for half)" if success else ""
@@ -3103,6 +3107,7 @@ class IceStorm(SpellAction):
             source_entity_uuid=caster.uuid,
             damage_rolls=applied_rolls,
             damages=[bludg_damage, cold_damage],
+            damage_save=DamageSaveContext(ability="dexterity", success=success, success_fraction=0.5),
             parent_event=effect_event.uuid,
             effect_origin=execution_event.to_effect_origin(),
         )
@@ -3471,7 +3476,8 @@ class ChainLightning(SpellAction):
                 parent_event=effect, damages=[damage], damage_rolls=[rolled])
         else:
             recipient.receive_damage(amount, DamageType.LIGHTNING, caster.uuid,
-                parent_event=effect.uuid, damages=[damage], damage_rolls=[rolled])
+                parent_event=effect.uuid, damages=[damage], damage_rolls=[rolled],
+                damage_save=DamageSaveContext(ability="dexterity", success=success, success_fraction=0.5))
         return effect.with_updates(damages=[damage], damage_rolls=[rolled], total_damage=amount)
 
 
@@ -3617,7 +3623,9 @@ class PrismaticSpray(SpellAction):
             )
             damage_roll = roll_spell_damage(prismatic_damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             final_damage = damage_roll.total // 2 if success else damage_roll.total
-            target.receive_damage(final_damage, color_damage[color], caster.uuid, parent_event=parent_event.uuid)
+            target.receive_damage(final_damage, color_damage[color], caster.uuid, parent_event=parent_event.uuid,
+                damages=[prismatic_damage], damage_rolls=[damage_roll],
+                damage_save=DamageSaveContext(ability=save_ability, success=success, success_fraction=0.5))
 
         elif color == 6:
 
@@ -3912,6 +3920,7 @@ class FlameStrike(SpellAction):
             source_entity_uuid=caster.uuid,
             damage_rolls=applied_rolls,
             damages=[fire_damage, radiant_damage],
+            damage_save=DamageSaveContext(ability="dexterity", success=success, success_fraction=0.5),
             parent_event=effect_event.uuid
         )
 
@@ -4715,6 +4724,7 @@ class DivineWordEffect(BaseCondition):
         if target is not None:
             target.receive_damage(
                 amount=99999,
+                effect_origin=self.effect_origin,
                 damage_type=DamageType.FORCE,
                 source_entity_uuid=self.source_entity_uuid,
                 parent_event=effect_event.uuid,
@@ -5844,7 +5854,8 @@ class VitriolicSphere(SpellAction):
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, damage_dice=4,
             dice_numbers=10+2*self.get_upcast_bonus(), damage_type=DamageType.ACID, damage_bonus=caster.get_spell_damage_bonus())
         roll = roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
-        effect = deliver_spell_damage(effect, target, damage, roll, amount=roll.total//2 if saved else roll.total)
+        effect = deliver_spell_damage(effect, target, damage, roll, amount=roll.total//2 if saved else roll.total,
+            damage_save=DamageSaveContext(ability="dexterity", success=saved, success_fraction=0.5))
         if not saved and not effect.canceled and target.is_active:
             effect = self.apply_owned_condition(effect, VitriolicResidue(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
         return effect

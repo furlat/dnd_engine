@@ -1,7 +1,7 @@
 from dnd.types.materials import Material
 from dnd.core.condition_types import ConditionDurationSummary, DurationType
 
-from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, SpellWeaponProfile, WeaponAttackOverride
+from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, ShieldAttackSpec, SpellWeaponProfile, WeaponAttackOverride
 """Equipment, armor, weapon, and shield models for entity combat gear."""
 
 from dataclasses import dataclass
@@ -958,6 +958,19 @@ class Equipment(BaseBlock):
         item = self.get_item_by_slot(slot)
         return item if isinstance(item, Weapon) else None
 
+    def get_equipped_shield(self) -> Optional[Shield]:
+        """Return the actual held shield only while its possession agrees with this slot."""
+        item = self.weapon_melee_off
+        if (isinstance(item, Shield) and item.owner_uuid == self.source_entity_uuid
+                and item.stored_in_uuid == self.uuid and item.is_equipped
+                and WeaponSlot.MELEE_OFF in self.compatible_slots_for_actor(item)):
+            return item
+        return None
+
+    def shield_attack_is_eligible(self, spec: ShieldAttackSpec) -> bool:
+        shield = self.get_equipped_shield()
+        return shield is not None and shield.uuid == spec.item_uuid
+
     def get_item_by_slot(self, slot: EquipmentSlot) -> Optional[EquippableItem]:
         """Get the item in any equipment slot."""
         attribute_name = _SLOT_ATTRIBUTE_BY_SLOT.get(slot)
@@ -1037,8 +1050,13 @@ class Equipment(BaseBlock):
         read: ValueRead,
         override_ability: Optional[AbilityName] = None,
         natural_weapon: Optional[NaturalWeaponSpec] = None,
+        shield_attack: Optional[ShieldAttackSpec] = None,
     ) -> Tuple[ModifiableValue, List[ModifiableValue], Tuple[Part, ...], Range]:
         """Return weapon, equipment, ability, and range attack components for one attack read."""
+        if shield_attack is not None:
+            return (ModifiableValue(source_entity_uuid=self.source_entity_uuid,
+                name="Shield attack bonus", base=shield_attack.fixed_attack_bonus, use_register=False),
+                [self.attack_bonus, self.melee_attack_bonus], (), shield_attack.range)
         weapon = None if natural_weapon else self.get_weapon(weapon_slot)
         attack_bonuses = [self.attack_bonus]
         if weapon is None:
@@ -1066,8 +1084,13 @@ class Equipment(BaseBlock):
         weapon_slot: WeaponSlot,
         override_ability: Optional[AbilityName] = None,
         natural_weapon: Optional[NaturalWeaponSpec] = None,
+        shield_attack: Optional[ShieldAttackSpec] = None,
     ) -> Tuple[int, int]:
         """Return actor-side attack bonus and advantage contributions."""
+        if shield_attack is not None:
+            components = (self.attack_bonus, self.melee_attack_bonus)
+            return (shield_attack.fixed_attack_bonus + sum(value.normalized_score for value in components),
+                    sum(value.advantage_sum for value in components))
         weapon = None if natural_weapon else self.get_weapon(weapon_slot)
         ability = self._select_weapon_attack_ability(
             ability_block,
@@ -1095,11 +1118,17 @@ class Equipment(BaseBlock):
         profile_factory: Callable[..., DamageProfileT],
         override_ability: Optional[AbilityName] = None,
         natural_weapon: Optional[NaturalWeaponSpec] = None,
+        shield_attack: Optional[ShieldAttackSpec] = None,
     ) -> List[DamageProfileT]:
         """Build damage formulas without importing the higher-level action DTO."""
         weapon = None if natural_weapon else self.get_weapon(weapon_slot)
         profiles: List[DamageProfileT] = []
-        if weapon is not None:
+        if shield_attack is not None:
+            profiles.append(profile_factory(dice_count=shield_attack.dice_numbers,
+                die_size=shield_attack.damage_dice, damage_type=shield_attack.damage_type.value,
+                flat_bonus=(shield_attack.fixed_damage_bonus + self.damage_bonus.normalized_score
+                            + self.melee_damage_bonus.normalized_score)))
+        elif weapon is not None:
             base_bonuses = [
                 value
                 for value in (weapon.damage_bonus, self.damage_bonus)
@@ -1394,8 +1423,17 @@ class Equipment(BaseBlock):
         else:
             return damages
 
-    def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, read: ValueRead, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> List[Damage]:
+    def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, read: ValueRead, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None, shield_attack: Optional[ShieldAttackSpec] = None) -> List[Damage]:
         """Return all damage payloads for an attack read from a weapon slot."""
+        if shield_attack is not None:
+            bonus = ModifiableValue(source_entity_uuid=self.source_entity_uuid,
+                name="Shield attack damage bonus", base=shield_attack.fixed_damage_bonus, use_register=False)
+            damage = Damage(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=read.target_entity_uuid,
+                context={"attack_ability": "Strength", "range_type": RangeType.REACH.value},
+                damage_dice=shield_attack.damage_dice, dice_numbers=shield_attack.dice_numbers,
+                damage_type=shield_attack.damage_type,
+                damage_bonus=parts(bonus, self.damage_bonus, self.melee_damage_bonus))
+            return [damage, *self.get_extra_attack_damage(read.target_entity_uuid)]
         if natural_weapon or self.is_unarmed(weapon_slot):
             return [self._get_main_unarmed_damage(ability_block, read, override_ability=override_ability, natural_weapon=natural_weapon)]+self.get_extra_attack_damage(read.target_entity_uuid)
         else:

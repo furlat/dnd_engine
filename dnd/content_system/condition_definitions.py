@@ -166,6 +166,8 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _original(monster_traits.HitSaveRiderFeature, ContentDefinitionKind.TRAIT, "trait.attack_hit_save_rider"),
     _original(monster_traits.KeenPerceptionFeature, ContentDefinitionKind.TRAIT, "trait.keen_perception"),
     _srd(monster_traits.MagicResistance,ContentDefinitionKind.TRAIT,"trait.magic_resistance"),
+    _srd(monster_traits.EvasionFeature,ContentDefinitionKind.TRAIT,"trait.evasion"),
+    _srd(monster_traits.SpellDamageResistance,ContentDefinitionKind.TRAIT,"trait.spell_damage_resistance"),
     _srd(monster_traits.InnateFlight,ContentDefinitionKind.TRAIT,"trait.innate_flight"),
     _srd(monster_traits.LifeDrainReduction,ContentDefinitionKind.CONDITION,"condition.wight.life_drain"),
     _srd(transmutation.ShillelaghEffect, ContentDefinitionKind.CONDITION, "condition.spell.shillelagh"),
@@ -270,6 +272,11 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
         "condition.consumable.weapon_coat.basic_poison",
     ),
     _original(
+        consumables._AssassinPoisonWeaponCoatCondition,
+        ContentDefinitionKind.CONDITION,
+        "condition.consumable.weapon_coat.assassin_poison",
+    ),
+    _original(
         consumables.TimedFireWeaponCoatCondition,
         ContentDefinitionKind.CONDITION,
         "condition.consumable.weapon_coat.timed_fire",
@@ -284,6 +291,7 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _original(skeleton_abilities.Marked, ContentDefinitionKind.TRAIT, "trait.skeleton_archer_marked"),
 
     # Reusable SRD monster/NPC traits represented by conditions.
+    _srd(monster_traits.AssassinateFeature, ContentDefinitionKind.TRAIT, "trait.assassinate"),
     _srd(monster_traits.BraveFeature, ContentDefinitionKind.TRAIT, "trait.brave"),
     _srd(monster_traits.BruteFeature, ContentDefinitionKind.TRAIT, "trait.brute"),
     _srd(monster_traits.DarkDevotionFeature, ContentDefinitionKind.TRAIT, "trait.dark_devotion"),

@@ -28,7 +28,7 @@ from dnd.core.spell_damage import roll_spell_damage
 from dnd.core.events import Damage, Event, EventHandler, EventPhase, EventType, Range, RangeType, SpatialChangeEvent, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue, parts
-from dnd.core.saving_throw_types import SavingThrowContext
+from dnd.core.saving_throw_types import DamageSaveContext, SavingThrowContext
 from dnd.entity import Entity, EntityConfig
 from dnd.spatial.area_conditions import AreaCondition
 from dnd.spatial.environmental_conditions import FireSurface
@@ -76,7 +76,8 @@ def _sphere_damage(caster_uuid: UUID,target: Entity,*,dc: int,dice_count: int,ev
         damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)))
     roll=roll_spell_damage(damage, parent_event=event, attack_outcome=AttackOutcome.HIT, effect_origin=origin)
     target.receive_damage(roll.total//2 if saved else roll.total,DamageType.FIRE,caster.uuid,
-        damages=[damage],damage_rolls=[roll],parent_event=event.uuid,effect_origin=origin)
+        damages=[damage],damage_rolls=[roll],parent_event=event.uuid,effect_origin=origin,
+        damage_save=DamageSaveContext(ability="dexterity", success=saved, success_fraction=0.5))
 
 
 @srd_condition_identity(content_id="spatial_effect.spell.flaming_sphere.aura",display_name="Flaming Sphere Aura",

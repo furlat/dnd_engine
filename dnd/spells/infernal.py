@@ -39,7 +39,7 @@ from dnd.core.events import (
     Damage,
 )
 from dnd.core.creature_types import DamageType
-from dnd.core.saving_throw_types import SavingThrowContext
+from dnd.core.saving_throw_types import DamageSaveContext, SavingThrowContext
 from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.spells.content_metadata import (
@@ -246,6 +246,7 @@ def _rebuke_processor(
         damages=[damage],effect_origin=origin,
         parent_event=effect.uuid,
         effect_id="spell.hellish_rebuke.damage",
+        damage_save=DamageSaveContext(ability="dexterity", success=saved, success_fraction=0.5),
     )
     effect.phase_to(EventPhase.COMPLETION)
     return event

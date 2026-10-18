@@ -2191,13 +2191,18 @@ class BaseAction(BaseObject):
             name += f"{RESTRICTED_ACTION_TEMPLATE_SEPARATOR}{selection.cost_source.restricted_grant_id}"
         return name
 
+    def discovery_label(self) -> str:
+        """The row's own label, before its restricted-grant and facet decorations."""
+        return self.name or "Unknown"
+
     def get_discovery_display_name(self) -> str:
         """Return the human-facing action name used by UIs."""
+        label = self.discovery_label()
         grant = self._restricted_action_grant
         if grant is not None:
-            return f"{grant.display_name}: {self.name or 'Unknown'}"
+            return f"{grant.display_name}: {label}"
         labels = [facet.label for facet in self._selected_facets]
-        return f"{self.name or 'Unknown'} ({', '.join(labels)})" if labels else (self.name or "Unknown")
+        return f"{label} ({', '.join(labels)})" if labels else label
 
     def row_facets(self) -> Tuple[ActionVariantFacet, ...]:
         """The facets a discovery row discloses: the action's fixed ones, then its chosen ones."""

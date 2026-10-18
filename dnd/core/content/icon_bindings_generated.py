@@ -1020,65 +1020,11 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'action.extra-attack',
         '6e5987a53a1f60dfe730d9748a36a4a0a50e54f93c682ea5048d18280ee29353',
     ),
-    'content.srd_5_1_cc:action:action.monster.multiattack.bandit_captain.melee@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
-        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
+    'content.srd_5_1_cc:action:action.monster.multiattack@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
+        'b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0',
         'bind',
-        'action.bandit-captain-multiattack-melee',
-        'c7ccd3b55cddd75c1be58fd9f4e82919c882e9ed18483d8b49b2a63a1258624f',
-    ),
-    'content.srd_5_1_cc:action:action.monster.multiattack.bandit_captain.ranged@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
-        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
-        'bind',
-        'action.bandit-captain-multiattack-ranged',
-        'c2759b4864eabbbaf126a34b8d871149e2713d8f9eb5814ec3ceffed120a28aa',
-    ),
-    'content.srd_5_1_cc:action:action.monster.multiattack.cult_fanatic@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
-        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
-        'bind',
-        'action.cult-fanatic-multiattack',
-        '54839e84bfc82656e6b2a84d93037ff4cbfc27fb5f3dd2c3f16b6cc7eb4be4ab',
-    ),
-    'content.srd_5_1_cc:action:action.monster.multiattack.knight@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
-        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
-        'bind',
-        'action.knight-multiattack',
-        '0b83e01a1e1cb8e31f7d0d51b80998a58f2eca51deceec7993137b715c124cc9',
-    ),
-    'content.srd_5_1_cc:action:action.monster.multiattack.scout.longbow@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
-        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
-        'bind',
-        'action.scout-multiattack-longbow',
-        '8f1171720705bb10155050076d7782428236956750426b4c32aa2f12547e0372',
-    ),
-    'content.srd_5_1_cc:action:action.monster.multiattack.scout.shortsword@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
-        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
-        'bind',
-        'action.scout-multiattack-shortsword',
-        '5920e363ce26521ff2a0760101f34f37e04dbb5ea18c28f5eecb1bb5a72a89ae',
-    ),
-    'content.srd_5_1_cc:action:action.monster.multiattack.spy@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
-        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
-        'bind',
-        'action.spy-multiattack',
-        '482b10d1f122fd70ee92549b6bb148b99b134d51adb567275671eb522d869922',
-    ),
-    'content.srd_5_1_cc:action:action.monster.multiattack.thug@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
-        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
-        'bind',
-        'action.thug-multiattack',
-        'aaa5ff51c82f45816f593f33d13b6b91af734cbc706124f8d47c4e353d0a1e0c',
-    ),
-    'content.srd_5_1_cc:action:action.monster.multiattack.veteran.melee@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
-        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
-        'bind',
-        'action.veteran-multiattack-melee',
-        '60cb261e339d011e083962e1d5572209b730f8958b475e79670312438ff3693d',
-    ),
-    'content.srd_5_1_cc:action:action.monster.multiattack.veteran.ranged@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
-        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
-        'bind',
-        'action.veteran-multiattack-ranged',
-        '156c638f0c62128fdb38747fe2637312c253d299fba3358f24c8ae517f96ac69',
+        'ui.filter-attacks',
+        '00b85f45f2ecb784e0fb1c79b00a01fee95bbc537fe1689260d29ac862f61bbc',
     ),
     'content.srd_5_1_cc:action:action.monster.natural_attack@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
         'b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0',
@@ -4007,12 +3953,6 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'bind',
         'reaction.opportunity-attack-handler',
         '39ea72afb62cfbd7e14a4a2da47224c00c30db1152ee16bdc16b19c1f9c64abd',
-    ),
-    'content.srd_5_1_cc:action:action.monster.multiattack.dretch@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
-        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
-        'bind',
-        'ui.filter-attacks',
-        '00b85f45f2ecb784e0fb1c79b00a01fee95bbc537fe1689260d29ac862f61bbc',
     ),
     'content.srd_5_1_cc:creature:creature.dretch@1#9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2': (
         '9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2',
