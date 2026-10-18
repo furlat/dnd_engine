@@ -42,8 +42,8 @@ from contextvars import ContextVar
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, StrictInt, field_serializer, model_validator
 from typing import FrozenSet, Union, List, Optional, Dict, Mapping, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
-from dnd.core.values import (AdvantageBreakdownRow, ComposedValue, ValueBreakdownRow, ValueRead, ValueReading,
-    read_value)
+from dnd.core.values import (AdvantageBreakdownRow, ComposedValue, ModifiableValue, ValueBreakdownRow, ValueRead,
+    ValueReading, read_value)
 from dnd.types.actor import TemporaryHitPointsGrant, ConditionState
 from dnd.types.class_features import IndomitableReroll, RelentlessRageIntervention
 from dnd.types.summoning import SummonOrigin, SummonSelection, TerminalOwnerRelease
@@ -3460,7 +3460,7 @@ class SensoryUpdateEvent(Event):
         ]
         while pending:
             value = pending.pop()
-            if isinstance(value, (BaseObject, Event)) or callable(value):
+            if isinstance(value, (BaseObject, Event, ModifiableValue)) or callable(value):
                 raise ValueError(
                     "sensory replay payload contains a runtime value",
                 )
