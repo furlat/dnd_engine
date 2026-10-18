@@ -297,6 +297,14 @@ def log_bytes(record, payload):
     return len(payload) - len(stripped.model_dump_json().encode())
 
 
+def world_bytes(record, payload):
+    """The bytes the world updates take in a record's encoding `payload` (E3-world's column): the record's size
+    less that of the record without them."""
+    stripped = record.model_copy(update={'lineages': tuple(replace(lineage, world_updates=())
+        for lineage in record.lineages)})
+    return len(payload) - len(stripped.model_dump_json().encode())
+
+
 def initialize_clients(clients, publications, records):
     """Fold each seat's initialization record (Start's records, in its publications' order) from its wire bytes."""
     for publication, record in zip(publications, records, strict=True):
@@ -317,9 +325,10 @@ def deliver(clients, records):
         started = perf_counter()
         clients.states[seat] = reduce_operation(clients.states[seat], PlayerOperation.model_validate_json(payload))
         fold_ms = (perf_counter() - started) * 1000
-        row = rows.setdefault(seat, {'bytes': 0, 'log_bytes': 0, 'fold_ms': 0.0})
+        row = rows.setdefault(seat, {'bytes': 0, 'log_bytes': 0, 'world_bytes': 0, 'fold_ms': 0.0})
         row['bytes'] += len(payload)
         row['log_bytes'] += log_bytes(record, payload)
+        row['world_bytes'] += world_bytes(record, payload)
         row['fold_ms'] += fold_ms
         if clients.oracle is not None:
             seat_oracle.receive(clients.oracle, seat, record.cursor.sequence, payload, clients.states[seat])
@@ -357,9 +366,11 @@ def byte_report(rows):
                 'client_fold_ms': {'max': 0.0, 'total': 0.0, 'records': 0}}
     largest = max(rows, key=lambda seat: rows[seat]['bytes'])
     non_log = max(rows, key=lambda seat: rows[seat]['bytes'] - rows[seat]['log_bytes'])
-    return {'seat_bytes': {seat: {'bytes': row['bytes'], 'log_bytes': row['log_bytes']} for seat, row in rows.items()},
+    return {'seat_bytes': {seat: {'bytes': row['bytes'], 'log_bytes': row['log_bytes'],
+                                  'world_bytes': row['world_bytes']} for seat, row in rows.items()},
         'largest_update': {'seat': largest, 'bytes': rows[largest]['bytes'], 'log_bytes': rows[largest]['log_bytes'],
-            'non_log_bytes': rows[largest]['bytes'] - rows[largest]['log_bytes']},
+            'non_log_bytes': rows[largest]['bytes'] - rows[largest]['log_bytes'],
+            'world_bytes': rows[largest]['world_bytes']},
         'largest_non_log': {'seat': non_log, 'bytes': rows[non_log]['bytes'] - rows[non_log]['log_bytes']},
         'client_fold_ms': {'max': max(row['fold_ms'] for row in rows.values()),
             'total': sum(row['fold_ms'] for row in rows.values()), 'records': len(rows)}}

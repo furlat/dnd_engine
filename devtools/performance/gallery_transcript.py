@@ -24,7 +24,7 @@ normalization, after projecting both onto a named representation. Published seat
 byte for byte after uuid normalization. The engine on PYTHONPATH is imported but not run.
 
     PYTHONPATH=<tree> python devtools/performance/gallery_transcript.py compare <base.json> <new.json> \
-        [--representation value-read|value-record]
+        [--representation value-read|value-record|world-16]
 
 The `value-read` representation (value read context as data, PR 2026-10-17) projects the d20, attack and
 contest bonus fields that became evaluated readings onto their normalized score, advantage, critical and
@@ -36,6 +36,10 @@ The `value-record` representation (value layer as data, PH-2 2026-10-18) project
 channel graph, a value record, or a composed read in a damage or healing packet) onto the read it gives with no
 target or context: name, owner, score, normalized score, advantage, critical and auto-hit states. Block dumps
 lose their `values` dict: a block's values are its value fields (still dumped, and named by `values_dict_*`).
+
+The `world-16` representation (the schema-16 world wire, E3-world 2026-10-18) drops every lineage's
+`world_updates` from both sides' published seat updates before their uuid normalization; the rest of each update
+(nodes, occurrence numbering, version rows, bodies, sensory rows, HUD, combat log, content) must stay equal.
 """
 
 import argparse
@@ -238,6 +242,14 @@ def _first_differences(a, b, path='', limit=12, found=None):
     return found
 
 
+def _without_world_updates(update: str) -> str:
+    """A published seat update without its lineages' world updates (`world-16`)."""
+    value = json.loads(update)
+    for lineage in value.get('lineages', ()):
+        lineage.pop('world_updates', None)
+    return json.dumps(value)
+
+
 def compare(base_path: Path, new_path: Path, representation: str | None) -> int:
     loaded = []
     for path in (base_path, new_path):
@@ -249,6 +261,9 @@ def compare(base_path: Path, new_path: Path, representation: str | None) -> int:
             body = _project_value_read(body)
         elif representation == 'value-record':
             body = _project_value_record(body)
+        if representation == 'world-16':
+            published = [[{seat: _without_world_updates(update) for seat, update in seats.items()} for seats in op]
+                         for op in published]
         loaded.append((json.loads(_normalized(json.dumps(body))),
                        [[{seat: _normalized(update) for seat, update in seats.items()} for seats in op]
                         for op in published]))
@@ -272,7 +287,7 @@ def main() -> None:
     parser.add_argument('command', choices=('compare',))
     parser.add_argument('base', type=Path)
     parser.add_argument('new', type=Path)
-    parser.add_argument('--representation', choices=('value-read', 'value-record'), default=None)
+    parser.add_argument('--representation', choices=('value-read', 'value-record', 'world-16'), default=None)
     args = parser.parse_args()
     sys.exit(compare(args.base, args.new, args.representation))
 
