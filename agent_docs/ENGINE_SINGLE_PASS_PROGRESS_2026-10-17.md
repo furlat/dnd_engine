@@ -520,3 +520,19 @@ Hard rules:
     - Client fold cost +0 to +3 ms per update.
   - **For the human:** Fireball and CoD can't fit 100 KB without (a) a residue-patch world-update type (each blood or ash change re-sends the tile's whole residue list, 53–56 KB) and (b) a combat-log redesign (41–57 KB, one entry per native event). Both are wire-design decisions.
   - Also: `PlayerCausalIndex` / `index_player_lineage` are only called from `game_obsolete/`, so deleting them is the human's call. One more fact-family `isinstance` (`SpellFact`, `_public_occurrences`).
+- 2026-10-18: **PV1a-2 fan-out merged (codex/single-pass-fanout, head 2c52b957d).**
+  - Settlement runs each stage over all views in turn. The rule hooks read only the observer's own senses or the world (reorder checked by both reviewers).
+  - Fixtures are re-observed in one pass per condition footprint, and emitters (light) are one masked OR over stacked views (`GridMap.light_slot_words`).
+  - Identity grants live only in a frozen `GrantTable`. It is None while no observer holds grants: the content-pack loader treats a truthy system attribute as live state (logged; worth a look).
+  - The (subject, cell) `identifying_observers` memo is kept as in the base (Fireball 87 → 104 ms native without it).
+  - One emit loop; the cell change returns its "differs" flags.
+  - Gates (agent, vs ead1f2458):
+    - 0 differences in per-settlement observer state and sensory payloads on 8 cases;
+    - transcripts byte-identical;
+    - sweep = r21; pyright 0 new.
+  - Time (total / native): SG moves 131–153 / 89–106 → 114–129 / 68–80; AI decision 4 216 → 182; Fireball 162 / 91 → 152 / 76; Sleet cast 154 → 145; Gust moves 60–66 → 51–56; Wall of Stone 143 → 136.
+  - Measured and not done:
+    - the stacked cell delta (slower: 2.1 vs 1.3 ms per 30-observer settlement);
+    - the sphere-volume loop (never runs in these cases);
+    - zone install (it is light work in `recompute_lights_at_positions`, ~63 ms profiled on Wall of Stone).
+  - Remaining on SG moves: publication ~40, the contact fan-out ~10, view ~7.
