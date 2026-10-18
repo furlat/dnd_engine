@@ -2398,10 +2398,6 @@ export type Label = string;
 export type Current = number;
 export type Maximum = number;
 export type Resources = PlayerResource[];
-export type Key1 = string;
-export type Current1 = number;
-export type Maximum1 = number;
-export type ResourceValues = PlayerResourceValue[];
 export type CompatibleItemSlots = [string, string[]][];
 /**
  * Handler display name.
@@ -2437,6 +2433,10 @@ export type PermanentFeatureUses = string[];
 export type SourceId1 = string;
 export type SpellIds = string[];
 export type PreparedSpellSelections = PreparedSpellSelection[];
+export type Key1 = string;
+export type Current1 = number;
+export type Maximum1 = number;
+export type ResourceValues = PlayerResourceValue[];
 export type Sheets = SheetPatch[];
 export type Uuids = string[];
 export type ContactUuidIndex = number[];
@@ -5485,14 +5485,19 @@ export interface PlayerHUDPatch {
   initiative?: Initiative;
   sheets?: Sheets;
 }
+/**
+ * One sheet's change: its replaced fields and, by key, the new values of resource rows it holds.
+ */
 export interface SheetPatch {
   actor_uuid: ActorUuid1;
   changes: SheetChanges;
+  resource_values?: ResourceValues;
 }
 /**
- * Present fields replace the seat's sheet values; against no sheet every field but `resource_values` is present.
+ * Present fields replace the seat's sheet values; against no sheet every field is present.
  *
- * `resources` is whole when its key sequence changed; otherwise `resource_values` gives the changed rows by key.
+ * `resources` is whole when its key sequence changed; otherwise its changed rows travel as the patch's
+ * `resource_values`.
  */
 export interface SheetChanges {
   species?: Species | null;
@@ -5506,7 +5511,6 @@ export interface SheetChanges {
   saves?: Saves;
   proficiency_bonus?: ProficiencyBonus;
   resources?: Resources;
-  resource_values?: ResourceValues;
   compatible_item_slots?: CompatibleItemSlots;
   handler_details?: HandlerDetails;
   scribed_spell_ids?: ScribedSpellIds;
@@ -5556,14 +5560,6 @@ export interface PlayerResource {
   maximum: Maximum;
 }
 /**
- * A resource row's new values, by its key.
- */
-export interface PlayerResourceValue {
-  key: Key1;
-  current: Current1;
-  maximum: Maximum1;
-}
-/**
  * Player-toggleable event handler exposed with available actions.
  */
 export interface AvailableHandlerInfo {
@@ -5581,6 +5577,14 @@ export interface AvailableHandlerInfo {
 export interface PreparedSpellSelection {
   source_id: SourceId1;
   spell_ids: SpellIds;
+}
+/**
+ * A resource row's new values, by its key.
+ */
+export interface PlayerResourceValue {
+  key: Key1;
+  current: Current1;
+  maximum: Maximum1;
 }
 /**
  * The distinct perceived values a group's sensory facts name, each once, as columns.

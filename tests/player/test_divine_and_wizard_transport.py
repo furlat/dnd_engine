@@ -36,8 +36,8 @@ from tests.player.test_hud_operation_oracle import deliver as oracle_deliver
 from tests.progression.prepared_class_support import prepared_build, prepared_level
 
 
-# Each runtime's seats, as their clients fold every record the worker delivered (each fold checked
-# against the live engine by the op-end oracle).
+# The current runtime's seats, as their clients fold every record the worker delivered (each fold
+# checked against the live engine by the op-end oracle). One runtime lives at a time.
 CLIENTS: dict[int, dict[str, PlayerState]] = {}
 
 
@@ -47,6 +47,7 @@ def deliver(runtime, records):
 
 def start(request):
     runtime, reply, records = native_worker.start(request)
+    CLIENTS.clear()
     deliver(runtime, records)
     return runtime, reply, records
 

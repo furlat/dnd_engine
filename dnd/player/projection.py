@@ -58,6 +58,7 @@ from dnd.player.facts import (
 )
 from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
 from dnd.player.sheet_facts import sheet_fact
+from dnd.types.actor_sheet import PlayerResourceValue
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
 from dnd.player.reduction import (apply_record_fact, apply_sensed_fact, apply_world_update, change_membership,
     commit_current, fold_senses, observe_body, observed_actor, occurrence_order)
@@ -2085,36 +2086,46 @@ def _emit_bodies(remembered: PlayerState, nodes: tuple[PlayerNode, ...], observa
     return tuple(result), tuple(emitted)
 
 
-def project_hud(audience: PlayerAudience, events: Iterable[Event], order_before: tuple[UUID, ...] | None,
-                order_after: tuple[UUID, ...], perceived_before: frozenset[UUID] | None,
-                perceived_after: frozenset[UUID]) -> PlayerHUDPatch | None:
-    """The seat's HUD patch for one group of recorded events: an initialization (no `*_before`) or an operation.
+def project_hud(audience: PlayerAudience, events: Iterable[Event],
+                before: tuple[tuple[UUID, ...], frozenset[UUID]] | None,
+                order_after: tuple[UUID, ...], perceived_after: frozenset[UUID]) -> PlayerHUDPatch | None:
+    """The seat's HUD patch for one group of recorded events: an initialization (`before` None) or an operation.
 
-    Sheets: per controlled actor, its sheet publication's groups and its own events' after-values
-    (`sheet_fact`), the published actors first, in publication order. Initiative: `order_*` is the
-    session fold's encounter order and `perceived_*` the seat's composed perception; the end order's
+    Sheets: per controlled actor, its sheet publications' groups and its own events' after-values
+    (`sheet_fact`) folded in source order, the published actors first, in publication order. Initiative: `before` is the
+    session fold's encounter order and the seat's composed perception at the group's start, `*_after`
+    the same at its end; the end order's
     perceived part is sent at initialization, when the order change shows under the end perception, or
     when anything entered perception (the client hides what left it).
     """
     changes: dict[UUID, SheetChanges] = {}
+    values: dict[UUID, dict[str, PlayerResourceValue]] = {}
     published: list[UUID] = []
     for event in events:
         fact = sheet_fact(event) if event.phase is EventPhase.COMPLETION and not event.canceled else None
         if fact is None or not audience.controls(fact.actor_uuid):
             continue
-        if fact.publication:
-            if fact.actor_uuid in published:
-                raise ValueError("A group holds at most one sheet publication per actor")
+        if fact.publication and fact.actor_uuid not in published:
             published.append(fact.actor_uuid)
-        changes.setdefault(fact.actor_uuid, {}).update(fact.changes)
+        held = changes.setdefault(fact.actor_uuid, {})
+        if "resources" in fact.changes:
+            # A whole resource tuple replaces any row values before it.
+            values.pop(fact.actor_uuid, None)
+        held.update(fact.changes)
+        if fact.resource_values and "resources" in held:
+            by_key = {row.key: row for row in fact.resource_values}
+            held["resources"] = tuple(replace(row, current=value.current, maximum=value.maximum)
+                if (value := by_key.get(row.key)) is not None else row for row in held["resources"])
+        elif fact.resource_values:
+            values.setdefault(fact.actor_uuid, {}).update((row.key, row) for row in fact.resource_values)
     order = (*published, *(identity for identity in changes if identity not in published))
-    sheets = tuple(SheetPatch(actor_uuid=identity, changes=changes[identity]) for identity in order)
+    sheets = tuple(SheetPatch(actor_uuid=identity, changes=changes[identity],
+        resource_values=tuple(values.get(identity, {}).values())) for identity in order)
 
     def perceived_part(initiative: tuple[UUID, ...]) -> tuple[UUID, ...]:
         return tuple(identity for identity in initiative if identity in perceived_after)
-    initiative = perceived_part(order_after) if (
-        order_before is None or perceived_before is None or not perceived_after <= perceived_before
-        or perceived_part(order_before) != perceived_part(order_after)) else None
+    initiative = perceived_part(order_after) if (before is None or not perceived_after <= before[1]
+        or perceived_part(before[0]) != perceived_part(order_after)) else None
     return PlayerHUDPatch(initiative=initiative, sheets=sheets) if initiative is not None or sheets else None
 
 

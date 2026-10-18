@@ -5,7 +5,7 @@ The server keeps no replica of a seat's client state. Its projection fold
 bodies it patches against, so the client fold of the detached updates must
 agree with it on every body and on everything else read there, and the
 client's composed view must equal a cold composition of its folded member
-senses.
+senses. The HUD each seat shows equals the live engine (the op-end oracle).
 """
 
 from dataclasses import dataclass
@@ -32,6 +32,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import Darkness
 from dnd.spells.evocation import Fireball
 from dnd.types.world import LightLevel
+from tests.player.test_hud_operation_oracle import live, shown
 
 
 INITIALIZATION = TypeAdapter(PlayerInitialization)
@@ -85,6 +86,7 @@ def check_replica(session: Session, steps: tuple[Step, ...]) -> dict[str, Player
         assert (client.reducer_cursor, len(client.combat_log_appends)) == (
             runtime.projection.next_occurrence, runtime.projection.next_log_append), case
         assert client.senses == begin_audience_composition(client.perception, client.observer_uuid).view, case
+        assert shown(client) == live(session, seat), case
 
     for seat, client in clients.items():
         check('initialization', seat, client, runtimes[seat])
@@ -174,6 +176,8 @@ def test_client_fold_of_emitted_updates_matches_projection_and_cold_composition(
     session.seats['fighter'] = PlayerAudience((fighter,), (fighter,))
     session.game.entities[sorcerer].action_economy.set_normal_spell_slot_capacity(
         uuid5(sorcerer, 'replica'), {level: 4 for level in range(1, 10)})
+    # The composed session already published its sheets; this change reaches them as any operation's end does.
+    publish_sheets(session)
     clients = check_replica(session, SCENARIO)
     for client in clients.values():
         assert tuple(row.encounter_log_index for row in client.combat_log_appends) == tuple(

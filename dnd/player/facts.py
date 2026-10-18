@@ -118,9 +118,10 @@ class PlayerHUDSnapshot:
 
 
 class SheetChanges(TypedDict, total=False):
-    """Present fields replace the seat's sheet values; against no sheet every field but `resource_values` is present.
+    """Present fields replace the seat's sheet values; against no sheet every field is present.
 
-    `resources` is whole when its key sequence changed; otherwise `resource_values` gives the changed rows by key.
+    `resources` is whole when its key sequence changed; otherwise its changed rows travel as the patch's
+    `resource_values`.
     """
 
     __pydantic_config__ = ConfigDict(extra="forbid")
@@ -136,7 +137,6 @@ class SheetChanges(TypedDict, total=False):
     saves: tuple[str, ...]
     proficiency_bonus: int
     resources: tuple[PlayerResource, ...]
-    resource_values: tuple[PlayerResourceValue, ...]
     compatible_item_slots: tuple[tuple[UUID, tuple[str, ...]], ...]
     handler_details: tuple[AvailableHandlerInfo, ...]
     scribed_spell_ids: tuple[str, ...]
@@ -146,8 +146,11 @@ class SheetChanges(TypedDict, total=False):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SheetPatch:
+    """One sheet's change: its replaced fields and, by key, the new values of resource rows it holds."""
+
     actor_uuid: UUID
     changes: SheetChanges
+    resource_values: Annotated[tuple[PlayerResourceValue, ...], Field(exclude_if=_no_rows)] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

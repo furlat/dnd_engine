@@ -12,7 +12,7 @@ from uuid import UUID
 from dnd.core.events import (ActorSheetEvent, EntityCreatedEvent, Event, PermanentFeatureUsedEvent,
     SpellbookChangedEvent, SpellMasteryStudiedEvent, SpellPreparationChangedEvent)
 from dnd.player.facts import SheetChanges
-from dnd.types.actor_sheet import ActorSheetChange
+from dnd.types.actor_sheet import ActorSheetChange, PlayerResourceValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +21,7 @@ class SheetFact:
 
     actor_uuid: UUID
     changes: SheetChanges
+    resource_values: tuple[PlayerResourceValue, ...] = ()
     publication: bool = False
 
 
@@ -38,8 +39,6 @@ def _group_changes(change: ActorSheetChange) -> SheetChanges:
         changes["proficiency_bonus"] = change.proficiency_bonus
     if change.resources is not None:
         changes["resources"] = change.resources
-    if change.resource_values:
-        changes["resource_values"] = change.resource_values
     if change.compatible_item_slots is not None:
         changes["compatible_item_slots"] = change.compatible_item_slots
     if change.handler_details is not None:
@@ -51,7 +50,8 @@ def sheet_fact(event: Event) -> SheetFact | None:
     """The actor whose sheet this committed event changes, and the change; None for any other event."""
     match event:
         case ActorSheetEvent():
-            return SheetFact(event.source_entity_uuid, _group_changes(event.change), publication=True)
+            return SheetFact(event.source_entity_uuid, _group_changes(event.change), event.change.resource_values,
+                publication=True)
         case EntityCreatedEvent():
             return SheetFact(event.entity_uuid, SheetChanges(species=event.species, species_variant=event.species_variant,
                 background=event.background, origin=event.applied_origin_state,

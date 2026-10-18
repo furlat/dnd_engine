@@ -20,7 +20,7 @@ from dnd.player.audience import (AudienceComposition, apply_current_audience, au
     begin_audience_composition, observe_audience, perceived_entities, resolve_audience)
 from dnd.player.facts import (
     AttackFact, ConditionChangeFact, ConditionFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
-    ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
+    ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, SheetPatch, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
     VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact,
 )
@@ -563,17 +563,10 @@ def reduce_initialization(initialization: PlayerInitialization, *,
     return target
 
 
-WHOLE_SHEET = SheetChanges.__optional_keys__ - {"resource_values"}
-
-
-def _sheet_fields(changes: SheetChanges) -> dict:
-    return {field: value for field, value in changes.items() if field != "resource_values"}
-
-
-def changed_sheet(before: PlayerCharacterSheet, changes: SheetChanges) -> PlayerCharacterSheet:
-    """A held sheet with a patch's fields; `resource_values` replace the values of rows the sheet holds."""
-    values = {row.key: row for row in changes.get("resource_values", ())}
-    sheet = replace(before, **_sheet_fields(changes))
+def changed_sheet(before: PlayerCharacterSheet, patch: SheetPatch) -> PlayerCharacterSheet:
+    """A held sheet with a patch's fields; its resource values replace those of rows the sheet holds."""
+    values = {row.key: row for row in patch.resource_values}
+    sheet = replace(before, **patch.changes)
     if not values:
         return sheet
     if not values.keys() <= {row.key for row in sheet.resources}:
@@ -588,10 +581,10 @@ def apply_hud(target: PlayerState, patch: PlayerHUDPatch) -> None:
     sheets = {row.actor_uuid: row for row in previous.sheets} if previous is not None else {}
     for row in patch.sheets:
         before = sheets.get(row.actor_uuid)
-        if before is None and row.changes.keys() != WHOLE_SHEET:
+        if before is None and (row.changes.keys() != SheetChanges.__optional_keys__ or row.resource_values):
             raise ValueError("A first sheet must carry every field")
-        sheets[row.actor_uuid] = (PlayerCharacterSheet(actor_uuid=row.actor_uuid, **_sheet_fields(row.changes))
-            if before is None else changed_sheet(before, row.changes))
+        sheets[row.actor_uuid] = (PlayerCharacterSheet(actor_uuid=row.actor_uuid, **row.changes)
+            if before is None else changed_sheet(before, row))
     initiative = patch.initiative if patch.initiative is not None else previous.initiative if previous is not None else None
     if initiative is None:
         raise ValueError("A first HUD requires its initiative")

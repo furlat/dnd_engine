@@ -165,7 +165,7 @@ class CaptureCheckpoint:
     the audiences sharing it). `root_of` and `trees` place the lineages of
     each still-open root; `pending` keeps the evidence of that root's folded
     versions until it completes, so a root's capture never folds history again.
-    `initiative` is the encounter's order (its start, then each join or leave).
+    `initiative` is the encounter's order (its start, then each join or leave); a session has one encounter.
     """
 
     generation: UUID

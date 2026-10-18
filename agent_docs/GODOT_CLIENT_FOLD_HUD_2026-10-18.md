@@ -14,16 +14,17 @@ HUDs: `huds` is gone and `initialization.hud` is absent).
 | `initiative` | the order when it changed | the order's perceived part when sent (see §3); absent when not sent |
 | `sheets` | changed sheets | the same; absent when empty |
 
-A sheet the client does not hold arrives whole (every field below except `resource_values`) and is
+A sheet the client does not hold arrives whole (every `SheetChanges` field, no `resource_values`) and is
 appended. At initialization the sheets arrive in their display order.
 
-## 2. `SheetChanges` and the sheet
+## 2. `SheetPatch`, `SheetChanges` and the sheet
 
 - **Removed from the sheet and its changes:** `name`, `portrait_key`, `normal_hp`, `maximum_hp`. Read them
   from the character's body: `actors[actor_uuid].name`, `.appearance.portrait_key`, `.normal_hp`,
   `.maximum_hp` (the body facts already kept them current).
-- **New `resource_values`:** `[{key, current, maximum}]`. Each row replaces `current` and `maximum` of the
-  held `resources` row with that `key` (its `label` is unchanged). A key the sheet does not hold is an error.
+- **New `SheetPatch.resource_values`** (beside `changes`; absent: `[]`): `[{key, current, maximum}]`. Apply
+  `changes` first, then each row replaces `current` and `maximum` of the held `resources` row with that
+  `key` (its `label` is unchanged). A key the sheet does not hold is an error.
 - `resources` is sent whole only when the sequence of keys changes (first sheet, a rank or resource gained
   or lost); otherwise changed rows come as `resource_values`.
 - Every other field is unchanged and still replaces the held value when present.

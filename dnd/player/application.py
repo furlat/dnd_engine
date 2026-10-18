@@ -29,6 +29,8 @@ class AudienceRuntime:
 
 def initialize_audiences(session: Session, catalog: UIContentManifest
                          ) -> tuple[dict[str, AudienceRuntime], dict[str, PlayerInitialization]]:
+    """Each seat's initialization, before the session's first operation: its HUD is the projection of
+    the startup sheet publication (one per actor), which only a fresh session's history holds."""
     runtimes = {}
     initializations = {}
     content_catalog = index_content_catalog(catalog)
@@ -44,7 +46,7 @@ def initialize_audiences(session: Session, catalog: UIContentManifest
         projection, initial = begin_projection(startup)
         # The startup publication's projection: the sheets whole, the perceived initiative.
         initial = replace(initial, hud=project_hud(audience, (event for _, event in startup.admitted), None,
-            checkpoint.initiative, None, perceived_entities(audience, projection.remembered.perception)))
+            checkpoint.initiative, perceived_entities(audience, projection.remembered.perception)))
         # Startup content is admitted from the client's own first fold.
         projection.remembered.content = admitted_content(catalog, reduce_initialization(initial))
         runtimes[seat] = AudienceRuntime(projection, checkpoint, content_catalog)
@@ -87,8 +89,8 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
             for index, original in operation.original_logs if (entry := seat_log_entry(original, audience,
                 known_entity_names=names, known_content_ids=known_content)) is not None)
         appends = project_log_appends(runtime.projection, appends)
-        hud = project_hud(audience, (event for native in natives for event in native.events), order_before,
-            checkpoint.initiative, perceived_before, perceived_entities(audience, remembered.perception))
+        hud = project_hud(audience, (event for native in natives for event in native.events),
+            (order_before, perceived_before), checkpoint.initiative, perceived_entities(audience, remembered.perception))
         if runtime.content_catalog.source is catalog:
             additions = observed_content_additions(runtime.content_catalog, known_content_keys, tuple(lineages))
             if additions:

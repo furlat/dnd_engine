@@ -2586,7 +2586,6 @@ class SheetChanges(TypedDict):
     saves: NotRequired[list[str]]
     proficiency_bonus: NotRequired[int]
     resources: NotRequired[list[PlayerResource]]
-    resource_values: NotRequired[list[PlayerResourceValue]]
     compatible_item_slots: NotRequired[list[list[str | list[str]]]]
     handler_details: NotRequired[list[AvailableHandlerInfo]]
     scribed_spell_ids: NotRequired[list[str]]
@@ -2597,6 +2596,7 @@ class SheetChanges(TypedDict):
 class SheetPatch(TypedDict):
     actor_uuid: str
     changes: SheetChanges
+    resource_values: NotRequired[list[PlayerResourceValue]]
 
 
 class SpatialChangeLogData(TypedDict):

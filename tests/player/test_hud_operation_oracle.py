@@ -40,7 +40,7 @@ def deliver(runtime, clients: dict[str, PlayerState], records) -> None:
                 lineages=record.lineages, hud=record.hud, combat_log_appends=record.combat_log_appends,
                 content_additions=record.content_additions))
     for seat, client in clients.items():
-        displayed, expected = shown(client), live(runtime, seat)
+        displayed, expected = shown(client), live(runtime.session, seat)
         assert displayed == expected, (seat, difference(displayed, expected))
 
 
@@ -73,9 +73,8 @@ def shown(client: PlayerState) -> tuple:
     return tuple(sheets), displayed_initiative(client)
 
 
-def live(runtime, seat: str) -> tuple:
+def live(session, seat: str) -> tuple:
     """The same values read fresh from the engine, the initiative filtered by the seat's live senses."""
-    session = runtime.session
     audience = session.seats[seat]
     sheets = []
     for identity in session.player_uuids:

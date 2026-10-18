@@ -17305,7 +17305,7 @@
       },
       "SheetChanges": {
         "additionalProperties": false,
-        "description": "Present fields replace the seat's sheet values; against no sheet every field but `resource_values` is present.\n\n`resources` is whole when its key sequence changed; otherwise `resource_values` gives the changed rows by key.",
+        "description": "Present fields replace the seat's sheet values; against no sheet every field is present.\n\n`resources` is whole when its key sequence changed; otherwise its changed rows travel as the patch's\n`resource_values`.",
         "properties": {
           "species": {
             "anyOf": [
@@ -17415,13 +17415,6 @@
             "title": "Resources",
             "type": "array"
           },
-          "resource_values": {
-            "items": {
-              "$ref": "#/components/schemas/PlayerResourceValue"
-            },
-            "title": "Resource Values",
-            "type": "array"
-          },
           "compatible_item_slots": {
             "items": {
               "maxItems": 2,
@@ -17476,6 +17469,7 @@
         "type": "object"
       },
       "SheetPatch": {
+        "description": "One sheet's change: its replaced fields and, by key, the new values of resource rows it holds.",
         "properties": {
           "actor_uuid": {
             "format": "uuid",
@@ -17484,6 +17478,14 @@
           },
           "changes": {
             "$ref": "#/components/schemas/SheetChanges"
+          },
+          "resource_values": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlayerResourceValue"
+            },
+            "title": "Resource Values",
+            "type": "array"
           }
         },
         "required": [
