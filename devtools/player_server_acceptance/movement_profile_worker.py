@@ -349,7 +349,7 @@ def main():
         (sensory.SpatialSensesSystem, 'recompute_observer', 'sensory.full_solve', sensory.SpatialSensesSystem.recompute_observer),
         (sensory.SpatialSensesSystem, '_collect_boundary_evidence', 'sensory.boundaries', sensory.SpatialSensesSystem._collect_boundary_evidence),
         (GridMap, 'move_light_source', 'grid.move_light', GridMap.move_light_source),
-        (GridMap, 'compute_fovs', 'grid.fov', GridMap.compute_fovs),
+        (GridMap, 'compute_fov_cells', 'grid.fov', GridMap.compute_fov_cells),
         (GridMap, 'compute_paths', 'grid.paths', GridMap.compute_paths),
     )
     if args.coarse_timing:
@@ -363,7 +363,7 @@ def main():
         methods = (
             (sensory.SpatialSensesSystem, 'recompute_observer', 'sensory.recompute_observer', sensory.SpatialSensesSystem.recompute_observer),
             (GridMap, '_compute_directional_fovs', 'grid._compute_directional_fovs', GridMap._compute_directional_fovs),
-            (GridMap, 'compute_fovs', 'grid.compute_fovs', GridMap.compute_fovs),
+            (GridMap, 'compute_fov_cells', 'grid.compute_fov_cells', GridMap.compute_fov_cells),
             (GridMap, 'compute_paths', 'grid.compute_paths', GridMap.compute_paths),
             (GridMap, 'move_light_source', 'grid.move_light', GridMap.move_light_source),
             (Entity, '_materialize_navigation_distance', 'entity.materialize_navigation', Entity._materialize_navigation_distance),

@@ -28,17 +28,18 @@ from dnd.core.navigation import NO_CELLS_LAYER, NO_ROUTES, NO_SIDES_LAYER, Route
 from dnd.core.geometry import ROUTE_STEP_SHIFT, supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
-from dnd.core.view import (FRAME_DISTANCE_FEET, MAGICAL_DARKNESS_BIT, NO_CELLS, OFF, PLAIN, R,
+from dnd.core.view import (FRAME_DISTANCE_FEET, MAGICAL_DARKNESS_BIT, NO_CELLS, NO_POSITIONS, OFF, PLAIN, R,
     SIDE, SPECIAL, SURVIVORS, Box, CellLayer, OpticalView, PerceivedCells, Position, RouteRows, RouteSight,
     boxes_intersect, cell_visible, embed, frame_box, frame_index, frame_of, frame_rows, lit_view,
     range_bits, route_rows, route_sight, rows_positions, sense_radius_cells, union_box, window_of)
 from dnd.core.events import (
     Event, EventType, EventPhase, SpatialChangeEvent,
     SpatialEffectChangeEvent, DeathEvent, EventQueue, OpenGroup, SensoryUpdateEvent,
-    SensoryUpdateReason,
+    SensoryUpdateReason, SensesUpdateHint,
 )
 from dnd.core.cells import pack_layers, pack_mask, pack_values
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues, no_cells
+from dnd.types.event_facts import SpatialChangeType
 from dnd.types.senses import (
     PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesType, VolumeSurfaceSight,
     SensesSnapshot as SensesSnapshot,
@@ -988,6 +989,20 @@ def _granted_cells(view: ObserverView, volume_grants: Set[Position]) -> CellLaye
     return CellLayer(window[0], window[1], window_of(grants, origin, window))
 
 
+_INERT_SENSES_HINT = SensesUpdateHint()
+
+
+def _perception_inert(event: Event) -> bool:
+    """Whether a fact changes nothing a settlement reads: a tiles fact with the empty hint.
+
+    Only `SpatialChangeEvent.tiles_changed(inert=True)` builds one (residue amounts, a harmless
+    material's presence); a harmful material's presence is published as tile mechanics, and a
+    Tile's hazard reads no amount (`Tile.is_hazardous_for`).
+    """
+    return (isinstance(event, SpatialChangeEvent) and event.change_type is SpatialChangeType.TILES_CHANGED
+            and event.senses_hint == _INERT_SENSES_HINT)
+
+
 @dataclass
 class _GroupSettlement:
     """Facts recorded for one observer while a simultaneous group is open."""
@@ -1107,10 +1122,10 @@ class SpatialSensesSystem:
             self._covered_observers |= covered
 
     def _settle_recorded(self, group: OpenGroup) -> None:
-        """Settle every observer recorded while the group was open, once, with all its facts."""
+        """Settle every observer recorded while the group was open, once, with all its facts; one that
+        recorded only inert facts and was asked no refresh is not settled."""
         root_uuid = group.root_uuid
         pending, self._pending = self._pending, {}
-        self._covered_facts, self._covered_observers = frozenset(group.completes_after), frozenset(pending)
         # A zone change opened in the group completes right after it and its
         # covered observers skip it then: they settle its cells now, with the
         # group's own facts.
@@ -1122,6 +1137,9 @@ class SpatialSensesSystem:
                 settlement = pending.get(observer_uuid)
                 if settlement is not None:
                     settlement.events.insert(0, versions[-1])
+        pending = {identity: settlement for identity, settlement in pending.items()
+                   if settlement.full or not all(_perception_inert(event) for event in settlement.events)}
+        self._covered_facts, self._covered_observers = frozenset(group.completes_after), frozenset(pending)
         if not pending:
             return
         root = EventQueue.get_event_by_uuid(root_uuid) if root_uuid is not None else None
@@ -1269,6 +1287,8 @@ class SpatialSensesSystem:
                 # what its consumers do then reduces as after the group.
                 self._absorbing_light, self._settled_with_light = False, True
                 self._settle_recorded(group)
+            return
+        if _perception_inert(event):
             return
         deferred: Set[UUID] = set()
         if event.lineage_uuid in self._covered_facts:
@@ -1594,7 +1614,7 @@ class SpatialSensesSystem:
 
     def _wall_fov_routes(self, scopes: Sequence[SightScope]) -> List[RouteRows]:
         """Each view's wall-FOV routes: its field's while the optical key holds, none without visual
-        reach, else from its wall FOV; those wall FOVs are solved together (`GridMap.compute_fovs`)."""
+        reach, else from its wall FOV; those wall FOVs are solved together (`GridMap.compute_fov_cells`)."""
         kept: List[Optional[RouteRows]] = []
         for scope in scopes:
             previous = self.fields.get(scope.owner.uuid)
@@ -1602,13 +1622,12 @@ class SpatialSensesSystem:
                         else None)
         solving = [index for index, (scope, routes) in enumerate(zip(scopes, kept))
                    if routes is None and scope.optical_reach > 0]
-        solved = dict(zip(solving, get_map().compute_fovs(
+        solved = dict(zip(solving, get_map().compute_fov_cells(
             [(scopes[index].origin, scopes[index].optical_reach) for index in solving])))
         routes_of: List[RouteRows] = []
         for index, (scope, routes) in enumerate(zip(scopes, kept)):
             if routes is None:
-                fov = solved.get(index, [])
-                routes = route_rows(frame_rows(np.array(fov, dtype=np.int64).reshape(-1, 2), scope.origin))
+                routes = route_rows(frame_rows(solved.get(index, NO_POSITIONS), scope.origin))
             routes_of.append(routes)
         return routes_of
 
@@ -1661,8 +1680,7 @@ class SpatialSensesSystem:
                 key = (sense_type, (origin, radius, world.propagation_revision))
                 rows = previous_felt.get(key)
                 if rows is None:
-                    rows = frame_rows(np.array(grid.compute_propagation_fov(origin, radius),
-                                               dtype=np.int64).reshape(-1, 2), origin)
+                    rows = frame_rows(grid.compute_propagation_fov_cells(origin, radius), origin)
                 keys.append(key)
                 rows_of.append(rows)
                 felt_frame[rows] |= bit
