@@ -295,14 +295,15 @@ class AppliedWorldFact:
 
     Each case fills it only from its own event's after-values (and, for a residue, whether the tile held that
     material before): a seat-independent record read by every seat's world publication, never a compare of world
-    states. `tiles` are tiles kept (same identity) with their keyed fields and materials; `tile_conditions` a
-    tile's own condition names after a condition fact (its residues' names follow them on the tile);
-    `replaced` cells whose tile was written whole, created or removed; `objects` the objects written (`moved`
-    those whose placement changed); `contents` each container's added and removed items; `connectors` the
-    connectors written.
+    states. Tiles kept (same identity): `tiles` the event's own keyed changes (E2's records, written by the native
+    writers), `tile_fields` the scalar after-values a tile-field or elevation fact wrote, `tile_conditions` a
+    tile's own condition names after a condition fact (its residues' names follow them on the tile). `replaced`
+    cells whose tile was written whole, created or removed; `objects` the objects written (`moved` those whose
+    placement changed); `contents` each container's added and removed items; `connectors` the connectors written.
     """
 
     tiles: Tuple[KeyedTileChange, ...] = ()
+    tile_fields: Tuple[Tuple[Tuple[int, int], KeyedTileFields], ...] = ()
     new_residues: frozenset[Tuple[Tuple[int, int], str]] = frozenset()
     light: Tuple[Tuple[Tuple[int, int], LightLevel], ...] = ()
     tile_conditions: Tuple[Tuple[Tuple[int, int], Tuple[str, ...]], ...] = ()

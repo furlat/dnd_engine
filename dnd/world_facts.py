@@ -83,6 +83,7 @@ class _Written:
     """One fold's writes as it makes them: the parts of its `AppliedWorldFact` a case fills."""
 
     tiles: list[KeyedTileChange] = field(default_factory=list)
+    tile_fields: list[tuple[tuple[int, int], KeyedTileFields]] = field(default_factory=list)
     new_residues: set[tuple[tuple[int, int], str]] = field(default_factory=set)
     light: dict[tuple[int, int], LightLevel] = field(default_factory=dict)
     tile_conditions: dict[tuple[int, int], tuple[str, ...]] = field(default_factory=dict)
@@ -93,7 +94,8 @@ class _Written:
     connectors: set[UUID] = field(default_factory=set)
 
     def applied(self) -> AppliedWorldFact:
-        return AppliedWorldFact(tiles=tuple(self.tiles), new_residues=frozenset(self.new_residues),
+        return AppliedWorldFact(tiles=tuple(self.tiles), tile_fields=tuple(self.tile_fields),
+            new_residues=frozenset(self.new_residues),
             light=tuple(self.light.items()), tile_conditions=tuple(self.tile_conditions.items()),
             replaced=frozenset(self.replaced), objects=frozenset(self.objects), moved=frozenset(self.moved),
             contents=tuple((owner, tuple(added), tuple(removed)) for owner, (added, removed) in self.contents.items()),
@@ -354,7 +356,7 @@ def apply_world_fact(
             fields = KeyedTileFields(elevation_steps=event.new_height_steps, surface_kind=event.new_surface_kind,
                 slope_axis=event.new_slope_axis)
             world.tiles[event.position] = previous.model_copy(update=dict(fields))
-            written.tiles.append(KeyedTileChange(position=event.position, fields=fields))
+            written.tile_fields.append((event.position, fields))
         case SpatialChangeEvent():
             if event.change_type is SpatialChangeType.TILES_CHANGED:
                 if not event.keyed_tile_changes:
@@ -395,7 +397,7 @@ def apply_world_fact(
                         written.light[event.position] = LightLevel(event.new_light_level)
                     world.tiles[event.position] = previous.model_copy(update=tile_updates)
                     if fields:
-                        written.tiles.append(KeyedTileChange(position=event.position, fields=fields))
+                        written.tile_fields.append((event.position, fields))
                 else:
                     return None
             elif event.change_type is SpatialChangeType.TILE_REMOVED:
