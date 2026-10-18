@@ -125,6 +125,18 @@ Per-seat server knowledge is what is perceived now (perception already computes 
 6. **Numbering:** keep the per-seat occurrence numbering (remembered knowledge) rather than native ids, which would leak how many undisclosed events happened. Integrator's recommendation: keep it.
 7. **Composition cursors:** the composition's contact and effect cursors are last-seen stamps used to merge hidden effect cells. Under (B)/(C) they stay server knowledge.
 
+### Human answers (2026-10-18), recorded with the integrator's reading (to confirm)
+
+1. **Multi-observer seats.**
+   - The wire sends the seat's composed view; every perceived thing keeps its attribution to the seat members who perceive it ("which characters does what is always important").
+   - The capacity gate is the worst case, one character per seat, where composed and per-character coincide. Byte and time gates are measured on a "one seat per character" gallery variant, not on the composed 26-observer seat.
+2. **The caster case.** A caster learns that its concentration ended from its own `Concentrating` condition, on its own body, which it always perceives. "Leaving: nothing" stays for the unseen target. The other small decisions take defaults and are logged.
+3. **Objective light.** Keep both the objective resolved light and the perceived light for cells the seat sees ("it makes sense to know it is dark but you see due to darkvision").
+4. **Reconnect** is exactly the same as having been connected from the start: journal replay of the seat's spool, kept for the whole game. The client's memory rules must be deterministic so replay rebuilds the same memory.
+5. **Numbering.** Keep the per-seat occurrence numbering.
+
+Still open: remembered-cell pathfinding (decision 2), the HUD (decision 3), connector names in the log.
+
 ---
 
 ## Revision 1 (first study; C1/C2 and D1/D2 superseded by revision 2)
