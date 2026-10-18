@@ -45,8 +45,9 @@ from dnd.types.summoning import SummonDepartureCause
 from dnd.player.audience import AudienceComposition, PlayerAudience, resolve_audience
 
 from dnd.player.actor_facts import ActorState, ConditionFact, PresentationTarget
-from dnd.player.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
-from dnd.actor_projection import remove_previous_item_holdings
+from dnd.actor_projection import actor_fact_owner, actor_from_birth
+from dnd.player.actor_projection import apply_presented_change
+from dnd.types.actor_facts import ActorFactChange
 from dnd.player.facts import (
     ActionCancellation, ActionFact, ActionReaction, ActorChanges, AreaReachFact, AttackFact, ConditionChangeFact, ItemEffectChangeFact, ContentAttribution, DamageRequestFact, DamageResultFact,
     DeathSaveFact, EquipmentFact, FloorItem, ForcedMovementFact, PortalTransferFact, MechanismActivationFact, HealFact, ItemChargeFact, LifeFact,
@@ -1310,6 +1311,7 @@ def _disclosed_items(patches: tuple[ItemPatch, ...], disclosed: LineageDisclosur
 
 def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...],
                    admissions: tuple[ActorAdmission, ...], conditions: tuple[ConditionFact, ...],
+                   actor_fact_changes: Mapping[UUID, ActorFactChange],
                    private_world: PresentationTarget, private_actors: dict[UUID, ActorState],
                    remembered: PlayerState, disclosed: set[int], world_index: WorldProjectionIndex,
                    audience_composition: AudienceComposition, logs: Mapping[UUID, PlayerLogEntry],
@@ -1419,28 +1421,16 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...]
         if not event.canceled:
             if isinstance(event, EntityCreatedEvent):
                 private_actors[event.entity_uuid] = actor_from_birth(event)
-            owner = actor_fact_owner(event)
-            if isinstance(event, ItemLocationStateEvent):
-                removed_holders = remove_previous_item_holdings(private_actors, event)
-                for identity in removed_holders:
+            if (change := actor_fact_changes.get(event.uuid)) is not None:
+                for identity in apply_presented_change(private_actors, change):
+                    if identity == change.owner_uuid:
+                        continue
+                    # Another holder's gear changed: the item left it, or the copy it holds changed.
                     contact = private_world.senses.entities.get(identity) if private_world.senses is not None else None
                     if identity in known and (observer.controls(identity) or contact is not None and contact.visual):
                         observations.append(_gear_observation(indexes[event.uuid], private_actors[identity], observer,
                             records))
-            if owner is not None and owner in private_actors:
-                private_actors[owner] = apply_actor_fact(private_actors[owner], event, facts.get(event.uuid))
             condition = facts.get(event.uuid)
-            owned_item = condition.resulting_item if condition is not None else None
-            if owned_item is not None:
-                for identity, actor in tuple(private_actors.items()):
-                    if not any(item.item_uuid == owned_item.item_uuid for item in actor.items):
-                        continue
-                    actor = replace(actor, items=tuple(owned_item if item.item_uuid == owned_item.item_uuid else item
-                                                       for item in actor.items))
-                    private_actors[identity] = actor
-                    contact = private_world.senses.entities.get(identity) if private_world.senses is not None else None
-                    if identity in known and (observer.controls(identity) or contact is not None and contact.visual):
-                        observations.append(_gear_observation(indexes[event.uuid], actor, observer, records))
             positions, object_positions = world_event_footprints(private_world.recorded_world, event, condition)
             changed_objects = world_event_objects(private_world.recorded_world, event, condition)
             changed_objects.update(world_objects_at(private_world.recorded_world, object_positions))
@@ -2192,7 +2182,7 @@ def begin_projection(initialization: IntervalEnvelope) -> tuple[ProjectionState,
     table = SensoryTable()
     nodes, observations, updates, superseded, known_removals, resolutions = _project_nodes(
         tuple(event for _, event in initialization.admitted), versions, initialization.admissions,
-        initialization.conditions, private_world, actors, remembered, state.disclosed_lineages, state.world_index,
+        initialization.conditions, initialization.actor_fact_changes, private_world, actors, remembered, state.disclosed_lineages, state.world_index,
         state.audience_composition, initialization.logs, NativeKeys(state.version_cursors, state.lineage_keys), table)
     state.owned_spatial_effects.update(event.spatial_effect_uuid for _, event in initialization.admitted
         if isinstance(event, SpatialEffectChangeEvent) and remembered.viewing_audience.controls(event.source_entity_uuid))
@@ -2220,7 +2210,8 @@ def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> Player
     _remember_versions(state.version_cursors, state.lineage_keys, versions)
     table = SensoryTable()
     nodes, observations, updates, superseded, known_removals, resolutions = _project_nodes(
-        upgrade_recorded_resolutions(lineage.events), versions, lineage.admissions, lineage.conditions, state.world,
+        upgrade_recorded_resolutions(lineage.events), versions, lineage.admissions, lineage.conditions,
+        lineage.actor_fact_changes, state.world,
         state.actors, state.remembered, state.disclosed_lineages, state.world_index, state.audience_composition,
         lineage.logs, NativeKeys(state.version_cursors, state.lineage_keys), table, lineage.observed_sources)
     # Settled initialization needs resulting state only. Presenting a damage

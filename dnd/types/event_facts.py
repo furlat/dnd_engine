@@ -246,7 +246,14 @@ class WorldTileChanges(TypedDict, total=False):
     residues: tuple[TileResidueState, ...]
 
 
-class TileResidueChange(BaseModel):
+class KeyedTileFields(TypedDict, total=False):
+    """The Tile fields a keyed change can carry: present fields replace the recorded values."""
+
+    walking_cost: Annotated[StrictInt, Field(ge=0)]
+    condition_names: Tuple[str, ...]
+
+
+class KeyedResidueChange(BaseModel):
     """One material's keyed change on one Tile: the writer names the key, completion reads its after-value."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -258,14 +265,15 @@ class TileResidueChange(BaseModel):
     state: Optional[TileResidueState] = None
 
 
-class WorldTileChange(BaseModel):
-    """One Tile's keyed change: the fields and materials one writer changed, with their after-values."""
+class KeyedTileChange(BaseModel):
+    """One Tile's keyed change (plan Q4 (W)): the fields and materials one writer changed, with their after-values."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     position: Tuple[int, int]
-    changes: WorldTileChanges = Field(default_factory=lambda: WorldTileChanges())
-    residues: Tuple[TileResidueChange, ...] = ()
+    fields: KeyedTileFields = Field(default_factory=lambda: KeyedTileFields())
+    residues: Tuple[KeyedResidueChange, ...] = ()
+
 
 
 class WorldConnectorState(BaseModel):

@@ -43,7 +43,7 @@ def _tile_rows(cursor: int) -> list[dict[tuple[int, int], int]]:
     """Walking cost per cell carried by each committed tile fact's keyed changes since `cursor`."""
     facts = _completed(cursor, EventType.SPATIAL_TILE_CHANGED)
     assert all(isinstance(fact, SpatialChangeEvent) for fact in facts)
-    return [{change.position: change.changes["walking_cost"] for change in fact.tile_changes} for fact in facts]
+    return [{change.position: change.fields["walking_cost"] for change in fact.keyed_tile_changes} for fact in facts]
 
 
 def test_terrain_install_and_removal_each_publish_one_tile_fact() -> None:

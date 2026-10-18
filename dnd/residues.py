@@ -21,7 +21,7 @@ from dnd.types.abilities import AbilityName
 from dnd.types.residues import ObjectResidueState, ResidueContribution, ResidueEllipse, ResidueFieldState, TileResidueState
 from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.world import CardinalDirection, OccupancyLayer, WorldEdgeChannel
-from dnd.types.event_facts import TileResidueChange, WorldTileChange
+from dnd.types.event_facts import KeyedResidueChange, KeyedTileChange
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,7 +203,7 @@ def deposit_residues(
     results: dict[tuple[int, int], TileResidueState] = {}
     # Each changed cell's keyed change: this material, the contribution row it grew, and the
     # tile's condition names when the material is new there (plan Q4 (W)).
-    changed: list[WorldTileChange] = []
+    changed: list[KeyedTileChange] = []
     new_cells: list[tuple[int, int]] = []
     for position, ellipses in cells.items():
         tile = grid.get_tile(*position)
@@ -240,9 +240,9 @@ def deposit_residues(
             continue
         tile.record_residue(state, name=profile.name, hazardous=hazardous)
         results[position] = state
-        changed.append(WorldTileChange(position=position,
-            changes={"condition_names": tile.condition_names()} if previous is None else {},
-            residues=(TileResidueChange(residue_id=profile.residue_id, contribution_index=contribution, state=state),)))
+        changed.append(KeyedTileChange(position=position,
+            fields={"condition_names": tile.condition_names()} if previous is None else {},
+            residues=(KeyedResidueChange(residue_id=profile.residue_id, contribution_index=contribution, state=state),)))
     field.cells.update(new_cells)
     parent_uuid = parent_event.uuid if parent_event is not None else None
     if new_cells and hazardous:
@@ -278,7 +278,7 @@ def remove_residues(
         return {}
     profile = _PROFILES[residue_id]
     removed: dict[tuple[int, int], TileResidueState] = {}
-    changes: list[WorldTileChange] = []
+    changes: list[KeyedTileChange] = []
     for position in positions:
         tile = grid.get_tile(*position)
         if tile is None:
@@ -289,8 +289,8 @@ def remove_residues(
         removed[position] = state
         field.cells.discard(position)
         # Keyed removal: the material leaves the tile, and its name leaves the tile's condition names.
-        changes.append(WorldTileChange(position=position, changes={"condition_names": tile.condition_names()},
-            residues=(TileResidueChange(residue_id=residue_id),)))
+        changes.append(KeyedTileChange(position=position, fields={"condition_names": tile.condition_names()},
+            residues=(KeyedResidueChange(residue_id=residue_id),)))
     if not removed:
         return removed
     parent_uuid = parent_event.uuid if parent_event is not None else None

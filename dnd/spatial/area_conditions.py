@@ -13,7 +13,7 @@ from dnd.core.item_types import ItemIntegrity
 from dnd.core.content.identities import ContentRef
 from dnd.core.effect_types import EffectOriginKind
 from dnd.types.event_facts import GroupEntryKind
-from dnd.types.event_facts import HandlerGroupDispatch, WorldTileChange
+from dnd.types.event_facts import HandlerGroupDispatch, KeyedTileChange
 from dnd.core.events import (
     EffectApplicationEvent,
     Event,
@@ -1378,7 +1378,7 @@ class AreaCondition(SpatialCondition):
             return []
         grid = get_map()
         owned: List[Tuple[UUID, UUID]] = []
-        changed: List[WorldTileChange] = []
+        changed: List[KeyedTileChange] = []
         for position in sorted(positions):
             if position in self._terrain_modifiers:
                 continue
@@ -1402,7 +1402,7 @@ class AreaCondition(SpatialCondition):
             owned.append(row)
             after = tile.get_movement_cost(MovementMode.WALKING)
             if after != before:
-                changed.append(WorldTileChange(position=position, changes={"walking_cost": after}))
+                changed.append(KeyedTileChange(position=position, fields={"walking_cost": after}))
         # One committed keyed traversal fact for the whole install (plan §5.5, Q4 (W)).
         grid.commit_tile_mechanics(changed, source_entity_uuid=self.source_entity_uuid,
             parent_event=parent_event.uuid if parent_event is not None else None)
@@ -1416,7 +1416,7 @@ class AreaCondition(SpatialCondition):
     ) -> None:
         """Remove exactly this condition's walking-cost modifiers."""
         grid = get_map()
-        changed: List[WorldTileChange] = []
+        changed: List[KeyedTileChange] = []
         for position in sorted(positions):
             row = self._terrain_modifiers.pop(position, None)
             if row is None:
@@ -1439,7 +1439,7 @@ class AreaCondition(SpatialCondition):
                 if not self.modifers_uuids[value_uuid]:
                     self.modifers_uuids.pop(value_uuid)
             if tile is not None and before != (after := tile.get_movement_cost(MovementMode.WALKING)):
-                changed.append(WorldTileChange(position=position, changes={"walking_cost": after}))
+                changed.append(KeyedTileChange(position=position, fields={"walking_cost": after}))
         # One committed keyed traversal fact for the whole release; a removal
         # publication keeps it until the removal itself is published.
         deferred = self._removal_publication is not None

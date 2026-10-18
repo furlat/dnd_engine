@@ -187,8 +187,8 @@ def test_repeated_injuries_record_authored_amount_without_changing_membership_or
             assert len(changes) == int(prior[0].amount != amount)
             if changes:
                 change, = changes
-                assert {row.position for row in change.tile_changes} == cells and change.parent_event is not None
-                at_origin, = [row for row in change.tile_changes if row.position == creature.position]
+                assert {row.position for row in change.keyed_tile_changes} == cells and change.parent_event is not None
+                at_origin, = [row for row in change.keyed_tile_changes if row.position == creature.position]
                 assert [material.state for material in at_origin.residues] == [residue]
                 parent = EventQueue.get_event_by_uuid(change.parent_event)
                 assert parent is not None and parent.lineage_uuid == injury.lineage_uuid

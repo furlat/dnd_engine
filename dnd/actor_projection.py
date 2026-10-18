@@ -12,7 +12,7 @@ from dnd.core.creature_types import Size
 from dnd.core.events import DamageAppliedEvent, EntityCreatedEvent, EntityFactionChangedEvent, Event, EventType, HealEvent, LifeStateChangeEvent, SpatialChangeEvent, SpatialChangeType, TemporaryHitPointsChangedEvent
 from dnd.core.item_types import ItemLocation
 from dnd.core.life_types import LifeState
-from dnd.types.actor_facts import ActorState, ConditionFact
+from dnd.types.actor_facts import ActorFactChange, ActorFieldValues, ActorState, ConditionFact, ItemResources
 from dnd.types.actor import EntityStatsState, SpatialDisposition
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent, ConditionStateChangedEvent
 
@@ -61,108 +61,165 @@ def actor_fact_owner(event: Event) -> UUID | None:
     return None
 
 
-def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact | None = None) -> ActorState:
-    """Apply native after-values; do not execute damage, hooks or equipment rules."""
+def _hit_points(normal_hp: int, temporary_hp: int) -> ActorFieldValues:
+    """Damage and healing write both pools; an emptied temporary pool loses its grant."""
+    values: ActorFieldValues = {"normal_hp": normal_hp, "temporary_hp": temporary_hp}
+    if temporary_hp <= 0:
+        values["temporary_hp_grant"] = None
+    return values
+
+
+def _stats_values(stats: EntityStatsState) -> ActorFieldValues:
+    """A native aggregate result as after-values, without evaluating rules."""
+    values: ActorFieldValues = {
+        "normal_hp": stats.normal_hp, "maximum_hp": stats.maximum_hp, "temporary_hp": stats.temporary_hp,
+        "temporary_hp_grant": stats.temporary_hp_grant, "armor_class": stats.armor_class,
+        "spatial_disposition": stats.spatial_disposition, "healing_blocked": stats.healing_blocked,
+        "damage_affinities": stats.damage_affinities,
+    }
+    if stats.resolved_size is not None:
+        values["resolved_size"] = stats.resolved_size
+    return values
+
+
+def actor_fact_change(event: Event, condition: ConditionFact | None = None) -> ActorFactChange | None:
+    """The one dispatch from a committed event to its actor change (plan §4).
+
+    Each arm writes what the engine fold writes for that fact, as native after-values; no rule is run.
+    Every fact with an owner gets a change, even one writing nothing, so its owner is rewritten exactly
+    when a fact reaches it.
+    """
+    owner = actor_fact_owner(event)
     match event:
         case EntityFactionChangedEvent():
-            return replace(actor, faction=event.faction_after)
+            return ActorFactChange(owner, {"faction": event.faction_after})
         case ItemHoldingsReleasedEvent():
-            return replace(actor,
-                items=tuple(item for item in actor.items if item.item_uuid != event.item_uuid),
-                equipment=tuple((slot, identity) for slot, identity in actor.equipment if identity != event.item_uuid))
-        case ItemLocationStateEvent(location=ItemLocation.FLOOR):
-            return replace(actor,
-                items=tuple(item for item in actor.items if item.item_uuid != event.item_state.item_uuid),
-                equipment=tuple((slot, identity) for slot, identity in actor.equipment
-                                if identity != event.item_state.item_uuid))
+            return ActorFactChange(owner, items_removed=(event.item_uuid,))
+        case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT):
+            item = event.item_state
+            layers: tuple[tuple[str, UUID], ...] = ()
+            if event.location is ItemLocation.EQUIPMENT:
+                if event.equipment_slot is None:
+                    raise ValueError("equipped item fact requires its committed slot")
+                layers = ((event.equipment_slot.value, item.item_uuid),)
+            values: ActorFieldValues = {}
+            if event.entity_armor_class_after is not None:
+                values["armor_class"] = event.entity_armor_class_after
+            # One location has one holder: the item leaves every other holder.
+            return ActorFactChange(owner, values, items_set=(item,), layers_removed=(item.item_uuid,),
+                                   layers_set=layers, released_item=item.item_uuid)
+        case ItemLocationStateEvent():
+            return ActorFactChange(None, released_item=event.item_state.item_uuid)
         case SpatialChangeEvent(change_type=SpatialChangeType.ENTITY_ENTERED | SpatialChangeType.ENTITY_LEFT):
+            values = {}
             if event.change_type is SpatialChangeType.ENTITY_ENTERED:
-                actor = replace(actor, spatial_disposition=SpatialDisposition.PRESENT)
-            return (actor if event.occupancy_layer is None
-                    else replace(actor, occupancy_layer=event.occupancy_layer))
+                values["spatial_disposition"] = SpatialDisposition.PRESENT
+            if event.occupancy_layer is not None:
+                values["occupancy_layer"] = event.occupancy_layer
+            return ActorFactChange(owner, values)
         case ItemResourceChangeEvent():
-            items = tuple(item.model_copy(update={
-                "charges": event.charges_after, "stack_count": event.stack_count_after,
-            }) if item.item_uuid == event.item_uuid else item for item in actor.items
-                if not (event.item_destroyed and item.item_uuid == event.item_uuid))
-            equipment = tuple((slot, identity) for slot, identity in actor.equipment
-                              if not (event.item_destroyed and identity == event.item_uuid))
-            return replace(actor, items=items, equipment=equipment)
+            return ActorFactChange(owner, item_resources=ItemResources(event.item_uuid, event.charges_after,
+                event.stack_count_after, event.item_destroyed))
         case AttackEvent() if event.attack_outcome is not None:
             selected = (WeaponSet.NONE if event.attack_source_kind != "equipped" else
                         WeaponSet.RANGED if event.weapon_slot in
                         (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF) else WeaponSet.MELEE)
-            return replace(actor, active_weapon_set=selected)
+            return ActorFactChange(owner, {"active_weapon_set": selected})
         case DamageAppliedEvent():
-            return replace(actor, normal_hp=event.resulting_normal_hp,
-                           temporary_hp=event.resulting_temporary_hp,
-                           temporary_hp_grant=actor.temporary_hp_grant if event.resulting_temporary_hp > 0 else None)
+            return ActorFactChange(owner, _hit_points(event.resulting_normal_hp, event.resulting_temporary_hp))
         case HealEvent():
             if event.was_blocked:
-                return actor
+                return ActorFactChange(owner)
             if event.resulting_normal_hp is None or event.resulting_temporary_hp is None:
                 raise ValueError("healing requires committed HP after-values")
-            return replace(actor, normal_hp=event.resulting_normal_hp,
-                           temporary_hp=event.resulting_temporary_hp,
-                           temporary_hp_grant=actor.temporary_hp_grant if event.resulting_temporary_hp > 0 else None)
+            return ActorFactChange(owner, _hit_points(event.resulting_normal_hp, event.resulting_temporary_hp))
         case Event(event_type=EventType.CONDITION_APPLICATION | EventType.CONDITION_REMOVAL | EventType.CONDITION_STATE_CHANGED):
             if condition is None:
+                if owner is None:
+                    return None  # A target-less membership (no recorded state) changes no actor.
                 raise ValueError("condition membership requires its recorded condition fact")
-            members = {member.condition_uuid: member for member in actor.conditions}
-            if event.event_type is EventType.CONDITION_REMOVAL:
-                members.pop(condition.condition_uuid, None)
-            else:
-                members[condition.condition_uuid] = condition
-            actor = replace(actor, conditions=tuple(members.values()),
-                           maximum_hp=actor.maximum_hp if condition.resulting_max_hp is None else condition.resulting_max_hp,
-                           armor_class=actor.armor_class if condition.resulting_ac is None else condition.resulting_ac)
-            return apply_stats(actor, condition.resulting_stats)
+            values = {}
+            if condition.resulting_max_hp is not None:
+                values["maximum_hp"] = condition.resulting_max_hp
+            if condition.resulting_ac is not None:
+                values["armor_class"] = condition.resulting_ac
+            if condition.resulting_stats is not None:
+                values.update(_stats_values(condition.resulting_stats))
+            removed = event.event_type is EventType.CONDITION_REMOVAL
+            return ActorFactChange(owner, values, conditions_set=() if removed else (condition,),
+                                   conditions_removed=(condition.condition_uuid,) if removed else (),
+                                   replaced_item=condition.resulting_item)
         case LifeStateChangeEvent():
-            return replace(actor, life_state=event.new_state, normal_hp=event.normal_hit_points,
-                           remains_disposition=event.remains_disposition)
+            return ActorFactChange(owner, {"life_state": event.new_state, "normal_hp": event.normal_hit_points,
+                                           "remains_disposition": event.remains_disposition})
         case TemporaryHitPointsChangedEvent():
-            return replace(actor, temporary_hp=event.resulting_temporary_hp, temporary_hp_grant=event.grant)
-        case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT):
-            item = event.item_state
-            items = {row.item_uuid: row for row in actor.items}
-            items[item.item_uuid] = item
-            equipment = {slot: identity for slot, identity in actor.equipment if identity != item.item_uuid}
-            if event.location is ItemLocation.EQUIPMENT:
-                if event.equipment_slot is None:
-                    raise ValueError("equipped item fact requires its committed slot")
-                equipment[event.equipment_slot.value] = item.item_uuid
-            return replace(actor, items=tuple(items.values()), equipment=tuple(equipment.items()),
-                           armor_class=actor.armor_class if event.entity_armor_class_after is None else event.entity_armor_class_after)
+            return ActorFactChange(owner, {"temporary_hp": event.resulting_temporary_hp,
+                                           "temporary_hp_grant": event.grant})
         case EquipmentEvent():
-            return (actor if event.active_weapon_set_after is None
-                    else replace(actor, active_weapon_set=event.active_weapon_set_after))
-    return actor
+            return ActorFactChange(owner, {} if event.active_weapon_set_after is None
+                                   else {"active_weapon_set": event.active_weapon_set_after})
+    return None
 
 
-def remove_previous_item_holdings(actors: dict[UUID, ActorState], event: ItemLocationStateEvent) -> tuple[UUID, ...]:
-    """One received location has one owner; remove only previously known holdings."""
-    retained_owner = event.owner_uuid if event.location in (ItemLocation.INVENTORY, ItemLocation.EQUIPMENT) else None
-    changed = []
-    for identity, actor in tuple(actors.items()):
-        if identity == retained_owner or not any(item.item_uuid == event.item_state.item_uuid for item in actor.items):
-            continue
-        actors[identity] = replace(actor,
-            items=tuple(item for item in actor.items if item.item_uuid != event.item_state.item_uuid),
-            equipment=tuple((slot, item_uuid) for slot, item_uuid in actor.equipment
-                            if item_uuid != event.item_state.item_uuid))
-        changed.append(identity)
-    return tuple(changed)
+def _without_items(actor: ActorState, identities: tuple[UUID, ...]) -> ActorState:
+    return replace(actor, items=tuple(item for item in actor.items if item.item_uuid not in identities),
+                   equipment=tuple((slot, item) for slot, item in actor.equipment if item not in identities))
 
 
-def apply_stats(actor: ActorState, stats: EntityStatsState | None) -> ActorState:
-    """Install an existing native aggregate result without evaluating rules."""
-    if stats is None:
-        return actor
-    return replace(actor, normal_hp=stats.normal_hp, maximum_hp=stats.maximum_hp,
-                   temporary_hp=stats.temporary_hp, temporary_hp_grant=stats.temporary_hp_grant,
-                   armor_class=stats.armor_class, spatial_disposition=stats.spatial_disposition,
-                   healing_blocked=stats.healing_blocked, damage_affinities=stats.damage_affinities,
-                   resolved_size=stats.resolved_size if stats.resolved_size is not None else actor.resolved_size)
+def _owner_after(actor: ActorState, change: ActorFactChange) -> ActorState:
+    conditions = actor.conditions
+    if change.conditions_set or change.conditions_removed:
+        members = {member.condition_uuid: member for member in actor.conditions}
+        for identity in change.conditions_removed:
+            members.pop(identity, None)
+        for member in change.conditions_set:
+            members[member.condition_uuid] = member
+        conditions = tuple(members.values())
+    items, equipment = actor.items, actor.equipment
+    if change.items_removed:
+        removed = change.items_removed
+        items = tuple(item for item in items if item.item_uuid not in removed)
+        equipment = tuple((slot, identity) for slot, identity in equipment if identity not in removed)
+    if (resources := change.item_resources) is not None:
+        used = resources.item_uuid
+        items = tuple(item.model_copy(update={"charges": resources.charges, "stack_count": resources.stack_count})
+                      if item.item_uuid == used else item for item in items
+                      if not (resources.destroyed and item.item_uuid == used))
+        equipment = tuple((slot, identity) for slot, identity in equipment
+                          if not (resources.destroyed and identity == used))
+    if change.items_set:
+        held = {item.item_uuid: item for item in items}
+        held.update((item.item_uuid, item) for item in change.items_set)
+        items = tuple(held.values())
+    if change.layers_removed or change.layers_set:
+        slots = {slot: identity for slot, identity in equipment if identity not in change.layers_removed}
+        slots.update(change.layers_set)
+        equipment = tuple(slots.items())
+    return replace(actor, **change.values, conditions=conditions, items=items, equipment=equipment)
+
+
+def apply_actor_fact_change(actors: dict[UUID, ActorState], change: ActorFactChange) -> tuple[UUID, ...]:
+    """The one fold of an actor change into a set of actors (plan §4); the identities it rewrote, in order.
+
+    The item's other holders release it first, then the owner takes the change, then every holder of a
+    replaced item takes its copy. Holders are those of this set: each fold's own holdings decide.
+    """
+    written: list[UUID] = []
+    if (released := change.released_item) is not None:
+        for identity, actor in tuple(actors.items()):
+            if identity != change.owner_uuid and any(item.item_uuid == released for item in actor.items):
+                actors[identity] = _without_items(actor, (released,))
+                written.append(identity)
+    if change.owner_uuid is not None and (owner := actors.get(change.owner_uuid)) is not None:
+        actors[change.owner_uuid] = _owner_after(owner, change)
+        written.append(change.owner_uuid)
+    if (replaced := change.replaced_item) is not None:
+        for identity, actor in tuple(actors.items()):
+            if any(item.item_uuid == replaced.item_uuid for item in actor.items):
+                actors[identity] = replace(actor, items=tuple(
+                    replaced if item.item_uuid == replaced.item_uuid else item for item in actor.items))
+                written.append(identity)
+    return tuple(written)
 
 
 def condition_fact(event: Event, *, source_index: int | None = None) -> ConditionFact | None:

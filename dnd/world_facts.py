@@ -10,7 +10,7 @@ from dnd.core.events import (
     WorldConnectorState, WorldInitializedEvent, WorldModifiedEvent, WorldObjectState,
     WorldTileState, SensoryUpdateEvent,
 )
-from dnd.types.event_facts import WorldTileChange
+from dnd.types.event_facts import KeyedTileChange
 from dnd.core.item_types import ItemLocation
 from dnd.types.world import CardinalDirection, LightLevel
 from dnd.types.actor_facts import ConditionFact
@@ -182,7 +182,7 @@ def world_event_positions(
             if event.old_position is not None:
                 positions.add(event.old_position)
             # Every tile a TILES_CHANGED fact changes (residues, terrain) is a changed cell.
-            positions.update(change.position for change in event.tile_changes)
+            positions.update(change.position for change in event.keyed_tile_changes)
             for placement in (event.placement, event.previous_placement):
                 if placement is not None:
                     positions.update(placement.positions)
@@ -222,9 +222,9 @@ def world_event_footprints(
     return positions, set(positions)
 
 
-def apply_tile_change(previous: WorldTileState, change: WorldTileChange) -> WorldTileState:
+def apply_keyed_tile_change(previous: WorldTileState, change: KeyedTileChange) -> WorldTileState:
     """One Tile's keyed change applied to its recorded value: the changed fields, the changed materials."""
-    update: dict[str, object] = dict(change.changes)
+    update: dict[str, object] = dict(change.fields)
     if change.residues:
         materials = {row.residue_id: row for row in previous.residues}
         for row in change.residues:
@@ -334,13 +334,13 @@ def apply_world_fact(
             })
         case SpatialChangeEvent():
             if event.change_type is SpatialChangeType.TILES_CHANGED:
-                applied = False
-                for change in event.tile_changes:
-                    if (previous := world.tiles.get(change.position)) is not None:
-                        world.tiles[change.position] = apply_tile_change(previous, change)
-                        applied = True
-                if not applied:
+                if not event.keyed_tile_changes:
                     return False
+                for change in event.keyed_tile_changes:
+                    previous = world.tiles.get(change.position)
+                    if previous is None:
+                        raise ValueError(f"A keyed tile change requires its recorded tile {change.position}")
+                    world.tiles[change.position] = apply_keyed_tile_change(previous, change)
             elif event.change_type is SpatialChangeType.TILE_CHANGED:
                 if event.tile_present is False:
                     world.tiles.pop(event.position, None)
