@@ -12,7 +12,7 @@ from dnd.player.application import capture_application_operation, initialize_aud
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import PlayerUpdate
 from dnd.player.reduction import reduce_initialization, reduce_operation
-from dnd.player.session import Operation, close_session, create_session, snapshot_player_hud
+from dnd.player.session import Operation, close_session, create_session
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.enchantment import Bless
 
@@ -53,9 +53,7 @@ def test_immunity_log_belongs_to_its_canceled_condition_event_and_replays(nested
         assert originals == [canceled.combat_log]
         operation = Operation(start_cursor=start, end_cursor=EventQueue.event_cursor(),
             roots=tuple(event for event in recorded if event.parent_lineage is None
-                and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)),
-            hud_by_seat=tuple((seat, snapshot_player_hud(session, audience=audience))
-                for seat, audience in session.seats.items()))
+                and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)))
         update = capture_application_operation(audiences, operation, catalog)["party"]
         assert update.combat_log_appends == ()
         occurrence = audiences["party"].projection.public_cursors[EventQueue.get_event_index(canceled.uuid)]
@@ -105,9 +103,7 @@ def test_unidentified_immunity_requires_native_occurrence_perception(perceived):
         canceled = source.add_condition(Poisoned(source_entity_uuid=source.uuid, target_entity_uuid=source.uuid))
         assert canceled.canceled and canceled.combat_log is not None
         assert bool(canceled.combat_log.perceiver_uuids & set(map(str, audience.observers))) is perceived
-        operation = Operation(start_cursor=start, end_cursor=EventQueue.event_cursor(), roots=(canceled,),
-            hud_by_seat=tuple((identity, snapshot_player_hud(session, audience=view))
-                for identity, view in session.seats.items()))
+        operation = Operation(start_cursor=start, end_cursor=EventQueue.event_cursor(), roots=(canceled,))
         update = capture_application_operation(audiences, operation, catalog)[seat]
         replayed = reduce_operation(before, PlayerUpdate.model_validate_json(update.model_dump_json()))
         logs = tuple(node.combat_log for group in update.lineages for node in group.events

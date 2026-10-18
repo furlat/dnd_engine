@@ -11,7 +11,7 @@ import pytest
 
 from dnd.core.events import EventQueue
 from dnd.player.commands import ActionSelection, CommandRejected
-from dnd.player.session import snapshot_player_hud
+from dnd.actor_sheets import evaluate_actor_sheet
 from server.protocol import CommandRequest, ExecuteSelectionIntent, PreviewRequest
 from server.worker import dispatch
 from server.worker_protocol import Command, Preview
@@ -38,7 +38,8 @@ def state(world):
     runtime, seat, publication = world
     actor = runtime.session.game.entities[publication.boundary.input_actor_uuid]
     return (EventQueue.event_cursor(), random.getstate(), actor.position,
-        snapshot_player_hud(runtime.session, audience=runtime.session.seats[seat]))
+        tuple(evaluate_actor_sheet(runtime.session.game.entities[identity])
+            for identity in runtime.session.seats[seat].controlled))
 
 
 @pytest.mark.parametrize("behavior_id", ["action.move", "spell.fireball", "action.dodge"])
