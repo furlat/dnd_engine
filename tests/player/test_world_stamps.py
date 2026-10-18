@@ -1,5 +1,5 @@
-"""Revision stamps for re-entry (player schema 16): a record re-entering a seat's perception travels whole only
-when something wrote it since the seat last had it whole; otherwise the seat keeps it as it holds it.
+"""Digest stamps for re-entry (player schema 16): a record re-entering a seat's perception travels whole only
+when its value is not the one the seat holds; otherwise the seat keeps it as it holds it.
 
 Recorded events in, the seat's world updates and client worlds out. A kept record must leave the client exactly
 as a whole send would, and the seat's stamps must be restorable from the updates it received.
@@ -17,8 +17,8 @@ from dnd.player.capture import CompletedLineage
 from dnd.player.facts import PlayerState
 from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.reduction import reduce_initialization, reduce_lineage
-from dnd.player.revision_stamps import RevisionStamps, unchanged_since
-from dnd.player.stamp_replay import replay_revision_stamps
+from dnd.player.stamp_replay import replay_world_stamps
+from dnd.player.world_stamps import WorldStamps, unchanged_since
 from dnd.player.world_columns import unpack_object_rows
 from dnd.types.residues import ObjectResidueState
 from dnd.types.senses import PerceivedContact
@@ -38,7 +38,7 @@ def project(start, events, *, stamps=True):
     received = list(public.world_updates)
     for index, event in enumerate(events, start=start.end_cursor):
         if not stamps:
-            projection.revision_stamps = RevisionStamps()
+            projection.world_stamps = WorldStamps()
         packet = project_lineage(session, projection, CompletedLineage(generation=start.generation,
             observer_uuid=start.observer_uuid, root=event, events=(event,), objective_rows=(objective(index, event),),
             start_cursor=index, end_cursor=index + 1, audience=start.audience))
@@ -54,9 +54,8 @@ def walk(start, events):
     equal its live ones."""
     projection, public, states, packets, received = project(start, events)
     assert states == project(start, events, stamps=False)[2]
-    native_of = {public_index: native for native, public_index in projection.public_cursors.items()}
-    assert replay_revision_stamps(PlayerState(generation=public.generation, observer_uuid=public.observer_uuid,
-        world=public.world, audience=public.audience), received, native_of) == projection.revision_stamps
+    assert replay_world_stamps(PlayerState(generation=public.generation, observer_uuid=public.observer_uuid,
+        world=public.world, audience=public.audience), received) == projection.world_stamps
     return states, packets
 
 
@@ -120,8 +119,8 @@ def test_a_record_written_while_unseen_reenters_whole():
     assert states[4].objects[identity].item.name == 'Crate'
 
 
-def test_a_keyed_change_seen_in_view_does_not_vouch_for_the_whole_record():
-    """A keyed change carries only what it wrote; the record's next re-entry is whole."""
+def test_a_change_seen_in_view_keeps_the_seats_stamp_current():
+    """A keyed change leaves the seat holding the record's value as of then: the record re-enters unchanged."""
     box, start = box_scene()
     identity = box.item.item_uuid
     observer = start.observer_uuid
@@ -132,9 +131,29 @@ def test_a_keyed_change_seen_in_view_does_not_vouch_for_the_whole_record():
     ))
     assert [mask_positions(row.entered) for row in packets[0]] == [[]]
     update, = packets[2]
-    assert update.tile_columns is not None and not mask_positions(update.tiles_unchanged)
+    assert update.tile_columns is None and mask_positions(update.tiles_unchanged) == [(1, 0)]
     assert update.objects_unchanged == (identity,)
     assert world(states[3]) == world(states[1])
+
+
+def test_a_record_written_and_written_back_unseen_reenters_unchanged():
+    """The digest is of the value, not its history: a seat learns nothing of writes it did not see."""
+    box, start = box_scene()
+    identity = box.item.item_uuid
+    observer = start.observer_uuid
+    crate = box.model_copy(update={'item': box.item.model_copy(update={'name': 'Crate'})})
+    states, packets = walk(start, (
+        sensory(observer, visible_cells_removed=[(1, 0)], object_contacts_removed={identity}),
+        light(observer, (1, 0), LightLevel.DIM_LIGHT),
+        renamed(observer, box, 'Crate'),
+        light(observer, (1, 0), LightLevel.BRIGHT_LIGHT),
+        renamed(observer, crate, 'Box'),
+        sensory(observer, visible_cells_added=[(1, 0)], object_contacts_changed={identity: seen((1, 0))}),
+    ))
+    update, = packets[5]
+    assert update.tile_columns is None and mask_positions(update.tiles_unchanged) == [(1, 0)]
+    assert update.objects_unchanged == (identity,) and update.objects is None
+    assert world(states[6]) == world(states[0])
 
 
 def test_an_object_the_client_dropped_unobserved_travels_whole_when_seen_again():
@@ -175,8 +194,8 @@ def test_other_observing_members_need_the_object_whole():
 
 
 def test_a_face_newly_seen_or_a_view_disclosed_field_needs_the_object_whole():
-    """A face the seat's last row did not show needs its residues; a remnant (its known attachments) and a
-    concentration slot naming a cast lineage (the lineages disclosed) follow the seat's knowledge, not the record."""
+    """A face the seat's last row did not show needs its residues; a concentration slot (mapped to the seat's
+    disclosed lineages as the update is emitted) always travels. A remnant is compared as disclosed."""
     soot = ObjectResidueState(condition_uuid=uuid4(), residue_id='test.soot', description='Soot',
                               faces=(CardinalDirection.EAST,))
     wall = placed(item('Wall').model_copy(update={'boundary_structure': BoundaryStructure(
@@ -195,11 +214,12 @@ def test_a_face_newly_seen_or_a_view_disclosed_field_needs_the_object_whole():
                 object_contacts_changed={ruins: seen((4, 0)), altars: seen((5, 0))}),
     ))
     update, = packets[1]
-    assert {row.item_uuid for row in unpack_object_rows(update.objects)} == {walls, ruins, altars}
-    assert not update.objects_unchanged
+    # The remnant names no attachment the seat lacks: it is as the seat holds it.
+    assert {row.item_uuid for row in unpack_object_rows(update.objects)} == {walls, altars}
+    assert update.objects_unchanged == (ruins,)
     assert states[2].objects[walls].item.surface_residues == (soot,)
 
 
-def test_the_rule_is_the_seats_stamp_against_the_records_last_write():
-    assert unchanged_since(7, 7) and unchanged_since(7, 3)
-    assert not unchanged_since(7, 8) and not unchanged_since(None, 3) and not unchanged_since(7, None)
+def test_the_rule_is_the_seats_stamp_against_the_records_digest():
+    assert unchanged_since(7, 7)
+    assert not unchanged_since(7, 8) and not unchanged_since(None, 3)

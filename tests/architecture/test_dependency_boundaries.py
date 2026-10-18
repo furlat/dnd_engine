@@ -1003,13 +1003,13 @@ def test_dependency_direction_is_respected() -> None:
     )
 
 
-# The client's reference fold of the player wire (with `stamp_replay`, the oracle's restore of revision stamps
+# The client's reference fold of the player wire (with `stamp_replay`, the oracle's restore of digest stamps
 # through it), and the server modules that publish to seats without it. A module joins the publishers once the
 # last held client value it reads is deleted; the sensory lane adds the projection, which still runs the client's
 # body fold until then.
 CLIENT_FOLD_MODULES = ("dnd.player.reduction", "dnd.player.world_reduction", "dnd.player.stamp_replay")
 SEAT_PUBLISHING_MODULES = frozenset({"dnd.player.application", "dnd.player.capture", "server.worker",
-    "dnd.player.world_publication", "dnd.player.revision_stamps"})
+    "dnd.player.world_publication", "dnd.player.world_stamps"})
 
 
 def test_seat_publication_does_not_import_the_client_fold() -> None:
@@ -1023,20 +1023,20 @@ def test_seat_publication_does_not_import_the_client_fold() -> None:
 
 
 def test_the_session_world_has_one_writer() -> None:
-    """The session's one world fold and its records' revisions are written in one place: the walk drivers'
-    `_fold_version`, through E2's `world_facts.apply_world_fact` and `revision_stamps.record_world_revisions`."""
+    """The session's one world fold, and the forgetting of its written tiles' digests, are written in one place:
+    the walk drivers' `_fold_version`, through E2's `world_facts.apply_world_fact` and `world_stamps.forget_written`."""
     tree = ast.parse((REPOSITORY_ROOT / "dnd" / "player" / "projection.py").read_text(encoding="utf-8"))
     writers = [function.name for function in ast.walk(tree) if isinstance(function, ast.FunctionDef)
         for node in ast.walk(function) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
         and node.func.id == "apply_world_fact"]
     assert writers == ["_fold_version"]
-    revision_writers = [f"{source.relative_to(REPOSITORY_ROOT)}:{function.name}"
+    digest_writers = [f"{source.relative_to(REPOSITORY_ROOT)}:{function.name}"
         for source in sorted((REPOSITORY_ROOT / "dnd").rglob("*.py"))
         for function in ast.walk(ast.parse(source.read_text(encoding="utf-8")))
         if isinstance(function, ast.FunctionDef)
         for node in ast.walk(function) if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name) and node.func.id == "record_world_revisions"]
-    assert revision_writers == ["dnd/player/projection.py:_fold_version"]
+        and isinstance(node.func, ast.Name) and node.func.id == "forget_written"]
+    assert digest_writers == ["dnd/player/projection.py:_fold_version"]
 
 
 def _rooted_at(node: ast.expr, name: str) -> bool:

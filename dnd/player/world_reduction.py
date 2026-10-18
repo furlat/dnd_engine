@@ -4,7 +4,7 @@ The memory rules the client owns (plan §3.2, §3.4; world brief §3.3):
 
 - what the seat saw go is dropped first (`objects_removed`, `connectors_removed`);
 - entering cells are authoritative: everything held there is dropped and replaced by what the update carries,
-  but the tiles and objects it names unchanged (nothing wrote them since the seat had them), which stay as held;
+  but the tiles and objects it names unchanged (their value is the one the seat holds), which stay as held;
   nothing held is ever evicted otherwise, since an unchanged record off the entered cells is not sent at all;
 - an object is forgotten when the seat sees its support without it (an entered cell, or `objects_removed`);
 - a wall's residue faces not seen now keep their last sight (the face merge);

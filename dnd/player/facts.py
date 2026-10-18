@@ -1399,8 +1399,8 @@ class WorldUpdate:
 
     `entered` is the update's authoritative scope: for those cells the client drops everything it holds and keeps
     only what this update carries, their tiles, every object touching them (`placement_support_cells`) and every
-    connector with an endpoint there; no object or connector there means none. A record nothing wrote since the
-    seat last had it is kept as the client holds it instead: the entered cells in `tiles_unchanged` (their tile, its
+    connector with an endpoint there; no object or connector there means none. A record whose value is the one the
+    seat holds is kept as the client holds it instead: the entered cells in `tiles_unchanged` (their tile, its
     condition names and residues) and the objects in `objects_unchanged`. Every other row is the keyed change of a
     record the seat perceived before and after the occurrence. Static rows come once per (kind, id) per seat.
     """

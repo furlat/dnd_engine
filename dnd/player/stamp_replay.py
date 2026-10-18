@@ -1,30 +1,28 @@
-"""A seat's revision stamps rebuilt from its own records: the restore of `revision_stamps`' seat knowledge.
+"""A seat's digest stamps rebuilt from its own records: the restore of `world_stamps`' seat knowledge.
 
-The live stamps follow the updates the seat was emitted (`stamp_world_update` in each walk); these follow the same
-updates as the seat received them, folded into a client world by the reference fold. An object the client drops
-(held before an update, not after) loses its stamp, where the live walk drops the objects it leaves unsent on the
-entered cells: the two differ only on an object written since its stamp (moved away unseen), which travels whole
-either way. Records number occurrences in the seat's public numbering; `native_of` maps each to its native index
-(the seat's `public_cursors`, inverted), which no record carries. Without stamps (no replay) the seat's next
-re-entry sends every record whole, which is always correct.
+The live stamps follow the updates the seat was emitted (`stamp_world_update` in each walk), digesting the values the
+session sent; these follow the same updates as the seat received them, folded into a client world by the reference
+fold, digesting what the client holds after each. The two are equal: the client holds what it was sent. Without
+stamps (no replay) the seat's next re-entry sends every record whole, which is always correct.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 
 from dnd.player.facts import PlayerState, WorldUpdate
-from dnd.player.revision_stamps import RevisionStamps, SeatStamps, merge_revision_stamps, stamp_world_update
+from dnd.player.world_columns import unpack_object_rows
 from dnd.player.world_reduction import fold_world_update
+from dnd.player.world_stamps import SeatStamps, WorldStamps, merge_world_stamps, stamp_world_update, tile_digest
 
 
-def replay_revision_stamps(memory: PlayerState, updates: Iterable[WorldUpdate], native_of: Mapping[int, int]
-                           ) -> RevisionStamps:
+def replay_world_stamps(memory: PlayerState, updates: Iterable[WorldUpdate]) -> WorldStamps:
     """The stamps of a seat whose client world is `memory` (empty at the start) after these world updates, in the
     order the seat received them."""
-    stamps = SeatStamps(RevisionStamps())
+    stamps = SeatStamps(WorldStamps())
     for update in updates:
-        held = set(memory.objects)
         fold_world_update(memory, update)
-        stamp_world_update(stamps, update, native_of[update.occurrence], held - memory.objects.keys())
-    restored = RevisionStamps()
-    merge_revision_stamps(restored, stamps.walk)
+        stamp_world_update(stamps, update, unpack_object_rows(update.objects),
+                           lambda position: tile_digest(memory.tiles[position]),
+                           lambda identity: memory.objects[identity].placement)
+    restored = WorldStamps()
+    merge_world_stamps(restored, stamps.walk)
     return restored

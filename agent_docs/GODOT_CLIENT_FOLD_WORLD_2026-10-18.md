@@ -13,7 +13,7 @@ occurrence, so the client's memory follows from the rules below and nothing else
 | Field | Meaning |
 | --- | --- |
 | `entered` (`CellMask`) | the update's authoritative cells: cells entering the seat's view, and visible cells whose tile was written whole |
-| `tiles_unchanged` (`CellMask`) | entered cells whose tile nothing wrote since the seat last had it whole (its revision stamp): the client keeps the tile it holds there, with its condition names and residues |
+| `tiles_unchanged` (`CellMask`) | entered cells whose tile is the value the seat holds (its digest stamp): the client keeps the tile it holds there, with its condition names and residues |
 | `tile_looks` | a tile surface and name under its content id (`look_id`, a digest of the value), once per id per seat |
 | `tile_statics` | a tile's fixed part (`position`, `tile_uuid`, `look`: a `tile_looks` id), once per tile uuid per seat |
 | `tile_columns` | the entered cells holding a tile, but those in `tiles_unchanged`: their changeable scalars as columns (§2) |
@@ -26,7 +26,7 @@ occurrence, so the client's memory follows from the rules below and nothing else
 | `boundary_structures` | a boundary structure's value under its content id (a digest of the value), once per id per seat |
 | `object_looks` | an object's fixed part (`ObjectLook`), once per item uuid per seat, floor objects and contained items alike |
 | `objects` (`ObjectColumns`) | the update's object rows as columns (below); each row is `item_uuid`, `members`, `state` (`ObjectState`), `placement` (`ObjectPlacement`), `observed_faces` (§3) |
-| `objects_unchanged` | objects on the entered cells that nothing wrote since the seat last had them whole: the client keeps them as held |
+| `objects_unchanged` | objects on the entered cells whose row would be the one the seat holds: the client keeps them as held |
 | `objects_removed` | objects the seat saw go |
 | `contents` | a container's whole contents (`ContainedItem`: uuid and state; looks through `object_looks`) |
 | `contents_changed` | keyed contents of a container the seat sees into: `upserted`, `removed` |
@@ -96,7 +96,7 @@ fill them.
    - remove the cell from the `construction_suppressions` positions of every object still held;
    - drop every connector with an endpoint there.
 
-   A `tiles_unchanged` cell that is not entered, not held or also in `tile_columns`, or an `objects_unchanged` object the client does not hold, is an error. The client never evicts what it holds otherwise: a record unchanged since the seat had it is not sent at all when it re-enters perception off the entered cells (a contact regained), so the client must still hold it.
+   A `tiles_unchanged` cell that is not entered, not held or also in `tile_columns`, or an `objects_unchanged` object the client does not hold, is an error. The client never evicts what it holds otherwise: a record whose value is the one the seat holds is not sent at all when it re-enters perception off the entered cells (a contact regained), so the client must still hold it.
 4. **Object rows, in order.**
    - Otherwise the item is the look joined with the state. The placement is the row's, or the held one.
    - Residues: the row's residues lie on its `observed_faces`. Held faces outside `observed_faces` are kept, and residues are united by `condition_uuid`. Drop empty ones and sort by `condition_uuid` as a string.

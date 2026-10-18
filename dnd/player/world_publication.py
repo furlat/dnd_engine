@@ -11,10 +11,9 @@ rules
 - a record perceived before and after the occurrence travels as its keyed change;
 - a record entering perception travels whole: a cell entering the composed view (or a visible tile replaced),
   every object touching it and every connector with an endpoint there; an object newly observed; a container
-  whose contents become visible. A tile or an object nothing wrote since the seat last had it whole (its revision
-  stamp, `revision_stamps`), and whose disclosure the view does not change (no face newly seen, the same observing
-  members, no suppression, remnant or cast lineage), is unchanged instead: an entered cell in `tiles_unchanged`,
-  an object on one in `objects_unchanged`, nothing for one off them (the client still holds it);
+  whose contents become visible. A tile or an object whose value now is the one the seat holds (its digest stamp,
+  `world_stamps`), seen on no new face and by the same members, is unchanged instead: an entered cell in
+  `tiles_unchanged`, an object on one in `objects_unchanged`, nothing for one off them (the client still holds it);
 - the seat sees an object go when it observed it and the occurrence removed or moved it, or when it sees the
   object's support without it;
 - leaving perception sends nothing;
@@ -32,8 +31,8 @@ from dnd.player.audience import AudiencePerception, PlayerAudience
 from dnd.player.facts import (BoundaryStructureStatic, ContainedItem, ContainerContents, ContentsChange,
     ContributionRow, FloorItem, ObjectLook, ObjectRow, ObjectState, PlayerObject, ResidueKey, ResidueMaterial,
     ResidueRow, TileConditions, TileFieldUpdate, TileLook, TileStatic, WorldUpdate)
-from dnd.player.revision_stamps import (SeatStamps, WorldRevisions, object_stamp, stamp_world_update, tile_stamp,
-    unchanged_since)
+from dnd.player.world_stamps import (SeatStamps, WorldDigests, object_digest, object_stamp, session_tile_digest,
+    stamp_world_update, stampable, tile_stamp, unchanged_since)
 from dnd.player.static_sent import StaticSent
 from dnd.player.world_columns import (pack_object_rows, pack_placement, pack_tile_columns, split_floor_item,
     tile_look_id)
@@ -135,14 +134,6 @@ def disclosed_world_object(world: WorldFacts, view: SensesSnapshot, identity: UU
                 if contents_granted(world, view, identity) else None)
     return PlayerObject(placement=obj.placement, item=disclosed_floor_item(world, view, identity, known),
         contained_items=contents)
-
-
-def _keepable(item: ItemPresentationState) -> bool:
-    """An object whose disclosure follows the view or the seat's knowledge beyond its faces and members always
-    travels whole: its suppressions (the providers perceived, the cells seen), its remnant (the attachments whose
-    look was sent), its concentration slots' cast lineages (the lineages disclosed)."""
-    return (not item.construction_suppressions and item.remnant_state is None
-            and all(slot.cast_lineage_uuid is None for slot in item.concentration_slots))
 
 
 def object_members(world: WorldFacts, perception: AudiencePerception, audience: PlayerAudience,
@@ -256,7 +247,7 @@ def _scalars(changes: WorldTileChanges, keys: Iterable[str], tile: WorldTileStat
 def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[AppliedWorldFact, ...], before: CellMask,
                       view: SensesSnapshot, perception: AudiencePerception, audience: PlayerAudience,
                       sensed: SensedWorld | None, *, observed: set[UUID], granted: set[UUID], sent: StaticSent,
-                      pending: StaticSent, revisions: WorldRevisions, stamps: SeatStamps) -> WorldUpdate | None:
+                      pending: StaticSent, digests: WorldDigests, stamps: SeatStamps) -> WorldUpdate | None:
     """One seat's world update at an occurrence, or None when it perceives no world change there.
 
     `applied` is what the occurrence wrote (for a member's sensory occurrence, what the changes it saw happen
@@ -265,7 +256,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
     it. It writes the seat knowledge it is given: `observed` and `granted` (the seat's observed objects and seen
     contents) become the seat's perception after it, and the static rows sent here join `pending` (the walk's,
     merged into `sent` once its group is emitted, never mid-walk: plan §3.5), its stamps the walk's (`stamps.walk`).
-    `revisions` are the session's records' last writes.
+    `digests` are the session's tile digests.
     """
     visible = view.visible
     replaced = set().union(*(row.replaced for row in applied))
@@ -280,7 +271,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
     # Tiles: the entered cells whole (their static rows first: a placement's anchor tile is derived from them),
     # but those the seat still has as they are.
     unchanged_tiles = {position for position in entered if position in world.tiles
-                       and unchanged_since(tile_stamp(stamps, position), revisions.tiles.get(position))}
+                       and unchanged_since(tile_stamp(stamps, position), session_tile_digest(digests, world, position))}
     tiles = {position: world.tiles[position] for position in sorted(entered - unchanged_tiles)
              if position in world.tiles}
     tile_conditions: dict[Position, tuple[str, ...]] = {}
@@ -319,10 +310,13 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
     unchanged = set()
     for identity in whole:
         stamp = object_stamp(stamps, identity)
-        obj = world.objects[identity]
-        if (stamp is not None and unchanged_since(stamp.index, revisions.objects.get(identity))
-                and _keepable(obj.item) and set(observed_faces(obj.placement, visible)) <= stamp.faces
-                and object_members(world, perception, audience, identity) == stamp.members):
+        if stamp is None:
+            continue
+        placement = world.objects[identity].placement
+        state = split_floor_item(disclosed_floor_item(world, view, identity, sent.object_looks | pending.object_looks))[1]
+        if (stampable(state) and set(observed_faces(placement, visible)) <= stamp.faces
+                and object_members(world, perception, audience, identity) == stamp.members
+                and unchanged_since(stamp.digest, object_digest(state, placement))):
             unchanged.add(identity)
     whole -= unchanged
     for identity in sorted(whole, key=str):
@@ -344,9 +338,6 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
                 if anchor is not None and anchor.tile_uuid in held_tiles else None)
                 if identity in whole or identity in moved else None,
             observed_faces=observed_faces(placement, visible)))
-    # The stamped objects the client drops on the entered cells (neither sent nor unchanged) lose their stamps.
-    dropped = {identity for identity in world_objects_at(world, entered) - whole - changed - unchanged
-               if object_stamp(stamps, identity) is not None}
     removed = sorted((identity for identity in before_observed - after
         if identity in written or identity not in world.objects
         or any(cell_in(visible, cell) for cell in placement_support_cells(world.objects[identity].placement))),
@@ -453,11 +444,12 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         residues=tuple(residues[key] for key in sorted(residues)),
         residues_removed=tuple(residues_removed[key] for key in sorted(residues_removed)),
         object_looks=tuple(rows.object_looks), objects=pack_object_rows(object_rows),
-        objects_unchanged=tuple(sorted(unchanged & touching, key=str)), objects_removed=tuple(removed),
+        objects_unchanged=tuple(sorted((unchanged - changed) & touching, key=str)), objects_removed=tuple(removed),
         contents=tuple(contents), contents_changed=tuple(contents_changed),
         connectors=tuple(connectors[identity] for identity in sorted(connectors, key=str)),
         connectors_removed=tuple(connectors_removed))
     if update == WorldUpdate(occurrence=occurrence):
         return None
-    stamp_world_update(stamps, update, occurrence, dropped)
+    stamp_world_update(stamps, update, object_rows, lambda position: session_tile_digest(digests, world, position),
+                       lambda identity: world.objects[identity].placement)
     return update

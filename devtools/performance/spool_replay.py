@@ -8,9 +8,8 @@ so the follower resumes after the operation it consumed (a seat with two operati
 after a consumed operation fails). The
 host serves a copy of the spool, so nothing the host does to its recording can touch the run's. Each record is folded by the client reference fold. After every
 record the client state (memory included) must equal the live run's (the manifest's digests), the final states
-must match, and the O3 views stored at each operation end must be reproduced. Each seat's revision stamps are
-restored from its own records (`stamp_replay`) and must equal the live run's, but on records written since their
-stamp, which travel whole with either stamp.
+must match, and the O3 views stored at each operation end must be reproduced. Each seat's digest stamps are
+restored from its own records (`stamp_replay`) and must equal the live run's.
 
     PYTHONHASHSEED=1 PYTHONPATH=<tree>:<tree>/sdk/python/src <python with jsonschema-rs> \\
         devtools/performance/spool_replay.py <oracle directory>
@@ -37,7 +36,7 @@ import httpx
 from devtools.performance import seat_oracle
 from dnd.player.facts import PlayerInitialization, PlayerState, WorldUpdate
 from dnd.player.reduction import reduce_initialization, reduce_operation
-from dnd.player.stamp_replay import replay_revision_stamps
+from dnd.player.stamp_replay import replay_world_stamps
 from dnd_player import contracts, transport as sdk
 from server.app import create_app
 from server.config import SeatCredential, ServerConfig
@@ -109,28 +108,16 @@ def stored_views(directory: Path) -> dict[str, dict[int, list[str]]]:
 
 def stamp_mismatches(seat: str, initialization: PlayerInitialization, updates: list[WorldUpdate],
                      manifest: dict[str, Any], counts: dict[str, Any]) -> list[dict[str, Any]]:
-    """The seat's stamps restored from its records against the live run's: equal, but on a record written since
-    the stamp one side holds (it travels whole either way; counted as `written_since`)."""
-    native_of = {public: int(native) for native, public in manifest['public_cursors'][seat].items()}
+    """The seat's digest stamps restored from its records against the live run's: they must be equal."""
     memory = PlayerState(generation=initialization.generation, observer_uuid=initialization.observer_uuid,
                          world=initialization.world, audience=initialization.audience)
-    restored = seat_oracle.stamp_data(replay_revision_stamps(memory, updates, native_of))
-    live, revisions = manifest['revision_stamps'][seat], manifest['world_revisions']
-    mismatches = []
-    counts['stamps'] = {'tiles': len(restored['tiles']), 'objects': len(restored['objects']), 'written_since': 0}
-    for kind in ('tiles', 'objects'):
-        for name in sorted(live[kind].keys() | restored[kind].keys()):
-            held, rebuilt = live[kind].get(name), restored[kind].get(name)
-            if held == rebuilt:
-                continue
-            one_sided = held if rebuilt is None else rebuilt if held is None else None
-            if one_sided is not None:
-                if revisions[kind].get(name, -1) > one_sided[0]:
-                    counts['stamps']['written_since'] += 1
-                    continue
-            mismatches.append({'seat': seat, 'kind': 'stamp', 'record': kind, 'key': name, 'live': held,
-                               'restored': rebuilt})
-    return mismatches
+    restored = seat_oracle.stamp_data(replay_world_stamps(memory, updates))
+    live = manifest['world_stamps'][seat]
+    counts['stamps'] = {'tiles': len(restored['tiles']), 'objects': len(restored['objects'])}
+    return [{'seat': seat, 'kind': 'stamp', 'record': kind, 'key': name, 'live': live[kind].get(name),
+             'restored': restored[kind].get(name)}
+            for kind in ('tiles', 'objects') for name in sorted(live[kind].keys() | restored[kind].keys())
+            if live[kind].get(name) != restored[kind].get(name)]
 
 
 async def follow_seat(app, seat: str, token: str, digests: list[str], views: dict[int, list[str]],

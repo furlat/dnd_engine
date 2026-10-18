@@ -389,7 +389,7 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
                           str(CHEST): object_view(chest_at, name="Chest", is_open=True),
                           str(TORCH): object_view(torch_at, name="Torch")})),
         ]),
-        "w14_a_reentered_cell_keeps_what_nothing_wrote": (
+        "w14_a_reentered_cell_keeps_what_the_seat_holds": (
             "An entered cell in `tiles_unchanged` keeps the tile the client holds (its scalars, condition names and "
             "residues), and an object in `objects_unchanged` is spared the reset; the other entered cells are reset as "
             "always (the torch there, neither sent nor unchanged, is dropped).",

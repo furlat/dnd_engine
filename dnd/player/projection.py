@@ -60,8 +60,8 @@ from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelop
 from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import PlayerResourceValue
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
-from dnd.player.revision_stamps import (RevisionStamps, SeatStamps, StampChanges, WorldRevisions,
-    merge_revision_stamps, record_world_revisions)
+from dnd.player.world_stamps import (SeatStamps, StampChanges, WorldDigests, WorldStamps, forget_written,
+    merge_world_stamps)
 from dnd.player.static_sent import StaticSent, merge_static_sent
 from dnd.player.reduction import (apply_record_fact, change_membership,
     commit_current, fold_senses, observe_body, observed_actor, occurrence_order)
@@ -1109,7 +1109,7 @@ class SeatWalk:
     updates: list[WorldUpdate] = field(default_factory=list)
     # The static rows this walk's updates carry, joining the seat's sent set once the group is emitted.
     pending: StaticSent = field(default_factory=StaticSent)
-    # The revision stamps this walk's updates set or drop, joining the seat's once the group is emitted.
+    # The stamp changes this walk's updates make, joining the seat's stamps once the group is emitted.
     stamps: StampChanges = field(default_factory=StampChanges)
     # The versions whose records the seat's world updates carried: each once per seat (a walked event's own, or a
     # change several members saw happen).
@@ -1220,12 +1220,12 @@ def _fold_version(session: "SessionProjection", folded: dict[UUID, AppliedWorldF
         raise ValueError("A session folds each version once")
     folded[event.uuid] = applied = apply_world_fact(session.world, event, condition)
     if applied is not None:
-        record_world_revisions(session.world_revisions, applied, session.versions[event.uuid])
+        forget_written(session.world_digests, applied)
     return applied
 
 
 def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", world: WorldFacts,
-                   revisions: WorldRevisions, event: Event,
+                   digests: WorldDigests, event: Event,
                    applied: AppliedWorldFact | None, folded: Mapping[UUID, AppliedWorldFact | None],
                    before: CellMask) -> None:
     """The seat's world update at an event (`before`: its composed view's visible cells before the event): what
@@ -1248,13 +1248,13 @@ def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", w
         return
     update = seat_world_update(world, group.indexes[event.uuid], records, before, view, composition.perception,
         audience, sensed, observed=state.observed_objects, granted=state.granted_containers, sent=state.static_sent,
-        pending=walk.pending, revisions=revisions, stamps=SeatStamps(state.revision_stamps, walk.stamps))
+        pending=walk.pending, digests=digests, stamps=SeatStamps(state.world_stamps, walk.stamps))
     if update is not None:
         walk.updates.append(update)
 
 
 def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", world: WorldFacts,
-                 revisions: WorldRevisions, event: Event,
+                 digests: WorldDigests, event: Event,
                  applied: AppliedWorldFact | None, folded: Mapping[UUID, AppliedWorldFact | None]) -> None:
     """A seat's part of an event after the session world took its after-values (`applied`: what the fold applied):
     its senses, its world update, its node. `folded` holds what each version the group folded so far applied."""
@@ -1267,7 +1267,7 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
         if isinstance(event, SensoryUpdateEvent) and sensed_here:
             # The member's senses: the seat's perception and composed view after the event.
             fold_senses(remembered, event, cursor=indexes[event.uuid], audience_composition=composition)
-        _publish_world(walk, group, state, world, revisions, event, applied, folded, before)
+        _publish_world(walk, group, state, world, digests, event, applied, folded, before)
     view = state.audience_composition.view
     observed_objects = walk.observed_objects
     if (isinstance(event, ActionEvent) and event.source_item_uuid is not None
@@ -1741,8 +1741,8 @@ class SessionProjection:
     versions: dict[UUID, int] = field(default_factory=dict)
     lineages: dict[UUID, int] = field(default_factory=dict)
     world: WorldFacts = field(default_factory=WorldFacts)
-    # The native index of each world record's last write, written with the world by `_fold_version`.
-    world_revisions: WorldRevisions = field(default_factory=WorldRevisions)
+    # The digest of each tile's current value, forgotten with each write by `_fold_version`.
+    world_digests: WorldDigests = field(default_factory=WorldDigests)
     walked: set[UUID] = field(default_factory=set)
 
 
@@ -1765,8 +1765,8 @@ class ProjectionState:
     audience: PlayerAudience
     # The static content the seat was sent, updated from each emitted group.
     static_sent: StaticSent = field(default_factory=StaticSent)
-    # When the seat last had each world record whole (native index), updated from each emitted group.
-    revision_stamps: RevisionStamps = field(default_factory=RevisionStamps)
+    # The digest of each world record as the seat holds it, updated from each emitted group.
+    world_stamps: WorldStamps = field(default_factory=WorldStamps)
     # Disclosed lineages, by their native key (`NativeKeys.lineages`).
     disclosed_lineages: set[int] = field(default_factory=set)
     public_versions: dict[UUID, int] = field(default_factory=dict)
@@ -2068,7 +2068,7 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
             _enter_event(walks[seat], group, states[seat], session.world, row)
         applied = _fold_version(session, folded, event, condition)
         for seat, row in due:
-            _leave_event(walks[seat], group, states[seat], session.world, session.world_revisions, row, applied, folded)
+            _leave_event(walks[seat], group, states[seat], session.world, session.world_digests, row, applied, folded)
     return tuple(_emit_initialization(group, state, initialization, walk, world)
         for state, initialization, walk, world in zip(states, initializations, walks, worlds, strict=True))
 
@@ -2085,7 +2085,7 @@ def _emit_initialization(group: WalkGroup, state: ProjectionState, initializatio
         _public_set(state, known_removals), sensory_rows, contacts)
     state.static_sent.actor_births.update(row.actor_uuid for row in observations)
     merge_static_sent(state.static_sent, walk.pending)
-    merge_revision_stamps(state.revision_stamps, walk.stamps)
+    merge_world_stamps(state.world_stamps, walk.stamps)
     return state, PlayerInitialization(generation=initialization.generation, observer_uuid=initialization.observer_uuid,
         world=world, nodes=nodes, version_rows=rows, end_cursor=state.next_occurrence,
         observations=observations, world_updates=updates, audience=state.audience, sensory_rows=sensory_rows,
@@ -2140,7 +2140,7 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
             _enter_event(walk, group, state, session.world, walk.events[position])
         applied = _fold_version(session, folded, event, condition)
         for walk, state in zip(walks, states):
-            _leave_event(walk, group, state, session.world, session.world_revisions, walk.events[position], applied,
+            _leave_event(walk, group, state, session.world, session.world_digests, walk.events[position], applied,
                          folded)
     return tuple(_emit_lineage(group, state, lineage, walk, start_cursor)
         for state, lineage, walk, start_cursor in zip(states, lineages, walks, start_cursors))
@@ -2170,7 +2170,7 @@ def _emit_lineage(group: WalkGroup, state: ProjectionState, lineage: CompletedLi
         _public_set(state, known_removals), sensory_rows, contacts)
     state.static_sent.actor_births.update(row.actor_uuid for row in observations)
     merge_static_sent(state.static_sent, walk.pending)
-    merge_revision_stamps(state.revision_stamps, walk.stamps)
+    merge_world_stamps(state.world_stamps, walk.stamps)
     root_occurrence = state.public_cursors.get(group.keys.versions[lineage.root.uuid])
     root = next((index for index, node in enumerate(nodes) if node.occurrence == root_occurrence), None)
     return PlayerLineage(generation=lineage.generation, observer_uuid=lineage.observer_uuid,
