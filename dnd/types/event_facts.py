@@ -246,6 +246,27 @@ class WorldTileChanges(TypedDict, total=False):
     residues: tuple[TileResidueState, ...]
 
 
+class TileResidueChange(BaseModel):
+    """One material's keyed change on one Tile: the writer names the key, completion reads its after-value."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    residue_id: str
+    # The contribution row the deposit appended or grew; None when no contribution row changed.
+    contribution_index: Optional[StrictInt] = Field(default=None, ge=0)
+    # The material's after-value on the tile; None once it is removed.
+    state: Optional[TileResidueState] = None
+
+
+class WorldTileChange(BaseModel):
+    """One Tile's keyed change: the fields and materials one writer changed, with their after-values."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    position: Tuple[int, int]
+    changes: WorldTileChanges = Field(default_factory=lambda: WorldTileChanges())
+    residues: Tuple[TileResidueChange, ...] = ()
+
 
 class WorldConnectorState(BaseModel):
     """Complete renderer-neutral state of one admitted connector."""
