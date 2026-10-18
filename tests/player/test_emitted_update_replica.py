@@ -69,8 +69,8 @@ def operation_since(session: Session, start: int) -> Operation:
 
 
 def what_capture_reads(state: PlayerState) -> tuple:
-    return (state.actors, state.items, state.spatial_content, state.connectors,
-        state.tiles, state.objects)
+    # The server holds no world copy: the seat's world is the client's alone (player schema 16).
+    return (state.actors, state.items, state.spatial_content)
 
 
 def check_replica(session: Session, steps: tuple[Step, ...]) -> dict[str, PlayerState]:

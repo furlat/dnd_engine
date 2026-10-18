@@ -1,4 +1,9 @@
-"""Recorded local changes preserve remembered geometry and composite grants."""
+"""Recorded local changes reach the client by the world wire's rules (player schema 16).
+
+Leaving perception sends nothing, so the client keeps what it last saw; cells entering view are authoritative,
+so an object moved away while unseen is dropped when its old support is seen again; a composite names an
+attachment once the seat was sent its look; the client keeps a wall's faces not seen now.
+"""
 
 from uuid import uuid4
 
@@ -115,8 +120,9 @@ def test_later_attachment_knowledge_refreshes_an_unchanged_remnant_and_preserves
         sensory(observer, passive_perception_changed=True, passive_perception=11),
     )
     states = check(start, events)
+    # The attachment's look was sent: the composite keeps naming it after the attachment is seen gone.
     assert [state.objects[root].item.remnant_state.intact_supported_items for state in states] == [
-        (), (identity,), (identity,), ()]
+        (), (identity,), (identity,), (identity,)]
     assert identity not in states[0].objects and identity in states[1].objects
     assert identity not in states[2].objects
 
@@ -140,7 +146,9 @@ def test_hidden_move_keeps_old_placement_until_that_support_is_observed():
         sensory(observer, visible_cells_added=[(1, 0)]),
     ))
     assert states[0].objects[identity].contained_items[0].item_uuid == child.item_uuid
-    assert states[1].objects[identity].contained_items is None
+    # Leaving sight sends nothing: the client keeps the contents it last saw.
+    kept = states[1].objects[identity].contained_items
+    assert kept is not None and kept[0].item_uuid == child.item_uuid
     assert states[2].objects[identity].placement.position == (1, 0)
     assert identity not in states[3].objects
 
@@ -217,5 +225,6 @@ def test_remote_section_visibility_and_provider_after_values_refresh_constructio
     ))
     assert states[0].objects[identity].item.construction_suppressions == ()
     outcomes = [state.objects[identity].item.construction_suppressions[0] for state in states[1:]]
-    assert [row.positions for row in outcomes] == [(), ((4, 0),), ((4, 0),), ()]
+    # Leaving view sends nothing: the client keeps the suppressed cell it last saw.
+    assert [row.positions for row in outcomes] == [(), ((4, 0),), ((4, 0),), ((4, 0),)]
     assert [row.area_geometry.radius_feet for row in outcomes] == [5, 5, 10, 10]

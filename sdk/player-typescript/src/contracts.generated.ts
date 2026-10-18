@@ -2289,10 +2289,127 @@ export type SpecialSenses = SensesType1[];
 export type Items1 = ItemPatch[];
 export type Observations = PlayerObservation[];
 export type Occurrence2 = number;
-export type Tiles = WorldTileState[];
-export type ContainedItems = FloorItem[] | null;
-export type Objects = PlayerObject[];
+export type X0 = number;
+export type Y0 = number;
+export type Width1 = number;
+export type Height1 = number;
+export type Bits1 = string;
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position9 = [number, number];
+export type TileUuid3 = string;
+export type Name12 = string;
+export type TileStatics = TileStatic[];
+export type WalkingCost1 = string;
+export type FlyingCost1 = string;
+export type SwimmingCost1 = string;
+export type BurrowingCost1 = string;
+export type Flags = string;
+export type DefaultLight = string;
+export type ResolvedLight = string;
+export type ElevationSteps2 = number[];
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position10 = [number, number];
+export type Names = string[];
+export type TileConditions = TileConditions1[];
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position11 = [number, number];
+export type BlocksOptics3 = boolean;
+export type BlocksPropagation4 = boolean;
+export type WalkingCost2 = number;
+export type FlyingCost2 = number;
+export type SwimmingCost2 = number;
+export type BurrowingCost2 = number;
+export type ElevationSteps3 = number;
+export type TileChanges = TileFieldUpdate[];
+export type Values = string;
+export type ResidueId2 = string;
+export type Name13 = string;
+export type Description9 = string;
+export type MaxAmount1 = number;
+export type ResidueMaterials = ResidueMaterial[];
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position12 = [number, number];
+export type ResidueId3 = string;
+export type ConditionUuid6 = string | null;
+export type Amount3 = number | null;
+export type Index1 = number;
+export type Contributions1 = ContributionRow[];
+export type Residues1 = ResidueRow[];
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position13 = [number, number];
+export type ResidueId4 = string;
+export type ResiduesRemoved = ResidueKey[];
+export type ItemUuid6 = string;
+export type ItemId5 = string;
+export type VisualVariantId3 = string | null;
+export type ContactPassage4 = "structural" | "clear" | "blocked" | "light_weapons" | "hand_and_light_weapons";
+export type SupportedByUuid3 = string | null;
+export type MaximumHitPoints3 = number | null;
+export type ConcentrationCapacity3 = number;
+export type ConstructionOwnerUuid3 = string | null;
+export type ConstructionGeometry3 =
+  | (
+      | SpherePresentationGeometry
+      | ConePresentationGeometry
+      | LinePresentationGeometry
+      | CubePresentationGeometry
+      | CylinderPresentationGeometry
+      | WallPresentationGeometry
+      | WallAssemblyPresentationGeometry
+    )
+  | null;
+export type KnownToCreator3 = boolean;
+export type ObjectLooks = ObjectLook[];
+export type ItemUuid7 = string;
+export type Members = number | null;
+export type Name14 = string;
+export type VisualItemName3 = string;
+export type MapChar3 = string;
+export type IsOpen3 = boolean | null;
+export type IsLit4 = boolean | null;
+export type VeryBrightRadiusFeet3 = number | null;
+export type BrightRadiusFeet3 = number | null;
+export type DimRadiusFeet3 = number | null;
+export type StackCount3 = number;
+export type IsPickable3 = boolean;
+export type ItemEffects4 = ItemEffectPresentationState[];
+export type BlocksPropagation5 = boolean;
+export type IsEngaged3 = boolean | null;
+export type SurfaceResidues3 = ObjectResidueState[];
+export type CurrentHitPoints3 = number | null;
+export type ConcentrationSlots4 = ItemConcentrationSlot[];
+/**
+ * Physical state, independent of inventory or world placement.
+ */
+export type ItemIntegrity3 = "intact" | "destroyed";
+export type DestructionOutcome4 = string | null;
+export type ConstructionSuppressions3 = SpellSuppression[];
+export type ObservedFaces = CardinalDirection[];
+export type Objects = ObjectRow[];
 export type ObjectsRemoved = string[];
+export type ContainerUuid = string;
+export type ItemUuid8 = string;
+export type Items2 = ContainedItem[];
+export type Contents = ContainerContents[];
+export type ContainerUuid1 = string;
+export type Upserted = ContainedItem[];
+export type Removed = string[];
+export type ContentsChanged = ContentsChange[];
 export type ConnectorUuid1 = string;
 export type AuthoredId = string;
 export type PresentationKey = string;
@@ -2320,28 +2437,7 @@ export type ActionCostAmount = number;
 export type Bidirectional = boolean;
 export type Enabled = boolean;
 export type Connectors = WorldConnectorState[];
-/**
- * @minItems 2
- * @maxItems 2
- */
-export type Position9 = [number, number];
-export type Name12 = string;
-export type BlocksOptics3 = boolean;
-export type BlocksPropagation4 = boolean;
-export type WalkingCost1 = number;
-export type FlyingCost1 = number;
-export type SwimmingCost1 = number;
-export type BurrowingCost1 = number;
-export type ElevationSteps2 = number;
-export type ConditionNames1 = string[];
-export type Residues1 = TileResidueState[];
-export type TileChanges = TileFieldUpdate[];
-export type X0 = number;
-export type Y0 = number;
-export type Width1 = number;
-export type Height1 = number;
-export type Bits1 = string;
-export type Values = string;
+export type ConnectorsRemoved = string[];
 export type WorldUpdates = WorldUpdate[];
 export type Initiative = string[] | null;
 export type ActorUuid1 = string;
@@ -2402,7 +2498,7 @@ export type CompatibleItemSlots = [string, string[]][];
 /**
  * Handler display name.
  */
-export type Name13 = string;
+export type Name15 = string;
 /**
  * Primitive handler-rule identity.
  */
@@ -2471,7 +2567,7 @@ export type AreaPropagation1 = ("line_of_effect" | "connected" | "ignore_barrier
  * @minItems 2
  * @maxItems 2
  */
-export type Position10 = [number, number];
+export type Position14 = [number, number];
 /**
  * @minItems 1
  */
@@ -2485,11 +2581,11 @@ export type Revision1 = number;
  * @minItems 2
  * @maxItems 2
  */
-export type Position11 = [number, number];
+export type Position15 = [number, number];
 export type BaseHeightSteps6 = number;
-export type VeryBrightRadiusFeet3 = number;
-export type BrightRadiusFeet3 = number;
-export type DimRadiusFeet3 = number;
+export type VeryBrightRadiusFeet4 = number;
+export type BrightRadiusFeet4 = number;
+export type DimRadiusFeet4 = number;
 export type Appearance = "torch" | "neutral";
 export type ActorAnchored = boolean;
 export type AnchorEntity = number | null;
@@ -2516,10 +2612,10 @@ export type CorrelationId1 = string;
 export type ForceAttack1 = boolean;
 export type Uuid2 = string;
 export type Kind65 = "creature" | "object";
-export type Name14 = string | null;
+export type Name16 = string | null;
 export type Subjects = ChoiceSubject[];
 export type Positions3 = [number, number][];
-export type Index1 = number;
+export type Index2 = number;
 export type Distance = number | null;
 export type PathCost = number | null;
 export type ExtraTargetUuids = string[] | null;
@@ -2536,8 +2632,8 @@ export type OpportunityAttackExposures = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures = ChoiceExposure[];
 export type Kind66 = "subject";
 export type Subject = number;
-export type Position12 = number | null;
-export type Index2 = number;
+export type Position16 = number | null;
+export type Index3 = number;
 export type Distance1 = number | null;
 export type PathCost1 = number | null;
 export type ExtraTargetUuids1 = string[] | null;
@@ -2549,8 +2645,8 @@ export type SafePath1 = number[] | null;
 export type OpportunityAttackExposures1 = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures1 = ChoiceExposure[];
 export type Kind67 = "position";
-export type Position13 = number;
-export type Index3 = number;
+export type Position17 = number;
+export type Index4 = number;
 export type Distance2 = number | null;
 export type PathCost2 = number | null;
 export type ExtraTargetUuids2 = string[] | null;
@@ -2638,7 +2734,7 @@ export type DisplayName2 = string;
 /**
  * Action description
  */
-export type Description9 = string;
+export type Description10 = string;
 /**
  * Type of cost (actions, bonus_actions, etc.)
  */
@@ -2667,7 +2763,7 @@ export type RestrictedActionBudget = string | null;
 /**
  * Human-readable cost label.
  */
-export type Name15 = string;
+export type Name17 = string;
 /**
  * Action economy bucket consumed by this cost.
  */
@@ -3057,7 +3153,7 @@ export type ItemChargeCost = number;
 /**
  * Human-readable cost label.
  */
-export type Name16 = string;
+export type Name18 = string;
 /**
  * Action economy bucket consumed by this cost.
  */
@@ -3155,7 +3251,7 @@ export type RemainingMovement = number;
 export type SubjectUuid = string;
 export type BehaviorId10 = string;
 export type Label2 = string;
-export type Description10 = string;
+export type Description11 = string;
 export type DefaultPriority1 = number;
 export type ContactPositions1 = [number, number][];
 export type ConnectorUuid3 = string | null;
@@ -3251,7 +3347,7 @@ export type Kind73 = "execute_selection";
 export type DiscoveryGeneration3 = number;
 export type Kind74 = "end_turn";
 export type Kind75 = "equip";
-export type ItemUuid6 = string;
+export type ItemUuid9 = string;
 export type Slot1 = WeaponSlot | BodyPart | RingSlot;
 /**
  * Body positions that may hold armor or accessories.
@@ -5395,24 +5491,227 @@ export interface PerceivedContact {
   special_senses?: SpecialSenses;
 }
 /**
- * The world values a seat observes at an occurrence: new tiles, known tiles' changed fields, objects, connectors.
+ * The world a seat perceives change at one occurrence.
  *
- * `resolved_light` is the changed resolved light of known tiles, as a value
- * per cell (a `LightLevel`); `tile_changes` carry their other changed fields.
+ * `entered` is the update's authoritative scope: for those cells the client drops everything it holds and keeps
+ * only what this update carries, their tiles, every object touching them (`placement_support_cells`) and every
+ * connector with an endpoint there; no object or connector there means none. Every other row is the keyed change
+ * of a record the seat perceived before and after the occurrence. Static rows come once per (kind, id) per seat.
  */
 export interface WorldUpdate {
   occurrence: Occurrence2;
-  tiles: Tiles;
-  objects: Objects;
-  objects_removed: ObjectsRemoved;
-  connectors: Connectors;
+  entered?: CellMask;
+  tile_statics?: TileStatics;
+  tile_columns?: TileColumns | null;
+  tile_conditions?: TileConditions;
   tile_changes?: TileChanges;
   resolved_light?: CellValues;
+  residue_materials?: ResidueMaterials;
+  residues?: Residues1;
+  residues_removed?: ResiduesRemoved;
+  object_looks?: ObjectLooks;
+  objects?: Objects;
+  objects_removed?: ObjectsRemoved;
+  contents?: Contents;
+  contents_changed?: ContentsChanged;
+  connectors?: Connectors;
+  connectors_removed?: ConnectorsRemoved;
 }
-export interface PlayerObject {
-  placement: WorldObjectPlacement;
-  item: FloorItem;
-  contained_items?: ContainedItems;
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits1;
+}
+/**
+ * A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new
+ * uuid).
+ */
+export interface TileStatic {
+  position: Position9;
+  tile_uuid: TileUuid3;
+  surface: TileSurface;
+  name: Name12;
+}
+/**
+ * The changeable scalars of the entered cells that hold a tile, one byte per cell per column in `cells` order
+ * (x, then y: the `CellValues` order). `flags` holds blocks_optics (bit 0), blocks_propagation (bit 1), the
+ * surface kind (bits 2-3: ordinary, stairs, ramp) and the slope axis (bits 4-5: none, north-south, east-west).
+ * `elevation_steps` is empty when every cell is at 0.
+ */
+export interface TileColumns {
+  cells: CellMask1;
+  walking_cost: WalkingCost1;
+  flying_cost: FlyingCost1;
+  swimming_cost: SwimmingCost1;
+  burrowing_cost: BurrowingCost1;
+  flags: Flags;
+  default_light: DefaultLight;
+  resolved_light: ResolvedLight;
+  elevation_steps?: ElevationSteps2;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask1 {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits1;
+}
+/**
+ * A tile's own condition names after the occurrence (never its residues' names), in the tile's order.
+ */
+export interface TileConditions1 {
+  position: Position10;
+  names: Names;
+}
+/**
+ * A perceived tile's changed scalars, each with its after-value; its conditions and residues change through
+ * their own rows and its static part never changes.
+ */
+export interface TileFieldUpdate {
+  position: Position11;
+  changes: WorldTileChanges;
+}
+/**
+ * A known tile's changed scalars on the player wire: present fields replace its values, omitted fields are
+ * unchanged. A tile's surface and name never change for its uuid; its conditions and residues have their own rows.
+ */
+export interface WorldTileChanges {
+  blocks_optics?: BlocksOptics3;
+  blocks_propagation?: BlocksPropagation4;
+  walking_cost?: WalkingCost2;
+  flying_cost?: FlyingCost2;
+  swimming_cost?: SwimmingCost2;
+  burrowing_cost?: BurrowingCost2;
+  elevation_steps?: ElevationSteps3;
+  surface_kind?: ElevationSurfaceKind;
+  slope_axis?: SlopeAxis | null;
+  default_light?: LightLevel;
+}
+/**
+ * One byte per cell of `cells`, in its cell order (x, then y).
+ */
+export interface CellValues {
+  cells: CellMask1;
+  values: Values;
+}
+/**
+ * A residue material's fixed part, sent once per residue id.
+ */
+export interface ResidueMaterial {
+  residue_id: ResidueId2;
+  name: Name13;
+  description: Description9;
+  max_amount: MaxAmount1;
+}
+/**
+ * One material on one tile: whole for a key the client does not hold (its condition uuid present), else the
+ * occurrence's change (`amount` None: unchanged; the contributions it set).
+ */
+export interface ResidueRow {
+  position: Position12;
+  residue_id: ResidueId3;
+  condition_uuid?: ConditionUuid6;
+  amount?: Amount3;
+  contributions?: Contributions1;
+}
+/**
+ * One contribution of a residue, set at its index (the index after the last appends one).
+ */
+export interface ContributionRow {
+  index: Index1;
+  contribution: ResidueContribution;
+}
+export interface ResidueKey {
+  position: Position13;
+  residue_id: ResidueId4;
+}
+/**
+ * A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid (a census of
+ * every gallery case's world fold; a broken object's visual name changes, so it is state).
+ */
+export interface ObjectLook {
+  item_uuid: ItemUuid6;
+  item_id: ItemId5;
+  visual_variant_id?: VisualVariantId3;
+  contact_passage?: ContactPassage4;
+  supported_by_uuid?: SupportedByUuid3;
+  door_mechanism?: DoorMechanism | null;
+  door_swing?: DoorSwing | null;
+  maximum_hit_points?: MaximumHitPoints3;
+  concentration_capacity?: ConcentrationCapacity3;
+  construction_owner_uuid?: ConstructionOwnerUuid3;
+  construction_geometry?: ConstructionGeometry3;
+  known_to_creator?: KnownToCreator3;
+}
+/**
+ * A world object the seat observes.
+ *
+ * An entering row carries its state, placement and the faces its residues are authoritative for (those whose
+ * viewing cell some member sees); a perceived object's change carries its state, and its placement when it moved.
+ * A row without a state changes only which members observe the object. `members`: bit i is the audience's
+ * `observers[i]`; a seat with one observer leaves it out.
+ */
+export interface ObjectRow {
+  item_uuid: ItemUuid7;
+  members?: Members;
+  state?: ObjectState | null;
+  placement?: WorldObjectPlacement | null;
+  observed_faces?: ObservedFaces;
+}
+/**
+ * A floor item's changeable part, its value at the occurrence; a field holding its default is left out.
+ */
+export interface ObjectState {
+  name: Name14;
+  visual_item_name: VisualItemName3;
+  map_char: MapChar3;
+  boundary_structure?: BoundaryStructure | null;
+  is_open?: IsOpen3;
+  is_lit?: IsLit4;
+  very_bright_radius_feet?: VeryBrightRadiusFeet3;
+  bright_radius_feet?: BrightRadiusFeet3;
+  dim_radius_feet?: DimRadiusFeet3;
+  stack_count?: StackCount3;
+  is_pickable?: IsPickable3;
+  item_effects?: ItemEffects4;
+  blocks_propagation?: BlocksPropagation5;
+  is_engaged?: IsEngaged3;
+  surface_residues?: SurfaceResidues3;
+  current_hit_points?: CurrentHitPoints3;
+  concentration_slots?: ConcentrationSlots4;
+  remnant_state?: ItemRemnantState | null;
+  integrity?: ItemIntegrity3;
+  destruction_outcome?: DestructionOutcome4;
+  construction_suppressions?: ConstructionSuppressions3;
+}
+/**
+ * A container's whole contents, on gaining sight of them (looks once, through `object_looks`).
+ */
+export interface ContainerContents {
+  container_uuid: ContainerUuid;
+  items?: Items2;
+}
+export interface ContainedItem {
+  item_uuid: ItemUuid8;
+  state: ObjectState;
+}
+/**
+ * A seen container's contents changing while the seat sees them.
+ */
+export interface ContentsChange {
+  container_uuid: ContainerUuid1;
+  upserted?: Upserted;
+  removed?: Removed;
 }
 /**
  * Complete renderer-neutral state of one admitted connector.
@@ -5431,47 +5730,6 @@ export interface WorldConnectorState {
   bidirectional: Bidirectional;
   enabled: Enabled;
   provocation_policy: ConnectorProvocationPolicy;
-}
-export interface TileFieldUpdate {
-  position: Position9;
-  changes: WorldTileChanges;
-}
-/**
- * Present fields replace known tile values; omitted fields are unchanged.
- */
-export interface WorldTileChanges {
-  surface?: TileSurface;
-  name?: Name12;
-  blocks_optics?: BlocksOptics3;
-  blocks_propagation?: BlocksPropagation4;
-  walking_cost?: WalkingCost1;
-  flying_cost?: FlyingCost1;
-  swimming_cost?: SwimmingCost1;
-  burrowing_cost?: BurrowingCost1;
-  elevation_steps?: ElevationSteps2;
-  surface_kind?: ElevationSurfaceKind;
-  slope_axis?: SlopeAxis | null;
-  default_light?: LightLevel;
-  condition_names?: ConditionNames1;
-  residues?: Residues1;
-}
-/**
- * One byte per cell of `cells`, in its cell order (x, then y).
- */
-export interface CellValues {
-  cells: CellMask;
-  values: Values;
-}
-/**
- * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
- * least significant bit first within each byte.
- */
-export interface CellMask {
-  x0: X0;
-  y0: Y0;
-  width: Width1;
-  height: Height1;
-  bits: Bits1;
 }
 /**
  * The projection of a group's sheet and initiative facts for the seat's controlled actors.
@@ -5563,7 +5821,7 @@ export interface PlayerResource {
  * Player-toggleable event handler exposed with available actions.
  */
 export interface AvailableHandlerInfo {
-  name: Name13;
+  name: Name15;
   behavior_id: BehaviorId8;
   provided_by_id: ProvidedById1;
   origin_root_id?: OriginRootId1;
@@ -5616,7 +5874,7 @@ export interface SensoryRows {
   light_sources?: LightSources;
   light_removal_uuid_index?: LightRemovalUuidIndex;
   light_removal_revisions?: LightRemovalRevisions;
-  cells?: CellMask2;
+  cells?: CellMask3;
   light_levels?: LightLevels;
   hazards?: Hazards;
 }
@@ -5638,7 +5896,7 @@ export interface RowBits5 {
  */
 export interface SpatialEffectSighting {
   duration?: ConditionDurationSummary | null;
-  positions: CellMask;
+  positions: CellMask1;
   owner_revision?: OwnerRevision;
   apparent_presence?: ApparentPresence;
   trap_state?: TrapState | null;
@@ -5656,7 +5914,7 @@ export interface SpatialEffectSighting {
   construction_sections?: ConstructionSections;
   area_propagation?: AreaPropagation1;
   deposit_source?: MaterialDepositSource | null;
-  visible_volume_positions?: CellMask1;
+  visible_volume_positions?: CellMask2;
   upper_volume_surfaces?: UpperVolumeSurfaces;
   suppressions?: Suppressions1;
 }
@@ -5664,7 +5922,7 @@ export interface SpatialEffectSighting {
  * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
  * least significant bit first within each byte.
  */
-export interface CellMask1 {
+export interface CellMask2 {
   x0: X0;
   y0: Y0;
   width: Width1;
@@ -5680,7 +5938,7 @@ export interface CellMask1 {
  * satisfying one complete entry is sufficient; planes within it remain AND.
  */
 export interface VolumeSurfaceSight {
-  position: Position10;
+  position: Position14;
   lower_height_planes: LowerHeightPlanes;
 }
 /**
@@ -5692,11 +5950,11 @@ export interface VolumeSurfaceSight {
 export interface LightRow {
   source: Source1;
   revision: Revision1;
-  position: Position11;
+  position: Position15;
   base_height_steps?: BaseHeightSteps6;
-  very_bright_radius_feet: VeryBrightRadiusFeet3;
-  bright_radius_feet: BrightRadiusFeet3;
-  dim_radius_feet: DimRadiusFeet3;
+  very_bright_radius_feet: VeryBrightRadiusFeet4;
+  bright_radius_feet: BrightRadiusFeet4;
+  dim_radius_feet: DimRadiusFeet4;
   appearance?: Appearance;
   actor_anchored?: ActorAnchored;
   anchor_entity?: AnchorEntity;
@@ -5707,14 +5965,14 @@ export interface LightRow {
  * One byte per cell of `cells`, in its cell order (x, then y).
  */
 export interface CellValues1 {
-  cells: CellMask;
+  cells: CellMask1;
   values: Values;
 }
 /**
  * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
  * least significant bit first within each byte.
  */
-export interface CellMask2 {
+export interface CellMask3 {
   x0: X0;
   y0: Y0;
   width: Width1;
@@ -5725,7 +5983,7 @@ export interface CellMask2 {
  * One byte per cell of `cells`, in its cell order (x, then y).
  */
 export interface CellValues2 {
-  cells: CellMask;
+  cells: CellMask1;
   values: Values;
 }
 /**
@@ -5776,10 +6034,10 @@ export interface PlayerChoices {
 export interface ChoiceSubject {
   uuid: Uuid2;
   kind: Kind65;
-  name?: Name14;
+  name?: Name16;
 }
 export interface SubjectBinding {
-  index: Index1;
+  index: Index2;
   distance?: Distance;
   path_cost?: PathCost;
   extra_target_uuids?: ExtraTargetUuids;
@@ -5792,7 +6050,7 @@ export interface SubjectBinding {
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures;
   kind: Kind66;
   subject: Subject;
-  position?: Position12;
+  position?: Position16;
 }
 export interface ChoiceExposure {
   reactor_uuid: ReactorUuid;
@@ -5801,7 +6059,7 @@ export interface ChoiceExposure {
   to_position: ToPosition2;
 }
 export interface PositionBinding {
-  index: Index2;
+  index: Index3;
   distance?: Distance1;
   path_cost?: PathCost1;
   extra_target_uuids?: ExtraTargetUuids1;
@@ -5813,10 +6071,10 @@ export interface PositionBinding {
   opportunity_attack_exposures?: OpportunityAttackExposures1;
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures1;
   kind: Kind67;
-  position: Position13;
+  position: Position17;
 }
 export interface SelfBinding {
-  index: Index3;
+  index: Index4;
   distance?: Distance2;
   path_cost?: PathCost2;
   extra_target_uuids?: ExtraTargetUuids2;
@@ -5855,7 +6113,7 @@ export interface PlayerAction {
   availability_status: ActionAvailabilityStatus;
   can_afford: CanAfford;
   display_name: DisplayName2;
-  description?: Description9;
+  description?: Description10;
   cost_type: CostType;
   cost_amount?: CostAmount;
   restricted_action_budget?: RestrictedActionBudget;
@@ -5948,7 +6206,7 @@ export interface PositionRegion {
  * Serializable action cost without executable callbacks.
  */
 export interface BaseCost {
-  name?: Name15;
+  name?: Name17;
   cost_type: CostType1;
   cost: Cost;
   resource_name?: ResourceName;
@@ -6091,7 +6349,7 @@ export interface TopologyEffectProfile {
  * A published cost paid only when the declared trigger occurs.
  */
 export interface ConditionalCost {
-  name?: Name16;
+  name?: Name18;
   cost_type: CostType2;
   cost: Cost1;
   resource_name?: ResourceName1;
@@ -6157,7 +6415,7 @@ export interface AvailableWorldInteraction {
   subject_uuid: SubjectUuid;
   behavior_id: BehaviorId10;
   label: Label2;
-  description?: Description10;
+  description?: Description11;
   default_priority?: DefaultPriority1;
   contact_positions?: ContactPositions1;
   connector_uuid?: ConnectorUuid3;
@@ -6244,7 +6502,7 @@ export interface EquipIntent {
   item: EquipItem;
 }
 export interface EquipItem {
-  item_uuid: ItemUuid6;
+  item_uuid: ItemUuid9;
   slot: Slot1;
 }
 export interface UnequipIntent {
@@ -6399,7 +6657,7 @@ export interface SensoryRows1 {
   light_sources?: LightSources;
   light_removal_uuid_index?: LightRemovalUuidIndex;
   light_removal_revisions?: LightRemovalRevisions;
-  cells?: CellMask2;
+  cells?: CellMask3;
   light_levels?: LightLevels;
   hazards?: Hazards;
 }

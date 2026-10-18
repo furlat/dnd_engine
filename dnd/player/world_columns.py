@@ -9,8 +9,7 @@ from collections.abc import Mapping
 
 from dnd.core.cells import mask_from_positions, mask_positions
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
-from dnd.player.facts import FloorItem
-from dnd.player.world_wire import ObjectLook, ObjectState, TileColumns, TileStatic
+from dnd.player.facts import FloorItem, ObjectLook, ObjectState, TileColumns, TileStatic
 from dnd.types.event_facts import WorldTileState
 from dnd.types.world import LightLevel
 

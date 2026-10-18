@@ -1007,7 +1007,8 @@ def test_dependency_direction_is_respected() -> None:
 # module joins the publishers once the last held client value it reads is deleted; the sensory lane adds the
 # projection, which still runs the client's body fold until then.
 CLIENT_FOLD_MODULES = ("dnd.player.reduction", "dnd.player.world_reduction")
-SEAT_PUBLISHING_MODULES = frozenset({"dnd.player.application", "dnd.player.capture", "server.worker"})
+SEAT_PUBLISHING_MODULES = frozenset({"dnd.player.application", "dnd.player.capture", "server.worker",
+    "dnd.player.world_publication"})
 
 
 def test_seat_publication_does_not_import_the_client_fold() -> None:
@@ -1030,18 +1031,29 @@ def test_the_session_world_has_one_writer() -> None:
     assert writers == ["_fold_version"]
 
 
-# The schema-16 world wire stages beside the projector until the switch moves its types into facts.py: only the
-# client fold and its codec import it (and its vector tooling, outside production).
-WORLD_WIRE_STAGING = "dnd.player.world_wire"
-WORLD_WIRE_STAGING_READERS = frozenset({"dnd.player.world_reduction", "dnd.player.world_columns"})
+def _rooted_at(node: ast.expr, name: str) -> bool:
+    """Whether an attribute, subscript or call chain starts at the variable `name`."""
+    while isinstance(node, (ast.Attribute, ast.Subscript, ast.Call)):
+        node = node.func if isinstance(node, ast.Call) else node.value
+    return isinstance(node, ast.Name) and node.id == name
 
 
-def test_staged_world_wire_is_read_only_by_the_client_fold() -> None:
-    violations = [reference for reference in _import_references()
-        if reference.target == WORLD_WIRE_STAGING and reference.importer not in WORLD_WIRE_STAGING_READERS]
-    assert not violations, (
-        "Only the client world fold reads the staged world wire:\n" + _format_import_references(violations)
-    )
+def test_world_publication_reads_the_world_as_of_the_occurrence_and_never_compares_it() -> None:
+    """The seats' world publication reads one world (the session's, as of the occurrence) and what the occurrence
+    wrote: it takes no second world, reads no client memory and compares no world value with another."""
+    path = REPOSITORY_ROOT / "dnd" / "player" / "world_publication.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    imported = {alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) for alias in node.names}
+    assert not imported & {"PlayerState", "copy_world_facts", "WorldMemory"}
+    for function in (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)):
+        worlds = [row.arg for row in function.args.args + function.args.kwonlyargs
+                  if isinstance(row.annotation, ast.Name) and row.annotation.id == "WorldFacts"]
+        assert len(worlds) <= 1, function.name
+        for compare in (node for node in ast.walk(function) if isinstance(node, ast.Compare)):
+            if not any(isinstance(op, (ast.Eq, ast.NotEq)) for op in compare.ops):
+                continue
+            assert not any(_rooted_at(side, world) for side in (compare.left, *compare.comparators)
+                           for world in worlds), f"{function.name} compares a world value (line {compare.lineno})"
 
 
 def test_game_import_does_not_load_ai_or_server_packages() -> None:

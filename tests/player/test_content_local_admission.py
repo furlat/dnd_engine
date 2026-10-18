@@ -67,8 +67,8 @@ def test_transient_world_content_matches_reference_and_cold_replay(session):
     assert private.ref not in {row.ref for row in before.content}
     guardian, operation = transient_guardian(session)
     update = capture_application_operation(runtimes, operation, catalog)['party']
-    assert any(obj.item.item_id == private.ref.content_id for lineage in update.lineages
-        for world in lineage.world_updates for obj in world.objects)
+    assert any(look.item_id == private.ref.content_id for lineage in update.lineages
+        for world in lineage.world_updates for look in world.object_looks)
     assert private.ref in {row.ref for row in update.content_additions}
     assert seat_content(runtime) == admitted_content(catalog,
         replace(runtime.projection.remembered, content=before.content), update.lineages)

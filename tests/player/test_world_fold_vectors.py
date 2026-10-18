@@ -6,19 +6,34 @@ the client world expected after each, written by hand (`devtools/fold_vectors_wo
 
 import json
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from pydantic import TypeAdapter
 
 from devtools.fold_vectors_world import DIRECTORY, documents
+from dnd.player.audience import PlayerAudience
+from dnd.player.facts import ObjectRow, PlayerState, PlayerWorld, TileFieldUpdate, WorldUpdate
 from dnd.player.world_reduction import fold_world_update
-from dnd.player.world_wire import ObjectRow, TileFieldUpdate, WorldMemory, WorldUpdate
 
 UPDATE = TypeAdapter(WorldUpdate)
 VECTORS = sorted(DIRECTORY.glob("*.json"))
+GENERATION = UUID("00000000-0000-4000-8000-00000000f000")
+WORLD = PlayerWorld(battlefield_id="vectors", battlefield_name="Vectors", bounds=(0, 0, 9, 9), width=10, height=10)
 
 
-def client_world_view(memory: WorldMemory) -> dict:
+def seat(observers: list[str]) -> PlayerState:
+    """An empty client of a seat with these observers."""
+    identities = tuple(UUID(observer) for observer in observers)
+    return PlayerState(generation=GENERATION, observer_uuid=identities[0], world=WORLD,
+        audience=PlayerAudience(controlled=(), observers=identities, revision=0))
+
+
+ONE = [str(UUID("00000000-0000-4000-8000-00000000000a"))]
+TWO = [*ONE, str(UUID("00000000-0000-4000-8000-00000000000b"))]
+
+
+def client_world_view(memory: PlayerState) -> dict:
     """What the client holds of the world, in the vectors' expected shape."""
     return {
         "tiles": {f"{x},{y}": {"tile": str(tile.tile_uuid), "walking_cost": tile.walking_cost,
@@ -42,8 +57,8 @@ def client_world_view(memory: WorldMemory) -> dict:
     }
 
 
-def _fold(memory: WorldMemory, observers: int, step: dict) -> WorldMemory:
-    fold_world_update(memory, UPDATE.validate_json(json.dumps(step["update"])), observers=observers)
+def _fold(memory: PlayerState, step: dict) -> PlayerState:
+    fold_world_update(memory, UPDATE.validate_json(json.dumps(step["update"])))
     return memory
 
 
@@ -54,9 +69,9 @@ def test_the_vector_files_are_their_written_source():
 @pytest.mark.parametrize("path", VECTORS, ids=[path.stem for path in VECTORS])
 def test_vector_folds_to_its_expected_worlds(path: Path):
     vector = json.loads(path.read_text())
-    memory = WorldMemory()
+    memory = seat(vector["observers"])
     for index, step in enumerate(vector["steps"]):
-        _fold(memory, len(vector["observers"]), step)
+        _fold(memory, step)
         assert client_world_view(memory) == step["expected"], f"step {index}"
 
 
@@ -67,18 +82,17 @@ def _vector(name: str) -> dict:
 def test_a_seat_with_several_observers_must_name_each_object_rows_members():
     step = _vector("w1_an_object_moved_unseen_is_dropped_when_its_cell_reenters")["steps"][0]
     with pytest.raises(ValueError, match="names the members of each object row"):
-        _fold(WorldMemory(), 2, step)
+        _fold(seat(TWO), step)
 
 
 def test_keyed_rows_require_what_they_change():
     first = _vector("w1_an_object_moved_unseen_is_dropped_when_its_cell_reenters")["steps"][0]
     with pytest.raises(ValueError, match="already known tile"):
-        fold_world_update(WorldMemory(), WorldUpdate(occurrence=0, tile_changes=(
-            TileFieldUpdate(position=(9, 9), changes={"walking_cost": 2}),)), observers=1)
+        fold_world_update(seat(ONE), WorldUpdate(occurrence=0, tile_changes=(
+            TileFieldUpdate(position=(9, 9), changes={"walking_cost": 2}),)))
     with pytest.raises(ValueError, match="names an object the client holds"):
-        fold_world_update(WorldMemory(), WorldUpdate(occurrence=0, objects=(
-            ObjectRow(item_uuid=UPDATE.validate_json(json.dumps(first["update"])).objects[0].item_uuid, members=1),)),
-            observers=1)
+        fold_world_update(seat(ONE), WorldUpdate(occurrence=0, objects=(
+            ObjectRow(item_uuid=UPDATE.validate_json(json.dumps(first["update"])).objects[0].item_uuid, members=1),)))
     without_look = {**first["update"], "object_looks": []}
     with pytest.raises(ValueError, match="first row requires its look"):
-        _fold(WorldMemory(), 1, {"update": without_look})
+        _fold(seat(ONE), {"update": without_look})

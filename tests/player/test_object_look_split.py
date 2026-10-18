@@ -6,7 +6,7 @@ from uuid import uuid4
 from dnd.core.item_types import DoorMechanism, DoorSwing, ItemIntegrity, ItemRemnantState
 from dnd.player.facts import FloorItem
 from dnd.player.world_columns import join_floor_item, split_floor_item
-from dnd.player.world_wire import ObjectLook, ObjectState
+from dnd.player.facts import ObjectLook, ObjectState
 from dnd.types.physical_access import ContactPassage
 from dnd.types.residues import ObjectResidueState
 from dnd.types.spell_suppression import SpellSuppression

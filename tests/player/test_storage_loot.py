@@ -108,7 +108,8 @@ def test_one_all_close_reopen_survive_cold_serialization(cache_world):
     assert chosen.loot_item_uuid not in {row.loot_item_uuid for row in rows(actor, chest)}
     commit(use(actor, chest, "Loot All"), set(), set(original))
     assert rows(actor, chest) == []
-    commit(use(actor, chest, "Close Chest"), None, set(original))
+    # Closing ends the grant; the client keeps the contents it last saw (empty after Loot All).
+    commit(use(actor, chest, "Close Chest"), set(), set(original))
     commit(use(actor, chest, "Open Chest"), set(), set(original))
     actor_uuid, chest_uuid = actor.uuid, chest.uuid
     saved = RecordedSequence(initialization=initial, lineages=tuple(recorded)).model_dump_json()
@@ -187,13 +188,14 @@ def test_full_stack_merge_removes_source_child_in_cold_view(cache_world):
     assert held.uuid in state.actors[actor.uuid].controlled_items and state.items[held.uuid].state.stack_count == 5
 
 
-def test_losing_sight_clears_contents_and_does_not_discover_private_items(cache_world):
+def test_losing_sight_keeps_last_contents_and_does_not_discover_private_items(cache_world):
     _, built, actor, chest = cache_world
     use(actor, chest, "Open Chest")
     session = SessionProjection()
     projection, public = begin_projection(session, initialization(built, actor))
     state = reduce_initialization(public)
-    assert len(state.objects[chest.uuid].contained_items) == 5
+    seen = state.objects[chest.uuid].contained_items
+    assert seen is not None and len(seen) == 5
     blinded = actor.add_condition(Blinded(source_entity_uuid=actor.uuid,
         target_entity_uuid=actor.uuid,
         duration=Duration(duration=3, duration_type=DurationType.ROUNDS)), check_save_throw=False)
@@ -204,7 +206,8 @@ def test_losing_sight_clears_contents_and_does_not_discover_private_items(cache_
         packet = project_lineage(session, projection, native)
         assert packet is not None
         state = reduce_lineage(state, packet)
-    assert chest.uuid not in state.objects or state.objects[chest.uuid].contained_items is None
+    # Leaving sight sends nothing: the client keeps the contents it saw, and nothing new is disclosed.
+    assert state.objects[chest.uuid].contained_items == seen
 
 
 def test_partial_loot_all_keeps_exact_remaining_contents_visible(cache_world):

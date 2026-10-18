@@ -20,6 +20,7 @@ from dnd.player.event_record import RecordedEvent, encode_event
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
+from dnd.core.cells import mask_positions
 from dnd.types.cells import cell_in
 from dnd.types.world import LightLevel
 from dnd.runtime_reset import reset_engine_runtime
@@ -239,16 +240,19 @@ def test_shared_light_tile_after_values_precede_parent_completion_and_survive_co
             assert packet is not None
             packets.append(packet)
             lineages.append(native)
+            indexes = {row.event_uuid: row.source_index for row in native.objective_rows}
+            light_completion = next(event for event in native.events
+                if event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+                and event.phase is EventPhase.COMPLETION)
             for update in packet.world_updates:
-                assert {tile.position for tile in update.tiles} <= {position}
+                assert set(mask_positions(update.entered)) <= {position}
                 assert {row.position for row in update.tile_changes} <= {position}
                 assert not update.objects and not update.objects_removed
-                indexes = {row.event_uuid: row.source_index for row in native.objective_rows}
-                light_completion = next(event for event in native.events
-                    if event.event_type is EventType.SPATIAL_LIGHT_CHANGED
-                    and event.phase is EventPhase.COMPLETION)
-                native = next(cursor for cursor, public in projection.public_cursors.items() if public == update.occurrence)
-                assert native < indexes[light_completion.uuid]
+            # The light's after-value reaches the seat at the first observer's sight of it, before the light's
+            # completion (which carries the same after-value again).
+            earliest = min(cursor for cursor, public in projection.public_cursors.items()
+                if public == packet.world_updates[0].occurrence)
+            assert earliest < indexes[light_completion.uuid]
             state = reduce_lineage(state, packet)
         # The first observer's source after-value is projected while the other
         # observer still grants this cell. Darkness is remembered at that prefix

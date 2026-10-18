@@ -2,6 +2,7 @@
 
 The memory rules the client owns (plan §3.2, §3.4; world brief §3.3):
 
+- what the seat saw go is dropped first (`objects_removed`, `connectors_removed`);
 - entering cells are authoritative: everything held there is dropped and replaced by what the update carries;
 - an object is forgotten when the seat sees its support without it (an entered cell, or `objects_removed`);
 - a wall's residue faces not seen now keep their last sight (the face merge);
@@ -16,9 +17,9 @@ from dataclasses import replace
 from uuid import UUID
 
 from dnd.core.cells import mask_positions, values_items
-from dnd.player.facts import FloorItem, PlayerObject
+from dnd.player.facts import (ContainedItem, FloorItem, ObjectRow, PlayerObject, PlayerState, StaticStore,
+    WorldUpdate)
 from dnd.player.world_columns import join_floor_item, unpack_tile_columns
-from dnd.player.world_wire import ContainedItem, ObjectRow, WorldMemory, WorldStatic, WorldUpdate
 from dnd.types.event_facts import WorldTileState
 from dnd.types.residues import ObjectResidueState, TileResidueState
 from dnd.types.spell_suppression import SpellSuppression
@@ -34,7 +35,7 @@ def _members(row: ObjectRow, observers: int) -> int:
     return 1
 
 
-def _static(static: WorldStatic, update: WorldUpdate) -> None:
+def _static(static: StaticStore, update: WorldUpdate) -> None:
     """The update's static rows; a static row never changes for its id."""
     for row in update.tile_statics:
         static.tiles[row.position] = row
@@ -46,7 +47,7 @@ def _static(static: WorldStatic, update: WorldUpdate) -> None:
             raise ValueError("An object's look changed")
 
 
-def _reset_entered(memory: WorldMemory, update: WorldUpdate, entered: frozenset[tuple[int, int]]) -> None:
+def _reset_entered(memory: PlayerState, update: WorldUpdate, entered: frozenset[tuple[int, int]]) -> None:
     """Drop what the client holds on the entered cells; their tiles are the update's columns."""
     for position in entered:
         memory.tiles.pop(position, None)
@@ -100,7 +101,7 @@ def _merged_suppressions(held: FloorItem | None, row: tuple[SpellSuppression, ..
         if suppression.provider_uuid not in perceived))
 
 
-def _object(memory: WorldMemory, row: ObjectRow, observers: int) -> None:
+def _object(memory: PlayerState, row: ObjectRow, observers: int) -> None:
     identity = row.item_uuid
     held = memory.objects.get(identity)
     members = _members(row, observers)
@@ -125,14 +126,14 @@ def _object(memory: WorldMemory, row: ObjectRow, observers: int) -> None:
     memory.object_members[identity] = members
 
 
-def _contained(static: WorldStatic, row: ContainedItem) -> FloorItem:
+def _contained(static: StaticStore, row: ContainedItem) -> FloorItem:
     look = static.object_looks.get(row.item_uuid)
     if look is None:
         raise ValueError("A contained item requires its look")
     return join_floor_item(look, row.state)
 
 
-def _contents(memory: WorldMemory, update: WorldUpdate) -> None:
+def _contents(memory: PlayerState, update: WorldUpdate) -> None:
     for row in update.contents:
         held = memory.objects.get(row.container_uuid)
         if held is None:
@@ -156,7 +157,7 @@ def _tile_part(tile: WorldTileState) -> tuple[str, ...]:
     return tile.condition_names[:len(tile.condition_names) - len(tile.residues)]
 
 
-def _tiles(memory: WorldMemory, update: WorldUpdate) -> None:
+def _tiles(memory: PlayerState, update: WorldUpdate) -> None:
     """The keyed tile rows: scalars, objective light, the tile's own conditions, its residues."""
     tiles = memory.tiles
 
@@ -190,11 +191,14 @@ def _tiles(memory: WorldMemory, update: WorldUpdate) -> None:
         if material is None:
             raise ValueError("A residue requires its material's static row")
         existing = rows.get(row.residue_id)
-        if existing is None:
-            if row.condition_uuid is None or row.amount is None:
-                raise ValueError("A residue the client does not hold arrives whole")
+        if row.condition_uuid is not None:
+            # A whole row (a key new to the client, or one entering view) replaces what the client held.
+            if row.amount is None:
+                raise ValueError("A whole residue row carries its amount")
             existing = TileResidueState(condition_uuid=row.condition_uuid, residue_id=row.residue_id,
                 description=material.description, amount=row.amount, max_amount=material.max_amount)
+        elif existing is None:
+            raise ValueError("A residue the client does not hold arrives whole")
         contributions = list(existing.contributions)
         for change in row.contributions:
             if change.index < len(contributions):
@@ -215,21 +219,22 @@ def _tiles(memory: WorldMemory, update: WorldUpdate) -> None:
             *parts[position], *(memory.static.residues[row.residue_id].name for row in ordered))})
 
 
-def fold_world_update(memory: WorldMemory, update: WorldUpdate, *, observers: int) -> None:
-    """Fold one occurrence's world update into the client's world (`observers`: the seat audience's count)."""
+def fold_world_update(memory: PlayerState, update: WorldUpdate) -> None:
+    """Fold one occurrence's world update into the client's world."""
     _static(memory.static, update)
-    entered = frozenset(mask_positions(update.entered))
-    if entered:
-        _reset_entered(memory, update, entered)
-    for row in update.objects:
-        _object(memory, row, observers)
-    _contents(memory, update)
-    _tiles(memory, update)
     for identity in update.objects_removed:
         if memory.objects.pop(identity, None) is None:
             raise ValueError("An object removal names an object the client holds")
         memory.object_members.pop(identity, None)
-    memory.connectors.update((row.connector_uuid, row) for row in update.connectors)
     for identity in update.connectors_removed:
         if memory.connectors.pop(identity, None) is None:
             raise ValueError("A connector removal names a connector the client holds")
+    entered = frozenset(mask_positions(update.entered))
+    if entered:
+        _reset_entered(memory, update, entered)
+    observers = len(memory.viewing_audience.observers)
+    for row in update.objects:
+        _object(memory, row, observers)
+    _contents(memory, update)
+    _tiles(memory, update)
+    memory.connectors.update((row.connector_uuid, row) for row in update.connectors)

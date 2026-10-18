@@ -29,10 +29,9 @@ from pydantic import TypeAdapter
 from dnd.core.cells import mask_from_positions, values_from_items
 from dnd.core.traversal_connectors import ConnectorProvocationPolicy, TraversalConnectorKind
 from dnd.core.world_edges import ElevationSurfaceKind
-from dnd.player.facts import FloorItem
-from dnd.player.world_columns import pack_tile_columns, split_floor_item
-from dnd.player.world_wire import (ContainedItem, ContainerContents, ContentsChange, ContributionRow, ObjectRow,
+from dnd.player.facts import (ContainedItem, ContainerContents, ContentsChange, ContributionRow, FloorItem, ObjectRow,
     ResidueKey, ResidueMaterial, ResidueRow, TileConditions, TileFieldUpdate, TileStatic, WorldUpdate)
+from dnd.player.world_columns import pack_tile_columns, split_floor_item
 from dnd.types.event_facts import WorldConnectorState, WorldTileState
 from dnd.types.materials import Material, TileSurface
 from dnd.types.residues import ObjectResidueState, ResidueContribution, ResidueEllipse

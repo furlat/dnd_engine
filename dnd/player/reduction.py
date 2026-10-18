@@ -21,8 +21,10 @@ from dnd.player.facts import (
     AttackFact, ConditionChangeFact, ConditionFact, DamageResultFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
     ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, SheetPatch, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
-    VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact,
+    VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact, PlayerObject, StaticStore,
 )
+from dnd.player.world_columns import join_floor_item, unpack_tile_columns
+from dnd.player.world_reduction import fold_world_update
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -72,7 +74,10 @@ STATE_PRESENTATION_KINDS = frozenset({
 
 def copy_target(target: PlayerState) -> PlayerState:
     senses = target.senses
-    return replace(target, tiles=dict(target.tiles), objects=dict(target.objects), actors=dict(target.actors),
+    return replace(target, tiles=dict(target.tiles), objects=dict(target.objects),
+        object_members=dict(target.object_members), connectors=dict(target.connectors),
+        static=StaticStore(tiles=dict(target.static.tiles), residues=dict(target.static.residues),
+            object_looks=dict(target.static.object_looks)), actors=dict(target.actors),
         items=dict(target.items), spatial_content=dict(target.spatial_content),
         spatial_commit_cursors=dict(target.spatial_commit_cursors),
         senses=None if senses is None else copy_senses_snapshot(senses),
@@ -81,22 +86,6 @@ def copy_target(target: PlayerState) -> PlayerState:
             contact_cursors=dict(target.perception.contact_cursors),
             effect_cursors=dict(target.perception.effect_cursors),
             effect_absences=dict(target.perception.effect_absences)))
-
-
-def apply_world_update(target: PlayerState, update: WorldUpdate) -> None:
-    target.tiles.update((row.position, row) for row in update.tiles)
-    changes: dict[tuple[int, int], dict[str, object]] = {row.position: dict(row.changes) for row in update.tile_changes}
-    for position, level in values_items(update.resolved_light):
-        changes.setdefault(position, {})["resolved_light"] = LightLevel(level)
-    for position, fields in changes.items():
-        previous = target.tiles.get(position)
-        if previous is None:
-            raise ValueError("Tile field update requires an already known tile")
-        target.tiles[position] = previous.model_copy(update=fields)
-    for identity in update.objects_removed:
-        target.objects.pop(identity, None)
-    target.objects.update((row.item.item_uuid, row) for row in update.objects)
-    target.connectors = update.connectors
 
 
 def observed_actor(previous: PlayerActor | None, observation: PlayerObservation) -> PlayerActor:
@@ -152,21 +141,31 @@ def stage_actors(target: PlayerState, observations: tuple[PlayerObservation, ...
     return result
 
 
+def stage_static(target: PlayerState, updates: tuple[WorldUpdate, ...]) -> None:
+    """The updates' static rows, which never change for their id: a partial fold of a group reads them."""
+    for update in updates:
+        target.static.tiles.update((row.position, row) for row in update.tile_statics)
+        target.static.residues.update((row.residue_id, row) for row in update.residue_materials)
+        target.static.object_looks.update((row.item_uuid, row) for row in update.object_looks)
+
+
 def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
     """Supply absent binding contacts without advancing known world geometry."""
     if (target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid
             or target.viewing_audience != resolve_audience(lineage.observer_uuid, lineage.audience)):
         raise ValueError("player lineage belongs to a different observer or generation")
     result = stage_actors(target, lineage.observations)
-    connectors = {row.connector_uuid: row for row in result.connectors}
+    stage_static(result, lineage.world_updates)
     for update in lineage.world_updates:
-        for tile in update.tiles:
-            result.tiles.setdefault(tile.position, tile)
-        for obj in update.objects:
-            result.objects.setdefault(obj.item.item_uuid, obj)
+        if update.tile_columns is not None:
+            for position, tile in unpack_tile_columns(update.tile_columns, result.static.tiles).items():
+                result.tiles.setdefault(position, tile)
+        for row in update.objects:
+            if row.state is not None and row.placement is not None and row.item_uuid not in result.objects:
+                result.objects[row.item_uuid] = PlayerObject(placement=row.placement,
+                    item=join_floor_item(result.static.object_looks[row.item_uuid], row.state))
         for connector in update.connectors:
-            connectors.setdefault(connector.connector_uuid, connector)
-    result.connectors = tuple(connectors.values())
+            result.connectors.setdefault(connector.connector_uuid, connector)
     return result
 
 
@@ -484,7 +483,7 @@ def _apply_nodes(result: PlayerState, nodes: tuple[PlayerNode, ...], versions: V
                 _observe(result, row, audience_composition=audience_composition)
             case PlayerNode():
                 if row.occurrence in world_updates:
-                    apply_world_update(result, world_updates[row.occurrence])
+                    fold_world_update(result, world_updates[row.occurrence])
                 if not row.canceled and row.fact is not None:
                     apply_committed_player_fact(result, row.fact, values, source_cursor=row.occurrence,
                         occurrences=occurrences, audience_composition=audience_composition)
@@ -498,9 +497,12 @@ def state_before_event(before: PlayerState, lineage: PlayerLineage, event: Playe
     events = tuple(row for row in lineage.events if row.occurrence in completed)
     if not events:
         return before
-    return reduce_lineage(before, replace(lineage, events=events, end_cursor=first,
+    result = copy_target(before)
+    stage_static(result, lineage.world_updates)
+    _apply_lineage(result, replace(lineage, events=events, end_cursor=first,
         observations=tuple(row for row in lineage.observations if row.occurrence in completed),
         world_updates=tuple(row for row in lineage.world_updates if row.occurrence in completed)))
+    return result
 
 
 def reduce_initialization(initialization: PlayerInitialization, *,
@@ -573,6 +575,7 @@ def _apply_lineage(target: PlayerState, lineage: PlayerLineage, *,
 
 
 def lineage_branch(lineage: PlayerLineage, root: PlayerNode) -> PlayerLineage:
+    """A root's branch of a received group; its folds first stage the group's statics (`stage_static`)."""
     by_lineage = {node.lineage: node for node in lineage.events}
     intervals: dict[int, tuple[int, int]] = {}
     versions = lineage.version_rows

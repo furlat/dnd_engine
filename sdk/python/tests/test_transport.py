@@ -465,8 +465,8 @@ def test_cursor_wait_deadline_releases_its_registration():
 
 @pytest.mark.parametrize('changes', [
     {'default_light': 2},
-    {'slope_axis': None, 'condition_names': [], 'residues': [],
-     'blocks_optics': False, 'walking_cost': 0, 'default_light': 0},
+    # A kept tile's scalars only: its conditions and residues have their own rows (player schema 16).
+    {'slope_axis': None, 'blocks_optics': False, 'walking_cost': 0, 'default_light': 0},
 ])
 def test_tile_field_updates_preserve_omission_and_explicit_clears(changes):
     value = {'position': [-47, 20], 'changes': changes}

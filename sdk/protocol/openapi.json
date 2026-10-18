@@ -5758,6 +5758,49 @@
         "title": "ContactPassage",
         "type": "string"
       },
+      "ContainedItem": {
+        "properties": {
+          "item_uuid": {
+            "format": "uuid",
+            "title": "Item Uuid",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ObjectState"
+          }
+        },
+        "required": [
+          "item_uuid",
+          "state"
+        ],
+        "title": "ContainedItem",
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ContainerContents": {
+        "description": "A container's whole contents, on gaining sight of them (looks once, through `object_looks`).",
+        "properties": {
+          "container_uuid": {
+            "format": "uuid",
+            "title": "Container Uuid",
+            "type": "string"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ContainedItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "container_uuid"
+        ],
+        "title": "ContainerContents",
+        "type": "object",
+        "additionalProperties": false
+      },
       "ContentAttribution": {
         "properties": {
           "role": {
@@ -6183,6 +6226,60 @@
         ],
         "title": "ContentVisibility",
         "type": "string"
+      },
+      "ContentsChange": {
+        "description": "A seen container's contents changing while the seat sees them.",
+        "properties": {
+          "container_uuid": {
+            "format": "uuid",
+            "title": "Container Uuid",
+            "type": "string"
+          },
+          "upserted": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ContainedItem"
+            },
+            "title": "Upserted",
+            "type": "array"
+          },
+          "removed": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Removed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "container_uuid"
+        ],
+        "title": "ContentsChange",
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ContributionRow": {
+        "description": "One contribution of a residue, set at its index (the index after the last appends one).",
+        "properties": {
+          "index": {
+            "minimum": 0,
+            "title": "Index",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "contribution": {
+            "$ref": "#/components/schemas/ResidueContribution"
+          }
+        },
+        "required": [
+          "index",
+          "contribution"
+        ],
+        "title": "ContributionRow",
+        "type": "object",
+        "additionalProperties": false
       },
       "CreationWitness": {
         "description": "Observed first placement tied to its exact recorded native birth.",
@@ -12995,6 +13092,163 @@
         "type": "object",
         "additionalProperties": false
       },
+      "ObjectLook": {
+        "description": "A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid (a census of\nevery gallery case's world fold; a broken object's visual name changes, so it is state).",
+        "properties": {
+          "item_uuid": {
+            "format": "uuid",
+            "title": "Item Uuid",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "visual_variant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Visual Variant Id"
+          },
+          "contact_passage": {
+            "$ref": "#/components/schemas/ContactPassage",
+            "default": "structural"
+          },
+          "supported_by_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Supported By Uuid"
+          },
+          "door_mechanism": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoorMechanism"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "door_swing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoorSwing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "maximum_hit_points": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Maximum Hit Points"
+          },
+          "concentration_capacity": {
+            "default": 0,
+            "title": "Concentration Capacity",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "construction_owner_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Construction Owner Uuid"
+          },
+          "construction_geometry": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "cone": "#/components/schemas/ConePresentationGeometry",
+                    "cube": "#/components/schemas/CubePresentationGeometry",
+                    "cylinder": "#/components/schemas/CylinderPresentationGeometry",
+                    "line": "#/components/schemas/LinePresentationGeometry",
+                    "sphere": "#/components/schemas/SpherePresentationGeometry",
+                    "wall": "#/components/schemas/WallPresentationGeometry",
+                    "wall_assembly": "#/components/schemas/WallAssemblyPresentationGeometry"
+                  },
+                  "propertyName": "shape"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SpherePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ConePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LinePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CubePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CylinderPresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WallPresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WallAssemblyPresentationGeometry"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Construction Geometry"
+          },
+          "known_to_creator": {
+            "default": false,
+            "title": "Known To Creator",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "item_uuid",
+          "item_id"
+        ],
+        "title": "ObjectLook",
+        "type": "object",
+        "additionalProperties": false
+      },
       "ObjectResidueState": {
         "additionalProperties": false,
         "description": "One inert residue on the contacted world-facing sides of an object.",
@@ -13028,6 +13282,66 @@
         ],
         "title": "ObjectResidueState",
         "type": "object"
+      },
+      "ObjectRow": {
+        "description": "A world object the seat observes.\n\nAn entering row carries its state, placement and the faces its residues are authoritative for (those whose\nviewing cell some member sees); a perceived object's change carries its state, and its placement when it moved.\nA row without a state changes only which members observe the object. `members`: bit i is the audience's\n`observers[i]`; a seat with one observer leaves it out.",
+        "properties": {
+          "item_uuid": {
+            "format": "uuid",
+            "title": "Item Uuid",
+            "type": "string"
+          },
+          "members": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer",
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Members"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "placement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorldObjectPlacement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "observed_faces": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CardinalDirection"
+            },
+            "title": "Observed Faces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_uuid"
+        ],
+        "title": "ObjectRow",
+        "type": "object",
+        "additionalProperties": false
       },
       "ObjectSectionVolume": {
         "additionalProperties": false,
@@ -13064,6 +13378,210 @@
         ],
         "title": "ObjectSectionVolume",
         "type": "object"
+      },
+      "ObjectState": {
+        "description": "A floor item's changeable part, its value at the occurrence; a field holding its default is left out.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "visual_item_name": {
+            "title": "Visual Item Name",
+            "type": "string"
+          },
+          "map_char": {
+            "title": "Map Char",
+            "type": "string"
+          },
+          "boundary_structure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoundaryStructure"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "is_open": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Is Open"
+          },
+          "is_lit": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Is Lit"
+          },
+          "very_bright_radius_feet": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Very Bright Radius Feet"
+          },
+          "bright_radius_feet": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Bright Radius Feet"
+          },
+          "dim_radius_feet": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Dim Radius Feet"
+          },
+          "stack_count": {
+            "default": 1,
+            "title": "Stack Count",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "is_pickable": {
+            "default": true,
+            "title": "Is Pickable",
+            "type": "boolean"
+          },
+          "item_effects": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ItemEffectPresentationState"
+            },
+            "title": "Item Effects",
+            "type": "array"
+          },
+          "blocks_propagation": {
+            "default": false,
+            "title": "Blocks Propagation",
+            "type": "boolean"
+          },
+          "is_engaged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Is Engaged"
+          },
+          "surface_residues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ObjectResidueState"
+            },
+            "title": "Surface Residues",
+            "type": "array"
+          },
+          "current_hit_points": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Current Hit Points"
+          },
+          "concentration_slots": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ItemConcentrationSlot"
+            },
+            "title": "Concentration Slots",
+            "type": "array"
+          },
+          "remnant_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemRemnantState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "integrity": {
+            "$ref": "#/components/schemas/ItemIntegrity",
+            "default": "intact"
+          },
+          "destruction_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Destruction Outcome"
+          },
+          "construction_suppressions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SpellSuppression"
+            },
+            "title": "Construction Suppressions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "visual_item_name",
+          "map_char"
+        ],
+        "title": "ObjectState",
+        "type": "object",
+        "additionalProperties": false
       },
       "ObservedMovementLogData": {
         "additionalProperties": false,
@@ -15083,38 +15601,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "PlayerObject": {
-        "properties": {
-          "placement": {
-            "$ref": "#/components/schemas/WorldObjectPlacement"
-          },
-          "item": {
-            "$ref": "#/components/schemas/FloorItem"
-          },
-          "contained_items": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/FloorItem"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Contained Items"
-          }
-        },
-        "required": [
-          "placement",
-          "item"
-        ],
-        "title": "PlayerObject",
-        "type": "object",
-        "additionalProperties": false
-      },
       "PlayerObservation": {
         "description": "One actor's observed body at an event, as a patch against what the seat holds,\nwith the patches of the items that body discloses.",
         "properties": {
@@ -16339,6 +16825,140 @@
         ],
         "title": "ResidueEllipse",
         "type": "object"
+      },
+      "ResidueKey": {
+        "properties": {
+          "position": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "title": "Position",
+            "type": "array"
+          },
+          "residue_id": {
+            "title": "Residue Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "residue_id"
+        ],
+        "title": "ResidueKey",
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ResidueMaterial": {
+        "description": "A residue material's fixed part, sent once per residue id.",
+        "properties": {
+          "residue_id": {
+            "title": "Residue Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "max_amount": {
+            "title": "Max Amount",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "residue_id",
+          "name",
+          "description",
+          "max_amount"
+        ],
+        "title": "ResidueMaterial",
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ResidueRow": {
+        "description": "One material on one tile: whole for a key the client does not hold (its condition uuid present), else the\noccurrence's change (`amount` None: unchanged; the contributions it set).",
+        "properties": {
+          "position": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "title": "Position",
+            "type": "array"
+          },
+          "residue_id": {
+            "title": "Residue Id",
+            "type": "string"
+          },
+          "condition_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Condition Uuid"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Amount"
+          },
+          "contributions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ContributionRow"
+            },
+            "title": "Contributions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "position",
+          "residue_id"
+        ],
+        "title": "ResidueRow",
+        "type": "object",
+        "additionalProperties": false
       },
       "RingSlot": {
         "description": "Concrete ring positions for items whose body part is ``RING``.",
@@ -20266,7 +20886,111 @@
         "type": "object",
         "additionalProperties": false
       },
+      "TileColumns": {
+        "description": "The changeable scalars of the entered cells that hold a tile, one byte per cell per column in `cells` order\n(x, then y: the `CellValues` order). `flags` holds blocks_optics (bit 0), blocks_propagation (bit 1), the\nsurface kind (bits 2-3: ordinary, stairs, ramp) and the slope axis (bits 4-5: none, north-south, east-west).\n`elevation_steps` is empty when every cell is at 0.",
+        "properties": {
+          "cells": {
+            "$ref": "#/components/schemas/CellMask"
+          },
+          "walking_cost": {
+            "format": "base64url",
+            "title": "Walking Cost",
+            "type": "string"
+          },
+          "flying_cost": {
+            "format": "base64url",
+            "title": "Flying Cost",
+            "type": "string"
+          },
+          "swimming_cost": {
+            "format": "base64url",
+            "title": "Swimming Cost",
+            "type": "string"
+          },
+          "burrowing_cost": {
+            "format": "base64url",
+            "title": "Burrowing Cost",
+            "type": "string"
+          },
+          "flags": {
+            "format": "base64url",
+            "title": "Flags",
+            "type": "string"
+          },
+          "default_light": {
+            "format": "base64url",
+            "title": "Default Light",
+            "type": "string"
+          },
+          "resolved_light": {
+            "format": "base64url",
+            "title": "Resolved Light",
+            "type": "string"
+          },
+          "elevation_steps": {
+            "default": [],
+            "items": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "title": "Elevation Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cells",
+          "walking_cost",
+          "flying_cost",
+          "swimming_cost",
+          "burrowing_cost",
+          "flags",
+          "default_light",
+          "resolved_light"
+        ],
+        "title": "TileColumns",
+        "type": "object",
+        "additionalProperties": false
+      },
+      "TileConditions": {
+        "description": "A tile's own condition names after the occurrence (never its residues' names), in the tile's order.",
+        "properties": {
+          "position": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "title": "Position",
+            "type": "array"
+          },
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "position",
+          "names"
+        ],
+        "title": "TileConditions",
+        "type": "object",
+        "additionalProperties": false
+      },
       "TileFieldUpdate": {
+        "description": "A perceived tile's changed scalars, each with its after-value; its conditions and residues change through\ntheir own rows and its static part never changes.",
         "properties": {
           "position": {
             "maxItems": 2,
@@ -20345,6 +21069,50 @@
         ],
         "title": "TileResidueState",
         "type": "object"
+      },
+      "TileStatic": {
+        "description": "A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new\nuuid).",
+        "properties": {
+          "position": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "title": "Position",
+            "type": "array"
+          },
+          "tile_uuid": {
+            "format": "uuid",
+            "title": "Tile Uuid",
+            "type": "string"
+          },
+          "surface": {
+            "$ref": "#/components/schemas/TileSurface"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "tile_uuid",
+          "surface",
+          "name"
+        ],
+        "title": "TileStatic",
+        "type": "object",
+        "additionalProperties": false
       },
       "TileSurface": {
         "additionalProperties": false,
@@ -21619,15 +22387,8 @@
       },
       "WorldTileChanges": {
         "additionalProperties": false,
-        "description": "Present fields replace known tile values; omitted fields are unchanged.",
+        "description": "A known tile's changed scalars on the player wire: present fields replace its values, omitted fields are\nunchanged. A tile's surface and name never change for its uuid; its conditions and residues have their own rows.",
         "properties": {
-          "surface": {
-            "$ref": "#/components/schemas/TileSurface"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
           "blocks_optics": {
             "title": "Blocks Optics",
             "type": "boolean"
@@ -21681,20 +22442,6 @@
           },
           "default_light": {
             "$ref": "#/components/schemas/LightLevel"
-          },
-          "condition_names": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Condition Names",
-            "type": "array"
-          },
-          "residues": {
-            "items": {
-              "$ref": "#/components/schemas/TileResidueState"
-            },
-            "title": "Residues",
-            "type": "array"
           }
         },
         "title": "WorldTileChanges",
@@ -21829,7 +22576,7 @@
         "type": "object"
       },
       "WorldUpdate": {
-        "description": "The world values a seat observes at an occurrence: new tiles, known tiles' changed fields, objects, connectors.\n\n`resolved_light` is the changed resolved light of known tiles, as a value\nper cell (a `LightLevel`); `tile_changes` carry their other changed fields.",
+        "description": "The world a seat perceives change at one occurrence.\n\n`entered` is the update's authoritative scope: for those cells the client drops everything it holds and keeps\nonly what this update carries, their tiles, every object touching them (`placement_support_cells`) and every\nconnector with an endpoint there; no object or connector there means none. Every other row is the keyed change\nof a record the seat perceived before and after the occurrence. Static rows come once per (kind, id) per seat.",
         "properties": {
           "occurrence": {
             "title": "Occurrence",
@@ -21837,33 +22584,41 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
-          "tiles": {
+          "entered": {
+            "$ref": "#/components/schemas/CellMask",
+            "default": {
+              "x0": 0,
+              "y0": 0,
+              "width": 0,
+              "height": 0,
+              "bits": ""
+            }
+          },
+          "tile_statics": {
+            "default": [],
             "items": {
-              "$ref": "#/components/schemas/WorldTileState"
+              "$ref": "#/components/schemas/TileStatic"
             },
-            "title": "Tiles",
+            "title": "Tile Statics",
             "type": "array"
           },
-          "objects": {
-            "items": {
-              "$ref": "#/components/schemas/PlayerObject"
-            },
-            "title": "Objects",
-            "type": "array"
+          "tile_columns": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TileColumns"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
-          "objects_removed": {
+          "tile_conditions": {
+            "default": [],
             "items": {
-              "format": "uuid",
-              "type": "string"
+              "$ref": "#/components/schemas/TileConditions"
             },
-            "title": "Objects Removed",
-            "type": "array"
-          },
-          "connectors": {
-            "items": {
-              "$ref": "#/components/schemas/WorldConnectorState"
-            },
-            "title": "Connectors",
+            "title": "Tile Conditions",
             "type": "array"
           },
           "tile_changes": {
@@ -21886,14 +22641,92 @@
               },
               "values": ""
             }
+          },
+          "residue_materials": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResidueMaterial"
+            },
+            "title": "Residue Materials",
+            "type": "array"
+          },
+          "residues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResidueRow"
+            },
+            "title": "Residues",
+            "type": "array"
+          },
+          "residues_removed": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResidueKey"
+            },
+            "title": "Residues Removed",
+            "type": "array"
+          },
+          "object_looks": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ObjectLook"
+            },
+            "title": "Object Looks",
+            "type": "array"
+          },
+          "objects": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ObjectRow"
+            },
+            "title": "Objects",
+            "type": "array"
+          },
+          "objects_removed": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Objects Removed",
+            "type": "array"
+          },
+          "contents": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ContainerContents"
+            },
+            "title": "Contents",
+            "type": "array"
+          },
+          "contents_changed": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ContentsChange"
+            },
+            "title": "Contents Changed",
+            "type": "array"
+          },
+          "connectors": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WorldConnectorState"
+            },
+            "title": "Connectors",
+            "type": "array"
+          },
+          "connectors_removed": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Connectors Removed",
+            "type": "array"
           }
         },
         "required": [
-          "occurrence",
-          "tiles",
-          "objects",
-          "objects_removed",
-          "connectors"
+          "occurrence"
         ],
         "title": "WorldUpdate",
         "type": "object",

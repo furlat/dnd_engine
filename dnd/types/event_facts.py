@@ -229,12 +229,11 @@ class WorldTileState(BaseModel):
 
 
 class WorldTileChanges(TypedDict, total=False):
-    """Present fields replace known tile values; omitted fields are unchanged."""
+    """A known tile's changed scalars on the player wire: present fields replace its values, omitted fields are
+    unchanged. A tile's surface and name never change for its uuid; its conditions and residues have their own rows."""
 
     __pydantic_config__ = ConfigDict(extra="forbid")
 
-    surface: TileSurface
-    name: str
     blocks_optics: bool
     blocks_propagation: bool
     walking_cost: Annotated[StrictInt, Field(ge=0)]
@@ -245,8 +244,6 @@ class WorldTileChanges(TypedDict, total=False):
     surface_kind: ElevationSurfaceKind
     slope_axis: Optional[SlopeAxis]
     default_light: LightLevel
-    condition_names: Tuple[str, ...]
-    residues: tuple[TileResidueState, ...]
 
 
 @with_config(ConfigDict(extra="forbid"))
@@ -289,32 +286,6 @@ class KeyedTileChange(BaseModel):
     residues: Tuple[KeyedResidueChange, ...] = ()
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AppliedWorldFact:
-    """What one recorded world fact changed in the world fold, as `world_facts.apply_world_fact` applied it.
-
-    Each case fills it only from its own event's after-values (and, for a residue, whether the tile held that
-    material before): a seat-independent record read by every seat's world publication, never a compare of world
-    states. Tiles kept (same identity): `tiles` the event's own keyed changes (E2's records, written by the native
-    writers), `tile_fields` the scalar after-values a tile-field or elevation fact wrote, `tile_conditions` a
-    tile's own condition names after a condition fact (its residues' names follow them on the tile). `replaced`
-    cells whose tile was written whole, created or removed; `objects` the objects written (`moved` those whose
-    placement changed); `contents` each container's added and removed items; `connectors` the connectors written.
-    """
-
-    tiles: Tuple[KeyedTileChange, ...] = ()
-    tile_fields: Tuple[Tuple[Tuple[int, int], KeyedTileFields], ...] = ()
-    new_residues: frozenset[Tuple[Tuple[int, int], str]] = frozenset()
-    light: Tuple[Tuple[Tuple[int, int], LightLevel], ...] = ()
-    tile_conditions: Tuple[Tuple[Tuple[int, int], Tuple[str, ...]], ...] = ()
-    replaced: frozenset[Tuple[int, int]] = frozenset()
-    objects: frozenset[UUID] = frozenset()
-    moved: frozenset[UUID] = frozenset()
-    contents: Tuple[Tuple[UUID, Tuple[UUID, ...], Tuple[UUID, ...]], ...] = ()
-    connectors: frozenset[UUID] = frozenset()
-
-
-
 class WorldConnectorState(BaseModel):
     """Complete renderer-neutral state of one admitted connector."""
 
@@ -334,3 +305,28 @@ class WorldConnectorState(BaseModel):
     enabled: bool
     provocation_policy: ConnectorProvocationPolicy
 
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AppliedWorldFact:
+    """What one recorded world fact changed in the world fold, as `world_facts.apply_world_fact` applied it.
+
+    Each case fills it only from its own event's after-values (and, for a residue, whether the tile held that
+    material before): a seat-independent record read by every seat's world publication, never a compare of world
+    states. Tiles kept (same identity): `tiles` the event's own keyed changes (E2's records, written by the native
+    writers), `tile_fields` the scalar after-values a tile-field or elevation fact wrote, `tile_conditions` a
+    tile's own condition names after a condition fact (its residues' names follow them on the tile). `replaced`
+    cells whose tile was written whole, created or removed; `objects` the objects written (`moved` those whose
+    placement changed); `contents` each container's added and removed items; `connectors` each connector written,
+    with the event's own before- and after-value (None: absent).
+    """
+
+    tiles: Tuple[KeyedTileChange, ...] = ()
+    tile_fields: Tuple[Tuple[Tuple[int, int], KeyedTileFields], ...] = ()
+    new_residues: frozenset[Tuple[Tuple[int, int], str]] = frozenset()
+    light: Tuple[Tuple[Tuple[int, int], LightLevel], ...] = ()
+    tile_conditions: Tuple[Tuple[Tuple[int, int], Tuple[str, ...]], ...] = ()
+    replaced: frozenset[Tuple[int, int]] = frozenset()
+    objects: frozenset[UUID] = frozenset()
+    moved: frozenset[UUID] = frozenset()
+    contents: Tuple[Tuple[UUID, Tuple[UUID, ...], Tuple[UUID, ...]], ...] = ()
+    connectors: Tuple[Tuple[UUID, Optional[WorldConnectorState], Optional[WorldConnectorState]], ...] = ()

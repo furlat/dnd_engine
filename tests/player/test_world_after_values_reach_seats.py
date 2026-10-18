@@ -141,7 +141,7 @@ def test_connector_edits_after_initialization_reach_a_seat_that_sees_them(sessio
         enemy_positions=((12, 4), (13, 4)))
     seat = initialize(session)
     ladder = session.battlefield.object_uuids['connector.proving.ladder']
-    held = {row.connector_uuid: row for row in seat.client.connectors}
+    held = dict(seat.client.connectors)
     assert ladder in held and held == visible_connectors(seat.client), case.name
     advance(seat, lambda: case.edit(ladder, uuid4()))
-    assert {row.connector_uuid: row for row in seat.client.connectors} == visible_connectors(seat.client), case.name
+    assert seat.client.connectors == visible_connectors(seat.client), case.name

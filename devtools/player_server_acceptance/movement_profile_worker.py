@@ -299,13 +299,10 @@ def main():
         with span('model.copy'):
             return original_copy(model, *arguments, **keywords)
 
-    def world_count(world, remembered, event_uuid, positions, object_positions, identities, index):
+    def world_count(world, occurrence, applied, before, view, *arguments):
         increment('world_update.world_objects_available', len(world.objects))
-        increment('world_update.remembered_objects_available', len(remembered.objects))
-        increment('world_update.visible_tiles_available', mask_count(world.senses.visible) if world.senses else 0)
-        increment('world_update.input_positions', len(positions))
-        increment('world_update.input_object_positions', len(object_positions))
-        increment('world_update.input_object_ids', len(identities))
+        increment('world_update.visible_tiles_available', mask_count(view.visible))
+        increment('world_update.applied_records', len(applied))
 
     def audience_count(composition, audience, observer_uuid, event, cursor):
         increment('audience.current.visible_added', mask_count(event.visible_cells_added))
@@ -329,11 +326,9 @@ def main():
         (reduction, 'reduce_nodes', 'reduction.nodes', reduction.reduce_nodes, None),
         (application, 'capture_lineages', 'capture.lineages', application.capture_lineages, None),
         (application, 'project_lineages', 'projection.lineage', application.project_lineages, None),
-        (projection, '_world_update', 'projection.world_update', projection._world_update, world_count),
-        (projection, '_observed_object', 'projection.observed_object', projection._observed_object, None),
+        (projection, 'seat_world_update', 'projection.world_update', projection.seat_world_update, world_count),
         (projection, '_public_occurrences', 'projection.occurrences', projection._public_occurrences, None),
         (projection, '_disclosed_actor', 'projection.disclosed_actor', projection._disclosed_actor, None),
-        (projection, '_disclosed_object', 'projection.disclosed_object', projection._disclosed_object, None),
         (reduction, 'apply_current_audience', 'audience.current', reduction.apply_current_audience, audience_count),
         (audience, 'apply_current_senses', 'audience.current_member_senses', audience.apply_current_senses, None),
         (audience, '_current_effect', 'audience.current_effect', audience._current_effect, None),
