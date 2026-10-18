@@ -162,6 +162,16 @@ def layer_positions(layer: CellLayer, mask: Optional[np.ndarray] = None) -> List
     return list(zip((xs + layer.x0).tolist(), (ys + layer.y0).tolist()))
 
 
+def positions_list(cells: np.ndarray) -> List[Position]:
+    """The (x, y) tuples of an (n, 2) array of map positions, in its order."""
+    return list(zip(cells[:, 0].tolist(), cells[:, 1].tolist()))
+
+
+# No map position: an (n, 2) positions array with no row, read-only.
+NO_POSITIONS = np.zeros((0, 2), dtype=np.int64)
+NO_POSITIONS.setflags(write=False)
+
+
 def boxes_intersect(first: Box, second: Box) -> bool:
     return not (first[2] < second[0] or second[2] < first[0] or first[3] < second[1] or second[3] < first[1])
 
@@ -227,7 +237,10 @@ def frame_rows(positions: np.ndarray, origin: Position) -> np.ndarray:
     offsets = positions.astype(np.int64) - np.asarray(origin, dtype=np.int64)
     if np.abs(offsets).max() > R:
         raise ValueError(f"perception reach exceeds the route table radius {R}")
-    return np.unique((offsets[:, 0] + R) * SIDE + offsets[:, 1] + R)
+    rows = (offsets[:, 0] + R) * SIDE + offsets[:, 1] + R
+    rows.sort()
+    # Sorted, a repeated row follows its first copy (the rows np.unique gives, several times faster).
+    return rows[np.concatenate(([True], rows[1:] != rows[:-1]))]
 
 
 def frame_index(xs: np.ndarray, ys: np.ndarray, origin: Position) -> np.ndarray:
