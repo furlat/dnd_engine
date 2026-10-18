@@ -28,12 +28,18 @@ class LeafBlock(BaseBlock):
 
     leaf_value: ModifiableValue = Field(description="A value owned by the leaf block.")
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        return (self.leaf_value,)
+
 
 class ParentBlock(BaseBlock):
     """Small parent block with one direct value and one nested block."""
 
     direct_value: ModifiableValue = Field(description="A value owned directly by the parent.")
     child: LeafBlock = Field(description="Nested child block.")
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        return (self.direct_value,)
 
 
 class MarkerCondition(BaseCondition):

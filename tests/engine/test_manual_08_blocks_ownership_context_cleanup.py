@@ -18,12 +18,18 @@ class TutorialLeafBlock(BaseBlock):
 
     leaf_value: ModifiableValue = Field(description="Value owned by the leaf block.")
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        return (self.leaf_value,)
+
 
 class TutorialSheetBlock(BaseBlock):
     """Tutorial block with one direct value and one child block."""
 
     armor_class: ModifiableValue = Field(description="Value owned directly by the sheet.")
     leaf: TutorialLeafBlock = Field(description="Nested child block.")
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        return (self.armor_class,)
 
 
 class TutorialMarkerCondition(BaseCondition):
