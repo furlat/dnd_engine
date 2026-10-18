@@ -12,14 +12,14 @@ from dnd.player.capture import capture_interval
 from dnd.core.events import EventQueue
 from dnd.player.facts import (
     PlayerLineage, PlayerNode, PlayerObservation, PlayerUpdate, SensoryFact,
-    SpatialFact, VersionRow,
+    SpatialFact, VersionRows,
 )
 from dnd.player.projection import begin_projection
 from dnd.player.reduction import reduce_initialization, reduce_lineage, reduce_operation
 from dnd.types.event_facts import SpatialChangeType
 from dnd.types.senses import PerceivedContact
 from tests.player.test_recorded_boundary import world
-from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES
+from dnd.types.cells import NO_ROWS
 
 
 @pytest.mark.parametrize('together', [False, True])
@@ -46,15 +46,15 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
     before = reduce_initialization(initial)
     frozen = deepcopy(before)
     template = next(node.fact for node in initial.nodes
-        if isinstance(node.fact, SensoryFact) and node.fact.observer_uuid == owner.uuid)
+        if isinstance(node.fact, SensoryFact) and initial.sensory_rows.uuids[node.fact.observer] == owner.uuid)
     sensory = replace(template, initial=False, observer_position_changed=False,
-        effective_light_levels_changed=EMPTY_VALUES, cause_occurrence=None,
-        visible_cells_added=EMPTY_CELLS, visible_cells_removed=EMPTY_CELLS, seen_cells_added=EMPTY_CELLS,
+        effective_light_levels_changed=NO_ROWS, cause_occurrence=None,
+        visible_cells_added=NO_ROWS, visible_cells_removed=NO_ROWS, seen_cells_added=NO_ROWS,
         entity_contacts_changed=(), entity_contacts_removed=(),
         object_contacts_changed=(), object_contacts_removed=(),
         sense_modes_changed=False, sense_modes=None, passive_perception_changed=False,
         passive_perception=None, visual_access_changed=False, visual_access=None,
-        hazardous_cells_changed=EMPTY_VALUES, spatial_effect_sightings=(), spatial_effect_content={},
+        hazardous_cells_changed=NO_ROWS, spatial_effect_sightings=(), spatial_effect_content={},
             spatial_effects_removed=())
     lineages = []
     for index, step in enumerate(steps, start=before.reducer_cursor):
@@ -79,13 +79,14 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
             canceled=step == 'canceled', fact=fact)
         lineages.append(PlayerLineage(generation=before.generation, observer_uuid=owner.uuid,
             audience=audience, lineage=index, root=0, events=(node,),
-            version_rows=(VersionRow(source_index=index, lineage=index),),
+            version_rows=VersionRows(occurrences=(index,), lineages=(index,)),
             start_cursor=index, end_cursor=index + 1, observations=observations,
             # The template's light source indices name the initialization's rows.
             sensory_rows=initial.sensory_rows))
     if together:
         lineages = [replace(lineages[0], events=tuple(node for row in lineages for node in row.events),
-            version_rows=tuple(version for row in lineages for version in row.version_rows),
+            version_rows=VersionRows(occurrences=tuple(value for row in lineages for value in row.version_rows.occurrences),
+                lineages=tuple(value for row in lineages for value in row.version_rows.lineages)),
             observations=tuple(value for row in lineages for value in row.observations),
             end_cursor=lineages[-1].end_cursor)]
     update = PlayerUpdate(audience=audience, lineages=tuple(lineages), hud=None,

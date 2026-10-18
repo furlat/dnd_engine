@@ -3,7 +3,8 @@
 A `CellMask` is a set of map cells over its bounding box; a `CellValues` is
 one byte per cell of a mask, in the mask's cell order. Both are canonical: a
 mask's box is the bounding box of its cells, so equal sets are equal values
-and an empty set has width and height 0. The array operations on them live in
+and an empty set has width and height 0. A `RowBits` is a subset of a row
+table (a group's shared cells), also canonical. The array operations on them live in
 `dnd.core.cells`.
 """
 
@@ -37,8 +38,19 @@ class CellValues:
     values: bytes
 
 
+@dataclass(frozen=True, slots=True, config=PACKED)
+class RowBits:
+    """A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+    (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+    nonzero byte, and the empty subset is start 0, no bits."""
+
+    start: int = 0
+    bits: bytes = b""
+
+
 EMPTY_CELLS = CellMask(0, 0, 0, 0, b"")
 EMPTY_VALUES = CellValues(EMPTY_CELLS, b"")
+NO_ROWS = RowBits()
 
 
 def cell_in(mask: CellMask, position: tuple[int, int]) -> bool:
@@ -72,9 +84,15 @@ def no_values(values: CellValues) -> bool:
     return values.cells.width == 0
 
 
+def no_rows(rows: RowBits) -> bool:
+    return not rows.bits
+
+
 # A changed-cells field: the empty value is its default and is left out of a dump.
 CellMaskField = Annotated[CellMask, Field(exclude_if=no_cells)]
 CellValuesField = Annotated[CellValues, Field(exclude_if=no_values)]
+RowBitsField = Annotated[RowBits, Field(exclude_if=no_rows)]
 
 
-__all__ = ["CellMask", "CellValues", "EMPTY_CELLS", "EMPTY_VALUES", "CellMaskField", "CellValuesField", "cell_in", "value_at", "no_cells", "no_values"]
+__all__ = ["CellMask", "CellValues", "RowBits", "EMPTY_CELLS", "EMPTY_VALUES", "NO_ROWS", "CellMaskField",
+           "CellValuesField", "RowBitsField", "cell_in", "value_at", "no_cells", "no_values", "no_rows"]
