@@ -135,7 +135,14 @@ Per-seat server knowledge is what is perceived now (perception already computes 
 4. **Reconnect** is exactly the same as having been connected from the start: journal replay of the seat's spool, kept for the whole game. The client's memory rules must be deterministic so replay rebuilds the same memory.
 5. **Numbering.** Keep the per-seat occurrence numbering.
 
-Still open: remembered-cell pathfinding (decision 2), the HUD (decision 3), connector names in the log.
+6. **Remembered-cell pathfinding: deferred (human: "skip this for now and handle it later").** The human's direction, to keep:
+   - separate what is *suggested* from what is *allowed*;
+   - allow a Move target on a remembered cell within movement distance;
+   - the server computes the actual path in chunks over what the agent knows, replans whenever something revealed touches the route, and stops at the target, at the budget, or when no route remains.
+   
+   Open within it: R-min (explored mask only) versus R-bits (one byte per explored cell: passable or blocked plus cost class). Until then, the current-terrain leak stays.
+
+Still open: the HUD (decision 3) and connector names in the log.
 
 ---
 
