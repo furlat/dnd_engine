@@ -1382,6 +1382,16 @@ class BaseAction(BaseObject):
         """
         return None
 
+    def target_reach_feet(self) -> Optional[int]:
+        """The farthest distance, from the source's position, at which this action's rule admits a target.
+
+        Discovery lists no object whose contact surface lies wholly beyond it
+        (`GridMap.object_contact_floor_feet`) and runs no admission for it.
+        An override must bound every target its `rule_error` admits; None
+        (the default) bounds nothing.
+        """
+        return None
+
     def get_target_origin(self) -> Optional[Tuple[int, int]]:
         """Return the grid origin used to measure this action's target range."""
         source = BaseBlock.get(self.source_entity_uuid)
