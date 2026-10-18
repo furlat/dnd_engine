@@ -1,4 +1,5 @@
-"""Subjective vision as data (plan §6b): the sense x interceptor rule, its tables, and one view as arrays.
+"""Subjective vision as data (plan §6b): the sense x interceptor rule, its tables, and one view as arrays;
+and the objective wall FOV those views and area propagation start from (`wall_visibility`).
 
 What can stop sight is a finite set (walls, heavy obscurement, magical darkness, the
 light at the target cell) and so is what can see (plain sight, darkvision, Devil's
@@ -20,9 +21,10 @@ from typing import AbstractSet, Collection, Dict, FrozenSet, List, Mapping, Opti
 
 import numpy as np
 
-from dnd.core.geometry import ROUTE_TABLE_RADIUS, supercover_route_table
+from dnd.core.geometry import (ROUTE_STEP_SHIFT, ROUTE_TABLE_RADIUS, STEP_ALONG_X, STEP_ALONG_Y, STEP_DIAGONAL,
+                               supercover_route_table)
 from dnd.types.senses import OBSCUREMENT_BITS, OBSCUREMENT_SETS, OpticalObscurement, SensesType
-from dnd.types.world import LightLevel
+from dnd.types.world import CardinalDirection, LightLevel
 
 Position = Tuple[int, int]
 Box = Tuple[int, int, int, int]  # inclusive (min_x, min_y, max_x, max_y)
@@ -238,6 +240,11 @@ def rows_positions(rows: np.ndarray, origin: Position) -> List[Position]:
     return list(zip((rows // SIDE - R + origin[0]).tolist(), (rows % SIDE - R + origin[1]).tolist()))
 
 
+def layer_window(layer: CellLayer, window: Box) -> np.ndarray:
+    """A view of a layer's values over a window inside its box (writes reach the layer)."""
+    return layer.values[window[0] - layer.x0:window[2] - layer.x0 + 1, window[1] - layer.y0:window[3] - layer.y0 + 1]
+
+
 def window_of(frame: np.ndarray, origin: Position, window: Box) -> np.ndarray:
     """The part of a flat frame inside a window box (which must lie inside the frame)."""
     fx0, fy0 = origin[0] - R, origin[1] - R
@@ -260,14 +267,15 @@ class RouteRows:
 
 
 def route_rows(rows: np.ndarray) -> RouteRows:
-    cells, lengths = supercover_route_table()
+    steps, lengths = supercover_route_table()
     row_lengths = lengths[rows].astype(np.int64)
     width = int(row_lengths.max()) if rows.size else 1
     kept = np.arange(width)[None, :] < (row_lengths - 1)[:, None]
-    before = np.append(cells[rows, :width][kept].astype(np.int64), OFF)
+    before = np.append((steps[rows, :width][kept] >> ROUTE_STEP_SHIFT).astype(np.int64), OFF)
     starts = (np.concatenate(([0], np.cumsum(row_lengths - 1)[:-1])).astype(np.int64) if rows.size
               else np.zeros(0, np.int64))
-    near = np.where(row_lengths >= 2, cells[rows, np.maximum(row_lengths - 2, 0)], OFF).astype(np.int64)
+    near = np.where(row_lengths >= 2, steps[rows, np.maximum(row_lengths - 2, 0)] >> ROUTE_STEP_SHIFT,
+                    OFF).astype(np.int64)
     return RouteRows(rows, before, starts, row_lengths < 2, near)
 
 
@@ -358,6 +366,72 @@ def lit_view(sight: RouteSight, exists: np.ndarray, light: np.ndarray) -> Optica
     established = surface_eligibility != 0
     return OpticalView(rows[visible], effective[visible], eligibility[visible], surface_rows[established],
                        surface_light[established], surface_eligibility[established])
+
+
+# ---------------------------------------------------------------- the wall FOV
+
+# A cell's outgoing cardinal edges, in bit order: east, west, north, south.
+CARDINAL_DIRECTIONS = (CardinalDirection.EAST, CardinalDirection.WEST, CardinalDirection.NORTH, CardinalDirection.SOUTH)
+CARDINAL_STEPS = ((1, 0), (-1, 0), (0, 1), (0, -1))
+OPPOSITE_CARDINAL = tuple(CARDINAL_STEPS.index((-dx, -dy)) for dx, dy in CARDINAL_STEPS)
+_STOP, _EDGE = 0, 1   # input layers; edge d is layer _EDGE + d
+
+
+def wall_visibility(origin: Position, window: Box, exists: np.ndarray, opaque: np.ndarray,
+                    blocked: np.ndarray, targets: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """The targets whose supercover route from the origin is clear, as window indices, x-major.
+
+    Every array covers the window box, which holds the origin: `exists` the Tiles, `opaque` the
+    cells whose center blocks, `blocked` per cell bit d set when its edge toward its neighbor
+    in CARDINAL_STEPS[d] blocks, `targets` the cells asked about. A route is clear when every step
+    crosses an open edge and no cell strictly between the origin and the target is opaque or
+    missing; a diagonal step is open through a bridge (a cell beside both of its ends) that
+    exists, is not opaque and has both legs open. A route and its bridges stay in the box
+    between the origin and its target, so only the inputs there are read.
+
+    Each cell gets one bit per way a route can enter it (along x, along y, diagonally, seen
+    from the origin's quadrant of the cell): the step blocks, or the cell it leaves stops the
+    route. The route table's steps then read one bit per step of every target's route. Every
+    read steps back toward the origin from a cell off its row or column, so it stays in the
+    window, and a bridge is never the origin, so a bridge is open exactly where it does not stop.
+    """
+    width, height = exists.shape
+    fx, fy = window[0] - origin[0] + R, window[1] - origin[1] + R
+    if fx < 0 or fy < 0 or fx + width > SIDE or fy + height > SIDE:
+        raise ValueError(f"wall FOV reach exceeds the route table radius {R}")
+    oi, oj = origin[0] - window[0], origin[1] - window[1]
+    inputs = np.empty((5, width, height), dtype=bool)
+    inputs[_STOP] = ~exists | opaque
+    inputs[_STOP, oi, oj] = False   # a route leaves its origin whatever the origin's center
+    for direction in range(4):
+        inputs[_EDGE + direction] = (blocked & (1 << direction)) != 0
+
+    def at(layer: int, dx: int, dy: int, xs: slice, ys: slice) -> np.ndarray:
+        """The layer at the cells (xs, ys) shifted by (dx, dy)."""
+        return inputs[layer, xs.start + dx:xs.stop + dx, ys.start + dy:ys.stop + dy]
+
+    entry = np.zeros((width, height, 1 << ROUTE_STEP_SHIFT), dtype=bool)   # STEP_NONE stays zero
+    columns, rows_y = slice(0, width), slice(0, height)
+    halves_x = ((1, slice(oi + 1, width), _EDGE), (-1, slice(0, oi), _EDGE + 1))
+    halves_y = ((1, slice(oj + 1, height), _EDGE + 2), (-1, slice(0, oj), _EDGE + 3))
+    for sx, xs, edge_x in halves_x:
+        entry[xs, :, STEP_ALONG_X] = at(edge_x, -sx, 0, xs, rows_y) | at(_STOP, -sx, 0, xs, rows_y)
+    for sy, ys, edge_y in halves_y:
+        entry[:, ys, STEP_ALONG_Y] = at(edge_y, 0, -sy, columns, ys) | at(_STOP, 0, -sy, columns, ys)
+    for sx, xs, edge_x in halves_x:
+        for sy, ys, edge_y in halves_y:
+            # From p = c - (sx, sy) through (c.x, p.y) or through (p.x, c.y).
+            blocked_x = at(_STOP, 0, -sy, xs, ys) | at(edge_x, -sx, -sy, xs, ys) | at(edge_y, 0, -sy, xs, ys)
+            blocked_y = at(_STOP, -sx, 0, xs, ys) | at(edge_y, -sx, -sy, xs, ys) | at(edge_x, -sx, 0, xs, ys)
+            entry[xs, ys, STEP_DIAGONAL] = (blocked_x & blocked_y) | at(_STOP, -sx, -sy, xs, ys)
+    frame = np.zeros((CELLS + 1) << ROUTE_STEP_SHIFT, dtype=bool)
+    frame[:CELLS << ROUTE_STEP_SHIFT].reshape(SIDE, SIDE, 1 << ROUTE_STEP_SHIFT)[fx:fx + width, fy:fy + height] = entry
+    ti, tj = np.nonzero(targets)
+    rows = (ti + fx) * SIDE + tj + fy
+    steps, lengths = supercover_route_table()
+    longest = int(lengths[rows].max()) if rows.size else 0
+    clear = ~frame[steps[rows, :longest]].any(axis=1)
+    return ti[clear], tj[clear]
 
 
 # ---------------------------------------------------------------- published cells and their queries

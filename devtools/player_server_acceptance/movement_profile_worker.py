@@ -169,7 +169,7 @@ def main():
             if args.coarse_timing else 'Decoded request through completed dispatch, response/public-record encoding and writes; includes cProfile and fine wrappers. ')
         data['scope'] += 'Ends before next input read. Still instrumented; never a clean speed sample.'
         if not args.coarse_timing:
-            data['directional_fov_note'] = 'Temporary timers and scalar counters add diagnostic overhead. sweep_remainder_ms = sweep_total_ms - interval_masks_ms - transition_total_ms - blocking_total_ms - terminal_output_ms. This is a derived loop/instrumentation remainder, not measured exclusive CPU time. Enumeration, target sorting and final output are separate disjoint phases. There is no retained ray graph or geometry warmup cache.'
+            data['directional_fov_note'] = 'Temporary timers and scalar counters add diagnostic overhead. One array solve per call; settled_predicates counts the edge predicates it settled first. There is no retained ray graph or geometry warmup cache.'
         data['exclusive_note'] = ('exclusive_wrapped_ns removes explicit child wrapper spans only; it is not function self time.'
             if args.coarse_timing else 'exclusive_wrapped_ns removes explicit child wrapper spans only; cProfile supplies function self time. Existing action hooks overlap these spans and each other.')
         data['coverage'] = coverage
