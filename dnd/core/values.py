@@ -23,15 +23,11 @@ from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
     AdvantageModifier,
     AdvantageStatus,
-    AutoHitModifier,
     AutoHitStatus,
-    CriticalModifier,
     CriticalStatus,
-    DamageTypeModifier,
     NumericalModifier,
     ResistanceModifier,
     ResistanceStatus,
-    SizeModifier,
 )
 
 
@@ -271,7 +267,10 @@ def _with_row(rows: Tuple[Row, ...], new: Row) -> Tuple[Row, ...]:
 
 
 def add_modifier(value: ModifiableValue, channel: Channel, kind: Kind, modifier: Any) -> UUID:
-    """Add one modifier row to a value; a row with the same (channel, kind, uuid) is replaced in place."""
+    """Add one modifier row to a value; a row with the same (channel, kind, uuid) is replaced in place.
+
+    A contextual row's callable returns its kind's payload or None: the status readers rely on it.
+    """
     value.modifiers = _with_row(value.modifiers, Row(channel, kind, modifier))
     return modifier.uuid
 
@@ -810,23 +809,24 @@ def _static_status(buckets: _Buckets, channel: Channel, kind: Kind) -> List[Any]
     return [modifier.value for modifier, _ in buckets.get((channel, kind), ()) if modifier.contributions_active()]
 
 
-def _contextual_status(buckets: _Buckets, channel: Channel, kind: Kind, payload: type, source: UUID,
+def _contextual_status(buckets: _Buckets, channel: Channel, kind: Kind, source: UUID,
                        target: Optional[UUID], context: Optional[Dict[str, Any]]) -> List[Any]:
+    """Values of the applying rows of one (channel, kind): a row's callable returns its kind's payload or None."""
     results = [modifier.evaluate(source, target, context) for modifier, _ in buckets.get((channel, kind), ())]
-    return [result.value for result in results if isinstance(result, payload)]
+    return [result.value for result in results if result is not None]
 
 
-def _override(composed_parts: Sequence[Part], read: ValueRead, kind: Kind, payload: type,
+def _override(composed_parts: Sequence[Part], read: ValueRead, kind: Kind,
               status: Callable[[Sequence[Any]], Any]) -> Any:
     """A critical or hit override: each channel's status, then the read's, by precedence."""
     buckets = _buckets(composed_parts)
     statuses = [status(_static_status(buckets, SELF_STATIC, kind)),
-                status(_contextual_status(buckets, SELF_CONTEXTUAL, kind, payload,
+                status(_contextual_status(buckets, SELF_CONTEXTUAL, kind,
                                           composed_parts[0].value.source_entity_uuid,
                                           read.target_entity_uuid, read.context))]
     if read.opponent is not None:
         opponent_buckets, opponent_source = _opponent(read)
-        statuses += [status(_contextual_status(opponent_buckets, TO_TARGET_CONTEXTUAL, kind, payload, opponent_source,
+        statuses += [status(_contextual_status(opponent_buckets, TO_TARGET_CONTEXTUAL, kind, opponent_source,
                                                read.source_entity_uuid, read.opponent.context)),
                      status(_static_status(opponent_buckets, TO_TARGET_STATIC, kind))]
     return status(statuses)
@@ -834,12 +834,12 @@ def _override(composed_parts: Sequence[Part], read: ValueRead, kind: Kind, paylo
 
 def value_critical(composed_parts: Sequence[Part], read: ValueRead) -> CriticalStatus:
     """Critical override of a read; NOCRIT takes precedence."""
-    return _override(composed_parts, read, CRITICAL, CriticalModifier, _critical_status)
+    return _override(composed_parts, read, CRITICAL, _critical_status)
 
 
 def value_auto_hit(composed_parts: Sequence[Part], read: ValueRead) -> AutoHitStatus:
     """Hit override of a read; AUTOMISS takes precedence."""
-    return _override(composed_parts, read, AUTO_HIT, AutoHitModifier, _auto_hit_status)
+    return _override(composed_parts, read, AUTO_HIT, _auto_hit_status)
 
 
 _SIZE_ORDER = {size: index for index, size in enumerate(Size)}
@@ -861,7 +861,7 @@ def _contextual_size(buckets: _Buckets, channel: Channel, source: UUID, target: 
     rows = buckets.get((channel, SIZE))
     if not rows:
         return Size.MEDIUM
-    return _largest(_contextual_status(buckets, channel, SIZE, SizeModifier, source, target, context))
+    return _largest(_contextual_status(buckets, channel, SIZE, source, target, context))
 
 
 def value_size(composed_parts: Sequence[Part], read: ValueRead) -> Size:
@@ -896,7 +896,7 @@ def _contextual_damage_types(buckets: _Buckets, channel: Channel, source: UUID, 
                              context: Optional[Dict[str, Any]]) -> List[DamageType]:
     if not buckets.get((channel, DAMAGE_TYPE)):
         return []
-    return _most_common(_contextual_status(buckets, channel, DAMAGE_TYPE, DamageTypeModifier, source, target, context))
+    return _most_common(_contextual_status(buckets, channel, DAMAGE_TYPE, source, target, context))
 
 
 def value_damage_types(composed_parts: Sequence[Part], read: ValueRead) -> List[DamageType]:

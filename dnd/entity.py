@@ -246,14 +246,14 @@ def get_natural_roll(roll: DiceRoll) -> int:
 
 def determine_attack_outcome(
     roll: DiceRoll,
-    ac: Union[int, ValueReading],
+    target_ac: int,
     crit_threshold: int = 20
 ) -> AttackOutcome:
         """Determine current engine d20 outcome from a roll and target number.
 
         Args:
             roll: D20 roll result.
-            ac: Target number or evaluated armor class.
+            target_ac: Target number: the read armor class's normalized score, or a DC.
             crit_threshold: Minimum natural attack roll that upgrades a hit to
                 a critical hit.
 
@@ -261,8 +261,6 @@ def determine_attack_outcome(
             Engine outcome for the roll. Attack rolls use natural 1/critical
             semantics; saving throws and checks compare total against DC.
         """
-        target_ac = ac if isinstance(ac, int) else ac.normalized_score
-
         if roll.roll_type != RollType.ATTACK:
             return AttackOutcome.HIT if roll.total >= target_ac else AttackOutcome.MISS
 
@@ -628,8 +626,6 @@ class Entity(BaseBlock):
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
 
     _fast_move_target_cache_revision: Optional[Tuple[int, int]] = PrivateAttr(default=None)
-    # The cells the last navigation materialization read and their traversal stamp then.
-    _navigation_traversal: Optional[Tuple[CellBox, int]] = PrivateAttr(default=None)
     _fast_move_target_cache: Dict[
         Tuple[Any, ...],
         Tuple[AvailableTarget, ...],
@@ -5252,11 +5248,6 @@ class Entity(BaseBlock):
                     return True
         return False
 
-    def _navigation_traversal_current(self) -> bool:
-        """Whether no traversal write touched a cell the last navigation materialization read."""
-        recorded = self._navigation_traversal
-        return recorded is not None and get_map().traversal_stamp(recorded[0]) == recorded[1]
-
     def materialize_navigation_after_movement(self, movement_mode: MovementMode) -> None:
         """Refresh navigation, omitting unused routes after ordinary exhaustion."""
         remaining_distance = max(
@@ -5293,7 +5284,7 @@ class Entity(BaseBlock):
         senses = self.senses
         # Paths read traversal within their search box; the walkable map reads every visible cell.
         read_box = union_box(path_read_box(self.position, effective_path_distance), visible_box(senses.cells))
-        self._navigation_traversal = (read_box, grid.traversal_stamp(read_box))
+        read_stamp = grid.traversal_stamp(read_box)
 
         def search_from_here(walk_in_danger: bool) -> PathSearch:
             return grid.path_search(self.position, effective_path_distance, requesting_entity_uuid=self.uuid,
@@ -5328,6 +5319,7 @@ class Entity(BaseBlock):
             safe_paths=safe_paths,
             path_max_distance=effective_path_distance,
         )
+        spatial_senses_system.record_navigation_read(self.uuid, read_box, read_stamp)
 
     def update_entity_senses(
         self,
@@ -7488,7 +7480,7 @@ class Entity(BaseBlock):
         paths_need_refresh = (
             required_path_distance > 0
             and not (self.senses.has_clean_paths_for_distance(required_path_distance)
-                     and self._navigation_traversal_current())
+                     and spatial_senses_system.navigation_current(self.uuid, get_map()))
         )
         if paths_need_refresh:
             started = time.perf_counter() if timing else 0.0
