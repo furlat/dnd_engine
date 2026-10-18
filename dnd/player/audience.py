@@ -763,7 +763,7 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
                             if names else (view.light_sources, view.light_source_removals))
     current.view = replace(view, light_sources=lights, light_source_removals=removals,
         position=anchor.position, passive_perception=anchor.passive_perception,
-        sense_modes_hash=anchor.sense_modes_hash, sense_modes=anchor.sense_modes,
+        sense_modes_key=anchor.sense_modes_key, sense_modes=anchor.sense_modes,
         visual_access=anchor.visual_access, paths_dirty=bool(current.dirty_members))
 
 

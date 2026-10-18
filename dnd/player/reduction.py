@@ -6,7 +6,7 @@ from typing import Collection, Iterator, Mapping, Sequence
 from dnd.types.actor import SpatialDisposition
 from dnd.core.cells import (CellRows, bit_rows, layer_rows, mask_positions, mask_rows, mask_union, selected_mask,
     selected_values, update_cells, values_items)
-from dnd.core.sensory_fold import copy_senses_snapshot, sense_modes_hash
+from dnd.core.sensory_fold import copy_senses_snapshot, sense_modes_key
 from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
@@ -807,7 +807,7 @@ def fold_composed_sensory(target: PlayerState, fact: ComposedSensoryFact, values
             raise ValueError("An initial sensory fact carries the position and every capability after-value")
         held = SensesSnapshot(position=fact.observer_position, visible=EMPTY_CELLS, seen=EMPTY_CELLS, entities={},
             objects={}, effective_light_levels=EMPTY_VALUES, paths_dirty=False,
-            passive_perception=fact.passive_perception, sense_modes_hash=sense_modes_hash(()), sense_modes=(),
+            passive_perception=fact.passive_perception, sense_modes_key=sense_modes_key(()), sense_modes=(),
             visual_access=fact.visual_access)
     elif held is None:
         raise ValueError("A sensory change requires the seat's entered perception")
@@ -894,7 +894,7 @@ def fold_composed_sensory(target: PlayerState, fact: ComposedSensoryFact, values
         passive_perception=(fact.passive_perception if fact.passive_perception_changed
             and fact.passive_perception is not None else held.passive_perception),
         sense_modes=modes if modes is not None else held.sense_modes,
-        sense_modes_hash=sense_modes_hash(modes) if modes is not None else held.sense_modes_hash,
+        sense_modes_key=sense_modes_key(modes) if modes is not None else held.sense_modes_key,
         visual_access=(fact.visual_access if fact.visual_access_changed
             and fact.visual_access is not None else held.visual_access))
     if fact.observer_position is not None and target.observer_uuid in target.actors:

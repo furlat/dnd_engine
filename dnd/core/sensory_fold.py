@@ -11,7 +11,7 @@ from uuid import UUID
 
 from dnd.core.cells import mask_union, update_cells
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES
-from dnd.types.senses import SenseMode, SensesSnapshot, SensoryDelta
+from dnd.types.senses import SenseMode, SenseModesKey, SensesSnapshot, SensoryDelta
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,7 +19,7 @@ class PreparedSensoryDelta:
     """Validated delta values; preparation never mutates a current fold."""
 
     sense_modes: tuple[SenseMode, ...] | None
-    sense_modes_hash: int | None
+    sense_modes_key: SenseModesKey | None
 
 
 def prepare_sensory_delta(expected_observer_uuid: UUID, previous: SensesSnapshot | None,
@@ -31,16 +31,16 @@ def prepare_sensory_delta(expected_observer_uuid: UUID, previous: SensesSnapshot
             raise ValueError("initial sensory update requires capability after-values")
     elif previous is None:
         raise ValueError("sensory delta requires a previously recorded initial state")
-    modes, modes_hash = None, None
+    modes, modes_key = None, None
     if event.sense_modes_changed and event.sense_modes is not None:
         modes = tuple(mode.model_copy(deep=True) for mode in event.sense_modes)
-        modes_hash = sense_modes_hash(modes)
-    return PreparedSensoryDelta(modes, modes_hash)
+        modes_key = sense_modes_key(modes)
+    return PreparedSensoryDelta(modes, modes_key)
 
 
-def sense_modes_hash(modes: Sequence[SenseMode]) -> int:
-    """A snapshot's sense modes as one comparable value (their types and ranges)."""
-    return hash(tuple(sorted((mode.sense_type.value, mode.range_feet) for mode in modes)))
+def sense_modes_key(modes: Sequence[SenseMode]) -> SenseModesKey:
+    """Sense modes as one comparable value, the same in every process: each mode's type and range, sorted."""
+    return tuple(sorted((mode.sense_type.value, mode.range_feet) for mode in modes))
 
 
 def apply_current_senses(previous: SensesSnapshot | None, event: SensoryDelta,
@@ -54,7 +54,7 @@ def apply_current_senses(previous: SensesSnapshot | None, event: SensoryDelta,
             position=event.observer_position, visible=EMPTY_CELLS, seen=EMPTY_CELLS,
             entities={}, objects={}, effective_light_levels=EMPTY_VALUES, paths_dirty=False,
             passive_perception=event.passive_perception,
-            sense_modes_hash=hash(()), sense_modes=(), visual_access=event.visual_access)
+            sense_modes_key=sense_modes_key(()), sense_modes=(), visual_access=event.visual_access)
     assert previous is not None
     visible, light, hazards = update_cells(previous.visible, previous.effective_light_levels, previous.hazardous_cells,
         event.visible_cells_removed, event.visible_cells_added, event.effective_light_levels_changed,
@@ -81,8 +81,8 @@ def apply_current_senses(previous: SensesSnapshot | None, event: SensoryDelta,
         passive_perception=(event.passive_perception if event.passive_perception_changed
             and event.passive_perception is not None else previous.passive_perception),
         sense_modes=prepared.sense_modes if prepared.sense_modes is not None else previous.sense_modes,
-        sense_modes_hash=(prepared.sense_modes_hash if prepared.sense_modes_hash is not None
-            else previous.sense_modes_hash),
+        sense_modes_key=(prepared.sense_modes_key if prepared.sense_modes_key is not None
+            else previous.sense_modes_key),
         visual_access=(event.visual_access if event.visual_access_changed
             and event.visual_access is not None else previous.visual_access))
 
@@ -104,4 +104,4 @@ def reduce_senses_snapshot(expected_observer_uuid: UUID, previous: SensesSnapsho
 
 
 __all__ = ["PreparedSensoryDelta", "prepare_sensory_delta", "apply_current_senses", "copy_senses_snapshot",
-           "reduce_senses_snapshot", "sense_modes_hash"]
+           "reduce_senses_snapshot", "sense_modes_key"]
