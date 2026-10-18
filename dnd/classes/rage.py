@@ -13,7 +13,7 @@ from dnd.core.action_types import ActionSelection, RestrictedActionKind
 from dnd.types.discovery import ActorScan
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_object import BaseObject
+from dnd.core.base_object import BaseObject, empty_list
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost
 )
@@ -547,7 +547,7 @@ class Rage(BaseAction):
     )
 
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Bonus-action and rage-resource costs rebuilt after model initialization.",
     )
 
@@ -663,7 +663,7 @@ class EndRage(BaseAction):
     )
 
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Bonus-action cost rebuilt after model initialization.",
     )
 
@@ -984,7 +984,7 @@ class Frenzy(BaseAction):
     )
 
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Bonus-action and rage-resource costs rebuilt after model initialization.",
     )
 

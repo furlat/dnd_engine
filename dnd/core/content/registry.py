@@ -531,24 +531,30 @@ def _validate_construction_cycles(
     visited: set[str] = set()
     active: list[str] = []
     active_set: set[str] = set()
-
-    def visit(key: str) -> None:
-        if key in visited:
-            return
-        if key in active_set:
-            start = active.index(key)
-            cycle = " -> ".join((*active[start:], key))
-            raise ValueError(f"Content construction dependency cycle: {cycle}")
-        active.append(key)
-        active_set.add(key)
-        for target in sorted(graph[key]):
-            visit(target)
-        active.pop()
-        active_set.remove(key)
-        visited.add(key)
-
     for key in sorted(graph):
-        visit(key)
+        _visit_construction(key, graph, visited, active, active_set)
+
+
+def _visit_construction(key: str, graph: Mapping[str, tuple[str, ...]], visited: set[str],
+                        active: list[str], active_set: set[str]) -> None:
+    """Depth-first walk of the construction graph; raises on the first cycle.
+
+    A module function rather than a recursive closure: a closure that calls
+    itself holds its own cell, a reference cycle left for the collector.
+    """
+    if key in visited:
+        return
+    if key in active_set:
+        start = active.index(key)
+        cycle = " -> ".join((*active[start:], key))
+        raise ValueError(f"Content construction dependency cycle: {cycle}")
+    active.append(key)
+    active_set.add(key)
+    for target in sorted(graph[key]):
+        _visit_construction(target, graph, visited, active, active_set)
+    active.pop()
+    active_set.remove(key)
+    visited.add(key)
 
 
 _VISIBILITY_RANK = {

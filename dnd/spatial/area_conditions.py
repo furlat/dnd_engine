@@ -35,6 +35,7 @@ from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.traps import TrapState
 from dnd.types.world import OccupancyLayer, SpatialChannel, WorldEdgeChannel, edge_revision_channels
+from dnd.core.base_object import empty_frozenset, empty_set
 from dnd.types.spatial_effects import (
     SpatialEffectAnchorKind,
     SpatialEffectBlockingPolicy,
@@ -71,7 +72,7 @@ class SpatialCondition(BaseCondition):
     position: Tuple[StrictInt, StrictInt] = Field(
         description="Authoritative anchor position.",
     )
-    affected_positions: Set[Tuple[int, int]] = Field(default_factory=set)
+    affected_positions: Set[Tuple[int, int]] = Field(default_factory=empty_set)
     observation_revision: int = Field(default=0, ge=0, exclude=True)
     layer: SpatialEffectLayer
     occupancy_policy: SpatialEffectOccupancyPolicy
@@ -79,10 +80,10 @@ class SpatialCondition(BaseCondition):
     anchor_uuid: Optional[UUID] = None
     blocking_policy: SpatialEffectBlockingPolicy = SpatialEffectBlockingPolicy.NONE
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
-        default_factory=frozenset,
+        default_factory=empty_frozenset,
     )
     first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
-        default_factory=frozenset,
+        default_factory=empty_frozenset,
     )
     arbitration_potency: int = Field(default=0, ge=0)
     optical_obscurement: Optional[OpticalObscurement] = None

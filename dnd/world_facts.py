@@ -229,7 +229,7 @@ def apply_keyed_tile_change(previous: WorldTileState, change: KeyedTileChange) -
         materials = {row.residue_id: row for row in previous.residues}
         for row in change.residues:
             if row.state is None:
-                materials.pop(row.residue_id, None)
+                del materials[row.residue_id]
             else:
                 materials[row.residue_id] = row.state
         # The tile lists its materials in residue order (`Tile.residue_states`).

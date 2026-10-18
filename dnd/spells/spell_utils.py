@@ -226,11 +226,24 @@ def deliver_spell_damage(event: SpellEvent,target: BaseBlock,damage: Damage,roll
 
 
 def spell_valid_positions(action: BaseAction):
+    """The spell placement region: the visible region in order, then the caster's own tile."""
     positions=BaseAction.get_valid_positions(action)
     caster=Entity.get(action.source_entity_uuid)
-    if caster is not None and get_map().has_tile(*caster.position) and action.target_position_error(caster.position) is None:
+    if caster is not None and _own_tile_placement(action, caster.position):
         positions.append(caster.position)
     return positions
+
+
+def in_spell_placement_region(action: BaseAction, position: tuple[int, int]) -> bool:
+    """The rule `spell_valid_positions` enumerates, for one point."""
+    return action.in_visible_region(position) or _own_tile_placement(action, position)
+
+
+def _own_tile_placement(action: BaseAction, position: tuple[int, int]) -> bool:
+    """The caster's own tile, when it is a map tile in range."""
+    caster=Entity.get(action.source_entity_uuid)
+    return (caster is not None and position==caster.position and get_map().has_tile(*position)
+        and action.target_position_error(position) is None)
 
 
 def target_turn_expiry_handler(owner: BaseCondition,*,turn_ends: int) -> EventHandler:

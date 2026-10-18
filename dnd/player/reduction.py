@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, replace
 import json
-from types import MappingProxyType
 from typing import Collection, Iterator, Mapping, Sequence
 from dnd.types.actor import SpatialDisposition
 from dnd.types.actor_facts import (ChangeField, ChangeRow, ConditionMember, ConditionRow, DispositionRow, DurationRow,
@@ -24,7 +23,7 @@ from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSp
 from dnd.player.audience import (AudienceComposition, apply_current_audience, audience_view,
     begin_audience_composition, observe_audience, perceived_entities, resolve_audience)
 from dnd.player.facts import (
-    ActorBirth, ActorChangeFact, BodyRecord, ItemRecord, AttackFact, ConditionChangeFact, ConditionFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
+    ActorBirth, ActorChangeFact, BodyRecord, ItemRecord, AttackFact, ConditionChangeFact, ConditionFact, DamageResultFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
     ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, SheetPatch, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
     VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact,
@@ -67,51 +66,6 @@ class SensoryChanges:
 
 # What the fold applies: a received fact, a sensory fact with its group's rows resolved.
 FoldedFact = PlayerFact | SensoryChanges
-
-
-@dataclass(frozen=True, slots=True)
-class PlayerCausalIndex:
-    """References into one received group, in its commit (occurrence) order."""
-    by_lineage: Mapping[int, PlayerNode]
-    by_occurrence: Mapping[int, PlayerNode]
-    # By resolution: a row of the group's `resolutions`.
-    owned: Mapping[int, tuple[PlayerNode, ...]]
-    results: Mapping[int, tuple[PlayerNode, ...]]
-    damage_requests: Mapping[int, int]
-
-
-def index_player_lineage(lineage: PlayerLineage) -> PlayerCausalIndex:
-    owned: dict[int, list[PlayerNode]] = {}
-    results: dict[int, list[PlayerNode]] = {}
-    by_lineage = {row.lineage: row for row in lineage.events}
-    damage_requests: dict[int, int] = {}
-    for node in lineage.events:
-        ancestors: list[int] = []
-        current = node
-        while current.lineage not in ancestors:
-            ancestors.append(current.lineage)
-            request = (current.lineage if isinstance(current.fact, DamageRequestFact)
-                       else damage_requests.get(current.lineage))
-            if request is not None:
-                damage_requests.update((identity, request) for identity in ancestors)
-                break
-            parent = by_lineage.get(current.parent_lineage) if current.parent_lineage is not None else None
-            if parent is None:
-                break
-            current = parent
-    for node in sorted(lineage.events, key=lambda row: row.occurrence):
-        reference = node.resolution
-        if reference is None:
-            continue
-        owned.setdefault(reference, []).append(node)
-        if not node.canceled and isinstance(node.fact, (DamageResultFact, ObjectDamageFact)):
-            results.setdefault(reference, []).append(node)
-    return PlayerCausalIndex(
-        MappingProxyType(by_lineage),
-        MappingProxyType({row.occurrence: row for row in lineage.events}),
-        MappingProxyType({key: tuple(rows) for key, rows in owned.items()}),
-        MappingProxyType({key: tuple(rows) for key, rows in results.items()}),
-        MappingProxyType(damage_requests))
 
 
 # These received families have ordinary state presentation, without a separate

@@ -7,7 +7,7 @@ from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll,
 from dnd.conditions import Restrained
 from dnd.spells.hit_effects import AttackBackedSpell
 from dnd.types.physical_access import PhysicalAccess
-from typing import Any, ClassVar, Literal, Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, ClassVar, Iterable, Literal, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
@@ -95,7 +95,7 @@ from dnd.core.events import SavingThrowEvent
 from dnd.core.aoe import AoEShape, Cube, Cylinder
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.gridmap import CrossingChannel, get_map
-from dnd.core.view import visible_positions
+from dnd.core.view import cell_visible, visible_positions
 from dnd.entity import Entity
 from dnd.types.world import OccupancyLayer, SpatialChannel
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
@@ -156,12 +156,18 @@ def _acid_splash_spread_error(positions: List[Tuple[int, int]]) -> Optional[str]
 
 
 def _call_lightning_positions(spell: SpellAction) -> List[Tuple[int, int]]:
-    """A bolt may target any visible in-range point, including the caster's feet."""
+    """Every point `_in_call_lightning_region` holds."""
     caster = Entity.get(spell.source_entity_uuid)
     if caster is None:
         return []
-    return [point for point in visible_positions(caster.senses.cells)
-            if spell.target_position_error(point) is None]
+    return [point for point in visible_positions(caster.senses.cells) if _in_call_lightning_region(spell, point)]
+
+
+def _in_call_lightning_region(spell: SpellAction, point: Tuple[int, int]) -> bool:
+    """A bolt may target any visible in-range point, including the caster's feet."""
+    caster = Entity.get(spell.source_entity_uuid)
+    return (caster is not None and cell_visible(caster.senses.cells, point)
+            and spell.target_position_error(point) is None)
 
 
 def _apply_call_lightning(spell: SpellAction, event: SpellEvent, *, dc: int) -> SpellEvent:
@@ -215,6 +221,9 @@ class CallLightningStrike(SpellAction):
     def get_valid_positions(self) -> List[Tuple[int, int]]:
         return _call_lightning_positions(self)
 
+    def valid_positions_among(self, points: Iterable[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        return [point for point in points if _in_call_lightning_region(self, point)]
+
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         if self.end_position is None and self.target_entity_uuid is not None:
@@ -258,6 +267,9 @@ class CallLightning(SpellAction):
 
     def get_valid_positions(self) -> List[Tuple[int, int]]:
         return _call_lightning_positions(self)
+
+    def valid_positions_among(self, points: Iterable[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        return [point for point in points if _in_call_lightning_region(self, point)]
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)

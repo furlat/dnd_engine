@@ -26,8 +26,8 @@ Of the 75 added `isinstance` calls, 55 repeat a call the base already made (move
 ## The 20 new isinstance calls, by kind
 
 **Union fields: a field holds two types and readers test which one (the "typecheck to cheat" kind).**
-- `dnd/core/events.py:3068/3070/3168/3170`: `bonus: Optional[Union[int, ValueReading]]` (field at ~2993). Readers branch on `isinstance(self.bonus, ValueReading)`. Fix: the field is one type (the reading), and an int bonus becomes a reading without rows.
-- `dnd/entity.py:261`: `target_ac = ac if isinstance(ac, int) else ac.normalized_score`. Same fix: one AC type.
+- `dnd/core/events.py:3068/3070/3168/3170`: `bonus: Optional[Union[int, ValueReading]]` (field at ~2993). Readers branch on `isinstance(self.bonus, ValueReading)`. Fixed in the cleanup lane (below).
+- `dnd/entity.py:261`: `target_ac = ac if isinstance(ac, int) else ac.normalized_score`. Fixed in the cleanup lane (below).
 
 **A target that may be a creature or an object.**
 - `dnd/actions.py:1981`, `dnd/actions.py:4790`, `dnd/spatial/area_reach.py:38`: branch on `isinstance(target, BaseItem)`. The engine has no component that states "this target is an object", so these replace older checks on concrete classes. Fix: a target-kind field on the target or its placement (next refactor).
@@ -38,7 +38,7 @@ Of the 75 added `isinstance` calls, 55 repeat a call the base already made (move
 - `server/worker.py:228`: the worker treats a `ChoicesResponse` differently when it records the packet.
 
 **Modifier kind, read from the result's type rather than the row's own Kind column.**
-- `dnd/core/values.py:816` (`_contextual_status`): contextual modifiers are evaluated and filtered by `isinstance(result, payload)`, while each `Row` already has a `kind` column. Fix: filter on `Row.kind` and evaluate only matching rows. Exact if a modifier's evaluated payload always matches its row kind, which must be checked.
+- `dnd/core/values.py:816` (`_contextual_status`): contextual modifiers are evaluated and filtered by `isinstance(result, payload)`, while each `Row` already has a `kind` column. Fixed in the cleanup lane (below).
 
 **Rule shape.**
 - `dnd/classes/fighter.py:1180`: a Shield in the off-hand slot (a rules test).
@@ -54,9 +54,9 @@ Of the 75 added `isinstance` calls, 55 repeat a call the base already made (move
   - the contact target table (PV1a-2);
   - the FOV caches (P5, scoped).
   
-  A second one, found by the contact fan-out lane: `SpatialSensesSystem._target_ids` (dnd/blocks/sensory.py, added in da41b695b) is a mutable, append-only intern map holding one id per uuid ever listed, cleared only on `reset`. It is system-owned but neither frozen nor revision-keyed (§6a). Contact-row matching relies on its "a key is never rebound" invariant, stated in the plan. Not changed yet.
+  A second one, found by the contact fan-out lane: `SpatialSensesSystem._target_ids` (dnd/blocks/sensory.py, added in da41b695b) is a mutable, append-only intern map holding one id per uuid ever listed, cleared only on `reset`. It is system-owned but neither frozen nor revision-keyed (§6a). Contact-row matching relies on its "a key is never rebound" invariant, stated in the plan. Left as is by the cleanup lane (below).
 
-  One exception, found later by the navigation lane: `Entity._navigation_traversal` (entity.py:632, added in P5, 6d9528cc4) is a private memo on the entity. It holds the read box and traversal stamp of its last navigation materialization, so a later discovery can tell whether its paths are still current. §6a bans exactly this kind of entity-held memo; it should be a system-owned frozen value, keyed by the grid's traversal stamp. Not changed yet. PV1a-4 settles edge answers on first read instead of at the writer, because eager writes cost +12 ms of unread predicates per Wall of Stone cast. That is a lazy answer inside GridMap: a decision for the human.
+  One exception, found later by the navigation lane: `Entity._navigation_traversal` (entity.py:632, added in P5, 6d9528cc4) is a private memo on the entity. It holds the read box and traversal stamp of its last navigation materialization, so a later discovery can tell whether its paths are still current. §6a bans exactly this kind of entity-held memo; it should be a system-owned frozen value, keyed by the grid's traversal stamp. Fixed in the cleanup lane (below). PV1a-4 settles edge answers on first read instead of at the writer, because eager writes cost +12 ms of unread predicates per Wall of Stone cast. That is a lazy answer inside GridMap: a decision for the human.
 - **Second paths still present:** `shadowcast.compute_fov` serves maps without optical boundaries and ignores local crossing owners (PV1a-4 left it untouched). A gallery_crowd-only `long_game` case exists for measurement.
 - **Plan text versus code:**
   - One settlement per move step (amended in §5.2, with the human's "seems okay").
@@ -67,6 +67,29 @@ Of the 75 added `isinstance` calls, 55 repeat a call the base already made (move
 ## Slop removed at close
 
 e260e92e1 removes imports and a map lookup that the perception merges left unused: `CENTER`, `reach_mask` and `cell_key` in sensory.py, `SpatialChannel` in entity.py, and an unused `grid = get_map()`.
+
+## Cleanup lane (codex/enp-cleanup, base 2b2dcc45e)
+
+Items the integrator assigned after the census. Each is done exactly or skipped with its reason. Gallery transcripts (fireball, circle_of_death, sleet_storm, wall_of_stone, spirit_guardians_walk, choices_caster, ai_decision) are compared with the base after each item.
+
+- **Dead code.** `GridMap.publish_tile_state_changed` had no callers and is deleted. `PlayerCausalIndex` / `index_player_lineage` (dnd/player/reduction.py) were called only from `game_obsolete/`. Nothing live or under `tests/` imports `game_obsolete`, and the package cannot be imported anyway (its modules import `game.*`, which no longer exists), so both are deleted.
+- **Forcecage crossing query.** `ForcecageZone.blocks_crossing_between` built its admitted-cell set once per section; it is now built once per query, as `SolidWallZone` does (4c66092b2). `allows_contribution_at` only reads. The ground-band `model_copy` stays per section: it copies that section's own geometry, and keeping a banded copy between queries would be a stored derived value on the condition (§6a), refreshed whenever a breach rewrites `sections`.
+- **Union fields (fixed).** `D20Event.bonus` is `Optional[ValueReading]`, as `D20RollResultEvent.bonus` already was. It held an int in two places, and both are now None:
+  - the unread default 0 on a request: no reading exists before the roll;
+  - a seat's detached body: the int was a copy of `dice_roll.bonus`, which the body keeps, also after an Indomitable reroll that read a different bonus.
+  
+  A "reading without rows" would need a made-up owner for the request, and its total could disagree with the roll. The two log readers test `is not None`. `determine_attack_outcome` takes an int target number; its two attack callers pass the read AC's `normalized_score`, the only part it read.
+  **Gate exception:** published updates and logs are byte-identical, but stored event dumps differ in that one field: an unread D20 request dumps `bonus: null` where the base dumped `0`. Mapping that field, everything else is identical.
+- **Modifier kind (fixed).** `_contextual_status` reads the rows of one (channel, kind) bucket, so the row's kind already selects them; it now keeps the results that are not None instead of testing `isinstance(result, payload)`, and the payload type parameter is gone from it and from `_override`. Exact because every contextual status row returns its kind's payload or None: an AST scan of every `add_modifier(...)` and `Row(...)` in dnd/ and server/ (260 sites) finds three contextual CRITICAL/AUTO_HIT/SIZE/DAMAGE_TYPE rows (Underwater and Charmed auto-miss in conditions.py, the close-range auto-critical in creature_transforms.py), and each callable returns `AutoHitModifier`/`CriticalModifier` or None; `evaluate` returns None when the row is inactive or raises. No call passes a channel or kind as a variable except `add_modifier` itself. The numerical, advantage and resistance readers keep their older isinstance filters (not new in the refactor, not in this item). Transcripts byte-identical to item 3's head.
+- **First version at a phase.** `EventQueue.is_first_at_phase` compared wall-clock timestamps. The clock can return the same value for two versions, and then an earlier version at the same phase was missed. It now walks the lineage index, which is in store order, and stops at the event itself. Its one caller (the HasAttacked tracker, on attack execution) always passes a stored version: `register` and `publish_committed_phase` store before dispatch. Transcripts byte-identical.
+- **Reckless Attack (deliberate behaviour fix).** This was logged in the progress log on 2026-10-17. A real weapon attack read its own rows in a context without `attack_ability`, so Reckless Attack's contextual advantage (Strength melee only) never applied. `Attack._resolve_attack` now starts the attack read's context from the value's own context, which the armor class read already used, and adds the attack's facts. No other rule reads `attack_ability` on an attack read (Rage reads it on damage, which already had it). `tests/progression/test_reckless_attack_roll.py` failed first on the reckless Strength melee case; the plain melee, reckless Dexterity melee and reckless ranged cases stay without advantage. No gallery case uses Reckless Attack, so transcripts are byte-identical.
+- **Navigation memo (fixed).** `Entity._navigation_traversal` is gone. The cells a navigation materialization reads and their traversal stamp are now a frozen `NavigationRead` owned by `SpatialSensesSystem`, the system that holds each observer's settled sight. It is keyed by observer uuid, recorded after the paths it describes are written (`record_navigation_read`, with the stamp taken when the cells were read) and read by `navigation_current`. Entries are kept until reset, like `_target_ids`: an observer's entry survives suspension, as the entity's memo did, and a destroyed entity's entry stays until reset. A map replaced without a reset is not covered; the entity's memo was not covered either. Same answers: transcripts byte-identical. A recording of every navigation materialization and path search (walkable cells, admitted paths and costs, safe paths) was equal before and after on spirit_guardians_walk, choices_caster and ai_decision.
+- **Contact target ids (left documented).** `SpatialSensesSystem._target_ids` has one writer, `_target_key`. It calls `dict.setdefault`, which never rebinds a key, and `reset` clears it together with every field that holds a key: the invariant is already in the code. The alternatives each fail a condition:
+  - a frozen mapping copies itself on every new id;
+  - an append-only wrapper is a registry class (§6a) and costs about 13 % per call (87 → 99 ns, timeit);
+  - keys tied to the contact table's revision would be rebound when the table rebuilds, breaking the comparison of contact rows across settlements.
+  
+  None of them is exact and no slower, so it stays as documented at its declaration and in `_row_identity`.
 
 ## How to re-run
 

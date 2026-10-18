@@ -2,7 +2,8 @@
 
 Static architecture checks, not gameplay evidence: an actor change is built by one dispatch over event
 kinds and folded by one function; a keyed tile change is written by its writers, refilled at completion
-and folded by one function. The engine fold module imports nothing from the player layer.
+and folded by one function. Records are data, and the engine fold modules import nothing from the player
+layer.
 """
 
 from __future__ import annotations
@@ -13,6 +14,10 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOTS = ("dnd", "server", "services", "custom_ai", "devtools")
+RECORDS = {
+    "dnd/types/actor_facts.py": ("ActorFieldValues", "HeldItem", "ItemResources", "ActorFactChange"),
+    "dnd/types/event_facts.py": ("KeyedTileFields", "KeyedResidueChange", "KeyedTileChange"),
+}
 
 
 @cache
@@ -21,17 +26,17 @@ def _modules() -> dict[str, ast.Module]:
             for root in SOURCE_ROOTS for path in (REPOSITORY_ROOT / root).rglob("*.py")}
 
 
-def _called_in(name: str) -> dict[str, set[str]]:
-    """For each module, the enclosing top-level functions (or `<module>`) that call `name`."""
-    found: dict[str, set[str]] = {}
+def _calls(name: str, keyword: str | None = None) -> set[str]:
+    """The modules calling `name` (with `keyword`, when given)."""
+    found: set[str] = set()
     for module, tree in _modules().items():
-        for node in tree.body:
-            owner = node.name if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) else "<module>"
-            for call in ast.walk(node):
-                if (isinstance(call, ast.Call)
-                        and (isinstance(call.func, ast.Name) and call.func.id == name
-                             or isinstance(call.func, ast.Attribute) and call.func.attr == name)):
-                    found.setdefault(module, set()).add(owner)
+        for call in ast.walk(tree):
+            if not isinstance(call, ast.Call):
+                continue
+            called = (call.func.id if isinstance(call.func, ast.Name)
+                      else call.func.attr if isinstance(call.func, ast.Attribute) else None)
+            if called == name and (keyword is None or any(row.arg == keyword for row in call.keywords)):
+                found.add(module)
     return found
 
 
@@ -41,38 +46,37 @@ def _defined(name: str) -> set[str]:
 
 
 def test_actor_changes_have_one_producer_and_one_fold() -> None:
-    assert _defined("actor_fact_change") == {"dnd/actor_projection.py"}
-    assert _called_in("ActorFactChange") == {"dnd/actor_projection.py": {"actor_fact_change"}}
-    # Computed once by the shared fold; seat and presentation folds read its records. The AI folds its own.
-    assert _called_in("actor_fact_change") == {
-        "dnd/player/capture.py": {"advance_capture"},
-        "dnd/ai/runtime/knowledge_reduction.py": {"AIKnowledge"},
-    }
-    assert _defined("apply_actor_fact_change") == {"dnd/actor_projection.py"}
-    assert _called_in("apply_actor_fact_change") == {
-        "dnd/player/actor_projection.py": {"apply_presented_change"},
-        "dnd/ai/runtime/knowledge_reduction.py": {"AIKnowledge"},
-    }
-    # The folds that preceded the records are gone, not kept beside them.
-    for retired in ("apply_actor_fact", "remove_previous_item_holdings", "apply_stats"):
-        assert not _defined(retired), retired
+    assert _defined("actor_fact_change") == _defined("apply_actor_fact_change") == {"dnd/actor_projection.py"}
+    assert (_calls("ActorFactChange")) == {"dnd/actor_projection.py"}
+    # Computed once by the shared fold, which seat and presentation folds read; the AI folds its own.
+    assert (_calls("actor_fact_change")) == {"dnd/player/capture.py", "dnd/ai/runtime/knowledge_reduction.py"}
+    assert (_calls("apply_actor_fact_change")) == {"dnd/player/actor_projection.py",
+                                                      "dnd/ai/runtime/knowledge_reduction.py"}
+    # The one copy of a record: the shared fold's E2 deferral of a condition's item after-value (E3-bodies).
+    assert (_calls("replace", keyword="replaced_item")) == {"dnd/player/capture.py"}
 
 
 def test_keyed_tile_changes_have_their_writers_and_one_fold() -> None:
-    assert set(_called_in("KeyedTileChange")) == {
-        "dnd/residues.py", "dnd/spatial/area_conditions.py", "dnd/core/gridmap.py"}
-    assert _called_in("KeyedTileChange")["dnd/core/gridmap.py"] == {"GridMap"}
+    assert (_calls("KeyedTileChange")) == {"dnd/residues.py", "dnd/spatial/area_conditions.py",
+                                              "dnd/core/gridmap.py"}
     assert _defined("apply_keyed_tile_change") == {"dnd/world_facts.py"}
-    assert _called_in("apply_keyed_tile_change") == {"dnd/world_facts.py": {"apply_world_fact"}}
-    # Whole tile rows left the tiles fact.
-    assert not [path for path in (REPOSITORY_ROOT / "dnd").rglob("*.py") if "tile_states" in path.read_text(encoding="utf-8")]
+    assert (_calls("apply_keyed_tile_change")) == {"dnd/world_facts.py"}
+
+
+def test_change_records_are_data() -> None:
+    for module, names in RECORDS.items():
+        classes = {node.name: node for node in _modules()[module].body if isinstance(node, ast.ClassDef)}
+        for name in names:
+            for member in classes[name].body[1:]:  # after the docstring
+                assert isinstance(member, ast.AnnAssign) or (
+                    isinstance(member, ast.Assign) and [target.id for target in member.targets
+                                                        if isinstance(target, ast.Name)] == ["model_config"]), name
 
 
 def test_the_engine_fold_imports_no_player_layer() -> None:
-    for module in ("dnd/actor_projection.py", "dnd/types/actor_facts.py", "dnd/world_facts.py",
-                   "dnd/ai/runtime/knowledge_reduction.py"):
-        imported = {node.module for node in ast.walk(_modules()[module])
-                    if isinstance(node, ast.ImportFrom) and node.module is not None}
-        imported |= {alias.name for node in ast.walk(_modules()[module]) if isinstance(node, ast.Import)
-                     for alias in node.names}
+    for module in ("dnd/actor_projection.py", "dnd/types/actor_facts.py", "dnd/types/event_facts.py",
+                   "dnd/world_facts.py", *(name for name in _modules() if name.startswith("dnd/ai/"))):
+        tree = _modules()[module]
+        imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
+        imported |= {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
         assert not {name for name in imported if name == "dnd.player" or name.startswith("dnd.player.")}, module

@@ -147,11 +147,12 @@ class AdmissionEvidence:
     `observer` is the tracked observer of a completed sensory delta (else
     None), `observed` its changed contacts plus itself and `acquired` the
     contacts it did not hold before. `candidates` are the participants and
-    the fact owner. For each of these identities: its actor (before this
-    version's fold), the tracked observers holding it as a contact, and its
-    own last sensory position. `actor_fact_change` is the actor change the
-    shared fold applied at this version (plan §4): the one record of it, which
-    every seat's fold applies.
+    the fact owner. For each of these identities: its actor (before a
+    completed version's fold; after an arrival's or departure's fold at its
+    effect), the tracked observers holding it as a contact, and its own last
+    sensory position. `actor_fact_change` is the record of a completed
+    version's actor change (plan §4), the one every seat's fold applies; the
+    shared fold applies it without its item replacement (E3-bodies).
     """
 
     observer: UUID | None
@@ -717,10 +718,7 @@ def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload:
         case HealRollResultEvent():
             copied = event.model_copy(update={**common, "context": {}})
         case D20Event():
-            copied = event.model_copy(update={
-                **common, "dice": None, "dc": event.get_dc(),
-                "bonus": event.dice_roll.bonus if event.dice_roll is not None else None,
-            })
+            copied = event.model_copy(update={**common, "dice": None, "dc": event.get_dc(), "bonus": None})
         case SpellMasteryStudiedEvent() | ConditionMembershipCommittedEvent() | RestResourcesRecoveredEvent() | PermanentFeatureUsedEvent() | ActionApplicationCommittedEvent() | MaximumHitPointReductionEvent() | EffectApplicationEvent() | ActionCostsCommittedEvent() | RestCompletedEvent() | HealingAppliedEvent():
             copied = event.model_copy(update=common)
         case CounterspellReactionEvent():
@@ -824,15 +822,14 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
         completed = event.phase is EventPhase.COMPLETION and not event.canceled
         if completed and isinstance(event, EntityCreatedEvent):
             actors[event.entity_uuid] = actor_from_birth(event)
-        change: ActorFactChange | None = None
         if (not event.canceled and event.phase is EventPhase.EFFECT
                 and isinstance(event, SpatialChangeEvent)
                 and event.change_type in (SpatialChangeType.ENTITY_LEFT, SpatialChangeType.ENTITY_ENTERED)
-                and event.entity_uuid is not None and event.entity_uuid in actors):
-            # The committed arrival or departure is the actor's at its effect, before its sensory children.
-            change = actor_fact_change(event)
-            if change is not None:
-                apply_presented_change(actors, change)
+                and event.entity_uuid is not None and event.entity_uuid in actors
+                and (arrival := actor_fact_change(event)) is not None):
+            # The committed arrival or departure is the actor's at its effect, before its sensory children;
+            # seats fold the completed version's record.
+            apply_presented_change(actors, arrival)
         observer: UUID | None = None
         observed: frozenset[UUID] = frozenset()
         acquired: frozenset[UUID] = frozenset()
@@ -852,9 +849,8 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
             if root is not None:
                 root_of[lineage] = root
                 trees.setdefault(root, []).append(lineage)
-        if completed:
-            # Records, then the version's frozen row (actors before the fold), then the fold.
-            change = actor_fact_change(event, _condition_fact(event))
+        # Records, then the version's frozen row (actors before the fold), then the fold.
+        change = actor_fact_change(event, _condition_fact(event)) if completed else None
         if not event.canceled:
             candidates = set(_actor_participants(event))
             owner = actor_fact_owner(event)

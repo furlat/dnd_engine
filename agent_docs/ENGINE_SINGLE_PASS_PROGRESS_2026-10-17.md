@@ -151,7 +151,7 @@ Hard rules:
   - Human: "you can't just push costs out of course total cost is still important". The AI knowledge advance runs in the op and is counted there (the post-reply move was reverted); PV1b owns its cost.
   - **Unowned term found:** Sleet zone install (terrain per tile, condition application models, dousing items), ~50–75 ms loaded. It goes to a PV1a follow-up after PV1a merges (same grids).
 - 2026-10-17: **PR findings.**
-  - **Player-visible bug, pre-existing, to fix separately:** `actions.py:2272` `set_context` replaces the attack context set at `entity.py:3425`, so `attack_ability` is missing during a real weapon-attack roll. Reckless Attack's contextual advantage never applies. PR preserves the behaviour exactly.
+  - **Player-visible bug, pre-existing, to fix separately:** `actions.py:2272` `set_context` replaces the attack context set at `entity.py:3425`, so `attack_ability` is missing during a real weapon-attack roll. Reckless Attack's contextual advantage never applies. PR preserves the behaviour exactly. **Fixed 2026-10-18 (codex/enp-cleanup):** the attack read's context now starts from the attack value's own context (`Attack._resolve_attack`); `tests/progression/test_reckless_attack_roll.py` failed first.
   - **First-use pydantic schema builds inside ops** (`defer_build` kept): Fireball 12.6–14.6 ms, Ice Storm 7.3–8.3, Circle of Death 2.7–2.9, once per process per model.
   - The value-read lineage only keyed a "latest evaluation" slot; it is deleted with the frozen reading.
 - 2026-10-17: **PV1a, rule-level side effects** (logged per the human's direction):
@@ -460,7 +460,7 @@ Hard rules:
   - The admitted physical-access contact is carried from admission to the target list: `BaseAction._physical_access_contact`, `@final`, listed in the admission architecture test. `attack_object_contact` calls: fighter menu / AI decision 819 → 650, caster menu 851 → 774. An oracle found 0 mismatches over 15,551 listed targets.
   - Object HP is read once per check, and `Health.get_max_hit_dices_points` skips the count read when the modifier is 0.
   - `Tile._add_illumination` skips an identical installed level.
-  - `SolidWallZone.blocks_crossing_between` builds its admitted cells once per call. Forcecage (wall_constructions.py:831) still rebuilds them per section.
+  - `SolidWallZone.blocks_crossing_between` builds its admitted cells once per call. Forcecage (wall_constructions.py:831) still rebuilds them per section. **Fixed in 18f88c8cc (codex/enp-cleanup).**
   - Gates (agent, vs d6a5ba8e7):
     - discovery dumps and agreement counts identical;
     - transcripts byte-identical on 6 cases;
@@ -496,8 +496,8 @@ Hard rules:
   - Logged:
     - `AreaCondition.crossing_channels` defaults to None, which makes undeclared zones (Gust's among them) global crossing owners that force Python step checks;
     - a kept movement-cost grid was not adopted (writer completeness unproven);
-    - `EventQueue.is_first_at_phase` compares wall-clock timestamps (latent; no effect seen).
-  - Census gap closed: `Entity._navigation_traversal` (P5) is an entity-held memo against §6a, now listed in RULE_VIOLATIONS.
+    - `EventQueue.is_first_at_phase` compares wall-clock timestamps (latent; no effect seen). **Fixed in 387645d3a (codex/enp-cleanup): store order.**
+  - Census gap closed: `Entity._navigation_traversal` (P5) is an entity-held memo against §6a, now listed in RULE_VIOLATIONS. **Fixed in 4345392a6 (codex/enp-cleanup): a `SpatialSensesSystem` frozen `NavigationRead`.**
 - 2026-10-18: **PV2 wire part 2 merged (777ecce99; 8b4673143 … 312d4a8b8): player schema 15, PlayerSequence 8.**
   - Wire changes:
     - each group sends its visible cells once, and light and hazard (cell, value) tables once; each observer's cell lists are bit lists over them;
@@ -519,7 +519,7 @@ Hard rules:
     - Fireball 247 → 201 KB; CoD 262 → 220 KB.
     - Client fold cost +0 to +3 ms per update.
   - **For the human:** Fireball and CoD can't fit 100 KB without (a) a residue-patch world-update type (each blood or ash change re-sends the tile's whole residue list, 53–56 KB) and (b) a combat-log redesign (41–57 KB, one entry per native event). Both are wire-design decisions.
-  - Also: `PlayerCausalIndex` / `index_player_lineage` are only called from `game_obsolete/`, so deleting them is the human's call. One more fact-family `isinstance` (`SpellFact`, `_public_occurrences`).
+  - Also: `PlayerCausalIndex` / `index_player_lineage` are only called from `game_obsolete/`, so deleting them is the human's call. **Deleted in d96f0b973 (codex/enp-cleanup).** One more fact-family `isinstance` (`SpellFact`, `_public_occurrences`).
 - 2026-10-18: **PV1a-2 fan-out merged (codex/single-pass-fanout, head 2c52b957d).**
   - Settlement runs each stage over all views in turn. The rule hooks read only the observer's own senses or the world (reorder checked by both reviewers).
   - Fixtures are re-observed in one pass per condition footprint, and emitters (light) are one masked OR over stacked views (`GridMap.light_slot_words`).
@@ -632,3 +632,28 @@ Hard rules:
   - **HUD bytes per op** (G1): Fireball 5.2 → 2.7 KB, SG walk 1.5 → 0.4 KB, init 109 → 105 KB.
   - **ms:** within load noise; E5's own CPU is lower or equal.
   - **For the human:** H2c (a kept sheet per actor) instead of H2a (the whole sheet on each event), accepted by the integrator.
+- 2026-10-18: **Cleanup lane merged into codex/event-native-deltas (fefaae23c).**
+  - **Removed:** `publish_tile_state_changed`, `PlayerCausalIndex`, the per-query Forcecage cell set, the `_contextual_status` isinstance filter, and timestamp order in `is_first_at_phase`.
+  - **`D20Event.bonus`** is an optional reading (the int duplicated `dice_roll.bonus`).
+  - **Navigation:** `Entity._navigation_traversal` became `NavigationRead`, owned by `SpatialSensesSystem`.
+  - **`_target_ids`** is kept: no exact, not-slower alternative.
+  - **Player-visible rules fix:** Reckless Attack with a Strength melee weapon now grants advantage.
+  - **Gates:**
+    - published updates byte-identical on 7 cases;
+    - the only native difference is `bonus` 0 → null on unread D20 requests;
+    - sweep = r29;
+    - pyright 0 new.
+- 2026-10-18: **E3-bodies prep (codex/enp-e3-bodies)** on top of E2's tip:
+  - **Startup-damage grant fix (5e937d6a1):** roster setup runs under the encounter's identity and location rule. 250 startup versions change only in their grants. Amber starts with crowd 1–6 at 6 HP instead of 44. This is player-visible.
+  - **Static-look census:** no held item's look or profile changes over 29 gallery cases and 4,139 tests.
+  - **Ruling (a):** one per-event conversion turns E2's named after-values into keyed rows, shared by every seat.
+- 2026-10-18: **E3-sensory prep (codex/enp-e3-sensory, 314105098):** the native settlement marker, with native events identical apart from it and the wire byte-identical; schema-16 sensory types in a staging module; the client fold; vectors V1–V8.
+- 2026-10-18: **Free-aim per point and GC alarms (codex/enp-freeaim: f02305211, 2b3fc5be6, 0405ae2d6), merged with 6810854a2 (c903b3dce).**
+  - **Free aim:** Create or Destroy Water, Call Lightning and its Strike answer each aim point by one per-point rule (`valid_positions_among`), and `get_valid_positions` lists that rule's cells. Caster menu `_collect_aoe_actions` 41 → 32 ms (minimum of 30 in-process repeats).
+  - **GC alarms:** pydantic reads a default factory's signature at every schema build in play and every `model_construct`. A C callable's (`list`/`set`/`frozenset`/`tuple`, `time.time`) leaves a class cycle (`inspect._signature_fromstr`).
+    - The 71 fields of models built in play and `DecisionEpoch.created_at` use Python factories (`dnd/core/base_object.py`).
+    - The content registry's recursive closure is a module function.
+    - Per-op `cycles_found` is 0 on 31 gallery cases (AI decisions 15 → 0). Start 11,947 → 317.
+  - **Known Start garbage:** 317 objects, once per process. numpy 2.5's `np.unique` reads `np.ma`, so numpy imports numpy.ma at the first `np.unique` (`view.py` `frame_rows`, at Start), and that import parses 5 C signatures. Integrator: no eager import; the alarm stays an alarm.
+  - **Gates vs 6810854a2:** discovery dumps equal on 3 cases; seeded agreement reports equal; transcripts byte-identical on 4 cases; sweep = r29; pyright 0 new.
+  - **Schema builds (measured, not changed):** none inside a timed gallery op. The harness builds each case's cast spells before its ops, as character creation would: 1–9 builds, 2.6–19.5 ms per case. Start plus setup: 81 builds, 137–204 ms (godmode 194 builds, 358–378 ms).

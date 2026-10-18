@@ -1952,16 +1952,6 @@ class GridMap:
             # inside their install/move group, which publishes the light fact.
             self.recompute_lights_at_positions(previous_positions | normalized)
 
-    def publish_tile_state_changed(
-        self, position: Tuple[int, int], *, source_entity_uuid: UUID,
-        parent_event: Optional[UUID] = None,
-    ) -> Optional[SpatialChangeEvent]:
-        """Publish an inert tile after-value without invalidating traversal."""
-        return self.publish_committed_spatial_event(SpatialChangeEvent.tile_changed(
-            position, source_entity_uuid=source_entity_uuid, parent_event=parent_event,
-            senses_hint=SensesUpdateHint(),
-        ))
-
     def residue_field(self, residue_id: str) -> Optional[ResidueFieldState]:
         """This map's one field for a material, if any of it was deposited."""
         return self._residue_fields.get(residue_id)
@@ -2013,6 +2003,8 @@ class GridMap:
 
     def _keyed_tile_change_after(self, change: KeyedTileChange) -> KeyedTileChange:
         """The same keys, with the tile's after-values read now (plan Q4 (W))."""
+        if change.fields.keys() - {"walking_cost", "condition_names"}:
+            raise ValueError(f"No completion reader for tile fields {sorted(change.fields)}")
         tile = self._tiles[change.position]
         fields: KeyedTileFields = {}
         if "walking_cost" in change.fields:
