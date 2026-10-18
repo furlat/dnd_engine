@@ -11,17 +11,29 @@ One case per fresh worker process (`server.worker.run_process`). Modes:
 - counts: `dnd.action_timing` counters and inclusive phases (not timing-qualified);
 - profile: cProfile plus counters (not timing-qualified).
 
-Spell cases measure construct → native apply → operation → both-audience
+Spell cases measure construct → native apply → operation → every-seat
 publication → encoding. Choices cases measure the worker requests Choices
 (miss, then hit), Preview and Command.
+
+Seats (`--seats`, plan EVENT_NATIVE_PUBLICATION E0): `faction` (G1, one seat per human slot: amber 4, blue 26),
+`character` (G2, one seat per member) or `batch:N` (G3 with N=5: blue in seats of N, amber one seat), all
+through the worker's Start assignments.
+
+Every seat's records are folded by the client reference fold (`dnd.player.reduction`) from their wire bytes,
+outside the measured spans: each row reports per seat the record's bytes, its combat-log bytes (plan Q2) and
+the client fold time. The harness's own world edits (`prepare_world`, a case's setup) are published to every
+seat as one unmeasured operation before the first measured one. `--oracle DIR` adds O1 at every operation end,
+O3 views and the O2 spool (`seat_oracle.py`, replayed by `spool_replay.py`).
 """
 
 import argparse
 import cProfile
 import gc
 from collections import Counter
+from dataclasses import dataclass, field, replace
 from functools import partial
 import json
+import os
 from pathlib import Path
 import pstats
 import sys
@@ -37,10 +49,12 @@ from dnd.actions import DropConcentration, Move
 from dnd.actions_functional import preview_available_selection, selection_admission_error
 from dnd.ai.policies.basic import BASIC_POLICY_ID
 from dnd.content.characters.premades import CLERIC_PREMADE_ID
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.environment_item_builders import build_oil_barrel
 from dnd.controller import HumanController
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import build_creatable_models
+from dnd.core.cells import mask_positions
 from dnd.core.content.encounters import (AuthoredCreatureRosterSource, EncounterDeploymentSpec,
     EncounterDeploymentZone, EncounterRecipe, EncounterRosterMember, EncounterRosterRecipe,
     PremadeCharacterRosterSource, RosterControllerDefaults, RosterControllerKind, RosterSpellGrant,
@@ -51,10 +65,13 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.encounter import TurnState
+from dnd.items.environment import DirectionalDoor
 from dnd.items.torches import WallTorch
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.player import application, session
 from dnd.player.commands import ActionSelection
+from dnd.player.facts import PlayerState
+from dnd.player.reduction import reduce_initialization, reduce_operation
 from dnd.spatial.gas_traps import materialize_gas_vent
 from dnd.spatial.portals import materialize_portal
 from dnd.spatial.triggers import materialize_pressure_plate
@@ -63,8 +80,10 @@ from dnd.spells.conjuration import Entangle
 from dnd.types.event_facts import EventPhase
 from dnd.types.controls import ActivationLink
 from dnd.types.traps import TrapState
+from devtools.performance import seat_oracle
 from server import worker
-from server.protocol import ChoicesRequest, CommandRequest, EndTurnIntent, ExecuteSelectionIntent, PreviewRequest
+from server.protocol import (ChoicesRequest, CommandRequest, EndTurnIntent, ExecuteSelectionIntent,
+    InitializationResponse, PlayerOperation, PreviewRequest, protocol_identity)
 from server.worker_protocol import Advance, Choices, Command, Preview, Start
 
 
@@ -114,6 +133,16 @@ PLATE = (27, 10)
 GAS_VENT = (42, 12)  # under the Fireball cluster
 PORTAL_ENTRANCES = WITNESSES[:3]  # one closed one-cell portal under each, exits 10 rows south
 PORTAL_DROP = 10
+# Room re-entry (plan E0): the party waits outside the hall. The caster stands in the passage at the gallery
+# door, seeing the lit hall through it; the allies stand in the burial hall off the line of both doors. A crowd
+# member on the passage side works the door while the caster is away.
+GALLERY_DOOR = 'Lantern gallery door'  # (24, 6), on the cell's west side
+PASSAGE_DOOR = 'Gallery passage'  # (20, 6), on the cell's east side
+REENTRY_PARTY = ((22, 6), (14, 2), (14, 10), (17, 2))
+DOOR_KEEPER = (23, 6)  # a door is worked from a cell touching its face (reach 0)
+DOOR_KEEPER_NAME = f'Gallery crowd {len(CROWD) + 1}'
+REENTRY_OUT = ((21, 6), (20, 6), (19, 6), (18, 5), (18, 4))  # the caster's steps out of sight of the hall
+HALL_X = 24  # the hall's cells are those with x >= 24 (the passage is x 21-23, the burial hall x 12-20)
 
 
 def _member(member_id, display_name, role, *, effects=(), source=None):
@@ -170,7 +199,14 @@ def damaged_party_roster(caster):
     return _party(caster, PARTY_DAMAGE), _crowd(CROWD)
 
 
-ROSTERS = {'crowd': crowd_roster, 'wall': wall_roster, 'undead': undead_roster, 'damaged_party': damaged_party_roster}
+def reentry_roster(caster):
+    """The party outside the hall (REENTRY_PARTY); the door keeper joins the crowd."""
+    (party, _), crowd = _party(caster), _crowd((*CROWD, DOOR_KEEPER))
+    return (party, REENTRY_PARTY), crowd
+
+
+ROSTERS = {'crowd': crowd_roster, 'wall': wall_roster, 'undead': undead_roster, 'damaged_party': damaged_party_roster,
+           'reentry': reentry_roster}
 
 
 def crowd_recipe(seed, *, godmode, roster='crowd', blue_ai=False):
@@ -204,30 +240,148 @@ def crowd_recipe(seed, *, godmode, roster='crowd', blue_ai=False):
         opening_policy=seed_recipe.opening_policy)
 
 
-def start_request(godmode, recipe_options):
-    """One seat per human-controlled slot, controlling all of its members."""
+def seat_layout(text):
+    """`faction`, `character` or `batch:N` (N ≥ 1)."""
+    kind, _, size = text.partition(':')
+    if text in ('faction', 'character') or (kind == 'batch' and size.isdigit() and int(size) >= 1):
+        return text
+    raise argparse.ArgumentTypeError(f'unknown seat layout {text!r}: faction, character or batch:N')
+
+
+def slot_seats(slot, layout):
+    """One human slot's seats as (seat id, member addresses): the whole slot (`faction`), one per member
+    (`character`), or for the blue slot consecutive members in seats of N (`batch:N`, other slots whole)."""
+    addresses = tuple((slot.roster_slot_id, member.member_id) for member in slot.roster.members)
+    if layout == 'character':
+        return tuple((f'{slot.roster_slot_id}.{member}', ((slot_id, member),)) for slot_id, member in addresses)
+    if layout.startswith('batch:') and slot.roster_slot_id == 'blue':
+        size = int(layout.removeprefix('batch:'))
+        return tuple((f'blue.{start // size + 1}', addresses[start:start + size])
+            for start in range(0, len(addresses), size))
+    return ((slot.roster_slot_id, addresses),)
+
+
+def start_request(godmode, recipe_options, layout):
+    """The Start request with `layout`'s seats over the human-controlled slots, each seat controlling (and
+    observing through) its members; and the slot of each seat."""
     seed = json.loads(SEED.read_text())
     recipe = crowd_recipe(seed, godmode=godmode, **recipe_options)
-    human = tuple(slot for slot in recipe.roster_slots
-        if slot.controller_defaults.controller is RosterControllerKind.HUMAN)
-    assignments = tuple({'seat_id': slot.roster_slot_id, 'controlled': [[slot.roster_slot_id, member.member_id]
-        for member in slot.roster.members], 'observers': None} for slot in human)
-    return Start.model_validate({'game_id': 'gallery-crowd', 'game_epoch': uuid4(),
-        'audience_ids': {slot.roster_slot_id: uuid4() for slot in human}, 'encounter_id': None,
+    seats = tuple((seat, slot.roster_slot_id, addresses) for slot in recipe.roster_slots
+        if slot.controller_defaults.controller is RosterControllerKind.HUMAN
+        for seat, addresses in slot_seats(slot, layout))
+    assignments = tuple({'seat_id': seat, 'controlled': [list(address) for address in addresses], 'observers': None}
+        for seat, _, addresses in seats)
+    request = Start.model_validate({'game_id': 'gallery-crowd', 'game_epoch': uuid4(),
+        'audience_ids': {seat: uuid4() for seat, _, _ in seats}, 'encounter_id': None,
         'recipe': recipe.model_dump(mode='json'), 'assignments': assignments, 'test_seed': seed['test_seed']})
+    return request, {seat: slot for seat, slot, _ in seats}
+
+
+@dataclass(slots=True)
+class SeatClients:
+    """Each seat's client: the slot its members come from, the reference fold of every record it received,
+    and the oracle outputs when `--oracle` is given."""
+
+    layout: str
+    slots: dict[str, str]
+    states: dict[str, PlayerState] = field(default_factory=dict)
+    oracle: seat_oracle.Oracle | None = None
+
+
+def log_bytes(record, payload):
+    """The bytes the combat log takes in a record's encoding `payload` (plan Q2: counted apart): its nodes'
+    entries and its standalone appends, as the record's size less that of the record without them."""
+    stripped = record.model_copy(update={'combat_log_appends': (), 'lineages': tuple(
+        replace(lineage, events=tuple(replace(node, combat_log=None) for node in lineage.events))
+        for lineage in record.lineages)})
+    return len(payload) - len(stripped.model_dump_json().encode())
+
+
+def initialize_clients(clients, publications, records):
+    """Fold each seat's initialization record (Start's records, in its publications' order) from its wire bytes."""
+    for publication, record in zip(publications, records, strict=True):
+        payload = record.model_dump_json().encode()
+        initial = InitializationResponse.model_validate_json(payload)
+        state = reduce_initialization(initial.initialization, content_additions=initial.content_additions)
+        clients.states[publication.seat_id] = state
+        if clients.oracle is not None:
+            seat_oracle.receive(clients.oracle, publication.seat_id, 0, payload, state)
+
+
+def deliver(clients, records):
+    """Fold each (seat, record) into the seat's client from its wire bytes, as a client does; the record's
+    bytes, combat-log bytes and fold time per seat."""
+    rows = {}
+    for seat, record in records:
+        payload = record.model_dump_json().encode()
+        started = perf_counter()
+        clients.states[seat] = reduce_operation(clients.states[seat], PlayerOperation.model_validate_json(payload))
+        fold_ms = (perf_counter() - started) * 1000
+        row = rows.setdefault(seat, {'bytes': 0, 'log_bytes': 0, 'fold_ms': 0.0})
+        row['bytes'] += len(payload)
+        row['log_bytes'] += log_bytes(record, payload)
+        row['fold_ms'] += fold_ms
+        if clients.oracle is not None:
+            seat_oracle.receive(clients.oracle, seat, record.cursor.sequence, payload, clients.states[seat])
+    return rows
+
+
+def publish(runtime, updates):
+    """`worker.dispatch`'s publication of an operation the harness ran itself, which no request owns: each seat
+    whose update says something or whose boundary moved gets its next cursor, revision and record."""
+    records = []
+    for seat, update in updates.items():
+        previous = runtime.publications[seat]
+        if not (update.lineages or update.combat_log_appends or update.content_additions or update.hud is not None
+                or worker.boundary(runtime.session, seat, previous.state_revision) != previous.boundary):
+            continue
+        cursor = previous.cursor.model_copy(update={'sequence': previous.cursor.sequence + 1})
+        # A fresh token per record, as the worker's, but drawn from no generator: the identities a transcript
+        # seeds (gallery_transcript.py) stay those of a harness that publishes nothing itself.
+        revision = str(uuid5(cursor.audience_id, f'harness-publication:{cursor.sequence}'))
+        boundary = worker.boundary(runtime.session, seat, revision)
+        runtime.publications[seat] = previous.model_copy(update={'cursor': cursor, 'state_revision': revision,
+            'boundary': boundary})
+        records.append((seat, PlayerOperation(audience=update.audience, lineages=update.lineages, hud=update.hud,
+            combat_log_appends=update.combat_log_appends, content_additions=update.content_additions,
+            protocol=protocol_identity(), cursor=cursor, state_revision=revision, command_number=None,
+            boundary=boundary)))
+    return records
+
+
+def byte_report(rows):
+    """An operation's seat updates: each seat's bytes and combat-log bytes, the largest update with its
+    combat-log and other bytes, the largest non-log bytes, and the client fold time."""
+    if not rows:
+        return {'seat_bytes': {}, 'largest_update': None, 'largest_non_log': None,
+                'client_fold_ms': {'max': 0.0, 'total': 0.0, 'records': 0}}
+    largest = max(rows, key=lambda seat: rows[seat]['bytes'])
+    non_log = max(rows, key=lambda seat: rows[seat]['bytes'] - rows[seat]['log_bytes'])
+    return {'seat_bytes': {seat: {'bytes': row['bytes'], 'log_bytes': row['log_bytes']} for seat, row in rows.items()},
+        'largest_update': {'seat': largest, 'bytes': rows[largest]['bytes'], 'log_bytes': rows[largest]['log_bytes'],
+            'non_log_bytes': rows[largest]['bytes'] - rows[largest]['log_bytes']},
+        'largest_non_log': {'seat': non_log, 'bytes': rows[non_log]['bytes'] - rows[non_log]['log_bytes']},
+        'client_fold_ms': {'max': max(row['fold_ms'] for row in rows.values()),
+            'total': sum(row['fold_ms'] for row in rows.values()), 'records': len(rows)}}
 
 
 class Driver:
-    """Worker requests addressed to the seat that currently holds input."""
+    """Worker requests addressed to the seat that currently holds input; their records wait in `pending`
+    until the seats' clients receive them, outside any measured span."""
 
-    def __init__(self, runtime):
+    def __init__(self, runtime, clients):
         self.runtime = runtime
+        self.clients = clients
+        self.pending = []
+        self.setup_rows = []  # the byte reports of the harness's unmeasured setup publications
         self.command_number = 0
 
     def dispatch(self, request):
-        reply, _, response = worker.dispatch(self.runtime, request)
+        reply, records, response = worker.dispatch(self.runtime, request)
         if reply.rejection is not None or reply.query_error is not None:
             raise AssertionError(f'{type(request).__name__} rejected: {reply.rejection or reply.query_error}')
+        self.pending.extend((publication.seat_id, record)
+                            for publication, record in zip(reply.publications, records, strict=True))
         return response
 
     def settle(self):
@@ -259,10 +413,10 @@ class Driver:
             actor_uuid=actor_uuid, state_revision=publication.state_revision, intent=intent)))
 
     def turn_of(self, accepts):
-        """End turns until an input actor satisfies `accepts(seat, actor)`; returns (seat, actor uuid)."""
+        """End turns until an input actor satisfies `accepts(its seat's slot, actor)`; returns (seat, actor uuid)."""
         for _ in range(64):
             seat, actor_uuid = self.input_seat()
-            if accepts(seat, self.runtime.session.game.entities[actor_uuid]):
+            if accepts(self.clients.slots[seat], self.runtime.session.game.entities[actor_uuid]):
                 return seat, actor_uuid
             self.command(seat, actor_uuid, EndTurnIntent())
         raise AssertionError('No input actor was accepted')
@@ -401,8 +555,39 @@ class Measurement:
         return result
 
 
-def measured_operation(runtime, mode, kind, action_factory, faces=()):
+def receive_pending(driver):
+    """Records of unmeasured requests reach their seats' clients; the fold's garbage is collected unmeasured."""
+    if driver.pending:
+        deliver(driver.clients, driver.pending)
+        driver.pending.clear()
+        worker.collect_between_requests()
+
+
+def after_operation(driver, kind, records):
+    """An operation's records reach the seats' clients after its measurement and post-reply collection; with
+    `--oracle`, O1 runs at its end. What they leave is collected unmeasured. Returns the byte report."""
+    report = byte_report(deliver(driver.clients, records))
+    oracle = driver.clients.oracle
+    if oracle is not None:
+        result = seat_oracle.check(oracle, len(oracle.report), kind, driver.runtime.session, driver.clients.states)
+        report['o1_differences'] = result['differences']
+    worker.collect_between_requests()
+    return report
+
+
+def publish_setup(driver, cursor, kind='setup'):
+    """The harness's own world edits since `cursor` reach every seat as one unmeasured operation."""
+    runtime = driver.runtime
+    receive_pending(driver)
+    updates = application.capture_application_operation(runtime.audiences, session._operation(runtime.session, cursor),
+        runtime.catalog)
+    return after_operation(driver, kind, publish(runtime, updates))
+
+
+def measured_operation(driver, mode, kind, action_factory, faces=()):
     """One measured action; `faces` fixes the die faces its rolls consume (e.g. a save that must succeed)."""
+    runtime = driver.runtime
+    receive_pending(driver)
     measurement = Measurement(mode)
     before = actor_states(runtime)
     cursor = EventQueue.event_cursor()
@@ -425,13 +610,14 @@ def measured_operation(runtime, mode, kind, action_factory, faces=()):
         marks['published'] = perf_counter()
         encoded = {seat: len(update.model_dump_json().encode('utf-8')) for seat, update in updates.items()}
         marks['encoded'] = perf_counter()
-        return outcome, encoded
+        return outcome, encoded, updates
 
-    outcome, encoded = measurement.run(operation)
+    outcome, encoded, updates = measurement.run(operation)
     measurement.collect_after()
     if outcome is None or outcome.canceled or outcome.phase.value != 'completion':
         reason = outcome.status_message if outcome is not None else 'no outcome'
         raise AssertionError(f'{kind}: the action failed to complete ({reason})')
+    seats = after_operation(driver, kind, publish(runtime, updates))
     after = actor_states(runtime)
     completed = Counter(event.event_type.value for _, event in EventQueue.iter_events_since(cursor)
         if event.phase.value == 'completion' and not event.canceled)
@@ -447,10 +633,12 @@ def measured_operation(runtime, mode, kind, action_factory, faces=()):
         'damaged': sum(name in before and state['damage_taken'] != before[name]['damage_taken']
             for name, state in after.items()),
         'arrived': sorted(after.keys() - before.keys()), 'departed': sorted(before.keys() - after.keys()),
-        **measurement.report()}
+        **seats, **measurement.report()}
 
 
-def measured_request(mode, kind, request):
+def measured_request(driver, mode, kind, request):
+    """One measured worker request (`request` dispatches it through `driver`)."""
+    receive_pending(driver)
     measurement = Measurement(mode)
     cursor = EventQueue.event_cursor()
     span = {}
@@ -464,9 +652,12 @@ def measured_request(mode, kind, request):
     response = measurement.run(timed)
     measurement.collect_after()
     elapsed = span['ms']
-    return response, {'kind': kind, 'total_ms': elapsed, 'event_versions': EventQueue.event_cursor() - cursor,
+    versions = EventQueue.event_cursor() - cursor
+    records, driver.pending = driver.pending, []
+    seats = after_operation(driver, kind, records)
+    return response, {'kind': kind, 'total_ms': elapsed, 'event_versions': versions,
         'response_bytes': len(response.model_dump_json().encode('utf-8')) if response is not None else 0,
-        **measurement.report()}
+        **seats, **measurement.report()}
 
 
 def _uuid_named(runtime, name):
@@ -494,12 +685,38 @@ def use(behavior_id, *, actor):
     return ('use', behavior_id, None, (), actor, {}, ())
 
 
-def sequence_case(*steps, setup=None):
-    """Measure each step in order in one fresh world (e.g. a cast, then a dispel), after an unmeasured `setup`."""
+def check(description, holds):
+    """An unmeasured check of the world between measured steps: `holds(runtime)` must be true."""
+    return ('check', description, holds, (), None, {}, ())
+
+
+def caster_hall_cells(runtime):
+    """How many hall cells the caster sees now (its published senses)."""
+    caster = runtime.session.game.entities[_uuid_named(runtime, CASTER_NAME)]
+    return sum(1 for x, _ in mask_positions(capture_senses_snapshot(caster.senses).visible) if x >= HALL_X)
+
+
+def door(name, *, actor):
+    """One measured use of the door named `name` by `actor`: Close Door if it is open, else Open Door."""
+    return ('door', name, None, (), actor, {}, ())
+
+
+def door_named(name):
+    return next(door for placement in get_map().iter_object_placements()
+        if isinstance(door := BaseBlock.get(placement.object_uuid), DirectionalDoor) and door.name == name)
+
+
+def sequence_case(*steps, setup=None, published=True):
+    """Measure each step in order in one fresh world (e.g. a cast, then a dispel), after an unmeasured `setup`,
+    published to every seat unless `published` is false (a trap materialized mid-game is battlefield authoring,
+    which the operation projector refuses as unsupported: such a setup reaches no seat, as before E0)."""
 
     def case(runtime, driver, mode, caster_uuid):
         if setup is not None:
+            cursor = EventQueue.event_cursor()
             setup(runtime)
+            if published:
+                driver.setup_rows.append(publish_setup(driver, cursor, 'case_setup'))
         # The harness constructs these spells itself, outside any creature's content: build each as the
         # template a caster holds is built at character creation (its class and what it can create).
         incomplete = incomplete_models()
@@ -517,23 +734,35 @@ def sequence_case(*steps, setup=None):
                 # Each step is its own turn's action; refresh the economy outside the measurement.
                 runtime.session.game.entities[actor_uuid].action_economy.reset_all_costs()
             if kind == 'drop_concentration':
-                operations.append(measured_operation(runtime, mode, 'concentration_drop',
+                operations.append(measured_operation(driver, mode, 'concentration_drop',
                     partial(DropConcentration, source_entity_uuid=actor_uuid, use_register=False)))
                 continue
             if kind == 'move':
-                operations.append(measured_operation(runtime, mode, f'move_to_{aim[0]}_{aim[1]}',
+                operations.append(measured_operation(driver, mode, f'move_to_{aim[0]}_{aim[1]}',
                     partial(Move, source_entity_uuid=actor_uuid, end_position=aim, use_register=False, **fields)))
                 continue
             if kind == 'use':
                 actor = runtime.session.game.entities[actor_uuid]
                 template = next(action for action in actor.registered_actions if action.semantic_key == content_id)
-                operations.append(measured_operation(runtime, mode, content_id, template.instantiate))
+                operations.append(measured_operation(driver, mode, content_id, template.instantiate))
+                continue
+            if kind == 'check':
+                if not aim(runtime):
+                    raise AssertionError(f'Check failed before step {index}: {content_id}')
+                continue
+            if kind == 'door':
+                if actor_uuid is None:
+                    raise AssertionError('A door step names its actor')
+                target = door_named(content_id)
+                template, = target.get_use_actions(actor_uuid)
+                operations.append(measured_operation(driver, mode, 'door_close' if target.is_open else 'door_open',
+                    template.instantiate))
                 continue
             if kind in ('end_turn', 'end_round'):
                 round_number = encounter.round_number
                 for _ in range(64):
                     seat, input_uuid = driver.input_seat()
-                    _, row = measured_request(mode, 'end_turn_and_next_start',
+                    _, row = measured_request(driver, mode, 'end_turn_and_next_start',
                         lambda: driver.command(seat, input_uuid, EndTurnIntent()))
                     row['round'] = encounter.round_number
                     operations.append(row)
@@ -552,7 +781,7 @@ def sequence_case(*steps, setup=None):
                 fields['extra_target_entity_uuids'] = uuids[1:]
             factory = partial(spell_type, source_entity_uuid=actor_uuid, use_register=False,
                 caster_level=20, cast_at_level=level, **fields)
-            operations.append(measured_operation(runtime, mode, content_id, factory, faces))
+            operations.append(measured_operation(driver, mode, content_id, factory, faces))
         if operations:
             operations[0]['harness_built'] = harness_built
         return operations
@@ -588,6 +817,15 @@ def portal_plate(runtime):
         for portal in portals))
 
 
+def open_doors(*names):
+    """Setup: open the named doors."""
+
+    def setup(runtime):
+        for name in names:
+            door_named(name).open()
+    return setup
+
+
 def ai_turn_case(runtime, driver, mode, caster_uuid):
     """End human turns until a living native-AI combatant is current, then measure each Advance of its turn
     (one policy decision each; the first also starts the turn unless the previous command did)."""
@@ -607,7 +845,7 @@ def ai_turn_case(runtime, driver, mode, caster_uuid):
     operations = []
     while True:
         turn_started = encounter.turn_state is TurnState.IN_PROGRESS
-        _, row = measured_request(mode, 'ai_decision', lambda: driver.dispatch(Advance()))
+        _, row = measured_request(driver, mode, 'ai_decision', lambda: driver.dispatch(Advance()))
         row.update({'actor': actor.name, 'turn_already_started': turn_started})
         operations.append(row)
         if (len(operations) == 4 or encounter.get_current_entity().uuid != actor.uuid
@@ -627,8 +865,8 @@ def choices_case(accepts, behavior_id, aim):
 
     def case(runtime, driver, mode, caster_uuid):
         seat, actor_uuid = driver.turn_of(accepts)
-        _, miss_row = measured_request(mode, 'choices_miss', lambda: driver.choices(seat, actor_uuid))
-        hit, hit_row = measured_request(mode, 'choices_hit', lambda: driver.choices(seat, actor_uuid))
+        _, miss_row = measured_request(driver, mode, 'choices_miss', lambda: driver.choices(seat, actor_uuid))
+        hit, hit_row = measured_request(driver, mode, 'choices_hit', lambda: driver.choices(seat, actor_uuid))
         choices = hit.choices
         rows = (*choices.self_actions, *choices.entity_actions, *choices.position_actions, *choices.object_actions)
         miss_row['rows'] = len(rows)
@@ -648,12 +886,12 @@ def choices_case(accepts, behavior_id, aim):
         target = min(pool, key=distance)
         selection = ActionSelection(action_index=action.discovery_index, target_indices=(target.index,),
             extra_target_positions=(), prefer_safe=False)
-        preview, preview_row = measured_request(mode, 'preview',
+        preview, preview_row = measured_request(driver, mode, 'preview',
             lambda: driver.preview(seat, actor_uuid, choices.discovery_generation, selection))
         preview_row['can_confirm'] = preview.preview.can_confirm
         operations.append(preview_row)
         if preview.preview.can_confirm:
-            _, command_row = measured_request(mode, 'command', lambda: driver.command(seat, actor_uuid,
+            _, command_row = measured_request(driver, mode, 'command', lambda: driver.command(seat, actor_uuid,
                 ExecuteSelectionIntent(discovery_generation=choices.discovery_generation, selection=selection)))
             operations.append(command_row)
         return operations
@@ -741,8 +979,10 @@ def agreement_case(accepts, godmode, recipe_options=None):
 
         def restart():
             session.close_session(driver.runtime.session)
-            driver.runtime, _, _ = worker.start(start_request(godmode, recipe_options or {}))
-            prepare_world(driver.runtime, _uuid_named(driver.runtime, CASTER_NAME))
+            fresh, _ = begin_world(godmode, recipe_options or {}, driver.clients.layout)
+            driver.runtime, driver.clients, driver.pending = fresh.runtime, fresh.clients, []
+            driver.setup_rows.clear()
+            prepare_published(driver)
             driver.turn_of(accepts)
 
         executed, admission_cancels, worlds = [], [], 1
@@ -784,12 +1024,15 @@ def agreement_case(accepts, godmode, recipe_options=None):
 
 
 
-def memory_census(kind, started_round, found, cycles, elapsed):
+def memory_census(kind, started_round, found, cycles, elapsed, seat_clients):
+    """The worker's round check. Since E0 the heap also holds the harness's `seat_clients` client folds (and
+    their garbage reaches the scans), so these counts are not the worker's alone."""
     with open('/proc/self/statm') as statm:
         rss_pages = int(statm.read().split()[1])
     return {'kind': kind, 'round': started_round, 'ms': elapsed, 'cycles_found': found,
         'cycle_types': dict(cycles.most_common(8)), 'frozen_objects': gc.get_freeze_count(),
-        'tracked_unfrozen': len(gc.get_objects()), 'rss_mb': rss_pages * 4096 / 2**20}
+        'tracked_unfrozen': len(gc.get_objects()), 'rss_mb': rss_pages * 4096 / 2**20,
+        'includes_seat_clients': seat_clients}
 
 
 def long_game_case(turns):
@@ -806,7 +1049,7 @@ def long_game_case(turns):
             """(accepted, response); an Advance is accepted with no response body."""
             round_before = encounter.round_number
             try:
-                response, row = measured_request(mode, kind, call)
+                response, row = measured_request(driver, mode, kind, call)
             except AssertionError as error:
                 operations.append({'kind': 'rejected', 'request': kind, 'error': str(error)[:200]})
                 return False, None
@@ -815,7 +1058,7 @@ def long_game_case(turns):
                 started = perf_counter()
                 found, cycles = worker.collect_frozen_cycles()
                 operations.append(memory_census('round_check', round_before, found, cycles,
-                    (perf_counter() - started) * 1000))
+                    (perf_counter() - started) * 1000, len(driver.clients.states)))
             return True, response
 
         for _ in range(turns):
@@ -853,7 +1096,7 @@ def long_game_case(turns):
         started = perf_counter()
         found, cycles = worker.collect_frozen_cycles()
         operations.append(memory_census('final_check', encounter.round_number, found, cycles,
-            (perf_counter() - started) * 1000))
+            (perf_counter() - started) * 1000, len(driver.clients.states)))
         return operations
     return case
 
@@ -862,8 +1105,8 @@ CASES = {
     'fireball': (False, sequence_case(cast('spell.fireball', aim=FIREBALL_AIM))),
     'sleet_storm': (False, sequence_case(cast('spell.sleet_storm', aim=FIREBALL_AIM), DROP_CONCENTRATION)),
     'ice_storm': (False, sequence_case(cast('spell.ice_storm', aim=ICE_STORM_AIM))),
-    'choices_caster': (True, choices_case(lambda seat, actor: actor.name == CASTER_NAME, 'spell.fireball', FIREBALL_AIM)),
-    'choices_fighter': (False, choices_case(lambda seat, actor: seat == 'blue', 'action.attack', CASTER)),
+    'choices_caster': (True, choices_case(lambda slot, actor: actor.name == CASTER_NAME, 'spell.fireball', FIREBALL_AIM)),
+    'choices_fighter': (False, choices_case(lambda slot, actor: slot == 'blue', 'action.attack', CASTER)),
     # P3 gate rows (P0b-2), by index pattern (§1).
     'circle_of_death': (False, sequence_case(cast('spell.circle_of_death', aim=(46, 20)))),
     'holy_aura': (False, sequence_case(cast('spell.holy_aura', targets=ALLY_NAMES))),
@@ -886,8 +1129,8 @@ CASES = {
     # Remaining §1 rows (P0b-2). A third entry holds `crowd_recipe` options (roster variant, AI blue slot).
     'turn_undead': (False, sequence_case(use('action.class.cleric.turn_undead', actor=CLERIC_NAME)),
         {'roster': 'undead'}),
-    'gas_vent_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=gas_vent_plate)),
-    'portal_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=portal_plate)),
+    'gas_vent_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=gas_vent_plate, published=False)),
+    'portal_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=portal_plate, published=False)),
     # The single die is the enclosed witness's Dexterity save: a 20 makes it the escaper.
     'wall_of_stone': (False, sequence_case(cast('spell.wall_of_stone', aim=WALL_OF_STONE[0], faces=(20,),
         extra_target_positions=WALL_OF_STONE[1:], displacement_side='right')), {'roster': 'wall'}),
@@ -906,34 +1149,79 @@ CASES = {
         setup=open_slots('Gallery ally 1', 'Gallery ally 3'))),
     'mass_healing_word': (False, sequence_case(cast('spell.mass_healing_word', targets=ALLY_NAMES)),
         {'roster': 'damaged_party'}),
+    # Plan E0: the caster sees the lit hall through the open door, steps out of sight, the door keeper closes and
+    # reopens the door, the caster steps back to where it saw the hall (in the passage, at the door) and sees it
+    # again. Each step and each door use is measured; the checks are not.
+    'room_reentry': (False, sequence_case(
+        check('the caster sees the hall', lambda runtime: caster_hall_cells(runtime) >= 100),
+        *(move(step) for step in REENTRY_OUT),
+        check('the caster sees none of the hall', lambda runtime: caster_hall_cells(runtime) == 0),
+        door(GALLERY_DOOR, actor=DOOR_KEEPER_NAME), door(GALLERY_DOOR, actor=DOOR_KEEPER_NAME),
+        *(move(step) for step in reversed((REENTRY_PARTY[0], *REENTRY_OUT[:-1]))),
+        check('the caster sees the hall again', lambda runtime: caster_hall_cells(runtime) >= 100),
+        setup=open_doors(GALLERY_DOOR, PASSAGE_DOOR)), {'roster': 'reentry'}),
     'ai_decision': (False, ai_turn_case, {'blue_ai': True}),
     'long_game': (True, long_game_case(50), {'blue_ai': True}),
     # Gate (b) of PD1b: discovery and Command agree.
-    'agreement_caster': (True, agreement_case(lambda seat, actor: actor.name == CASTER_NAME, True)),
-    'agreement_fighter': (False, agreement_case(lambda seat, actor: seat == 'blue', False)),
+    'agreement_caster': (True, agreement_case(lambda slot, actor: actor.name == CASTER_NAME, True)),
+    'agreement_fighter': (False, agreement_case(lambda slot, actor: slot == 'blue', False)),
 }
+
+
+def begin_world(godmode, recipe_options, layout, oracle=None):
+    """A fresh world started by the worker with `layout`'s seats, and a driver whose seat clients hold their
+    initialization records; the Start request's own time (ms)."""
+    request, slots = start_request(godmode, recipe_options, layout)
+    started = perf_counter()
+    runtime, reply, records = worker.start(request)
+    elapsed = (perf_counter() - started) * 1000
+    try:
+        driver = Driver(runtime, SeatClients(layout, slots,
+            oracle=seat_oracle.open_oracle(oracle, slots) if oracle is not None else None))
+        initialize_clients(driver.clients, reply.publications, records)
+    except BaseException:
+        session.close_session(runtime.session)
+        raise
+    return driver, elapsed
+
+
+def prepare_published(driver):
+    """`prepare_world`, then its edits published to every seat; the caster, the setup facts and its time (ms)."""
+    caster_uuid = _uuid_named(driver.runtime, CASTER_NAME)
+    cursor = EventQueue.event_cursor()
+    started = perf_counter()
+    setup = prepare_world(driver.runtime, caster_uuid)
+    elapsed = (perf_counter() - started) * 1000
+    driver.setup_rows.append(publish_setup(driver, cursor))
+    return caster_uuid, setup, elapsed
+
+
+def finish_oracle(driver, game_epoch):
+    """The O2 manifest: the game's identities and each seat's final publication (its retained head). Its
+    `identities` is 'seeded' when gallery_transcript.py records the run with its seeded generators (it sets
+    GALLERY_IDENTITIES); only then do the O3 views compare across runs (`seat_oracle.compare_views`)."""
+    runtime = driver.runtime
+    seat_oracle.close_oracle(driver.clients.oracle, {'game_id': 'gallery-crowd', 'game_epoch': str(game_epoch),
+        'hash_seed': os.environ.get('PYTHONHASHSEED'), 'identities': os.environ.get('GALLERY_IDENTITIES', 'random'), 'layout': driver.clients.layout,
+        'slots': driver.clients.slots,
+        'publications': {seat: publication.model_dump(mode='json') for seat, publication in runtime.publications.items()}},
+        driver.clients.states)
 
 
 def run(args):
     godmode, case, *variant = CASES[args.case]
     recipe_options = variant[0] if variant else {}
     report = {'status': 'running', 'case': args.case, 'mode': args.mode, 'godmode': godmode,
-        'recipe_options': recipe_options, 'timing_qualified': args.mode == 'ordinary', 'python': sys.version,
-        'operations': []}
-    runtime = None
+        'recipe_options': recipe_options, 'seats': args.seats, 'oracle': str(args.oracle) if args.oracle else None,
+        'timing_qualified': args.mode == 'ordinary' and args.oracle is None, 'python': sys.version, 'operations': []}
+    driver = None
     try:
-        started = perf_counter()
-        runtime, _, _ = worker.start(start_request(godmode, recipe_options))
-        report['startup_ms'] = (perf_counter() - started) * 1000
-        driver = Driver(runtime)
-        caster_uuid = next(identity for identity, entity in runtime.session.game.entities.items()
-            if entity.name == CASTER_NAME)
-        started = perf_counter()
-        report['setup'] = prepare_world(runtime, caster_uuid)
-        report['setup_ms'] = (perf_counter() - started) * 1000
-        worker.collect_between_requests()
-        report['operations'] = case(runtime, driver, args.mode, caster_uuid)
-        runtime = driver.runtime  # a case may continue in a fresh world
+        driver, report['startup_ms'] = begin_world(godmode, recipe_options, args.seats, args.oracle)
+        report['seat_slots'] = driver.clients.slots
+        caster_uuid, report['setup'], report['setup_ms'] = prepare_published(driver)
+        report['operations'] = case(driver.runtime, driver, args.mode, caster_uuid)
+        receive_pending(driver)
+        report['setup_publications'] = driver.setup_rows
         report['status'] = 'passed'
     except BaseException as error:
         report['status'] = 'failed'
@@ -941,25 +1229,34 @@ def run(args):
         report['error'] = str(error)[:1500]
         raise
     finally:
-        if runtime is not None:
-            session.close_session(runtime.session)
+        if driver is not None:
+            if driver.clients.oracle is not None:
+                finish_oracle(driver, next(iter(driver.runtime.publications.values())).cursor.game_epoch)
+            session.close_session(driver.runtime.session)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2, default=str))
-        print(json.dumps({'status': report['status'], 'case': args.case, 'mode': args.mode,
+        print(json.dumps({'status': report['status'], 'case': args.case, 'mode': args.mode, 'seats': args.seats,
             'report': str(args.output), 'operations': [{key: row.get(key) for key in (
-                'kind', 'total_ms', 'native_ms', 'publication_ms', 'event_versions', 'deaths', 'schema_builds')
+                'kind', 'total_ms', 'native_ms', 'publication_ms', 'event_versions', 'deaths', 'schema_builds',
+                'largest_update', 'o1_differences')
                 if key in row or row.get('kind') != 'agreement'}
                 for row in report['operations']]}, default=str), flush=True)
 
 
 def entry():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--case', required=True, choices=tuple(CASES))
     parser.add_argument('--mode', choices=('ordinary', 'counts', 'profile'), default='ordinary')
     parser.add_argument('--name', required=True, help='report file stem under .runtime/single-pass/gallery_crowd')
+    parser.add_argument('--seats', type=seat_layout, default='faction',
+        help='seat layout: faction (G1), character (G2) or batch:N (G3 with N=5); default faction')
+    parser.add_argument('--oracle', type=Path, default=None,
+        help='new directory for the O1 report, O3 views and the O2 spool (not timing-qualified)')
     args = parser.parse_args()
     if Path(args.name).name != args.name:
         parser.error('--name must be a file stem')
+    if args.oracle is not None and args.case.startswith('agreement'):
+        parser.error('--oracle follows one world; agreement cases restart theirs')
     args.output = OUTPUT / f'{args.name}.json'
     if args.output.exists():
         raise FileExistsError(args.output)
