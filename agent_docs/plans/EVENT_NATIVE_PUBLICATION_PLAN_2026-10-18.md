@@ -169,6 +169,13 @@ The held values therefore go with each family's wire change.
 - "Log appends byte-identical" becomes **log entries identical**. Occurrence renumbering changes `CombatLogAppend.operation_end_cursor`, so the appends can't stay byte-identical.
 - "No regression in bytes on any row" excludes the **re-entry rows**: the full room is delta (Sleet drop, Daylight, room_reentry, SG steps if they regress). Each is listed with measured bytes, and ≤100 KB is checked at E6.
 
+**What replaces byte identity (human, 2026-10-18):** "identical might be too much but we should ensure the client has all the information needed to play and we do not have regression in how we handle subjective and boundaries of who sees what". Every E3 lane must pass all of these on G1, G2 and G3:
+- **O1:** what the seat perceives now equals the live engine read through the disclosure functions. Nothing is missing, extra or ghost.
+- **O3:** the perceived states equal the head's at every op end.
+- **O2:** replay and reconnect.
+- **O4, the disclosure boundary (added to E0):** per seat, the union over time of everything the client has held (memory included) is, at every op end, a subset of the head's union. No seat learns anything earlier, or anything extra, than the head told it. Exceptions are listed by the lane that causes them.
+- **Logs and privacy tests:** log entries are identical, and the privacy and disclosure tests in the sweep stay green.
+
 **Per-lane decisions** are in the briefs (scratchpad `e3design/{world,bodies,sensory}_brief.md`, the "Coordinator decisions" sections). They include:
 - E3-world sends exact object bits whenever a row is sent;
 - found traps are kept through retired cells (as today);
