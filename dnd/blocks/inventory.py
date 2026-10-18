@@ -277,7 +277,7 @@ class Inventory(BaseBlock):
             item.stack_count -= transfer
             if item.stack_count == 0:
                 self._clear_consumed_item_location(item)
-                BaseBlock._registry.pop(item.uuid, None)
+                BaseBlock.drop_registered(item.uuid)
                 if (previous_owner_uuid is not None and previous_container_uuid is not None
                         and previous_owner_uuid != self.source_entity_uuid):
                     item.publish_holdings_release(previous_owner_uuid, previous_container_uuid,
