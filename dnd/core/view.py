@@ -22,7 +22,7 @@ from typing import AbstractSet, Collection, Dict, FrozenSet, List, Mapping, Opti
 import numpy as np
 
 from dnd.core.geometry import (ROUTE_STEP_SHIFT, ROUTE_TABLE_RADIUS, STEP_ALONG_X, STEP_ALONG_Y, STEP_DIAGONAL,
-                               supercover_route_table)
+                               supercover_route_table, supercover_routes)
 from dnd.types.senses import OBSCUREMENT_BITS, OBSCUREMENT_SETS, OpticalObscurement, SensesType
 from dnd.types.world import CardinalDirection, LightLevel
 
@@ -377,6 +377,10 @@ OPPOSITE_CARDINAL = tuple(CARDINAL_STEPS.index((-dx, -dy)) for dx, dy in CARDINA
 _STOP, _EDGE = 0, 1   # input layers; edge d is layer _EDGE + d
 
 
+# Routes gathered per batch of targets: bounds the step array a long reach builds.
+_ROUTE_BATCH = 16384
+
+
 def wall_visibility(origin: Position, window: Box, exists: np.ndarray, opaque: np.ndarray,
                     blocked: np.ndarray, targets: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """The targets whose supercover route from the origin is clear, as window indices, x-major.
@@ -396,10 +400,11 @@ def wall_visibility(origin: Position, window: Box, exists: np.ndarray, opaque: n
     window, and a bridge is never the origin, so a bridge is open exactly where it does not stop.
     """
     width, height = exists.shape
-    fx, fy = window[0] - origin[0] + R, window[1] - origin[1] + R
-    if fx < 0 or fy < 0 or fx + width > SIDE or fy + height > SIDE:
-        raise ValueError(f"wall FOV reach exceeds the route table radius {R}")
     oi, oj = origin[0] - window[0], origin[1] - window[1]
+    # The frame holds the window: the kept route table's within R, a larger one beyond it.
+    radius = max(R, oi, oj, width - 1 - oi, height - 1 - oj)
+    side = 2 * radius + 1
+    fx, fy = radius - oi, radius - oj
     inputs = np.empty((5, width, height), dtype=bool)
     inputs[_STOP] = ~exists | opaque
     inputs[_STOP, oi, oj] = False   # a route leaves its origin whatever the origin's center
@@ -424,13 +429,14 @@ def wall_visibility(origin: Position, window: Box, exists: np.ndarray, opaque: n
             blocked_x = at(_STOP, 0, -sy, xs, ys) | at(edge_x, -sx, -sy, xs, ys) | at(edge_y, 0, -sy, xs, ys)
             blocked_y = at(_STOP, -sx, 0, xs, ys) | at(edge_y, -sx, -sy, xs, ys) | at(edge_x, -sx, 0, xs, ys)
             entry[xs, ys, STEP_DIAGONAL] = (blocked_x & blocked_y) | at(_STOP, -sx, -sy, xs, ys)
-    frame = np.zeros((CELLS + 1) << ROUTE_STEP_SHIFT, dtype=bool)
-    frame[:CELLS << ROUTE_STEP_SHIFT].reshape(SIDE, SIDE, 1 << ROUTE_STEP_SHIFT)[fx:fx + width, fy:fy + height] = entry
+    frame = np.zeros((side * side + 1) << ROUTE_STEP_SHIFT, dtype=bool)
+    frame[:(side * side) << ROUTE_STEP_SHIFT].reshape(side, side, 1 << ROUTE_STEP_SHIFT)[fx:fx + width, fy:fy + height] = entry
     ti, tj = np.nonzero(targets)
-    rows = (ti + fx) * SIDE + tj + fy
-    steps, lengths = supercover_route_table()
-    longest = int(lengths[rows].max()) if rows.size else 0
-    clear = ~frame[steps[rows, :longest]].any(axis=1)
+    clear = np.zeros(ti.size, dtype=bool)
+    for start in range(0, ti.size, _ROUTE_BATCH):
+        batch = slice(start, start + _ROUTE_BATCH)
+        steps, _ = supercover_routes(ti[batch] - oi, tj[batch] - oj, radius)
+        clear[batch] = ~frame[steps].any(axis=1)
     return ti[clear], tj[clear]
 
 
