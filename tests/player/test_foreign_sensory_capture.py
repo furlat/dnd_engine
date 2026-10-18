@@ -235,7 +235,7 @@ def test_split_seat_application_lineages_equal_independent_full_capture(session)
     captured = {}
     for seat, reference in references.items():
         known = seat_capture_inputs(reference)
-        captured[seat] = capture_lineages(operation.roots, observer_uuid=reference.projection.remembered.observer_uuid,
+        captured[seat] = capture_lineages(operation.roots, observer_uuid=reference.projection.observer_uuid,
             audience=session.seats[seat], known_actor_uuids=known.actors, known_entity_names=known.names,
             known_connector_uuids=known.connectors, known_content_ids=known.content_ids, context=context)
     shared = next(iter(references.values())).session

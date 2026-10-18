@@ -1090,12 +1090,28 @@ type LifeStateChangeReason = Literal[
 ]
 
 
+class LightChanges(TypedDict):
+    position: NotRequired[list[PositionItem]]
+    base_height_steps: NotRequired[int]
+    very_bright_radius_feet: NotRequired[int]
+    bright_radius_feet: NotRequired[int]
+    dim_radius_feet: NotRequired[int]
+    appearance: NotRequired[Literal['torch', 'neutral']]
+    actor_anchored: NotRequired[bool]
+    anchor_entity: NotRequired[int | None]
+    anchor_item: NotRequired[int | None]
+
+
 type LightLevel = Literal[0, 1, 2, 3, 4]
+
+
+class LightPatch(TypedDict):
+    source: int
+    changes: LightChanges
 
 
 class LightRow(TypedDict):
     source: int
-    revision: int
     position: list[PositionItem]
     base_height_steps: NotRequired[int]
     very_bright_radius_feet: int
@@ -1105,7 +1121,6 @@ class LightRow(TypedDict):
     actor_anchored: NotRequired[bool]
     anchor_entity: NotRequired[int | None]
     anchor_item: NotRequired[int | None]
-    affected_tiles: NotRequired[CellValues]
 
 
 class LinePresentationGeometry(TypedDict):
@@ -1581,6 +1596,9 @@ class ShoveLogData(TypedDict):
     is_ally: bool
 
 
+type AnchorPositionItem = int
+
+
 class SinglePositionSelection(TypedDict):
     kind: NotRequired[Literal['single']]
 
@@ -1660,7 +1678,10 @@ type SpatialEffectInteractionOperation = Literal[
 type SpatialEffectLayer = Literal['ground_surface', 'cloud', 'field']
 
 
-type AnchorPositionItem = int
+type UpperRemovedItemItem = int
+
+
+type UpperRemovedItem = list[UpperRemovedItemItem]
 
 
 type RemovedPosition = int
@@ -2700,15 +2721,12 @@ class SenseMode(TypedDict):
 
 class SensoryFact(TypedDict):
     kind: NotRequired[Literal['sensory']]
-    observer: int
     initial: NotRequired[bool]
-    observer_position: list[ObserverPositionItem]
-    observer_position_changed: NotRequired[bool]
-    effective_light_levels_changed: NotRequired[RowBits]
-    cause_occurrence: NotRequired[int | None]
+    observer_position: NotRequired[list[ObserverPositionItem] | None]
     visible_cells_added: NotRequired[RowBits]
     visible_cells_removed: NotRequired[RowBits]
-    seen_cells_added: NotRequired[RowBits]
+    effective_light_levels_changed: NotRequired[RowBits]
+    hazardous_cells_changed: NotRequired[RowBits]
     entity_contacts_changed: NotRequired[list[int]]
     entity_contacts_removed: NotRequired[list[int]]
     object_contacts_changed: NotRequired[list[int]]
@@ -2720,11 +2738,13 @@ class SensoryFact(TypedDict):
     visual_access_changed: NotRequired[bool]
     visual_access: NotRequired[int | None]
     paths_dirty: NotRequired[bool]
-    hazardous_cells_changed: NotRequired[RowBits]
-    spatial_effect_sightings: NotRequired[list[int]]
-    spatial_effect_content: NotRequired[dict[str, SpatialEffectContent]]
+    spatial_effects_added: NotRequired[list[int]]
+    spatial_effects_patched: NotRequired[list[int]]
     spatial_effects_removed: NotRequired[list[int]]
-    light_sources_changed: NotRequired[list[int]]
+    spatial_effect_cells_retired: NotRequired[list[int]]
+    spatial_effect_content: NotRequired[dict[str, SpatialEffectContent]]
+    light_sources_added: NotRequired[list[int]]
+    light_sources_patched: NotRequired[list[int]]
     light_sources_removed: NotRequired[list[int]]
 
 
@@ -3503,10 +3523,52 @@ class ObjectState(TypedDict):
     construction_suppressions: NotRequired[list[SpellSuppression]]
 
 
+class SightingChanges(TypedDict):
+    duration: NotRequired[ConditionDurationSummary | None]
+    apparent_presence: NotRequired[bool]
+    trap_state: NotRequired[TrapState | None]
+    pressed: NotRequired[bool | None]
+    direction: NotRequired[list[DirectionItem] | None]
+    anchor_item_uuid: NotRequired[str | None]
+    anchor_entity_uuid: NotRequired[str | None]
+    energy_type: NotRequired[DamageType | None]
+    presence_mode: NotRequired[Literal['awe', 'fear'] | None]
+    sustainer_item_uuid: NotRequired[str | None]
+    concentration_slot_uuid: NotRequired[str | None]
+    anchor_position: NotRequired[list[AnchorPositionItem] | None]
+    anchor_elevation_steps: NotRequired[int | None]
+    area_geometry: NotRequired[
+        SpherePresentationGeometry
+        | ConePresentationGeometry
+        | LinePresentationGeometry
+        | CubePresentationGeometry
+        | CylinderPresentationGeometry
+        | WallPresentationGeometry
+        | WallAssemblyPresentationGeometry
+        | None
+    ]
+    construction_sections: NotRequired[list[WallAssemblyPresentationGeometry]]
+    area_propagation: NotRequired[
+        Literal['line_of_effect', 'connected', 'ignore_barriers'] | None
+    ]
+    deposit_source: NotRequired[MaterialDepositSource | None]
+    suppressions: NotRequired[list[SpellSuppression]]
+
+
+class SpatialEffectPatch(TypedDict):
+    positions_added: NotRequired[CellMask]
+    positions_removed: NotRequired[CellMask]
+    volume_added: NotRequired[CellMask]
+    volume_removed: NotRequired[CellMask]
+    upper_added: NotRequired[list[VolumeSurfaceSight]]
+    upper_removed: NotRequired[list[list[UpperRemovedItem | list[list[float]]]]]
+    members: NotRequired[MemberBits | None]
+    changes: NotRequired[SightingChanges]
+
+
 class SpatialEffectSighting(TypedDict):
     duration: NotRequired[ConditionDurationSummary | None]
     positions: CellMask
-    owner_revision: NotRequired[int | None]
     apparent_presence: NotRequired[bool]
     trap_state: NotRequired[TrapState | None]
     pressed: NotRequired[bool | None]
@@ -3620,11 +3682,16 @@ class SensoryRows(TypedDict):
     contact_positions: NotRequired[list[list[ContactPosition]]]
     contact_visual: NotRequired[RowBits]
     contact_special_senses: NotRequired[list[list[SensesType]]]
+    contact_members: NotRequired[list[MemberBits]]
     sighting_uuid_index: NotRequired[list[int]]
     sightings: NotRequired[list[SpatialEffectSighting]]
+    sighting_members: NotRequired[list[MemberBits]]
+    patch_uuid_index: NotRequired[list[int]]
+    sighting_patches: NotRequired[list[SpatialEffectPatch]]
+    retired_uuid_index: NotRequired[list[int]]
+    retired_cells: NotRequired[list[CellMask]]
     light_sources: NotRequired[list[LightRow]]
-    light_removal_uuid_index: NotRequired[list[int]]
-    light_removal_revisions: NotRequired[list[int]]
+    light_patches: NotRequired[list[LightPatch]]
     cells: NotRequired[CellMask]
     light_levels: NotRequired[list[CellValues]]
     hazards: NotRequired[list[CellValues]]

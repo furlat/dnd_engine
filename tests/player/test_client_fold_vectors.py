@@ -14,9 +14,8 @@ from pydantic import TypeAdapter
 from devtools.fold_vectors_sensory import DIRECTORY, documents
 from dnd.core.cells import mask_positions, values_items
 from dnd.player.audience import PlayerAudience
-from dnd.player.facts import PlayerState, PlayerWorld
+from dnd.player.facts import PlayerState, PlayerWorld, SensoryFact, SensoryRows
 from dnd.player.reduction import composed_values, copy_target, fold_composed_sensory
-from dnd.player.sensory_facts import SensoryFact, SensoryRows
 
 ROWS, FACT = TypeAdapter(SensoryRows), TypeAdapter(SensoryFact)
 VECTORS = sorted(DIRECTORY.glob("*.json"))

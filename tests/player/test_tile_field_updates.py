@@ -38,8 +38,8 @@ def light_change(observer, light):
 
 
 def project_event(session, projection, event, index, *, disclosed=True):
-    native = CompletedLineage(generation=projection.remembered.generation,
-        observer_uuid=projection.remembered.observer_uuid, root=event, events=(event,),
+    native = CompletedLineage(generation=projection.generation,
+        observer_uuid=projection.observer_uuid, root=event, events=(event,),
         objective_rows=(objective(index, event),), start_cursor=index, end_cursor=index+1)
     packet = project_lineage(session, projection, native)
     assert (packet is not None) is disclosed

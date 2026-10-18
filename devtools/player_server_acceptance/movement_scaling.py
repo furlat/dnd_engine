@@ -69,8 +69,8 @@ def census(runtime):
         },
         'seats': len(runtime.audiences),
         'audiences': {seat: {'observed_objects': len(owner.projection.observed_objects),
-            'seen': mask_count(owner.projection.remembered.senses.seen) if owner.projection.remembered.senses else 0,
-            'visible': mask_count(owner.projection.remembered.senses.visible) if owner.projection.remembered.senses else 0,
+            'seen': mask_count(owner.projection.audience_composition.view.seen) if owner.projection.audience_composition.view else 0,
+            'visible': mask_count(owner.projection.audience_composition.view.visible) if owner.projection.audience_composition.view else 0,
             'fields': {runtime.session.game.entities[identity].name: {
                 'optical_route_cells': int(field.routes.rows.size) if field is not None else 0,
                 'visible_cells': visible_count(senses.cells)}

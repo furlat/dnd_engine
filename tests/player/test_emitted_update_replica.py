@@ -1,11 +1,11 @@
 """Emitted updates, folded the way the client folds them, reproduce what the seat's projection knows.
 
-The server keeps no replica of a seat's client state: it holds no world, bodies or
-items (player schema 16). What its projection keeps for the seat
-(`ProjectionState.remembered`: the spatial content it was sent) must agree with
-the client fold of the detached updates, and the client's composed view must
-equal a cold composition of its folded member senses. The HUD each seat shows
-equals the live engine (the op-end oracle).
+The server keeps no replica of a seat's client state: it holds no world, bodies,
+items or client perception (player schema 16). What its projection keeps for the
+seat (the effect content it was sent, its composed view) must agree with the
+client fold of the detached updates: the client perceives now what the seat's
+composition shows. The HUD each seat shows equals the live engine (the op-end
+oracle).
 """
 
 from dataclasses import dataclass
@@ -23,9 +23,10 @@ from dnd.core.events import EventPhase, EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.player.application import AudienceRuntime, capture_application_operation, initialize_audiences, seat_content
-from dnd.player.audience import PlayerAudience, begin_audience_composition
+from dnd.player.audience import PlayerAudience
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import PlayerInitialization, PlayerState, PlayerUpdate
+from dnd.player.projection import ProjectionState
 from dnd.player.reduction import reduce_initialization, reduce_operation
 from dnd.player.session import Operation, Session, close_session, create_session, publish_sheets
 from dnd.runtime_reset import reset_engine_runtime
@@ -68,9 +69,25 @@ def operation_since(session: Session, start: int) -> Operation:
         original_logs=originals)
 
 
-def what_capture_reads(state: PlayerState) -> tuple:
-    # The server holds no world, body or item copy: those are the client's alone (player schema 16).
-    return (state.spatial_content,)
+def perceived_now(state: PlayerState) -> tuple:
+    """What the client perceives now: its cells, contacts, effect cells, light sources at their cells, and the
+    anchor's scalars."""
+    senses = state.senses
+    assert senses is not None
+    return (senses.visible, senses.effective_light_levels, senses.hazardous_cells, senses.entities, senses.objects,
+        {identity: effect.positions for identity, effect in senses.spatial_effects.items()},
+        {identity: source.position for identity, source in state.light_sources.items()}, senses.position,
+        senses.passive_perception, senses.sense_modes, senses.visual_access)
+
+
+def composed_now(projection: ProjectionState) -> tuple:
+    """The same values of the seat's composed view (`AudienceComposition.view`)."""
+    view = projection.audience_composition.view
+    assert view is not None
+    return (view.visible, view.effective_light_levels, view.hazardous_cells, view.entities, view.objects,
+        {identity: effect.positions for identity, effect in view.spatial_effects.items()},
+        {identity: source.position for identity, source in view.light_sources.items()}, view.position,
+        view.passive_perception, view.sense_modes, view.visual_access)
 
 
 def check_replica(session: Session, steps: tuple[Step, ...]) -> dict[str, PlayerState]:
@@ -82,14 +99,14 @@ def check_replica(session: Session, steps: tuple[Step, ...]) -> dict[str, Player
 
     def check(name: str, seat: str, client: PlayerState, runtime: AudienceRuntime) -> None:
         case = f'{name} / {seat}'
-        assert what_capture_reads(client) == what_capture_reads(runtime.projection.remembered), case
-        # The server holds no bodies or items; the capture fold and the session's actor fold agree.
-        assert not runtime.projection.remembered.actors and not runtime.projection.remembered.items, case
+        # Each effect's content is sent once, and the client holds every one it was sent.
+        assert client.spatial_content.keys() == runtime.projection.static_sent.spatial_content, case
+        # The capture fold and the session's actor fold agree.
         assert runtime.capture.actors == runtime.session.actors, case
         assert client.content == seat_content(runtime), case
         assert (client.reducer_cursor, len(client.combat_log_appends)) == (
             runtime.projection.next_occurrence, runtime.projection.next_log_append), case
-        assert client.senses == begin_audience_composition(client.perception, client.observer_uuid).view, case
+        assert perceived_now(client) == composed_now(runtime.projection), case
         assert shown(client) == live(session, seat), case
 
     for seat, client in clients.items():

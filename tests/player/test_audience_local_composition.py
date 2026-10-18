@@ -11,8 +11,7 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import EventPhase, SensoryUpdateEvent
 from dnd.core.sensory_fold import reduce_senses_snapshot
 from dnd.player.audience import (
-    AudienceComposition, AudiencePerception, ComposedEffect, PlayerAudience, apply_settlement,
-    begin_audience_composition, composed_view,
+    AudienceComposition, AudiencePerception, ComposedEffect, PlayerAudience, apply_settlement, composed_view,
 )
 from dnd.types.cells import value_at
 from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect
@@ -181,16 +180,14 @@ def test_a_settlement_composes_once_and_equals_its_members_folded_one_by_one():
     assert changes[0].initial and cells(changes[0].visible_added) == {(0, 0)}
 
 
-def test_owned_acquisition_detaches_history_and_rejected_delta_does_not_mutate():
-    public = AudiencePerception({FIRST: reduce_senses_snapshot(FIRST, None,
-        delta(FIRST, initial=True, visible_cells_added=[(0, 0)], seen_cells_added=[(0, 0)]))})
-    retained = deepcopy(public)
-    current = begin_audience_composition(public, FIRST)
+def test_rejected_delta_does_not_mutate():
+    current = AudienceComposition()
+    apply_settlement(current, AUDIENCE, FIRST, [delta(FIRST, initial=True, visible_cells_added=[(0, 0)],
+        seen_cells_added=[(0, 0)])])
     before = deepcopy(current)
     with pytest.raises(ValueError):
         # A delta for a member without its initial state is rejected by the shared reducer.
         apply_settlement(current, AUDIENCE, FIRST, [delta(SECOND, visible_cells_added=[(2, 0)])])
     assert current == before
     apply_settlement(current, AUDIENCE, FIRST, [delta(FIRST, seen_cells_added=[(2, 0)])])
-    assert public == retained
     assert cells(current.view.seen) == {(0, 0), (2, 0)}

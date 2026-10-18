@@ -153,11 +153,8 @@ class SensesView(Protocol):
 
 
 class SensoryDelta(Protocol):
-    """Recorded observer after-values consumed by the shared sensory reducer.
-
-    Native events and the client's resolved player facts (`SensoryChanges`)
-    expose the same values. Reduction needs neither native event construction
-    nor its source/handler metadata.
+    """Recorded observer after-values consumed by the shared sensory reducer (native sensory events expose
+    them). Reduction needs neither native event construction nor its source/handler metadata.
     """
 
     @property

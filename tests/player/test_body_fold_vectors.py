@@ -16,7 +16,7 @@ from pydantic import TypeAdapter
 from devtools.fold_vectors_bodies import DIRECTORY, documents
 from dnd.core.cells import mask_from_positions
 from dnd.player.audience import PlayerAudience
-from dnd.player.facts import (ActorChangeFact, BodyRecord, NO_SENSORY_ROWS, PlayerActor, PlayerItem, PlayerState,
+from dnd.player.facts import (ActorChangeFact, BodyRecord, PlayerActor, PlayerItem, PlayerState,
     PlayerWorld, SpatialFact)
 from dnd.player.reduction import (apply_actor_change_fact, apply_record_fact, clear_unseen_positions, copy_target,
     enter_body)
@@ -76,7 +76,7 @@ def _fold(state: PlayerState, step: dict) -> PlayerState:
     elif "change" in step:
         apply_actor_change_fact(result, CHANGE.validate_python(step["change"]))
     elif "spatial" in step:
-        apply_record_fact(result, SPATIAL.validate_python(step["spatial"]), NO_SENSORY_ROWS, ())
+        apply_record_fact(result, SPATIAL.validate_python(step["spatial"]))
     else:
         _seen(result, step["seen"])
     return result

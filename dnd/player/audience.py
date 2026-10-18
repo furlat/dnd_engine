@@ -11,7 +11,7 @@ from uuid import UUID
 import numpy as np
 
 from dnd.core.cells import Box, cell_layers, mask_box, mask_union, pack_layers, pack_mask, pack_values, union_box
-from dnd.core.sensory_fold import apply_current_senses, copy_senses_snapshot, prepare_sensory_delta
+from dnd.core.sensory_fold import apply_current_senses, prepare_sensory_delta
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues, cell_in
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SensoryDelta, SensesSnapshot
 
@@ -76,9 +76,10 @@ class AudiencePerception:
     members: dict[UUID, SensesSnapshot] = field(default_factory=dict)
 
 
-def perceived_entities(audience: PlayerAudience, perception: AudiencePerception) -> frozenset[UUID]:
-    """The entities a seat perceives now: its controlled actors and every member's entity contacts."""
-    return frozenset(audience.controlled).union(*(snapshot.entities for snapshot in perception.members.values()))
+def perceived_entities(audience: PlayerAudience, senses: SensesSnapshot | None) -> frozenset[UUID]:
+    """The entities a seat perceives now: its controlled actors and its composed view's entity contacts (every
+    member's)."""
+    return frozenset(audience.controlled).union(senses.entities if senses is not None else ())
 
 
 def _effect_signature(value: PerceivedSpatialEffect) -> tuple:
@@ -437,21 +438,6 @@ def _membership(index: dict, key, identity: UUID, present: bool) -> None:
         members.discard(identity)
         if not members:
             del index[key]
-
-
-def copy_audience_perception(perception: AudiencePerception) -> AudiencePerception:
-    """Detach a retained public before-state from an owned current fold."""
-    return AudiencePerception({identity: copy_senses_snapshot(value) for identity, value in perception.members.items()})
-
-
-def begin_audience_composition(perception: AudiencePerception, observer_uuid: UUID) -> AudienceComposition:
-    """Acquire a detached fold once; ordinary observations never recopy history."""
-    perception = copy_audience_perception(perception)
-    current = AudienceComposition(perception=perception, view=composed_view(perception, observer_uuid))
-    _restack(current)
-    current.entity_members, current.object_members, current.effect_members = _holders(perception)
-    current.dirty_members = {member for member, senses in perception.members.items() if senses.paths_dirty}
-    return current
 
 
 @dataclass(frozen=True, slots=True)

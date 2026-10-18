@@ -1003,12 +1003,11 @@ def test_dependency_direction_is_respected() -> None:
     )
 
 
-# The client's reference fold of the player wire, and the server modules that publish to seats without it. A
-# module joins the publishers once the last held client value it reads is deleted; the sensory lane adds the
-# projection, which still runs the client's sensory and spatial folds (`fold_senses`, `commit_current`) until then.
+# The client's reference fold of the player wire, and the server modules that publish to seats without it (plan
+# §4: the projector holds no client state; the spatial commit order both keep is the leaf `spatial_commits`).
 CLIENT_FOLD_MODULES = ("dnd.player.reduction", "dnd.player.world_reduction")
 SEAT_PUBLISHING_MODULES = frozenset({"dnd.player.application", "dnd.player.capture", "server.worker",
-    "dnd.player.world_publication", "dnd.player.bodies"})
+    "dnd.player.world_publication", "dnd.player.bodies", "dnd.player.projection"})
 
 
 def test_seat_publication_does_not_import_the_client_fold() -> None:

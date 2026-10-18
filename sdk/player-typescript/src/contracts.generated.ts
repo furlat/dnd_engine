@@ -978,17 +978,10 @@ export type SlotLevel = number | null;
 export type SorceryPointsDelta = number | null;
 export type SpellSlotsDelta = number | null;
 export type Kind25 = "sensory";
-export type Observer = number;
 export type Initial = boolean;
-/**
- * @minItems 2
- * @maxItems 2
- */
-export type ObserverPosition = [number, number];
-export type ObserverPositionChanged = boolean;
+export type ObserverPosition = [number, number] | null;
 export type Start1 = number;
 export type Bits = string;
-export type CauseOccurrence = number | null;
 export type EntityContactsChanged = number[];
 export type EntityContactsRemoved = number[];
 export type ObjectContactsChanged = number[];
@@ -1008,11 +1001,14 @@ export type PassivePerception = number | null;
 export type VisualAccessChanged = boolean;
 export type VisualAccess = number | null;
 export type PathsDirty = boolean;
-export type SpatialEffectSightings = number[];
+export type SpatialEffectsAdded = number[];
+export type SpatialEffectsPatched = number[];
+export type SpatialEffectsRemoved = number[];
+export type SpatialEffectCellsRetired = number[];
 export type Name6 = string;
 export type Description4 = string;
-export type SpatialEffectsRemoved = number[];
-export type LightSourcesChanged = number[];
+export type LightSourcesAdded = number[];
+export type LightSourcesPatched = number[];
 export type LightSourcesRemoved = number[];
 export type Kind26 = "item_charge";
 export type SourceEntityUuid10 = string;
@@ -2430,8 +2426,8 @@ export type ContactPositions = [number, number][];
  */
 export type SensesType1 = "Blindsight" | "Darkvision" | "Tremorsense" | "Truesight" | "Devils Sight" | "See Invisible";
 export type ContactSpecialSenses = SensesType1[][];
+export type ContactMembers = MemberBits[];
 export type SightingUuidIndex = number[];
-export type OwnerRevision = number | null;
 export type ApparentPresence = boolean;
 export type Pressed1 = boolean | null;
 export type Direction6 = [number, number] | null;
@@ -2467,8 +2463,38 @@ export type LowerHeightPlanes = [[number, number, number], ...[number, number, n
 export type UpperVolumeSurfaces = VolumeSurfaceSight[];
 export type Suppressions1 = SpellSuppression[];
 export type Sightings = SpatialEffectSighting[];
+export type SightingMembers = MemberBits[];
+export type PatchUuidIndex = number[];
+export type UpperAdded = VolumeSurfaceSight[];
+export type UpperRemoved = [[number, number], [number, number, number][]][];
+export type ApparentPresence1 = boolean;
+export type Pressed2 = boolean | null;
+export type Direction7 = [number, number] | null;
+export type AnchorItemUuid1 = string | null;
+export type AnchorEntityUuid1 = string | null;
+export type PresenceMode1 = ("awe" | "fear") | null;
+export type SustainerItemUuid1 = string | null;
+export type ConcentrationSlotUuid1 = string | null;
+export type AnchorPosition1 = [number, number] | null;
+export type AnchorElevationSteps2 = number | null;
+export type AreaGeometry3 =
+  | (
+      | SpherePresentationGeometry
+      | ConePresentationGeometry
+      | LinePresentationGeometry
+      | CubePresentationGeometry
+      | CylinderPresentationGeometry
+      | WallPresentationGeometry
+      | WallAssemblyPresentationGeometry
+    )
+  | null;
+export type ConstructionSections1 = WallAssemblyPresentationGeometry[];
+export type AreaPropagation2 = ("line_of_effect" | "connected" | "ignore_barriers") | null;
+export type Suppressions2 = SpellSuppression[];
+export type SightingPatches = SpatialEffectPatch[];
+export type RetiredUuidIndex = number[];
+export type RetiredCells = CellMask1[];
 export type Source1 = number;
-export type Revision1 = number;
 /**
  * @minItems 2
  * @maxItems 2
@@ -2483,10 +2509,23 @@ export type ActorAnchored = boolean;
 export type AnchorEntity = number | null;
 export type AnchorItem = number | null;
 export type LightSources = LightRow[];
-export type LightRemovalUuidIndex = number[];
-export type LightRemovalRevisions = number[];
-export type LightLevels = CellValues2[];
-export type Hazards = CellValues2[];
+export type Source2 = number;
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position15 = [number, number];
+export type BaseHeightSteps7 = number;
+export type VeryBrightRadiusFeet4 = number;
+export type BrightRadiusFeet4 = number;
+export type DimRadiusFeet4 = number;
+export type Appearance1 = "torch" | "neutral";
+export type ActorAnchored1 = boolean;
+export type AnchorEntity1 = number | null;
+export type AnchorItem1 = number | null;
+export type LightPatches = LightPatch[];
+export type LightLevels = CellValues1[];
+export type Hazards = CellValues1[];
 export type Lineage = number;
 export type ApplicationId1 = string | null;
 export type Resolutions = PlayerResolution[];
@@ -2524,7 +2563,7 @@ export type OpportunityAttackExposures = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures = ChoiceExposure[];
 export type Kind64 = "subject";
 export type Subject = number;
-export type Position15 = number | null;
+export type Position16 = number | null;
 export type Index2 = number;
 export type Distance1 = number | null;
 export type PathCost1 = number | null;
@@ -2537,7 +2576,7 @@ export type SafePath1 = number[] | null;
 export type OpportunityAttackExposures1 = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures1 = ChoiceExposure[];
 export type Kind65 = "position";
-export type Position16 = number;
+export type Position17 = number;
 export type Index3 = number;
 export type Distance2 = number | null;
 export type PathCost2 = number | null;
@@ -3305,7 +3344,7 @@ export type AudienceId9 = string;
 export type CommandNumber6 = number;
 export type Kind84 = "unknown";
 export type Kind85 = "content";
-export type Revision2 = string;
+export type Revision1 = string;
 export type Descriptors = ContentDescriptor[];
 export type Kind86 = "ready";
 export type Kind87 = "stream_status";
@@ -4378,31 +4417,29 @@ export interface FontConversion {
   spell_slots_delta?: SpellSlotsDelta;
 }
 /**
- * One observer's sensory after-values; its observer, changed and removed values are rows of its group's `SensoryRows`.
+ * A settlement's change of the seat's composed perception; its values are rows of its group's `SensoryRows`.
  *
- * `observer` indexes `uuids`; `entity_contacts_changed` /
- * `object_contacts_changed` index contact rows, `spatial_effect_sightings`
- * sighting rows, `light_sources_changed` light sources,
- * `light_sources_removed` light removal rows; the three other removed lists
- * index `uuids`. A list never names two rows of one identity. The cell lists
- * are subsets of the group's row tables: the visible and seen lists of
- * `cells`, `effective_light_levels_changed` of `light_levels`,
- * `hazardous_cells_changed` of `hazards`; a value list names one row per
- * cell. (While projection builds a group, `observer` names the fact's
- * `SensoryTable` row and the other indices that table's rows; the cell lists
- * are set when the group's row tables are.)
+ * The cells are the composed view's (Q1 (a)): `visible_cells_added` / `_removed` are subsets of the group's
+ * `cells`, `effective_light_levels_changed` of `light_levels` and `hazardous_cells_changed` of `hazards` (a value
+ * list names one row per cell; a cell entering view without a value reads 0). The seen cells are not sent: the
+ * client's seen cells are every cell it has seen visible. `entity_contacts_changed` / `object_contacts_changed`
+ * index contact rows (set: entering, changed, or perceived by other members); `spatial_effects_added` sighting
+ * rows; `spatial_effects_patched` patch rows; `spatial_effect_cells_retired` retired rows; `light_sources_added`
+ * light source rows; `light_sources_patched` light patch rows. The removed lists (`*_removed`) index `uuids`:
+ * those records left the seat's perception. A list never names two rows of one identity.
+ *
+ * `observer_position` and the capability scalars are the anchor member's (the stream observer once it perceives):
+ * `observer_position` is present only when it changed, or `initial` (the seat's first perception, carrying every
+ * scalar). `spatial_effect_content` is the static content of each effect the seat has not received yet.
  */
 export interface SensoryFact {
   kind?: Kind25;
-  observer: Observer;
   initial?: Initial;
-  observer_position: ObserverPosition;
-  observer_position_changed?: ObserverPositionChanged;
-  effective_light_levels_changed?: RowBits;
-  cause_occurrence?: CauseOccurrence;
-  visible_cells_added?: RowBits1;
-  visible_cells_removed?: RowBits2;
-  seen_cells_added?: RowBits3;
+  observer_position?: ObserverPosition;
+  visible_cells_added?: RowBits;
+  visible_cells_removed?: RowBits1;
+  effective_light_levels_changed?: RowBits2;
+  hazardous_cells_changed?: RowBits3;
   entity_contacts_changed?: EntityContactsChanged;
   entity_contacts_removed?: EntityContactsRemoved;
   object_contacts_changed?: ObjectContactsChanged;
@@ -4414,11 +4451,13 @@ export interface SensoryFact {
   visual_access_changed?: VisualAccessChanged;
   visual_access?: VisualAccess;
   paths_dirty?: PathsDirty;
-  hazardous_cells_changed?: RowBits4;
-  spatial_effect_sightings?: SpatialEffectSightings;
-  spatial_effect_content?: SpatialEffectContent;
+  spatial_effects_added?: SpatialEffectsAdded;
+  spatial_effects_patched?: SpatialEffectsPatched;
   spatial_effects_removed?: SpatialEffectsRemoved;
-  light_sources_changed?: LightSourcesChanged;
+  spatial_effect_cells_retired?: SpatialEffectCellsRetired;
+  spatial_effect_content?: SpatialEffectContent;
+  light_sources_added?: LightSourcesAdded;
+  light_sources_patched?: LightSourcesPatched;
   light_sources_removed?: LightSourcesRemoved;
 }
 /**
@@ -4463,15 +4502,6 @@ export interface RowBits3 {
 export interface SenseMode {
   sense_type: SensesType;
   range_feet?: RangeFeet;
-}
-/**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits4 {
-  start?: Start1;
-  bits?: Bits;
 }
 export interface SpatialEffectContent {
   [k: string]: SpatialEffectContent1;
@@ -5551,7 +5581,7 @@ export interface ObjectColumns {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface Column_MemberBits_ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values1;
 }
 /**
@@ -5559,7 +5589,7 @@ export interface Column_MemberBits_ {
  * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
  * nonzero byte, and the empty subset is start 0, no bits.
  */
-export interface RowBits5 {
+export interface RowBits4 {
   start?: Start1;
   bits?: Bits;
 }
@@ -5568,7 +5598,7 @@ export interface RowBits5 {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface ColumnTuple_CardinalDirection__________ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values2;
 }
 /**
@@ -5576,7 +5606,7 @@ export interface ColumnTuple_CardinalDirection__________ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface ColumnStr_ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values3;
 }
 /**
@@ -5584,7 +5614,7 @@ export interface ColumnStr_ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface ColumnBool_ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values4;
 }
 /**
@@ -5592,7 +5622,7 @@ export interface ColumnBool_ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface ColumnInt_ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values5;
 }
 /**
@@ -5600,7 +5630,7 @@ export interface ColumnInt_ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface ColumnTuple_ItemEffectPresentationState__________ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values6;
 }
 /**
@@ -5608,7 +5638,7 @@ export interface ColumnTuple_ItemEffectPresentationState__________ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface ColumnTuple_ObjectResidueState__________ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values7;
 }
 /**
@@ -5616,7 +5646,7 @@ export interface ColumnTuple_ObjectResidueState__________ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface ColumnTuple_ItemConcentrationSlot__________ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values8;
 }
 /**
@@ -5624,7 +5654,7 @@ export interface ColumnTuple_ItemConcentrationSlot__________ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface Column_ItemRemnantState_ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values9;
 }
 /**
@@ -5632,7 +5662,7 @@ export interface Column_ItemRemnantState_ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface Column_ItemIntegrity_ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values10;
 }
 /**
@@ -5640,7 +5670,7 @@ export interface Column_ItemIntegrity_ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface Column_ConstructionGeometry_ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values11;
 }
 /**
@@ -5648,7 +5678,7 @@ export interface Column_ConstructionGeometry_ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface ColumnTuple_SpellSuppression__________ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values12;
 }
 /**
@@ -5656,7 +5686,7 @@ export interface ColumnTuple_SpellSuppression__________ {
  * every row).
  */
 export interface PlacementColumns {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   position: Position12;
   top_height_steps: TopHeightSteps1;
   boundary_direction?: Column_CardinalDirection_ | null;
@@ -5672,7 +5702,7 @@ export interface PlacementColumns {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface Column_CardinalDirection_ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values13;
 }
 /**
@@ -5680,7 +5710,7 @@ export interface Column_CardinalDirection_ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface Column_UUID_ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values14;
 }
 /**
@@ -5688,7 +5718,7 @@ export interface Column_UUID_ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface ColumnTuple_WorldObjectSupport__________ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values15;
 }
 /**
@@ -5696,7 +5726,7 @@ export interface ColumnTuple_WorldObjectSupport__________ {
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
 export interface ColumnTupleTupleInt_Int_Int___________ {
-  rows?: RowBits5 | null;
+  rows?: RowBits4 | null;
   values: Values16;
 }
 /**
@@ -5879,36 +5909,42 @@ export interface PlayerResourceValue {
   maximum: Maximum1;
 }
 /**
- * The distinct perceived values a group's sensory facts name, each once, as columns.
+ * The values a group's sensory facts name, as columns.
  *
- * Every identity an observer, a removed list or a row names is in `uuids`
- * once. Contact row i is the entity or object `uuids[contact_uuid_index[i]]`
- * perceived at `contact_positions[i]`, visually if row i is in
- * `contact_visual`, with special senses `contact_special_senses[i]` (no
- * row has any when that column is empty); sighting row i is the effect
- * `uuids[sighting_uuid_index[i]]` seen as `sightings[i]`; light removal row i
- * is the source `uuids[light_removal_uuid_index[i]]` gone at revision
- * `light_removal_revisions[i]`; light source row i is `light_sources[i]`.
+ * Every identity a row or a removed list names is in `uuids` once. Contact row i is the entity or object
+ * `uuids[contact_uuid_index[i]]` perceived at `contact_positions[i]`, visually if row i is in `contact_visual`,
+ * with special senses `contact_special_senses[i]` (empty column: none has any), by the members
+ * `contact_members[i]`. Sighting row i is the effect `uuids[sighting_uuid_index[i]]` entering perception as
+ * `sightings[i]`, by the members `sighting_members[i]`. Patch row i changes the perceived effect
+ * `uuids[patch_uuid_index[i]]` by `sighting_patches[i]`. Retired row i: the effect `uuids[retired_uuid_index[i]]`
+ * left the cells `retired_cells[i]` as a member saw them (plan D1 (a)). `light_sources[i]` is a source entering
+ * perception, `light_patches[i]` the change of one perceived before and after.
  *
- * Three row tables hold the cells the facts' cell lists name, each once:
- * `cells` the rows of the visible and seen lists (its cells in cell order);
- * `light_levels` the rows of the light lists and `hazards` those of the
- * hazard lists, each table the distinct (cell, value) pairs by cell in cell
- * order, then by value. Layer k of a table holds, for each cell with more
- * than k values in the group, its (k+1)-th smallest.
+ * A seat with one observer leaves out both member columns: every row is perceived by that observer. Otherwise
+ * each member column has one entry per row of its table.
+ *
+ * Three row tables hold the cells the facts' cell lists name, each once: `cells` the
+ * rows of the visible lists (its cells in cell order); `light_levels` the rows of the light lists and `hazards`
+ * those of the hazard lists, each table the distinct (cell, value) pairs by cell in cell order, then by value.
+ * Layer k of a table holds, for each cell with more than k values in the group, its (k+1)-th smallest.
  */
 export interface SensoryRows {
   uuids?: Uuids;
   contact_uuid_index?: ContactUuidIndex;
   contact_positions?: ContactPositions;
-  contact_visual?: RowBits6;
+  contact_visual?: RowBits5;
   contact_special_senses?: ContactSpecialSenses;
+  contact_members?: ContactMembers;
   sighting_uuid_index?: SightingUuidIndex;
   sightings?: Sightings;
+  sighting_members?: SightingMembers;
+  patch_uuid_index?: PatchUuidIndex;
+  sighting_patches?: SightingPatches;
+  retired_uuid_index?: RetiredUuidIndex;
+  retired_cells?: RetiredCells;
   light_sources?: LightSources;
-  light_removal_uuid_index?: LightRemovalUuidIndex;
-  light_removal_revisions?: LightRemovalRevisions;
-  cells?: CellMask3;
+  light_patches?: LightPatches;
+  cells?: CellMask7;
   light_levels?: LightLevels;
   hazards?: Hazards;
 }
@@ -5917,21 +5953,20 @@ export interface SensoryRows {
  * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
  * nonzero byte, and the empty subset is start 0, no bits.
  */
-export interface RowBits6 {
+export interface RowBits5 {
   start?: Start1;
   bits?: Bits;
 }
 /**
- * One observation of a spatial effect without its static content (`PerceivedSpatialEffect`'s other fields).
+ * An effect the seat perceives, as it enters perception: its visible part (plan §3.2), without static content.
  *
- * Its cell lists are sets of cells (`positions`, `visible_volume_positions`):
- * a perceived effect's lists are sorted and hold each cell once, which is
- * the order the client unpacks them in. A field holding its default is left out.
+ * `positions` are the effect's cells some member sees now (its own cells or seen volume cells),
+ * `visible_volume_positions` the seen volume cells among them. The seat's native revision of the effect is not
+ * sent. A field holding its default is left out.
  */
 export interface SpatialEffectSighting {
   duration?: ConditionDurationSummary | null;
   positions: CellMask1;
-  owner_revision?: OwnerRevision;
   apparent_presence?: ApparentPresence;
   trap_state?: TrapState | null;
   pressed?: Pressed1;
@@ -5976,31 +6011,19 @@ export interface VolumeSurfaceSight {
   lower_height_planes: LowerHeightPlanes;
 }
 /**
- * A perceived light source (`PerceivedLightSource`) as a row of its group: its identities name the group's `uuids`.
- *
- * `affected_tiles` is its footprint as a level per cell; a field holding its
- * default is left out.
+ * The change of an effect perceived before and after the settlement: visible cells and seen volume cells
+ * added and removed, upper volume surfaces added and removed by key, the member bitset when it changed, and the
+ * other changed fields. A field holding its default is left out.
  */
-export interface LightRow {
-  source: Source1;
-  revision: Revision1;
-  position: Position14;
-  base_height_steps?: BaseHeightSteps6;
-  very_bright_radius_feet: VeryBrightRadiusFeet3;
-  bright_radius_feet: BrightRadiusFeet3;
-  dim_radius_feet: DimRadiusFeet3;
-  appearance?: Appearance;
-  actor_anchored?: ActorAnchored;
-  anchor_entity?: AnchorEntity;
-  anchor_item?: AnchorItem;
-  affected_tiles?: CellValues1;
-}
-/**
- * One byte per cell of `cells`, in its cell order (x, then y).
- */
-export interface CellValues1 {
-  cells: CellMask1;
-  values: Values;
+export interface SpatialEffectPatch {
+  positions_added?: CellMask3;
+  positions_removed?: CellMask4;
+  volume_added?: CellMask5;
+  volume_removed?: CellMask6;
+  upper_added?: UpperAdded;
+  upper_removed?: UpperRemoved;
+  members?: MemberBits | null;
+  changes?: SightingChanges;
 }
 /**
  * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
@@ -6014,9 +6037,115 @@ export interface CellMask3 {
   bits: Bits1;
 }
 /**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask4 {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits1;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask5 {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits1;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask6 {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits1;
+}
+/**
+ * A perceived effect's changed fields, each with its after-value (None: it became unset); its cell sets and
+ * volume surfaces change through `SpatialEffectPatch`'s added and removed sets.
+ */
+export interface SightingChanges {
+  duration?: ConditionDurationSummary | null;
+  apparent_presence?: ApparentPresence1;
+  trap_state?: TrapState | null;
+  pressed?: Pressed2;
+  direction?: Direction7;
+  anchor_item_uuid?: AnchorItemUuid1;
+  anchor_entity_uuid?: AnchorEntityUuid1;
+  energy_type?: DamageType | null;
+  presence_mode?: PresenceMode1;
+  sustainer_item_uuid?: SustainerItemUuid1;
+  concentration_slot_uuid?: ConcentrationSlotUuid1;
+  anchor_position?: AnchorPosition1;
+  anchor_elevation_steps?: AnchorElevationSteps2;
+  area_geometry?: AreaGeometry3;
+  construction_sections?: ConstructionSections1;
+  area_propagation?: AreaPropagation2;
+  deposit_source?: MaterialDepositSource | null;
+  suppressions?: Suppressions2;
+}
+/**
+ * A light source entering the seat's perception (an emitter lighting a cell it sees); its identities name
+ * the group's `uuids`. A field holding its default is left out.
+ */
+export interface LightRow {
+  source: Source1;
+  position: Position14;
+  base_height_steps?: BaseHeightSteps6;
+  very_bright_radius_feet: VeryBrightRadiusFeet3;
+  bright_radius_feet: BrightRadiusFeet3;
+  dim_radius_feet: DimRadiusFeet3;
+  appearance?: Appearance;
+  actor_anchored?: ActorAnchored;
+  anchor_entity?: AnchorEntity;
+  anchor_item?: AnchorItem;
+}
+/**
+ * The change of a light source perceived before and after: its changed fields (a walking torch: its position).
+ */
+export interface LightPatch {
+  source: Source2;
+  changes: LightChanges;
+}
+/**
+ * A perceived light source's changed fields with their after-values; an anchor is a `uuids` index, None when
+ * it became undisclosed.
+ */
+export interface LightChanges {
+  position?: Position15;
+  base_height_steps?: BaseHeightSteps7;
+  very_bright_radius_feet?: VeryBrightRadiusFeet4;
+  bright_radius_feet?: BrightRadiusFeet4;
+  dim_radius_feet?: DimRadiusFeet4;
+  appearance?: Appearance1;
+  actor_anchored?: ActorAnchored1;
+  anchor_entity?: AnchorEntity1;
+  anchor_item?: AnchorItem1;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask7 {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits1;
+}
+/**
  * One byte per cell of `cells`, in its cell order (x, then y).
  */
-export interface CellValues2 {
+export interface CellValues1 {
   cells: CellMask1;
   values: Values;
 }
@@ -6084,7 +6213,7 @@ export interface SubjectBinding {
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures;
   kind: Kind64;
   subject: Subject;
-  position?: Position15;
+  position?: Position16;
 }
 export interface ChoiceExposure {
   reactor_uuid: ReactorUuid;
@@ -6105,7 +6234,7 @@ export interface PositionBinding {
   opportunity_attack_exposures?: OpportunityAttackExposures1;
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures1;
   kind: Kind65;
-  position: Position16;
+  position: Position17;
 }
 export interface SelfBinding {
   index: Index3;
@@ -6619,7 +6748,7 @@ export interface UnknownReceipt {
 }
 export interface ContentResponse {
   kind?: Kind85;
-  revision: Revision2;
+  revision: Revision1;
   descriptors: Descriptors;
 }
 export interface StreamReady {
@@ -6664,36 +6793,42 @@ export interface PlayerLineage {
   resolutions?: Resolutions1;
 }
 /**
- * The distinct perceived values a group's sensory facts name, each once, as columns.
+ * The values a group's sensory facts name, as columns.
  *
- * Every identity an observer, a removed list or a row names is in `uuids`
- * once. Contact row i is the entity or object `uuids[contact_uuid_index[i]]`
- * perceived at `contact_positions[i]`, visually if row i is in
- * `contact_visual`, with special senses `contact_special_senses[i]` (no
- * row has any when that column is empty); sighting row i is the effect
- * `uuids[sighting_uuid_index[i]]` seen as `sightings[i]`; light removal row i
- * is the source `uuids[light_removal_uuid_index[i]]` gone at revision
- * `light_removal_revisions[i]`; light source row i is `light_sources[i]`.
+ * Every identity a row or a removed list names is in `uuids` once. Contact row i is the entity or object
+ * `uuids[contact_uuid_index[i]]` perceived at `contact_positions[i]`, visually if row i is in `contact_visual`,
+ * with special senses `contact_special_senses[i]` (empty column: none has any), by the members
+ * `contact_members[i]`. Sighting row i is the effect `uuids[sighting_uuid_index[i]]` entering perception as
+ * `sightings[i]`, by the members `sighting_members[i]`. Patch row i changes the perceived effect
+ * `uuids[patch_uuid_index[i]]` by `sighting_patches[i]`. Retired row i: the effect `uuids[retired_uuid_index[i]]`
+ * left the cells `retired_cells[i]` as a member saw them (plan D1 (a)). `light_sources[i]` is a source entering
+ * perception, `light_patches[i]` the change of one perceived before and after.
  *
- * Three row tables hold the cells the facts' cell lists name, each once:
- * `cells` the rows of the visible and seen lists (its cells in cell order);
- * `light_levels` the rows of the light lists and `hazards` those of the
- * hazard lists, each table the distinct (cell, value) pairs by cell in cell
- * order, then by value. Layer k of a table holds, for each cell with more
- * than k values in the group, its (k+1)-th smallest.
+ * A seat with one observer leaves out both member columns: every row is perceived by that observer. Otherwise
+ * each member column has one entry per row of its table.
+ *
+ * Three row tables hold the cells the facts' cell lists name, each once: `cells` the
+ * rows of the visible lists (its cells in cell order); `light_levels` the rows of the light lists and `hazards`
+ * those of the hazard lists, each table the distinct (cell, value) pairs by cell in cell order, then by value.
+ * Layer k of a table holds, for each cell with more than k values in the group, its (k+1)-th smallest.
  */
 export interface SensoryRows1 {
   uuids?: Uuids;
   contact_uuid_index?: ContactUuidIndex;
   contact_positions?: ContactPositions;
-  contact_visual?: RowBits6;
+  contact_visual?: RowBits5;
   contact_special_senses?: ContactSpecialSenses;
+  contact_members?: ContactMembers;
   sighting_uuid_index?: SightingUuidIndex;
   sightings?: Sightings;
+  sighting_members?: SightingMembers;
+  patch_uuid_index?: PatchUuidIndex;
+  sighting_patches?: SightingPatches;
+  retired_uuid_index?: RetiredUuidIndex;
+  retired_cells?: RetiredCells;
   light_sources?: LightSources;
-  light_removal_uuid_index?: LightRemovalUuidIndex;
-  light_removal_revisions?: LightRemovalRevisions;
-  cells?: CellMask3;
+  light_patches?: LightPatches;
+  cells?: CellMask7;
   light_levels?: LightLevels;
   hazards?: Hazards;
 }

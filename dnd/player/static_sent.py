@@ -26,6 +26,8 @@ class StaticSent:
     # Held items whose look the seat was sent, and those whose profile (a controlled item's) it was sent, by item uuid.
     item_looks: set[UUID] = field(default_factory=set)
     item_profiles: set[UUID] = field(default_factory=set)
+    # Spatial effects whose static content (`SpatialEffectContent`) the seat was sent, by effect uuid.
+    spatial_content: set[UUID] = field(default_factory=set)
 
 
 def merge_static_sent(sent: StaticSent, emitted: StaticSent) -> None:
@@ -39,3 +41,4 @@ def merge_static_sent(sent: StaticSent, emitted: StaticSent) -> None:
     sent.boundary_structures.update(emitted.boundary_structures)
     sent.item_looks.update(emitted.item_looks)
     sent.item_profiles.update(emitted.item_profiles)
+    sent.spatial_content.update(emitted.spatial_content)

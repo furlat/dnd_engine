@@ -13,7 +13,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.player.audience import resolve_audience
 from dnd.player.capture import capture_interval, capture_lineages
-from dnd.player.facts import ActorChangeFact, CombatLogAppend, PlayerLogEntry, PlayerNode, PlayerState, PlayerWorld
+from dnd.player.facts import ActorChangeFact, CombatLogAppend, PlayerLogEntry, PlayerNode
 from dnd.types.actor_facts import ConditionRow, DurationRow
 from dnd.player.projection import SessionProjection, ProjectionState, begin_projection, project_lineage, project_log_appends
 from dnd.player.reduction import node_lineages, parent_lineages, reduce_initialization, reduce_lineage
@@ -30,10 +30,7 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 ])
 def test_after_values_wait_for_all_disclosed_occurrences(native_order, expected):
     generation, observer = uuid4(), uuid4()
-    world = PlayerWorld(battlefield_id="test", battlefield_name="Test",
-        bounds=(0, 0, 1, 1), width=2, height=2)
     projection = ProjectionState(generation=generation, observer_uuid=observer,
-        remembered=PlayerState(generation=generation, observer_uuid=observer, world=world),
         audience=resolve_audience(observer, None), public_cursors={native: local for local, native in enumerate(native_order)}, next_occurrence=len(native_order))
     entry = PlayerLogEntry(entry_type=CombatLogEntryType.ACTION, source_name="", source_uuid="", target_name=None,
         target_uuid=None, compact="", verbose="", detailed="", data=EmptyLogData(), success=None)

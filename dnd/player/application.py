@@ -19,8 +19,7 @@ from dnd.player.session import Operation, Session
 
 @dataclass(slots=True)
 class AudienceRuntime:
-    """One seat's projection: its knowledge (control, perception, what static content it was sent) and,
-    until the body lane, its client's bodies (`projection.remembered`).
+    """One seat's projection: its knowledge (control, perception, what static content it was sent).
 
     `capture` is the session's one recorded fold and `session` what its seats share in projection: the same
     values for every seat.
@@ -54,7 +53,7 @@ def initialize_audiences(session: Session, catalog: UIContentManifest
         projection, initial = projected[seat]
         # The startup publication's projection: the sheets whole, the perceived initiative.
         initial = replace(initial, hud=project_hud(audience, (event for _, event in startup.admitted), None,
-            checkpoint.initiative, perceived_entities(audience, projection.audience_composition.perception)))
+            checkpoint.initiative, perceived_entities(audience, projection.audience_composition.view)))
         # Startup content: the public catalog and the observed content the initialization witnesses.
         projection.static_sent.content.update(row.ref.identity_key
             for row in startup_content(content_catalog, initial))
@@ -95,9 +94,9 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
     replacement_catalog = None
     # What each seat's client knew before the operation, and each root captured for it.
     known_before = {seat: seat_capture_inputs(runtime) for seat, runtime in runtimes.items()}
-    perceived_before = {seat: perceived_entities(runtime.projection.audience, runtime.projection.audience_composition.perception)
+    perceived_before = {seat: perceived_entities(runtime.projection.audience, runtime.projection.audience_composition.view)
         for seat, runtime in runtimes.items()}
-    natives = {seat: capture_lineages(operation.roots, observer_uuid=runtime.projection.remembered.observer_uuid,
+    natives = {seat: capture_lineages(operation.roots, observer_uuid=runtime.projection.observer_uuid,
             audience=runtime.projection.audience, known_actor_uuids=known.actors, context=context,
             known_entity_names=known.names, known_connector_uuids=known.connectors,
             known_content_ids=known.content_ids, omit_foreign_sensory_payloads=True)
@@ -116,19 +115,18 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
                 lineages[seat].append(lineage)
     for seat, runtime in runtimes.items():
         projection = runtime.projection
-        remembered = projection.remembered
         audience = projection.audience
         sent = projection.static_sent
         known = known_before[seat]
         known_content_keys = frozenset(sent.content)
-        appends = tuple(CombatLogAppend(generation=remembered.generation, observer_uuid=remembered.observer_uuid,
+        appends = tuple(CombatLogAppend(generation=projection.generation, observer_uuid=projection.observer_uuid,
             encounter_log_index=index, operation_end_cursor=operation.end_cursor, entry=entry)
             for index, original in operation.original_logs if (entry := seat_log_entry(original, audience,
                 known_entity_names=known.names, known_content_ids=known.content_ids)) is not None)
         appends = project_log_appends(projection, appends)
         hud = project_hud(audience, (event for native in natives[seat] for event in native.events),
             (order_before, perceived_before[seat]), checkpoint.initiative,
-            perceived_entities(audience, projection.audience_composition.perception))
+            perceived_entities(audience, projection.audience_composition.view))
         added: dict[str, ContentDescriptor] = {}
         if runtime.content_catalog.source is not catalog:
             # A replacement catalog sends its new public descriptors now, its observed ones as they are witnessed.

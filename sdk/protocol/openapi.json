@@ -12279,6 +12279,94 @@
         "title": "LifeStateChangeReason",
         "type": "string"
       },
+      "LightChanges": {
+        "additionalProperties": false,
+        "description": "A perceived light source's changed fields with their after-values; an anchor is a `uuids` index, None when\nit became undisclosed.",
+        "properties": {
+          "position": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "title": "Position",
+            "type": "array"
+          },
+          "base_height_steps": {
+            "title": "Base Height Steps",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "very_bright_radius_feet": {
+            "title": "Very Bright Radius Feet",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "bright_radius_feet": {
+            "title": "Bright Radius Feet",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "dim_radius_feet": {
+            "title": "Dim Radius Feet",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "appearance": {
+            "enum": [
+              "torch",
+              "neutral"
+            ],
+            "title": "Appearance",
+            "type": "string"
+          },
+          "actor_anchored": {
+            "title": "Actor Anchored",
+            "type": "boolean"
+          },
+          "anchor_entity": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer",
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Entity"
+          },
+          "anchor_item": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer",
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Item"
+          }
+        },
+        "title": "LightChanges",
+        "type": "object"
+      },
       "LightLevel": {
         "description": "Objective light levels ordered from most obscuring to brightest.",
         "enum": [
@@ -12293,8 +12381,8 @@
         "minimum": -9007199254740991,
         "maximum": 9007199254740991
       },
-      "LightRow": {
-        "description": "A perceived light source (`PerceivedLightSource`) as a row of its group: its identities name the group's `uuids`.\n\n`affected_tiles` is its footprint as a level per cell; a field holding its\ndefault is left out.",
+      "LightPatch": {
+        "description": "The change of a light source perceived before and after: its changed fields (a walking torch: its position).",
         "properties": {
           "source": {
             "minimum": 0,
@@ -12302,9 +12390,24 @@
             "type": "integer",
             "maximum": 9007199254740991
           },
-          "revision": {
+          "changes": {
+            "$ref": "#/components/schemas/LightChanges"
+          }
+        },
+        "required": [
+          "source",
+          "changes"
+        ],
+        "title": "LightPatch",
+        "type": "object",
+        "additionalProperties": false
+      },
+      "LightRow": {
+        "description": "A light source entering the seat's perception (an emitter lighting a cell it sees); its identities name\nthe group's `uuids`. A field holding its default is left out.",
+        "properties": {
+          "source": {
             "minimum": 0,
-            "title": "Revision",
+            "title": "Source",
             "type": "integer",
             "maximum": 9007199254740991
           },
@@ -12392,24 +12495,10 @@
             ],
             "default": null,
             "title": "Anchor Item"
-          },
-          "affected_tiles": {
-            "$ref": "#/components/schemas/CellValues",
-            "default": {
-              "cells": {
-                "bits": "",
-                "height": 0,
-                "width": 0,
-                "x0": 0,
-                "y0": 0
-              },
-              "values": ""
-            }
           }
         },
         "required": [
           "source",
-          "revision",
           "position",
           "very_bright_radius_feet",
           "bright_radius_feet",
@@ -15597,11 +15686,16 @@
                 "start": 0
               },
               "contact_special_senses": [],
+              "contact_members": [],
               "sighting_uuid_index": [],
               "sightings": [],
+              "sighting_members": [],
+              "patch_uuid_index": [],
+              "sighting_patches": [],
+              "retired_uuid_index": [],
+              "retired_cells": [],
               "light_sources": [],
-              "light_removal_uuid_index": [],
-              "light_removal_revisions": [],
+              "light_patches": [],
               "cells": {
                 "bits": "",
                 "height": 0,
@@ -15706,11 +15800,16 @@
                 "start": 0
               },
               "contact_special_senses": [],
+              "contact_members": [],
               "sighting_uuid_index": [],
               "sightings": [],
+              "sighting_members": [],
+              "patch_uuid_index": [],
+              "sighting_patches": [],
+              "retired_uuid_index": [],
+              "retired_cells": [],
               "light_sources": [],
-              "light_removal_uuid_index": [],
-              "light_removal_revisions": [],
+              "light_patches": [],
               "cells": {
                 "bits": "",
                 "height": 0,
@@ -18107,7 +18206,7 @@
         "type": "string"
       },
       "SensoryFact": {
-        "description": "One observer's sensory after-values; its observer, changed and removed values are rows of its group's `SensoryRows`.\n\n`observer` indexes `uuids`; `entity_contacts_changed` /\n`object_contacts_changed` index contact rows, `spatial_effect_sightings`\nsighting rows, `light_sources_changed` light sources,\n`light_sources_removed` light removal rows; the three other removed lists\nindex `uuids`. A list never names two rows of one identity. The cell lists\nare subsets of the group's row tables: the visible and seen lists of\n`cells`, `effective_light_levels_changed` of `light_levels`,\n`hazardous_cells_changed` of `hazards`; a value list names one row per\ncell. (While projection builds a group, `observer` names the fact's\n`SensoryTable` row and the other indices that table's rows; the cell lists\nare set when the group's row tables are.)",
+        "description": "A settlement's change of the seat's composed perception; its values are rows of its group's `SensoryRows`.\n\nThe cells are the composed view's (Q1 (a)): `visible_cells_added` / `_removed` are subsets of the group's\n`cells`, `effective_light_levels_changed` of `light_levels` and `hazardous_cells_changed` of `hazards` (a value\nlist names one row per cell; a cell entering view without a value reads 0). The seen cells are not sent: the\nclient's seen cells are every cell it has seen visible. `entity_contacts_changed` / `object_contacts_changed`\nindex contact rows (set: entering, changed, or perceived by other members); `spatial_effects_added` sighting\nrows; `spatial_effects_patched` patch rows; `spatial_effect_cells_retired` retired rows; `light_sources_added`\nlight source rows; `light_sources_patched` light patch rows. The removed lists (`*_removed`) index `uuids`:\nthose records left the seat's perception. A list never names two rows of one identity.\n\n`observer_position` and the capability scalars are the anchor member's (the stream observer once it perceives):\n`observer_position` is present only when it changed, or `initial` (the seat's first perception, carrying every\nscalar). `spatial_effect_content` is the static content of each effect the seat has not received yet.",
         "properties": {
           "kind": {
             "const": "sensory",
@@ -18115,60 +18214,36 @@
             "title": "Kind",
             "type": "string"
           },
-          "observer": {
-            "minimum": 0,
-            "title": "Observer",
-            "type": "integer",
-            "maximum": 9007199254740991
-          },
           "initial": {
             "default": false,
             "title": "Initial",
             "type": "boolean"
           },
           "observer_position": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "title": "Observer Position",
-            "type": "array"
-          },
-          "observer_position_changed": {
-            "default": false,
-            "title": "Observer Position Changed",
-            "type": "boolean"
-          },
-          "effective_light_levels_changed": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
-          },
-          "cause_occurrence": {
             "anyOf": [
               {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
             "default": null,
-            "title": "Cause Occurrence"
+            "title": "Observer Position"
           },
           "visible_cells_added": {
             "$ref": "#/components/schemas/RowBits",
@@ -18184,7 +18259,14 @@
               "bits": ""
             }
           },
-          "seen_cells_added": {
+          "effective_light_levels_changed": {
+            "$ref": "#/components/schemas/RowBits",
+            "default": {
+              "start": 0,
+              "bits": ""
+            }
+          },
+          "hazardous_cells_changed": {
             "$ref": "#/components/schemas/RowBits",
             "default": {
               "start": 0,
@@ -18294,21 +18376,44 @@
             "title": "Paths Dirty",
             "type": "boolean"
           },
-          "hazardous_cells_changed": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
-          },
-          "spatial_effect_sightings": {
+          "spatial_effects_added": {
             "default": [],
             "items": {
               "minimum": 0,
               "type": "integer",
               "maximum": 9007199254740991
             },
-            "title": "Spatial Effect Sightings",
+            "title": "Spatial Effects Added",
+            "type": "array"
+          },
+          "spatial_effects_patched": {
+            "default": [],
+            "items": {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            "title": "Spatial Effects Patched",
+            "type": "array"
+          },
+          "spatial_effects_removed": {
+            "default": [],
+            "items": {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            "title": "Spatial Effects Removed",
+            "type": "array"
+          },
+          "spatial_effect_cells_retired": {
+            "default": [],
+            "items": {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            "title": "Spatial Effect Cells Retired",
             "type": "array"
           },
           "spatial_effect_content": {
@@ -18321,24 +18426,24 @@
             "title": "Spatial Effect Content",
             "type": "object"
           },
-          "spatial_effects_removed": {
+          "light_sources_added": {
             "default": [],
             "items": {
               "minimum": 0,
               "type": "integer",
               "maximum": 9007199254740991
             },
-            "title": "Spatial Effects Removed",
+            "title": "Light Sources Added",
             "type": "array"
           },
-          "light_sources_changed": {
+          "light_sources_patched": {
             "default": [],
             "items": {
               "minimum": 0,
               "type": "integer",
               "maximum": 9007199254740991
             },
-            "title": "Light Sources Changed",
+            "title": "Light Sources Patched",
             "type": "array"
           },
           "light_sources_removed": {
@@ -18352,16 +18457,12 @@
             "type": "array"
           }
         },
-        "required": [
-          "observer",
-          "observer_position"
-        ],
         "title": "SensoryFact",
         "type": "object",
         "additionalProperties": false
       },
       "SensoryRows": {
-        "description": "The distinct perceived values a group's sensory facts name, each once, as columns.\n\nEvery identity an observer, a removed list or a row names is in `uuids`\nonce. Contact row i is the entity or object `uuids[contact_uuid_index[i]]`\nperceived at `contact_positions[i]`, visually if row i is in\n`contact_visual`, with special senses `contact_special_senses[i]` (no\nrow has any when that column is empty); sighting row i is the effect\n`uuids[sighting_uuid_index[i]]` seen as `sightings[i]`; light removal row i\nis the source `uuids[light_removal_uuid_index[i]]` gone at revision\n`light_removal_revisions[i]`; light source row i is `light_sources[i]`.\n\nThree row tables hold the cells the facts' cell lists name, each once:\n`cells` the rows of the visible and seen lists (its cells in cell order);\n`light_levels` the rows of the light lists and `hazards` those of the\nhazard lists, each table the distinct (cell, value) pairs by cell in cell\norder, then by value. Layer k of a table holds, for each cell with more\nthan k values in the group, its (k+1)-th smallest.",
+        "description": "The values a group's sensory facts name, as columns.\n\nEvery identity a row or a removed list names is in `uuids` once. Contact row i is the entity or object\n`uuids[contact_uuid_index[i]]` perceived at `contact_positions[i]`, visually if row i is in `contact_visual`,\nwith special senses `contact_special_senses[i]` (empty column: none has any), by the members\n`contact_members[i]`. Sighting row i is the effect `uuids[sighting_uuid_index[i]]` entering perception as\n`sightings[i]`, by the members `sighting_members[i]`. Patch row i changes the perceived effect\n`uuids[patch_uuid_index[i]]` by `sighting_patches[i]`. Retired row i: the effect `uuids[retired_uuid_index[i]]`\nleft the cells `retired_cells[i]` as a member saw them (plan D1 (a)). `light_sources[i]` is a source entering\nperception, `light_patches[i]` the change of one perceived before and after.\n\nA seat with one observer leaves out both member columns: every row is perceived by that observer. Otherwise\neach member column has one entry per row of its table.\n\nThree row tables hold the cells the facts' cell lists name, each once: `cells` the\nrows of the visible lists (its cells in cell order); `light_levels` the rows of the light lists and `hazards`\nthose of the hazard lists, each table the distinct (cell, value) pairs by cell in cell order, then by value.\nLayer k of a table holds, for each cell with more than k values in the group, its (k+1)-th smallest.",
         "properties": {
           "uuids": {
             "default": [],
@@ -18422,6 +18523,14 @@
             "title": "Contact Special Senses",
             "type": "array"
           },
+          "contact_members": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MemberBits"
+            },
+            "title": "Contact Members",
+            "type": "array"
+          },
           "sighting_uuid_index": {
             "default": [],
             "items": {
@@ -18440,6 +18549,50 @@
             "title": "Sightings",
             "type": "array"
           },
+          "sighting_members": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MemberBits"
+            },
+            "title": "Sighting Members",
+            "type": "array"
+          },
+          "patch_uuid_index": {
+            "default": [],
+            "items": {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            "title": "Patch Uuid Index",
+            "type": "array"
+          },
+          "sighting_patches": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SpatialEffectPatch"
+            },
+            "title": "Sighting Patches",
+            "type": "array"
+          },
+          "retired_uuid_index": {
+            "default": [],
+            "items": {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            "title": "Retired Uuid Index",
+            "type": "array"
+          },
+          "retired_cells": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CellMask"
+            },
+            "title": "Retired Cells",
+            "type": "array"
+          },
           "light_sources": {
             "default": [],
             "items": {
@@ -18448,24 +18601,12 @@
             "title": "Light Sources",
             "type": "array"
           },
-          "light_removal_uuid_index": {
+          "light_patches": {
             "default": [],
             "items": {
-              "minimum": 0,
-              "type": "integer",
-              "maximum": 9007199254740991
+              "$ref": "#/components/schemas/LightPatch"
             },
-            "title": "Light Removal Uuid Index",
-            "type": "array"
-          },
-          "light_removal_revisions": {
-            "default": [],
-            "items": {
-              "minimum": 0,
-              "type": "integer",
-              "maximum": 9007199254740991
-            },
-            "title": "Light Removal Revisions",
+            "title": "Light Patches",
             "type": "array"
           },
           "cells": {
@@ -18876,6 +19017,270 @@
         "title": "ShoveLogData",
         "type": "object"
       },
+      "SightingChanges": {
+        "additionalProperties": false,
+        "description": "A perceived effect's changed fields, each with its after-value (None: it became unset); its cell sets and\nvolume surfaces change through `SpatialEffectPatch`'s added and removed sets.",
+        "properties": {
+          "duration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConditionDurationSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "apparent_presence": {
+            "title": "Apparent Presence",
+            "type": "boolean"
+          },
+          "trap_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrapState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pressed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressed"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "anchor_item_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Item Uuid"
+          },
+          "anchor_entity_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Entity Uuid"
+          },
+          "energy_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DamageType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "presence_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "awe",
+                  "fear"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence Mode"
+          },
+          "sustainer_item_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sustainer Item Uuid"
+          },
+          "concentration_slot_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concentration Slot Uuid"
+          },
+          "anchor_position": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Position"
+          },
+          "anchor_elevation_steps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Elevation Steps"
+          },
+          "area_geometry": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "cone": "#/components/schemas/ConePresentationGeometry",
+                    "cube": "#/components/schemas/CubePresentationGeometry",
+                    "cylinder": "#/components/schemas/CylinderPresentationGeometry",
+                    "line": "#/components/schemas/LinePresentationGeometry",
+                    "sphere": "#/components/schemas/SpherePresentationGeometry",
+                    "wall": "#/components/schemas/WallPresentationGeometry",
+                    "wall_assembly": "#/components/schemas/WallAssemblyPresentationGeometry"
+                  },
+                  "propertyName": "shape"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SpherePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ConePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LinePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CubePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CylinderPresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WallPresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WallAssemblyPresentationGeometry"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Geometry"
+          },
+          "construction_sections": {
+            "items": {
+              "$ref": "#/components/schemas/WallAssemblyPresentationGeometry"
+            },
+            "title": "Construction Sections",
+            "type": "array"
+          },
+          "area_propagation": {
+            "anyOf": [
+              {
+                "enum": [
+                  "line_of_effect",
+                  "connected",
+                  "ignore_barriers"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Propagation"
+          },
+          "deposit_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MaterialDepositSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suppressions": {
+            "items": {
+              "$ref": "#/components/schemas/SpellSuppression"
+            },
+            "title": "Suppressions",
+            "type": "array"
+          }
+        },
+        "title": "SightingChanges",
+        "type": "object"
+      },
       "SinglePositionSelection": {
         "additionalProperties": false,
         "description": "One selected position, such as a ring's center.",
@@ -19232,8 +19637,126 @@
         "title": "SpatialEffectLayer",
         "type": "string"
       },
+      "SpatialEffectPatch": {
+        "description": "The change of an effect perceived before and after the settlement: visible cells and seen volume cells\nadded and removed, upper volume surfaces added and removed by key, the member bitset when it changed, and the\nother changed fields. A field holding its default is left out.",
+        "properties": {
+          "positions_added": {
+            "$ref": "#/components/schemas/CellMask",
+            "default": {
+              "x0": 0,
+              "y0": 0,
+              "width": 0,
+              "height": 0,
+              "bits": ""
+            }
+          },
+          "positions_removed": {
+            "$ref": "#/components/schemas/CellMask",
+            "default": {
+              "x0": 0,
+              "y0": 0,
+              "width": 0,
+              "height": 0,
+              "bits": ""
+            }
+          },
+          "volume_added": {
+            "$ref": "#/components/schemas/CellMask",
+            "default": {
+              "x0": 0,
+              "y0": 0,
+              "width": 0,
+              "height": 0,
+              "bits": ""
+            }
+          },
+          "volume_removed": {
+            "$ref": "#/components/schemas/CellMask",
+            "default": {
+              "x0": 0,
+              "y0": 0,
+              "width": 0,
+              "height": 0,
+              "bits": ""
+            }
+          },
+          "upper_added": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/VolumeSurfaceSight"
+            },
+            "title": "Upper Added",
+            "type": "array"
+          },
+          "upper_removed": {
+            "default": [],
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  ],
+                  "type": "array"
+                },
+                {
+                  "items": {
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "type": "array"
+                  },
+                  "type": "array"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Upper Removed",
+            "type": "array"
+          },
+          "members": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "changes": {
+            "$ref": "#/components/schemas/SightingChanges"
+          }
+        },
+        "title": "SpatialEffectPatch",
+        "type": "object",
+        "additionalProperties": false
+      },
       "SpatialEffectSighting": {
-        "description": "One observation of a spatial effect without its static content (`PerceivedSpatialEffect`'s other fields).\n\nIts cell lists are sets of cells (`positions`, `visible_volume_positions`):\na perceived effect's lists are sorted and hold each cell once, which is\nthe order the client unpacks them in. A field holding its default is left out.",
+        "description": "An effect the seat perceives, as it enters perception: its visible part (plan \u00a73.2), without static content.\n\n`positions` are the effect's cells some member sees now (its own cells or seen volume cells),\n`visible_volume_positions` the seen volume cells among them. The seat's native revision of the effect is not\nsent. A field holding its default is left out.",
         "properties": {
           "duration": {
             "anyOf": [
@@ -19248,20 +19771,6 @@
           },
           "positions": {
             "$ref": "#/components/schemas/CellMask"
-          },
-          "owner_revision": {
-            "anyOf": [
-              {
-                "minimum": 0,
-                "type": "integer",
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Owner Revision"
           },
           "apparent_presence": {
             "default": false,

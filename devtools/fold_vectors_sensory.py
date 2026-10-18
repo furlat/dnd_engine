@@ -31,8 +31,7 @@ from pydantic import TypeAdapter
 from dnd.core.cells import (flag_bits, mask_from_positions, shared_cells, shared_values, values_from_items,
     zeros_left_out)
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.player.facts import SpatialEffectContent
-from dnd.player.sensory_facts import (LightChanges, LightPatch, LightRow, SensoryFact, SensoryRows,
+from dnd.player.facts import (LightChanges, LightPatch, LightRow, SensoryFact, SensoryRows, SpatialEffectContent,
     SpatialEffectPatch, SpatialEffectSighting)
 from dnd.types.senses import SenseMode, SensesType
 from dnd.types.traps import TrapState
