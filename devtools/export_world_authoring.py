@@ -35,7 +35,7 @@ def main() -> None:
     objects = tuple(PlayerObject(placement=o.placement, item=_floor_item(o.item, ())) for o in world.objects)
     observer, generation = uuid4(), uuid4()
     positions = tuple(t.position for t in tiles)
-    rows = SensoryRows(uuids=tuple(o.item.item_uuid for o in objects), contact_uuids=tuple(range(len(objects))),
+    rows = SensoryRows(uuids=tuple(o.item.item_uuid for o in objects), contact_uuid_index=tuple(range(len(objects))),
         contacts=tuple(PerceivedContact(position=o.placement.position, visual=True) for o in objects))
     sensory = SensoryFact(observer_uuid=observer, initial=True, observer_position=positions[0],
         observer_position_changed=True, effective_light_levels_changed=values_from_items({position: 3 for position in positions}),
