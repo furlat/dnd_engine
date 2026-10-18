@@ -72,7 +72,7 @@ from dnd.core.dice import AttackOutcome
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.elevation import support_distance_feet
 from dnd.core.life_types import LifeState
-from dnd.core.saving_throw_types import SavingThrowContext
+from dnd.core.saving_throw_types import DamageSaveContext, SavingThrowContext
 from dnd.types.event_facts import LandingKind
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.modifiers import (
@@ -2426,7 +2426,8 @@ class ExhaleDragonsBreath(SpellAction):
             damage_type=self.spell_damage_type,damage_dice=6,dice_numbers=1+self.cast_at_level,
             damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)))
         roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
-        return deliver_spell_damage(effect,target,damage,roll,amount=roll.total//2 if saved else roll.total)
+        return deliver_spell_damage(effect,target,damage,roll,amount=roll.total//2 if saved else roll.total,
+            damage_save=DamageSaveContext(ability="dexterity", success=saved, success_fraction=0.5))
 
     def _finalize_aoe(self,event: ActionEvent) -> None:
         apply_elemental_surface_contacts(event,set(event.resolved_area_positions or ()),self.spell_damage_type)

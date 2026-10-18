@@ -64,7 +64,7 @@ _CONTRACT_HASH = compute_definition_contract_hash(
 )
 
 
-def _declaration(
+def declare_multiattack_configuration(
     *,
     content_id: str,
     display_name: str,
@@ -144,7 +144,7 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
     ContentDeclaration,
     ...,
 ] = (
-    _declaration(
+    declare_multiattack_configuration(
         content_id="action.monster.multiattack.dretch",
         display_name="Dretch Multiattack",
         icon_key="ui.filter-attacks",
@@ -152,7 +152,7 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
         steps=((WeaponSlot.MELEE_MAIN, 1), (WeaponSlot.MELEE_OFF, 1)),
         sort_order=11,
     ),
-    _declaration(
+    declare_multiattack_configuration(
         content_id="action.monster.multiattack.scout.shortsword",
         display_name="Scout Multiattack: Shortsword",
         icon_key="action.scout-multiattack-shortsword",
@@ -160,7 +160,7 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
         steps=((WeaponSlot.MELEE_MAIN, 2),),
         sort_order=1,
     ),
-    _declaration(
+    declare_multiattack_configuration(
         content_id="action.monster.multiattack.scout.longbow",
         display_name="Scout Multiattack: Longbow",
         icon_key="action.scout-multiattack-longbow",
@@ -168,7 +168,7 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
         steps=((WeaponSlot.RANGED_MAIN, 2),),
         sort_order=2,
     ),
-    _declaration(
+    declare_multiattack_configuration(
         content_id="action.monster.multiattack.thug",
         display_name="Thug Multiattack",
         icon_key="action.thug-multiattack",
@@ -176,7 +176,7 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
         steps=((WeaponSlot.MELEE_MAIN, 2),),
         sort_order=3,
     ),
-    _declaration(
+    declare_multiattack_configuration(
         content_id="action.monster.multiattack.spy",
         display_name="Spy Multiattack",
         icon_key="action.spy-multiattack",
@@ -184,7 +184,7 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
         steps=((WeaponSlot.MELEE_MAIN, 2),),
         sort_order=4,
     ),
-    _declaration(
+    declare_multiattack_configuration(
         content_id="action.monster.multiattack.bandit_captain.melee",
         display_name="Bandit Captain Multiattack: Melee",
         icon_key="action.bandit-captain-multiattack-melee",
@@ -197,7 +197,7 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
         ),
         sort_order=5,
     ),
-    _declaration(
+    declare_multiattack_configuration(
         content_id="action.monster.multiattack.bandit_captain.ranged",
         display_name="Bandit Captain Multiattack: Ranged",
         icon_key="action.bandit-captain-multiattack-ranged",
@@ -207,7 +207,7 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
         steps=((WeaponSlot.RANGED_MAIN, 2),),
         sort_order=6,
     ),
-    _declaration(
+    declare_multiattack_configuration(
         content_id="action.monster.multiattack.cult_fanatic",
         display_name="Cult Fanatic Multiattack",
         icon_key="action.cult-fanatic-multiattack",
@@ -217,7 +217,7 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
         steps=((WeaponSlot.MELEE_MAIN, 2),),
         sort_order=7,
     ),
-    _declaration(
+    declare_multiattack_configuration(
         content_id="action.monster.multiattack.knight",
         display_name="Knight Multiattack",
         icon_key="action.knight-multiattack",
@@ -225,7 +225,7 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
         steps=((WeaponSlot.MELEE_MAIN, 2),),
         sort_order=8,
     ),
-    _declaration(
+    declare_multiattack_configuration(
         content_id="action.monster.multiattack.veteran.melee",
         display_name="Veteran Multiattack: Melee",
         icon_key="action.veteran-multiattack-melee",
@@ -236,7 +236,7 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
         ),
         sort_order=9,
     ),
-    _declaration(
+    declare_multiattack_configuration(
         content_id="action.monster.multiattack.veteran.ranged",
         display_name="Veteran Multiattack: Ranged",
         icon_key="action.veteran-multiattack-ranged",
@@ -262,7 +262,7 @@ __all__ = [
 
 # Ordinary adapted beasts/devils, independent of the summoning catalog.
 BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS = tuple(
-    _declaration(
+    declare_multiattack_configuration(
         content_id=f"action.monster.multiattack.{key}",
         display_name=f"{name} Multiattack", icon_key="ui.filter-attacks",
         source_anchor=anchor, steps=steps, sort_order=100 + index,
@@ -297,7 +297,7 @@ BODY_MULTIATTACK_CONFIGURATIONS_BY_ID = MappingProxyType({
 
 
 GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS = tuple(
-    _declaration(
+    declare_multiattack_configuration(
         content_id=f"action.monster.multiattack.{key}", display_name=f"{name} Multiattack",
         icon_key="ui.filter-attacks", source_anchor="Authored Goblin roster, 2026-10-03",
         steps=((WeaponSlot.MELEE_MAIN, 1), (WeaponSlot.MELEE_OFF, 1)), sort_order=120 + index,

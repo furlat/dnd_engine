@@ -955,6 +955,18 @@ _BODY_WEAPONS = (
         intrinsic=True, usage=WeaponUsage.BODY, damage_die=6, damage_dice_count=2,
         damage_type=DamageType.PIERCING, normal_range_feet=5,
         is_magical=True, attack_bonus=0),
+    WeaponDefinition("weapon.creature.wing_regent_devil_claws", "Claws",
+        "Intrinsic magical claws of the authored wing regent devil (C08).",
+        ("creature_possession", "intrinsic", "natural", "weapon"),
+        intrinsic=True, usage=WeaponUsage.BODY, damage_die=8, damage_dice_count=2,
+        damage_type=DamageType.SLASHING, normal_range_feet=5, is_magical=True,
+        extra_damage_die=6, extra_damage_dice_count=2,
+        extra_damage_type=DamageType.NECROTIC),
+    WeaponDefinition("weapon.creature.arcane_sentinel_slam", "Slam",
+        "Intrinsic slam of the authored arcane sentinel (E01).",
+        ("creature_possession", "intrinsic", "natural", "weapon"),
+        intrinsic=True, usage=WeaponUsage.BODY, damage_die=8, damage_dice_count=2,
+        damage_type=DamageType.BLUDGEONING, normal_range_feet=5),
 )
 
 AUTHORED_WEAPON_DEFINITIONS: Mapping[str, WeaponDefinition] = MappingProxyType({
@@ -1464,6 +1476,11 @@ _BODY_HIDES = (
         "Intrinsic hide of the fellwing devil.",
         ("armor", "creature_possession", "intrinsic", "natural"),
         intrinsic=True, armor_type=ArmorType.LIGHT, armor_class=14),
+    WearableDefinition("armor.creature.arcane_sentinel_natural", "Natural Armor",
+        "Intrinsic rigid armor of the authored arcane sentinel (E01).",
+        ("armor", "creature_possession", "intrinsic", "natural"),
+        intrinsic=True, armor_type=ArmorType.HEAVY, armor_class=16,
+        maximum_dexterity_bonus=0),
 )
 
 AUTHORED_WEARABLE_DEFINITIONS: Mapping[str, WearableDefinition] = MappingProxyType({

@@ -499,4 +499,4 @@ def test_active_monster_actions_apply_their_marker_conditions() -> None:
         condition.name == "Leadership Aura"
         for condition in get_map().get_spatial_conditions()
     )
-    assert "Leadership Used" in knight.active_conditions
+    assert knight.action_economy.get_resource_current("leadership") == 0

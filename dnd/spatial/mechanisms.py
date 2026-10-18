@@ -13,7 +13,7 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.creature_types import DamageType
 from dnd.core.events import Event, EventPhase, EventQueue, EventType, MechanismActivationEvent
 from dnd.core.gridmap import CrossingChannel, get_map
-from dnd.core.saving_throw_types import SavingThrowContext
+from dnd.core.saving_throw_types import DamageSaveContext, SavingThrowContext
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spatial.trap_payloads import apply_trap_payload, retreat_after_saved_entry
@@ -183,7 +183,9 @@ class FiniteTrap(SpatialCondition):
             return
         apply_trap_payload(entity, self.payload, source_uuid=self.uuid, content_ref=self.content_ref,
                            name=self.name, parent_event=parent_event, half_damage=saved,
-                           apply_condition=not saved)
+                           apply_condition=not saved,
+                           damage_save=DamageSaveContext(ability=self.avoidance.ability, success=saved,
+                               success_fraction=0.5 if self.avoidance.half_damage_on_success else 0))
 
     def fire(self, *, parent_event: Event) -> MechanismActivationEvent:
         """Resolve one requested pulse, even when its final mode remains Ready."""

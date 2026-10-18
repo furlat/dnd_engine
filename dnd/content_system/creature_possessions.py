@@ -30,9 +30,14 @@ class CreaturePossessionGrant:
     item_id: str
     disposition: CreaturePossessionDisposition
     equipment_slot: EquipmentSlot | None = None
+    stack_count: int = 1
 
     def __post_init__(self) -> None:
         validate_namespaced_id(self.item_id, "item_id")
+        if self.stack_count < 1:
+            raise ValueError("Possession stack_count must be positive")
+        if self.stack_count != 1 and self.disposition is not CreaturePossessionDisposition.INVENTORY:
+            raise ValueError("Only inventory possessions can grant a stack")
         requires_slot = self.disposition in {
             CreaturePossessionDisposition.INTRINSIC,
             CreaturePossessionDisposition.EQUIPPED,
@@ -63,7 +68,7 @@ def apply_creature_possessions(
     try:
         rows = tuple(
             (
-                build_authored_item(grant.item_id, entity.uuid),
+                build_authored_item(grant.item_id, entity.uuid, quantity=grant.stack_count),
                 grant.equipment_slot,
             )
             for grant in selected

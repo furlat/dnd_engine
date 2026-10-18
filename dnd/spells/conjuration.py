@@ -90,7 +90,7 @@ from dnd.core.modifiers import (
     ResistanceStatus,
     ResistanceModifier,
 )
-from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag, SavingThrowContext
+from dnd.core.saving_throw_types import DamageSaveContext, SavingThrowContext, SavingThrowEffectTag
 from dnd.core.events import SavingThrowEvent
 from dnd.core.aoe import AoEShape, Cube, Cylinder
 from dnd.core.base_block import BaseBlock, LightLevel
@@ -180,7 +180,8 @@ def _apply_call_lightning(spell: SpellAction, event: SpellEvent, *, dc: int) -> 
     roll = roll_spell_damage(damage, parent_event=event, effect_origin=spell.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
     amount = roll.total // 2 if success else roll.total
     target.receive_damage(amount=amount, damage_type=DamageType.LIGHTNING,
-        source_entity_uuid=caster.uuid, parent_event=effect.uuid)
+        source_entity_uuid=caster.uuid, parent_event=effect.uuid, damages=[damage], damage_rolls=[roll],
+        damage_save=DamageSaveContext(ability="dexterity", success=success, success_fraction=0.5))
     return effect.with_updates(damages=[damage], damage_rolls=[roll], total_damage=amount,
         status_message=f"{spell.name} dealt {amount} lightning damage")
 
@@ -370,7 +371,7 @@ class PoisonSpray(SpellAction):
             amount=packet.applied_amount,
             damage_type=DamageType.POISON,
             source_entity_uuid=caster.uuid,
-            parent_event=execution_event.uuid
+            parent_event=execution_event.uuid, damages=[poison_damage], damage_rolls=[damage_roll]
         )
 
         return effect_event.with_updates(
@@ -481,7 +482,7 @@ class AcidSplash(SpellAction):
             amount=packet.applied_amount,
             damage_type=DamageType.ACID,
             source_entity_uuid=caster.uuid,
-            parent_event=effect_event.uuid
+            parent_event=effect_event.uuid, damages=[acid_damage], damage_rolls=[damage_roll]
         )
 
         return effect_event.with_updates(
@@ -3282,6 +3283,8 @@ class IncendiaryCloudZone(AreaCondition):
             DamageType.FIRE,
             self.source_entity_uuid,
             independent_resolution=independent_resolution, effect_origin=self.effect_origin, parent_event=parent_event.uuid,
+            damages=[damage], damage_rolls=[roll],
+            damage_save=DamageSaveContext(ability="dexterity", success=success, success_fraction=0.5),
         )
 
 
@@ -4333,6 +4336,7 @@ class GuardianOfFaithZone(AreaCondition):
                     applied_damage = result.applied_damage
 
             entity.receive_damage(amount=10 if success else 20, damage_type=DamageType.RADIANT,
+                damage_save=DamageSaveContext(ability="dexterity", success=success, success_fraction=0.5),
                 source_entity_uuid=zone.source_entity_uuid, independent_resolution=True,
                 effect_origin=zone.effect_origin, parent_event=event.uuid, source_condition_uuid=zone.uuid,
                 spatial_source=SpatialDamageSource(spatial_effect_uuid=zone.uuid, position=entity.position,

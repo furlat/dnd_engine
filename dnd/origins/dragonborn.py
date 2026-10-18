@@ -27,6 +27,7 @@ from dnd.core.dice import AttackOutcome, DiceRoll
 from dnd.core.events import Damage, Event, EventPhase
 from dnd.core.creature_types import DamageType
 from dnd.core.values import ModifiableValue, parts
+from dnd.core.saving_throw_types import DamageSaveContext
 from dnd.entity import Entity
 from dnd.types.abilities import AbilityName
 from dnd.types.discovery import ActorScan
@@ -221,6 +222,7 @@ class DragonbornBreathWeapon(BaseAction):
             damage_rolls=[damage_roll],
             damages=[damage],
             parent_event=effect_event.uuid,
+            damage_save=DamageSaveContext(ability=self.save_ability, success=save_success, success_fraction=0.5),
         )
         return effect_event.with_updates(
             damages=[damage],

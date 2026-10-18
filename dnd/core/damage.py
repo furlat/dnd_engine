@@ -52,11 +52,11 @@ class DamageResolution(DamageResolutionModel):
     )
     incoming_damage: int = Field(
         ge=0,
-        description="Damage entering health resolution after event handlers.",
+        description="Damage entering affinity resolution after handlers and save defenses.",
     )
     event_prevented_damage: int = Field(
         ge=0,
-        description="Damage removed by event handlers before health affinities.",
+        description="Damage removed by handlers or save defenses before health affinities.",
     )
     event_amplified_damage: int = Field(
         ge=0,

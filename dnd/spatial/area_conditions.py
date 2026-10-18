@@ -87,6 +87,7 @@ class SpatialCondition(BaseCondition):
     arbitration_potency: int = Field(default=0, ge=0)
     optical_obscurement: Optional[OpticalObscurement] = None
     blocks_physical_optics: bool = False
+    blocks_sound: bool = False
     has_visible_presence: bool = False
     minimum_walking_cost: int = Field(default=1,ge=1)
     movement_expenditure_extra: float = Field(default=0, ge=0,

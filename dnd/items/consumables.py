@@ -76,6 +76,8 @@ from dnd.spells.transmutation import HasteEffect
 
 BASIC_POISON_APPLY_SEMANTIC_KEY = "content.neurodragon:action:action.consumable.weapon_coat.basic_poison.apply@1"
 BASIC_POISON_CONDITION_SEMANTIC_KEY = "content.neurodragon:condition:condition.consumable.weapon_coat.basic_poison@1"
+ASSASSIN_POISON_APPLY_SEMANTIC_KEY = "content.neurodragon:action:action.consumable.weapon_coat.assassin_poison.apply@1"
+ASSASSIN_POISON_CONDITION_SEMANTIC_KEY = "content.neurodragon:condition:condition.consumable.weapon_coat.assassin_poison@1"
 
 
 HEALING_POTION_DRINK_SEMANTIC_KEY = (
@@ -127,21 +129,27 @@ TIMED_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY = (
 
 def append_saved_poison(event: DamageRollResultEvent, *, dc: int,
         die: Literal[4,6,8,10,12,20], name: str, bonus: ModifiableValue,
-        cause_id: str) -> DamageRollResultEvent:
+        cause_id: str, effect_id: str, dice_count: int = 1,
+        half_on_save: bool = False) -> DamageRollResultEvent:
     attacker = Entity.get(event.source_entity_uuid) if event.source_entity_uuid else None
     target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
     if attacker is None or target is None or event.canceled:
         return event
     request = attacker.create_saving_throw_request(target.uuid,"constitution",dc,parent_event=event.uuid,
-        saving_throw_context=SavingThrowContext(cause_id=cause_id,effect_id="item.basic_poison.hit",
+        saving_throw_context=SavingThrowContext(cause_id=cause_id,effect_id=effect_id,
             is_magical=False,effect_tags=(SavingThrowEffectTag.POISON,)))
     _,_,saved = target.saving_throw(request)
-    if saved:
+    if saved and not half_on_save:
         return event
     damage = Damage(name=name,source_entity_uuid=attacker.uuid,target_entity_uuid=target.uuid,
-        damage_dice=die,dice_numbers=1,damage_type=DamageType.POISON,damage_bonus=parts(bonus))
-    return event.append_damage_roll(damage,damage.get_dice(AttackOutcome.HIT).roll,
-        name,"Failed poison Constitution save")
+        damage_dice=die,dice_numbers=dice_count,damage_type=DamageType.POISON,damage_bonus=parts(bonus))
+    roll = damage.get_dice(AttackOutcome.HIT).roll
+    packet_index = len(event.damage_packets)
+    result = event.append_damage_roll(damage, roll, name, "Poison Constitution save")
+    if saved:
+        return result.replace_roll(packet_index, roll.model_copy(update={"total": roll.total // 2}),
+            name, "Successful poison Constitution save halves damage")
+    return result
 
 
 def _provenance(display_name: str) -> ContentProvenance:
@@ -213,6 +221,7 @@ def _consumable_condition_identity(
     display_name: str,
     description: str,
     sort_order: int,
+    provenance: ContentProvenance | None = None,
 ):
     """Declare one exact player-visible consumable condition."""
     return behavior_identity(
@@ -237,7 +246,7 @@ def _consumable_condition_identity(
                 sort_order=sort_order,
             ),
         ),
-        provenance=_provenance(display_name),
+        provenance=provenance or _provenance(display_name),
     )
 
 
@@ -373,19 +382,14 @@ class _HealingPotion(UsableItem):
 
 def _saved_coat_damage(event: Event, source_entity_uuid: UUID, *, weapon_uuid: UUID,
                        dc: int, die: Literal[4, 6, 8, 10, 12, 20], name: str,
-                       bonus: ModifiableValue) -> Event | None:
+                       bonus: ModifiableValue, cause_id: str, effect_id: str,
+                       dice_count: int, half_on_save: bool) -> Event | None:
     if not isinstance(event, DamageRollResultEvent) or event.canceled or event.attack_outcome not in (AttackOutcome.HIT, AttackOutcome.CRIT):
         return None
-    attack = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event else None
-    if not isinstance(attack, ActionEvent) or attack.canceled or attack.event_type != EventType.ATTACK or attack.source_item_uuid != weapon_uuid:
-        return None
-    attacker = Entity.get(event.source_entity_uuid) if event.source_entity_uuid else None
-    target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
-    # Objects use normal weapon damage; they do not have a creature Constitution save.
-    if attacker is None or target is None:
+    if event.attack_kind != "weapon" or event.source_item_uuid != weapon_uuid:
         return None
     return append_saved_poison(event,dc=dc,die=die,name=name,bonus=bonus,
-        cause_id="consumable.weapon_coat.basic_poison")
+        cause_id=cause_id, effect_id=effect_id, dice_count=dice_count, half_on_save=half_on_save)
 
 
 class _WeaponCoatCondition(BaseCondition):
@@ -413,14 +417,17 @@ class _WeaponCoatCondition(BaseCondition):
     damage_contribution_uuid: Optional[UUID] = None
     last_duration_interval: Optional[tuple[UUID, int]] = None
     coat_damage_die: Literal[4, 6, 8, 10, 12, 20] = 6
+    coat_damage_dice_count: int = Field(default=1, ge=1)
     coat_save_dc: int | None = Field(default=None, gt=0)
+    coat_half_on_save: bool = False
+    coat_poison_effect_id: str = "item.basic_poison.hit"
 
     @model_validator(mode="after")
     def validate_damage_profile(self) -> Self:
-        if self.coat_save_dc is None and self.coat_damage_die != 6:
+        if self.coat_save_dc is None and (self.coat_damage_die != 6 or self.coat_damage_dice_count != 1 or self.coat_half_on_save):
             raise ValueError("Unconditional coat retains its existing 1d6 packet")
-        if self.coat_save_dc is not None and (self.coat_damage_die != 4 or self.coat_damage_type != DamageType.POISON):
-            raise ValueError("Save-gated coat requires the supported 1d4 poison profile")
+        if self.coat_save_dc is not None and self.coat_damage_type is not DamageType.POISON:
+            raise ValueError("Save-gated coat requires poison damage")
         return self
 
 
@@ -482,9 +489,13 @@ class _WeaponCoatCondition(BaseCondition):
             weapon.extra_damage_type.append(self.coat_damage_type)
         else:
             handler = EventHandler(name=self.name, source_entity_uuid=weapon.uuid,
-                trigger_conditions=[Trigger(event_type=EventType.DAMAGE_ROLL_RESULT, event_phase=EventPhase.EFFECT)],
+                trigger_conditions=[Trigger(event_type=EventType.DAMAGE_ROLL_RESULT,
+                    event_phase=EventPhase.EFFECT, event_source_item_uuid=weapon.uuid)],
                 event_processor=partial(_saved_coat_damage, weapon_uuid=weapon.uuid,
-                    dc=self.coat_save_dc, die=self.coat_damage_die, name=self.name, bonus=bonus_mv))
+                    dc=self.coat_save_dc, die=self.coat_damage_die, name=self.name, bonus=bonus_mv,
+                    cause_id=get_content_declaration(type(self)).ref.content_id,
+                    effect_id=self.coat_poison_effect_id, dice_count=self.coat_damage_dice_count,
+                    half_on_save=self.coat_half_on_save))
             bind_runtime_behavior_child(handler, provider_binding=self.behavior_binding, runtime_owner_uuid=weapon.uuid)
             weapon.add_event_handler(handler)
             handlers.append(handler.uuid)
@@ -628,8 +639,36 @@ class _BasicPoisonWeaponCoatCondition(_WeaponCoatCondition):
     coat_save_dc: int | None = Field(default=10, gt=0)
 
 
+@_consumable_condition_identity(
+    content_id="condition.consumable.weapon_coat.assassin_poison",
+    display_name="Assassin Poison",
+    description="DC15 Constitution on hit, 7d6 poison damage, half on success; no Poisoned condition.",
+    sort_order=60,
+    provenance=ContentProvenance(
+        primary_source_id="wotc.srd_5_1_cc",
+        source_anchor="SRD 5.1 (CC-BY-4.0), Appendix MM-B: Assassin weapon poison rider.",
+        relation=ContentProvenanceRelation.COMPATIBLE_ADAPTATION,
+        adapted_from_source_id="wotc.srd_5_1_cc",
+        fidelity=ContentFidelity.PARTIAL,
+        review_status=ContentReviewStatus.REVIEWED,
+        notes="Exact damage/save payload supplied through a finite weapon-coating dose; kit supply and lifetime are authored separately.",
+    ),
+)
+class _AssassinPoisonWeaponCoatCondition(_WeaponCoatCondition):
+    name: str = "Assassin Poison"
+    description: str = "DC15 Constitution on hit, 7d6 poison damage, half on success; no Poisoned condition."
+    condition_category: ConditionCategory = ConditionCategory.CONDITION
+    coat_damage_type: DamageType = DamageType.POISON
+    coat_damage_die: Literal[4, 6, 8, 10, 12, 20] = 6
+    coat_damage_dice_count: int = 7
+    coat_save_dc: int | None = Field(default=15, gt=0)
+    coat_half_on_save: bool = True
+    coat_poison_effect_id: str = "item.assassin_poison.hit"
+
+
 _WEAPON_COAT_CONDITION_TYPES_BY_SEMANTIC_KEY = MappingProxyType({
     BASIC_POISON_CONDITION_SEMANTIC_KEY: _BasicPoisonWeaponCoatCondition,
+    ASSASSIN_POISON_CONDITION_SEMANTIC_KEY: _AssassinPoisonWeaponCoatCondition,
     FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY:
         _FireWeaponCoatCondition,
     LIGHTNING_WEAPON_COAT_CONDITION_SEMANTIC_KEY:
@@ -660,7 +699,7 @@ if any(
 )
 class _ApplyWeaponCoatAction(BaseAction):
     """Apply weapon coat to a specific weapon slot."""
-    creates = (Concentrating, _ConcentrationFireWeaponCoatCondition, _BasicPoisonWeaponCoatCondition, _LightningWeaponCoatCondition, TimedFireWeaponCoatCondition, _FireWeaponCoatCondition)
+    creates = (Concentrating, _ConcentrationFireWeaponCoatCondition, _BasicPoisonWeaponCoatCondition, _AssassinPoisonWeaponCoatCondition, _LightningWeaponCoatCondition, TimedFireWeaponCoatCondition, _FireWeaponCoatCondition)
 
     name: str = Field(
         default="Coat Main Hand",
@@ -723,6 +762,12 @@ class _ApplyWeaponCoatAction(BaseAction):
         if not weapon or not isinstance(weapon, Weapon):
             return execution_event.cancel(status_message="No weapon in slot")
 
+        effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Applying weapon coating")
+        if effect.canceled:
+            return effect
+        if entity.equipment.get_weapon(slot) is not weapon or weapon.owner_uuid != entity.uuid:
+            return effect.cancel(status_message="Weapon is no longer held by the applicator")
+
         if self.coat_duration is not None:
             duration = Duration(
                 duration=self.coat_duration,
@@ -768,21 +813,17 @@ class _ApplyWeaponCoatAction(BaseAction):
         )
         try:
             applied = weapon.add_condition(
-                coat, parent_event=execution_event,
+                coat, parent_event=effect,
                 required_condition=(entity, concentration) if concentration is not None else None,
             )
         finally:
             if concentration is not None and not concentration.applied:
                 entity._discard_uncommitted_condition_tree(concentration)
         if applied is None or applied.canceled or not coat.applied:
-            return execution_event.cancel(status_message="Weapon coating could not be applied")
+            return effect.cancel(status_message="Weapon coating could not be applied")
         if concentration is not None:
             concentration.add_linked_condition(weapon.uuid, coat.uuid)
 
-        effect = execution_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied {coat.name.lower()}",
-        )
         return effect.with_updates(
             status_message=(
                 f"Weapon coated with {self.coat_damage_type.value}"
@@ -1164,33 +1205,29 @@ def _build_direct_weapon_coat(
     condition_id: str,
     stack_id: str,
     include_off_hand: bool = True,
+    include_ranged: bool = False,
     duration: Optional[int] = None,
     concentration: bool = False,
     application_cost: int = 0,
 ) -> UsableItem:
     """Construct one weapon coating from explicit mechanical facts."""
-    actions: list[BaseAction] = [_ApplyWeaponCoatAction(
-        source_entity_uuid=uuid4(),
-        source_item_uuid=uuid4(),
-        name="Coat Main Hand",
-        costs=[Cost(name="Coating application", cost_type="actions", cost=application_cost, evaluator=entity_action_economy_cost_evaluator)] if application_cost else [],
-        semantic_key=action_id,
-        condition_semantic_key=condition_id,
-        weapon_slot="MELEE_MAIN",
-        coat_damage_type=damage_type,
-        coat_duration=duration,
-        use_concentration=concentration,
-        template=True,
-    )]
+    slots = [("Coat Main Hand", WeaponSlot.MELEE_MAIN)]
     if include_off_hand:
+        slots.append(("Coat Off Hand", WeaponSlot.MELEE_OFF))
+    if include_ranged:
+        slots.append(("Coat Ranged Main Hand", WeaponSlot.RANGED_MAIN))
+        if include_off_hand:
+            slots.append(("Coat Ranged Off Hand", WeaponSlot.RANGED_OFF))
+    actions: list[BaseAction] = []
+    for name, slot in slots:
         actions.append(_ApplyWeaponCoatAction(
             source_entity_uuid=uuid4(),
             source_item_uuid=uuid4(),
-            name="Coat Off Hand",
+            name=name,
             costs=[Cost(name="Coating application", cost_type="actions", cost=application_cost, evaluator=entity_action_economy_cost_evaluator)] if application_cost else [],
             semantic_key=action_id,
             condition_semantic_key=condition_id,
-            weapon_slot="MELEE_OFF",
+            weapon_slot=slot.value,
             coat_damage_type=damage_type,
             coat_duration=duration,
             use_concentration=concentration,
@@ -1211,6 +1248,15 @@ def build_basic_poison_weapon_coat(source_entity_uuid: UUID) -> UsableItem:
         damage_type=DamageType.POISON, action_id=BASIC_POISON_APPLY_SEMANTIC_KEY,
         condition_id=BASIC_POISON_CONDITION_SEMANTIC_KEY, stack_id="weapon_coat_basic_poison",
         duration=10, application_cost=1)
+
+
+def build_assassin_poison_weapon_coat(source_entity_uuid: UUID, *, duration: int | None = 10) -> UsableItem:
+    """One finite dose using the current coating duration until a kit selects its lifetime."""
+    return _build_direct_weapon_coat(source_entity_uuid,
+        item_id="consumable.weapon_coat.assassin_poison", display_name="Assassin Poison",
+        damage_type=DamageType.POISON, action_id=ASSASSIN_POISON_APPLY_SEMANTIC_KEY,
+        condition_id=ASSASSIN_POISON_CONDITION_SEMANTIC_KEY, stack_id="weapon_coat_assassin_poison",
+        duration=duration, application_cost=1, include_ranged=True)
 
 
 def build_fire_weapon_coat(source_entity_uuid: UUID) -> UsableItem:

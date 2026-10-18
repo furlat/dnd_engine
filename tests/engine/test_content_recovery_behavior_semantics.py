@@ -168,7 +168,7 @@ def test_monster_parry_activates_exact_reaction_and_spends_one_reaction() -> Non
     assert handler is not None
     Entity.update_all_entities_senses(max_distance=20)
 
-    with fixed_dice_faces(10):
+    with fixed_dice_faces(11):
         event = Attack(
             source_entity_uuid=attacker.uuid,
             target_entity_uuid=defender.uuid,
