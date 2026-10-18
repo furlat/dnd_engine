@@ -1229,6 +1229,9 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
     for event in lineage.events:
         if event.canceled or event.uuid in unsupported:
             continue
+        if event.phase is EventPhase.COMPLETION:
+            # A body born in the lineage (a summon) is held from its birth, as the session's fold holds it.
+            fold_birth(result.actors, event)
         if (change := recorded_actor_change(lineage.actor_fact_changes, event)) is not None:
             apply_presented_change(result.actors, change)
         condition = condition_facts.get(event.uuid)
