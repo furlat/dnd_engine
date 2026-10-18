@@ -831,14 +831,15 @@ Hard rules:
     - O1 on portal_plate: `cells:field:hazard` 6/90/21 → 0 on G1/G2/G3. `body.normal_hp` (E3-bodies) is counted at one more checkpoint, the published setup.
     - Test: `test_live_connector_edits_and_mechanism_installs_publish_to_every_seat`. It raised before the fix.
     - The 12 gallery cases are byte-identical apart from portal_plate's published updates (its setup is now published). The trap tests and tests/player, ai and architecture match r29.
-- 2026-10-18: **E3-world encoding follow-ups (codex/enp-e3-world-encoding, from e85b4af33: 26b4cd834, 85bc0cfcd, 11a37f971, 25cb86820; not merged).** Encoding only, no rule change.
+- 2026-10-18: **E3-world encoding follow-ups (codex/enp-e3-world-encoding, from e85b4af33: 26b4cd834, 85bc0cfcd, 11a37f971, 25cb86820; merged as 7feebee85).** Encoding only, no rule change.
   - **1. Tile looks are content-addressed.** A tile's surface and name travel once per value per seat (`tile_looks`, keyed by a digest), and a tile's static row names its look. On its own this took mass_healing_word G2 from 382.7 to 312.5 KB: its 1,070 tile static rows share one look.
   - **2. Object rows travel as columns** (`ObjectColumns`, `PlacementColumns`, `Column`: `rows` left out selects every row; a column with no non-default value is left out). Vectors (w13 added: placed and unplaced rows in one update) and the Godot note are updated. On small updates the per-column wrappers cost a little: Fireball's 11 object rows, spread over several updates, go 4.6 → 5.7 KB.
   - **3. The missing tests.**
     - **T6** (`tests/player/test_object_look_static.py`): a door opened, closed, damaged and destroyed; a chest looted with its contents; a Wall of Stone section cut by Disintegrate. Each scenario's completed versions are folded with `world_facts`, and every object's look stays its first.
       - It failed on the cut: a construction's geometry (`removed_sections`) changes in place, so a seat kept drawing the uncut wall. As the brief's R3 prescribes, `construction_geometry` moved from `ObjectLook` to `ObjectState`. No gallery case cuts a wall, so O1 never saw it.
     - **T8:** `world_placement.boundary_sides` is the one definition of a boundary's faces and incident cells. Publication, the fold's support cells and the seat oracle all use it. An architecture test forbids the direction tables in those modules; the only exception is world_facts iterating neighbours.
-      - The test covers the player modules, world_facts and the seat oracle. `dnd/core/gridmap.py` has a second definition, which it does not cover: `BOUNDARY_FACING` plus `contact_surface`, the cells a contact lands on. Replacing it touches gridmap and is left to the coordinator.
+      - The test covers the player modules, world_facts and the seat oracle. `dnd/core/gridmap.py` has a second definition, which it does not cover: `BOUNDARY_FACING` plus `contact_surface`, the cells a contact lands on.
+      - **Follow-up:** replace gridmap's `BOUNDARY_FACING` and `contact_surface` with `world_placement.boundary_sides`, and extend the test to gridmap.
       - The extended import rule `projection` ↛ `reduction` waits on E3-bodies. The projection still imports reduction's body fold: `apply_record_fact`, `change_membership`, `commit_current`, `fold_senses`, `observe_body`, `observed_actor`, `occurrence_order`.
     - **T9:** O1 names an object kept at its old placement on a re-entered cell, and a stale suppressed cell on a re-entered cell.
   - **4. Review fixes (antislop and anti-OOP).**
@@ -872,6 +873,7 @@ Hard rules:
     - Each field's default is still written in the pack filter, the unpack default and the dataclass. The round-trip test pins them.
     - `content_composition` and `projection` read column internals.
     - `facts.py` still holds the column types; they could live in a module below it.
-    - The wire changed and the protocol digest with it, but `player_schema_version` stays 16. That is fine as long as no client consumes 16 yet.
-    - Commit 3 alone fails `test_recorded_world_object_queries` (commit 4 fixes it). Squash commit 4 into commits 1-3 if one commit per item matters at merge.
-    - `construction_geometry` as state is a public wire change. It fixes a bug merged with e85b4af33, which is also on codex/enp-e3-bodies: after a Disintegrate cut, a seat keeps drawing the uncut wall.
+  - **Rulings (coordinator, at the merge):**
+    - `construction_geometry` moves to `ObjectState`: accepted. It fixes a bug merged with e85b4af33: after a Disintegrate cut, a seat kept drawing the uncut wall.
+    - `player_schema_version` stays 16, although the wire and the protocol digest changed: accepted, because the E-series is unreleased.
+    - No squash. Commit 3 alone fails `test_recorded_world_object_queries`; commit 4 fixes it.
