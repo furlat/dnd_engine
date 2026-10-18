@@ -23,12 +23,12 @@ from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_tiles import Tile
-from dnd.core.gridmap import GridMap, SpatialConditionOwner, get_map
+from dnd.core.gridmap import CellBox, GridMap, SpatialConditionOwner, get_map
 from dnd.core.navigation import NO_CELLS_LAYER, NO_ROUTES, NO_SIDES_LAYER, Routes, has_route
 from dnd.core.geometry import ROUTE_STEP_SHIFT, supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
-from dnd.core.view import (FRAME_DISTANCE_FEET, MAGICAL_DARKNESS_BIT, NO_CELLS, OFF, PLAIN, R,
+from dnd.core.view import (FRAME_DISTANCE_FEET, MAGICAL_DARKNESS_BIT, NO_CELLS, NO_POSITIONS, OFF, PLAIN, R,
     SIDE, SPECIAL, SURVIVORS, Box, CellLayer, OpticalView, PerceivedCells, Position, RouteRows, RouteSight,
     boxes_intersect, cell_visible, embed, frame_box, frame_index, frame_of, frame_rows, lit_view,
     range_bits, route_rows, route_sight, rows_positions, sense_radius_cells, union_box, window_of)
@@ -1003,6 +1003,15 @@ def _perception_inert(event: Event) -> bool:
             and event.senses_hint == _INERT_SENSES_HINT)
 
 
+@dataclass(frozen=True)
+class NavigationRead:
+    """The cells one observer's last navigation materialization read and their traversal stamp then
+    (`GridMap.traversal_stamp`): its paths are current while the stamp of those cells is unchanged."""
+
+    box: CellBox
+    traversal_stamp: int
+
+
 @dataclass
 class _GroupSettlement:
     """Facts recorded for one observer while a simultaneous group is open."""
@@ -1068,6 +1077,8 @@ class SpatialSensesSystem:
         # completion reads settled senses); those observers already settled it.
         self._covered_facts: FrozenSet[UUID] = frozenset()
         self._covered_observers: FrozenSet[UUID] = frozenset()
+        # Each observer's last navigation read, replaced by its next materialization; reset clears it.
+        self._navigation_reads: Dict[UUID, NavigationRead] = {}
 
     def attach(self) -> None:
         """Attach the reducer to the existing pre-completion event boundary."""
@@ -1096,6 +1107,7 @@ class SpatialSensesSystem:
         self._table_version = 0
         self._table_changes = None
         self._map = None
+        self._navigation_reads.clear()
 
     def _recording(self) -> bool:
         """Whether facts are recorded for the open group instead of settled now.
@@ -1173,6 +1185,15 @@ class SpatialSensesSystem:
         if self.fields.pop(observer_uuid, None) is not None:
             self._grants = _replace_grants(self._grants, {observer_uuid: None})
         self._identity_grants.clear()
+
+    def record_navigation_read(self, observer_uuid: UUID, box: CellBox, traversal_stamp: int) -> None:
+        """Keep the cells a written navigation materialization read, with their traversal stamp when read."""
+        self._navigation_reads[observer_uuid] = NavigationRead(box, traversal_stamp)
+
+    def navigation_current(self, observer_uuid: UUID, grid: GridMap) -> bool:
+        """Whether no traversal write touched a cell the observer's last navigation materialization read."""
+        read = self._navigation_reads.get(observer_uuid)
+        return read is not None and grid.traversal_stamp(read.box) == read.traversal_stamp
 
     def unregister_observer(self, observer_uuid: UUID) -> None:
         """Remove an observer and its field."""
@@ -1614,7 +1635,7 @@ class SpatialSensesSystem:
 
     def _wall_fov_routes(self, scopes: Sequence[SightScope]) -> List[RouteRows]:
         """Each view's wall-FOV routes: its field's while the optical key holds, none without visual
-        reach, else from its wall FOV; those wall FOVs are solved together (`GridMap.compute_fovs`)."""
+        reach, else from its wall FOV; those wall FOVs are solved together (`GridMap.compute_fov_cells`)."""
         kept: List[Optional[RouteRows]] = []
         for scope in scopes:
             previous = self.fields.get(scope.owner.uuid)
@@ -1622,13 +1643,12 @@ class SpatialSensesSystem:
                         else None)
         solving = [index for index, (scope, routes) in enumerate(zip(scopes, kept))
                    if routes is None and scope.optical_reach > 0]
-        solved = dict(zip(solving, get_map().compute_fovs(
+        solved = dict(zip(solving, get_map().compute_fov_cells(
             [(scopes[index].origin, scopes[index].optical_reach) for index in solving])))
         routes_of: List[RouteRows] = []
         for index, (scope, routes) in enumerate(zip(scopes, kept)):
             if routes is None:
-                fov = solved.get(index, [])
-                routes = route_rows(frame_rows(np.array(fov, dtype=np.int64).reshape(-1, 2), scope.origin))
+                routes = route_rows(frame_rows(solved.get(index, NO_POSITIONS), scope.origin))
             routes_of.append(routes)
         return routes_of
 
@@ -1681,8 +1701,7 @@ class SpatialSensesSystem:
                 key = (sense_type, (origin, radius, world.propagation_revision))
                 rows = previous_felt.get(key)
                 if rows is None:
-                    rows = frame_rows(np.array(grid.compute_propagation_fov(origin, radius),
-                                               dtype=np.int64).reshape(-1, 2), origin)
+                    rows = frame_rows(grid.compute_propagation_fov_cells(origin, radius), origin)
                 keys.append(key)
                 rows_of.append(rows)
                 felt_frame[rows] |= bit

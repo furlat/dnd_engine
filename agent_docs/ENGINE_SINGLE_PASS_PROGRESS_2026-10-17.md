@@ -151,7 +151,7 @@ Hard rules:
   - Human: "you can't just push costs out of course total cost is still important". The AI knowledge advance runs in the op and is counted there (the post-reply move was reverted); PV1b owns its cost.
   - **Unowned term found:** Sleet zone install (terrain per tile, condition application models, dousing items), ~50–75 ms loaded. It goes to a PV1a follow-up after PV1a merges (same grids).
 - 2026-10-17: **PR findings.**
-  - **Player-visible bug, pre-existing, to fix separately:** `actions.py:2272` `set_context` replaces the attack context set at `entity.py:3425`, so `attack_ability` is missing during a real weapon-attack roll. Reckless Attack's contextual advantage never applies. PR preserves the behaviour exactly.
+  - **Player-visible bug, pre-existing, to fix separately:** `actions.py:2272` `set_context` replaces the attack context set at `entity.py:3425`, so `attack_ability` is missing during a real weapon-attack roll. Reckless Attack's contextual advantage never applies. PR preserves the behaviour exactly. **Fixed 2026-10-18 (codex/enp-cleanup):** the attack read's context now starts from the attack value's own context (`Attack._resolve_attack`); `tests/progression/test_reckless_attack_roll.py` failed first.
   - **First-use pydantic schema builds inside ops** (`defer_build` kept): Fireball 12.6–14.6 ms, Ice Storm 7.3–8.3, Circle of Death 2.7–2.9, once per process per model.
   - The value-read lineage only keyed a "latest evaluation" slot; it is deleted with the frozen reading.
 - 2026-10-17: **PV1a, rule-level side effects** (logged per the human's direction):
@@ -460,7 +460,7 @@ Hard rules:
   - The admitted physical-access contact is carried from admission to the target list: `BaseAction._physical_access_contact`, `@final`, listed in the admission architecture test. `attack_object_contact` calls: fighter menu / AI decision 819 → 650, caster menu 851 → 774. An oracle found 0 mismatches over 15,551 listed targets.
   - Object HP is read once per check, and `Health.get_max_hit_dices_points` skips the count read when the modifier is 0.
   - `Tile._add_illumination` skips an identical installed level.
-  - `SolidWallZone.blocks_crossing_between` builds its admitted cells once per call. Forcecage (wall_constructions.py:831) still rebuilds them per section.
+  - `SolidWallZone.blocks_crossing_between` builds its admitted cells once per call. Forcecage (wall_constructions.py:831) still rebuilds them per section. **Fixed in 18f88c8cc (codex/enp-cleanup).**
   - Gates (agent, vs d6a5ba8e7):
     - discovery dumps and agreement counts identical;
     - transcripts byte-identical on 6 cases;
@@ -496,8 +496,8 @@ Hard rules:
   - Logged:
     - `AreaCondition.crossing_channels` defaults to None, which makes undeclared zones (Gust's among them) global crossing owners that force Python step checks;
     - a kept movement-cost grid was not adopted (writer completeness unproven);
-    - `EventQueue.is_first_at_phase` compares wall-clock timestamps (latent; no effect seen).
-  - Census gap closed: `Entity._navigation_traversal` (P5) is an entity-held memo against §6a, now listed in RULE_VIOLATIONS.
+    - `EventQueue.is_first_at_phase` compares wall-clock timestamps (latent; no effect seen). **Fixed in 387645d3a (codex/enp-cleanup): store order.**
+  - Census gap closed: `Entity._navigation_traversal` (P5) is an entity-held memo against §6a, now listed in RULE_VIOLATIONS. **Fixed in 4345392a6 (codex/enp-cleanup): a `SpatialSensesSystem` frozen `NavigationRead`.**
 - 2026-10-18: **PV2 wire part 2 merged (777ecce99; 8b4673143 … 312d4a8b8): player schema 15, PlayerSequence 8.**
   - Wire changes:
     - each group sends its visible cells once, and light and hazard (cell, value) tables once; each observer's cell lists are bit lists over them;
@@ -519,7 +519,7 @@ Hard rules:
     - Fireball 247 → 201 KB; CoD 262 → 220 KB.
     - Client fold cost +0 to +3 ms per update.
   - **For the human:** Fireball and CoD can't fit 100 KB without (a) a residue-patch world-update type (each blood or ash change re-sends the tile's whole residue list, 53–56 KB) and (b) a combat-log redesign (41–57 KB, one entry per native event). Both are wire-design decisions.
-  - Also: `PlayerCausalIndex` / `index_player_lineage` are only called from `game_obsolete/`, so deleting them is the human's call. One more fact-family `isinstance` (`SpellFact`, `_public_occurrences`).
+  - Also: `PlayerCausalIndex` / `index_player_lineage` are only called from `game_obsolete/`, so deleting them is the human's call. **Deleted in d96f0b973 (codex/enp-cleanup).** One more fact-family `isinstance` (`SpellFact`, `_public_occurrences`).
 - 2026-10-18: **PV1a-2 fan-out merged (codex/single-pass-fanout, head 2c52b957d).**
   - Settlement runs each stage over all views in turn. The rule hooks read only the observer's own senses or the world (reorder checked by both reviewers).
   - Fixtures are re-observed in one pass per condition footprint, and emitters (light) are one masked OR over stacked views (`GridMap.light_slot_words`).
@@ -590,3 +590,61 @@ Hard rules:
   - Wall of Stone 144 → 136 ms (native 95 → 87). The other rows are within load noise.
   - The scalar-solver oracle moved to scratchpad `wf/fov_oracle_batch.py`; the old `pv1a4/fov_oracle.py` wraps a deleted method.
   - Next, decided by the integrator: sensory re-converts each sight answer (~1,800 tuples) to arrays and repeats the route lookup the solve made (~9 ms per Wall of Stone op). The solve returns its rows instead (own lane).
+- 2026-10-18: **Inert-fact skip merged into codex/event-native-deltas (2b2dcc45e; 1ca67753e, f39d062e2).** An inert TILES_CHANGED fact (residue amounts, harmless material; hint == empty `SensesUpdateHint`) settles no observer alone. In a group, an observer is dropped only if all its recorded facts are inert, so `_reason_for(events[-1])` is unchanged.
+  - Gates:
+    - the agent's, on b58417f4a;
+    - re-run by the integrator on the merge against an export of 585b86e2e, after the human's go-ahead (the subagent's own merge was blocked by the permission check): per-settlement recorder 0 differences on 9 cases (432 settlements, padded recorder for the skipped passive reads); transcripts byte-identical on 9; sweep = r21.
+  - Magic Missile settlement 30 → 3 observers, native 22 → 17 ms. Other rows are within noise.
+  - Dead code noted: `GridMap.publish_tile_state_changed` (the cleanup lane deletes it).
+- 2026-10-18: **Test memory re-measured:** the former 15–20 GB spell tests peak at 0.23 GB, and a 25-file sweep chunk at 0.29 GB. Parallel test lanes are fine; the caps stay as a safety net.
+- 2026-10-18: **Correction to the PT-navigation entry ("`AreaCondition.crossing_channels` defaults to None"):** stale.
+  - `AreaCondition` declares `frozenset()` (area_conditions.py:1061), and so do the trap and mechanism families. Only the base `SpatialCondition` keeps `None`, restored in b98543e50 because the contract test `test_undeclared_custom_rule_still_blocks_outside_registered_footprint` requires undeclared rules to stay global.
+  - Crossing oracle (enp-crossing lane):
+    - 66 zone classes;
+    - gallery, 9 cases: 46,272 crossing queries, 0 with a global owner;
+    - tests: 1,575,580 queries, global owners only the contract test's remote rule and bare test conditions;
+    - 0 unconsulted zones that would block.
+  - Decision (integrator): no change; the gain is zero.
+  - Open: whatever made navigation take Python per-step checks in Gust is something else (to look at in the native study).
+- 2026-10-18: **E1 merged into codex/event-native-deltas (78ecee85c … ae39ca050).**
+  - **Startup:** capture admits LIGHT_CHANGED and TILES_CHANGED, so seats no longer start with stale light (lantern crypt: 49 first-seen tiles were DARKNESS against BRIGHT) or without startup residues. This is player-visible.
+  - **Connectors:** the projector reads the recorded connectors instead of the init event's, so changes after init reach seats at the projection boundary. **Open:** on the live path a connector edit still raises "Unprojected committed state" (application.py ~77; `TraversalConnectorChangeEvent` is an unsupported header). Nothing edits connectors outside tests today. Assigned to E3-world.
+  - **Strict xfails** (hand-built facts, latent on head) for the temp-HP/INTERNAL fold disagreement and the destroyed-item ghost layer. Kept as the "client fold == engine fold" contract; they turn green with E3-bodies.
+  - **Transcript differences**, all classified: a constant occurrence shift (amber +28, blue +44, from the larger initialization), removed light corrections, true first-sight light, and no residue re-sends.
+  - **O3 baselines** must be recorded on this head.
+  - Not admitted at startup (out of scope): TILE_CHANGED / TILE_REMOVED.
+- 2026-10-18: **FOV-rows merge re-gated by the integrator:** recorder 0 differences on 6 cases; transcripts byte-identical; sweep = r21.
+- 2026-10-18: **Sweep r29 on the E1 merge:** 64 failures, the same set as r21.
+- 2026-10-18: **Plan revision 3 (a8d40ed55, 5779fecb6).**
+  - E3a can't be byte-identical: today's wire diffs against each seat's held values, and keeping it would need a second fold. It is dissolved into E3-world, then E3-bodies, then E3-sensory.
+  - The E3 gates become O1–O4 plus identical log entries, with named re-entry byte exceptions. The human: "ensure the client has all the information needed to play and we do not have regression in how we handle subjective and boundaries of who sees what".
+  - O4, the disclosure boundary, is added to E0.
+  - The lane decisions are in scratchpad `e3design/*_brief.md`.
+- 2026-10-18: **E5 merged into codex/event-native-deltas (c157a21f7, a95edcaef, b505e60eb): the HUD as an op-end engine sheet publisher, H2c, player schema 16.**
+  - **Design.** One frozen published sheet per actor on `Session` (never per seat), compared at op end. A keyed `ActorSheetEvent` carries only the changed groups. `InitiativeOrderChangedEvent` is emitted at the three initiative writers. The per-seat HUD diff and `hud_snapshots` are deleted.
+  - **Gates on b505e60eb** (a8d40ed55 + E5):
+    - the HUD fold is equal at every op and seat on 9 cases;
+    - payloads minus `hud` are identical, initialization included;
+    - native events are identical except the added events;
+    - op-end HUD oracle and one-caller architecture test;
+    - sweep 0 unexpected against r29 (`test_gas_traps` share-one-exposure depends on test order);
+    - pyright 0 new.
+  - **HUD bytes per op** (G1): Fireball 5.2 → 2.7 KB, SG walk 1.5 → 0.4 KB, init 109 → 105 KB.
+  - **ms:** within load noise; E5's own CPU is lower or equal.
+  - **For the human:** H2c (a kept sheet per actor) instead of H2a (the whole sheet on each event), accepted by the integrator.
+- 2026-10-18: **Cleanup lane merged into codex/event-native-deltas (fefaae23c).**
+  - **Removed:** `publish_tile_state_changed`, `PlayerCausalIndex`, the per-query Forcecage cell set, the `_contextual_status` isinstance filter, and timestamp order in `is_first_at_phase`.
+  - **`D20Event.bonus`** is an optional reading (the int duplicated `dice_roll.bonus`).
+  - **Navigation:** `Entity._navigation_traversal` became `NavigationRead`, owned by `SpatialSensesSystem`.
+  - **`_target_ids`** is kept: no exact, not-slower alternative.
+  - **Player-visible rules fix:** Reckless Attack with a Strength melee weapon now grants advantage.
+  - **Gates:**
+    - published updates byte-identical on 7 cases;
+    - the only native difference is `bonus` 0 → null on unread D20 requests;
+    - sweep = r29;
+    - pyright 0 new.
+- 2026-10-18: **E3-bodies prep (codex/enp-e3-bodies)** on top of E2's tip:
+  - **Startup-damage grant fix (5e937d6a1):** roster setup runs under the encounter's identity and location rule. 250 startup versions change only in their grants. Amber starts with crowd 1–6 at 6 HP instead of 44. This is player-visible.
+  - **Static-look census:** no held item's look or profile changes over 29 gallery cases and 4,139 tests.
+  - **Ruling (a):** one per-event conversion turns E2's named after-values into keyed rows, shared by every seat.
+- 2026-10-18: **E3-sensory prep (codex/enp-e3-sensory, 314105098):** the native settlement marker, with native events identical apart from it and the wire byte-identical; schema-16 sensory types in a staging module; the client fold; vectors V1–V8.

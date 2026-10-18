@@ -2249,6 +2249,7 @@ class Attack(BaseAction):
                         else parts(ModifiableValue(source_entity_uuid=target_entity.uuid,
                             base=target_entity.armor_class, name="Object AC", use_register=False)))
             attack_context: Dict[str, Any] = {
+                **(attack_value_context or {}),
                 "weapon_slot": weapon_slot.value,
                 "weapon_name": execution_event.weapon_name or "Unarmed",
                 "range_type": execution_event.range.type.value if execution_event.range else None,
@@ -2278,7 +2279,9 @@ class Attack(BaseAction):
 
             started = time.perf_counter()
             # The armor class reads the attacker's outgoing rows in the attack value's
-            # composition context; the attack's own rows read the attack context.
+            # composition context; the attack's own rows read the attack context: that
+            # composition context (attack ability, range) under the attack's own facts,
+            # whose range type (the attack's, from `weapon_reach`) replaces the weapon's.
             attack_event = execution_event.phase_to(
                 new_phase=EventPhase.EXECUTION,
                 status_message="Rolling attack",
@@ -2312,7 +2315,7 @@ class Attack(BaseAction):
             started = time.perf_counter()
             crit_threshold = (source_entity.get_spell_crit_threshold() if weapon is not None and weapon.spell_attack_profile is not None
                 else source_entity.get_crit_threshold(weapon_slot))
-            attack_outcome = determine_attack_outcome(dice_roll, ac_reading, crit_threshold)
+            attack_outcome = determine_attack_outcome(dice_roll, ac_reading.normalized_score, crit_threshold)
             weapon = source_entity.equipment.get_weapon(weapon_slot)
             missile_size = (execution_event.natural_weapon.missile_size if execution_event.natural_weapon is not None
                             else weapon.missile_size if weapon is not None else "ordinary")
@@ -4598,7 +4601,7 @@ def resolve_spell_attack_values(caster:Entity,target:Entity|BaseItem,parent_even
     )
     outcome = determine_attack_outcome(
         dice_roll,
-        target_ac,
+        target_ac.normalized_score,
         caster.get_spell_crit_threshold(),
     )
     return SpellAttackResolution(

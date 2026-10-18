@@ -17,9 +17,9 @@ from pydantic import BaseModel, Field
 
 from dnd.types.event_facts import GroupEntryKind, LandingKind
 from dnd.core.geometry import circle_positions, grid_distance_feet, supercover_line
-from dnd.core.view import (CARDINAL_DIRECTIONS, CARDINAL_STEPS, EDGE_SHIFTS, OPPOSITE_CARDINAL, Box, CellLayer,
-    boxes_intersect, cell_visible, cells_layer, compact_window_groups, covering_box, embed, entered_by, layer_value,
-    layer_window, union_box, wall_visibility)
+from dnd.core.view import (CARDINAL_DIRECTIONS, CARDINAL_STEPS, EDGE_SHIFTS, NO_POSITIONS, OPPOSITE_CARDINAL, Box,
+    CellLayer, boxes_intersect, cell_visible, cells_layer, compact_window_groups, covering_box, embed, entered_by,
+    layer_value, layer_window, positions_list, union_box, wall_visibility)
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.shadowcast import compute_fov
@@ -185,14 +185,14 @@ class SightEntry(NamedTuple):
 
     box: Optional[CellBox]
     distance: Optional[float]
-    positions: Tuple[Tuple[int, int], ...]
+    cells: np.ndarray        # (n, 2) int64 map positions in answer order, read-only
 
 
 class PropagationEntry(NamedTuple):
     """One kept line-of-effect answer and the cells its solve can read."""
 
     box: Optional[CellBox]
-    positions: Tuple[Tuple[int, int], ...]
+    cells: np.ndarray        # (n, 2) int64 map positions, x-major, read-only
 
 
 class WallFovRequest(NamedTuple):
@@ -210,14 +210,13 @@ def sight_reaches(held: Optional[float], wanted: Optional[float]) -> bool:
     return held is None or (wanted is not None and held >= wanted)
 
 
-def sight_within(entry: SightEntry, origin: Tuple[int, int], max_distance: Optional[float]) -> List[Tuple[int, int]]:
-    """A kept sight answer cut to ``max_distance`` (which it reaches: `sight_reaches`), as a new list."""
+def sight_within(entry: SightEntry, origin: Tuple[int, int], max_distance: Optional[float]) -> np.ndarray:
+    """A kept sight answer cut to ``max_distance`` (which it reaches: `sight_reaches`), read-only."""
     if max_distance == entry.distance:
-        return list(entry.positions)
+        return entry.cells
     assert max_distance is not None
-    radius_squared = max_distance * max_distance
-    return [position for position in entry.positions
-            if ((position[0] - origin[0]) ** 2 + (position[1] - origin[1]) ** 2) <= radius_squared]
+    offsets = entry.cells - np.asarray(origin, dtype=np.int64)
+    return frozen_array(entry.cells[(offsets * offsets).sum(axis=1) <= max_distance * max_distance])
 
 
 class PathEntry(NamedTuple):
@@ -454,10 +453,6 @@ class GridMap:
         # never read on the channel that wrote them.
         self._transit: Dict[WorldEdgeChannel, CellLayer] = {
             channel: CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint16)) for channel in TRANSIT_CHANNELS}
-        # Each cell's coordinate tuple over the cell box, built with the box: a solve answers with
-        # these objects instead of a new tuple per cell (each new one is a tracked object the
-        # worker's post-request collection scans).
-        self._cell_positions = CellLayer(0, 0, np.empty((0, 0), dtype=object))
         # Advanced by every write that changes the Tile/obscurement or light grid; a settlement keyed
         # on them reads this map (perception forgets its fields when the map is replaced).
         self._sight_grid_revision = 0
@@ -634,12 +629,6 @@ class GridMap:
         for channel in TRANSIT_CHANNELS:
             self._transit[channel] = CellLayer(target[0], target[1],
                                                embed(self._transit[channel], target, np.dtype(np.uint16)))
-        positions = np.empty((target[2] - target[0] + 1) * (target[3] - target[1] + 1), dtype=object)
-        for index, position in enumerate((x, y) for x in range(target[0], target[2] + 1)
-                                         for y in range(target[1], target[3] + 1)):
-            positions[index] = position
-        self._cell_positions = CellLayer(target[0], target[1],
-                                         positions.reshape(target[2] - target[0] + 1, target[3] - target[1] + 1))
         self._bump_sight_grids()
         self._bump_light_grid()
         slots = self._cell_light_slots
@@ -1962,16 +1951,6 @@ class GridMap:
             # lit-area solve read these cells are re-lit. Footprint commits run
             # inside their install/move group, which publishes the light fact.
             self.recompute_lights_at_positions(previous_positions | normalized)
-
-    def publish_tile_state_changed(
-        self, position: Tuple[int, int], *, source_entity_uuid: UUID,
-        parent_event: Optional[UUID] = None,
-    ) -> Optional[SpatialChangeEvent]:
-        """Publish an inert tile after-value without invalidating traversal."""
-        return self.publish_committed_spatial_event(SpatialChangeEvent.tile_changed(
-            position, source_entity_uuid=source_entity_uuid, parent_event=parent_event,
-            senses_hint=SensesUpdateHint(),
-        ))
 
     def residue_field(self, residue_id: str) -> Optional[ResidueFieldState]:
         """This map's one field for a material, if any of it was deposited."""
@@ -4717,9 +4696,9 @@ class GridMap:
         self,
         requests: Sequence[Tuple[Tuple[int, int], Optional[float]]],
         channel: WorldEdgeChannel,
-    ) -> List[List[Tuple[int, int]]]:
+    ) -> List[np.ndarray]:
         """For each (origin, max_distance), the Tiles the channel's native ray reaches from the origin
-        (``raycast_clear``), x-major; nothing from an origin without a Tile.
+        (``raycast_clear``), as read-only (n, 2) int64 positions, x-major; none from an origin without a Tile.
 
         Targets are the Tiles in the map bounds within the distance (the whole bounds when None), at
         any reach. One array solve per group of origins (`wall_visibility`) over the channel's transit
@@ -4737,7 +4716,7 @@ class GridMap:
         total_started = time.perf_counter() if timing else 0.0
         if self._bounds_dirty:
             self._update_bounds()
-        answers: List[List[Tuple[int, int]]] = [[] for _ in requests]
+        answers: List[np.ndarray] = [NO_POSITIONS for _ in requests]
         asked: List[WallFovRequest] = []
         for index, (origin, max_distance) in enumerate(requests):
             if origin not in self._tiles:
@@ -4758,7 +4737,7 @@ class GridMap:
         return answers
 
     def _solve_directional_group(self, asked: Sequence[WallFovRequest],
-                                 channel: WorldEdgeChannel) -> List[List[Tuple[int, int]]]:
+                                 channel: WorldEdgeChannel) -> List[np.ndarray]:
         """One group of `_compute_directional_fovs`, solved over the box covering its windows: each
         request's answer, in order."""
         timing = action_timing_enabled()
@@ -4811,7 +4790,7 @@ class GridMap:
                                                                     for _, _, targets in solves))
             record_action_count("grid.directional_fov.settled_predicates", int(np.count_nonzero(~unsettled)))
             record_action_count("grid.directional_fov.visible_targets", sum(len(rows_x) for rows_x, _ in clear))
-        return [layer_window(self._cell_positions, request.window)[rows_x, rows_y].tolist()
+        return [frozen_array(np.column_stack((rows_x + request.window[0], rows_y + request.window[1])))
                 for request, (rows_x, rows_y) in zip(asked, clear)]
 
     def upper_volume_sight_planes(
@@ -4878,8 +4857,15 @@ class GridMap:
         self,
         requests: Sequence[Tuple[Tuple[int, int], Optional[float]]],
     ) -> List[List[Tuple[int, int]]]:
-        """The cells visible from each origin within its max distance (None: unbounded), x-major on a
-        map with an optical boundary.
+        """`compute_fov_cells` as position tuples."""
+        return [positions_list(cells) for cells in self.compute_fov_cells(requests)]
+
+    def compute_fov_cells(
+        self,
+        requests: Sequence[Tuple[Tuple[int, int], Optional[float]]],
+    ) -> List[np.ndarray]:
+        """The cells visible from each origin within its max distance (None: unbounded), as read-only
+        (n, 2) int64 positions: x-major on a map with an optical boundary, else in shadowcast order.
 
         Each origin is answered once, as far as its farthest request asks: by its kept entry when that
         one reaches as far, else by a fresh solve kept in its place. With an optical boundary on the map
@@ -4915,10 +4901,9 @@ class GridMap:
                 visible_positions: List[Tuple[int, int]] = []
                 compute_fov(origin, self.is_blocking_optics, lambda x, y: visible_positions.append((x, y)),
                             max_distance)
-                solved.append(visible_positions)
-        for (origin, max_distance), visible_positions in zip(fresh, solved):
-            entry = entries[origin] = SightEntry(sight_read_box(origin, max_distance), max_distance,
-                                                 tuple(visible_positions))
+                solved.append(frozen_array(np.array(visible_positions, dtype=np.int64).reshape(-1, 2)))
+        for (origin, max_distance), cells in zip(fresh, solved):
+            entry = entries[origin] = SightEntry(sight_read_box(origin, max_distance), max_distance, cells)
             self._fov_cache[(origin, directional)] = entry
             self._fov_cache.move_to_end((origin, directional))
             if len(self._fov_cache) > FOV_CACHE_ORIGINS:
@@ -6158,7 +6143,13 @@ class GridMap:
 
     def compute_propagation_fov(self, origin: Tuple[int, int],
                                 max_distance: Optional[float] = None) -> List[Tuple[int, int]]:
-        """Return the cells an area's line of effect reaches from ``origin``.
+        """`compute_propagation_fov_cells` as position tuples."""
+        return positions_list(self.compute_propagation_fov_cells(origin, max_distance))
+
+    def compute_propagation_fov_cells(self, origin: Tuple[int, int],
+                                      max_distance: Optional[float] = None) -> np.ndarray:
+        """Return the cells an area's line of effect reaches from ``origin``, as read-only (n, 2)
+        int64 positions, x-major.
 
         One semantics, whatever else is on the map: a cell is reached when the
         native propagation ray to it is clear (``raycast_clear``), so blocking
@@ -6171,16 +6162,15 @@ class GridMap:
         if cached is not None:
             self._propagation_fov_cache.move_to_end(cache_key)
             record_action_timing("grid.compute_propagation_fov.cache_hit_ms", cache_started)
-            return list(cached.positions)
+            return cached.cells
         record_action_timing("grid.compute_propagation_fov.cache_miss_ms", cache_started)
-        visible_positions = self._compute_directional_fovs(((origin, max_distance),), WorldEdgeChannel.PROPAGATION)[0]
+        cells = self._compute_directional_fovs(((origin, max_distance),), WorldEdgeChannel.PROPAGATION)[0]
 
-        self._propagation_fov_cache[cache_key] = PropagationEntry(sight_read_box(origin, max_distance),
-                                                                  tuple(visible_positions))
+        self._propagation_fov_cache[cache_key] = PropagationEntry(sight_read_box(origin, max_distance), cells)
         self._propagation_fov_cache.move_to_end(cache_key)
         if len(self._propagation_fov_cache) > FOV_CACHE_ORIGINS:
             self._propagation_fov_cache.popitem(last=False)
-        return list(visible_positions)
+        return cells
 
     def connected_propagation_positions(
         self, origin: Tuple[int, int], geometric: Set[Tuple[int, int]],
@@ -6261,7 +6251,6 @@ class GridMap:
         self._cell_obscurement = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
         for channel in TRANSIT_CHANNELS:
             self._transit[channel] = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint16))
-        self._cell_positions = CellLayer(0, 0, np.empty((0, 0), dtype=object))
         self._bump_sight_grids()
         self._bump_light_grid()
         self._condition_footprints.clear()

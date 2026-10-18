@@ -37,8 +37,8 @@ def require(condition: bool, message: str) -> None:
 
 def check_hud(value: dict | None, controlled: set[str]) -> None:
     if value is not None:
-        require({row['actor_uuid'] for row in value['sheets']} <= controlled
-            and set(value['sheet_order'] or ()) <= controlled, 'HUD includes a character sheet outside seat control')
+        require({row['actor_uuid'] for row in value.get('sheets', ())} <= controlled,
+            'HUD includes a character sheet outside seat control')
 
 
 def record_log(entry: dict, digest: Any, counts: Counter) -> None:

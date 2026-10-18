@@ -51,14 +51,16 @@ from dnd.player.facts import (
     ActionCancellation, ActionFact, ActionReaction, ActorChanges, AreaReachFact, AttackFact, ConditionChangeFact, ItemEffectChangeFact, ContentAttribution, DamageRequestFact, DamageResultFact,
     DeathSaveFact, EquipmentFact, FloorItem, ForcedMovementFact, PortalTransferFact, MechanismActivationFact, HealFact, ItemChargeFact, LifeFact,
     MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage,
-    PlayerNode, PlayerObject, PlayerObservation, PlayerState, PlayerHUDSnapshot, PlayerHUDPatch, CombatLogAppend,
-    PlayerCharacterSheet, PlayerLogEntry, SheetChanges, SheetPatch, SpatialEffectContent, SpatialEffectSighting,
+    PlayerNode, PlayerObject, PlayerObservation, PlayerState, PlayerHUDPatch, CombatLogAppend,
+    PlayerLogEntry, SheetChanges, SheetPatch, SpatialEffectContent, SpatialEffectSighting,
     PlayerWorld, PlayerResolution, LightRow, SensoryFact, SensoryRows, ShoveFact, SpellApplication, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
     VersionRows, VisualItem, VisualLoadout, WorldUpdate, ItemLook, ItemPatch, ItemProfile, ItemState, PlayerItem, TileFieldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
 )
 from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
+from dnd.player.sheet_facts import sheet_fact
+from dnd.types.actor_sheet import PlayerResourceValue
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
-from dnd.player.reduction import (apply_record_fact, apply_hud, apply_sensed_fact, apply_world_update, change_membership,
+from dnd.player.reduction import (apply_record_fact, apply_sensed_fact, apply_world_update, change_membership,
     commit_current, fold_senses, observe_body, observed_actor, occurrence_order)
 from dnd.player.compatibility import legacy_damage_reference
 from dnd.world_facts import world_event_objects, world_event_footprints, world_objects_at
@@ -1221,7 +1223,7 @@ def _world_update(world: PresentationTarget, remembered: PlayerState, occurrence
                 and previous.contained_items is not None):
             changed[identity] = replace(previous, contained_items=None)
     objects = tuple(changed[identity] for identity in sorted(changed, key=str))
-    connectors = tuple(row for row in world.world.connectors
+    connectors = tuple(row for row in world.recorded_world.connectors.values()
                        if all(cell_in(senses.visible, point) for point in row.endpoints))
     if (not tiles and not tile_changes and not lights and not objects and not removed
             and connectors == remembered.connectors):
@@ -2084,71 +2086,51 @@ def _emit_bodies(remembered: PlayerState, nodes: tuple[PlayerNode, ...], observa
     return tuple(result), tuple(emitted)
 
 
-def sheet_changes(before: PlayerCharacterSheet | None, after: PlayerCharacterSheet) -> SheetChanges:
-    """The patch that turns the seat's sheet `before` (absent: every field) into `after`."""
-    changes: SheetChanges = {}
-    if before is None or before.species != after.species:
-        changes["species"] = after.species
-    if before is None or before.species_variant != after.species_variant:
-        changes["species_variant"] = after.species_variant
-    if before is None or before.background != after.background:
-        changes["background"] = after.background
-    if before is None or before.origin != after.origin:
-        changes["origin"] = after.origin
-    if before is None or before.class_levels != after.class_levels:
-        changes["class_levels"] = after.class_levels
-    if before is None or before.abilities != after.abilities:
-        changes["abilities"] = after.abilities
-    if before is None or before.skills != after.skills:
-        changes["skills"] = after.skills
-    if before is None or before.expertise != after.expertise:
-        changes["expertise"] = after.expertise
-    if before is None or before.saves != after.saves:
-        changes["saves"] = after.saves
-    if before is None or before.proficiency_bonus != after.proficiency_bonus:
-        changes["proficiency_bonus"] = after.proficiency_bonus
-    if before is None or before.resources != after.resources:
-        changes["resources"] = after.resources
-    if before is None or before.name != after.name:
-        changes["name"] = after.name
-    if before is None or before.portrait_key != after.portrait_key:
-        changes["portrait_key"] = after.portrait_key
-    if before is None or before.normal_hp != after.normal_hp:
-        changes["normal_hp"] = after.normal_hp
-    if before is None or before.maximum_hp != after.maximum_hp:
-        changes["maximum_hp"] = after.maximum_hp
-    if before is None or before.compatible_item_slots != after.compatible_item_slots:
-        changes["compatible_item_slots"] = after.compatible_item_slots
-    if before is None or before.handler_details != after.handler_details:
-        changes["handler_details"] = after.handler_details
-    if before is None or before.scribed_spell_ids != after.scribed_spell_ids:
-        changes["scribed_spell_ids"] = after.scribed_spell_ids
-    if before is None or before.permanent_feature_uses != after.permanent_feature_uses:
-        changes["permanent_feature_uses"] = after.permanent_feature_uses
-    if before is None or before.prepared_spell_selections != after.prepared_spell_selections:
-        changes["prepared_spell_selections"] = after.prepared_spell_selections
-    return changes
+def project_hud(audience: PlayerAudience, events: Iterable[Event],
+                before: tuple[tuple[UUID, ...], frozenset[UUID]] | None,
+                order_after: tuple[UUID, ...], perceived_after: frozenset[UUID]) -> PlayerHUDPatch | None:
+    """The seat's HUD patch for one group of recorded events: an initialization (`before` None) or an operation.
 
-
-def hud_patch(before: PlayerHUDSnapshot | None, after: PlayerHUDSnapshot) -> PlayerHUDPatch:
-    """The patch that turns the seat's last display `before` (absent: everything) into `after`."""
-    sheets = {row.actor_uuid: row for row in before.sheets} if before is not None else {}
-    order = tuple(row.actor_uuid for row in after.sheets)
-    return PlayerHUDPatch(generation=after.generation, observer_uuid=after.observer_uuid, revision=after.revision,
-        initiative=after.initiative if before is None or before.initiative != after.initiative else None,
-        sheet_order=order if before is None or order != tuple(row.actor_uuid for row in before.sheets) else None,
-        sheets=tuple(SheetPatch(actor_uuid=row.actor_uuid, changes=changes) for row in after.sheets
-            if (changes := sheet_changes(sheets.get(row.actor_uuid), row))))
-
-
-def project_after_values(state: ProjectionState, hud: PlayerHUDSnapshot | None,
-                         appends: tuple[CombatLogAppend, ...]
-                         ) -> tuple[PlayerHUDPatch | None, tuple[CombatLogAppend, ...]]:
-    """Map already-admitted native after-values into this audience's ordering.
-
-    The display travels as the patch against the seat's last one, folded into
-    `remembered` by the client's reducer; an unchanged display sends nothing.
+    Sheets: per controlled actor, its sheet publications' groups and its own events' after-values
+    (`sheet_fact`) folded in source order, the published actors first, in publication order. Initiative: `before` is the
+    session fold's encounter order and the seat's composed perception at the group's start, `*_after`
+    the same at its end; the end order's
+    perceived part is sent at initialization, when the order change shows under the end perception, or
+    when anything entered perception (the client hides what left it).
     """
+    changes: dict[UUID, SheetChanges] = {}
+    values: dict[UUID, dict[str, PlayerResourceValue]] = {}
+    published: list[UUID] = []
+    for event in events:
+        fact = sheet_fact(event) if event.phase is EventPhase.COMPLETION and not event.canceled else None
+        if fact is None or not audience.controls(fact.actor_uuid):
+            continue
+        if fact.publication and fact.actor_uuid not in published:
+            published.append(fact.actor_uuid)
+        held = changes.setdefault(fact.actor_uuid, {})
+        if "resources" in fact.changes:
+            # A whole resource tuple replaces any row values before it.
+            values.pop(fact.actor_uuid, None)
+        held.update(fact.changes)
+        if fact.resource_values and "resources" in held:
+            by_key = {row.key: row for row in fact.resource_values}
+            held["resources"] = tuple(replace(row, current=value.current, maximum=value.maximum)
+                if (value := by_key.get(row.key)) is not None else row for row in held["resources"])
+        elif fact.resource_values:
+            values.setdefault(fact.actor_uuid, {}).update((row.key, row) for row in fact.resource_values)
+    order = (*published, *(identity for identity in changes if identity not in published))
+    sheets = tuple(SheetPatch(actor_uuid=identity, changes=changes[identity],
+        resource_values=tuple(values.get(identity, {}).values())) for identity in order)
+
+    def perceived_part(initiative: tuple[UUID, ...]) -> tuple[UUID, ...]:
+        return tuple(identity for identity in initiative if identity in perceived_after)
+    initiative = perceived_part(order_after) if (before is None or not perceived_after <= before[1]
+        or perceived_part(before[0]) != perceived_part(order_after)) else None
+    return PlayerHUDPatch(initiative=initiative, sheets=sheets) if initiative is not None or sheets else None
+
+
+def project_log_appends(state: ProjectionState, appends: tuple[CombatLogAppend, ...]) -> tuple[CombatLogAppend, ...]:
+    """Map already-admitted native log appends into this audience's ordering."""
     def boundary(native_cursor: int) -> int:
         # Public occurrences increase in insertion order, including late
         # disclosures of older native events. The first qualifying occurrence
@@ -2157,18 +2139,12 @@ def project_after_values(state: ProjectionState, hud: PlayerHUDSnapshot | None,
                      if native < native_cursor), 0)
 
     if any(row.generation != state.world.generation or row.observer_uuid != state.world.observer_uuid
-           for row in appends) or hud is not None and (
-               hud.generation != state.world.generation or hud.observer_uuid != state.world.observer_uuid):
-        raise ValueError("After-values belong to another audience or generation")
-    public_hud = replace(hud, revision=boundary(hud.revision)) if hud is not None else None
+           for row in appends):
+        raise ValueError("Log appends belong to another audience or generation")
     public_logs = tuple(replace(row, encounter_log_index=state.next_log_append + index,
         operation_end_cursor=boundary(row.operation_end_cursor)) for index, row in enumerate(appends))
     state.next_log_append += len(public_logs)
-    if public_hud is None or public_hud == state.remembered.hud_snapshot:
-        return None, public_logs
-    patch = hud_patch(state.remembered.hud_snapshot, public_hud)
-    apply_hud(state.remembered, patch, end_cursor=state.next_occurrence)
-    return patch, public_logs
+    return public_logs
 
 
 def _public_set(state: ProjectionState, cursors: frozenset[int]) -> frozenset[int]:

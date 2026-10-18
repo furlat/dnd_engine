@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, replace
 import json
-from types import MappingProxyType
 from typing import Collection, Iterator, Mapping, Sequence
 from dnd.types.actor import SpatialDisposition
 from dnd.core.cells import (CellRows, bit_rows, layer_rows, mask_positions, mask_rows, selected_mask, selected_values,
@@ -17,10 +16,10 @@ from dnd.types.event_facts import EventType, SpatialChangeType
 from dnd.types.world import LightLevel
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensoryDelta
 from dnd.player.audience import (AudienceComposition, apply_current_audience, audience_view,
-    begin_audience_composition, observe_audience, resolve_audience)
+    begin_audience_composition, observe_audience, perceived_entities, resolve_audience)
 from dnd.player.facts import (
-    AttackFact, ConditionChangeFact, ConditionFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
-    ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
+    AttackFact, ConditionChangeFact, ConditionFact, DamageResultFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
+    ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, SheetPatch, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
     VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact,
 )
@@ -62,51 +61,6 @@ class SensoryChanges:
 
 # What the fold applies: a received fact, a sensory fact with its group's rows resolved.
 FoldedFact = PlayerFact | SensoryChanges
-
-
-@dataclass(frozen=True, slots=True)
-class PlayerCausalIndex:
-    """References into one received group, in its commit (occurrence) order."""
-    by_lineage: Mapping[int, PlayerNode]
-    by_occurrence: Mapping[int, PlayerNode]
-    # By resolution: a row of the group's `resolutions`.
-    owned: Mapping[int, tuple[PlayerNode, ...]]
-    results: Mapping[int, tuple[PlayerNode, ...]]
-    damage_requests: Mapping[int, int]
-
-
-def index_player_lineage(lineage: PlayerLineage) -> PlayerCausalIndex:
-    owned: dict[int, list[PlayerNode]] = {}
-    results: dict[int, list[PlayerNode]] = {}
-    by_lineage = {row.lineage: row for row in lineage.events}
-    damage_requests: dict[int, int] = {}
-    for node in lineage.events:
-        ancestors: list[int] = []
-        current = node
-        while current.lineage not in ancestors:
-            ancestors.append(current.lineage)
-            request = (current.lineage if isinstance(current.fact, DamageRequestFact)
-                       else damage_requests.get(current.lineage))
-            if request is not None:
-                damage_requests.update((identity, request) for identity in ancestors)
-                break
-            parent = by_lineage.get(current.parent_lineage) if current.parent_lineage is not None else None
-            if parent is None:
-                break
-            current = parent
-    for node in sorted(lineage.events, key=lambda row: row.occurrence):
-        reference = node.resolution
-        if reference is None:
-            continue
-        owned.setdefault(reference, []).append(node)
-        if not node.canceled and isinstance(node.fact, (DamageResultFact, ObjectDamageFact)):
-            results.setdefault(reference, []).append(node)
-    return PlayerCausalIndex(
-        MappingProxyType(by_lineage),
-        MappingProxyType({row.occurrence: row for row in lineage.events}),
-        MappingProxyType({key: tuple(rows) for key, rows in owned.items()}),
-        MappingProxyType({key: tuple(rows) for key, rows in results.items()}),
-        MappingProxyType(damage_requests))
 
 
 # These received families have ordinary state presentation, without a separate
@@ -558,31 +512,45 @@ def reduce_initialization(initialization: PlayerInitialization, *,
                      initialization.observations, initialization.world_updates, initialization.sensory_rows)
     target.reducer_cursor = initialization.end_cursor
     if initialization.hud is not None:
-        apply_hud(target, initialization.hud, end_cursor=initialization.end_cursor)
+        apply_hud(target, initialization.hud)
     target.content = tuple(sorted(content_additions, key=lambda row: row.ref.identity_key))
     return target
 
 
-def apply_hud(target: PlayerState, patch: PlayerHUDPatch, *, end_cursor: int) -> None:
-    """Fold a HUD patch into the seat's last display; against no display it is complete."""
+def changed_sheet(before: PlayerCharacterSheet, patch: SheetPatch) -> PlayerCharacterSheet:
+    """A held sheet with a patch's fields; its resource values replace those of rows the sheet holds."""
+    values = {row.key: row for row in patch.resource_values}
+    sheet = replace(before, **patch.changes)
+    if not values:
+        return sheet
+    if not values.keys() <= {row.key for row in sheet.resources}:
+        raise ValueError("Resource values name a row the sheet does not hold")
+    return replace(sheet, resources=tuple(replace(row, current=value.current, maximum=value.maximum)
+        if (value := values.get(row.key)) is not None else row for row in sheet.resources))
+
+
+def apply_hud(target: PlayerState, patch: PlayerHUDPatch) -> None:
+    """Fold a HUD patch into the seat's display; a sheet it does not hold arrives whole and is appended."""
     previous = target.hud_snapshot
-    if (patch.generation != target.generation or patch.observer_uuid != target.observer_uuid
-            or patch.revision > end_cursor or previous is not None and patch.revision < previous.revision):
-        raise ValueError("HUD belongs to a different or future operation")
     sheets = {row.actor_uuid: row for row in previous.sheets} if previous is not None else {}
     for row in patch.sheets:
         before = sheets.get(row.actor_uuid)
-        if before is None and row.changes.keys() != SheetChanges.__optional_keys__:
+        if before is None and (row.changes.keys() != SheetChanges.__optional_keys__ or row.resource_values):
             raise ValueError("A first sheet must carry every field")
-        sheets[row.actor_uuid] = (PlayerCharacterSheet(actor_uuid=row.actor_uuid, **row.changes) if before is None
-            else replace(before, **row.changes))
+        sheets[row.actor_uuid] = (PlayerCharacterSheet(actor_uuid=row.actor_uuid, **row.changes)
+            if before is None else changed_sheet(before, row))
     initiative = patch.initiative if patch.initiative is not None else previous.initiative if previous is not None else None
-    order = (patch.sheet_order if patch.sheet_order is not None
-        else tuple(row.actor_uuid for row in previous.sheets) if previous is not None else None)
-    if initiative is None or order is None:
-        raise ValueError("A first HUD requires its initiative and sheet order")
-    target.hud_snapshot = PlayerHUDSnapshot(generation=patch.generation, observer_uuid=patch.observer_uuid,
-        revision=patch.revision, initiative=initiative, sheets=tuple(sheets[identity] for identity in order))
+    if initiative is None:
+        raise ValueError("A first HUD requires its initiative")
+    target.hud_snapshot = PlayerHUDSnapshot(initiative=initiative, sheets=tuple(sheets.values()))
+
+
+def displayed_initiative(target: PlayerState) -> tuple[UUID, ...]:
+    """The initiative the seat shows: the received order's part it perceives now."""
+    if target.hud_snapshot is None:
+        return ()
+    perceived = perceived_entities(target.viewing_audience, target.perception)
+    return tuple(identity for identity in target.hud_snapshot.initiative if identity in perceived)
 
 
 def reduce_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
@@ -673,7 +641,7 @@ def reduce_operation(target: PlayerState, update: PlayerUpdate) -> PlayerState:
             composition = begin_audience_composition(result.perception, result.observer_uuid)
         _apply_lineage(result, lineage, audience_composition=composition)
     if update.hud is not None:
-        apply_hud(result, update.hud, end_cursor=result.reducer_cursor)
+        apply_hud(result, update.hud)
     for index, row in enumerate(update.combat_log_appends, len(result.combat_log_appends)):
         if (row.generation != result.generation or row.observer_uuid != result.observer_uuid
                 or row.operation_end_cursor > result.reducer_cursor or row.encounter_log_index != index):

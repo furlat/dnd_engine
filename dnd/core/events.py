@@ -88,6 +88,7 @@ from dnd.types.spatial_effects import (
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.item_types import ItemPresentationState
 from dnd.types.abilities import AbilityName, SavingThrowName, SkillName
+from dnd.types.actor_sheet import ActorSheetChange
 from dnd.types.character_progression import (
     AppliedClassLevel,
     AppliedOriginState,
@@ -2971,13 +2972,12 @@ class EventQueue:
 
         Returns:
             True if no other events with the same lineage_uuid exist at this phase
-            (considering only events registered before this one).
+            (only versions stored before it; the lineage index is in store order).
         """
-        history = cls._events_by_lineage.get(event.lineage_uuid, [])
-        for e in history:
+        for e in cls._events_by_lineage.get(event.lineage_uuid, []):
             if e.uuid == event.uuid:
-                continue
-            if e.phase == event.phase and e.timestamp < event.timestamp:
+                return True
+            if e.phase == event.phase:
                 return False
         return True
 
@@ -2990,9 +2990,9 @@ class D20Event(Event):
         default=None,
         description="Difficulty class for the roll.",
     )
-    bonus: Optional[Union[int, ValueReading]] = Field(
-        default=0,
-        description="Roll bonus: the evaluated bonus, or its total once detached for a seat.",
+    bonus: Optional[ValueReading] = Field(
+        default=None,
+        description="Evaluated roll bonus; None before the roll and in a seat's detached body (its value stays in dice_roll.bonus).",
     )
     dice: Optional[Dice] = Field(default=None, description="Dice object used to create the roll.")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="Resolved dice roll.")
@@ -3065,9 +3065,8 @@ class SavingThrowEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        bonus_breakdown = value_log_rows(self.bonus.breakdown) if isinstance(self.bonus, ValueReading) else []
-        advantage_breakdown = (advantage_log_rows(self.bonus.advantage_breakdown)
-                               if isinstance(self.bonus, ValueReading) else [])
+        bonus_breakdown = value_log_rows(self.bonus.breakdown) if self.bonus is not None else []
+        advantage_breakdown = advantage_log_rows(self.bonus.advantage_breakdown) if self.bonus is not None else []
 
         success = self.result if self.result is not None else (roll.total >= dc if dc > 0 else None)
 
@@ -3165,9 +3164,8 @@ class SkillCheckEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        bonus_breakdown = value_log_rows(self.bonus.breakdown) if isinstance(self.bonus, ValueReading) else []
-        advantage_breakdown = (advantage_log_rows(self.bonus.advantage_breakdown)
-                               if isinstance(self.bonus, ValueReading) else [])
+        bonus_breakdown = value_log_rows(self.bonus.breakdown) if self.bonus is not None else []
+        advantage_breakdown = advantage_log_rows(self.bonus.advantage_breakdown) if self.bonus is not None else []
 
         success = self.result if self.result is not None else (roll.total >= dc if dc is not None and dc > 0 else None)
 
@@ -3942,7 +3940,6 @@ class SpatialChangeEvent(Event):
                      tile_blocks_optics: Optional[bool] = None,
                      tile_blocks_propagation: Optional[bool] = None,
                      new_light_level: Optional[int] = None,
-                     source_entity_uuid: Optional[UUID] = None,
                      senses_hint: Optional['SensesUpdateHint'] = None,
                      parent_event: Optional[UUID] = None,
                      directional_position: Optional[Tuple[int, int]] = None,
@@ -3987,7 +3984,7 @@ class SpatialChangeEvent(Event):
                 ),
             )
         return cls(
-            source_entity_uuid=source_entity_uuid or uuid4(),
+            source_entity_uuid=uuid4(),
             event_type=EventType.SPATIAL_TILE_CHANGED,
             change_type=SpatialChangeType.TILE_CHANGED,
             position=position,
@@ -5608,6 +5605,26 @@ class SpellPreparationChangedEvent(Event):
     name: str = "Spell Preparation Changed"
     casting_source_id: str
     prepared_spell_selections: Tuple[PreparedSpellSelection, ...]
+
+
+class ActorSheetEvent(Event):
+    """One player actor's sheet publication at an operation boundary, as its keyed change.
+
+    The source is the actor. Emitted only by the sheet publisher (dnd/actor_sheets.py), never with a parent.
+    """
+
+    event_type: EventType = EventType.ACTOR_SHEET
+    name: str = "Actor Sheet"
+    change: ActorSheetChange
+
+
+class InitiativeOrderChangedEvent(Event):
+    """The encounter's initiative order after a combatant joined or left (the start order is the encounter start's)."""
+
+    event_type: EventType = EventType.INITIATIVE_ORDER_CHANGED
+    name: str = "Initiative Order Changed"
+    encounter_uuid: UUID
+    initiative_order: Tuple[UUID, ...]
 
 
 class ActionApplicationCommittedEvent(Event):
