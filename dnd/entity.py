@@ -5817,8 +5817,9 @@ class Entity(BaseBlock):
     ) -> Tuple[List[AvailableTarget], int]:
         """Admit candidate targets against the registered template itself (plan §14.3b).
 
-        Each candidate is a selection checked by `discovery_error`: no copy of
-        the action and no declaration event.
+        Each candidate is a selection checked by `discovery_admission`: no copy
+        of the action and no declaration event. An object is listed at the
+        surface the admission reached it at.
 
         Args:
             template: Action template being discovered.
@@ -5835,21 +5836,15 @@ class Entity(BaseBlock):
         for target_uuid, target_pos in target_pool.items():
             selection = replace(base, target_uuids=(target_uuid,))
             record_action_count("discovery.validation", 1)
-            if template.discovery_error(scan, selection) is not None:
+            error, contact = template.discovery_admission(scan, selection)
+            if error is not None:
                 continue
             rules_valid_count += 1
             if template.target_dependent_costs and not template.with_selection(selection).check_costs():
                 continue
             target_entity = BaseBlock.get(target_uuid)
-            if isinstance(target_entity, BaseItem):
-                action_range = template.get_range()
-                access = template.get_physical_access()
-                if action_range is not None and access is not None:
-                    contact = get_map().attack_object_contact(self.uuid, target_uuid,
-                        range_feet=action_range.long or action_range.normal, access=access,
-                        subjective=scan.subjective, origin=template.get_target_origin())
-                    if contact is not None:
-                        target_pos = contact
+            if contact is not None:
+                target_pos = contact
             valid_targets.append(AvailableTarget(
                 index=len(valid_targets),
                 target_uuid=target_uuid,
