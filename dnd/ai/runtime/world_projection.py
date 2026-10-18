@@ -11,7 +11,8 @@ from dnd.core.world_edges import WorldEdgeStructuralContribution, world_edge_con
 from dnd.types.cells import value_at
 from dnd.types.senses import SensesSnapshot
 from dnd.types.world import MovementMode, WorldEdgeChannel
-from dnd.world_facts import CARDINAL_DELTAS, OPPOSITE_DIRECTION, WorldFacts
+from dnd.types.world_placement import CARDINAL_DELTAS, OPPOSITE_DIRECTION
+from dnd.world_facts import WorldFacts
 
 
 ADJACENT_DELTAS = tuple((offset, offset.delta) for offset in AdjacentOffset)

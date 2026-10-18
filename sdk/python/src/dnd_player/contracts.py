@@ -1214,6 +1214,9 @@ class ObjectDamageFact(TypedDict):
     damage_type: DamageType | None
 
 
+type RemovedBand = int
+
+
 class ObjectResidueState(TypedDict):
     condition_uuid: str
     residue_id: str
@@ -1427,6 +1430,18 @@ class ResidueEllipse(TypedDict):
     radius_x: float
     radius_y: float
     angle: NotRequired[float]
+
+
+class ResidueKey(TypedDict):
+    position: list[PositionItem]
+    residue_id: str
+
+
+class ResidueMaterial(TypedDict):
+    residue_id: str
+    name: str
+    description: str
+    max_amount: int
 
 
 type RingSlot = Literal['Left Ring', 'Right Ring']
@@ -1823,6 +1838,23 @@ class TemporaryHitPointsGrant(TypedDict):
     source_id: NotRequired[str | None]
 
 
+class TileColumns(TypedDict):
+    cells: CellMask
+    walking_cost: str
+    flying_cost: str
+    swimming_cost: str
+    burrowing_cost: str
+    flags: str
+    default_light: str
+    resolved_light: str
+    elevation_steps: NotRequired[list[int]]
+
+
+class TileConditions(TypedDict):
+    position: list[PositionItem]
+    names: list[str]
+
+
 class TileSurface(TypedDict):
     base_material: Material
     layers: NotRequired[list[SurfaceLayer]]
@@ -2010,15 +2042,25 @@ class WorldConnectorState(TypedDict):
 type WorldEdgeChannel = Literal['movement', 'optical', 'propagation']
 
 
-type RemovedBand = int
-
-
 class WorldObjectSupport(TypedDict):
     position: list[PositionItem]
     tile_uuid: str
 
 
 type WorldPlacementKind = Literal['center', 'boundary']
+
+
+class WorldTileChanges(TypedDict):
+    blocks_optics: NotRequired[bool]
+    blocks_propagation: NotRequired[bool]
+    walking_cost: NotRequired[int]
+    flying_cost: NotRequired[int]
+    swimming_cost: NotRequired[int]
+    burrowing_cost: NotRequired[int]
+    elevation_steps: NotRequired[int]
+    surface_kind: NotRequired[ElevationSurfaceKind]
+    slope_axis: NotRequired[SlopeAxis | None]
+    default_light: NotRequired[LightLevel]
 
 
 class AckRequest(TypedDict):
@@ -2193,6 +2235,11 @@ class BoundaryStructure(TypedDict):
     material: Material
     blocked_channels: list[WorldEdgeChannel]
     contact_passage: NotRequired[ContactPassage]
+
+
+class BoundaryStructureStatic(TypedDict):
+    structure_id: str
+    structure: BoundaryStructure
 
 
 class CommittedReceipt(TypedDict):
@@ -2490,6 +2537,18 @@ class MovementFact(TypedDict):
     connector_presentation_key: NotRequired[str | None]
 
 
+class ObjectPlacement(TypedDict):
+    position: list[PositionItem]
+    top_height_steps: int
+    boundary_direction: NotRequired[CardinalDirection | None]
+    tile_uuid: NotRequired[str | None]
+    covered_supports: NotRequired[list[WorldObjectSupport]]
+    occupies_bands: NotRequired[bool]
+    base_height_steps: NotRequired[int]
+    orientation: NotRequired[CardinalDirection | None]
+    removed_bands: NotRequired[list[list[RemovedBand]]]
+
+
 class PerceivedContact(TypedDict):
     position: list[PositionItem]
     visual: bool
@@ -2667,6 +2726,11 @@ class TemporaryHitPointsFact(TypedDict):
     grant: NotRequired[TemporaryHitPointsGrant | None]
 
 
+class TileFieldUpdate(TypedDict):
+    position: list[PositionItem]
+    changes: WorldTileChanges
+
+
 class TileResidueState(TypedDict):
     condition_uuid: str
     residue_id: str
@@ -2674,6 +2738,13 @@ class TileResidueState(TypedDict):
     amount: NotRequired[int]
     max_amount: NotRequired[int]
     contributions: NotRequired[list[ResidueContribution]]
+
+
+class TileStatic(TypedDict):
+    position: list[PositionItem]
+    tile_uuid: str
+    surface: TileSurface
+    name: str
 
 
 class UnequipItem(TypedDict):
@@ -2715,23 +2786,6 @@ class WorldObjectPlacement(TypedDict):
     orientation: NotRequired[CardinalDirection | None]
     covered_supports: NotRequired[list[WorldObjectSupport]]
     removed_bands: NotRequired[list[list[RemovedBand]]]
-
-
-class WorldTileChanges(TypedDict):
-    surface: NotRequired[TileSurface]
-    name: NotRequired[str]
-    blocks_optics: NotRequired[bool]
-    blocks_propagation: NotRequired[bool]
-    walking_cost: NotRequired[int]
-    flying_cost: NotRequired[int]
-    swimming_cost: NotRequired[int]
-    burrowing_cost: NotRequired[int]
-    elevation_steps: NotRequired[int]
-    surface_kind: NotRequired[ElevationSurfaceKind]
-    slope_axis: NotRequired[SlopeAxis | None]
-    default_light: NotRequired[LightLevel]
-    condition_names: NotRequired[list[str]]
-    residues: NotRequired[list[TileResidueState]]
 
 
 class WorldTileState(TypedDict):
@@ -2848,9 +2902,38 @@ class ContentPresentation(TypedDict):
     equipment_sprites: NotRequired[list[EquipmentSpritePresentation]]
 
 
+class ContributionRow(TypedDict):
+    index: int
+    contribution: ResidueContribution
+
+
 class EquipIntent(TypedDict):
     kind: NotRequired[Literal['equip']]
     item: EquipItem
+
+
+class ObjectLook(TypedDict):
+    item_uuid: str
+    item_id: str
+    visual_variant_id: NotRequired[str | None]
+    contact_passage: NotRequired[ContactPassage]
+    supported_by_uuid: NotRequired[str | None]
+    door_mechanism: NotRequired[DoorMechanism | None]
+    door_swing: NotRequired[DoorSwing | None]
+    maximum_hit_points: NotRequired[int | None]
+    concentration_capacity: NotRequired[int]
+    construction_owner_uuid: NotRequired[str | None]
+    construction_geometry: NotRequired[
+        SpherePresentationGeometry
+        | ConePresentationGeometry
+        | LinePresentationGeometry
+        | CubePresentationGeometry
+        | CylinderPresentationGeometry
+        | WallPresentationGeometry
+        | WallAssemblyPresentationGeometry
+        | None
+    ]
+    known_to_creator: NotRequired[bool]
 
 
 class PlayerAction(TypedDict):
@@ -3035,6 +3118,14 @@ class PreviewResponse(TypedDict):
     preview: PlayerSelectionPreview
 
 
+class ResidueRow(TypedDict):
+    position: list[PositionItem]
+    residue_id: str
+    condition_uuid: NotRequired[str | None]
+    amount: NotRequired[int | None]
+    contributions: NotRequired[list[ContributionRow]]
+
+
 class SpellSuppression(TypedDict):
     provider_uuid: str
     positions: list[list[Position]]
@@ -3050,11 +3141,6 @@ class SpellSuppression(TypedDict):
         | None
     ]
     anchor_elevation_steps: NotRequired[int | None]
-
-
-class TileFieldUpdate(TypedDict):
-    position: list[PositionItem]
-    changes: WorldTileChanges
 
 
 class UnequipIntent(TypedDict):
@@ -3277,10 +3363,28 @@ class ObjectDestroyedFact(TypedDict):
     resulting_placement: NotRequired[WorldObjectPlacement | None]
 
 
-class PlayerObject(TypedDict):
-    placement: WorldObjectPlacement
-    item: FloorItem
-    contained_items: NotRequired[list[FloorItem] | None]
+class ObjectState(TypedDict):
+    name: str
+    visual_item_name: NotRequired[str | None]
+    map_char: str
+    boundary_structure: NotRequired[str | None]
+    is_open: NotRequired[bool | None]
+    is_lit: NotRequired[bool | None]
+    very_bright_radius_feet: NotRequired[int | None]
+    bright_radius_feet: NotRequired[int | None]
+    dim_radius_feet: NotRequired[int | None]
+    stack_count: NotRequired[int]
+    is_pickable: NotRequired[bool]
+    item_effects: NotRequired[list[ItemEffectPresentationState]]
+    blocks_propagation: NotRequired[bool]
+    is_engaged: NotRequired[bool | None]
+    surface_residues: NotRequired[list[ObjectResidueState]]
+    current_hit_points: NotRequired[int | None]
+    concentration_slots: NotRequired[list[ItemConcentrationSlot]]
+    remnant_state: NotRequired[ItemRemnantState | None]
+    integrity: NotRequired[ItemIntegrity]
+    destruction_outcome: NotRequired[str | None]
+    construction_suppressions: NotRequired[list[SpellSuppression]]
 
 
 class SpatialEffectSighting(TypedDict):
@@ -3354,16 +3458,6 @@ class SpellFact(TypedDict):
     target_base_height_steps: NotRequired[int | None]
 
 
-class WorldUpdate(TypedDict):
-    occurrence: int
-    tiles: list[WorldTileState]
-    objects: list[PlayerObject]
-    objects_removed: list[str]
-    connectors: list[WorldConnectorState]
-    tile_changes: NotRequired[list[TileFieldUpdate]]
-    resolved_light: NotRequired[CellValues]
-
-
 class ConditionFact(TypedDict):
     event_uuid: str | None
     condition_uuid: str
@@ -3379,11 +3473,35 @@ class ConditionFact(TypedDict):
     consumed: NotRequired[bool]
 
 
+class ContainedItem(TypedDict):
+    item_uuid: str
+    state: ObjectState
+
+
+class ContainerContents(TypedDict):
+    container_uuid: str
+    items: NotRequired[list[ContainedItem]]
+
+
+class ContentsChange(TypedDict):
+    container_uuid: str
+    upserted: NotRequired[list[ContainedItem]]
+    removed: NotRequired[list[str]]
+
+
 class ItemPatch(TypedDict):
     item_uuid: str
     look: NotRequired[ItemLook | None]
     profile: NotRequired[ItemProfile | None]
     state: NotRequired[ItemState | None]
+
+
+class ObjectRow(TypedDict):
+    item_uuid: str
+    members: NotRequired[int | None]
+    state: ObjectState
+    placement: NotRequired[ObjectPlacement | None]
+    observed_faces: NotRequired[list[CardinalDirection]]
 
 
 class SensoryRows(TypedDict):
@@ -3400,6 +3518,27 @@ class SensoryRows(TypedDict):
     cells: NotRequired[CellMask]
     light_levels: NotRequired[list[CellValues]]
     hazards: NotRequired[list[CellValues]]
+
+
+class WorldUpdate(TypedDict):
+    occurrence: int
+    entered: NotRequired[CellMask]
+    tile_statics: NotRequired[list[TileStatic]]
+    tile_columns: NotRequired[TileColumns | None]
+    tile_conditions: NotRequired[list[TileConditions]]
+    tile_changes: NotRequired[list[TileFieldUpdate]]
+    resolved_light: NotRequired[CellValues]
+    residue_materials: NotRequired[list[ResidueMaterial]]
+    boundary_structures: NotRequired[list[BoundaryStructureStatic]]
+    residues: NotRequired[list[ResidueRow]]
+    residues_removed: NotRequired[list[ResidueKey]]
+    object_looks: NotRequired[list[ObjectLook]]
+    objects: NotRequired[list[ObjectRow]]
+    objects_removed: NotRequired[list[str]]
+    contents: NotRequired[list[ContainerContents]]
+    contents_changed: NotRequired[list[ContentsChange]]
+    connectors: NotRequired[list[WorldConnectorState]]
+    connectors_removed: NotRequired[list[str]]
 
 
 class ActorChanges(TypedDict):

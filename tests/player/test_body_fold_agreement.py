@@ -22,7 +22,7 @@ from dnd.core.condition_types import ConditionAgencyDenial, ConditionCategory
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.player.capture import CompletedLineage, capture_interval, reduce_interval
 from dnd.player.facts import PlayerActor
-from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.recorded import RecordedSequence
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.player.session import Session, close_session, create_session
@@ -121,10 +121,11 @@ def check(session: Session, case: FoldCase) -> None:
         conditions=() if fact is None else (fact,), audience=audience, actor_fact_changes={event.uuid: change})
     recorded = RecordedSequence.model_validate_json(RecordedSequence(initialization=startup,
         lineages=(lineage,)).model_dump_json(), context=PASSIVE_EVENT_REPLAY)
-    projection, initial = begin_projection(recorded.initialization)
+    projected = SessionProjection()
+    projection, initial = begin_projection(projected, recorded.initialization)
     client = reduce_initialization(initial)
     assert client_body(client.actors[identity]) == engine_body(before), case.name
-    packet = project_lineage(projection, recorded.lineages[0])
+    packet = project_lineage(projected, projection, recorded.lineages[0])
     if packet is not None:
         client = reduce_lineage(client, packet)
     actors = {identity: before}

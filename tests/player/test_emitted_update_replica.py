@@ -22,7 +22,7 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
-from dnd.player.application import AudienceRuntime, capture_application_operation, initialize_audiences
+from dnd.player.application import AudienceRuntime, capture_application_operation, initialize_audiences, seat_content
 from dnd.player.audience import PlayerAudience, begin_audience_composition
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import PlayerInitialization, PlayerState, PlayerUpdate
@@ -69,20 +69,21 @@ def operation_since(session: Session, start: int) -> Operation:
 
 
 def what_capture_reads(state: PlayerState) -> tuple:
-    return (state.actors, state.items, state.spatial_content, state.connectors, state.content,
-        state.tiles, state.objects)
+    # The server holds no world copy: the seat's world is the client's alone (player schema 16).
+    return (state.actors, state.items, state.spatial_content)
 
 
 def check_replica(session: Session, steps: tuple[Step, ...]) -> dict[str, PlayerState]:
     catalog = ui_content_manifest()
     runtimes, initializations = initialize_audiences(session, catalog)
     clients = {seat: reduce_initialization(INITIALIZATION.validate_json(INITIALIZATION.dump_json(initial)),
-            content_additions=runtimes[seat].projection.remembered.content)
+            content_additions=seat_content(runtimes[seat]))
         for seat, initial in initializations.items()}
 
     def check(name: str, seat: str, client: PlayerState, runtime: AudienceRuntime) -> None:
         case = f'{name} / {seat}'
         assert what_capture_reads(client) == what_capture_reads(runtime.projection.remembered), case
+        assert client.content == seat_content(runtime), case
         assert (client.reducer_cursor, len(client.combat_log_appends)) == (
             runtime.projection.next_occurrence, runtime.projection.next_log_append), case
         assert client.senses == begin_audience_composition(client.perception, client.observer_uuid).view, case

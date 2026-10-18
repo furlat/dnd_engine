@@ -1003,6 +1003,59 @@ def test_dependency_direction_is_respected() -> None:
     )
 
 
+# The client's reference fold of the player wire, and the server modules that publish to seats without it. A
+# module joins the publishers once the last held client value it reads is deleted; the sensory lane adds the
+# projection, which still runs the client's body fold until then.
+CLIENT_FOLD_MODULES = ("dnd.player.reduction", "dnd.player.world_reduction")
+SEAT_PUBLISHING_MODULES = frozenset({"dnd.player.application", "dnd.player.capture", "server.worker",
+    "dnd.player.world_publication"})
+
+
+def test_seat_publication_does_not_import_the_client_fold() -> None:
+    """Publishing modules never import the client fold directly (transitive edges are the projection's)."""
+    violations = [reference for reference in _import_references()
+        if reference.importer in SEAT_PUBLISHING_MODULES and any(
+            reference.target == module or reference.target.startswith(f"{module}.") for module in CLIENT_FOLD_MODULES)]
+    assert not violations, (
+        "Seat publication imports the client fold:\n" + _format_import_references(violations)
+    )
+
+
+def test_the_session_world_has_one_writer() -> None:
+    """The session's one world fold is written in one place: the walk drivers' `_fold_version`, through E2's
+    `world_facts.apply_world_fact`."""
+    tree = ast.parse((REPOSITORY_ROOT / "dnd" / "player" / "projection.py").read_text(encoding="utf-8"))
+    writers = [function.name for function in ast.walk(tree) if isinstance(function, ast.FunctionDef)
+        for node in ast.walk(function) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        and node.func.id == "apply_world_fact"]
+    assert writers == ["_fold_version"]
+
+
+def _rooted_at(node: ast.expr, name: str) -> bool:
+    """Whether an attribute, subscript or call chain starts at the variable `name`."""
+    while isinstance(node, (ast.Attribute, ast.Subscript, ast.Call)):
+        node = node.func if isinstance(node, ast.Call) else node.value
+    return isinstance(node, ast.Name) and node.id == name
+
+
+def test_world_publication_reads_the_world_as_of_the_occurrence_and_never_compares_it() -> None:
+    """The seats' world publication reads one world (the session's, as of the occurrence) and what the occurrence
+    wrote: it takes no second world, reads no client memory and compares no world value with another."""
+    path = REPOSITORY_ROOT / "dnd" / "player" / "world_publication.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    imported = {alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) for alias in node.names}
+    assert not imported & {"PlayerState", "copy_world_facts", "WorldMemory"}
+    for function in (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)):
+        worlds = [row.arg for row in function.args.args + function.args.kwonlyargs
+                  if isinstance(row.annotation, ast.Name) and row.annotation.id == "WorldFacts"]
+        assert len(worlds) <= 1, function.name
+        for compare in (node for node in ast.walk(function) if isinstance(node, ast.Compare)):
+            if not any(isinstance(op, (ast.Eq, ast.NotEq)) for op in compare.ops):
+                continue
+            assert not any(_rooted_at(side, world) for side in (compare.left, *compare.comparators)
+                           for world in worlds), f"{function.name} compares a world value (line {compare.lineno})"
+
+
 def test_game_import_does_not_load_ai_or_server_packages() -> None:
     """Importing the active client must not load AI or the retired server."""
     marker = "__DND_ARCH_AI_MODULES__="

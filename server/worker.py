@@ -18,7 +18,7 @@ from dnd.controller import HumanController
 from dnd.core.events import EventQueue
 from dnd.core.content.descriptors import ContentVisibility
 from dnd.encounter import EncounterState, TurnState
-from dnd.player.application import AudienceRuntime, capture_application_operation, initialize_audiences
+from dnd.player.application import AudienceRuntime, capture_application_operation, initialize_audiences, seat_content
 from dnd.player.commands import ActionSelection, CommandRejected
 from dnd.player.content import UIContentManifest
 from dnd.player.content_composition import ui_content_manifest
@@ -86,16 +86,16 @@ def start(request: Start) -> tuple[Runtime, Reply, tuple[BaseModel, ...]]:
         publications = {}
         records = []
         for seat, initial in initializations.items():
-            remembered = audiences[seat].projection.remembered
             cursor = PlayerCursor(game_id=request.game_id, game_epoch=request.game_epoch,
                 audience_id=request.audience_ids[seat], sequence=0)
             revision = str(uuid4())
             publication = Publication(seat_id=seat, cursor=cursor, state_revision=revision,
-                boundary=boundary(session, seat, revision), audience=remembered.viewing_audience,
+                boundary=boundary(session, seat, revision), audience=audiences[seat].projection.audience,
                 content_revision=content_revision)
             publications[seat] = publication
             records.append(InitializationResponse(protocol=protocol_identity(), cursor=cursor,
-                content_revision=content_revision, content_additions=remembered.content, initialization=initial))
+                content_revision=content_revision, content_additions=seat_content(audiences[seat]),
+                initialization=initial))
         return Runtime(session, catalog, audiences, publications), Reply(publications=tuple(publications.values()),
             encounter_name=session.encounter.name, needs_advance=needs_advance(session), has_response=True), tuple(records)
     except BaseException:
