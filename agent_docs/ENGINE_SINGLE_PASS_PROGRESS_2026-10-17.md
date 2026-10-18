@@ -498,3 +498,25 @@ Hard rules:
     - a kept movement-cost grid was not adopted (writer completeness unproven);
     - `EventQueue.is_first_at_phase` compares wall-clock timestamps (latent; no effect seen).
   - Census gap closed: `Entity._navigation_traversal` (P5) is an entity-held memo against §6a, now listed in RULE_VIOLATIONS.
+- 2026-10-18: **PV2 wire part 2 merged (777ecce99; 8b4673143 … 312d4a8b8): player schema 15, PlayerSequence 8.**
+  - Wire changes:
+    - each group sends its visible cells once, and light and hazard (cell, value) tables once; each observer's cell lists are bit lists over them;
+    - observer and contacts are named by index; light sources are compact rows;
+    - spatial-effect cell lists are packed;
+    - resolutions and spell applications use the seat's lineage index;
+    - 78 default-valued fact fields are left out;
+    - changed resolved light is one packed set per world update.
+  - Publication:
+    - a re-observed body builds each item record once per walk;
+    - no `dataclasses.replace` when nothing changes;
+    - `_world_update` skips tiles the seat already holds as the same object.
+    - Once-per-group `_world_update` is NOT exact (the object-removal rule is judged per event against a view that can lose cells mid-group) and was not done.
+  - The Python SDK validator now registers `base64url`. Messages with packed cells couldn't be validated since schema 13.
+  - Gates (agent): folded client state strictly equal per op and seat on 10 cases vs 983e85d1d (and three earlier bases); sweep = r21; SDK tests TS 64/64, Python 91/91; pyright 0 new.
+  - Time and bytes (3 runs, loaded, base 983e85d1d → new):
+    - Sleet drop 182 → 145 ms (179 → 85 KB); Daylight 195 → 159 (204 → 83); Cloudkill drop 171 → 126 (139 → 74);
+    - Sleet cast 150 → 145 (142 → 96); Ice Storm 98 KB; SG moves 53–66 KB;
+    - Fireball 247 → 201 KB; CoD 262 → 220 KB.
+    - Client fold cost +0 to +3 ms per update.
+  - **For the human:** Fireball and CoD can't fit 100 KB without (a) a residue-patch world-update type (each blood or ash change re-sends the tile's whole residue list, 53–56 KB) and (b) a combat-log redesign (41–57 KB, one entry per native event). Both are wire-design decisions.
+  - Also: `PlayerCausalIndex` / `index_player_lineage` are only called from `game_obsolete/`, so deleting them is the human's call. One more fact-family `isinstance` (`SpellFact`, `_public_occurrences`).
