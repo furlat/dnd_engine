@@ -4672,7 +4672,7 @@ class GridMap:
         """The Tiles the channel's native ray reaches from ``origin`` (``raycast_clear``), x-major.
 
         Targets are the Tiles in the map bounds within ``max_distance`` (the whole bounds when
-        None); the reach must stay within ROUTE_TABLE_RADIUS of the origin. One array solve
+        None), at any reach. One array solve
         (`wall_visibility`) over the channel's transit grid: the written center bits, and the
         answers of the structured edges -- every edge while a global crossing owner exists --
         with the unsettled ones a route from here crosses settled first. Any other edge between
@@ -4795,8 +4795,7 @@ class GridMap:
             origin: Position to compute FOV from
             max_distance: Maximum view distance
         Returns list of visible positions. With an optical boundary on the map the solve is the
-        wall FOV, whose reach (the map bounds within ``max_distance``) must stay within
-        ROUTE_TABLE_RADIUS (80) cells of the origin, else it raises ValueError.
+        wall FOV over the map bounds within ``max_distance``.
         """
         timing = action_timing_enabled()
         cache_started = time.perf_counter() if timing else 0.0
@@ -5961,9 +5960,8 @@ class GridMap:
         One semantics, whatever else is on the map: a cell is reached when the
         native propagation ray to it is clear (``raycast_clear``), so blocking
         and missing cells, directional boundaries and spatial-condition
-        crossings give total cover. Magical darkness does not block it. The reach
-        (the map bounds within ``max_distance``) must stay within ROUTE_TABLE_RADIUS
-        (80) cells of the origin, else it raises ValueError."""
+        crossings give total cover. Magical darkness does not block it. The reach is
+        the map bounds within ``max_distance``."""
         cache_started = time.perf_counter()
         cache_key = (origin, max_distance)
         cached = self._propagation_fov_cache.get(cache_key)
