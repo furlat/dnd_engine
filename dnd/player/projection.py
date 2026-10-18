@@ -5,7 +5,7 @@ authority, remembers last-observed world values, and copies committed facts;
 it never asks the live engine what an observer can see.
 """
 
-from collections.abc import Callable, Collection, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from typing import TypeVar
 from dataclasses import dataclass, field, replace
 from math import floor
@@ -284,14 +284,17 @@ class SensoryTable:
 Row = TypeVar("Row")
 
 
-def _appended(column: list[Row], value: Row) -> int:
-    column.append(value)
-    return len(column) - 1
+def _appended(column: list[Row], values: Iterable[Row]) -> tuple[int, ...]:
+    """Append values as rows of a column; their indices."""
+    start = len(column)
+    column.extend(values)
+    return tuple(range(start, len(column)))
 
 
-def _keyed(keys: list[UUID], column: list[Row], identity: UUID, value: Row) -> int:
-    keys.append(identity)
-    return _appended(column, value)
+def _keyed(keys: list[UUID], column: list[Row], values: Mapping[UUID, Row]) -> tuple[int, ...]:
+    """Append a map's entries as rows of a keyed column pair; their indices."""
+    keys.extend(values)
+    return _appended(column, values.values())
 
 
 def _effect_content(effect: PerceivedSpatialEffect) -> SpatialEffectContent:
@@ -304,22 +307,19 @@ def _sensory_fact(event: SensoryUpdateEvent, keys: "NativeKeys", table: SensoryT
         observer_position=event.observer_position, observer_position_changed=event.observer_position_changed,
         effective_light_levels_changed=event.effective_light_levels_changed,
         hazardous_cells_changed=event.hazardous_cells_changed,
-        light_sources_changed=tuple(_appended(table.light_sources, source) for source in event.light_sources_changed.values()),
-        light_sources_removed=tuple(_keyed(table.light_removal_uuids, table.light_removal_revisions, identity, revision)
-            for identity, revision in event.light_sources_removed.items()),
-        spatial_effect_sightings=tuple(_keyed(table.sighting_uuids, table.sightings, identity, _sighting(effect))
-            for identity, effect in event.spatial_effects_changed.items()),
+        light_sources_changed=_appended(table.light_sources, event.light_sources_changed.values()),
+        light_sources_removed=_keyed(table.light_removal_uuids, table.light_removal_revisions, event.light_sources_removed),
+        spatial_effect_sightings=_keyed(table.sighting_uuids, table.sightings,
+            {identity: _sighting(effect) for identity, effect in event.spatial_effects_changed.items()}),
         spatial_effect_content={identity: _effect_content(effect) for identity, effect in event.spatial_effects_changed.items()},
-        spatial_effects_removed=tuple(_appended(table.removed_uuids, identity) for identity in event.spatial_effects_removed),
+        spatial_effects_removed=_appended(table.removed_uuids, event.spatial_effects_removed),
         cause_occurrence=_version_key(keys, event.cause_event_uuid),
         visible_cells_added=event.visible_cells_added, visible_cells_removed=event.visible_cells_removed,
         seen_cells_added=event.seen_cells_added,
-        entity_contacts_changed=tuple(_keyed(table.contact_uuids, table.contacts, identity, contact)
-            for identity, contact in event.entity_contacts_changed.items()),
-        entity_contacts_removed=tuple(_appended(table.removed_uuids, identity) for identity in event.entity_contacts_removed),
-        object_contacts_changed=tuple(_keyed(table.contact_uuids, table.contacts, identity, contact)
-            for identity, contact in event.object_contacts_changed.items()),
-        object_contacts_removed=tuple(_appended(table.removed_uuids, identity) for identity in event.object_contacts_removed),
+        entity_contacts_changed=_keyed(table.contact_uuids, table.contacts, event.entity_contacts_changed),
+        entity_contacts_removed=_appended(table.removed_uuids, event.entity_contacts_removed),
+        object_contacts_changed=_keyed(table.contact_uuids, table.contacts, event.object_contacts_changed),
+        object_contacts_removed=_appended(table.removed_uuids, event.object_contacts_removed),
         sense_modes_changed=event.sense_modes_changed,
         sense_modes=tuple(event.sense_modes) if event.sense_modes is not None else None,
         passive_perception_changed=event.passive_perception_changed,
