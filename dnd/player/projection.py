@@ -57,8 +57,8 @@ from dnd.player.facts import (
     VersionRows, WorldUpdate, ItemRecord, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
     Column, ContainedItem, ObjectState,
 )
-from dnd.player.capture import (CompletedLineage, IntervalEnvelope, ObjectiveRow, recorded_actor_change,
-    seat_log_entry)
+from dnd.player.capture import (CompletedLineage, IntervalEnvelope, ObjectiveRow, SharedLogEntries,
+    recorded_actor_change, seat_log_entry)
 from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import PlayerResourceValue
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
@@ -963,6 +963,8 @@ class SeatWalk:
     native_logs: Mapping[UUID, CombatLogEntry]
     names: dict[str, str]
     log_inputs: "SeatLogInputs"
+    # The group's renderings, shared by all its seats.
+    shared_logs: SharedLogEntries
     by_lineage: dict[UUID, Event]
     # Before each walk event (by uuid): the deliveries whose entry sight is kept, and the objects whose removal starts.
     deliveries_at: dict[UUID, tuple[UUID, ...]]
@@ -1013,13 +1015,13 @@ def _seat_log(walk: SeatWalk, event: Event, observer: PlayerAudience) -> PlayerL
         return walk.logs.get(event.uuid)
     return seat_log_entry(native, observer, known_entity_names=walk.names,
         known_connector_uuids=walk.log_inputs.connectors, known_content_ids=walk.log_inputs.content_ids,
-        retained_entries=walk.retained_logs)
+        retained_entries=walk.retained_logs, shared=walk.shared_logs)
 
 
 def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event, ...],
                 conditions: tuple[ConditionFact, ...], actor_fact_changes: Mapping[UUID, ActorFactChange],
                 logs: Mapping[UUID, PlayerLogEntry], native_logs: Mapping[UUID, CombatLogEntry],
-                names: Mapping[UUID, str], log_inputs: SeatLogInputs) -> SeatWalk:
+                names: Mapping[UUID, str], log_inputs: SeatLogInputs, shared_logs: SharedLogEntries) -> SeatWalk:
     """A seat's walk over a group: its events (old recordings upgraded) and their schedules."""
     events = upgrade_recorded_spatial_commits(events, tuple(
         (row.lineage_uuid, row.event_uuid) for row in sorted(group.versions, key=lambda row: row.source_index)))
@@ -1058,6 +1060,7 @@ def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event,
     return SeatWalk(events=events, facts={row.event_uuid: row for row in conditions},
         actor_fact_changes=actor_fact_changes, logs=logs, native_logs=native_logs,
         names={str(identity): names[identity] for identity in sent.actor_births}, log_inputs=log_inputs,
+        shared_logs=shared_logs,
         by_lineage=by_lineage,
         deliveries_at=_due(events, indexes, list(delivery_starts.items())),
         removals_at=_due(events, indexes, list(removal_starts.items())),
@@ -1924,7 +1927,8 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
         states.append(state)
         worlds.append(world)
         walks.append(_begin_walk(group, state, tuple(event for _, event in initialization.admitted),
-            initialization.conditions, changes, initialization.logs, {}, session.names, NO_LOG_INPUTS))
+            initialization.conditions, changes, initialization.logs, {}, session.names, NO_LOG_INPUTS,
+            SharedLogEntries()))
     steps: dict[int, list[tuple[int, Event]]] = {}
     for seat, walk in enumerate(walks):
         for event in walk.events:
@@ -1990,8 +1994,10 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
             if isinstance(event, SpatialEffectChangeEvent) and state.audience.controls(event.source_entity_uuid))
     group = _walk_group(session, versions)
     inputs = log_inputs if log_inputs is not None else tuple(NO_LOG_INPUTS for _ in states)
+    shared_logs = SharedLogEntries()
     walks = tuple(_begin_walk(group, state, upgrade_recorded_resolutions(lineage.events),
-        lineage.conditions, lineage.actor_fact_changes, {}, lineage.native_logs, session.names, seat_inputs)
+        lineage.conditions, lineage.actor_fact_changes, {}, lineage.native_logs, session.names, seat_inputs,
+        shared_logs)
         for state, lineage, seat_inputs in zip(states, lineages, inputs, strict=True))
     order = tuple(event.uuid for event in walks[0].events)
     if any(tuple(event.uuid for event in walk.events) != order for walk in walks[1:]):

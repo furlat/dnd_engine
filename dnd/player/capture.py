@@ -56,7 +56,7 @@ from dnd.core.events import (
     WorldModifiedEvent,
 )
 from dnd.core.item_types import ItemLocation
-from dnd.subjective_combat_log import project_combat_log
+from dnd.subjective_combat_log import SharedRenders, project_combat_log
 from dnd.types.senses import PerceivedContact
 from dnd.world_facts import copy_world_facts, apply_world_fact as apply_recorded_world_fact
 from dnd.player.audience import PlayerAudience, resolve_audience
@@ -650,26 +650,42 @@ def _controller_redaction(event: Event, audience: PlayerAudience) -> bool | None
     return None
 
 
+@dataclass(slots=True)
+class SharedLogEntries:
+    """One walk group's log entries for all its seats: each native entry rendered once per distinct disclosure
+    (`SharedRenders`) and wrapped once as a `PlayerLogEntry`."""
+
+    renders: SharedRenders = field(default_factory=SharedRenders)
+    entries: dict[int, PlayerLogEntry] = field(default_factory=dict)
+
+
 def seat_log_entry(log: CombatLogEntry | None, audience: PlayerAudience, *,
                    known_entity_names: Mapping[str, str] | None = None,
                    known_connector_uuids: frozenset[str] = frozenset(),
                    known_content_ids: frozenset[str] = frozenset(),
-                   retained_entries: dict[int, CombatLogEntry | None] | None = None) -> PlayerLogEntry | None:
+                   retained_entries: dict[int, CombatLogEntry | None] | None = None,
+                   shared: SharedLogEntries | None = None) -> PlayerLogEntry | None:
     """The one projection of a native log for a seat: rendered, without nested copies or grants.
 
     Nested child entries inform the rendering; the seat receives each child's
     own entry with its node, so its target indices refer to those (see
-    `PlayerLogEntry`).
+    `PlayerLogEntry`). With `shared`, seats deciding alike on an entry share its rendering.
     """
     projected = project_combat_log(log, known_entity_names=known_entity_names, retained_entries=retained_entries,
         known_connector_uuids=known_connector_uuids, known_content_ids=known_content_ids,
-        controlled_entity_uuids=audience.controlled_ids, observer_entity_uuids=audience.observer_ids)
+        controlled_entity_uuids=audience.controlled_ids, observer_entity_uuids=audience.observer_ids,
+        shared=shared.renders if shared is not None else None)
     if projected is None:
         return None
-    return PlayerLogEntry(entry_type=projected.entry_type, source_name=projected.source_name,
+    if shared is not None and (entry := shared.entries.get(id(projected))) is not None:
+        return entry
+    entry = PlayerLogEntry(entry_type=projected.entry_type, source_name=projected.source_name,
         source_uuid=projected.source_uuid, target_name=projected.target_name, target_uuid=projected.target_uuid,
         compact=projected.compact, verbose=projected.verbose, detailed=projected.detailed, data=projected.data,
         success=projected.success)
+    if shared is not None:
+        shared.entries[id(projected)] = entry
+    return entry
 
 
 def _retained_event(event: Event, audience: PlayerAudience, *, omit_sensory_payload: bool = False,
@@ -1294,6 +1310,7 @@ __all__ = [
     "copy_target",
     "reduce_interval",
     "reduce_lineage",
+    "SharedLogEntries",
     "seat_log_entry",
     "seed_actors",
     "settle_dispositions",

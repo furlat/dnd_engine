@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 import re
 from dnd.core.combat_log import (
     ActionLogData, AttackLogData, CombatLogData, CombatLogEntry, CombatLogEntryType,
@@ -20,6 +21,17 @@ from dnd.core.elevation import support_distance_feet
 from dnd.types.event_facts import MovementTrajectory
 
 
+@dataclass(slots=True)
+class SharedRenders:
+    """Rendered entries by what a seat decided about a native entry (`_project`): every seat taking the same
+    decisions on the same entry shares one rendering."""
+
+    renders: dict[tuple, CombatLogEntry] = field(default_factory=dict)
+    # Per native entry (by identity): the identities its public dump contains, the only ones whose hiding can
+    # change its rendering.
+    mentioned: dict[int, frozenset[str]] = field(default_factory=dict)
+
+
 def project_combat_log(log: CombatLogEntry | None, *,
                       controlled_entity_uuids: frozenset[str],
                       observer_entity_uuids: frozenset[str],
@@ -27,19 +39,26 @@ def project_combat_log(log: CombatLogEntry | None, *,
                       known_connector_uuids: frozenset[str] = frozenset(),
                       known_content_ids: frozenset[str] = frozenset(),
                       retained_entries: dict[int, CombatLogEntry | None] | None = None,
+                      shared: SharedRenders | None = None,
                       ) -> CombatLogEntry | None:
-    """Retained identity can name an admitted occurrence; it cannot admit one."""
+    """Retained identity can name an admitted occurrence; it cannot admit one.
+
+    The seat decides what of the entry it may see (visibility, identities, positions, the connector and content
+    it knows); the entry is rendered once per distinct decision and shared through `shared`.
+    """
     if log is None:
         return None
     return _project(log, controlled_entity_uuids, observer_entity_uuids,
                     known_entity_names or {}, known_connector_uuids, known_content_ids,
-                    retained_entries if retained_entries is not None else {})
+                    retained_entries if retained_entries is not None else {},
+                    shared if shared is not None else SharedRenders())
 
 
 def _project(log: CombatLogEntry, controlled: frozenset[str], observers: frozenset[str],
              known: Mapping[str, str], connectors: frozenset[str],
              content_ids: frozenset[str],
-             memo: dict[int, CombatLogEntry | None]) -> CombatLogEntry | None:
+             memo: dict[int, CombatLogEntry | None], shared: SharedRenders) -> CombatLogEntry | None:
+    """A seat's decisions on one entry (every read of the seat is here), then its shared rendering."""
     if id(log) in memo:
         return memo[id(log)]
     participants = {value for value in (log.source_uuid, log.target_uuid) if value}
@@ -47,10 +66,11 @@ def _project(log: CombatLogEntry, controlled: frozenset[str], observers: frozens
                    or any(grants & observers for grants in log.located_entity_observer_uuids.values())
                    or any(grants & observers for grants in log.located_position_observer_uuids.values())
                    or (log.data.kind == "turn" and bool(log.identified_entity_observer_uuids.get(log.source_uuid, set()) & observers)))
+    results = [_project(child, controlled, observers, known, connectors, content_ids, memo, shared)
+               for child in log.sub_entries]
     children = []
     child_indices = {}
-    for index, child in enumerate(log.sub_entries):
-        projected = _project(child, controlled, observers, known, connectors, content_ids, memo)
+    for index, projected in enumerate(results):
         if projected is not None:
             child_indices[index] = len(children)
             children.append(projected)
@@ -75,6 +95,56 @@ def _project(log: CombatLogEntry, controlled: frozenset[str], observers: frozens
         log.source_uuid in controlled or (log.data.kind == "forced_movement" and log.target_uuid in controlled))
     if owned_movement:
         admitted.update(positions)
+    known_connectors = frozenset(identity for identity in _connectors_of(log.data) if identity in connectors)
+    known_content = frozenset(identity for identity in _content_of(log.data) if identity in content_ids)
+    mentioned = shared.mentioned.get(id(log))
+    if mentioned is None:
+        dump = log.model_dump_json()
+        mentioned = shared.mentioned[id(log)] = frozenset(
+            identity for identity in _tree_identities(log) if identity in dump)
+    key = (id(log), visible, source, target, source_known, target_known, frozenset(hidden_ids & mentioned),
+           frozenset(hidden_names), frozenset(admitted), owned_movement, known_connectors, known_content,
+           tuple(id(projected) for projected in results))
+    result = shared.renders.get(key)
+    if result is None:
+        result = shared.renders[key] = _render(log, visible, children, child_indices, source, target, source_known,
+            target_known, hidden_ids, hidden_names, positions, admitted, owned_movement, known_connectors,
+            known_content)
+    memo[id(log)] = result
+    return result
+
+
+def _tree_identities(log: CombatLogEntry) -> set[str]:
+    """Every identity an entry and its sub-entries name: the candidates `_hidden_identities` may hide."""
+    found = {identity for identity in _identity_candidates(log) if identity}
+    for child in log.sub_entries:
+        found |= _tree_identities(child)
+    return found
+
+
+def _connectors_of(data: CombatLogData) -> tuple[str, ...]:
+    """The connectors an entry's rendering asks the seat about."""
+    match data:
+        case ConnectorMovementLogData():
+            return (str(data.connector_uuid),)
+    return ()
+
+
+def _content_of(data: CombatLogData) -> tuple[str, ...]:
+    """The content ids an entry's rendering asks the seat about."""
+    match data:
+        case DamageTakenLogData() if data.effect_id is not None:
+            return (data.effect_id,)
+        case SpatialInteractionLogData() if data.source_item_id is not None:
+            return (data.source_item_id,)
+    return ()
+
+
+def _render(log: CombatLogEntry, visible: bool, children: list[CombatLogEntry], child_indices: dict[int, int],
+            source: str, target: str | None, source_known: bool, target_known: bool, hidden_ids: set[str],
+            hidden_names: set[str], positions: set[tuple[int, int]], admitted: set[tuple[int, int]],
+            owned_movement: bool, connectors: frozenset[str], content_ids: frozenset[str]) -> CombatLogEntry:
+    """An entry as the seat's decisions show it: a pure function of them (shared by `SharedRenders`)."""
     hidden_positions = positions - admitted
     clean = lambda text: _sanitize_text(text, hidden_ids, hidden_names, hidden_positions)
     data = _project_data(log.data, clean, hidden_ids, admitted, source_known, content_ids)
@@ -124,7 +194,6 @@ def _project(log: CombatLogEntry, controlled: frozenset[str], observers: frozens
         "identified_entity_observer_uuids": {}, "located_entity_observer_uuids": {},
         "located_position_observer_uuids": {},
     })
-    memo[id(log)] = result
     return result
 
 
