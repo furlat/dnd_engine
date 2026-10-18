@@ -1210,9 +1210,10 @@ class PlayerState:
     content: tuple[ContentDescriptor, ...] = ()
     combat_log_appends: tuple[CombatLogAppend, ...] = ()
     # Schema 16 (composed perception, plan §3.1, Q1 (a)): the members perceiving each contact and effect the seat
-    # perceives now, bit i the audience's `observers[i]`.
+    # perceives now, bit i the audience's `observers[i]`. An object contact's members are its contact row's: the
+    # members observing a world object are the world rows' (`object_members`, E3-world).
     entity_members: dict[UUID, int] = field(default_factory=dict)
-    object_members: dict[UUID, int] = field(default_factory=dict)
+    object_contact_members: dict[UUID, int] = field(default_factory=dict)
     effect_members: dict[UUID, int] = field(default_factory=dict)
     # The light sources the seat perceives now (schema 16; `senses` holds no light sources then).
     light_sources: dict[UUID, PlayerLightSource] = field(default_factory=dict)

@@ -44,7 +44,7 @@ def client_sensory_view(state: PlayerState) -> dict:
                                      "members": state.entity_members[identity]}
                      for identity, contact in senses.entities.items()},
         "objects": {str(identity): {"position": list(contact.position), "visual": contact.visual,
-                                    "members": state.object_members[identity]}
+                                    "members": state.object_contact_members[identity]}
                     for identity, contact in senses.objects.items()},
         "effects": {str(identity): {"name": effect.name, "positions": _cells(effect.positions),
                                     "volume": _cells(effect.visible_volume_positions),

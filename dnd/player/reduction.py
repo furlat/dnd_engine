@@ -84,7 +84,7 @@ def copy_target(target: PlayerState) -> PlayerState:
             contact_cursors=dict(target.perception.contact_cursors),
             effect_cursors=dict(target.perception.effect_cursors),
             effect_absences=dict(target.perception.effect_absences)),
-        entity_members=dict(target.entity_members), object_members=dict(target.object_members),
+        entity_members=dict(target.entity_members), object_contact_members=dict(target.object_contact_members),
         effect_members=dict(target.effect_members), light_sources=dict(target.light_sources),
         remembered_effects=dict(target.remembered_effects))
 
@@ -820,7 +820,7 @@ def fold_composed_sensory(target: PlayerState, fact: ComposedSensoryFact, values
     entities, objects = dict(held.entities), dict(held.objects)
     for contacts, members, changed, gone in (
             (entities, target.entity_members, fact.entity_contacts_changed, fact.entity_contacts_removed),
-            (objects, target.object_members, fact.object_contacts_changed, fact.object_contacts_removed)):
+            (objects, target.object_contact_members, fact.object_contacts_changed, fact.object_contacts_removed)):
         for identity in _unique(dict.fromkeys(uuids[index] for index in gone), gone):
             if identity not in contacts:
                 raise ValueError("A removed contact is one the seat perceives")
