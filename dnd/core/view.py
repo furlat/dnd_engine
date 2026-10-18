@@ -234,12 +234,12 @@ def frame_rows(positions: np.ndarray, origin: Position) -> np.ndarray:
     """Sorted unique frame rows of (n, 2) map positions; every position must lie in the frame."""
     if positions.size == 0:
         return np.zeros(0, dtype=np.int64)
-    offsets = positions.astype(np.int64) - np.asarray(origin, dtype=np.int64)
+    offsets = positions - np.asarray(origin, dtype=np.int64)
     if np.abs(offsets).max() > R:
         raise ValueError(f"perception reach exceeds the route table radius {R}")
     rows = (offsets[:, 0] + R) * SIDE + offsets[:, 1] + R
     rows.sort()
-    # Sorted, a repeated row follows its first copy (the rows np.unique gives, several times faster).
+    # Sorted, repeats are adjacent: each row's first copy is kept (np.unique's rows).
     return rows[np.concatenate(([True], rows[1:] != rows[:-1]))]
 
 
