@@ -783,6 +783,16 @@ Hard rules:
     - The largest startup record per G2 seat drops 1.73 → 1.20 MB.
     - Op ms (one run each, on a machine loaded by the batches): lower on most rows; the few higher ones are within run noise. The 3-run quiet timing is not done.
     - Measured, not built: mass_healing_word G2's 1,070 tile static rows are 174 KB (one distinct surface and name). Interning surface and name would make them about 115 KB.
+  - **Gates.** Against E0's base (60adf05eb, seeded): 9 oracle cases (fireball, sleet_storm, darkness_daylight, spirit_guardians_walk, room_reentry, wall_of_stone, round_step_zones, portal_plate, mass_healing_word) × G1/G2/G3, at dab1966d3.
+    - **O1.** Every class count equals the base's, and no world class (tiles, objects, connectors) appears. Two changes: round_step_zones `body.conditions` goes 41 → 0 on all three layouts (the stale Prone), and portal_plate `cells:field:hazard` goes → 0 after e7f7e19c4.
+    - **O2.** 27 of 27 spool replays pass in a fresh process with hash seed 1.
+    - **O3.** The views equal the base's, except round_step_zones: 41 `body.conditions` (the Prone fix).
+    - **O4.**
+      - Bounded on all 27 runs: no seat learns anything the base did not tell it.
+      - Object member bits: every bit sent to a multi-member seat equals what its client derives from the per-member views the sensory wire carries (18 runs on G1 and G3, 0 mismatches).
+    - **Transcripts** (`--representation world-16`): events and logs are identical everywhere. Published updates outside `world_updates` are byte-identical, except Fireball's renumbered nodes (listed above).
+    - **Sweep** (r29's directories): 66 failures = r29's 64 plus 2 `cr0_evidence` tests that need git (a snapshot has none; they pass in the worktree).
+    - **pyright:** 0 new.
   - **End reviews (antislop, antiOOP) — fixed in dab1966d3 / 657dff66c:**
     - one publication per record (antislop blocker: a removal sent twice made the client raise);
     - keyed tile rows and connector removals need cells seen before and after;
