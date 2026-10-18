@@ -26,7 +26,8 @@ from dnd.core.values import (
 from dnd.encounter import AdvanceResult, Encounter, TurnState
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
-from dnd.player.session import close_session, create_session, snapshot_player_hud
+from dnd.actor_sheets import evaluate_actor_sheet
+from dnd.player.session import close_session, create_session
 from dnd.runtime_reset import reset_engine_runtime
 
 
@@ -105,14 +106,14 @@ def test_repeated_hud_and_stat_reads_leave_registries_and_native_events_unchange
             source_id=uuid4(), base_ac=22, ability_names=("dexterity",),
             requires_unarmored=False))
         expected_ac = tuple(actor.ac_bonus().normalized_score for actor in actors)
-        hud = snapshot_player_hud(session)
+        sheets = tuple(evaluate_actor_sheet(actor) for actor in actors)
         stats = tuple(actor.snapshot_entity_stats() for actor in actors)
         passive = tuple(actor.get_passive_perception() for actor in actors)
         owned = tuple(actor.ability_scores.constitution.ability_score for actor in actors)
         before = registry_identities()
         cursor = EventQueue.event_cursor()
         for _ in range(30):
-            assert snapshot_player_hud(session) == hud
+            assert tuple(evaluate_actor_sheet(actor) for actor in actors) == sheets
             assert tuple(actor.snapshot_entity_stats() for actor in actors) == stats
             assert tuple(actor.get_passive_perception() for actor in actors) == passive
             assert tuple(actor.ac_bonus().normalized_score

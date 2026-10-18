@@ -15,6 +15,7 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventQueue
 from dnd.items.spell_items import build_fireball_scroll
 from dnd.player.commands import ActionSelection
+from dnd.player.facts import PlayerState
 from dnd.player.session import close_session
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.character_progression import CharacterClass, PreparedSpellSelection
@@ -27,17 +28,39 @@ from server.protocol import (
     PrepareSpellsIntent,
     StudySpellMasteryIntent,
 )
-from server.worker import start, dispatch, needs_advance
+import server.worker as native_worker
+from server.worker import needs_advance
 from server.worker_protocol import Start, Advance, Command, Preview, Choices
 from tests.player.test_compact_choices import request_choices, rows
+from tests.player.test_hud_operation_oracle import deliver as oracle_deliver
 from tests.progression.prepared_class_support import prepared_build, prepared_level
 
 
+# The current runtime's seats, as their clients fold every record the worker delivered (each fold
+# checked against the live engine by the op-end oracle). One runtime lives at a time.
+CLIENTS: dict[int, dict[str, PlayerState]] = {}
+
+
+def deliver(runtime, records):
+    oracle_deliver(runtime, CLIENTS.setdefault(id(runtime), {}), records)
+
+
+def start(request):
+    runtime, reply, records = native_worker.start(request)
+    CLIENTS.clear()
+    deliver(runtime, records)
+    return runtime, reply, records
+
+
+def dispatch(runtime, request):
+    reply, records, response = native_worker.dispatch(runtime, request)
+    deliver(runtime, records)
+    return reply, records, response
+
+
 def seat_sheet(runtime, seat, actor_uuid):
-    """The sheet in the seat's display: its HUD travels as patches, folded by the seat's
-    projection the way its client folds them (see test_emitted_update_replica)."""
-    return next(row for row in runtime.audiences[seat].projection.remembered.hud_snapshot.sheets
-        if row.actor_uuid == actor_uuid)
+    """The sheet in the seat's display: the client fold of the delivered records."""
+    return next(row for row in CLIENTS[id(runtime)][seat].hud_snapshot.sheets if row.actor_uuid == actor_uuid)
 
 
 def worker(build):

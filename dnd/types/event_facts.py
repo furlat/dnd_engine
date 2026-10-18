@@ -24,6 +24,7 @@ class EventType(str, Enum):
     SPELL_MASTERY_STUDIED = "spell_mastery_studied"
     SPELLBOOK_CHANGED = "spellbook_changed"
     SPELL_PREPARATION_CHANGED = "spell_preparation_changed"
+    ACTOR_SHEET = "actor_sheet"
     ATTACK = "attack"
     MOVEMENT = "movement"
     STEP_MOVEMENT = "step_movement"
@@ -101,6 +102,7 @@ class EventType(str, Enum):
 
     ENCOUNTER_START = "encounter_start"
     ENCOUNTER_END = "encounter_end"
+    INITIATIVE_ORDER_CHANGED = "initiative_order_changed"
     ROUND_START = "round_start"
     ROUND_END = "round_end"
     TURN_START = "turn_start"

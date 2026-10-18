@@ -18,6 +18,8 @@ from dnd.core.content.identities import validate_namespaced_id
 class AvailableHandlerInfo(BaseModel):
     """Player-toggleable event handler exposed with available actions."""
 
+    model_config = ConfigDict(frozen=True)
+
     name: str = Field(description="Handler display name.")
     behavior_id: str = Field(description="Primitive handler-rule identity.")
     provided_by_id: str = Field(description="Primitive direct-provider identity.")
