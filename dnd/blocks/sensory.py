@@ -905,17 +905,58 @@ def _pack_cells(keys: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
 TargetFacts = Tuple[BaseBlock, int, int, bool, bool]  # block, key, stealth DC, invisible, volatile
 
 
-def _contact_table_value(box: Box, facts: Sequence[Tuple[UUID, bool, TargetFacts]], cell_array: np.ndarray,
+@dataclass(frozen=True)
+class TargetColumns:
+    """A contact table's per-target columns, in target order."""
+
+    blocks: Tuple[BaseBlock, ...]
+    uuid_objects: np.ndarray         # object array of the uuids
+    uuid_halves: np.ndarray          # (targets, 2) uint64
+    target_key: np.ndarray           # int64: the target's id times two plus its class (0 entity, 1 object)
+    stealth: np.ndarray              # int64
+    invisible: np.ndarray            # bool
+    volatile: np.ndarray             # bool
+
+
+def _listed_columns(facts: Sequence[Tuple[UUID, bool, TargetFacts]]) -> TargetColumns:
+    """The columns of these read targets (uuid, listed as an entity, facts)."""
+    uuid_objects = np.empty(len(facts), dtype=object)
+    uuid_objects[:] = [identity for identity, _, _ in facts]
+    return TargetColumns(
+        tuple(values[0] for _, _, values in facts), uuid_objects,
+        np.array([(identity.int >> 64, identity.int & UUID_LOW) for identity, _, _ in facts],
+                 dtype=np.uint64).reshape(-1, 2),
+        np.array([values[1] for _, _, values in facts], dtype=np.int64),
+        np.array([values[2] for _, _, values in facts], dtype=np.int64),
+        np.array([values[3] for _, _, values in facts], dtype=bool),
+        np.array([values[4] for _, _, values in facts], dtype=bool))
+
+
+def _kept_columns(table: ContactTable, indexes: np.ndarray) -> TargetColumns:
+    """A kept table's columns at these targets."""
+    return TargetColumns(tuple(table.blocks[index] for index in indexes.tolist()), table.uuid_objects[indexes],
+                         table.uuid_halves[indexes], table.target_key[indexes], table.stealth[indexes],
+                         table.invisible[indexes], table.volatile[indexes])
+
+
+def _joined_columns(first: TargetColumns, second: TargetColumns) -> TargetColumns:
+    return TargetColumns(first.blocks + second.blocks,
+                         np.concatenate((first.uuid_objects, second.uuid_objects)),
+                         np.concatenate((first.uuid_halves, second.uuid_halves)),
+                         np.concatenate((first.target_key, second.target_key)),
+                         np.concatenate((first.stealth, second.stealth)),
+                         np.concatenate((first.invisible, second.invisible)),
+                         np.concatenate((first.volatile, second.volatile)))
+
+
+def _contact_table_value(box: Box, columns: TargetColumns, cell_array: np.ndarray,
                          side_array: np.ndarray) -> ContactTable:
-    """The table of these targets (uuid, listed as an entity, facts) and rows: cells (x, y, target,
-    kind) and sides (side x, y, across x, y, across tile, optical, propagation, target, position)."""
-    uuids = tuple(identity for identity, _, _ in facts)
-    halves = np.array([(identity.int >> 64, identity.int & UUID_LOW) for identity in uuids],
-                      dtype=np.uint64).reshape(-1, 2)
-    target_key = np.array([values[1] for _, _, values in facts], dtype=np.int64)
-    stealth = np.array([values[2] for _, _, values in facts], dtype=np.int64)
-    invisible = np.array([values[3] for _, _, values in facts], dtype=bool)
-    volatile = np.array([values[4] for _, _, values in facts], dtype=bool)
+    """The table of these targets' columns and rows: cells (x, y, target, kind) and sides (side x, y,
+    across x, y, across tile, optical, propagation, target, position)."""
+    uuids = tuple(columns.uuid_objects.tolist())
+    as_entity = ((columns.target_key & 1) == 0).tolist()
+    halves, target_key = columns.uuid_halves, columns.target_key
+    stealth, invisible, volatile = columns.stealth, columns.invisible, columns.volatile
     cell_x, cell_y, cell_target, cell_kind = cell_array[:, 0], cell_array[:, 1], cell_array[:, 2], cell_array[:, 3]
     side_target = side_array[:, 7]
     cell_keys, side_keys = target_key[cell_target], target_key[side_target]
@@ -923,12 +964,10 @@ def _contact_table_value(box: Box, facts: Sequence[Tuple[UUID, bool, TargetFacts
                                   invisible[cell_target])).astype(np.int64).reshape(-1, 6)
     side_input = np.column_stack((side_array[:, :7], side_keys, side_array[:, 8:10], stealth[side_target],
                                   invisible[side_target])).astype(np.int64).reshape(-1, 12)
-    uuid_objects = np.empty(len(uuids), dtype=object)
-    uuid_objects[:] = uuids
     return ContactTable(
-        box, tuple(values[0] for _, _, values in facts), uuids, uuid_objects,
-        {(identity, as_entity): index for index, (identity, as_entity, _) in enumerate(facts)},
-        {identity: index for index, (identity, as_entity, _) in enumerate(facts) if as_entity},
+        box, columns.blocks, uuids, columns.uuid_objects,
+        dict(zip(zip(uuids, as_entity), range(len(uuids)))),
+        {identity: index for index, (identity, entity) in enumerate(zip(uuids, as_entity)) if entity},
         halves, stealth, invisible, volatile,
         cell_x, cell_y, cell_target, cell_kind,
         side_array[:, 0], side_array[:, 1], side_array[:, 2], side_array[:, 3], side_array[:, 4] != 0,
@@ -1812,7 +1851,7 @@ class SpatialSensesSystem:
         kept_cells = kept_sides = None
         if incremental:
             assert previous is not None and named is not None
-            # Every other row and every other target's facts are the kept table's.
+            # Every row away from the named cells is the kept table's (its targets' facts below).
             def named_at(xs: np.ndarray, ys: np.ndarray, cells_named: Set[Position]) -> np.ndarray:
                 named_array = np.array(list(cells_named), dtype=np.int64).reshape(-1, 2)
                 return np.isin(_pack_cells(np.zeros(xs.size, dtype=np.int64), xs, ys),
@@ -1825,14 +1864,6 @@ class SpatialSensesSystem:
                 target(previous.uuids[index], kind == ROW_ENTITY)
             for index in previous.side_target[~kept_sides].tolist():
                 target(previous.uuids[index], False)
-            kept_targets = np.unique(np.concatenate((previous.cell_target[kept_cells],
-                                                     previous.side_target[kept_sides]))).tolist()
-            entity_of = {index: identity for identity, index in previous.entity_index.items()}
-            for index in kept_targets:
-                key = (previous.uuids[index], entity_of.get(index) == previous.uuids[index])
-                if key not in facts:
-                    facts[key] = (previous.blocks[index], int(previous.target_key[index]), int(previous.stealth[index]),
-                                  bool(previous.invisible[index]), bool(previous.volatile[index]))
         listed = [(identity, as_entity, values) for (identity, as_entity), values in facts.items() if values is not None]
         index_of = {(identity, as_entity): index for index, (identity, as_entity, _) in enumerate(listed)}
         cell_rows = [(x, y, index_of[(identity, as_entity)], kind) for identity, as_entity, x, y, kind in cells]
@@ -1840,12 +1871,24 @@ class SpatialSensesSystem:
                      for identity, x, y, ax, ay, tile, optical, propagation, px, py in sides]
         cell_array = np.array(cell_rows, dtype=np.int64).reshape(-1, 4)
         side_array = np.array(side_rows, dtype=np.int64).reshape(-1, 10)
+        columns = _listed_columns(listed)
         if incremental:
             assert previous is not None and kept_cells is not None and kept_sides is not None
+            # Every other target's facts are the kept table's: the targets with a kept row that this
+            # settlement did not read follow the read ones, in kept order (a key is the target's
+            # (uuid, listed as an entity) pair: its id and class).
+            read_keys = np.array([target_id * 2 + (0 if as_entity else 1) for identity, as_entity in facts
+                                  if (target_id := self._target_ids.get(identity)) is not None], dtype=np.int64)
+            kept = np.unique(np.concatenate((previous.cell_target[kept_cells], previous.side_target[kept_sides])))
+            kept = kept[~np.isin(previous.target_key[kept], read_keys)]
+            columns = _joined_columns(columns, _kept_columns(previous, kept))
             # The kept rows, re-indexed; a target no longer listed loses them.
-            remap = np.array([index_of.get((identity, as_entity), -1)
-                              for (identity, as_entity), _ in sorted(previous.targets.items(), key=lambda item: item[1])],
-                             dtype=np.int64)
+            remap = np.full(len(previous.uuids), -1, dtype=np.int64)
+            remap[kept] = len(listed) + np.arange(kept.size, dtype=np.int64)
+            for index, (identity, as_entity, _) in enumerate(listed):
+                held = previous.targets.get((identity, as_entity))
+                if held is not None:
+                    remap[held] = index
             old_cells = np.column_stack((previous.cell_x, previous.cell_y, remap[previous.cell_target],
                                          previous.cell_kind)).astype(np.int64).reshape(-1, 4)[kept_cells]
             old_sides = np.column_stack((previous.side_x, previous.side_y, previous.across_x, previous.across_y,
@@ -1854,7 +1897,7 @@ class SpatialSensesSystem:
                                          previous.side_position_y)).astype(np.int64).reshape(-1, 10)[kept_sides]
             cell_array = np.concatenate((old_cells[old_cells[:, 2] >= 0], cell_array))
             side_array = np.concatenate((old_sides[old_sides[:, 7] >= 0], side_array))
-        return _contact_table_value(box, listed, cell_array, side_array)
+        return _contact_table_value(box, columns, cell_array, side_array)
 
     def _publish_cells(self, view: ObserverView, world: SettlementWorld, passive: int,
                        resolved: ResolvedContacts) -> CellLayer:
