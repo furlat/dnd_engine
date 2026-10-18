@@ -5780,17 +5780,19 @@ class Entity(BaseBlock):
             footprints[identity] = footprint
         return footprint
 
-    def _aoe_aim_points(self, template: BaseAction, admitted: Sequence[Tuple[int, int]],
-                        scan: ActorScan) -> List[Tuple[int, int]]:
-        """One aim point per perceived creature, the actor included (plan §14.1), that the action admits.
+    def _aoe_aim_points(self, template: BaseAction, scan: ActorScan,
+                        region: Optional[AbstractSet[Tuple[int, int]]] = None) -> List[Tuple[int, int]]:
+        """One aim point per perceived creature, the actor included (plan §14.1), in the action's region
+        and admitted by the action.
 
-        Each aim passes the one admission path (plan §14.3b). Free aims anywhere
-        in the row's region are validated on demand.
+        The region is `region` when the caller holds it, else the action's own
+        per-point answer (`valid_positions_among`). Each aim passes the one
+        admission path (plan §14.3b). Free aims anywhere in the row's region
+        are validated on demand.
         """
-        allowed = set(admitted)
-        aims = {contact.position for contact in self.senses.entities.values() if contact.position in allowed}
-        if self.position in allowed:
-            aims.add(self.position)
+        candidates = {contact.position for contact in self.senses.entities.values()} | {self.position}
+        aims = (template.valid_positions_among(candidates) if region is None
+                else [aim for aim in candidates if aim in region])
         base = template.current_selection()
         admitted_aims = []
         for aim in sorted(aims):
@@ -6926,16 +6928,10 @@ class Entity(BaseBlock):
                     continue
 
                 if type(template).get_valid_positions is BaseAction.get_valid_positions:
-                    valid_pos_list = list(
-                        self._get_subjective_visible_positions(
-                            template,
-                            visible_cells,
-                        )
-                    )
+                    valid_pos_list = self._aoe_aim_points(template, scan, frozenset(
+                        self._get_subjective_visible_positions(template, visible_cells)))
                 else:
-                    valid_pos_list = template.get_valid_positions()
-
-                valid_pos_list = self._aoe_aim_points(template, valid_pos_list, scan)
+                    valid_pos_list = self._aoe_aim_points(template, scan)
                 if not include_aoe_preview and not template.aoe_require_targets:
                     valid_positions = [AvailableTarget(
                         index=index, position=position,
@@ -7261,7 +7257,7 @@ class Entity(BaseBlock):
                 if use_shape_template is None:
                     continue
 
-                valid_pos_list = self._aoe_aim_points(use_template, use_template.get_valid_positions(), scan)
+                valid_pos_list = self._aoe_aim_points(use_template, scan)
 
                 use_valid_positions: List[AvailableTarget] = []
                 use_idx = 0

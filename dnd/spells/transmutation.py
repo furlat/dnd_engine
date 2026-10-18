@@ -14,7 +14,7 @@ from dnd.types.materials import Material
 from dnd.core.equipment_types import WeaponKind, WeaponSet, WeaponSlot
 from dnd.types.world import MovementMode
 from dnd.core.base_conditions import Duration
-from typing import Any, Dict, Literal, Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, Dict, Iterable, Literal, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID, uuid4
 
 from pydantic import Field, PrivateAttr
@@ -117,7 +117,7 @@ from dnd.types.spatial_effects import (
     SpatialEffectTriggerKind,
 )
 from dnd.spells.content_metadata import srd_condition_identity, srd_action_identity, srd_spell_identity
-from dnd.spells.spell_utils import (deliver_spell_damage, spell_valid_positions, fire_heal_roll_result,
+from dnd.spells.spell_utils import (deliver_spell_damage, spell_valid_positions, in_spell_placement_region, fire_heal_roll_result,
     living_recipients_error, placement_error, seen_point_error, selected_cast_level, target_count_error)
 from dnd.types.discovery import ActorScan, ScanRecord
 
@@ -2321,6 +2321,9 @@ class CreateOrDestroyWater(SpellAction):
 
     def get_valid_positions(self):
         return spell_valid_positions(self)
+
+    def valid_positions_among(self, points: Iterable[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        return [point for point in points if in_spell_placement_region(self, point)]
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         return placement_error(self, scan, selection)

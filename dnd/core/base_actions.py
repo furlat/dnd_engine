@@ -57,6 +57,7 @@ from typing import (
     OrderedDict,
     List,
     Dict,
+    Iterable,
     Literal,
     Protocol,
     Sequence,
@@ -1596,39 +1597,53 @@ class BaseAction(BaseObject):
         """Get valid target positions for POSITION_LOS and POSITION_AOE actions.
 
         Override in subclasses to provide custom position filtering.
-        Default implementation uses senses.visible + get_range().
+        Default implementation: the visible cells `in_visible_region` holds.
 
         Returns:
             List of valid positions this action can target.
         """
+        senses = self._region_senses()
+        if senses is None:
+            return []
+        return [position for position in visible_positions(senses.cells) if self.in_visible_region(position)]
+
+    def valid_positions_among(self, points: Iterable[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        """The given points that `get_valid_positions` lists, in the order given.
+
+        An action whose region is one per-point rule overrides this to answer
+        each point by that rule, without enumerating the region.
+        """
+        region = set(self.get_valid_positions())
+        return [point for point in points if point in region]
+
+    @final
+    def in_visible_region(self, position: Tuple[int, int]) -> bool:
+        """The default region's rule for one point (`BaseAction.get_valid_positions`).
+
+        A visible cell in range, other than the source's own cell unless it is a
+        path vertex.
+        """
+        senses = self._region_senses()
+        if senses is None or not cell_visible(senses.cells, position):
+            return False
+        selection = self.get_position_selection()
+        if position == senses.position and (selection is None or selection.kind != "path"):
+            return False
+        return self.target_position_error(position) is None
+
+    def _region_senses(self) -> Optional[Senses]:
+        """The senses whose visible cells hold the default region.
+
+        None when the action has no such region: neither a position action nor
+        a creature's destination, or a source without senses.
+        """
         selection = self.get_position_selection()
         if (self.effective_target_type not in (TargetType.POSITION_LOS, TargetType.POSITION_AOE)
                 and (selection is None or selection.kind != "entity_destination")):
-            return []
-
+            return None
         entity = BaseBlock.get(self.source_entity_uuid)
-        if entity is None:
-            return []
-
-        senses_block = entity.get_senses()
-        if not isinstance(senses_block, Senses):
-            return []
-
-        valid: List[Tuple[int, int]] = []
-        visible = visible_positions(senses_block.cells)
-        position = senses_block.position
-        selection = self.get_position_selection()
-
-        if not visible:
-            return []
-
-        for pos in visible:
-            if pos == position and (selection is None or selection.kind != "path"):
-                continue
-            if self.target_position_error(pos) is not None:
-                continue
-            valid.append(pos)
-        return valid
+        senses = entity.get_senses() if entity is not None else None
+        return senses if isinstance(senses, Senses) else None
 
     def get_disclosed_movement_path(
         self,
