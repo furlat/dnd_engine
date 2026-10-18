@@ -793,6 +793,19 @@ Hard rules:
     - **Transcripts** (`--representation world-16`): events and logs are identical everywhere. Published updates outside `world_updates` are byte-identical, except Fireball's renumbered nodes (listed above).
     - **Sweep** (r29's directories): 66 failures = r29's 64 plus 2 `cr0_evidence` tests that need git (a snapshot has none; they pass in the worktree).
     - **pyright:** 0 new.
+  - **Expected test changes (merge note).** Each change follows the rule.
+    - `test_projection_local_world`: a composite keeps naming an attachment whose look was sent; contents and a suppressed cell stay as last seen after leaving view.
+    - `test_storage_loot`: closing the chest or losing sight keeps the last contents seen (renamed `…keeps_last_contents…`).
+    - `test_tile_field_updates`:
+      - entering rows, not whole tiles;
+      - a tile written whole re-enters;
+      - a tile's surface and name never change for its uuid (raises);
+      - the "already known tile" errors stay.
+    - `test_light_source_projection`: the light's after-value reaches the seat before the light's completion, which sends it again.
+    - `test_foreign_sensory_capture`: projects per walk group.
+    - `test_content_local_admission`, `test_emitted_update_replica`, `test_world_after_values_reach_seats`: the new fields (object looks; the server holds no world copy; connectors as a dict).
+    - `test_seat_oracle`: the start record carries the seat's startup content.
+    - SDK fixtures: tile field changes hold scalars only.
   - **End reviews (antislop, antiOOP) — fixed in dab1966d3 / 657dff66c:**
     - one publication per record (antislop blocker: a removal sent twice made the client raise);
     - keyed tile rows and connector removals need cells seen before and after;
