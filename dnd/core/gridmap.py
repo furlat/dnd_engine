@@ -4666,10 +4666,11 @@ class GridMap:
         dx = np.arange(min_x - origin[0], max_x - origin[0] + 1)
         dy = np.arange(min_y - origin[1], max_y - origin[1] + 1)
         exists = self._window_values(self._cell_exists, window)
-        if max_distance is None or max_distance == math.inf:
+        radius_squared = max_distance * max_distance if max_distance is not None else math.inf
+        if radius_squared == math.inf:
             targets = exists.copy()
         else:
-            targets = exists & ((dx * dx)[:, None] + (dy * dy)[None, :] <= math.floor(max_distance * max_distance))
+            targets = exists & ((dx * dx)[:, None] + (dy * dy)[None, :] <= math.floor(radius_squared))
         transit = self._window_values(self._transit[channel], window)
         # A global crossing owner may block any edge; otherwise only structured edges can.
         structured = (np.full(transit.shape, EDGES_SETTLED, dtype=np.uint16) if self._global_crossing_owners
