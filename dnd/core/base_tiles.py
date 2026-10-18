@@ -372,9 +372,13 @@ class Tile(BaseBlock):
             elevation_steps=self.height, surface_kind=self.elevation_surface_kind,
             slope_axis=self.slope_axis, default_light=self.default_light,
             resolved_light=self.resolved_light_level,
-            condition_names=(*self.active_conditions, *(self._residue_names[key] for key in sorted(self._residues))),
+            condition_names=self.condition_names(),
             residues=self.residue_states(),
         )
+
+    def condition_names(self) -> Tuple[str, ...]:
+        """This tile's condition names: its active conditions, then its materials in residue order."""
+        return (*self.active_conditions, *(self._residue_names[key] for key in sorted(self._residues)))
 
     def residue_states(self) -> Tuple[TileResidueState, ...]:
         """This tile's residue after-values, one per material."""

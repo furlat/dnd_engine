@@ -56,6 +56,7 @@ from dnd.types.spatial_effects import (
     SpatialEffectTriggerKind,
 )
 from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, normalized_base
+from dnd.core.base_object import empty_list
 
 
 def _child_binding(parent_binding, behavior_id: str, runtime_owner_uuid: UUID):
@@ -1376,7 +1377,7 @@ class ConvertSlotToSP(BaseAction):
     target_type: TargetType = Field(default=TargetType.SELF, description="Font of Magic conversion targets the caster's own resources.")
     action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Action category used for discovery and reveal behavior.")
     slot_level: int = Field(default=1, ge=1, le=5, description="Spell slot level converted into sorcery points.")
-    costs: List[Cost] = Field(default_factory=list, description="Generated bonus-action and spell-slot costs for this conversion.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="Generated bonus-action and spell-slot costs for this conversion.")
 
     def describe_discovery(self) -> ActionDiscoveryDescription:
         return ActionDiscoveryDescription(fixed_facets=(
@@ -1442,7 +1443,7 @@ class ConvertSPToSlot(BaseAction):
     target_type: TargetType = Field(default=TargetType.SELF, description="Font of Magic conversion targets the caster's own resources.")
     action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Action category used for discovery and reveal behavior.")
     slot_level: int = Field(default=1, ge=1, le=5, description="Spell slot level created from sorcery points.")
-    costs: List[Cost] = Field(default_factory=list, description="Generated bonus-action and sorcery-point costs for this conversion.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="Generated bonus-action and sorcery-point costs for this conversion.")
 
     def describe_discovery(self) -> ActionDiscoveryDescription:
         return ActionDiscoveryDescription(fixed_facets=(
@@ -1512,7 +1513,7 @@ class SorceryPointsFeature(BaseCondition):
     name: str = Field(default="Sorcery Points Feature", description="Display name for the Sorcery Points class feature.")
     description: str = Field(default="Sorcery points for metamagic and Font of Magic", description="Rules summary for sorcery point resources and granted actions.")
     sorcery_points: int = Field(default=2, description="Maximum sorcery points granted by this feature.")
-    metamagic_choices: List[str] = Field(default_factory=list, description="Metamagic option keys registered as actions by this feature.")
+    metamagic_choices: List[str] = Field(default_factory=empty_list, description="Metamagic option keys registered as actions by this feature.")
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],

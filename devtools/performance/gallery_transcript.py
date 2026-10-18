@@ -112,6 +112,8 @@ def record(tree: Path, out: Path) -> None:
         return updates
 
     gallery.application.capture_application_operation = captured
+    # Requests (choices, AI advances) publish through the worker, which bound the function by name.
+    gallery.worker.capture_application_operation = captured
     run = gallery.Measurement.run
 
     def measured(self, operation):

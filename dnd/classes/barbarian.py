@@ -56,6 +56,7 @@ from dnd.types.discovery import ActorScan
 from dnd.spells.spell_utils import seen_recipients_error
 from uuid import UUID, uuid4
 from functools import partial
+from dnd.core.base_object import empty_list
 
 from dnd.classes.rage import (
     rage_damage_check,
@@ -258,7 +259,7 @@ class RecklessAttack(BaseAction):
     )
 
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Reckless Attack has no action or resource costs.",
     )
     active_reckless_condition_uuid: Optional[UUID] = Field(
@@ -1323,7 +1324,7 @@ class IntimidatingPresence(BaseAction):
     )
 
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Action cost rebuilt after model initialization.",
     )
 
@@ -1455,7 +1456,7 @@ class ExtendIntimidatingPresence(BaseAction):
     )
 
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Action cost rebuilt after model initialization.",
     )
 

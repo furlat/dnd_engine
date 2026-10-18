@@ -1,7 +1,7 @@
 from dnd.core.effect_types import EventResolutionRef, EffectOrigin
 from dnd.core.damage import DamageResolution
 from dnd.core.attack_types import NaturalWeaponSpec
-from typing import cast, Callable, AbstractSet, Dict, FrozenSet, Hashable, Mapping, Optional, Any, List, ClassVar, Sequence, Union, Tuple, Set
+from typing import cast, Callable, AbstractSet, Dict, FrozenSet, Hashable, Iterable, Mapping, Optional, Any, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from dataclasses import dataclass, field, replace
@@ -5780,17 +5780,17 @@ class Entity(BaseBlock):
             footprints[identity] = footprint
         return footprint
 
-    def _aoe_aim_points(self, template: BaseAction, admitted: Sequence[Tuple[int, int]],
+    def _aim_candidates(self) -> Set[Tuple[int, int]]:
+        """The aim points discovery lists: each perceived creature's position and the actor's own (plan §14.1)."""
+        return {contact.position for contact in self.senses.entities.values()} | {self.position}
+
+    def _aoe_aim_points(self, template: BaseAction, aims: Iterable[Tuple[int, int]],
                         scan: ActorScan) -> List[Tuple[int, int]]:
-        """One aim point per perceived creature, the actor included (plan §14.1), that the action admits.
+        """The aims, in sorted order, that the action admits.
 
         Each aim passes the one admission path (plan §14.3b). Free aims anywhere
         in the row's region are validated on demand.
         """
-        allowed = set(admitted)
-        aims = {contact.position for contact in self.senses.entities.values() if contact.position in allowed}
-        if self.position in allowed:
-            aims.add(self.position)
         base = template.current_selection()
         admitted_aims = []
         for aim in sorted(aims):
@@ -6926,16 +6926,12 @@ class Entity(BaseBlock):
                     continue
 
                 if type(template).get_valid_positions is BaseAction.get_valid_positions:
-                    valid_pos_list = list(
-                        self._get_subjective_visible_positions(
-                            template,
-                            visible_cells,
-                        )
-                    )
+                    # The default region, measured subjectively from the call's distance table.
+                    region = frozenset(self._get_subjective_visible_positions(template, visible_cells))
+                    aims = [aim for aim in self._aim_candidates() if aim in region]
                 else:
-                    valid_pos_list = template.get_valid_positions()
-
-                valid_pos_list = self._aoe_aim_points(template, valid_pos_list, scan)
+                    aims = template.valid_positions_among(self._aim_candidates())
+                valid_pos_list = self._aoe_aim_points(template, aims, scan)
                 if not include_aoe_preview and not template.aoe_require_targets:
                     valid_positions = [AvailableTarget(
                         index=index, position=position,
@@ -7261,7 +7257,8 @@ class Entity(BaseBlock):
                 if use_shape_template is None:
                     continue
 
-                valid_pos_list = self._aoe_aim_points(use_template, use_template.get_valid_positions(), scan)
+                valid_pos_list = self._aoe_aim_points(
+                    use_template, use_template.valid_positions_among(self._aim_candidates()), scan)
 
                 use_valid_positions: List[AvailableTarget] = []
                 use_idx = 0

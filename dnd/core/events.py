@@ -34,7 +34,7 @@ __all__ = [
     "DeathSaveEvent", "InstantDeathEvent", "DeathEvent",
 ]
 
-from dnd.types.event_facts import (JOINS_A_STEP, SIMULTANEOUS_ENTRIES, GroupEntryKind, HandlerGroupDispatch, LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
+from dnd.types.event_facts import (JOINS_A_STEP, SIMULTANEOUS_ENTRIES, GroupEntryKind, HandlerGroupDispatch, LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, KeyedTileChange, WorldConnectorState as WorldConnectorState)
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -118,7 +118,7 @@ import logging
 import time
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
-from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute, empty_list
 
 logger = logging.getLogger(__name__)
 
@@ -353,12 +353,12 @@ class Event(BaseModel):
         description="Whether this is the last event at this phase in its lineage.",
     )
     lineage_children_events: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description=("Child event UUIDs accumulated across this lineage's earlier phases, as stored; "
                      "later children are read through EventQueue.child_links."),
     )
     children_events: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description=("Child event UUIDs attached during this event version's phase, as stored; "
                      "later children are read through EventQueue.child_links."),
     )
@@ -367,7 +367,7 @@ class Event(BaseModel):
         description="Stable lineage UUID of the parent, resolved during completion.",
     )
     children_lineages: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Stable child lineage UUIDs resolved during completion.",
     )
     combat_log: Optional[CombatLogEntry] = Field(
@@ -3746,8 +3746,9 @@ class SpatialChangeEvent(Event):
     tile_state: Optional[WorldTileState] = Field(
         default=None, description="Complete Tile after-value at an actual commit.",
     )
-    tile_states: Tuple[WorldTileState, ...] = Field(
-        default=(), description="Complete after-values of every Tile in one committed mechanics change.",
+    keyed_tile_changes: Tuple[KeyedTileChange, ...] = Field(
+        default=(), description="Keyed changes of every Tile in one committed mechanics change: the keys its writer "
+        "changed, with their after-values.",
     )
     tile_present: Optional[bool] = Field(
         default=None, description="Whether the addressed Tile exists after this commit.",
@@ -3934,24 +3935,25 @@ class SpatialChangeEvent(Event):
         )
 
     @classmethod
-    def tiles_changed(cls, rows: Tuple[WorldTileState, ...], *,
+    def tiles_changed(cls, changes: Tuple[KeyedTileChange, ...], *,
                       source_entity_uuid: UUID,
                       parent_event: Optional[UUID] = None,
                       inert: bool = False) -> 'SpatialChangeEvent':
         """One committed change covering every changed Tile (plan §5.5).
 
-        The rows are complete after-values; observers and world folds read them
-        as one fact instead of one fact per cell. ``inert`` after-values (residue
-        amounts) change no traversal, like a single inert tile refresh.
+        Each change names the keys its writer changed, with their after-values;
+        observers and world folds read them as one fact instead of one fact per
+        cell. ``inert`` after-values (residue amounts) change no traversal, like a
+        single inert tile refresh.
         """
-        if not rows:
+        if not changes:
             raise ValueError("A tile mechanics change needs at least one Tile")
         return cls(
             source_entity_uuid=source_entity_uuid,
             event_type=EventType.SPATIAL_TILE_CHANGED,
             change_type=SpatialChangeType.TILES_CHANGED,
-            position=rows[0].position,
-            tile_states=rows,
+            position=changes[0].position,
+            keyed_tile_changes=changes,
             tile_present=True,
             phase=EventPhase.DECLARATION,
             use_register=False,
@@ -4315,7 +4317,7 @@ class SpatialChangeEvent(Event):
             positions.add(self.transition_from)
         if self.transition_to:
             positions.add(self.transition_to)
-        positions.update(row.position for row in self.tile_states)
+        positions.update(change.position for change in self.keyed_tile_changes)
         if self.senses_hint:
             if self.senses_hint.directional_positions:
                 positions.update(self.senses_hint.directional_positions)

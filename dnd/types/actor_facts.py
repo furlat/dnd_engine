@@ -1,6 +1,7 @@
 """Passive actor values shared by recorded reduction and presentation."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import TypedDict
 from uuid import UUID
 
 from dnd.types.appearance import AppearanceConfig
@@ -63,3 +64,62 @@ class ActorState:
     structural_base_size: Size | None = None
     summon_origin: SummonOrigin | None = None
     spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT
+
+
+class ActorFieldValues(TypedDict, total=False):
+    """The actor values one fact writes, as after-values: present fields replace, omitted fields are unchanged."""
+
+    normal_hp: int
+    temporary_hp: int
+    temporary_hp_grant: TemporaryHitPointsGrant | None
+    maximum_hp: int
+    armor_class: int
+    life_state: LifeState
+    remains_disposition: RemainsDisposition
+    resolved_size: Size
+    spatial_disposition: SpatialDisposition
+    faction: str | None
+    occupancy_layer: OccupancyLayer
+    active_weapon_set: WeaponSet
+    healing_blocked: bool
+    damage_affinities: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class HeldItem:
+    """An item entering or moving within its holder's holdings: its after-value, and its slot when equipped."""
+
+    item: ItemPresentationState
+    slot: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ItemResources:
+    """A used item's charges and stack after the use; a holder writes them only to the copy it holds."""
+
+    item_uuid: UUID
+    charges: int | None
+    stack_count: int
+    destroyed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ActorFactChange:
+    """One committed event's actor change (plan §4): what it writes to its owner, and how the item it moves
+    or changes leaves or changes in the actors holding it. Data only; `apply_actor_fact_change` folds it.
+
+    Item operations. The owner's: `held_item` upserts the item, takes it out of every equipment slot and
+    equips it on its slot; `used_item` writes charges and stack only, to the copy the owner holds;
+    `released_by_owner` leaves the owner's inventory and equipment. Other holders': `released_by_others`
+    leaves every holder but the owner; `replaced_item` replaces the copy of every actor holding it.
+    """
+
+    owner_uuid: UUID | None
+    values: ActorFieldValues = field(default_factory=lambda: ActorFieldValues())
+    conditions_set: tuple[ConditionFact, ...] = ()
+    conditions_removed: tuple[UUID, ...] = ()
+    held_item: HeldItem | None = None
+    used_item: ItemResources | None = None
+    released_by_owner: UUID | None = None
+    released_by_others: UUID | None = None
+    replaced_item: ItemPresentationState | None = None
