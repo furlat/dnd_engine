@@ -32,7 +32,7 @@ Status: **revision 2, decisions taken (§8); implementation started with E0 (the
   - memory retention;
   - remembered-cell pathfinding (deferred; the current-terrain leak stays);
   - reconnect beyond the decided rule (journal replay of the seat's spool);
-  - the HUD, until the H1/H2 study is decided. The HUD stays exactly as today, a per-seat snapshot diff; this plan doesn't touch it;
+  - (the HUD is now in scope: E5, decided H2-exact);
   - the Godot client. Each schema bump ships a Godot fold note.
 
 ## 3. The decided rules
@@ -116,7 +116,22 @@ Dependencies: E0 → E1 → E2 → E3a → (E3-world ∥ E3-bodies ∥ E3-sensor
   - SDK regeneration;
   - the Godot note.
   - **Gate:** O1–O3 on G1, G2 and G3; log appends byte-identical; no regression in ms or bytes on any row; ≤100 KB on every row except Q2's named exceptions; the expected test changes listed and justified.
-- **E5: HUD** after the H1/H2 decision. Untouched until then.
+- **E5: HUD, decided H2-exact** (study: [stateless/hud.md](../event_native_deltas_2026-10-18/stateless/hud.md); runs in parallel from now).
+  - **Why not H1:** the HUD's action, movement and ability values are computed when read and change with no write to the actor (Frightened's sight-dependent cap, paladin auras, spatial suppression, equip state). The writers are an open set, so H1 can't be exact.
+  - **The change:**
+    - One engine HUD publisher, called once per op at op end (session.py ~474, after the cost reset, before `end_cursor`) and once at startup.
+    - It evaluates each player actor's sheet, minus the fields that already have events (HP, levels, spellbook, feature uses, prepared spells) and static fields.
+    - It compares with that actor's last published sheet event, reached through a per-actor pointer the publisher owns (the `publish_owner_state` pattern, conditions.py ~2084-2110), and emits a keyed native sheet event with only the changed fields.
+    - Initiative gets explicit native join/leave events (encounter.py ~458, ~475, ~527), filtered by perception like every fact.
+  - **Deleted:** the per-seat HUD diff (projection.py ~2133-2171) and the `hud_snapshots` side channel.
+  - **Gates:**
+    - a differential test against base-commit recordings (every op's HUD fold equal);
+    - an op-end oracle;
+    - a one-caller architecture test;
+    - sweep with the expected test changes listed; pyright 0 new;
+    - bytes: Fireball HUD ≈5.1 → 0.3 KB, SG walk ≈10.6 → 2 KB (estimates, to measure).
+  - **Size:** ≈+350/−200 lines, ~12 files.
+  - **Against the rule, stated honestly:** the comparison base is the engine's own last sheet event, one per actor, not a per-seat client copy. For computed values it is the only exact alternative to whole sheets every op.
 - **E6: exit.** Re-time every case on G1, G2 and G3, quiet machine, 3 runs. Every row over 100 ms or 100 KB is listed with what dominates it, and the human decides the next owner.
 
 **Expected test changes (to list per lane):** about 70 test files reference fields this plan reshapes, so "0 new failures" means "0 unexpected". Each lane lists the tests whose expected outputs change, with the reason, before merging.
