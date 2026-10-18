@@ -1,132 +1,177 @@
-# Event-native, stateless publication: plan (draft for review, 2026-10-18)
+# Event-native, stateless publication: plan (revision 2, after the antislop and antiOOP reviews, 2026-10-18)
 
-Design source: [EVENT_NATIVE_DELTAS_2026-10-18.md](../EVENT_NATIVE_DELTAS_2026-10-18.md), revision 2 and "Human answers", with the studies in [event_native_deltas_2026-10-18/](../event_native_deltas_2026-10-18/). Base: branch `codex/event-native-deltas`, engine at integration `a6ee21389`, player wire schema 15.
+Design source: [EVENT_NATIVE_DELTAS_2026-10-18.md](../EVENT_NATIVE_DELTAS_2026-10-18.md), revision 2 and "Human answers", with the studies in [event_native_deltas_2026-10-18/](../event_native_deltas_2026-10-18/). Base: branch `codex/event-native-deltas`, engine at integration `a6ee21389`, player wire schema 15. The reviews are kept in [event_native_deltas_2026-10-18/plan_reviews/](../event_native_deltas_2026-10-18/plan_reviews/) (antislop: 17 findings; antiOOP: 10). §9 maps every finding to its resolution.
 
-Status: **draft. AGENTS.md requires the antislop and antiOOP reviews before approval, and the human approves before implementation.**
+Status: **draft revision 2. Q1–Q4 (§8) wait on the human, then approval, then implementation.**
 
-## 1. Goal and targets
+## 1. Goal, targets and what this plan can reach
 
-- **The human's targets:** every seat update ≤100 KB, every op ≤100 ms (≤50 acceptable). Total cost counts: no work moved to the client or to the next request.
+- **The human's targets:** every seat update ≤100 KB, every op ≤100 ms (≤50 acceptable). Total cost counts: no work moved to the client or the next request.
 - **The human's rule:** publication keeps no remembered state.
   - Perceived before and after an event: the event's keyed change, disclosed per field.
   - Entering perception: the current state, in full.
   - Leaving perception: nothing.
-  - Per-seat server state is what is perceived now and which static content ids were sent. There are no client-value copies and no diffs.
-- **Native behaviour is unchanged.** The engine's events, logs, AI and rules stay identical, except the native fields this plan adds (§4 E2) and the bug fixes (§4 E1), which have their own contract tests.
+  - Per-seat server state is knowledge only: what is perceived now, control, which static content ids were sent, disclosed lineages and public cursors. There are no copies of client values.
+  - Changes are computed once per event against the session's single objective fold or recorded by the writer, never against a per-seat copy.
+- **What this plan cannot reach alone (stated up front).** Fireball (≈201 KB) and Circle of Death (≈220 KB) fall to an estimated ≈140 KB, not under 100 KB: the combat log (41–57 KB), out of scope by the human, remains. These two rows are named exceptions owned by the combat-log redesign (Q2).
+- **Metrics:**
+  - ms is the gallery `total_ms` per op (wall clock, as today) on each seat layout;
+  - the post-reply collection is reported beside it;
+  - the client fold time per update is reported;
+  - bytes are the largest seat update per op, per layout.
 
 ## 2. Scope
 
 - **In scope:**
-  - the player wire and the projector: world, bodies and items, sensory, spatial effects, lineage and facts;
-  - the native change records the wire needs;
+  - the player wire and the projector: world, bodies and items, sensory and spatial effects, lineage and facts;
+  - the change records the wire needs;
   - the seat-layout gates;
-  - the latent bugs the studies found.
+  - two latent bugs fixable on today's head, plus tests for the rest that turn green with E3.
 - **Out of scope** (the human):
-  - the combat log;
+  - the combat log. Its inputs must stay byte-identical: the log's known names and connectors come from structures this plan deletes, so the plan keeps a log-input path and gates on byte-identical log appends;
   - memory retention;
   - remembered-cell pathfinding (deferred; the current-terrain leak stays);
-  - reconnect beyond the decided rule (journal replay of the seat's spool, "the same as having been there from the start");
-  - the HUD until the H1/H2 study is decided (§4 E5);
-  - the Godot client itself. It is the human's; each schema bump ships a Godot fold note.
+  - reconnect beyond the decided rule (journal replay of the seat's spool);
+  - the HUD, until the H1/H2 study is decided. The HUD stays exactly as today, a per-seat snapshot diff; this plan doesn't touch it;
+  - the Godot client. Each schema bump ships a Godot fold note.
 
 ## 3. The decided rules
 
-1. **Composition.** The wire carries the seat's composed view. Every perceived thing keeps its attribution: the bits of the seat members who perceive it. One fact per settlement, never member by member, because transient add-then-remove states must not reach the wire.
-2. **Keyed changes.** A record perceived before and after an event gets the event's change, keyed: residue (cell, material, contribution); condition uuid; item uuid; loadout slot; light source; effect.
-   - Scalars carry their new value.
-   - Cell sets go as packed added and removed masks.
-   - The change record names its fields, so a change to hidden fields alone sends nothing.
-3. **Entering perception** (the composed view's transition, never a member's) sends:
-   - for cells: a packed mask, packed columns of current values, current conditions and residues, and objects and connectors touching the cells;
+1. **Composition.** The wire carries the seat's composed view. One composed change per settlement, keyed by the settlement marker: never member by member, never "the first member node". Attribution of perceived things to seat members follows Q1.
+2. **Visible part only.** Effects publish their *visible* cells only. Hidden-cell retention (today sensory.py ~2384-2399 and the composition's footprint merge, audience.py ~76-117) leaves publication. The composition's last-seen cursors and absences (audience.py ~69-74) then have no publication use and are deleted from it. `seen_cells_added` leaves the wire: the client derives `seen |= visible`. Each memory fact has exactly one owner, the client.
+3. **Keyed changes.** A record perceived before and after gets the event's change: residue (cell, material, contribution); condition uuid; item uuid; loadout slot; light source; effect.
+   - Scalars carry their new value; cell sets go as packed added and removed masks.
+   - **One generic fact** `ActorChangeFact`: rows tagged by a `ChangeField` enum, disclosed through one table (field → who may see it). No new fact class per change kind, and no longer `isinstance` chains.
+   - Items split into look, profile and state; only the small state changes, field by field.
+4. **Entering perception** (the composed view's transition) sends, read statelessly from the session fold as of the occurrence:
+   - for cells: a packed mask, packed columns of current values, conditions, residues;
+   - **every** object and connector touching the cells, including the empty case, so the client knows the set is authoritative;
    - for bodies: all changeable fields;
-   - for items and effects: their current state.
+   - for items and effects: their current visible state.
    
-   The client resets what it holds for those cells and records, then applies the snapshot.
-4. **Static content once per content id per seat:** residue material name, description and max amount; an item's look and profile; a body's birth fields; a tile's static row; spatial-effect content (already).
-5. **Nothing restated in one update:**
-   - the envelope (generation, observer) once, with the audience in the initialization only;
-   - the spell declaration on the root application only, and `SpellFact.application` deleted (the resolution row carries it);
-   - `cause_occurrence` deleted (it always equals `parent_event`);
-   - in-group `parent_lineage` and `PlayerNode.lineage` dropped (ordered `children_lineages` and `parent_event` stay);
+   The client resets what it holds for those cells and records, then applies. "Touching the cells" is one leaf function, `placement_support_cells` (new, in `dnd/types/world_placement.py`), used by server and client. **Initialization uses the same entering functions**, so there is no second path.
+5. **Static content once per (kind, id) per seat:** one sent set, updated from the final emitted update, never mid-walk. The client contract says static stores are never pruned.
+6. **Nothing restated:**
+   - envelope once, audience in the initialization;
+   - spell declaration on the root only. Parity: a child is disclosed only together with its root (test it), so a child never needs a declaration its root didn't carry;
+   - `SpellFact.application`, `cause_occurrence`, in-group `parent_lineage` and `PlayerNode.lineage` deleted;
    - `observer_position` only when it changed;
-   - a REMOVED state sends `removed_positions` only;
-   - an admission doesn't repeat the sensory contact.
-6. **Both light levels:** the objective resolved light and the perceived light, for cells the seat perceives.
-7. **Numbering:** keep the per-seat occurrence numbering, so the wire doesn't leak the count of undisclosed events.
-8. **Reconnect:** journal replay of the seat's spool. The client's memory rules must be deterministic:
-   - `seen |= visible`;
-   - forget an object when its cell is seen without it;
-   - the wall-face merge;
-   - effect-footprint retirement when seen empty.
+   - REMOVED sends `removed_positions` only;
+   - an admission doesn't repeat the sensory contact;
+   - `affected_tiles` and the per-seat spatial revision fields deleted.
+7. **Both light levels** (objective and perceived) for perceived cells. **Per-seat occurrence numbering** kept. **Reconnect** by journal replay; the client's memory rules are deterministic and come with golden test vectors.
 
-## 4. Phases
+## 4. Architecture of the new pieces
 
-Dependencies: E0 → (E1 ∥ E2) → E3 → E6. E5 follows the HUD decision. Each phase is its own lane in its own worktree, merged into `codex/event-native-deltas` after its gates.
+All of these are data plus system functions: no behaviour on records, no managers, no lazy state.
 
-### E0: harness and baselines (no engine change)
-- `gallery_crowd.py` and `gallery_transcript.py` get a seat-layout option:
-  - **G1:** one seat per faction (today: amber 4, blue 26);
-  - **G2:** one seat per character, the capacity worst case;
-  - **G3:** blue batched into seats of 5.
-- A **room re-entry** case: see a room, leave, close the door, reopen it, step in. This is the new rule's worst case.
-- The **new oracles**, written before the change and run on the current head:
-  - **O1:** at each op end, per seat, the client fold restricted to what the seat perceives equals a snapshot built from the session fold by the same functions that build entering snapshots;
-  - **O2:** the spool fold equals the live fold;
-  - **O3:** the perceived part of the folded client state equals the base recording's, on a common representation.
-- **Baseline:** bytes and ms for every case on G1, G2 and G3 at the head, 3 runs on a quiet machine.
+- **The session fold is `CaptureCheckpoint`** (capture.py ~159), extended with the world facts and per-record state. `advance_capture` is its only writer, and the three holdings writers (capture.py ~838, ~386-394, projection.py ~1431) collapse into it. Snapshot builders are stateless functions over it.
+- **Change records:**
+  - frozen types in `dnd/types/actor_facts.py`;
+  - **one** `match` over event kinds produces the change;
+  - **one** `apply_actor_change` folds it for everyone: the session fold, the client reference fold and the AI knowledge fold;
+  - the records live in the capture context keyed by event uuid, never on `Event` and never lazily.
+  
+  The AI-fold gate is "AI knowledge equal", not "AI fold code unchanged".
+- **Native events carry the change, not the whole row (Q4).**
+  - Residue and terrain writers record their keyed change.
+  - Consumers of the whole `tile_states` rows (sensory_fold.py ~64-68, the `SensoryDelta` protocol, the AI) move to applying the change.
+  - Light and effect patches are computed in the projector from the composed before/after the composition already holds (audience.py ~736-758). No native schema change there.
+- **Seat knowledge** replaces `remembered: PlayerState`: a dataclass with only the allowed fields (perception composed and members, control, the static sent set, disclosed lineages, public cursors). The HUD, unchanged until E5, is one named field.
+  - Projection, capture and application must not import `dnd/player/reduction.py`, guarded by an architecture test.
+  - Composition leaves reduction.py: `apply_settlement(...) -> ComposedChange` is a frozen return, with its "before" in locals, and each settlement closes within its group.
+- **Event-major projection:** one walk per event across all seats, not per seat. This is its own gated phase (E3a), with no escape hatch.
 
-### E1: latent bugs (each with a failing-first contract test)
-1. The client and engine folds disagree on temporary HP and its grant in a condition's `resulting_stats`, and on INTERNAL conditions changing a body without a fact. The change record is built from the engine fold's own case.
-2. Non-controllers keep a ghost layer for a destroyed equipped item (projection.py ~808-811).
-3. Connectors are read from the init event only (projection.py ~1224).
-4. The startup fold lacks LIGHT_CHANGED/TILES_CHANGED, so initial light can be stale.
-5. Entered cells come from the member event instead of the composed view (projection.py ~1466; expose entered/left from `_fold_view_cells`, audience.py ~396-405, ~711).
-6. Re-acquisition is counted per observer instead of per seat (capture.py ~808, ~877).
-7. The server and client compose seats over different values (`owner_revision`, audience.py ~161). This is removed by §3.1, and E1 adds the test that would catch it.
+## 5. Phases
 
-### E2: native keyed change records (engine events gain fields; nothing else changes)
-- **Residues:** `deposit_residues` / `remove_residues` record (cell, material, amount, contribution) on their event (≈30–50 lines).
-- **Terrain writers** record `walking_cost` changes (≈10–20 lines).
-- **One `ActorChange` / `ItemChange` per event case,** built in `advance_capture` from the engine fold's own case and shared by every seat:
-  - which fields of a condition or its stats changed;
-  - an item's previous slot and holder;
-  - the fields changed inside whole-item snapshots.
-- **`SensoryUpdateEvent`** gets a settlement marker, and light sources and effects become *added* (whole) / *patched* (changed fields; cells added and removed) from the before/after the native code already holds (sensory.py ~2516-2534, ~2379-2403).
-- **Gate:** native transcripts identical apart from the added fields; the AI-knowledge fold and the capture unchanged; sweep 0 new; pyright 0 new.
+Dependencies: E0 → E1 → E2 → E3a → (E3-world ∥ E3-bodies ∥ E3-sensory) → E6. Each is a lane in its own worktree, merged into `codex/event-native-deltas` after its gates. A plan-adherence tracker runs throughout.
 
-### E3: stateless projector (schema 16)
-- **World:**
-  - delete `remembered.tiles/.objects/.connectors`, `apply_world_update(remembered)`, `_tile_changes` and the diff loop;
-  - delete `remembered_positions/order`, `observed_values`, `_observed_plain_or_object`, the remembered merges in `_observed_object`, and the removal, contents-clearing and connector-gate rules judged against memory;
-  - entering snapshots read the session fold as of the occurrence.
-- **Bodies and items:** delete the body diff, `item_patch` / `_item_patches`, `_holdings` / `_gear_observation`, the whole-holdings `EquipmentFact` (it becomes a holdings delta), the known-removal machinery, the permanent `known` set, and `acquired`.
-- **Sensory and effects:** delete `spatial_values`, the sighting filter, the per-seat spatial revisions, the content value checks and the equality scans. Composed seat facts with member attribution.
-- **Restatements:** §3.5.
-- **The session fold:** one per session, written only from event after-values. Per seat: perception (composed and members), control, the static-content-sent sets, disclosed lineages and public cursors. The per-seat `ProjectionState.world` / `.actors` is deleted once projection runs event-major across seats; if that is too large for this phase, it is logged as its own step.
-- **The client:** the Python reference fold (`dnd/player/reduction.py`) adds the four memory rules of §3.8. SDKs are regenerated. The Godot fold note is `agent_docs/GODOT_CLIENT_FOLD_SCHEMA_16_*.md`.
-- **Gate:**
-  - O1, O2 and O3 on every case and on G1, G2 and G3;
-  - the "client == remembered" replica test is replaced by O1;
-  - sweep 0 new; pyright 0 new; SDK tests;
-  - the bytes and ms table on G1, G2 and G3.
+- **E0: harness and baselines** (after Q3).
+  - **Seat layouts:** G1 one seat per faction (today), G2 one seat per character (the capacity worst case), G3 blue batched into seats of 5. The harness's `seat == 'blue'` checks (gallery_crowd.py ~866, ~913) become per-layout.
+  - **A room re-entry case:** see, leave, close the door, reopen it, step in. Its bytes are estimated until measured.
+  - **Oracles:**
+    - **O1 (perceived equality):** at each op end, per seat, the reference is built **from the live engine** (each perceived record read through the disclosure functions), not from the new snapshot code. It is compared with the client fold restricted to the records **the client holds in currently visible cells** (catches ghost objects).
+    - **O2 (replay):** a fresh process with a different `PYTHONHASHSEED` replays the seat's spool through transport resume. Its fold equals the live fold.
+    - **O3 (baseline):** the perceived client states folded at the head are stored as data (not re-derived by the old reducer), and re-recorded after E1.
+  - **Baselines:** G1, G2 and G3 bytes and ms, 3 runs, quiet machine.
+- **E1: bugs fixable on the head, each failing first.**
+  - Connectors read from init only (projection.py ~1224).
+  - Stale initial light (startup fold lacks LIGHT_CHANGED/TILES_CHANGED).
+  - Failing-first tests, without fixes, for the fold disagreement (temporary HP in `resulting_stats`, INTERNAL conditions) and the ghost layer of a destroyed equipped item. They turn green in E3-bodies.
+  - Re-acquisition per seat and entered cells from the composed view are fixed by E3's design and keep their tests there.
+  - The composition divergence (never reproduced) is covered by O1.
+- **E2: change records.**
+  - The residue and terrain writers record keyed changes, and their whole-row consumers move to applying changes (Q4).
+  - `ActorChange` / `ItemChange` per §4.
+  - **Gate:** published updates byte-identical (the wire doesn't change yet); AI knowledge equal; native events identical apart from the replaced fields, listed; sweep with the expected test changes listed up front; pyright 0 new.
+- **E3a: seat knowledge and event-major projection.**
+  - `remembered: PlayerState` is replaced by seat knowledge, with the reducer-import architecture test.
+  - `CaptureCheckpoint` gains world facts.
+  - Projection becomes event-major across seats.
+  - **Gate:** published updates byte-identical, O1–O3, log appends byte-identical.
+- **E3-world / E3-bodies / E3-sensory** (schema 16, one bump, lanes merged in order):
+  - each family's deletions (lists in revision 2 of the design doc);
+  - §3's rules;
+  - the client reference fold's memory rules with golden vectors;
+  - SDK regeneration;
+  - the Godot note.
+  - **Gate:** O1–O3 on G1, G2 and G3; log appends byte-identical; no regression in ms or bytes on any row; ≤100 KB on every row except Q2's named exceptions; the expected test changes listed and justified.
+- **E5: HUD** after the H1/H2 decision. Untouched until then.
+- **E6: exit.** Re-time every case on G1, G2 and G3, quiet machine, 3 runs. Every row over 100 ms or 100 KB is listed with what dominates it, and the human decides the next owner.
 
-### E5: HUD (after the human decides from the H1/H2 study)
-Placeholder. The HUD stays a per-seat snapshot diff until then, the one declared exception, and is listed as such in RULE_VIOLATIONS.
+**Expected test changes (to list per lane):** about 70 test files reference fields this plan reshapes, so "0 new failures" means "0 unexpected". Each lane lists the tests whose expected outputs change, with the reason, before merging.
 
-### E6: exit
-Re-time every case on G1, G2 and G3 on a quiet machine, 3 runs. Report every row over 100 ms or 100 KB with what dominates it.
+## 6. Risks
 
-## 5. Risks
+- **Composition** changes what a multi-member seat's client can show per character (Q1).
+- **Re-entry bytes:** the room re-entry case, estimated at ≈12–23 KB (mostly wall placements); measured in E0.
+- **Objects destroyed or moved while unseen** are corrected only on re-entry. `placement_support_cells` is the single definition, and O1 tests it.
+- **Ordering:** updates stay one per occurrence. A fact arriving before its sensory child must not be lost (summon creation witnesses).
+- **Spool size:** about 80–250 MB per seat estimated for a long game, against the 1 GiB per-seat default (config.py ~33), which caps game length. Logged; memory work is next refactor.
+- **Old recordings** compare through O3's stored perceived states.
 
-- **The composed view changes what a multi-member seat's client can show per character.** Attribution bits keep "who sees what"; if the UI needs a character's own full view, that is a later per-member stream.
-- **Re-entry bytes:** the room re-entry case is the new worst case, mostly wall placements. Packed tile columns and compact placements are the mitigation; measure in E0 and E3.
-- **Objects destroyed or moved while unseen** are corrected only when their cell is re-entered. The client and server must define "touches the entered cells" identically, tested by O1.
-- **Ordering:** updates stay one per occurrence (once per group is not exact for removals). A fact arriving before its sensory child must not be lost (summon creation witnesses).
-- **Admission** moves from capture into the projector walk.
-- **Schema and SDK digest bump;** old recordings need the common-representation compare (O3).
-- **Event volume:** E2 adds fields, not versions. Check retained-event growth (memory is out of scope, but don't regress it knowingly).
+## 7. Reviews and tracking
 
-## 6. Reviews and tracking
+The revision-2 plan gets one confirming pass from each reviewer, on whether the findings are resolved, before approval. Each lane runs its own antislop and antiOOP reviews at design time and at the end, and a plan-adherence tracker runs during implementation.
 
-- **Before approval:** one antislop and one antiOOP reviewer over this plan; accepted findings are folded in and rejected ones listed with reasons.
-- **During implementation:** a plan-adherence tracker sub-agent per AGENTS.md; each lane runs its own reviewers on its design and at its end.
+## 8. Questions for the human
+
+- **Q1. What member attribution means on the wire.**
+  - (a) Per contact and per effect only: which members perceive each creature, object and effect. Cheap (a member bitset per row); cells stay composed.
+  - (b) Per cell as well: equivalent in bytes to today's per-member masks (16–164 KB on the census cases), which cancels most of the composition saving.
+  - Recommendation: (a). The worst-case gate (G2) is unaffected either way.
+- **Q2.** Accept Fireball and Circle of Death as named exceptions to ≤100 KB in this plan's gate, owned by the combat-log redesign?
+- **Q3.** May E0 run its baselines? About 300 gallery runs over three layouts.
+- **Q4. Where keyed world changes come from.**
+  - (a) The writer records the change on the event, and every consumer of the whole rows (sensory fold, AI) moves to applying changes. One representation, a larger E2.
+  - (b) Capture derives the change by comparing the event's after-rows with the session's one objective fold: a comparison, but against the objective fold, not a per-seat copy.
+  - Recommendation: (a), the human's "the delta is the game-state change that produced the event".
+
+## 9. Review findings → resolution
+
+| Finding | Resolution |
+| --- | --- |
+| antislop 1 (BLOCKER), antiOOP 6: remembered footprints, cursors, two owners | §3.2 |
+| antislop 2: attribution undesigned | Q1 |
+| antislop 3: O1 self-referential | §5 E0 O1 |
+| antislop 4: O2 can't fail | §5 E0 O2 |
+| antislop 5: O3 undefined | §5 E0 O3 |
+| antislop 6: E1/E2 overlap | §5 E1 |
+| antislop 7, antiOOP 1 (BLOCKER): escape hatch, fold owner | §4, E3a |
+| antislop 8, antiOOP 4: E2 second path | §4, Q4 |
+| antislop 9: combat log inputs | §2, gates |
+| antislop 10: targets not gates | §1, §5 gates, Q2 |
+| antislop 11: "0 new" impossible | §5 "Expected test changes" |
+| antislop 12: mega-lane | E3 split |
+| antislop 13: spell parity | §3.6 |
+| antislop 14: deletion list, seen mask | §3.2, §3.6 |
+| antislop 15: HUD wording | §2 |
+| antislop 16: probe count, `seat == 'blue'` | Q3, E0 |
+| antislop 17: estimate as fact | §6 |
+| antiOOP 2: disguised replica | §4 seat knowledge, import test |
+| antiOOP 3: change record home | §4 |
+| antiOOP 5: isinstance chains, item compare | §3.3 |
+| antiOOP 7: composition scratch state | §4 |
+| antiOOP 8: static channels | §3.5 |
+| antiOOP 9: "touches" helper | §3.4 |
+| antiOOP 10: second init path, E1.6 | §3.4, §5 E1 |
