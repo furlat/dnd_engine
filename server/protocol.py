@@ -43,7 +43,7 @@ class PlayerCursor(Identity):
 
 class ProtocolIdentity(Wire):
     protocol_version: Literal[1] = 1
-    player_schema_version: Literal[14] = 14
+    player_schema_version: Literal[15] = 15
     schema_digest: Annotated[str, Field(pattern='^[0-9a-f]{64}$')]
 
 
