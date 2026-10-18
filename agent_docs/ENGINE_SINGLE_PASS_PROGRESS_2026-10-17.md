@@ -590,3 +590,10 @@ Hard rules:
   - Wall of Stone 144 → 136 ms (native 95 → 87). The other rows are within load noise.
   - The scalar-solver oracle moved to scratchpad `wf/fov_oracle_batch.py`; the old `pv1a4/fov_oracle.py` wraps a deleted method.
   - Next, decided by the integrator: sensory re-converts each sight answer (~1,800 tuples) to arrays and repeats the route lookup the solve made (~9 ms per Wall of Stone op). The solve returns its rows instead (own lane).
+- 2026-10-18: **Inert-fact skip merged into codex/event-native-deltas (2b2dcc45e; 1ca67753e, f39d062e2).** An inert TILES_CHANGED fact (residue amounts, harmless material; hint == empty `SensesUpdateHint`) settles no observer alone. In a group, an observer is dropped only if all its recorded facts are inert, so `_reason_for(events[-1])` is unchanged.
+  - Gates:
+    - the agent's, on b58417f4a;
+    - re-run by the integrator on the merge against an export of 585b86e2e, after the human's go-ahead (the subagent's own merge was blocked by the permission check): per-settlement recorder 0 differences on 9 cases (432 settlements, padded recorder for the skipped passive reads); transcripts byte-identical on 9; sweep = r21.
+  - Magic Missile settlement 30 → 3 observers, native 22 → 17 ms. Other rows are within noise.
+  - Dead code noted: `GridMap.publish_tile_state_changed` (the cleanup lane deletes it).
+- 2026-10-18: **Test memory re-measured:** the former 15–20 GB spell tests peak at 0.23 GB, and a 25-file sweep chunk at 0.29 GB. Parallel test lanes are fine; the caps stay as a safety net.
