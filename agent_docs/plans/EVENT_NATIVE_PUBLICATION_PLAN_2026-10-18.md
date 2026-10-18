@@ -2,7 +2,7 @@
 
 Design source: [EVENT_NATIVE_DELTAS_2026-10-18.md](../EVENT_NATIVE_DELTAS_2026-10-18.md), revision 2 and "Human answers", with the studies in [event_native_deltas_2026-10-18/](../event_native_deltas_2026-10-18/). Base: branch `codex/event-native-deltas`, engine at integration `a6ee21389`, player wire schema 15. The reviews are kept in [event_native_deltas_2026-10-18/plan_reviews/](../event_native_deltas_2026-10-18/plan_reviews/) (antislop: 17 findings; antiOOP: 10). §9 maps every finding to its resolution.
 
-Status: **draft revision 2. Q1–Q4 (§8) wait on the human, then approval, then implementation.**
+Status: **revision 2, decisions taken (§8); implementation started with E0 (the human: "we are in a worktree so we can fail fast and find a better solution if needed").**
 
 ## 1. Goal, targets and what this plan can reach
 
@@ -134,18 +134,21 @@ Dependencies: E0 → E1 → E2 → E3a → (E3-world ∥ E3-bodies ∥ E3-sensor
 
 The revision-2 plan gets one confirming pass from each reviewer, on whether the findings are resolved, before approval. Each lane runs its own antislop and antiOOP reviews at design time and at the end, and a plan-adherence tracker runs during implementation.
 
-## 8. Questions for the human
+## 8. Decisions (2026-10-18)
 
-- **Q1. What member attribution means on the wire.**
-  - (a) Per contact and per effect only: which members perceive each creature, object and effect. Cheap (a member bitset per row); cells stay composed.
-  - (b) Per cell as well: equivalent in bytes to today's per-member masks (16–164 KB on the census cases), which cancels most of the composition saving.
-  - Recommendation: (a). The worst-case gate (G2) is unaffected either way.
-- **Q2.** Accept Fireball and Circle of Death as named exceptions to ≤100 KB in this plan's gate, owned by the combat-log redesign?
-- **Q3.** May E0 run its baselines? About 300 gallery runs over three layouts.
-- **Q4. Where keyed world changes come from.**
-  - (a) The writer records the change on the event, and every consumer of the whole rows (sensory fold, AI) moves to applying changes. One representation, a larger E2.
-  - (b) Capture derives the change by comparing the event's after-rows with the session's one objective fold: a comparison, but against the objective fold, not a per-seat copy.
-  - Recommendation: (a), the human's "the delta is the game-state change that produced the event".
+- **Q1: member attribution per row, option (a).** Each contact, object and effect row carries the bitset of seat members who perceive it; cells stay composed. Measured on the dumped G1 updates:
+  - per-character cell lists cost 2.9 / 18.8 / 34.0 / 14.2 KB (Fireball / Sleet / SG walk / Darkness-Daylight);
+  - the row bitsets cost ~0 / 2.8 / 0.6 / 3.1 KB;
+  - so (a) saves 3–33 KB per case, up to 8.4 KB in one update.
+  - What is lost: the client can't tell which *cells* each character sees, only which creatures, objects and effects. The human: "a) seems good".
+- **Q2: the combat log is counted separately.** Every gate reports log bytes and the rest apart. The ≤100 KB gate applies to the non-log bytes, and the log is handled later (human).
+- **Q3: measurements run without asking** (human: "why do you even have to ask??").
+- **Q4: the integrator decides where keyed world changes are produced, after a study.** Candidates:
+  - the writer, recording on the event;
+  - capture, against the one objective fold;
+  - the sensory settlement, which already computes per-cell changes for perceived cells and might publish world changes directly and save the separate `_world_update` walk.
+  
+  The study measures CPU as well as bytes. The decision and its numbers are recorded here before E2 starts.
 
 ## 9. Review findings → resolution
 
