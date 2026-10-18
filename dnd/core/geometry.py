@@ -159,31 +159,30 @@ def supercover_cells_relative(dx: int, dy: int) -> frozenset[Tuple[int, int]]:
 ROUTE_STEP_SHIFT = 2
 STEP_NONE, STEP_ALONG_X, STEP_ALONG_Y, STEP_DIAGONAL = 0, 1, 2, 3
 
-# Square radius in cells of the vectorized route table (161 x 161 endpoints, about 17 MB):
-# the engine's perception reach (`update_all_entities_senses(max_distance=80)`).
+# Square radius in cells of the cached route table (161 x 161 endpoints, about 17 MB): the
+# engine's perception reach (`update_all_entities_senses(max_distance=80)`). Routes beyond it
+# come from the same stepping rule, computed for the endpoints asked about.
 ROUTE_TABLE_RADIUS = 80
 
 
-@lru_cache(maxsize=1)
-def supercover_route_table() -> Tuple[np.ndarray, np.ndarray]:
-    """Every `supercover_line_relative` from the origin within the table square, as its steps.
+def supercover_route_steps(dx: np.ndarray, dy: np.ndarray, radius: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Every `supercover_line_relative` from the origin to the endpoints (dx, dy), as its steps.
 
-    Row ``(dx + r) * (2r + 1) + (dy + r)`` holds the line to (dx, dy) in order, one entry per
-    cell: ``cell << ROUTE_STEP_SHIFT | kind``, the cell flattened the same way and the kind of the
-    step into it (STEP_NONE for the origin, the first cell). Rows are padded with the cell
-    ``(2r + 1) ** 2`` (one past the grid) and STEP_NONE. The second array holds each line's length. The same stepping rule as the scalar line, applied to
-    every endpoint at once.
+    Row k holds the line to (dx[k], dy[k]) in order, one entry per cell: ``cell << ROUTE_STEP_SHIFT
+    | kind``, the cell flattened as ``(x + radius) * (2 * radius + 1) + (y + radius)`` and the kind
+    of the step into it (STEP_NONE for the origin, the first cell). Rows are padded with the cell
+    ``(2 * radius + 1) ** 2`` (one past the frame) and STEP_NONE. The second array holds each
+    line's length. Every endpoint lies within the radius. The same stepping rule as the scalar
+    line, applied to every endpoint at once.
     """
-    radius = ROUTE_TABLE_RADIUS
     side = 2 * radius + 1
-    dx, dy = (axis.ravel() for axis in np.meshgrid(
-        np.arange(-radius, radius + 1), np.arange(-radius, radius + 1), indexing="ij"))
     nx, ny, sx, sy = np.abs(dx), np.abs(dy), np.sign(dx), np.sign(dy)
     x, y, ix, iy = (np.zeros_like(dx) for _ in range(4))
-    steps = np.full((dx.size, 2 * radius + 1), (side * side) << ROUTE_STEP_SHIFT | STEP_NONE, dtype=np.int32)
+    longest = int((nx + ny).max()) + 1 if dx.size else 1
+    steps = np.full((dx.size, longest), (side * side) << ROUTE_STEP_SHIFT | STEP_NONE, dtype=np.int32)
     steps[:, 0] = (radius * side + radius) << ROUTE_STEP_SHIFT | STEP_NONE
     lengths = np.ones(dx.size, dtype=np.int32)
-    for step in range(1, 2 * radius + 1):
+    for step in range(1, longest):
         active = (ix < nx) | (iy < ny)
         x_mid = (1 + 2 * ix) * ny
         y_mid = (1 + 2 * iy) * nx
@@ -199,6 +198,27 @@ def supercover_route_table() -> Tuple[np.ndarray, np.ndarray]:
         steps[active, step] = ((((x + radius) * side + (y + radius)) << ROUTE_STEP_SHIFT) | kind)[active]
         lengths += active
     return steps, lengths
+
+
+@lru_cache(maxsize=1)
+def supercover_route_table() -> Tuple[np.ndarray, np.ndarray]:
+    """The routes to every endpoint within ROUTE_TABLE_RADIUS (`supercover_route_steps`), kept:
+    row ``(dx + r) * (2r + 1) + (dy + r)`` holds the route to (dx, dy)."""
+    radius = ROUTE_TABLE_RADIUS
+    dx, dy = (axis.ravel() for axis in np.meshgrid(
+        np.arange(-radius, radius + 1), np.arange(-radius, radius + 1), indexing="ij"))
+    return supercover_route_steps(dx, dy, radius)
+
+
+def supercover_routes(dx: np.ndarray, dy: np.ndarray, radius: int) -> Tuple[np.ndarray, np.ndarray]:
+    """The routes to the endpoints (dx, dy) in the frame of ``radius``, trimmed to the longest:
+    read from the kept table when the radius is the table's, computed by the same rule otherwise."""
+    if radius != ROUTE_TABLE_RADIUS:
+        return supercover_route_steps(dx, dy, radius)
+    steps, lengths = supercover_route_table()
+    rows = (dx + radius) * (2 * radius + 1) + (dy + radius)
+    kept = lengths[rows]
+    return steps[rows, :int(kept.max()) if rows.size else 1], kept
 
 
 @lru_cache(maxsize=8192)
