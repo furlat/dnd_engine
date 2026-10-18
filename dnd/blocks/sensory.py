@@ -1060,6 +1060,9 @@ class SpatialSensesSystem:
         # perception changes: every perception write (register, unregister, recompute,
         # reset, a replaced map) clears them with the grant table's write.
         self._identity_grants: Dict[Tuple[UUID, Tuple[int, int]], FrozenSet[str]] = {}
+        # Advances with every clear of the identity grants (and starts again at 0 when the system resets):
+        # a grant read at one epoch holds while it does.
+        self.identity_epoch = 0
         # Contact targets' ids (each target once, in first-seen order): their keys compare by value
         # across settlements. Append-only; reset clears it with every field that holds a key.
         self._target_ids: Dict[UUID, int] = {}
@@ -1100,7 +1103,11 @@ class SpatialSensesSystem:
         self._absorbing_light = False
         self._settled_with_light = False
         self._grants = None
+        # A reset runtime is cold (the content loader requires every field empty): the epoch starts
+        # again at 0. The Encounter's carry never outlives that in use: the queue's reset removes its
+        # computers, and installing them clears it.
         self._identity_grants.clear()
+        self.identity_epoch = 0
         self._target_ids.clear()
         self._light_table = None
         self._table = None
@@ -1184,7 +1191,7 @@ class SpatialSensesSystem:
         self.senses_by_observer[observer_uuid] = senses
         if self.fields.pop(observer_uuid, None) is not None:
             self._grants = _replace_grants(self._grants, {observer_uuid: None})
-        self._identity_grants.clear()
+        self._drop_identity_grants()
 
     def record_navigation_read(self, observer_uuid: UUID, box: CellBox, traversal_stamp: int) -> None:
         """Keep the cells a written navigation materialization read, with their traversal stamp when read."""
@@ -1201,7 +1208,7 @@ class SpatialSensesSystem:
         self.published_observers.discard(observer_uuid)
         if self.fields.pop(observer_uuid, None) is not None:
             self._grants = _replace_grants(self._grants, {observer_uuid: None})
-            self._identity_grants.clear()
+            self._drop_identity_grants()
 
     # ------------------------------------------------------------------ selection
 
@@ -1231,6 +1238,11 @@ class SpatialSensesSystem:
             grants = self._identity_grants[(subject_uuid, position)] = frozenset(
                 str(holder) for holder in holders)
         return grants
+
+    def _drop_identity_grants(self) -> None:
+        """Every perception write's end of the identity grants: they are cleared and the epoch advances."""
+        self._identity_grants.clear()
+        self.identity_epoch += 1
 
     def contact_holders(self, subject_uuid: UUID, observers: AbstractSet[UUID]) -> Set[UUID]:
         """Those observers whose current entity contacts include this subject."""
@@ -1480,7 +1492,7 @@ class SpatialSensesSystem:
             # A replaced map: every field and table read the old one.
             self.fields.clear()
             self._grants = None
-            self._identity_grants.clear()
+            self._drop_identity_grants()
             self._light_table = None
             self._table = None
             self._map = grid
@@ -1609,7 +1621,7 @@ class SpatialSensesSystem:
             touched[observer_uuid] = effect_before
         # The grants are written once the settlement is published.
         self._grants = _replace_grants(self._grants, grants)
-        self._identity_grants.clear()
+        self._drop_identity_grants()
         return touched
 
     def _sight_scope(self, observer_uuid: UUID, world: SettlementWorld) -> SightScope:
