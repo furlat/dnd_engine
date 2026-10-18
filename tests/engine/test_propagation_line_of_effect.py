@@ -115,3 +115,30 @@ def test_an_unrelated_condition_elsewhere_changes_no_reach(seed):
     activate(unrelated_zone((SIZE - 1, SIZE - 1) if get_map().has_tile(SIZE - 1, SIZE - 1) else (0, 0)))
     after = {(origin, radius): reach(origin, radius) for origin in origins for radius in RADII}
     assert after == before
+
+
+def long_corridor(seed: int) -> random.Random:
+    """A 200 x 5 corridor, far wider than the 80-cell kept route table, with boundaries beyond it."""
+    rng = random.Random(seed)
+    reset_engine_runtime()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 200, 5)
+    cells = sorted(grid.get_all_tiles())
+    for x, y in rng.sample(cells, 12):
+        grid.set_tile(x, y, blocks_propagation=True, blocks_optics=True)
+    for position in rng.sample(sorted(grid.get_all_tiles()), 6):
+        DirectionalWall(source_entity_uuid=uuid4(), item_id="test.line_of_effect.pane",
+            blocked_channels=(WorldEdgeChannel.PROPAGATION,)).place_on_grid(
+            position, boundary_direction=rng.choice(list(CardinalDirection)))
+    return rng
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_propagation_reach_beyond_eighty_cells_is_the_native_ray(seed):
+    rng = long_corridor(seed)
+    origins = [(0, 2), (199, 2)] + rng.sample(sorted(get_map().get_all_tiles()), 2)
+    for origin in origins:
+        for radius in (None, 150):
+            reached = reach(origin, radius)
+            assert reached == native_rays(origin, radius), (origin, radius)
+    assert any(abs(x - origin[0]) > 80 for origin in origins for x, _ in reach(origin, None))
