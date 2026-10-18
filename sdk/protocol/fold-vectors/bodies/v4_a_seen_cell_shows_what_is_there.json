@@ -1,0 +1,564 @@
+{
+ "name": "v4_a_seen_cell_shows_what_is_there",
+ "rule": "A living body last seen on a visible cell that is no longer a contact loses its position; a controlled body, a dead body, a body still held as a contact and one on a cell not seen keep theirs.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "controlled": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "body": {
+    "occurrence": 0,
+    "actor_uuid": "00000000-0000-4000-8000-00000000000a",
+    "birth": {
+     "name": "Hero",
+     "character_body_id": null,
+     "creature_content_ref": null,
+     "appearance": {
+      "portrait_key": null,
+      "presentation_kind": "layered",
+      "visual_scale": 1.0,
+      "visual_scale_x": 1.0,
+      "placeholder_tint": 3604322,
+      "body_category": "NakedBody",
+      "skin_tint": 14527112,
+      "head_category": null,
+      "hair_tint": 0,
+      "has_beard": false,
+      "beard_tint": 0
+     },
+     "structural_base_size": "Medium"
+    },
+    "body": {
+     "visual_loadout": {
+      "active_weapon_set": "melee",
+      "layers": []
+     },
+     "normal_hp": 10,
+     "maximum_hp": 10,
+     "temporary_hp": 0,
+     "life_state": "alive",
+     "armor_class": 12,
+     "controlled_items": [],
+     "remains_disposition": "intact",
+     "spatial_disposition": "present"
+    }
+   },
+   "expected": {
+    "actors": {
+     "00000000-0000-4000-8000-00000000000a": {
+      "name": "Hero",
+      "hp": [
+       10,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": null,
+      "conditions": [],
+      "weapon_set": "melee",
+      "layers": [],
+      "inventory": [],
+      "size": null,
+      "disposition": "present"
+     }
+    },
+    "items": {}
+   }
+  },
+  {
+   "body": {
+    "occurrence": 0,
+    "actor_uuid": "00000000-0000-4000-8000-00000000000b",
+    "birth": {
+     "name": "Goblin",
+     "character_body_id": null,
+     "creature_content_ref": null,
+     "appearance": {
+      "portrait_key": null,
+      "presentation_kind": "layered",
+      "visual_scale": 1.0,
+      "visual_scale_x": 1.0,
+      "placeholder_tint": 3604322,
+      "body_category": "NakedBody",
+      "skin_tint": 14527112,
+      "head_category": null,
+      "hair_tint": 0,
+      "has_beard": false,
+      "beard_tint": 0
+     },
+     "structural_base_size": "Medium"
+    },
+    "body": {
+     "visual_loadout": {
+      "active_weapon_set": "melee",
+      "layers": []
+     },
+     "normal_hp": 4,
+     "maximum_hp": 10,
+     "temporary_hp": 0,
+     "life_state": "alive",
+     "armor_class": 12,
+     "remains_disposition": "intact",
+     "spatial_disposition": "present"
+    }
+   },
+   "expected": {
+    "actors": {},
+    "items": {}
+   }
+  },
+  {
+   "body": {
+    "occurrence": 0,
+    "actor_uuid": "00000000-0000-4000-8000-00000000000c",
+    "birth": {
+     "name": "Corpse",
+     "character_body_id": null,
+     "creature_content_ref": null,
+     "appearance": {
+      "portrait_key": null,
+      "presentation_kind": "layered",
+      "visual_scale": 1.0,
+      "visual_scale_x": 1.0,
+      "placeholder_tint": 3604322,
+      "body_category": "NakedBody",
+      "skin_tint": 14527112,
+      "head_category": null,
+      "hair_tint": 0,
+      "has_beard": false,
+      "beard_tint": 0
+     },
+     "structural_base_size": "Medium"
+    },
+    "body": {
+     "visual_loadout": {
+      "active_weapon_set": "melee",
+      "layers": []
+     },
+     "normal_hp": 4,
+     "maximum_hp": 10,
+     "temporary_hp": 0,
+     "life_state": "dead",
+     "armor_class": 12,
+     "remains_disposition": "intact",
+     "spatial_disposition": "present"
+    }
+   },
+   "expected": {
+    "actors": {},
+    "items": {}
+   }
+  },
+  {
+   "body": {
+    "occurrence": 0,
+    "actor_uuid": "00000000-0000-4000-8000-00000000000d",
+    "birth": {
+     "name": "Far goblin",
+     "character_body_id": null,
+     "creature_content_ref": null,
+     "appearance": {
+      "portrait_key": null,
+      "presentation_kind": "layered",
+      "visual_scale": 1.0,
+      "visual_scale_x": 1.0,
+      "placeholder_tint": 3604322,
+      "body_category": "NakedBody",
+      "skin_tint": 14527112,
+      "head_category": null,
+      "hair_tint": 0,
+      "has_beard": false,
+      "beard_tint": 0
+     },
+     "structural_base_size": "Medium"
+    },
+    "body": {
+     "visual_loadout": {
+      "active_weapon_set": "melee",
+      "layers": []
+     },
+     "normal_hp": 4,
+     "maximum_hp": 10,
+     "temporary_hp": 0,
+     "life_state": "alive",
+     "armor_class": 12,
+     "remains_disposition": "intact",
+     "spatial_disposition": "present"
+    }
+   },
+   "expected": {
+    "actors": {},
+    "items": {}
+   }
+  },
+  {
+   "body": {
+    "occurrence": 0,
+    "actor_uuid": "00000000-0000-4000-8000-00000000000e",
+    "birth": {
+     "name": "Hidden goblin",
+     "character_body_id": null,
+     "creature_content_ref": null,
+     "appearance": {
+      "portrait_key": null,
+      "presentation_kind": "layered",
+      "visual_scale": 1.0,
+      "visual_scale_x": 1.0,
+      "placeholder_tint": 3604322,
+      "body_category": "NakedBody",
+      "skin_tint": 14527112,
+      "head_category": null,
+      "hair_tint": 0,
+      "has_beard": false,
+      "beard_tint": 0
+     },
+     "structural_base_size": "Medium"
+    },
+    "body": {
+     "visual_loadout": {
+      "active_weapon_set": "melee",
+      "layers": []
+     },
+     "normal_hp": 4,
+     "maximum_hp": 10,
+     "temporary_hp": 0,
+     "life_state": "alive",
+     "armor_class": 12,
+     "remains_disposition": "intact",
+     "spatial_disposition": "present"
+    }
+   },
+   "expected": {
+    "actors": {},
+    "items": {}
+   }
+  },
+  {
+   "seen": {
+    "visible": [
+     [
+      4,
+      5
+     ],
+     [
+      4,
+      6
+     ],
+     [
+      4,
+      7
+     ],
+     [
+      4,
+      8
+     ],
+     [
+      9,
+      9
+     ]
+    ],
+    "contacts": {
+     "00000000-0000-4000-8000-00000000000a": {
+      "position": [
+       4,
+       7
+      ],
+      "visual": true
+     },
+     "00000000-0000-4000-8000-00000000000b": {
+      "position": [
+       4,
+       5
+      ],
+      "visual": true
+     },
+     "00000000-0000-4000-8000-00000000000c": {
+      "position": [
+       4,
+       6
+      ],
+      "visual": true
+     },
+     "00000000-0000-4000-8000-00000000000d": {
+      "position": [
+       9,
+       9
+      ],
+      "visual": true
+     },
+     "00000000-0000-4000-8000-00000000000e": {
+      "position": [
+       4,
+       8
+      ],
+      "visual": true
+     }
+    }
+   },
+   "expected": {
+    "actors": {
+     "00000000-0000-4000-8000-00000000000a": {
+      "name": "Hero",
+      "hp": [
+       10,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": [
+       4,
+       7
+      ],
+      "conditions": [],
+      "weapon_set": "melee",
+      "layers": [],
+      "inventory": [],
+      "size": null,
+      "disposition": "present"
+     },
+     "00000000-0000-4000-8000-00000000000b": {
+      "name": "Goblin",
+      "hp": [
+       4,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": [
+       4,
+       5
+      ],
+      "conditions": [],
+      "weapon_set": "melee",
+      "layers": [],
+      "inventory": null,
+      "size": null,
+      "disposition": "present"
+     },
+     "00000000-0000-4000-8000-00000000000c": {
+      "name": "Corpse",
+      "hp": [
+       4,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "dead",
+      "present": true,
+      "position": [
+       4,
+       6
+      ],
+      "conditions": [],
+      "weapon_set": "melee",
+      "layers": [],
+      "inventory": null,
+      "size": null,
+      "disposition": "present"
+     },
+     "00000000-0000-4000-8000-00000000000d": {
+      "name": "Far goblin",
+      "hp": [
+       4,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": [
+       9,
+       9
+      ],
+      "conditions": [],
+      "weapon_set": "melee",
+      "layers": [],
+      "inventory": null,
+      "size": null,
+      "disposition": "present"
+     },
+     "00000000-0000-4000-8000-00000000000e": {
+      "name": "Hidden goblin",
+      "hp": [
+       4,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": [
+       4,
+       8
+      ],
+      "conditions": [],
+      "weapon_set": "melee",
+      "layers": [],
+      "inventory": null,
+      "size": null,
+      "disposition": "present"
+     }
+    },
+    "items": {}
+   }
+  },
+  {
+   "seen": {
+    "visible": [
+     [
+      4,
+      5
+     ],
+     [
+      4,
+      6
+     ],
+     [
+      4,
+      7
+     ],
+     [
+      4,
+      8
+     ]
+    ],
+    "contacts": {
+     "00000000-0000-4000-8000-00000000000e": {
+      "position": [
+       4,
+       8
+      ],
+      "visual": false
+     }
+    }
+   },
+   "expected": {
+    "actors": {
+     "00000000-0000-4000-8000-00000000000a": {
+      "name": "Hero",
+      "hp": [
+       10,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": [
+       4,
+       7
+      ],
+      "conditions": [],
+      "weapon_set": "melee",
+      "layers": [],
+      "inventory": [],
+      "size": null,
+      "disposition": "present"
+     },
+     "00000000-0000-4000-8000-00000000000b": {
+      "name": "Goblin",
+      "hp": [
+       4,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": null,
+      "conditions": [],
+      "weapon_set": "melee",
+      "layers": [],
+      "inventory": null,
+      "size": null,
+      "disposition": "present"
+     },
+     "00000000-0000-4000-8000-00000000000c": {
+      "name": "Corpse",
+      "hp": [
+       4,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "dead",
+      "present": true,
+      "position": [
+       4,
+       6
+      ],
+      "conditions": [],
+      "weapon_set": "melee",
+      "layers": [],
+      "inventory": null,
+      "size": null,
+      "disposition": "present"
+     },
+     "00000000-0000-4000-8000-00000000000d": {
+      "name": "Far goblin",
+      "hp": [
+       4,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": [
+       9,
+       9
+      ],
+      "conditions": [],
+      "weapon_set": "melee",
+      "layers": [],
+      "inventory": null,
+      "size": null,
+      "disposition": "present"
+     },
+     "00000000-0000-4000-8000-00000000000e": {
+      "name": "Hidden goblin",
+      "hp": [
+       4,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": [
+       4,
+       8
+      ],
+      "conditions": [],
+      "weapon_set": "melee",
+      "layers": [],
+      "inventory": null,
+      "size": null,
+      "disposition": "present"
+     }
+    },
+    "items": {}
+   }
+  }
+ ]
+}

@@ -13,7 +13,8 @@ from dnd.player.audience import PlayerAudience
 from dnd.player.event_record import decode_event, encode_event
 from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.recorded import encode_sequence, decode_sequence
-from dnd.player.facts import DamageResultFact, ConditionChangeFact
+from dnd.player.facts import ActorChangeFact, DamageResultFact
+from dnd.types.actor_facts import ConditionRow
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.spells.necromancy import Harm
 from tests.player.test_recorded_boundary import world as world
@@ -58,4 +59,5 @@ def test_real_harm_cast_and_reduction_admission_capture_project_and_replay(world
     assert replayed.actors[target.uuid].normal_hp == target.get_normal_hp(), (replayed.actors[target.uuid].normal_hp,target.get_normal_hp())
     assert replayed.actors[target.uuid].maximum_hp == target.get_max_hp(), (replayed.actors[target.uuid].maximum_hp,target.get_max_hp())
     assert any(isinstance(node.fact,DamageResultFact) for node in public.events)
-    assert any(isinstance(node.fact,ConditionChangeFact) for node in public.events)
+    assert any(isinstance(node.fact, ActorChangeFact) and any(isinstance(row, ConditionRow)
+        for change in node.fact.actors for row in change.rows) for node in public.events)

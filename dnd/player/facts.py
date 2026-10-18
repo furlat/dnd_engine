@@ -26,14 +26,14 @@ from dnd.core.creature_types import AttackOutcome
 from dnd.core.effect_types import ObjectSectionVolume, EffectPropagationLink
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.types.event_facts import EventPhase, EventType, LandingKind, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState, WorldTileChanges
-from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot, ItemResourceChange, ItemEffectPresentationState,
-    ItemIntegrity, ItemPresentationKind, ItemRarity, ItemRemnantState)
+from dnd.core.item_types import (DoorMechanism, DoorSwing, ItemConcentrationSlot, ItemResourceChange, ItemEffectPresentationState,
+    ItemIntegrity, ItemRemnantState)
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
 from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState, ResidueContribution
 from dnd.types.materials import TileSurface
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, NO_ROWS, PACKED, CellMask, CellMaskField, CellValues, CellValuesField, RowBits, RowBitsField
-from dnd.types.senses import PerceivedContact, SenseMode, SensesSnapshot, SensesType, VolumeSurfaceSight
+from dnd.types.senses import SenseMode, SensesSnapshot, SensesType, VolumeSurfaceSight
 from dnd.core.condition_types import ConditionDurationSummary
 from dnd.types.class_features import DraconicPresenceMode
 from dnd.types.material_deposits import MaterialDepositSource
@@ -48,7 +48,9 @@ from dnd.types.abilities import AbilityName
 from dnd.types.actor import TemporaryHitPointsGrant, SpatialDisposition
 from dnd.types.actor_sheet import PlayerResource, PlayerResourceValue
 from dnd.types.class_features import FontConversion, IndomitableReroll, RelentlessRageIntervention
-from dnd.types.actor_facts import ConditionFact
+from dnd.types.actor_facts import ChangeRow, ConditionMember
+from dnd.types.item_parts import (ItemLook as ItemLook, ItemProfile as ItemProfile, ItemState as ItemState,
+    VisualItem as VisualItem)
 from dnd.types.summoning import SummonManifestation, SummonDepartureCause
 from dnd.types.character_progression import Species, SpeciesVariant, Background, AppliedOriginState, AppliedClassLevel
 
@@ -205,112 +207,17 @@ class CombatLogAppend:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ItemLook:
-    """What any viewer of an equipped item sees of it; `is_lit` travels in its layer."""
-
-    item_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")]
-    item_kind: ItemPresentationKind
-    visual_item_name: str
-    visual_variant_id: str | None
-    equipped_visual_policy: EquippedVisualPolicy
-    item_effects: tuple[ItemEffectPresentationState, ...]
-    very_bright_radius_feet: Annotated[int, Field(ge=0)] | None
-    bright_radius_feet: Annotated[int, Field(ge=0)] | None
-    dim_radius_feet: Annotated[int, Field(ge=0)] | None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ItemProfile:
-    """What a controlled item is: the fields its use does not change."""
-
-    name: str
-    description: str | None
-    rarity: ItemRarity
-    weight: float
-    value: int
-    tags: tuple[str, ...]
-    is_pickable: bool
-    is_equippable: bool
-    is_usable: bool
-    is_targetable: bool
-    door_mechanism: DoorMechanism | None
-    door_swing: DoorSwing | None
-    stack_id: str | None
-    damage_dice: str | None
-    damage_type: str | None
-    weapon_properties: tuple[str, ...]
-    armor_type: str | None
-    armor_ac: int | None
-    shield_ac_bonus: int | None
-    max_charges: Annotated[int, Field(ge=-1)] | None
-    max_stack: Annotated[int, Field(ge=1)]
-    is_consumable: bool
-    map_char: str
-    include_in_senses_objects: bool
-    include_in_adjacent_senses_objects: bool
-    include_in_available_object_actions: bool
-    maximum_hit_points: Annotated[int, Field(ge=0)] | None
-    concentration_capacity: Annotated[int, Field(ge=0)]
-    boundary_structure: BoundaryStructure | None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ItemState:
-    """What a controlled item's use and the world change."""
-
-    stack_count: Annotated[int, Field(ge=0)]
-    charges: Annotated[int, Field(ge=-1)] | None
-    integrity: ItemIntegrity
-    destruction_outcome: str | None
-    remnant_state: ItemRemnantState | None
-    current_hit_points: Annotated[int, Field(ge=0)] | None
-    concentration_slots: tuple[ItemConcentrationSlot, ...]
-    construction_owner_uuid: UUID | None
-    construction_geometry: AoEPresentationGeometry | None
-    construction_suppressions: tuple[SpellSuppression, ...]
-    known_to_creator: bool
-    supported_by_uuid: UUID | None
-    contact_passage: ContactPassage
-    surface_residues: tuple[ObjectResidueState, ...]
-    linked_spatial_condition_uuid: UUID | None
-    is_open: bool | None
-    is_engaged: bool | None
-    blocks_movement: bool
-    blocks_optics: bool
-    blocks_propagation: bool
-    is_lit: bool | None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerItem:
     """What a seat knows of one item instance: its look and, once it controlled the item, its profile and state.
 
-    The profile and state are current while the item is in a controlled inventory.
+    The profile and state are current while the item is in a controlled inventory; `effects` are the item's
+    effects as last shown. The seat never prunes its item records.
     """
 
     look: ItemLook
     profile: ItemProfile | None = None
     state: ItemState | None = None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ItemPatch:
-    """One item's components new to the seat: all it may know the first time, then the components that changed."""
-
-    item_uuid: UUID
-    look: ItemLook | None = None
-    profile: ItemProfile | None = None
-    state: ItemState | None = None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class VisualItem:
-    """One equipped layer; the item's look is in the seat's record of `item_uuid`."""
-
-    slot: str
-    item_uuid: UUID
-    item_id: str
-    is_lit: bool | None = None
+    effects: tuple[ItemEffectPresentationState, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -332,7 +239,7 @@ class PlayerActor:
     temporary_hp: int
     life_state: LifeState
     armor_class: int
-    conditions: tuple[ConditionFact, ...] = ()
+    conditions: tuple[ConditionMember, ...] = ()
     last_visual_position: tuple[int, int] | None = None
     # A controlled actor's inventory, in order; its records are in `PlayerState.items`.
     controlled_items: tuple[UUID, ...] | None = None
@@ -347,48 +254,77 @@ class PlayerActor:
     spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT
 
 
-class ActorChanges(TypedDict, total=False):
-    """Present fields replace the seat's known body values; omitted fields are unchanged.
-
-    Against an absent body (first acquisition) every field is present.
-    """
-
-    __pydantic_config__ = ConfigDict(extra="forbid")
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ActorBirth:
+    """A body's birth fields: no event changes them, so a seat receives them once."""
 
     name: str
     character_body_id: str | None
     creature_content_ref: str | None
     appearance: AppearanceConfig
+    structural_base_size: Annotated[Size | None, Field(exclude_if=_unset)] = None
+    manifestation: Annotated[SummonManifestation | None, Field(exclude_if=_unset)] = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BodyState:
+    """Every changeable field of a body, current at its record's occurrence."""
+
     visual_loadout: VisualLoadout
     normal_hp: int
     maximum_hp: int
     temporary_hp: int
     life_state: LifeState
     armor_class: int
-    conditions: tuple[ConditionFact, ...]
-    last_visual_position: tuple[int, int] | None
-    controlled_items: tuple[UUID, ...] | None
-    occupancy_layer: OccupancyLayer | None
-    temporary_hp_grant: TemporaryHitPointsGrant | None
-    resolved_size: Size | None
-    structural_base_size: Size | None
-    manifestation: SummonManifestation | None
-    faction: str | None
-    present: bool
-    remains_disposition: RemainsDisposition
-    spatial_disposition: SpatialDisposition
+    temporary_hp_grant: Annotated[TemporaryHitPointsGrant | None, Field(exclude_if=_unset)] = None
+    conditions: Annotated[tuple[ConditionMember, ...], Field(exclude_if=_no_rows)] = ()
+    # The controller's inventory, in order; None for any other seat.
+    controlled_items: Annotated[tuple[UUID, ...] | None, Field(exclude_if=_unset)] = None
+    occupancy_layer: Annotated[OccupancyLayer | None, Field(exclude_if=_unset)] = None
+    resolved_size: Annotated[Size | None, Field(exclude_if=_unset)] = None
+    faction: Annotated[str | None, Field(exclude_if=_unset)] = None
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
+    spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PlayerObservation:
-    """One actor's observed body at an event, as a patch against what the seat holds,
-    with the patches of the items that body discloses."""
+class ItemRecord:
+    """An item entering a seat's view: its static parts if the seat lacks them, its dynamic parts current and whole."""
+
+    item_uuid: UUID
+    look: Annotated[ItemLook | None, Field(exclude_if=_unset)] = None
+    profile: Annotated[ItemProfile | None, Field(exclude_if=_unset)] = None
+    state: Annotated[ItemState | None, Field(exclude_if=_unset)] = None
+    effects: Annotated[tuple[ItemEffectPresentationState, ...], Field(exclude_if=_no_rows)] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BodyRecord:
+    """A body entering a seat's view at an occurrence: all its changeable fields, its birth the first time,
+    and the records of the items it shows."""
 
     occurrence: int
     actor_uuid: UUID
-    changes: Annotated[ActorChanges, Field(exclude_if=_no_rows)] = field(default_factory=ActorChanges)
-    contact: Annotated[PerceivedContact | None, Field(exclude_if=_unset)] = None
-    items: Annotated[tuple[ItemPatch, ...], Field(exclude_if=_no_rows)] = ()
+    birth: Annotated[ActorBirth | None, Field(exclude_if=_unset)] = None
+    body: BodyState
+    items: Annotated[tuple[ItemRecord, ...], Field(exclude_if=_no_rows)] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ActorRows:
+    """One actor's disclosed change rows, in the engine's order."""
+
+    actor_uuid: UUID
+    rows: tuple[ChangeRow, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ActorChangeFact:
+    """An event's change to the bodies a seat perceives: each actor's rows, after the items entering its view."""
+
+    kind: Literal["actor_change"] = "actor_change"
+    actors: tuple[ActorRows, ...]
+    items: Annotated[tuple[ItemRecord, ...], Field(exclude_if=_no_rows)] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -632,35 +568,6 @@ class DeathSaveFact:
     entity_uuid: UUID
     natural_roll: int | None
     succeeded: bool
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class EquipmentFact:
-    """A holder's equipment change: its body patch (loadout, armor class, inventory) and its items' patches."""
-
-    kind: Literal["equipment"] = "equipment"
-    source_entity_uuid: UUID
-    changes: ActorChanges
-    items: Annotated[tuple[ItemPatch, ...], Field(exclude_if=_no_rows)] = ()
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConditionChangeFact:
-    kind: Literal["condition"] = "condition"
-    target_entity_uuid: UUID
-    event_type: EventType
-    condition: ConditionFact
-    consumed: Annotated[bool, Field(exclude_if=_unflagged)] = False
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ItemEffectChangeFact:
-    """Witnessed native item membership edge, without a creature condition."""
-
-    kind: Literal["item_effect"] = "item_effect"
-    item_uuid: UUID
-    effect_uuid: UUID
-    event_type: EventType
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -966,8 +873,8 @@ class ObjectDestroyedFact:
 
 PlayerFact = Annotated[
     AttackFact | SpellFact | AreaReachFact | MovementFact | StepFact | ForcedMovementFact | PortalTransferFact | ShoveFact
-    | Annotated[DamageFact, Field(discriminator="stage")] | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact | EquipmentFact
-    | ConditionChangeFact | ItemEffectChangeFact | SpatialFact | FactionFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
+    | Annotated[DamageFact, Field(discriminator="stage")] | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact
+    | ActorChangeFact | SpatialFact | FactionFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
     | ObjectDamageFact | ObjectDestroyedFact | MechanismActivationFact | SavingThrowFact,
     Field(discriminator="kind"),
 ]
@@ -1457,7 +1364,7 @@ class PlayerLineage:
     version_rows: VersionRows
     start_cursor: int
     end_cursor: int
-    observations: tuple[PlayerObservation, ...] = ()
+    bodies: Annotated[tuple[BodyRecord, ...], Field(exclude_if=_no_rows)] = ()
     world_updates: tuple[WorldUpdate, ...] = ()
     audience: PlayerAudience | None = None
     # The perceived values its sensory facts name, each once.
@@ -1474,7 +1381,7 @@ class PlayerInitialization:
     nodes: tuple[PlayerNode, ...]
     version_rows: VersionRows
     end_cursor: int
-    observations: tuple[PlayerObservation, ...]
+    bodies: Annotated[tuple[BodyRecord, ...], Field(exclude_if=_no_rows)] = ()
     world_updates: tuple[WorldUpdate, ...]
     hud: PlayerHUDPatch | None = None
     audience: PlayerAudience | None = None

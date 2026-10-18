@@ -27,7 +27,7 @@ def initialization(sequence=0):
     return {'kind': 'initialization', 'protocol': sdk.IDENTITY, 'cursor': cursor(sequence), 'content_revision': 'r', 'content_additions': [],
         'initialization': {'generation': UUID, 'observer_uuid': UUID, 'world': {'battlefield_id': 'test', 'battlefield_name': 'é',
             'bounds': [-1, -1, 1, 1], 'width': 3, 'height': 3}, 'nodes': [], 'version_rows': {}, 'end_cursor': 0,
-            'observations': [], 'world_updates': []}}
+            'world_updates': []}}
 
 
 def operation(sequence):

@@ -17,10 +17,14 @@ from dnd.player.projection import SessionProjection, begin_projection, project_l
 
 
 class RecordedSequence(BaseModel):
-    """Private native event inputs, including local objective diagnostics."""
+    """Private native event inputs, including local objective diagnostics.
+
+    Version 6: the startup world interval carries the actor change record of each of its versions, which the
+    session's actor fold reads (engine-free replay builds bodies from births and records).
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal[5] = 5
+    schema_version: Literal[6] = 6
     initialization: IntervalEnvelope
     lineages: tuple[CompletedLineage, ...]
     combat_log_appends: tuple[CombatLogAppend, ...] = ()

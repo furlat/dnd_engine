@@ -31,7 +31,7 @@ def published(tmp_path):
         content_revision='public', content_additions=(), initialization=PlayerInitialization(
             generation=uuid4(), observer_uuid=actor, audience=audience,
             world=PlayerWorld(battlefield_id='review', battlefield_name='Review', bounds=(0, 0, 1, 1),
-                width=1, height=1), nodes=(), version_rows=VersionRows(), end_cursor=0, observations=(), world_updates=()))
+                width=1, height=1), nodes=(), version_rows=VersionRows(), end_cursor=0, world_updates=()))
     boundary = wire.BoundaryState(lifecycle='terminal', input_actor_uuid=None, state_revision=None)
     operation = wire.PlayerOperation(protocol=wire.protocol_identity(), cursor=owner.cursor(host, seat, 1),
         state_revision='final', boundary=boundary, command_number=None, audience=audience,

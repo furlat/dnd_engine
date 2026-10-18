@@ -13,7 +13,7 @@ const status = (final?: number): sdk.StatusSnapshot => ({...scope, boundary: {..
 const protocol = identity as sdk.ProtocolIdentity;
 const initial = (sequence = 0): sdk.InitializationResponse => ({kind: 'initialization', protocol, cursor: cursor(sequence), content_revision: 'r', content_additions: [],
   initialization: {generation: uuid, observer_uuid: uuid, world: {battlefield_id: 'test', battlefield_name: 'é', bounds: [-1, -1, 1, 1], width: 3, height: 3},
-    nodes: [], version_rows: {}, end_cursor: 0, observations: [], world_updates: []}});
+    nodes: [], version_rows: {}, end_cursor: 0, world_updates: []}});
 const operation = (sequence: number): sdk.PlayerOperation => ({kind: 'operation', protocol, cursor: cursor(sequence), state_revision: 'r', command_number: null, boundary,
   audience: {controlled: [uuid], observers: [uuid]}, lineages: [], hud: null, combat_log_appends: [], content_additions: []});
 const event = (name: string, value: unknown, sequence?: number) => `event: ${name}\n${sequence === undefined ? '' : `id: ${sequence}\n`}data: ${JSON.stringify(value)}\n\n`;
