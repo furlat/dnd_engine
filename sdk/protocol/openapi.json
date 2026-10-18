@@ -4815,6 +4815,497 @@
         "type": "object",
         "additionalProperties": false
       },
+      "Column_CardinalDirection_": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/CardinalDirection"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_ConstructionGeometry_": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/ConstructionGeometry"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_ItemIntegrity_": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/ItemIntegrity"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_ItemRemnantState_": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/ItemRemnantState"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_MemberBits_": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/MemberBits"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_UUID_": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_bool_": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "type": "boolean"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_int_": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_str_": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_tuple_CardinalDirection__________": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/CardinalDirection"
+              },
+              "type": "array"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_tuple_ItemConcentrationSlot__________": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/ItemConcentrationSlot"
+              },
+              "type": "array"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_tuple_ItemEffectPresentationState__________": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/ItemEffectPresentationState"
+              },
+              "type": "array"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_tuple_ObjectResidueState__________": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/ObjectResidueState"
+              },
+              "type": "array"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_tuple_SpellSuppression__________": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/SpellSuppression"
+              },
+              "type": "array"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_tuple_WorldObjectSupport__________": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/WorldObjectSupport"
+              },
+              "type": "array"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_tuple_tuple_int__int__int___________": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "items": {
+                "maxItems": 3,
+                "minItems": 3,
+                "prefixItems": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
       "CombatLogAppend": {
         "properties": {
           "generation": {
@@ -5849,6 +6340,43 @@
         ],
         "title": "ConnectorTraversalDiscovery",
         "type": "object"
+      },
+      "ConstructionGeometry": {
+        "discriminator": {
+          "mapping": {
+            "cone": "#/components/schemas/ConePresentationGeometry",
+            "cube": "#/components/schemas/CubePresentationGeometry",
+            "cylinder": "#/components/schemas/CylinderPresentationGeometry",
+            "line": "#/components/schemas/LinePresentationGeometry",
+            "sphere": "#/components/schemas/SpherePresentationGeometry",
+            "wall": "#/components/schemas/WallPresentationGeometry",
+            "wall_assembly": "#/components/schemas/WallAssemblyPresentationGeometry"
+          },
+          "propertyName": "shape"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SpherePresentationGeometry"
+          },
+          {
+            "$ref": "#/components/schemas/ConePresentationGeometry"
+          },
+          {
+            "$ref": "#/components/schemas/LinePresentationGeometry"
+          },
+          {
+            "$ref": "#/components/schemas/CubePresentationGeometry"
+          },
+          {
+            "$ref": "#/components/schemas/CylinderPresentationGeometry"
+          },
+          {
+            "$ref": "#/components/schemas/WallPresentationGeometry"
+          },
+          {
+            "$ref": "#/components/schemas/WallAssemblyPresentationGeometry"
+          }
+        ]
       },
       "ContactPassage": {
         "enum": [
@@ -12165,6 +12693,11 @@
         "type": "object",
         "additionalProperties": false
       },
+      "MemberBits": {
+        "minimum": 1,
+        "type": "integer",
+        "maximum": 9007199254740991
+      },
       "ModifierBreakdown": {
         "additionalProperties": false,
         "description": "A single modifier contributing to a roll or value.\n\nAttributes:\n    name: Human-readable modifier name.\n    value: Numerical modifier value.\n    source: Description of where the modifier originated.",
@@ -12737,6 +13270,294 @@
         "type": "object",
         "additionalProperties": false
       },
+      "ObjectColumns": {
+        "description": "An update's `ObjectRow`s as columns, one entry per row in row order (field names once per update): the\nrows' uuids, members, observed faces, every `ObjectState` field and their placements. A sparse column holds\nthe rows whose value is not the field's default.",
+        "properties": {
+          "item_uuids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Item Uuids",
+            "type": "array"
+          },
+          "members": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_MemberBits_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "observed_faces": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_tuple_CardinalDirection__________"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "name": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Name",
+            "type": "array"
+          },
+          "visual_item_name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_str_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "map_char": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Map Char",
+            "type": "array"
+          },
+          "boundary_structure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_str_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "is_open": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_bool_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "is_lit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_bool_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "very_bright_radius_feet": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_int_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "bright_radius_feet": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_int_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dim_radius_feet": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_int_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "stack_count": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_int_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "is_pickable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_bool_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "item_effects": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_tuple_ItemEffectPresentationState__________"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "blocks_propagation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_bool_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "is_engaged": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_bool_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "surface_residues": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_tuple_ObjectResidueState__________"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "current_hit_points": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_int_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "concentration_slots": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_tuple_ItemConcentrationSlot__________"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "remnant_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_ItemRemnantState_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "integrity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_ItemIntegrity_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "destruction_outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_str_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "construction_geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_ConstructionGeometry_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "construction_suppressions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_tuple_SpellSuppression__________"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "placements": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlacementColumns"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "item_uuids",
+          "name",
+          "map_char"
+        ],
+        "title": "ObjectColumns",
+        "type": "object",
+        "additionalProperties": false
+      },
       "ObjectDamageFact": {
         "description": "The completed damage result for an observed item, not an actor.",
         "properties": {
@@ -12889,7 +13710,7 @@
         "additionalProperties": false
       },
       "ObjectLook": {
-        "description": "A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid (a census of\nevery gallery case's world fold; a broken object's visual name changes, so it is state).",
+        "description": "A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid\n(`test_object_look_static` and a census of every gallery case's world fold; a broken object's visual name and a\ncut construction's geometry change, so they are state).",
         "properties": {
           "item_uuid": {
             "format": "uuid",
@@ -12985,52 +13806,6 @@
             "default": null,
             "title": "Construction Owner Uuid"
           },
-          "construction_geometry": {
-            "anyOf": [
-              {
-                "discriminator": {
-                  "mapping": {
-                    "cone": "#/components/schemas/ConePresentationGeometry",
-                    "cube": "#/components/schemas/CubePresentationGeometry",
-                    "cylinder": "#/components/schemas/CylinderPresentationGeometry",
-                    "line": "#/components/schemas/LinePresentationGeometry",
-                    "sphere": "#/components/schemas/SpherePresentationGeometry",
-                    "wall": "#/components/schemas/WallPresentationGeometry",
-                    "wall_assembly": "#/components/schemas/WallAssemblyPresentationGeometry"
-                  },
-                  "propertyName": "shape"
-                },
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/SpherePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/LinePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CubePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CylinderPresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/WallPresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/WallAssemblyPresentationGeometry"
-                  }
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Construction Geometry"
-          },
           "known_to_creator": {
             "default": false,
             "title": "Known To Creator",
@@ -13042,124 +13817,6 @@
           "item_id"
         ],
         "title": "ObjectLook",
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ObjectPlacement": {
-        "description": "An object's placement on the wire: every field its `WorldObjectPlacement` holds that is neither derivable\nnor its default. The object is the row's `item_uuid`; its kind is a boundary exactly when it has a boundary\ndirection; `tile_uuid`, left out, is the client's static tile row at `position`; `covered_supports`, left\nout, is that anchor support alone.",
-        "properties": {
-          "position": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "title": "Position",
-            "type": "array"
-          },
-          "top_height_steps": {
-            "title": "Top Height Steps",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "boundary_direction": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CardinalDirection"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "tile_uuid": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Tile Uuid"
-          },
-          "covered_supports": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/WorldObjectSupport"
-            },
-            "title": "Covered Supports",
-            "type": "array"
-          },
-          "occupies_bands": {
-            "default": true,
-            "title": "Occupies Bands",
-            "type": "boolean"
-          },
-          "base_height_steps": {
-            "default": 0,
-            "title": "Base Height Steps",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "orientation": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CardinalDirection"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "removed_bands": {
-            "default": [],
-            "items": {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                }
-              ],
-              "type": "array"
-            },
-            "title": "Removed Bands",
-            "type": "array"
-          }
-        },
-        "required": [
-          "position",
-          "top_height_steps"
-        ],
-        "title": "ObjectPlacement",
         "type": "object",
         "additionalProperties": false
       },
@@ -13196,59 +13853,6 @@
         ],
         "title": "ObjectResidueState",
         "type": "object"
-      },
-      "ObjectRow": {
-        "description": "A world object the seat observes, at an occurrence.\n\nAn entering row carries its state, placement and the faces its residues are authoritative for (those whose\nviewing cell some member sees); a perceived object's change carries its state, and its placement when the\noccurrence wrote one. `members`: bit i is the audience's `observers[i]`, exact as of this row; a seat with one\nobserver leaves it out.",
-        "properties": {
-          "item_uuid": {
-            "format": "uuid",
-            "title": "Item Uuid",
-            "type": "string"
-          },
-          "members": {
-            "anyOf": [
-              {
-                "minimum": 1,
-                "type": "integer",
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Members"
-          },
-          "state": {
-            "$ref": "#/components/schemas/ObjectState"
-          },
-          "placement": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ObjectPlacement"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "observed_faces": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/CardinalDirection"
-            },
-            "title": "Observed Faces",
-            "type": "array"
-          }
-        },
-        "required": [
-          "item_uuid",
-          "state"
-        ],
-        "title": "ObjectRow",
-        "type": "object",
-        "additionalProperties": false
       },
       "ObjectSectionVolume": {
         "additionalProperties": false,
@@ -13480,6 +14084,52 @@
             ],
             "default": null,
             "title": "Destruction Outcome"
+          },
+          "construction_geometry": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "cone": "#/components/schemas/ConePresentationGeometry",
+                    "cube": "#/components/schemas/CubePresentationGeometry",
+                    "cylinder": "#/components/schemas/CylinderPresentationGeometry",
+                    "line": "#/components/schemas/LinePresentationGeometry",
+                    "sphere": "#/components/schemas/SpherePresentationGeometry",
+                    "wall": "#/components/schemas/WallPresentationGeometry",
+                    "wall_assembly": "#/components/schemas/WallAssemblyPresentationGeometry"
+                  },
+                  "propertyName": "shape"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SpherePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ConePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LinePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CubePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CylinderPresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WallPresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WallAssemblyPresentationGeometry"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Construction Geometry"
           },
           "construction_suppressions": {
             "default": [],
@@ -13852,6 +14502,136 @@
         ],
         "title": "PendingReceipt",
         "type": "object"
+      },
+      "PlacementColumns": {
+        "description": "The `ObjectPlacement`s of an update's object rows, as columns over the rows `rows` selects (left out:\nevery row).",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "position": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Position",
+            "type": "array"
+          },
+          "top_height_steps": {
+            "items": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "title": "Top Height Steps",
+            "type": "array"
+          },
+          "boundary_direction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_CardinalDirection_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "tile_uuid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_UUID_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "covered_supports": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_tuple_WorldObjectSupport__________"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "occupies_bands": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_bool_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "base_height_steps": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_int_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_CardinalDirection_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "removed_bands": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Column_tuple_tuple_int__int__int___________"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "position",
+          "top_height_steps"
+        ],
+        "title": "PlacementColumns",
+        "type": "object",
+        "additionalProperties": false
       },
       "PlayerAction": {
         "additionalProperties": false,
@@ -20865,8 +21645,32 @@
         "type": "object",
         "additionalProperties": false
       },
+      "TileLook": {
+        "description": "A tile's surface and name, sent once per seat under its content id (a digest of the value).",
+        "properties": {
+          "look_id": {
+            "title": "Look Id",
+            "type": "string"
+          },
+          "surface": {
+            "$ref": "#/components/schemas/TileSurface"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "look_id",
+          "surface",
+          "name"
+        ],
+        "title": "TileLook",
+        "type": "object",
+        "additionalProperties": false
+      },
       "TileStatic": {
-        "description": "A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new\nuuid).",
+        "description": "A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new\nuuid). `look` is its surface and name's `TileLook` content id.",
         "properties": {
           "position": {
             "maxItems": 2,
@@ -20891,19 +21695,15 @@
             "title": "Tile Uuid",
             "type": "string"
           },
-          "surface": {
-            "$ref": "#/components/schemas/TileSurface"
-          },
-          "name": {
-            "title": "Name",
+          "look": {
+            "title": "Look",
             "type": "string"
           }
         },
         "required": [
           "position",
           "tile_uuid",
-          "surface",
-          "name"
+          "look"
         ],
         "title": "TileStatic",
         "type": "object",
@@ -22280,6 +23080,14 @@
               "bits": ""
             }
           },
+          "tile_looks": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TileLook"
+            },
+            "title": "Tile Looks",
+            "type": "array"
+          },
           "tile_statics": {
             "default": [],
             "items": {
@@ -22369,12 +23177,15 @@
             "type": "array"
           },
           "objects": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ObjectRow"
-            },
-            "title": "Objects",
-            "type": "array"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectColumns"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "objects_removed": {
             "default": [],

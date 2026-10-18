@@ -19,7 +19,7 @@ rules
 """
 
 from collections.abc import Collection, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from dnd.core.cells import mask_difference, mask_from_positions, mask_intersection, mask_positions, mask_union, \
@@ -28,16 +28,17 @@ from dnd.core.item_types import ItemIntegrity, ItemPresentationState, ItemRemnan
 from dnd.player.audience import AudiencePerception, PlayerAudience
 from dnd.player.facts import (BoundaryStructureStatic, ContainedItem, ContainerContents, ContentsChange,
     ContributionRow, FloorItem, ObjectLook, ObjectRow, ObjectState, PlayerObject, ResidueKey, ResidueMaterial,
-    ResidueRow, TileConditions, TileFieldUpdate, TileStatic, WorldUpdate)
+    ResidueRow, TileConditions, TileFieldUpdate, TileLook, TileStatic, WorldUpdate)
 from dnd.player.static_sent import StaticSent
-from dnd.player.world_columns import pack_placement, pack_tile_columns, split_floor_item
+from dnd.player.world_columns import (pack_object_rows, pack_placement, pack_tile_columns, split_floor_item,
+    tile_look_id)
 from dnd.types.cells import EMPTY_CELLS, CellMask, cell_in
 from dnd.types.event_facts import (AppliedWorldFact, WorldConnectorState, WorldTileChanges, WorldTileState,
     tile_own_condition_names, tile_residue_names)
 from dnd.types.residues import ObjectResidueState, TileResidueState
 from dnd.types.senses import SensesSnapshot
 from dnd.types.world import CardinalDirection
-from dnd.types.world_placement import CARDINAL_DELTAS, OPPOSITE_DIRECTION, WorldObjectPlacement, placement_support_cells
+from dnd.types.world_placement import WorldObjectPlacement, boundary_sides, placement_support_cells
 from dnd.world_facts import WorldFacts, world_objects_at
 
 Position = tuple[int, int]
@@ -51,24 +52,15 @@ def object_observed(world: WorldFacts, view: SensesSnapshot | None, identity: UU
     if identity in view.objects:
         return True
     obj = world.objects[identity]
-    direction = obj.placement.boundary_direction
-    if obj.item.supported_by_uuid is not None or direction is None or obj.item.boundary_structure is None:
+    if obj.item.supported_by_uuid is not None or obj.item.boundary_structure is None:
         return False
-    x, y = obj.placement.position
-    dx, dy = CARDINAL_DELTAS[direction]
-    return cell_in(view.visible, (x, y)) or cell_in(view.visible, (x + dx, y + dy))
+    return any(cell_in(view.visible, cell) for _, cell in boundary_sides(obj.placement))
 
 
 def observed_faces(placement: WorldObjectPlacement, visible: CellMask) -> tuple[CardinalDirection, ...]:
     """A boundary's faces whose viewing cell is visible, by value; a center object has none."""
-    direction = placement.boundary_direction
-    if direction is None:
-        return ()
-    x, y = placement.position
-    dx, dy = CARDINAL_DELTAS[direction]
-    faces = [face for face, cell in ((OPPOSITE_DIRECTION[direction], (x, y)), (direction, (x + dx, y + dy)))
-             if cell_in(visible, cell)]
-    return tuple(sorted(faces, key=lambda face: face.value))
+    return tuple(sorted((face for face, cell in boundary_sides(placement) if cell_in(visible, cell)),
+                        key=lambda face: face.value))
 
 
 def observed_remnant(state: ItemRemnantState | None, known: Collection[UUID]) -> ItemRemnantState | None:
@@ -171,10 +163,11 @@ def _whole_residue(position: Position, residue: TileResidueState) -> ResidueRow:
 class _Rows:
     """One update's rows as they are built."""
 
-    tile_statics: list[TileStatic]
-    residue_materials: list[ResidueMaterial]
-    object_looks: list[ObjectLook]
-    boundary_structures: list[BoundaryStructureStatic]
+    tile_looks: list[TileLook] = field(default_factory=list)
+    tile_statics: list[TileStatic] = field(default_factory=list)
+    residue_materials: list[ResidueMaterial] = field(default_factory=list)
+    object_looks: list[ObjectLook] = field(default_factory=list)
+    boundary_structures: list[BoundaryStructureStatic] = field(default_factory=list)
 
 
 def _material(rows: _Rows, tile: WorldTileState, residue_id: str, sent: StaticSent, pending: StaticSent) -> None:
@@ -268,7 +261,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         entered_cells = mask_union(entered_cells, mask_difference(visible, before))
         left.update(mask_positions(mask_difference(before, visible)))
     entered = set(mask_positions(entered_cells))
-    rows = _Rows([], [], [], [])
+    rows = _Rows()
 
     # Tiles: the entered cells whole (their static rows first: a placement's anchor tile is derived from them).
     tiles = {position: world.tiles[position] for position in sorted(entered) if position in world.tiles}
@@ -277,8 +270,11 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
     residues_removed: dict[tuple[Position, str], ResidueKey] = {}
     for position, tile in tiles.items():
         if tile.tile_uuid not in sent.tiles and tile.tile_uuid not in pending.tiles:
-            rows.tile_statics.append(TileStatic(position=position, tile_uuid=tile.tile_uuid, surface=tile.surface,
-                name=tile.name))
+            look = tile_look_id(tile.surface, tile.name)
+            if look not in sent.tile_looks and look not in pending.tile_looks:
+                rows.tile_looks.append(TileLook(look_id=look, surface=tile.surface, name=tile.name))
+                pending.tile_looks.add(look)
+            rows.tile_statics.append(TileStatic(position=position, tile_uuid=tile.tile_uuid, look=look))
             pending.tiles.add(tile.tile_uuid)
         if own := tile_own_condition_names(tile):
             tile_conditions[position] = own
@@ -416,7 +412,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
                     for index in sorted(indexes)))
     tile_changes = {position: changes for position, changes in tile_changes.items() if changes}
     update = WorldUpdate(occurrence=occurrence, entered=entered_cells,
-        tile_statics=tuple(rows.tile_statics), tile_columns=pack_tile_columns(tiles),
+        tile_looks=tuple(rows.tile_looks), tile_statics=tuple(rows.tile_statics), tile_columns=pack_tile_columns(tiles),
         tile_conditions=tuple(TileConditions(position=position, names=names)
             for position, names in sorted(tile_conditions.items())),
         tile_changes=tuple(TileFieldUpdate(position=position, changes=changes)
@@ -425,7 +421,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         boundary_structures=tuple(rows.boundary_structures),
         residues=tuple(residues[key] for key in sorted(residues)),
         residues_removed=tuple(residues_removed[key] for key in sorted(residues_removed)),
-        object_looks=tuple(rows.object_looks), objects=tuple(object_rows), objects_removed=tuple(removed),
+        object_looks=tuple(rows.object_looks), objects=pack_object_rows(object_rows), objects_removed=tuple(removed),
         contents=tuple(contents), contents_changed=tuple(contents_changed),
         connectors=tuple(connectors[identity] for identity in sorted(connectors, key=str)),
         connectors_removed=tuple(connectors_removed))

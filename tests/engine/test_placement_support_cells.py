@@ -33,6 +33,9 @@ CASES = (
          frozenset({(3, 4), (3, 5)}), boundary_direction=CardinalDirection.NORTH),
     Case("west boundary", WorldPlacementKind.BOUNDARY, ((3, 4),), frozenset({(3, 4), (2, 4)}),
          boundary_direction=CardinalDirection.WEST),
+    Case("a boundary whose owner bands are all removed touches only the cell beyond it", WorldPlacementKind.BOUNDARY,
+         ((3, 4),), frozenset({(3, 5)}), boundary_direction=CardinalDirection.NORTH,
+         removed_bands=((3, 4, 0), (3, 4, 1))),
 )
 
 

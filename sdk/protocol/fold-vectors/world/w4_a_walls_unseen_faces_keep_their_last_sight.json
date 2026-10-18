@@ -15,6 +15,17 @@
      "height": 1,
      "bits": "AQ=="
     },
+    "tile_looks": [
+     {
+      "look_id": "652de935c25693e0",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
     "tile_statics": [
      {
       "position": [
@@ -22,12 +33,7 @@
        0
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100000000",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      }
     ],
     "tile_columns": {
@@ -54,14 +60,31 @@
       "maximum_hit_points": 30
      }
     ],
-    "objects": [
-     {
-      "item_uuid": "00000000-0000-4000-8000-000000002003",
-      "state": {
-       "name": "Wall",
-       "visual_item_name": "wall",
-       "map_char": "W",
-       "surface_residues": [
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002003"
+     ],
+     "observed_faces": {
+      "values": [
+       [
+        "south"
+       ]
+      ]
+     },
+     "name": [
+      "Wall"
+     ],
+     "visual_item_name": {
+      "values": [
+       "wall"
+      ]
+     },
+     "map_char": [
+      "W"
+     ],
+     "surface_residues": {
+      "values": [
+       [
         {
          "condition_uuid": "00000000-0000-4000-8000-000000005001",
          "residue_id": "residue.blood",
@@ -70,23 +93,36 @@
           "south"
          ]
         }
-       ],
-       "current_hit_points": 30
-      },
-      "placement": {
-       "position": [
+       ]
+      ]
+     },
+     "current_hit_points": {
+      "values": [
+       30
+      ]
+     },
+     "placements": {
+      "position": [
+       [
         0,
         0
-       ],
-       "top_height_steps": 2,
-       "boundary_direction": "north",
-       "occupies_bands": false
+       ]
+      ],
+      "top_height_steps": [
+       2
+      ],
+      "boundary_direction": {
+       "values": [
+        "north"
+       ]
       },
-      "observed_faces": [
-       "south"
-      ]
+      "occupies_bands": {
+       "values": [
+        false
+       ]
+      }
      }
-    ]
+    }
    },
    "expected": {
     "tiles": {
@@ -181,12 +217,7 @@
        1
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100000001",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      }
     ],
     "tile_columns": {
@@ -205,14 +236,31 @@
      "default_light": "Aw==",
      "resolved_light": "Aw=="
     },
-    "objects": [
-     {
-      "item_uuid": "00000000-0000-4000-8000-000000002003",
-      "state": {
-       "name": "Wall",
-       "visual_item_name": "wall",
-       "map_char": "W",
-       "surface_residues": [
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002003"
+     ],
+     "observed_faces": {
+      "values": [
+       [
+        "north"
+       ]
+      ]
+     },
+     "name": [
+      "Wall"
+     ],
+     "visual_item_name": {
+      "values": [
+       "wall"
+      ]
+     },
+     "map_char": [
+      "W"
+     ],
+     "surface_residues": {
+      "values": [
+       [
         {
          "condition_uuid": "00000000-0000-4000-8000-000000005002",
          "residue_id": "residue.soot",
@@ -221,14 +269,15 @@
           "north"
          ]
         }
-       ],
-       "current_hit_points": 30
-      },
-      "observed_faces": [
-       "north"
+       ]
+      ]
+     },
+     "current_hit_points": {
+      "values": [
+       30
       ]
      }
-    ]
+    }
    },
    "expected": {
     "tiles": {
@@ -342,14 +391,32 @@
   {
    "update": {
     "occurrence": 2,
-    "objects": [
-     {
-      "item_uuid": "00000000-0000-4000-8000-000000002003",
-      "state": {
-       "name": "Wall",
-       "visual_item_name": "wall",
-       "map_char": "W",
-       "surface_residues": [
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002003"
+     ],
+     "observed_faces": {
+      "values": [
+       [
+        "north",
+        "south"
+       ]
+      ]
+     },
+     "name": [
+      "Wall"
+     ],
+     "visual_item_name": {
+      "values": [
+       "wall"
+      ]
+     },
+     "map_char": [
+      "W"
+     ],
+     "surface_residues": {
+      "values": [
+       [
         {
          "condition_uuid": "00000000-0000-4000-8000-000000005002",
          "residue_id": "residue.soot",
@@ -358,15 +425,15 @@
           "north"
          ]
         }
-       ],
-       "current_hit_points": 30
-      },
-      "observed_faces": [
-       "north",
-       "south"
+       ]
+      ]
+     },
+     "current_hit_points": {
+      "values": [
+       30
       ]
      }
-    ]
+    }
    },
    "expected": {
     "tiles": {

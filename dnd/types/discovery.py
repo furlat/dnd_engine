@@ -72,13 +72,16 @@ class ObjectRecord:
 
 @dataclass(frozen=True, slots=True)
 class ActorScan:
-    """Everything the base admission checks read for one actor at one instant.
+    """The actor facts admission checks and rules read, once per scan, for one actor at one instant.
 
     `subjective` is the knowledge every check reads the world with: discovery
     and preview see what the actor perceives, execution sees the world.
 
     `reach_cells` and `threat_domains` are navigation: only a
     discovery scan carries them; an executed action's scan leaves them empty.
+
+    `jump_feet` is the actor's jump distance (`Entity.jump_distance_feet`),
+    read once for every landing a Jump admits.
     """
 
     actor_uuid: UUID
@@ -95,3 +98,4 @@ class ActorScan:
     free_cast_grants: FrozenSet[UUID]
     source_item_charges: Mapping[UUID, int]
     active_encounter_uuid: Optional[UUID]
+    jump_feet: int

@@ -55,7 +55,7 @@ from dnd.player.facts import (
     PlayerLogEntry, SheetChanges, SheetPatch, SpatialEffectContent, SpatialEffectSighting,
     PlayerWorld, PlayerResolution, LightRow, SensoryFact, SensoryRows, ShoveFact, SpellApplication, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
     VersionRows, WorldUpdate, ItemRecord, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
-    ContainedItem, ObjectRow, ObjectState,
+    Column, ContainedItem, ObjectState,
 )
 from dnd.player.capture import CompletedLineage, IntervalEnvelope, ObjectiveRow, recorded_actor_change
 from dnd.player.sheet_facts import sheet_fact
@@ -1300,15 +1300,8 @@ def _end_walk(walk: SeatWalk, group: WalkGroup, state: "ProjectionState"
     for index, row in enumerate(bodies):
         bodies[index] = _disclosed_body(row, disclosure)
     for index, row in enumerate(updates):
-        updates[index] = _map_object_states(row, lambda value: replace(value,
-            concentration_slots=_disclosed_slots(value.concentration_slots, disclosure))
-            if value.concentration_slots else value)
+        updates[index] = _disclosed_update(row, disclosure)
     return tuple(nodes), tuple(bodies), tuple(updates), resolutions
-
-
-def _object_state(row: ObjectRow, value_of: Callable[[ObjectState], ObjectState]) -> ObjectRow:
-    state = value_of(row.state)
-    return row if state is row.state else replace(row, state=state)
 
 
 def _contained_states(rows: tuple[ContainedItem, ...], value_of: Callable[[ObjectState], ObjectState]
@@ -1316,14 +1309,41 @@ def _contained_states(rows: tuple[ContainedItem, ...], value_of: Callable[[Objec
     return tuple(row if (state := value_of(row.state)) is row.state else replace(row, state=state) for row in rows)
 
 
-def _map_object_states(update: WorldUpdate, value_of: Callable[[ObjectState], ObjectState]) -> WorldUpdate:
-    """The update with `value_of` each object and contained item state (an unchanged state stays itself)."""
-    if not update.objects and not update.contents and not update.contents_changed:
+def _mapped_column(column: Column[Row] | None, value_of: Callable[[Row], Row]) -> Column[Row] | None:
+    return replace(column, values=tuple(value_of(value) for value in column.values)) if column is not None else None
+
+
+def _map_world_update(update: WorldUpdate, *, slots: Callable[[tuple[ItemConcentrationSlot, ...]],
+                      tuple[ItemConcentrationSlot, ...]] | None = None,
+                      effects: Callable[[tuple[ItemEffectPresentationState, ...]],
+                      tuple[ItemEffectPresentationState, ...]] | None = None) -> WorldUpdate:
+    """The update with `slots` its objects' and contained items' concentration slots and `effects` their item
+    effects (an unchanged update stays itself)."""
+    objects = update.objects
+    if objects is not None and (slots is not None and objects.concentration_slots is not None
+                                or effects is not None and objects.item_effects is not None):
+        objects = replace(objects,
+            concentration_slots=_mapped_column(objects.concentration_slots, slots) if slots is not None
+                else objects.concentration_slots,
+            item_effects=_mapped_column(objects.item_effects, effects) if effects is not None else objects.item_effects)
+    if objects is update.objects and not update.contents and not update.contents_changed:
         return update
-    return replace(update, objects=tuple(_object_state(row, value_of) for row in update.objects),
-        contents=tuple(replace(row, items=_contained_states(row.items, value_of)) for row in update.contents),
-        contents_changed=tuple(replace(row, upserted=_contained_states(row.upserted, value_of))
+
+    def state_of(value: ObjectState) -> ObjectState:
+        if slots is not None and value.concentration_slots:
+            value = replace(value, concentration_slots=slots(value.concentration_slots))
+        if effects is not None and value.item_effects:
+            value = replace(value, item_effects=effects(value.item_effects))
+        return value
+    return replace(update, objects=objects,
+        contents=tuple(replace(row, items=_contained_states(row.items, state_of)) for row in update.contents),
+        contents_changed=tuple(replace(row, upserted=_contained_states(row.upserted, state_of))
             for row in update.contents_changed))
+
+
+def _disclosed_update(update: WorldUpdate, disclosure: LineageDisclosure) -> WorldUpdate:
+    """The update with its objects' undisclosed casting lineages cleared."""
+    return _map_world_update(update, slots=lambda value: _disclosed_slots(value, disclosure))
 
 
 def _public_cursor(cursors: dict[int, int], source: int | None) -> int | None:
@@ -1566,9 +1586,8 @@ def _public_occurrences(state: "ProjectionState", keys: NativeKeys, nodes: tuple
             turn_execution_id=node.turn_execution_id if node.turn_execution_id in state.disclosed_turns else None,
             content_attributions=attributions, resolution=resolution(node.occurrence)))
     bodies = tuple(_public_body(row, state.public_cursors) for row in bodies)
-    updates = tuple(_map_object_states(replace(row, occurrence=state.public_cursors[row.occurrence]),
-        lambda value: replace(value, item_effects=_public_item_effects(value.item_effects, state.public_cursors))
-        if value.item_effects else value) for row in updates)
+    updates = tuple(_map_world_update(replace(row, occurrence=state.public_cursors[row.occurrence]),
+        effects=lambda value: _public_item_effects(value, state.public_cursors)) for row in updates)
     return (tuple(result), VersionRows(occurrences=tuple(occurrences), lineages=tuple(lineages)), bodies, updates,
             tuple(resolution_rows))
 

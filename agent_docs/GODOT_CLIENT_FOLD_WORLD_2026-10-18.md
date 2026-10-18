@@ -13,7 +13,8 @@ occurrence, so the client's memory follows from the rules below and nothing else
 | Field | Meaning |
 | --- | --- |
 | `entered` (`CellMask`) | the update's authoritative cells: cells entering the seat's view, and visible cells whose tile was written whole |
-| `tile_statics` | a tile's fixed part (`position`, `tile_uuid`, `surface`, `name`), once per tile uuid per seat |
+| `tile_looks` | a tile surface and name under its content id (`look_id`, a digest of the value), once per id per seat |
+| `tile_statics` | a tile's fixed part (`position`, `tile_uuid`, `look`: a `tile_looks` id), once per tile uuid per seat |
 | `tile_columns` | the entered cells holding a tile: their changeable scalars as columns (§2) |
 | `tile_conditions` | a tile's own condition names (never its residues' names), whole list per cell |
 | `tile_changes` | a kept tile's changed scalars (`WorldTileChanges`: costs, optics, propagation, elevation, surface kind, slope axis, default light) |
@@ -23,7 +24,7 @@ occurrence, so the client's memory follows from the rules below and nothing else
 | `residues_removed` | (cell, material) keys removed |
 | `boundary_structures` | a boundary structure's value under its content id (a digest of the value), once per id per seat |
 | `object_looks` | an object's fixed part (`ObjectLook`), once per item uuid per seat, floor objects and contained items alike |
-| `objects` (`ObjectRow`) | `item_uuid`, `members`, `state` (`ObjectState`), `placement`, `observed_faces` (§3) |
+| `objects` (`ObjectColumns`) | the update's object rows as columns (below); each row is `item_uuid`, `members`, `state` (`ObjectState`), `placement` (`ObjectPlacement`), `observed_faces` (§3) |
 | `objects_removed` | objects the seat saw go |
 | `contents` | a container's whole contents (`ContainedItem`: uuid and state; looks through `object_looks`) |
 | `contents_changed` | keyed contents of a container the seat sees into: `upserted`, `removed` |
@@ -32,12 +33,23 @@ occurrence, so the client's memory follows from the rules below and nothing else
 
 A field holding its default is left out.
 
+### `ObjectColumns` (an update's object rows)
+
+Row *i* is the *i*-th entry of `item_uuids`; field names travel once per update.
+- `name` and `map_char` are dense: one value per row.
+- Every other field of a row is a `Column` (`rows`, `values`), left out when no row holds a non-default value.
+  - `rows` is a `RowBits` subset of the update's rows (left out: every row), and `values` holds one value per selected row, in row order.
+  - A row the column skips holds the field's default: `None` / `[]`, `stack_count` 1, `is_pickable` true, `blocks_propagation` false, `integrity` intact, and no `members` (one observer) or `observed_faces`.
+- `placements` (left out: no row carries a placement) has its own `rows` subset of the update's rows.
+  - `position` and `top_height_steps` are dense over those rows.
+  - Every other `ObjectPlacement` field is a `Column` over the placed rows, with that field's default when skipped.
+
 ### `ObjectState`
 
 `visual_item_name` is left out when it equals `name`. `boundary_structure` is the content id of a
-`boundary_structures` row.
+`boundary_structures` row. `construction_geometry` is state, not look: a cut construction's geometry changes.
 
-### `ObjectPlacement` (an object row's placement)
+### `ObjectPlacement` (an object row's placement, as `placements` decodes it)
 
 It carries what the full `WorldObjectPlacement` holds that is neither derivable nor a default. To decode it:
 
@@ -69,11 +81,12 @@ One byte per cell per column, in `cells` order (x, then y: the `CellValues` orde
 
 `elevation_steps` is a list of signed ints, one per cell, absent when every cell is at 0. A cell's
 tile is its static row (the latest one received for its position) joined with its column values.
-Its condition names start empty, and its rows in the same update fill them.
+Its surface and name are its static row's look. Its condition names start empty, and its rows in the same update
+fill them.
 
 ## 3. Fold order of one update
 
-1. **Static rows.** Store `tile_statics` by position (the latest one wins), `residue_materials` and `object_looks` by id, and `boundary_structures` by content id. They are never pruned. A look, a material or a structure never changes for its id (an id naming another value is an error).
+1. **Static rows.** Store `tile_looks` by content id, `tile_statics` by position (the latest one wins), `residue_materials` and `object_looks` by id, and `boundary_structures` by content id. They are never pruned. A look, a material or a structure never changes for its id (an id naming another value is an error).
 2. **Removals.** Pop `objects_removed` (with their members) and `connectors_removed`. Each names something the client holds.
 3. **Reset `entered`.** For every entered cell:
    - drop its tile and rebuild it from the columns;

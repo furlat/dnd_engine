@@ -3,7 +3,8 @@
 O1 compares a seat's client fold with a reference read from the live engine. These cases plant a known fault
 in an otherwise folded client and require O1 to name it: a body or an object drawn where nothing stands
 (a ghost), a body value that drifted, a body or a tile the client lost, an ended effect or a removed connector
-still shown. Other differences the head has are not asserted here; the gallery oracle runs list them.
+still shown, and the two a re-entered cell retires: an object kept at its old placement, and a construction's
+suppressed cell. Other differences the head has are not asserted here; the gallery oracle runs list them.
 """
 
 from collections.abc import Callable
@@ -17,14 +18,16 @@ from devtools.performance import gallery_crowd, seat_oracle
 from dnd.core.events import WorldConnectorState
 from dnd.core.traversal_connectors import ConnectorProvocationPolicy, TraversalConnectorKind
 from dnd.core.cells import mask_positions
+from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.player.application import initialize_audiences, seat_content
 from dnd.player.content_composition import ui_content_manifest
-from dnd.player.facts import PlayerState
+from dnd.player.facts import PlayerObject, PlayerState
 from dnd.player.reduction import reduce_initialization
 from dnd.player.session import close_session, create_session
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.senses import PerceivedSpatialEffect
-from dnd.types.world_placement import placement_support_cells
+from dnd.types.spell_suppression import SpellSuppression
+from dnd.types.world_placement import WorldObjectPlacement, WorldObjectSupport, placement_support_cells
 
 
 @pytest.mark.parametrize('layout,expected', [
@@ -96,14 +99,46 @@ def lost_tile(client: PlayerState) -> tuple[str, str, str | None]:
     return 'tiles', seat_oracle.key(position), ''
 
 
+def held_in_view(client: PlayerState) -> PlayerObject:
+    return next(obj for obj in client.objects.values() if placement_support_cells(obj.placement)
+                & set(mask_positions(senses(client).visible)))
+
+
 def ghost_object(client: PlayerState) -> tuple[str, str, str | None]:
     """A copy of a held object in view, under an identity nothing in the world has."""
-    held = next(obj for obj in client.objects.values() if placement_support_cells(obj.placement)
-                & set(mask_positions(senses(client).visible)))
+    held = held_in_view(client)
     identity = uuid4()
     client.objects[identity] = replace(held, item=replace(held.item, item_uuid=identity),
                                        placement=held.placement.model_copy(update={'object_uuid': identity}))
     return 'objects', str(identity), None
+
+
+def kept_object(client: PlayerState) -> tuple[str, str, str | None]:
+    """A held object shown at its old placement on a re-entered cell, although it now stands elsewhere."""
+    held = held_in_view(client)
+    position = next(cell for cell in sorted(mask_positions(senses(client).visible))
+                    if cell not in placement_support_cells(held.placement))
+    support = WorldObjectSupport(position=position, tile_uuid=client.tiles[position].tile_uuid)
+    placement = WorldObjectPlacement.model_validate({**held.placement.model_dump(), 'position': position,
+        'tile_uuid': support.tile_uuid, 'covered_supports': (support,), 'removed_bands': ()})
+    client.objects[held.item.item_uuid] = replace(held, placement=placement)
+    return 'objects', str(held.item.item_uuid), 'placement.position'
+
+
+def stale_suppression(client: PlayerState) -> tuple[str, str, str | None]:
+    """A perceived provider's suppressed cell still on a held object after the cell re-entered view (the world
+    has no such suppression)."""
+    held = held_in_view(client)
+    position = min(placement_support_cells(held.placement) & set(mask_positions(senses(client).visible)))
+    provider = uuid4()
+    effect = PerceivedSpatialEffect(content_ref=client.content[0].ref, name='Protecting zone', description='',
+                                    positions=(position,), area_geometry=SpherePresentationGeometry(center=position,
+                                                                                                    radius_feet=5))
+    client.senses = replace(senses(client), spatial_effects={**senses(client).spatial_effects, provider: effect})
+    row = SpellSuppression(provider_uuid=provider, positions=(position,))
+    client.objects[held.item.item_uuid] = replace(held, item=replace(held.item, construction_suppressions=(
+        *held.item.construction_suppressions, row)))
+    return 'objects', str(held.item.item_uuid), 'item.construction_suppressions'
 
 
 def stale_effect(client: PlayerState) -> tuple[str, str, str | None]:
@@ -136,7 +171,9 @@ class Fault:
 
 FAULTS = (Fault('ghost body', ghost), Fault('drifted hit points', drifted_hit_points),
           Fault('lost body', lost_body), Fault('lost tile', lost_tile), Fault('ghost object', ghost_object),
-          Fault('stale effect', stale_effect), Fault('stale connector', stale_connector))
+          Fault('stale effect', stale_effect), Fault('stale connector', stale_connector),
+          Fault('object kept after its cell re-entered', kept_object),
+          Fault('stale suppression on a re-entered cell', stale_suppression))
 
 
 @pytest.mark.parametrize('fault', FAULTS, ids=lambda fault: fault.name)

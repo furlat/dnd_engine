@@ -27,7 +27,7 @@ from dnd.player.facts import (
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
     VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact, PlayerObject, StaticStore,
 )
-from dnd.player.world_columns import join_floor_item, unpack_placement, unpack_tile_columns
+from dnd.player.world_columns import join_floor_item, unpack_object_rows, unpack_placement, unpack_tile_columns
 from dnd.player.world_reduction import fold_static_rows, fold_world_update
 
 
@@ -80,7 +80,8 @@ def copy_target(target: PlayerState) -> PlayerState:
     senses = target.senses
     return replace(target, tiles=dict(target.tiles), objects=dict(target.objects),
         object_members=dict(target.object_members), connectors=dict(target.connectors),
-        static=StaticStore(tiles=dict(target.static.tiles), residues=dict(target.static.residues),
+        static=StaticStore(tiles=dict(target.static.tiles), tile_looks=dict(target.static.tile_looks),
+            residues=dict(target.static.residues),
             object_looks=dict(target.static.object_looks),
             boundary_structures=dict(target.static.boundary_structures)), actors=dict(target.actors),
         items=dict(target.items), spatial_content=dict(target.spatial_content),
@@ -276,9 +277,10 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
     stage_static(result, lineage.world_updates)
     for update in lineage.world_updates:
         if update.tile_columns is not None:
-            for position, tile in unpack_tile_columns(update.tile_columns, result.static.tiles).items():
+            for position, tile in unpack_tile_columns(update.tile_columns, result.static.tiles,
+                    result.static.tile_looks).items():
                 result.tiles.setdefault(position, tile)
-        for row in update.objects:
+        for row in unpack_object_rows(update.objects):
             if row.placement is not None and row.item_uuid not in result.objects:
                 result.objects[row.item_uuid] = PlayerObject(
                     placement=unpack_placement(row.item_uuid, row.placement, result.static.tiles),

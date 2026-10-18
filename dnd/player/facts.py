@@ -7,11 +7,12 @@ engine constructors, executable state, audience grant maps, or diagnostic rows.
 from dnd.core.content.descriptors import ContentDescriptor
 
 from dataclasses import dataclass, field
-from typing import Annotated, Literal, TypedDict, TypeVar
+from typing import Annotated, Generic, Literal, TypedDict, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.dataclasses import dataclass as packed_dataclass
+from pydantic.config import JsonDict
 from dnd.player.compatibility import upgrade_spell_fact
 from dnd.player.audience import AudiencePerception, PlayerAudience, resolve_audience
 
@@ -31,7 +32,7 @@ from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposi
 from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState, ResidueContribution
 from dnd.types.materials import TileSurface
-from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, NO_ROWS, PACKED, CellMask, CellMaskField, CellValues, CellValuesField, RowBitsField
+from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, NO_ROWS, PACKED, CellMask, CellMaskField, CellValues, CellValuesField, RowBits, RowBitsField
 from dnd.types.senses import SenseMode, SensesSnapshot, SensesType, VolumeSurfaceSight
 from dnd.core.condition_types import ConditionDurationSummary
 from dnd.types.class_features import DraconicPresenceMode
@@ -992,14 +993,22 @@ class PlayerObject:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class TileLook:
+    """A tile's surface and name, sent once per seat under its content id (a digest of the value)."""
+
+    look_id: str
+    surface: TileSurface
+    name: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TileStatic:
     """A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new
-    uuid)."""
+    uuid). `look` is its surface and name's `TileLook` content id."""
 
     position: tuple[int, int]
     tile_uuid: UUID
-    surface: TileSurface
-    name: str
+    look: str
 
 
 @packed_dataclass(frozen=True, slots=True, kw_only=True, config=PACKED)
@@ -1075,8 +1084,9 @@ class ResidueKey:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ObjectLook:
-    """A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid (a census of
-    every gallery case's world fold; a broken object's visual name changes, so it is state)."""
+    """A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid
+    (`test_object_look_static` and a census of every gallery case's world fold; a broken object's visual name and a
+    cut construction's geometry change, so they are state)."""
 
     item_uuid: UUID
     item_id: str
@@ -1088,7 +1098,6 @@ class ObjectLook:
     maximum_hit_points: Annotated[int | None, Field(exclude_if=_unset)] = None
     concentration_capacity: Annotated[int, Field(exclude_if=_zero)] = 0
     construction_owner_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
-    construction_geometry: Annotated[AoEPresentationGeometry | None, Field(exclude_if=_unset)] = None
     known_to_creator: Annotated[bool, Field(exclude_if=_unflagged)] = False
 
 
@@ -1139,6 +1148,7 @@ class ObjectState:
     remnant_state: Annotated[ItemRemnantState | None, Field(exclude_if=_unset)] = None
     integrity: Annotated[ItemIntegrity, Field(exclude_if=_intact)] = ItemIntegrity.INTACT
     destruction_outcome: Annotated[str | None, Field(exclude_if=_unset)] = None
+    construction_geometry: Annotated[AoEPresentationGeometry | None, Field(exclude_if=_unset)] = None
     construction_suppressions: Annotated[tuple[SpellSuppression, ...], Field(exclude_if=_no_rows)] = ()
 
 
@@ -1185,6 +1195,88 @@ class ObjectRow:
     observed_faces: Annotated[tuple[CardinalDirection, ...], Field(exclude_if=_no_rows)] = ()
 
 
+Value = TypeVar("Value")
+
+
+def _named_by_its_definition(schema: JsonDict) -> None:
+    """A column's schema is named by its definition (`Column_<value type>_`), not by a title every column
+    shares (an SDK generator would number the columns by order)."""
+    del schema["title"]
+
+
+# The rows a group's column selects; left out, every row.
+SelectedRows = Annotated[RowBits | None, Field(exclude_if=_unset)]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Column(Generic[Value]):
+    """One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+    every row; a column with no value is left out of its group, and each row it skips holds the field's default."""
+
+    __pydantic_config__ = ConfigDict(json_schema_extra=_named_by_its_definition)
+
+    rows: SelectedRows = None
+    values: tuple[Value, ...]
+
+
+# A column of non-default values, left out when no row holds one.
+Sparse = Annotated[Column[Value] | None, Field(exclude_if=_unset)]
+# Value types named so the schema names their columns.
+type ConstructionGeometry = AoEPresentationGeometry
+type MemberBits = Annotated[int, Field(ge=1)]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlacementColumns:
+    """The `ObjectPlacement`s of an update's object rows, as columns over the rows `rows` selects (left out:
+    every row)."""
+
+    rows: SelectedRows = None
+    position: tuple[tuple[int, int], ...]
+    top_height_steps: tuple[int, ...]
+    boundary_direction: Sparse[CardinalDirection] = None
+    tile_uuid: Sparse[UUID] = None
+    covered_supports: Sparse[tuple[WorldObjectSupport, ...]] = None
+    occupies_bands: Sparse[bool] = None
+    base_height_steps: Sparse[int] = None
+    orientation: Sparse[CardinalDirection] = None
+    removed_bands: Sparse[tuple[tuple[int, int, int], ...]] = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObjectColumns:
+    """An update's `ObjectRow`s as columns, one entry per row in row order (field names once per update): the
+    rows' uuids, members, observed faces, every `ObjectState` field and their placements. A sparse column holds
+    the rows whose value is not the field's default."""
+
+    item_uuids: tuple[UUID, ...]
+    members: Sparse[MemberBits] = None
+    observed_faces: Sparse[tuple[CardinalDirection, ...]] = None
+    name: tuple[str, ...]
+    visual_item_name: Sparse[str] = None
+    map_char: tuple[str, ...]
+    boundary_structure: Sparse[str] = None
+    is_open: Sparse[bool] = None
+    is_lit: Sparse[bool] = None
+    very_bright_radius_feet: Sparse[int] = None
+    bright_radius_feet: Sparse[int] = None
+    dim_radius_feet: Sparse[int] = None
+    stack_count: Sparse[int] = None
+    is_pickable: Sparse[bool] = None
+    item_effects: Sparse[tuple[ItemEffectPresentationState, ...]] = None
+    blocks_propagation: Sparse[bool] = None
+    is_engaged: Sparse[bool] = None
+    surface_residues: Sparse[tuple[ObjectResidueState, ...]] = None
+    current_hit_points: Sparse[int] = None
+    concentration_slots: Sparse[tuple[ItemConcentrationSlot, ...]] = None
+    remnant_state: Sparse[ItemRemnantState] = None
+    integrity: Sparse[ItemIntegrity] = None
+    destruction_outcome: Sparse[str] = None
+    construction_geometry: Sparse[ConstructionGeometry] = None
+    construction_suppressions: Sparse[tuple[SpellSuppression, ...]] = None
+    placements: Annotated[PlacementColumns | None, Field(exclude_if=_unset)] = None
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ContainedItem:
     item_uuid: UUID
@@ -1220,6 +1312,7 @@ class WorldUpdate:
 
     occurrence: int
     entered: CellMaskField = EMPTY_CELLS
+    tile_looks: Rows[TileLook] = ()
     tile_statics: Rows[TileStatic] = ()
     tile_columns: Annotated[TileColumns | None, Field(exclude_if=_unset)] = None
     tile_conditions: Rows[TileConditions] = ()
@@ -1230,7 +1323,7 @@ class WorldUpdate:
     residues: Rows[ResidueRow] = ()
     residues_removed: Rows[ResidueKey] = ()
     object_looks: Rows[ObjectLook] = ()
-    objects: Rows[ObjectRow] = ()
+    objects: Annotated[ObjectColumns | None, Field(exclude_if=_unset)] = None
     objects_removed: Rows[UUID] = ()
     contents: Rows[ContainerContents] = ()
     contents_changed: Rows[ContentsChange] = ()
@@ -1240,10 +1333,11 @@ class WorldUpdate:
 
 @dataclass(slots=True, kw_only=True)
 class StaticStore:
-    """The static rows the client was sent, never pruned: tiles by cell (the latest uuid there), residue
-    materials by id, object looks by item uuid, boundary structures by content id."""
+    """The static rows the client was sent, never pruned: tiles by cell (the latest uuid there), tile looks and
+    boundary structures by content id, residue materials by id, object looks by item uuid."""
 
     tiles: dict[tuple[int, int], TileStatic] = field(default_factory=dict)
+    tile_looks: dict[str, TileLook] = field(default_factory=dict)
     residues: dict[str, ResidueMaterial] = field(default_factory=dict)
     object_looks: dict[UUID, ObjectLook] = field(default_factory=dict)
     boundary_structures: dict[str, BoundaryStructure] = field(default_factory=dict)

@@ -78,7 +78,7 @@ from dnd.types.actor_facts import ConditionMember
 from dnd.types.cells import cell_in
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SensesSnapshot
 from dnd.types.world import CardinalDirection
-from dnd.types.world_placement import CARDINAL_DELTAS, WorldObjectPlacement, placement_support_cells
+from dnd.types.world_placement import WorldObjectPlacement, boundary_sides, placement_support_cells
 from dnd.world_authoring import project_world_connector, project_world_object
 from dnd.world_facts import WorldFacts, _put_object, _Written, world_objects_at
 from server.config import ServerConfig
@@ -232,15 +232,9 @@ def _shown_item_uuids(actor: PlayerActor, owned: bool) -> tuple[UUID, ...]:
 
 
 def _seen_faces(placement: WorldObjectPlacement, visible: set[Position]) -> set[CardinalDirection]:
-    """A boundary object's faces seen now: its owner cell's side if that cell is visible, the far side if the
-    opposite incident cell is (the publication's face rule, `world_publication.observed_faces`)."""
-    if placement.boundary_direction is None:
-        return set()
-    dx, dy = CARDINAL_DELTAS[placement.boundary_direction]
-    x, y = placement.position
-    opposite = next(direction for direction, delta in CARDINAL_DELTAS.items() if delta == (-dx, -dy))
-    return ({opposite} if (x, y) in visible else set()) | ({placement.boundary_direction}
-                                                          if (x + dx, y + dy) in visible else set())
+    """A boundary object's faces seen now: each face whose viewing cell is visible (`boundary_sides`, the one
+    rule for a boundary's incident cells)."""
+    return {face for face, cell in boundary_sides(placement) if cell in visible}
 
 
 def _perceived_object(obj: PlayerObject, visible: set[Position], in_view: Collection[UUID],

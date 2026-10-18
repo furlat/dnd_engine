@@ -15,6 +15,17 @@
      "height": 1,
      "bits": "Dw=="
     },
+    "tile_looks": [
+     {
+      "look_id": "652de935c25693e0",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
     "tile_statics": [
      {
       "position": [
@@ -22,12 +33,7 @@
        0
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100000000",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      },
      {
       "position": [
@@ -35,12 +41,7 @@
        0
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100001000",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      },
      {
       "position": [
@@ -48,12 +49,7 @@
        0
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100002000",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      },
      {
       "position": [
@@ -61,12 +57,7 @@
        0
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100003000",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      }
     ],
     "tile_columns": {
@@ -98,38 +89,42 @@
       "supported_by_uuid": "00000000-0000-4000-8000-000000002003"
      }
     ],
-    "objects": [
-     {
-      "item_uuid": "00000000-0000-4000-8000-000000002001",
-      "state": {
-       "name": "Box",
-       "visual_item_name": "box",
-       "map_char": "B"
-      },
-      "placement": {
-       "position": [
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002001",
+      "00000000-0000-4000-8000-000000002002"
+     ],
+     "name": [
+      "Box",
+      "Torch"
+     ],
+     "visual_item_name": {
+      "values": [
+       "box",
+       "torch"
+      ]
+     },
+     "map_char": [
+      "B",
+      "T"
+     ],
+     "placements": {
+      "position": [
+       [
         1,
         0
        ],
-       "top_height_steps": 2
-      }
-     },
-     {
-      "item_uuid": "00000000-0000-4000-8000-000000002002",
-      "state": {
-       "name": "Torch",
-       "visual_item_name": "torch",
-       "map_char": "T"
-      },
-      "placement": {
-       "position": [
+       [
         2,
         0
-       ],
-       "top_height_steps": 2
-      }
+       ]
+      ],
+      "top_height_steps": [
+       2,
+       2
+      ]
      }
-    ]
+    }
    },
    "expected": {
     "tiles": {
