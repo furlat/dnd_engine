@@ -2,13 +2,33 @@
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
 owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
-333 shared definitions and 1,781 object-field rows. `protocol-identity.json` binds
-protocol 1 and player schema 13 to the exact canonical schema digest.
+334 shared definitions and 1,791 object-field rows. `protocol-identity.json` binds
+protocol 1 and player schema 14 to the exact canonical schema digest.
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
 - `field-ledger.json`: each reachable field, required/default shape and source owner.
 - The Python and TypeScript packages carry the same schema and digest.
+
+## Shared sensory rows (schema 14)
+
+A seat with many observers receives the same perceived values in many
+observers' sensory facts. Each group (`PlayerLineage`, and the
+`PlayerInitialization`) now carries `sensory_rows` (`SensoryRows`): its
+distinct values, each once, as columns. `uuids` holds every identity a keyed
+row or a removed list names. Contact row i is `uuids[contact_uuid_index[i]]`
+perceived as `contacts[i]`; sighting row i is the effect
+`uuids[sighting_uuid_index[i]]` seen as `sightings[i]`; light removal row i is
+the source `uuids[light_removal_uuid_index[i]]` gone at
+`light_removal_revisions[i]`; `light_sources[i]` is a `PerceivedLightSource`
+(it carries its `source_uuid`). A `SensoryFact` names rows of its own group by
+index: `entity_contacts_changed` / `object_contacts_changed` contact rows,
+`spatial_effect_sightings` sighting rows, `light_sources_changed` light sources,
+`light_sources_removed` light removal rows, and `entity_contacts_removed`,
+`object_contacts_removed`, `spatial_effects_removed` indices into `uuids`. A
+one-observer seat has the same shape. A sensory field holding its default
+(an empty list or map, `false`, `null`) is left out; decoding restores the
+default. `dnd/player/reduction.py:sensory_changes` is the reference resolution.
 
 ## Packed cells (schema 13)
 
@@ -53,7 +73,7 @@ A seat receives what it does not hold yet, as patches against its own fold
   `event_uuid`, concentration slots, application and resolution references)
   remain opaque attributes.
 
-Saved `PlayerSequence` packets are schema 6.
+Saved `PlayerSequence` packets are schema 7 (schema 14's sensory rows).
 
 ## Antimagic removal (schema 11)
 

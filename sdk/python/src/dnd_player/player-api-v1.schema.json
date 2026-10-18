@@ -12781,6 +12781,19 @@
             }
           ],
           "default": null
+        },
+        "sensory_rows": {
+          "$ref": "#/$defs/SensoryRows",
+          "default": {
+            "uuids": [],
+            "contact_uuid_index": [],
+            "contacts": [],
+            "sighting_uuid_index": [],
+            "sightings": [],
+            "light_sources": [],
+            "light_removal_uuid_index": [],
+            "light_removal_revisions": []
+          }
         }
       },
       "required": [
@@ -12880,6 +12893,19 @@
             }
           ],
           "default": null
+        },
+        "sensory_rows": {
+          "$ref": "#/$defs/SensoryRows",
+          "default": {
+            "uuids": [],
+            "contact_uuid_index": [],
+            "contacts": [],
+            "sighting_uuid_index": [],
+            "sightings": [],
+            "light_sources": [],
+            "light_removal_uuid_index": [],
+            "light_removal_revisions": []
+          }
         }
       },
       "required": [
@@ -14352,8 +14378,8 @@
           "maximum": 9007199254740991
         },
         "player_schema_version": {
-          "const": 13,
-          "default": 13,
+          "const": 14,
+          "default": 14,
           "title": "Player Schema Version",
           "type": "integer",
           "minimum": -9007199254740991,
@@ -15142,6 +15168,7 @@
       "type": "string"
     },
     "SensoryFact": {
+      "description": "One observer's sensory after-values; its changed and removed values are rows of its group's `SensoryRows`.\n\n`entity_contacts_changed` / `object_contacts_changed` index contact rows,\n`spatial_effect_sightings` sighting rows, `light_sources_changed` light\nsources, `light_sources_removed` light removal rows; the three other removed\nlists index `uuids`. A list never names two rows of one identity.",
       "properties": {
         "kind": {
           "const": "sensory",
@@ -15155,6 +15182,7 @@
           "type": "string"
         },
         "initial": {
+          "default": false,
           "title": "Initial",
           "type": "boolean"
         },
@@ -15177,6 +15205,7 @@
           "type": "array"
         },
         "observer_position_changed": {
+          "default": false,
           "title": "Observer Position Changed",
           "type": "boolean"
         },
@@ -15204,6 +15233,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Cause Occurrence"
         },
         "visible_cells_added": {
@@ -15237,44 +15267,47 @@
           }
         },
         "entity_contacts_changed": {
-          "additionalProperties": {
-            "$ref": "#/$defs/PerceivedContact"
-          },
-          "propertyNames": {
-            "format": "uuid"
+          "default": [],
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
           },
           "title": "Entity Contacts Changed",
-          "type": "object"
+          "type": "array"
         },
         "entity_contacts_removed": {
+          "default": [],
           "items": {
-            "format": "uuid",
-            "type": "string"
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
           },
           "title": "Entity Contacts Removed",
-          "type": "array",
-          "uniqueItems": true
+          "type": "array"
         },
         "object_contacts_changed": {
-          "additionalProperties": {
-            "$ref": "#/$defs/PerceivedContact"
-          },
-          "propertyNames": {
-            "format": "uuid"
+          "default": [],
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
           },
           "title": "Object Contacts Changed",
-          "type": "object"
+          "type": "array"
         },
         "object_contacts_removed": {
+          "default": [],
           "items": {
-            "format": "uuid",
-            "type": "string"
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
           },
           "title": "Object Contacts Removed",
-          "type": "array",
-          "uniqueItems": true
+          "type": "array"
         },
         "sense_modes_changed": {
+          "default": false,
           "title": "Sense Modes Changed",
           "type": "boolean"
         },
@@ -15290,9 +15323,11 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Sense Modes"
         },
         "passive_perception_changed": {
+          "default": false,
           "title": "Passive Perception Changed",
           "type": "boolean"
         },
@@ -15307,9 +15342,11 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Passive Perception"
         },
         "visual_access_changed": {
+          "default": false,
           "title": "Visual Access Changed",
           "type": "boolean"
         },
@@ -15324,9 +15361,11 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Visual Access"
         },
         "paths_dirty": {
+          "default": false,
           "title": "Paths Dirty",
           "type": "boolean"
         },
@@ -15344,14 +15383,14 @@
           }
         },
         "spatial_effect_sightings": {
-          "additionalProperties": {
-            "$ref": "#/$defs/SpatialEffectSighting"
-          },
-          "propertyNames": {
-            "format": "uuid"
+          "default": [],
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
           },
           "title": "Spatial Effect Sightings",
-          "type": "object"
+          "type": "array"
         },
         "spatial_effect_content": {
           "additionalProperties": {
@@ -15366,55 +15405,120 @@
         "spatial_effects_removed": {
           "default": [],
           "items": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "title": "Spatial Effects Removed",
-          "type": "array",
-          "uniqueItems": true
-        },
-        "light_sources_changed": {
-          "additionalProperties": {
-            "$ref": "#/$defs/PerceivedLightSource"
-          },
-          "propertyNames": {
-            "format": "uuid"
-          },
-          "title": "Light Sources Changed",
-          "type": "object"
-        },
-        "light_sources_removed": {
-          "additionalProperties": {
+            "minimum": 0,
             "type": "integer",
-            "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
-          "propertyNames": {
-            "format": "uuid"
+          "title": "Spatial Effects Removed",
+          "type": "array"
+        },
+        "light_sources_changed": {
+          "default": [],
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "title": "Light Sources Changed",
+          "type": "array"
+        },
+        "light_sources_removed": {
+          "default": [],
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
           },
           "title": "Light Sources Removed",
-          "type": "object"
+          "type": "array"
         }
       },
       "required": [
         "observer_uuid",
-        "initial",
-        "observer_position",
-        "observer_position_changed",
-        "cause_occurrence",
-        "entity_contacts_changed",
-        "entity_contacts_removed",
-        "object_contacts_changed",
-        "object_contacts_removed",
-        "sense_modes_changed",
-        "sense_modes",
-        "passive_perception_changed",
-        "passive_perception",
-        "visual_access_changed",
-        "visual_access",
-        "paths_dirty"
+        "observer_position"
       ],
       "title": "SensoryFact",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "SensoryRows": {
+      "description": "The distinct perceived values a group's sensory facts name, each once, as columns.\n\nEvery identity a removed list or a keyed row names is in `uuids` once.\nContact row i is the entity or object `uuids[contact_uuid_index[i]]`\nperceived as `contacts[i]`; sighting row i is the effect\n`uuids[sighting_uuid_index[i]]` seen as `sightings[i]`; light removal row i\nis the source `uuids[light_removal_uuid_index[i]]` gone at revision\n`light_removal_revisions[i]`. A light source row is the record itself; it\ncarries its `source_uuid`.",
+      "properties": {
+        "uuids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Uuids",
+          "type": "array"
+        },
+        "contact_uuid_index": {
+          "default": [],
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "title": "Contact Uuid Index",
+          "type": "array"
+        },
+        "contacts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PerceivedContact"
+          },
+          "title": "Contacts",
+          "type": "array"
+        },
+        "sighting_uuid_index": {
+          "default": [],
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "title": "Sighting Uuid Index",
+          "type": "array"
+        },
+        "sightings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SpatialEffectSighting"
+          },
+          "title": "Sightings",
+          "type": "array"
+        },
+        "light_sources": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PerceivedLightSource"
+          },
+          "title": "Light Sources",
+          "type": "array"
+        },
+        "light_removal_uuid_index": {
+          "default": [],
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "title": "Light Removal Uuid Index",
+          "type": "array"
+        },
+        "light_removal_revisions": {
+          "default": [],
+          "items": {
+            "minimum": 0,
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "title": "Light Removal Revisions",
+          "type": "array"
+        }
+      },
+      "title": "SensoryRows",
       "type": "object",
       "additionalProperties": false
     },
