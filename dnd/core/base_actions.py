@@ -1957,16 +1957,23 @@ class BaseAction(BaseObject):
                 if error is None:
                     break
             return error, None
-        error = self._admission_error(scan, selection)
-        return (error, None) if error else self._physical_access_contact(scan, selection)
+        return self._requirements_contact(scan, selection)
 
     @final
     def requirements_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        """Every non-cost requirement of one selection: shared admission, the action's rule, physical access.
+        """The error of `_requirements_contact`."""
+        return self._requirements_contact(scan, selection)[0]
+
+    @final
+    def _requirements_contact(self, scan: ActorScan,
+                              selection: ActionSelection) -> Tuple[Optional[str], Optional[Tuple[int, int]]]:
+        """Every non-cost requirement of one selection (shared admission, the action's rule, physical access),
+        with the physical-access contact.
 
         The scan's knowledge decides what is read: perception in discovery, the world at execution.
         """
-        return self._admission_error(scan, selection) or self._physical_access_contact(scan, selection)[0]
+        error = self._admission_error(scan, selection)
+        return (error, None) if error else self._physical_access_contact(scan, selection)
 
     def relocation_destinations(self, scan: ActorScan, selection: ActionSelection) -> Tuple[Tuple[int, int], ...]:
         """Destinations a relocation may choose: seen, unoccupied and in range (plan §14.1).
