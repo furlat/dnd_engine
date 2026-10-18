@@ -128,7 +128,8 @@ def _compute_identified_entity_observers(
         key = _id_string(participant_uuid)
         position = grid.get_entity_position(participant_uuid)
         rows.append((key, frozenset((key,)) if position is None
-            else spatial_senses_system.identifying_observers(participant_uuid, position)))
+            else frozenset(_id_string(holder)
+                           for holder in spatial_senses_system.identifying_observers(participant_uuid, position))))
     if len(rows) == len(previous) and all(
             held_key == key and (held is observers or held == observers)
             for (held_key, held), (key, observers) in zip(previous.items(), rows)):

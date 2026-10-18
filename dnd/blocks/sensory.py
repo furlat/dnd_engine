@@ -667,7 +667,7 @@ class ObserverField:
     `sight_inputs`, the light stage on the objective light over the window (`light`);
     contacts, hazards, fixtures and emitters read the published view every time. The
     routes are kept while their key (origin, radius, optical revision) holds; the window
-    and grants describe the last published view.
+    and contact rows describe the last published view.
     """
 
     origin: Position
@@ -686,7 +686,6 @@ class ObserverField:
     felt_frame: np.ndarray
     seen_frame: np.ndarray
     senses_frame: np.ndarray
-    grants: CellLayer                # bool over the window: cells whose facts this observer is granted
     contact_rows: np.ndarray         # the published contacts as rows: kind, uuid halves, x, y, visual, senses
     contact_uuids: np.ndarray        # each contact row's target (object array of UUID)
     contact_changes: Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]  # entities, objects the last recompute touched
@@ -701,6 +700,59 @@ class ObserverField:
 NO_CONTACT_ROWS = np.zeros((0, 8), dtype=np.int64)
 CELL_PACK_LIMIT = 1 << 20
 NO_UUIDS = np.zeros(0, dtype=object)
+
+
+@dataclass(frozen=True)
+class GrantTable:
+    """The cells whose facts each settled observer is granted (its routes, felt cells and volume
+    routes), owned by the system and their only holder: a settlement replaces its observers' rows,
+    register and unregister drop a row, reset and a replaced map empty it. Each row is a bool layer
+    over the observer's window; the rows are read together through one flat array."""
+
+    observers: Tuple[UUID, ...]
+    layers: Tuple[CellLayer, ...]
+    x0: np.ndarray                   # each row's window origin, width and height
+    y0: np.ndarray
+    width: np.ndarray
+    height: np.ndarray
+    offset: np.ndarray               # each row's first index in `flat`
+    flat: np.ndarray                 # every row's values, x-major, concatenated
+
+
+def _grant_table(rows: Sequence[Tuple[UUID, CellLayer]]) -> GrantTable:
+    """The table of these rows (observer, granted cells over its window)."""
+    layers = tuple(layer for _, layer in rows)
+    sizes = np.array([layer.values.size for layer in layers], dtype=np.int64)
+    return GrantTable(tuple(identity for identity, _ in rows), layers,
+                      np.array([layer.x0 for layer in layers], dtype=np.int64),
+                      np.array([layer.y0 for layer in layers], dtype=np.int64),
+                      np.array([layer.values.shape[0] for layer in layers], dtype=np.int64),
+                      np.array([layer.values.shape[1] for layer in layers], dtype=np.int64),
+                      np.concatenate(([0], np.cumsum(sizes)[:-1])).astype(np.int64) if layers else sizes,
+                      np.concatenate([layer.values.reshape(-1) for layer in layers]) if layers
+                      else np.zeros(0, dtype=bool))
+
+
+NO_GRANTS = _grant_table(())
+
+
+def _replace_grants(table: GrantTable, rows: Mapping[UUID, Optional[CellLayer]]) -> GrantTable:
+    """The table with these observers' rows replaced (None drops a row)."""
+    kept = [(identity, layer) for identity, layer in zip(table.observers, table.layers) if identity not in rows]
+    return _grant_table(kept + [(identity, layer) for identity, layer in rows.items() if layer is not None])
+
+
+def _granted_at(table: GrantTable, positions: Iterable[Position]) -> np.ndarray:
+    """The indices of the table's observers granted any of these cells."""
+    cells = np.array(list(positions), dtype=np.int64).reshape(-1, 2)
+    if not cells.size or not table.observers:
+        return np.zeros(0, dtype=np.int64)
+    i = cells[None, :, 0] - table.x0[:, None]
+    j = cells[None, :, 1] - table.y0[:, None]
+    inside = (i >= 0) & (i < table.width[:, None]) & (j >= 0) & (j < table.height[:, None])
+    granted = np.zeros(inside.shape, dtype=bool)
+    granted[inside] = table.flat[(table.offset[:, None] + i * table.height[:, None] + j)[inside]]
+    return np.flatnonzero(granted.any(axis=1))
 
 
 @dataclass(frozen=True)
@@ -900,10 +952,8 @@ class SpatialSensesSystem:
         self._settling = False
         self._absorbing_light = False
         self._settled_with_light = False
-        # The identity grants of a creature at a cell, valid while no observer's published
-        # perception changes: every perception write (register, unregister, recompute,
-        # reset) clears them.
-        self._identity_grants: Dict[Tuple[UUID, Tuple[int, int]], FrozenSet[str]] = {}
+        # The settled observers' grants (written by each settlement, dropped with their fields).
+        self._grants: GrantTable = NO_GRANTS
         # Contact targets' ids (each target once, in first-seen order): their keys compare by value
         # across settlements. Append-only; reset clears it with every field that holds a key.
         self._target_ids: Dict[UUID, int] = {}
@@ -941,7 +991,7 @@ class SpatialSensesSystem:
         self._settling = False
         self._absorbing_light = False
         self._settled_with_light = False
-        self._identity_grants.clear()
+        self._grants = NO_GRANTS
         self._target_ids.clear()
         self._light_table = None
         self._table = None
@@ -1027,33 +1077,22 @@ class SpatialSensesSystem:
     def register_observer(self, observer_uuid: UUID, senses: Senses) -> None:
         """Register an observer without independently materializing its world view."""
         self.senses_by_observer[observer_uuid] = senses
-        self.fields.pop(observer_uuid, None)
-        self._identity_grants.clear()
+        if self.fields.pop(observer_uuid, None) is not None:
+            self._grants = _replace_grants(self._grants, {observer_uuid: None})
 
     def unregister_observer(self, observer_uuid: UUID) -> None:
         """Remove an observer and its field."""
         self.senses_by_observer.pop(observer_uuid, None)
         self.published_observers.discard(observer_uuid)
         if self.fields.pop(observer_uuid, None) is not None:
-            self._identity_grants.clear()
+            self._grants = _replace_grants(self._grants, {observer_uuid: None})
 
     # ------------------------------------------------------------------ selection
 
     def observers_granted(self, positions: Iterable[Position]) -> Set[UUID]:
         """Observers whose last view grants any of these cells (wall field, felt cells, volume routes)."""
-        cells = list(positions)
-        if not cells:
-            return set()
-        xs, ys = np.array(cells, dtype=np.int64).reshape(-1, 2).T
-        granted: Set[UUID] = set()
-        for identity, field in self.fields.items():
-            grants = field.grants
-            i, j = xs - grants.x0, ys - grants.y0
-            width, height = grants.values.shape
-            inside = (i >= 0) & (i < width) & (j >= 0) & (j < height)
-            if inside.any() and grants.values[i[inside], j[inside]].any():
-                granted.add(identity)
-        return granted
+        table = self._grants
+        return {table.observers[index] for index in _granted_at(table, positions).tolist()}
 
     def _observers_reaching(self, box: Box) -> Set[UUID]:
         """Observers with a settled view whose selection box intersects a change box."""
@@ -1064,19 +1103,17 @@ class SpatialSensesSystem:
         return {identity for identity, senses in self.senses_by_observer.items()
                 if entity and subject_uuid in senses.entities or item and subject_uuid in senses.objects}
 
-    def identifying_observers(self, subject_uuid: UUID, position: Tuple[int, int]) -> FrozenSet[str]:
-        """String ids of the creature itself and each observer granted its cell holding its contact.
+    def identifying_observers(self, subject_uuid: UUID, position: Tuple[int, int]) -> Set[UUID]:
+        """The creature itself and each observer granted its cell holding its contact.
 
         Every holder is a registered Entity: only entities register as
         observers, and an entity leaves the registry after it unregisters here.
         """
-        grants = self._identity_grants.get((subject_uuid, position))
-        if grants is None:
-            holders = self.contact_holders(subject_uuid, self.observers_granted((position,)))
-            holders.add(subject_uuid)
-            grants = self._identity_grants[(subject_uuid, position)] = frozenset(
-                str(holder) for holder in holders)
-        return grants
+        table = self._grants
+        holders = self.contact_holders(subject_uuid, {table.observers[index]
+                                                      for index in _granted_at(table, (position,)).tolist()})
+        holders.add(subject_uuid)
+        return holders
 
     def contact_holders(self, subject_uuid: UUID, observers: AbstractSet[UUID]) -> Set[UUID]:
         """Those observers whose current entity contacts include this subject."""
@@ -1293,7 +1330,7 @@ class SpatialSensesSystem:
         if grid is not self._map:
             # A replaced map: every field and table read the old one.
             self.fields.clear()
-            self._identity_grants.clear()
+            self._grants = NO_GRANTS
             self._light_table = None
             self._table = None
             self._map = grid
@@ -1380,11 +1417,13 @@ class SpatialSensesSystem:
         if diagnostic:
             record_action_timing("sensory.settlement.contacts_ms", started)
         touched = {}
+        grants: Dict[UUID, Optional[CellLayer]] = {}
         light_diffs: Dict[int, Tuple[np.ndarray, np.ndarray, Tuple[UUID, ...]]] = {}
         for view, resolved in zip(views, contacts):
-            touched[view.owner.uuid] = self._publish(view, world, table, affected[view.owner.uuid], shared,
-                                                     passives[view.owner.uuid], resolved, light_diffs)
-        self._identity_grants.clear()
+            touched[view.owner.uuid], grants[view.owner.uuid] = self._publish(
+                view, world, table, affected[view.owner.uuid], shared, passives[view.owner.uuid], resolved, light_diffs)
+        # The grants are written once the settlement is published (no fact is stored while it publishes).
+        self._grants = _replace_grants(self._grants, grants)
         return touched
 
     def _view(self, observer_uuid: UUID, world: SettlementWorld) -> ObserverView:
@@ -1480,7 +1519,6 @@ class SpatialSensesSystem:
                     frame_changes = set(rows_positions(moved, origin))
         field = ObserverField(origin, window, selection, optical_key, routes, felt_keys, felt_rows, inputs, sight,
                               light, world.light_version, optical, exists, felt_frame, seen_frame, senses_frame,
-                              CellLayer(window[0], window[1], np.zeros((0, 0), dtype=bool)),
                               previous.contact_rows if previous is not None else NO_CONTACT_ROWS,
                               previous.contact_uuids if previous is not None else NO_UUIDS, None,
                               previous.table_version if previous is not None else None,
@@ -1602,8 +1640,9 @@ class SpatialSensesSystem:
                  resolved: Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray, np.ndarray,
                                  Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]],
                  light_diffs: Dict[int, Tuple[np.ndarray, np.ndarray, Tuple[UUID, ...]]],
-                 ) -> Dict[UUID, Optional[PerceivedSpatialEffect]]:
-        """Contacts, hazards, volume sight and fixtures of one view; publish them on its Senses."""
+                 ) -> Tuple[Dict[UUID, Optional[PerceivedSpatialEffect]], CellLayer]:
+        """Contacts, hazards, volume sight and fixtures of one view; publish them on its Senses.
+        Returns the prior values of the fixtures it re-observed and its granted cells."""
         diagnostic = action_timing_enabled()
         started = time.perf_counter() if diagnostic else 0.0
         owner, senses, origin = view.owner, view.senses, view.origin
@@ -1706,13 +1745,12 @@ class SpatialSensesSystem:
         self.fields[observer_uuid] = ObserverField(
             field.origin, window, field.selection, field.optical_key, field.routes, field.felt_keys, field.felt_rows,
             field.sight_inputs, field.sight, field.light, field.light_version, field.optical, field.exists_frame,
-            field.felt_frame,
-            field.seen_frame, field.senses_frame, CellLayer(window[0], window[1], window_of(grants, origin, window)),
+            field.felt_frame, field.seen_frame, field.senses_frame,
             contact_rows, contact_uuids, contact_changes, self._table_version, passive, light_values, light_inputs,
             volumes, upper)
         if diagnostic:
             record_action_timing("sensory.recompute.publish_ms", started)
-        return effect_before
+        return effect_before, CellLayer(window[0], window[1], window_of(grants, origin, window))
 
     def _contacts(self, views: Sequence[ObserverView], table: ContactTable, passives: Sequence[int],
                   changed: Sequence[Optional[np.ndarray]], shared: SharedValues,
