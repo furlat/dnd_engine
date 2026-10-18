@@ -280,16 +280,31 @@ class RouteRows:
     near: np.ndarray       # the route cell before the endpoint (OFF for the origin)
 
 
-def route_rows(rows: np.ndarray) -> RouteRows:
+@functools.lru_cache(maxsize=1)
+def _route_table_before() -> Tuple[np.ndarray, np.ndarray]:
+    """The kept route table's routes without their endpoints (frame rows), concatenated row after row,
+    and each table row's offset there: `route_rows` gathers any rows' routes in one pass."""
     steps, lengths = supercover_route_table()
+    counts = lengths.astype(np.int64) - 1
+    flat = (steps[np.arange(steps.shape[1])[None, :] < counts[:, None]] >> ROUTE_STEP_SHIFT).astype(np.int32)
+    flat.flags.writeable = False
+    offsets = np.concatenate(([0], np.cumsum(counts)[:-1])).astype(np.int64)
+    offsets.flags.writeable = False
+    return flat, offsets
+
+
+def route_rows(rows: np.ndarray) -> RouteRows:
+    _, lengths = supercover_route_table()
+    flat, offsets = _route_table_before()
     row_lengths = lengths[rows].astype(np.int64)
-    width = int(row_lengths.max()) if rows.size else 1
-    kept = np.arange(width)[None, :] < (row_lengths - 1)[:, None]
-    before = np.append((steps[rows, :width][kept] >> ROUTE_STEP_SHIFT).astype(np.int64), OFF)
-    starts = (np.concatenate(([0], np.cumsum(row_lengths - 1)[:-1])).astype(np.int64) if rows.size
+    counts = row_lengths - 1
+    starts = (np.concatenate(([0], np.cumsum(counts)[:-1])).astype(np.int64) if rows.size
               else np.zeros(0, np.int64))
-    near = np.where(row_lengths >= 2, steps[rows, np.maximum(row_lengths - 2, 0)] >> ROUTE_STEP_SHIFT,
-                    OFF).astype(np.int64)
+    total = int(counts.sum())
+    before = np.empty(total + 1, dtype=np.int64)
+    before[:total] = flat[np.repeat(offsets[rows] - starts, counts) + np.arange(total)]
+    before[total] = OFF
+    near = np.where(row_lengths >= 2, flat[np.maximum(offsets[rows] + counts - 1, 0)], OFF).astype(np.int64)
     return RouteRows(rows, before, starts, row_lengths < 2, near)
 
 

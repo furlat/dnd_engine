@@ -16,7 +16,7 @@ from uuid import UUID
 from datetime import UTC, datetime
 from pydantic import Field, PrivateAttr, computed_field
 from enum import Enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from contextlib import contextmanager
 from collections.abc import Iterator
 import logging
@@ -77,7 +77,9 @@ def _compute_revealed_entities(event: Event, child_logs: List[CombatLogEntry]) -
 # Owned by the Encounter system, whose event computers are this module's functions: one string per
 # entity id (observers and participants), so event-time grants and log perceivers share their
 # strings instead of stringifying an id per version. Cleared whenever the encounter installs or
-# removes its computers; bounded by the encounter's entities. A pure UUID-to-text table.
+# removes its computers; bounded by the encounter's entities. A pure UUID-to-text table. The
+# SpatialSensesSystem keeps the same text for its registered observers (`_id_texts`), for the identity
+# grants it builds.
 _ID_STRINGS: Dict[UUID, str] = {}
 
 
@@ -86,6 +88,32 @@ def _id_string(identity: UUID) -> str:
     if text is None:
         text = _ID_STRINGS[identity] = str(identity)
     return text
+
+
+Located = Tuple[Tuple[UUID, Optional[Tuple[int, int]]], ...]
+
+
+@dataclass
+class _IdentityCarry:
+    """Owned by the Encounter system with `_ID_STRINGS`: per lineage, the participants and positions
+    its last stored version's identity grants were computed at, and those grants, all read at one
+    identity epoch (`SpatialSensesSystem.identity_epoch`). Cleared whenever the epoch differs from the one
+    held (it advances with every identity-grant clear; a reset, or the content loader's rollback of the
+    senses system, can set it back) and when the encounter installs or removes its computers; bounded by
+    the lineages stored between two epochs. An entry is only used for a version whose carried grants
+    are the entry's own mapping."""
+
+    epoch: int = -1
+    # Frozen rows: the located participants and the grants mapping the version stored (never edited).
+    lineages: Dict[UUID, Tuple[Located, Dict[str, FrozenSet[str]]]] = field(default_factory=dict)
+
+
+_IDENTITY_CARRY = _IdentityCarry()
+
+
+def _clear_identity_carry() -> None:
+    _IDENTITY_CARRY.epoch = -1
+    _IDENTITY_CARRY.lineages.clear()
 
 
 def _compute_perceivers(event: Event) -> Set[str]:
@@ -114,9 +142,15 @@ def _compute_identified_entity_observers(
     A participant identifies itself; an observer subscribed to its cell
     identifies it when the participant is among that observer's contacts.
     `previous` is the grants mapping the version carries from its predecessor:
-    the grants are computed for every version, and when every participant's grant
-    is unchanged the carried mapping is returned itself (grants are shared frozen
-    values), so versions share one mapping while it holds.
+    the grants are computed for each version (unless the carry below holds), and
+    when every participant's grant is unchanged the carried mapping is returned
+    itself (grants are shared frozen values), so versions share one mapping while
+    it holds.
+
+    A version whose predecessor's grants are `previous` and were computed at the same
+    identity epoch, for the same participants at the same positions, reads the same
+    identity grants (they change only when the epoch advances): it carries `previous`
+    without reading them again (`_IDENTITY_CARRY`).
     """
     grid = get_map()
     participant_uuids = {
@@ -124,17 +158,28 @@ def _compute_identified_entity_observers(
         for entity_uuid in event.get_participant_entity_uuids()
         if Entity.get(entity_uuid) is not None
     }
+    located: Located = tuple((participant_uuid, grid.get_entity_position(participant_uuid))
+                             for participant_uuid in participant_uuids)
+    carry = _IDENTITY_CARRY
+    if carry.epoch != spatial_senses_system.identity_epoch:
+        carry.lineages.clear()
+        carry.epoch = spatial_senses_system.identity_epoch
+    held = carry.lineages.get(event.lineage_uuid)
+    if held is not None and held[1] is previous and held[0] == located:
+        return previous
     rows: List[Tuple[str, FrozenSet[str]]] = []
-    for participant_uuid in participant_uuids:
+    for participant_uuid, position in located:
         key = _id_string(participant_uuid)
-        position = grid.get_entity_position(participant_uuid)
         rows.append((key, frozenset((key,)) if position is None
             else spatial_senses_system.identifying_observers(participant_uuid, position)))
     if len(rows) == len(previous) and all(
-            held_key == key and (held is observers or held == observers)
-            for (held_key, held), (key, observers) in zip(previous.items(), rows)):
-        return previous
-    return dict(rows)
+            held_key == key and (held_grants is observers or held_grants == observers)
+            for (held_key, held_grants), (key, observers) in zip(previous.items(), rows)):
+        grants = previous
+    else:
+        grants = dict(rows)
+    carry.lineages[event.lineage_uuid] = (located, grants)
+    return grants
 
 
 class EncounterState(str, Enum):
@@ -641,6 +686,7 @@ class Encounter(BaseObject):
 
         EventQueue.set_combat_log_callback(self._on_event_combat_log)
         _ID_STRINGS.clear()
+        _clear_identity_carry()
         EventQueue.set_perceiver_computer(_compute_perceivers)
         EventQueue.set_revealed_computer(_compute_revealed_entities)
         EventQueue.set_identified_entity_observer_computer(_compute_identified_entity_observers)
@@ -693,6 +739,7 @@ class Encounter(BaseObject):
         EventQueue.set_revealed_computer(None)
         EventQueue.set_identified_entity_observer_computer(None)
         _ID_STRINGS.clear()
+        _clear_identity_carry()
 
         self._notify_controllers_encounter_end()
 

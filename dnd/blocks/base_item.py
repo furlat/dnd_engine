@@ -508,9 +508,8 @@ class BaseItem(BaseBlock):
         return self.supported_by_uuid
 
     def supported_items(self) -> tuple["BaseItem", ...]:
-        """Return authored attachments, including ones not placed yet."""
-        return tuple(item for item in BaseBlock._registry.values()
-                     if isinstance(item, BaseItem) and item.supported_by_uuid == self.uuid)
+        """Return authored attachments, including ones not placed yet (the registry's attachment index)."""
+        return tuple(item for item in BaseBlock.attachments_of(self.uuid) if isinstance(item, BaseItem))
 
     def get_boundary_structure(self) -> BoundaryStructure | None:
         if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:

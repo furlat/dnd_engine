@@ -48,6 +48,8 @@ def reset_engine_runtime(
 
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
+    BaseBlock._attachments.clear()
+    BaseBlock._attachment_support.clear()
     BaseBlock.ground_hazard_holders.clear()
     ModifiableValue._registry.clear()
     Dice._registry.clear()

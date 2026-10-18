@@ -869,6 +869,8 @@ def _engine_runtime_attribute_specs(
     return (
         (BaseObject, "_registry"),
         (BaseBlock, "_registry"),
+        (BaseBlock, "_attachments"),
+        (BaseBlock, "_attachment_support"),
         (ModifiableValue, "_registry"),
         (DiceRoll, "_registry"),
         (Dice, "_registry"),
