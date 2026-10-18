@@ -169,23 +169,38 @@ def register_reckless(entity: Entity) -> None:
     _register_action_once(entity, RecklessAttack(source_entity_uuid=entity.uuid, template=True, name="Reckless"))
 
 
+# A stat-block Multiattack's steps, in order: a weapon slot and how many attacks it makes. Every creature recipe
+# authors its Multiattack in this one shape; the shared MultiattackAction executes it.
+MultiattackSteps = tuple[tuple[WeaponSlot, int], ...]
+
+_MULTIATTACK_SLOT_LABELS = {
+    WeaponSlot.MELEE_MAIN: "main hand",
+    WeaponSlot.MELEE_OFF: "off hand",
+    WeaponSlot.RANGED_MAIN: "ranged",
+    WeaponSlot.RANGED_OFF: "ranged off hand",
+}
+
+
+def multiattack_template_name(attacks: MultiattackSteps) -> str:
+    """The template's stable identity: its step list by slot, so a creature's Multiattacks stay distinct
+    whatever it holds."""
+    return "Multiattack: " + ", ".join(f"{count} × {_MULTIATTACK_SLOT_LABELS[slot]}" for slot, count in attacks)
+
+
 def register_multiattack(
     entity: Entity,
-    name: str,
-    attacks: tuple[tuple[WeaponSlot, int], ...],
+    attacks: MultiattackSteps,
     *,
-    configured_action_ref: ContentRef,
     attack_replacement: AttackReplacement | None = None,
 ) -> None:
-    """Register one exactly identified monster stat-block Multiattack."""
+    """Register one creature's stat-block Multiattack: the shared action with the creature's own steps."""
     _register_action_once(
         entity,
         MultiattackAction(
             source_entity_uuid=entity.uuid,
             template=True,
-            name=name,
+            name=multiattack_template_name(attacks),
             attack_sequence=attacks,
-            configured_action_ref=configured_action_ref,
             attack_replacement=attack_replacement,
         ),
     )
@@ -571,7 +586,7 @@ class MultiattackAction(BaseAction):
     target_type: TargetType = Field(default=TargetType.CREATURE_OR_OBJECT, description="Multiattack targets one entity for v1.")
     action_category: ActionCategory = Field(default=ActionCategory.ATTACK, description="Attack category.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Multiattack Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="One action cost.")
-    attack_sequence: tuple[tuple[WeaponSlot, int], ...] = Field(default_factory=empty_tuple, description="Weapon slots and counts.")
+    attack_sequence: MultiattackSteps = Field(default_factory=empty_tuple, description="Weapon slots and counts.")
     attack_replacement: AttackReplacement | None = None
     use_attack_substitution: bool = False
 
@@ -611,6 +626,17 @@ class MultiattackAction(BaseAction):
     def _selection_overrides(self, selection: ActionSelection) -> dict:
         return {**super()._selection_overrides(selection),
                 "use_attack_substitution": any(facet.key == "form" for facet in selection.facets)}
+
+    def discovery_label(self) -> str:
+        """The menu label: each step's count and what the actor now holds in that slot."""
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return self.name
+        steps = []
+        for slot, count in self.attack_sequence:
+            weapon = actor.equipment.get_weapon(slot)
+            steps.append(f"{count} × {weapon.name if weapon is not None else 'Unarmed Strike'}")
+        return "Multiattack: " + ", ".join(steps)
 
     def _selected_attacks(self, target_uuid: Optional[UUID]) -> list[Attack]:
         result: list[Attack] = []
@@ -677,14 +703,15 @@ class MultiattackAction(BaseAction):
         target = BaseBlock.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if actor is None or not isinstance(target, (Entity, BaseItem)):
             return execution_event.cancel(status_message="Multiattack actor or target missing")
-        effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} uses {self.name}")
+        label = self.discovery_label()
+        effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} uses {label}")
         if effect_event.canceled:return effect_event
         for attack in self._selected_attacks(target.uuid):
             if target.get_hp() <= 0:
                 break
             if attack.pre_validate():
                 actor.perform(attack, attack.current_selection(), parent_event=effect_event)
-        return effect_event.with_updates(status_message=f"{self.name} completed")
+        return effect_event.with_updates(status_message=f"{label} completed")
 
     def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)

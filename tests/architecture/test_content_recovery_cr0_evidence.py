@@ -29,17 +29,17 @@ from dnd.monsters.configured_srd_creatures import (
     CONFIGURED_SRD_CREATURE_WARDROBE_GRANTS_BY_ID,
 )
 from dnd.monsters.srd_roster import SRD_CREATURE_DECLARATIONS
-from dnd.monsters.multiattack_definitions import (
-    BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS,
-    GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS,
-    SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS,
-)
-from dnd.monsters.remaining_fiends import REMAINING_FIEND_MULTIATTACK_DECLARATIONS
-from dnd.monsters.roster_humanoids import HUMANOID_MULTIATTACK_DECLARATIONS
-from dnd.monsters.undead_roster import UNDEAD_MULTIATTACK_DECLARATIONS
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+# CR-0 froze eleven SRD Multiattack configurations as structural definitions. They are retired: one public
+# `action.monster.multiattack` behavior takes each creature's own steps from its recipe (human, 2026-10-18).
+# Their frozen manifest and icon rows stay untouched evidence.
+RETIRED_MULTIATTACK_CONFIGURATIONS = frozenset(
+    f"content.srd_5_1_cc:action:action.monster.multiattack.{key}@1"
+    for key in ("bandit_captain.melee", "bandit_captain.ranged", "cult_fanatic", "dretch", "knight",
+                "scout.longbow", "scout.shortsword", "spy", "thug", "veteran.melee", "veteran.ranged")
+)
 MANIFEST_PATH = (
     REPOSITORY_ROOT
     / "content_data"
@@ -539,35 +539,12 @@ def _tuple_literal_rows(tree: ast.Module, assignment_name: str) -> tuple[ast.Tup
     return tuple(row for row in value.elts if isinstance(row, ast.Tuple))
 
 
-def _static_structural_owners() -> dict[str, dict[str, str]]:
-    # CR-0 is frozen historical evidence; later authored definitions are checked
-    # against their live collection below, without inventing legacy entries.
-    expected = {row.ref.content_id for row in SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS}
-    owners: dict[str, dict[str, str]] = {}
-    direct_collections = {
-        "dnd/monsters/multiattack_definitions.py": "SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS",
-    }
-    for source_path, collection in direct_collections.items():
-        tree = _source_tree(source_path)
-        assert collection in _assigned_names(tree)
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            content_id = _literal_string(_call_bindings(node, tree).get("content_id"))
-            if content_id in expected:
-                _record_owner(owners, content_id, source_path, collection)
-    assert set(owners) == expected
-    return owners
-
-
 @lru_cache(maxsize=None)
 def _static_owner_rows(authority_kind: str) -> dict[str, dict[str, str]]:
     if authority_kind == "behavior_identity":
         return _static_behavior_owners()
-    if authority_kind == "materializable_root":
-        return _static_factory_owners()
-    assert authority_kind == "structural_definition"
-    return _static_structural_owners()
+    assert authority_kind == "materializable_root"
+    return _static_factory_owners()
 
 
 def _validate_static_owner(identity: str, authority_kind: str) -> None:
@@ -1400,45 +1377,28 @@ def test_production_never_imports_cr0_evidence() -> None:
 
 
 def test_every_structural_definition_has_one_exact_authored_owner() -> None:
+    """No structural definition remains: the frozen ones are the retired Multiattack configurations."""
     declarations = _declarations()
-    structural_identities = {
-        identity
-        for identity, declaration in declarations.items()
-        if declaration.mode.value == "typed_definition"
-    }
-    historical = {row.ref.identity_key for row in SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS}
-    current_body = {row.ref.identity_key for row in BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS}
-    current_goblins = {row.ref.identity_key for row in GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS}
-    roster_rows = (*HUMANOID_MULTIATTACK_DECLARATIONS, *UNDEAD_MULTIATTACK_DECLARATIONS,
-                   *REMAINING_FIEND_MULTIATTACK_DECLARATIONS)
-    current_rosters = {row.ref.identity_key for row in roster_rows}
-    assert len(historical) == 11
-    assert len(current_body) == len(BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS) == 5
-    assert len(current_goblins) == len(GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS) == 2
-    assert len(current_rosters) == len(roster_rows)
-    assert not historical & current_body
-    assert not current_goblins & (historical | current_body)
-    assert not current_rosters & (historical | current_body | current_goblins)
-    assert structural_identities == historical | current_body | current_goblins | current_rosters
-    manifest_rows = _definition_manifest_rows()
-    assert set(manifest_rows) >= historical
-    for identity in sorted(historical):
-        _validate_static_owner(identity, "structural_definition")
-    for row in (*BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS,
-                *GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS, *roster_rows):
-        assert declarations[row.ref.identity_key] is row
-        assert sum(candidate.ref.identity_key == row.ref.identity_key
-                   for candidate in BUILT_IN_DECLARATION_INVENTORY) == 1
+    assert not {identity for identity, declaration in declarations.items()
+                if declaration.mode.value == "typed_definition"}
+    frozen = {identity for identity, row in _definition_manifest_rows().items()
+              if row["current_owner"]["source_path"] == "dnd/monsters/multiattack_definitions.py"}
+    assert frozen == RETIRED_MULTIATTACK_CONFIGURATIONS
+    assert not frozen & set(declarations)
+    executor = declarations["content.srd_5_1_cc:action:action.monster.multiattack@1"]
+    assert executor.mode.value == "behavior_identity"
+    assert executor.descriptor.visibility.value == "public"
 
 
 def test_frozen_icon_snapshot_differs_only_by_explicit_retirements() -> None:
     """The historical freeze stays immutable; today's retirements are explicit."""
     frozen = _artifact_json("current.icon_bindings")
     current = json.loads((REPOSITORY_ROOT / "content_data/ledgers/content_icon_bindings.json").read_bytes())
+    retired_multiattacks = {identity.split(":")[2].removesuffix("@1") for identity in RETIRED_MULTIATTACK_CONFIGURATIONS}
     retired = [row for row in frozen["definitions"]
                if row["content_ref"]["content_id"] in {"condition.grappled",
-                   "condition.spell.antimagic_field.zone", "spell.antimagic_field"}]
-    assert len(retired) == 3
+                   "condition.spell.antimagic_field.zone", "spell.antimagic_field", *retired_multiattacks}]
+    assert len(retired) == 3 + len(retired_multiattacks)
     retained = [row for row in frozen["definitions"] if row not in retired]
     added = [row for row in current["definitions"]
              if row["content_ref"]["content_id"] == "condition.spell.charm_person.effect"]

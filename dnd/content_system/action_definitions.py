@@ -238,13 +238,16 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _srd(
         monster_traits.MultiattackAction,
         "action.monster.multiattack",
-        "Multiattack Runtime",
+        "Multiattack",
         (
-            "Internal reusable engine behavior specialized by exact public "
-            "stat-block action configurations."
+            "Make a creature's stat-block sequence of weapon attacks for one "
+            "action; each creature's recipe supplies its steps. The engine "
+            "resolves the whole sequence against one selected target, although "
+            "the general attack rules let each attack choose its own unless a "
+            "stat block says otherwise."
         ),
-        visibility=ContentVisibility.INTERNAL,
         root_owned=True,
+        icon_key="ui.filter-attacks",
     ),
     _srd(monster_traits.NaturalAttack, "action.monster.natural_attack", "Natural Attack", "Resolve a data-authored natural weapon attack.", root_owned=True),
 

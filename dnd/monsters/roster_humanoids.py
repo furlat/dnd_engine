@@ -33,7 +33,6 @@ from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponKind, Weapon
 from dnd.core.modifiers import ContextualNumericalModifier
 from dnd.core.values import Channel, Kind, add_modifier
 from dnd.entity import Entity
-from dnd.monsters.multiattack_definitions import declare_multiattack_configuration
 from dnd.monsters.protection import register_protection
 from dnd.monsters.roster_casting import (
     ARCHMAGE_SPELLS, MAGE_SPELLS, grant_innate_spell,
@@ -42,7 +41,7 @@ from dnd.monsters.srd_roster import HitDieValue, create_creature_entity
 from dnd.monsters.traits import (
     AggressiveMoveAction, AssassinateFeature, AttackReplacement, BraveFeature, BruteFeature,
     DivineEminenceAction, EvasionFeature, HitSaveRiderFeature, LeadershipAction,
-    MagicResistance, MultiattackAction, ParryFeature, ShieldBash, SneakAttackFeature,
+    MagicResistance, MultiattackAction, MultiattackSteps, ParryFeature, ShieldBash, SneakAttackFeature,
     SpellDamageResistance, register_aggressive, register_assassinate, register_brave,
     register_brute, register_divine_eminence, register_leadership, register_multiattack,
     register_parry, register_reckless, register_shield_bash, register_sneak_attack,
@@ -160,7 +159,7 @@ class HumanoidRosterDefinition:
     source_variant: str
     foundation: NpcFoundation
     possessions: tuple[CreaturePossessionGrant, ...]
-    attacks: tuple[tuple[WeaponSlot,int], ...] = ()
+    attacks: MultiattackSteps = ()
     protection: bool = False
     web: bool = False
     burning_hands: bool = False
@@ -309,19 +308,6 @@ HUMANOID_ROSTER_DEFINITIONS = (
 )
 
 
-HUMANOID_MULTIATTACK_DECLARATIONS = tuple(
-    declare_multiattack_configuration(content_id=f"action.monster.multiattack.{row.key}",
-        display_name=f"{row.name} Multiattack",icon_key="ui.filter-attacks",
-        source_anchor=f"Accepted roster {row.pack}/{row.source_variant}; {row.foundation.source}",
-        steps=row.attacks,sort_order=index,pack_id="content.neurodragon")
-    for index,row in enumerate(HUMANOID_ROSTER_DEFINITIONS) if row.attacks
-)
-_MULTIATTACK_BY_KEY = MappingProxyType({
-    row.ref.content_id.removeprefix("action.monster.multiattack."):row
-    for row in HUMANOID_MULTIATTACK_DECLARATIONS
-})
-
-
 def _selected_spells(row: HumanoidRosterDefinition) -> tuple[type[SpellAction], ...]:
     # Web replaces unsupported source Suggestion; Burning Hands replaces
     # unsupported Detect Magic. Slow replaces the source Fly selection.
@@ -385,9 +371,7 @@ def build_roster_humanoid(context: CreatureBuildContext, row: HumanoidRosterDefi
     if row.shield_bash_with is not None:
         register_shield_bash(entity)
     if row.attacks:
-        declaration = _MULTIATTACK_BY_KEY[row.key]
-        register_multiattack(entity,declaration.descriptor.display_name,row.attacks,
-            configured_action_ref=declaration.ref,
+        register_multiattack(entity,row.attacks,
             attack_replacement=None if row.shield_bash_with is None else AttackReplacement(
                 sequence_index=0,weapon_kind=row.shield_bash_with,action=ShieldBash(source_entity_uuid=entity.uuid)))
     for spell in _selected_spells(row):
@@ -435,9 +419,6 @@ def _declare(row: HumanoidRosterDefinition) -> ContentDeclaration:
     dependencies.extend(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,
         target_ref=ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[action].ref)
         for enabled,action in actions if enabled)
-    if row.attacks:
-        dependencies.append(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,
-            target_ref=_MULTIATTACK_BY_KEY[row.key].ref))
     spells = (*_selected_spells(row), *((BurningHands,) if row.innate_burning_hands else ()),
         *((Invisibility,) if profile.innate_invisibility else ()))
     dependencies.extend(ContentDependency(relation=ContentDependencyRelation.GRANTS_SPELL,

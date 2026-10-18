@@ -23,12 +23,11 @@ from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponKind, WeaponSlot
 from dnd.core.proficiency_types import ProficiencyMode
 from dnd.entity import Entity
-from dnd.monsters.multiattack_definitions import declare_multiattack_configuration
 from dnd.monsters.protection import register_protection
 from dnd.monsters.roster_casting import ARCHMAGE_SPELLS, MAGE_SPELLS, grant_innate_spell
 from dnd.monsters.srd_roster import HitDieValue, create_creature_entity
 from dnd.monsters.traits import (
-    BraveFeature, BruteFeature, MagicResistance, MultiattackAction, ParryFeature,
+    BraveFeature, BruteFeature, MagicResistance, MultiattackAction, MultiattackSteps, ParryFeature,
     SpellDamageResistance, SunlightSensitivityFeature, WightLifeDrain,
     register_brave, register_brute, register_multiattack, register_parry,
     register_reckless, register_sunlight_sensitivity, AttackReplacement,
@@ -84,7 +83,7 @@ class UndeadDefinition:
     source_variant: str
     profile: UndeadProfile
     possessions: tuple[CreaturePossessionGrant, ...]
-    attacks: tuple[tuple[WeaponSlot, int], ...] = ()
+    attacks: MultiattackSteps = ()
     parry: int = 0
     protection: bool = False
     burning_hands: bool = False
@@ -119,18 +118,9 @@ UNDEAD_DEFINITIONS = (
     UndeadDefinition("undead_ember_oracle", "Antlered Ember Oracle", "9Wizard", MAGE, ()),
 )
 
-UNDEAD_MULTIATTACK_DECLARATIONS = tuple(declare_multiattack_configuration(
-    content_id=f"action.monster.multiattack.{row.key}",display_name=f"{row.name} Multiattack",
-    icon_key="ui.filter-attacks",source_anchor=f"Accepted undead roster {row.source_variant}",
-    steps=row.attacks,sort_order=index,pack_id="content.neurodragon")
-    for index,row in enumerate(UNDEAD_DEFINITIONS) if row.attacks)
-_MULTIATTACKS = MappingProxyType({row.ref.content_id.removeprefix("action.monster.multiattack."):row
-                                for row in UNDEAD_MULTIATTACK_DECLARATIONS})
-
 
 def _declare_undead(definition: UndeadDefinition) -> ContentDeclaration:
     profile = definition.profile
-    configuration = _MULTIATTACKS.get(definition.key)
 
     def factory(raw_context: object, parameters: UndeadRosterParameters) -> Entity:
         context = CreatureBuildContext.model_validate(raw_context)
@@ -166,8 +156,8 @@ def _declare_undead(definition: UndeadDefinition) -> ContentDeclaration:
             register_parry(entity,definition.parry)
         if definition.protection:
             register_protection(entity,context.requested_ref)
-        if configuration is not None:
-            register_multiattack(entity,"Multiattack",definition.attacks,configured_action_ref=configuration.ref,
+        if definition.attacks:
+            register_multiattack(entity,definition.attacks,
                 attack_replacement=None if definition.life_drain_weapon is None else AttackReplacement(
                     sequence_index=0,weapon_kind=definition.life_drain_weapon,
                     action=WightLifeDrain(source_entity_uuid=entity.uuid)))
@@ -195,9 +185,9 @@ def _declare_undead(definition: UndeadDefinition) -> ContentDeclaration:
         if enabled:
             dependencies.append(ContentDependency(relation=ContentDependencyRelation.GRANTS_FEATURE,
                 target_ref=CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[feature].ref))
-    if configuration is not None:
-        dependencies.extend(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,target_ref=row.ref)
-            for row in (configuration,ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[MultiattackAction]))
+    if definition.attacks:
+        dependencies.append(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,
+            target_ref=ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[MultiattackAction].ref))
     if profile.wight:
         dependencies.append(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,
             target_ref=ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[WightLifeDrain].ref))

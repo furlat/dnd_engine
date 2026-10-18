@@ -1,6 +1,6 @@
 {
   "asset_index_digest": "3bd799f4ad12eb9d097f1a9c44790a2d0d0e75a8ee8b83e85ababce79aada632",
-  "binding_digest": "ffa8e58adbe4eb6b9e09e76ef5474dd5bb1193de128bc74bc1471bf68e2e5b17",
+  "binding_digest": "37699cd835a59af99e3288b74d4547b578fc8980a88df00241b15a7b214302fd",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -2353,146 +2353,6 @@
       "evidence_kind": "runtime_action_class",
       "evidence_token": "dnd.classes.fighter.ExtraAttack",
       "icon_key": "action.extra-attack"
-    },
-    {
-      "asset_sha256": "c7ccd3b55cddd75c1be58fd9f4e82919c882e9ed18483d8b49b2a63a1258624f",
-      "content_ref": {
-        "content_id": "action.monster.multiattack.bandit_captain.melee",
-        "content_version": 1,
-        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
-        "definition_kind": "action",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "human_reviewed",
-      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.bandit_captain.melee@1->action.bandit-captain-multiattack-melee",
-      "icon_key": "action.bandit-captain-multiattack-melee"
-    },
-    {
-      "asset_sha256": "c2759b4864eabbbaf126a34b8d871149e2713d8f9eb5814ec3ceffed120a28aa",
-      "content_ref": {
-        "content_id": "action.monster.multiattack.bandit_captain.ranged",
-        "content_version": 1,
-        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
-        "definition_kind": "action",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "human_reviewed",
-      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.bandit_captain.ranged@1->action.bandit-captain-multiattack-ranged",
-      "icon_key": "action.bandit-captain-multiattack-ranged"
-    },
-    {
-      "asset_sha256": "54839e84bfc82656e6b2a84d93037ff4cbfc27fb5f3dd2c3f16b6cc7eb4be4ab",
-      "content_ref": {
-        "content_id": "action.monster.multiattack.cult_fanatic",
-        "content_version": 1,
-        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
-        "definition_kind": "action",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "human_reviewed",
-      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.cult_fanatic@1->action.cult-fanatic-multiattack",
-      "icon_key": "action.cult-fanatic-multiattack"
-    },
-    {
-      "asset_sha256": "0b83e01a1e1cb8e31f7d0d51b80998a58f2eca51deceec7993137b715c124cc9",
-      "content_ref": {
-        "content_id": "action.monster.multiattack.knight",
-        "content_version": 1,
-        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
-        "definition_kind": "action",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "human_reviewed",
-      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.knight@1->action.knight-multiattack",
-      "icon_key": "action.knight-multiattack"
-    },
-    {
-      "asset_sha256": "8f1171720705bb10155050076d7782428236956750426b4c32aa2f12547e0372",
-      "content_ref": {
-        "content_id": "action.monster.multiattack.scout.longbow",
-        "content_version": 1,
-        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
-        "definition_kind": "action",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "human_reviewed",
-      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.scout.longbow@1->action.scout-multiattack-longbow",
-      "icon_key": "action.scout-multiattack-longbow"
-    },
-    {
-      "asset_sha256": "5920e363ce26521ff2a0760101f34f37e04dbb5ea18c28f5eecb1bb5a72a89ae",
-      "content_ref": {
-        "content_id": "action.monster.multiattack.scout.shortsword",
-        "content_version": 1,
-        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
-        "definition_kind": "action",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "human_reviewed",
-      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.scout.shortsword@1->action.scout-multiattack-shortsword",
-      "icon_key": "action.scout-multiattack-shortsword"
-    },
-    {
-      "asset_sha256": "482b10d1f122fd70ee92549b6bb148b99b134d51adb567275671eb522d869922",
-      "content_ref": {
-        "content_id": "action.monster.multiattack.spy",
-        "content_version": 1,
-        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
-        "definition_kind": "action",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "human_reviewed",
-      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.spy@1->action.spy-multiattack",
-      "icon_key": "action.spy-multiattack"
-    },
-    {
-      "asset_sha256": "aaa5ff51c82f45816f593f33d13b6b91af734cbc706124f8d47c4e353d0a1e0c",
-      "content_ref": {
-        "content_id": "action.monster.multiattack.thug",
-        "content_version": 1,
-        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
-        "definition_kind": "action",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "human_reviewed",
-      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.thug@1->action.thug-multiattack",
-      "icon_key": "action.thug-multiattack"
-    },
-    {
-      "asset_sha256": "60cb261e339d011e083962e1d5572209b730f8958b475e79670312438ff3693d",
-      "content_ref": {
-        "content_id": "action.monster.multiattack.veteran.melee",
-        "content_version": 1,
-        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
-        "definition_kind": "action",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "human_reviewed",
-      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.veteran.melee@1->action.veteran-multiattack-melee",
-      "icon_key": "action.veteran-multiattack-melee"
-    },
-    {
-      "asset_sha256": "156c638f0c62128fdb38747fe2637312c253d299fba3358f24c8ae517f96ac69",
-      "content_ref": {
-        "content_id": "action.monster.multiattack.veteran.ranged",
-        "content_version": 1,
-        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
-        "definition_kind": "action",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "human_reviewed",
-      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.veteran.ranged@1->action.veteran-multiattack-ranged",
-      "icon_key": "action.veteran-multiattack-ranged"
     },
     {
       "asset_sha256": "08586fb57222f0d99a818fcf6cb3f8ffc1f5bd7dc6c0f46b08855d4aff10b30f",
@@ -9325,20 +9185,6 @@
       "evidence_kind": "authored_presentation",
       "evidence_token": "catalog:core.rules:reaction:reaction.opportunity_attack@1",
       "icon_key": "reaction.opportunity-attack-handler"
-    },
-    {
-      "asset_sha256": "00b85f45f2ecb784e0fb1c79b00a01fee95bbc537fe1689260d29ac862f61bbc",
-      "content_ref": {
-        "content_id": "action.monster.multiattack.dretch",
-        "content_version": 1,
-        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
-        "definition_kind": "action",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "authored_presentation",
-      "evidence_token": "Dretch Multiattack deliberately reuses the generic attack-filter glyph; no dedicated Dretch icon is claimed.",
-      "icon_key": "ui.filter-attacks"
     },
     {
       "asset_sha256": null,

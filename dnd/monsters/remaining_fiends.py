@@ -30,14 +30,13 @@ from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponSlot
 from dnd.core.modifiers import ContextualNumericalModifier
 from dnd.core.values import Channel, Kind, add_modifier
 from dnd.entity import Entity
-from dnd.monsters.multiattack_definitions import declare_multiattack_configuration
 from dnd.monsters.protection import register_protection
 from dnd.monsters.roster_casting import (
     COUNTERSPELL_REACTION_SPELL, SHIELD_REACTION_SPELL, InnateReactionSpell, grant_innate_reaction, grant_innate_spell,
 )
 from dnd.monsters.srd_roster import HitDieValue, create_creature_entity
 from dnd.monsters.traits import (
-    InnateFlight, InnateInvisibility, MagicResistance, MultiattackAction, ParryFeature,
+    InnateFlight, InnateInvisibility, MagicResistance, MultiattackAction, MultiattackSteps, ParryFeature,
     register_multiattack, register_parry,
 )
 from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS_BY_CLASS
@@ -73,7 +72,7 @@ class RemainingFiendDefinition:
     hit_die: HitDieValue = 8
     proficiency: int = 2
     speed: int = 30
-    attacks: tuple[tuple[WeaponSlot, int], ...] = ()
+    attacks: MultiattackSteps = ()
     parry: int = 0
     protection: bool = False
     magic_resistance: bool = False
@@ -220,19 +219,7 @@ def _provenance(definition: RemainingFiendDefinition) -> ContentProvenance:
         notes=notes)
 
 
-REMAINING_FIEND_MULTIATTACK_DECLARATIONS = tuple(
-    declare_multiattack_configuration(content_id=f"action.monster.multiattack.{row.key}",
-        display_name=f"{row.name} Multiattack",icon_key="ui.filter-attacks",
-        source_anchor=f"Authored Devils {row.source_id}",steps=row.attacks,sort_order=100+index,
-        pack_id="content.neurodragon",provenance=_provenance(row))
-    for index,row in enumerate(REMAINING_FIEND_DEFINITIONS) if row.attacks)
-_MULTIATTACKS = {row.ref.content_id.removeprefix("action.monster.multiattack."): row
-    for row in REMAINING_FIEND_MULTIATTACK_DECLARATIONS}
-
-
 def _declare(definition: RemainingFiendDefinition) -> ContentDeclaration:
-    multiattack = _MULTIATTACKS.get(definition.key)
-
     def factory(raw_context: object, parameters: RemainingFiendParameters) -> Entity:
         context = CreatureBuildContext.model_validate(raw_context)
         skills = {skill:True for skill in ("deception","insight","persuasion","stealth")} if definition.imp else {}
@@ -272,9 +259,8 @@ def _declare(definition: RemainingFiendDefinition) -> ContentDeclaration:
             register_parry(entity,definition.parry)
         if definition.protection:
             register_protection(entity,context.requested_ref)
-        if multiattack is not None:
-            register_multiattack(entity,multiattack.descriptor.display_name,definition.attacks,
-                configured_action_ref=multiattack.ref)
+        if definition.attacks:
+            register_multiattack(entity,definition.attacks)
         for selection in definition.spells:
             grant_innate_spell(entity,selection.spell_type,caster_level=selection.caster_level,
                 cast_rank=selection.rank,daily_uses=selection.daily_uses)
@@ -297,9 +283,9 @@ def _declare(definition: RemainingFiendDefinition) -> ContentDeclaration:
     if definition.protection:
         dependencies.append(ContentDependency(relation=ContentDependencyRelation.INSTALLS_HANDLER,
             target_ref=PROTECTION_REACTION_DECLARATION.ref))
-    if multiattack is not None:
-        dependencies.extend(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,target_ref=row.ref)
-            for row in (ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[MultiattackAction],multiattack))
+    if definition.attacks:
+        dependencies.append(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,
+            target_ref=ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[MultiattackAction].ref))
     dependencies.extend(ContentDependency(relation=ContentDependencyRelation.GRANTS_SPELL,
         target_ref=SPELL_CONTENT_DECLARATIONS_BY_CLASS[selection.spell_type].ref) for selection in definition.spells)
     for reaction,_,_ in definition.reactions:
