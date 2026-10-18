@@ -242,7 +242,6 @@ class WorldTileChanges(TypedDict, total=False):
     surface_kind: ElevationSurfaceKind
     slope_axis: Optional[SlopeAxis]
     default_light: LightLevel
-    resolved_light: LightLevel
     condition_names: Tuple[str, ...]
     residues: tuple[TileResidueState, ...]
 

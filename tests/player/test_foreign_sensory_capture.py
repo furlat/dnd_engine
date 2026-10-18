@@ -27,7 +27,7 @@ from dnd.types.world import LightLevel
 from tests.player.test_recorded_boundary import world
 from tests.player.test_emitted_update_replica import session
 from dnd.core.cells import mask_from_positions
-from dnd.types.cells import cell_in, no_cells
+from dnd.types.cells import cell_in, no_cells, no_rows
 from tests.sensory_cells import packed_cells
 
 
@@ -210,7 +210,7 @@ def test_invisible_torch_user_keeps_witness_light_children_without_disclosing_ac
                 state = reduce_lineage(state, actual)
         assert not any(isinstance(node.fact, ActionFact)
             for packet in packets for node in packet.events)
-        assert any(isinstance(node.fact, SensoryFact) and not no_cells(node.fact.effective_light_levels_changed.cells)
+        assert any(isinstance(node.fact, SensoryFact) and not no_rows(node.fact.effective_light_levels_changed)
             for packet in packets for node in packet.events)
 
 

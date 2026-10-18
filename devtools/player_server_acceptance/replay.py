@@ -49,25 +49,27 @@ def record_log(entry: dict, digest: Any, counts: Counter) -> None:
 
 def check_group(group: dict, controlled: set[str], events: set[int], lineages: set[int], counts: Counter, logs: Any) -> None:
     nodes = group.get('events', group.get('nodes', []))
-    rows = group['version_rows']
+    # Schema 15: the version columns, and a node's default-valued fields left out.
+    occurrences = group['version_rows']['occurrences']
     start = group.get('start_cursor', 0)
-    require([row['source_index'] for row in rows] == list(range(start, group['end_cursor'])), 'Occurrence coordinates are not dense')
-    for row in rows:
-        require(row['source_index'] not in events, 'Occurrence admitted twice')
-        events.add(row['source_index'])
-        lineages.add(row['lineage'])
+    require(occurrences == list(range(start, group['end_cursor'])), 'Occurrence coordinates are not dense')
+    for occurrence, lineage in zip(occurrences, group['version_rows']['lineages'], strict=True):
+        require(occurrence not in events, 'Occurrence admitted twice')
+        events.add(occurrence)
+        lineages.add(lineage)
+    resolutions = group.get('resolutions', [])
     for node in nodes:
-        if node['combat_log'] is not None:
+        if node.get('combat_log') is not None:
             record_log(node['combat_log'], logs, counts)
         require(node['occurrence'] in events, 'Node has no disclosed occurrence')
         for key in ('parent_event',):
-            require(node[key] is None or node[key] in events, f'Undisclosed {key}')
-        require(node['parent_lineage'] is None or node['parent_lineage'] in lineages, 'Undisclosed parent lineage')
-        require(set(node['children_lineages']) <= lineages, 'Undisclosed child lineage')
-        reference = node['resolution_ref']
-        if reference is not None:
-            counts['application_references' if reference['kind'] == 'application' else 'event_references'] += 1
-        fact = node['fact']
+            require(node.get(key) is None or node[key] in events, f'Undisclosed {key}')
+        require(node.get('parent_lineage') is None or node['parent_lineage'] in lineages, 'Undisclosed parent lineage')
+        require(set(node.get('children_lineages', ())) <= lineages, 'Undisclosed child lineage')
+        if node.get('resolution') is not None:
+            reference = resolutions[node['resolution']]
+            counts['application_references' if reference.get('application_id') is not None else 'event_references'] += 1
+        fact = node.get('fact')
         if fact is None:
             continue
         counts['fact:' + fact['kind']] += 1

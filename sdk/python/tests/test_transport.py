@@ -26,7 +26,7 @@ def status(final=None, lifecycle='terminal'):
 def initialization(sequence=0):
     return {'kind': 'initialization', 'protocol': sdk.IDENTITY, 'cursor': cursor(sequence), 'content_revision': 'r', 'content_additions': [],
         'initialization': {'generation': UUID, 'observer_uuid': UUID, 'world': {'battlefield_id': 'test', 'battlefield_name': 'é',
-            'bounds': [-1, -1, 1, 1], 'width': 3, 'height': 3}, 'nodes': [], 'version_rows': [], 'end_cursor': 0,
+            'bounds': [-1, -1, 1, 1], 'width': 3, 'height': 3}, 'nodes': [], 'version_rows': {}, 'end_cursor': 0,
             'observations': [], 'world_updates': []}}
 
 
@@ -464,9 +464,9 @@ def test_cursor_wait_deadline_releases_its_registration():
 
 
 @pytest.mark.parametrize('changes', [
-    {'resolved_light': 2},
+    {'default_light': 2},
     {'slope_axis': None, 'condition_names': [], 'residues': [],
-     'blocks_optics': False, 'walking_cost': 0, 'resolved_light': 0},
+     'blocks_optics': False, 'walking_cost': 0, 'default_light': 0},
 ])
 def test_tile_field_updates_preserve_omission_and_explicit_clears(changes):
     value = {'position': [-47, 20], 'changes': changes}
@@ -476,7 +476,8 @@ def test_tile_field_updates_preserve_omission_and_explicit_clears(changes):
 
 
 @pytest.mark.parametrize('changes', [
-    {'resolved_light': None}, {'condition_names': None}, {'walking_cost': -1},
+    # Changed resolved light travels as the world update's packed `resolved_light`.
+    {'resolved_light': 2}, {'condition_names': None}, {'walking_cost': -1},
     {'walking_cost': True}, {'walking_cost': 1.5}, {'tile_uuid': UUID},
     {'position': [1, 0]}, {'unknown': 1},
 ])

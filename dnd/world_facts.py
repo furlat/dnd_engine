@@ -60,8 +60,8 @@ def copy_world_facts(world: WorldFacts) -> WorldFacts:
 def world_objects_at(world: WorldFacts, positions: set[tuple[int, int]]) -> set[UUID]:
     """Objects on touched supports, including either incident side of a boundary."""
     identities: set[UUID] = set()
-    for position in positions:
-        identities.update(world.objects_by_position.get(position, ()))
+    for position in positions & world.objects_by_position.keys():
+        identities.update(world.objects_by_position[position])
     return identities
 
 

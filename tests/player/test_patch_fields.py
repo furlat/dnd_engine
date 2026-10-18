@@ -13,9 +13,9 @@ from dnd.core.equipment_types import WeaponSet
 from dnd.core.item_types import ItemPresentationState
 from dnd.core.life_types import LifeState
 from dnd.player.facts import (ActorChanges, ItemLook, ItemProfile, ItemState, PlayerActor, PlayerCharacterSheet,
-    PlayerObservation, SheetChanges, SpatialEffectContent, SpatialEffectSighting, VisualLoadout, joined_effect)
+    PlayerObservation, SheetChanges, SpatialEffectContent, SpatialEffectSighting, VisualLoadout)
 from dnd.player.projection import _sighting, actor_changes
-from dnd.player.reduction import observed_actor
+from dnd.player.reduction import joined_effect, observed_actor
 from dnd.types.appearance import AppearanceConfig
 from dnd.types.senses import PerceivedSpatialEffect
 
@@ -54,7 +54,7 @@ def test_a_sighting_split_and_joined_back_passes_every_field():
     effect = PerceivedSpatialEffect(content_ref=ContentRef(pack_id="test.patch",
         definition_kind=ContentDefinitionKind.CONDITION, content_id="condition.test.patch",
         content_version=1, definition_contract_hash="0" * 64), name="Fog", description="Thick.",
-        positions=((1, 2),), owner_revision=3)
+        positions=((1, 2), (1, 3), (4, 0)), visible_volume_positions=((2, 2),), owner_revision=3)
     sighting = _sighting(effect)
     content = SpatialEffectContent(content_ref=effect.content_ref, name=effect.name, description=effect.description)
     assert sighting.model_fields_set == set(SpatialEffectSighting.model_fields)
