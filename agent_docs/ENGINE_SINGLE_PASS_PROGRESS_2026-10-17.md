@@ -688,3 +688,9 @@ Hard rules:
     - RSS grows ~105–123 MB per round (0.57 → 1.94 GB) with `cycles_found` 0 throughout, so it is retained state.
   - Seeded runs reproduce the game exactly.
 - 2026-10-18: **Sense-modes key merged (c6f8a832c).** `sense_modes_hash` (a per-process `hash()`) becomes the stable `sense_modes_key` tuple, which fixes E0 O2 on turn_undead. Transcripts are byte-identical.
+- 2026-10-18: **Long-game Choices growth is world state, not history** (seeded game, c7ee71e6c).
+  - Choices ms ≈ 65 + 0.093 × candidate target rows (r = +0.59). Against events stored, registry size and combat log, r ≈ −0.15.
+  - Round 13 holds 32× round 1's events and is faster (56 vs 67 ms) at the same target count.
+  - The rows grow with movement budget (Haste and Dash: move and jump destinations 135 → 500) and with the crowd in reach.
+  - The cost is per-candidate admission: `discovery_admission` / `_requirements_contact` run once per (row × target).
+  - Scratch: `lgc/choices_prof.py`, `prof_diff.py`.
