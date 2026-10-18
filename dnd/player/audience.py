@@ -519,11 +519,14 @@ def _current_contact(current: AudienceComposition, identity: UUID, *,
     return selected, holder
 
 
+def _rank_of(row: PerceivedSpatialEffect, cursor: int, observer: UUID) -> tuple[int, int, int]:
+    """A member's claim to show an effect: its row's newest revision, then its latest sighting, then the smaller uuid."""
+    return (row.owner_revision if row.owner_revision is not None else -1, cursor, -observer.int)
+
+
 def _effect_rank(perception: AudiencePerception, observer: UUID, identity: UUID) -> tuple[int, int, int]:
-    """A member's claim to show an effect: its newest revision, then its latest sighting, then the smaller uuid."""
-    revision = perception.members[observer].spatial_effects[identity].owner_revision
-    return (revision if revision is not None else -1, perception.effect_cursors.get((observer, identity), -1),
-            -observer.int)
+    return _rank_of(perception.members[observer].spatial_effects[identity],
+                    perception.effect_cursors.get((observer, identity), -1), observer)
 
 
 def _current_effect(current: AudienceComposition, identity: UUID) -> PerceivedSpatialEffect | None:
@@ -542,8 +545,8 @@ def _current_effect(current: AudienceComposition, identity: UUID) -> PerceivedSp
 
 def _keeps_composed_effect(current: AudienceComposition, observer: UUID, identity: UUID,
                            sighting: PerceivedSpatialEffect, prior: PerceivedSpatialEffect | None,
-                           prior_rank: tuple[int, int, int]) -> bool:
-    """Whether `observer` now seeing `sighting` (instead of `prior`, ranked `prior_rank`) leaves the composed effect as it is.
+                           prior_cursor: int) -> bool:
+    """Whether `observer` now seeing `sighting` (instead of `prior`, sighted at `prior_cursor`) leaves the composed effect as it is.
 
     It does when the newest row among the other members equals it: the newest
     row is then this value before and after, a row equal to the join's first
@@ -562,7 +565,8 @@ def _keeps_composed_effect(current: AudienceComposition, observer: UUID, identit
         return False
     if prior is None or prior is sighting or prior == sighting:
         return True
-    return prior.owner_revision != sighting.owner_revision and prior_rank < _effect_rank(perception, newest, identity)
+    return (prior.owner_revision != sighting.owner_revision
+            and _rank_of(prior, prior_cursor, observer) < _effect_rank(perception, newest, identity))
 
 
 def _keeps_composed_light(view: SensesSnapshot, identity: UUID, source: PerceivedLightSource,
@@ -650,8 +654,7 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
         if any(visible(position) for position in effect.positions)
         or effect.visible_volume_positions or effect.upper_volume_surfaces}
     # The member's rows before this delta (its snapshot's containers are advanced in place below).
-    prior_effects = ({identity: (before.spatial_effects.get(identity), _effect_rank(perception, observer, identity)
-                      if identity in before.spatial_effects else (-1, -1, -observer.int))
+    prior_effects = ({identity: (before.spatial_effects.get(identity), perception.effect_cursors.get((observer, identity), -1))
                       for identity in event.spatial_effects_changed} if before is not None and not event.initial else {})
     prior_lights = ({identity: before.light_sources.get(identity) for identity in event.light_sources_changed}
                     if before is not None and not event.initial else {})

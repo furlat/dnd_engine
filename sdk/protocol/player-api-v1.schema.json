@@ -15168,7 +15168,7 @@
       "type": "string"
     },
     "SensoryFact": {
-      "description": "One observer's sensory after-values; its changed and removed values are rows of its group's `SensoryRows`.\n\n`entity_contacts_changed` / `object_contacts_changed` index contact rows,\n`spatial_effect_sightings` sighting rows, `light_sources_changed` light\nsources, `light_sources_removed` light removal rows; the three other removed\nlists index `uuids`. A list never names two rows of one identity.",
+      "description": "One observer's sensory after-values; its changed and removed values are rows of its group's `SensoryRows`.\n\n`entity_contacts_changed` / `object_contacts_changed` index contact rows,\n`spatial_effect_sightings` sighting rows, `light_sources_changed` light\nsources, `light_sources_removed` light removal rows; the three other removed\nlists index `uuids`. A list never names two rows of one identity. (While\nprojection builds a group, the indices name its `SensoryTable` rows.)",
       "properties": {
         "kind": {
           "const": "sensory",

@@ -219,7 +219,10 @@ def _unique(values: dict, indices: tuple[int, ...]) -> dict:
 
 
 def sensory_changes(fact: SensoryFact, rows: SensoryRows, held: Mapping[UUID, SpatialEffectContent]) -> SensoryChanges:
-    """A received sensory fact with its group's rows resolved; a sighting's content is the fact's, else the seat's (`held`)."""
+    """A received sensory fact with its group's rows resolved; a sighting's content is the fact's, else the seat's (`held`).
+
+    An index outside its column raises IndexError, a list naming one identity twice ValueError.
+    """
     uuids = rows.uuids
 
     def contacts(indices: tuple[int, ...]) -> dict[UUID, PerceivedContact]:
@@ -251,6 +254,11 @@ def sensory_changes(fact: SensoryFact, rows: SensoryRows, held: Mapping[UUID, Sp
         sense_modes_changed=fact.sense_modes_changed, sense_modes=fact.sense_modes,
         passive_perception_changed=fact.passive_perception_changed, passive_perception=fact.passive_perception,
         visual_access_changed=fact.visual_access_changed, visual_access=fact.visual_access, paths_dirty=fact.paths_dirty)
+
+
+def folded_fact(fact: PlayerFact, rows: SensoryRows, held: Mapping[UUID, SpatialEffectContent]) -> FoldedFact:
+    """What the fold applies for a received fact of a group with `rows`: a sensory fact resolved, any other as it is."""
+    return sensory_changes(fact, rows, held) if isinstance(fact, SensoryFact) else fact
 
 
 def apply_player_fact(target: PlayerState, fact: FoldedFact, *, source_cursor: int | None = None,
@@ -463,9 +471,8 @@ def _apply_nodes(result: PlayerState, nodes: tuple[PlayerNode, ...], versions: t
                 if row.occurrence in world_updates:
                     apply_world_update(result, world_updates[row.occurrence])
                 if not row.canceled and row.fact is not None:
-                    fact = (sensory_changes(row.fact, rows, result.spatial_content)
-                        if isinstance(row.fact, SensoryFact) else row.fact)
-                    apply_committed_player_fact(result, fact, source_cursor=row.occurrence,
+                    apply_committed_player_fact(result, folded_fact(row.fact, rows, result.spatial_content),
+                        source_cursor=row.occurrence,
                         occurrences=occurrences, audience_composition=audience_composition)
 
 

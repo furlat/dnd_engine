@@ -81,6 +81,7 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
             audience=audience, lineage=index, root=0, events=(node,),
             version_rows=(VersionRow(source_index=index, lineage=index),),
             start_cursor=index, end_cursor=index + 1, observations=observations,
+            # The template's light source indices name the initialization's rows.
             sensory_rows=initial.sensory_rows))
     if together:
         lineages = [replace(lineages[0], events=tuple(node for row in lineages for node in row.events),

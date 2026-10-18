@@ -772,7 +772,7 @@ def _unset(value: object) -> bool:
 # Indices into the group's `SensoryRows`.
 RowIndices = Annotated[tuple[RowIndex, ...], Field(exclude_if=_no_rows)]
 SensoryFlag = Annotated[bool, Field(exclude_if=_unflagged)]
-SensoryCount = Annotated[int | None, Field(exclude_if=_unset)]
+SensoryNumber = Annotated[int | None, Field(exclude_if=_unset)]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -808,12 +808,13 @@ class SensoryRows:
 NO_SENSORY_ROWS = SensoryRows()
 
 
-def no_sensory_rows(rows: SensoryRows) -> bool:
+def _no_sensory_rows(rows: SensoryRows) -> bool:
+    # Every keyed row names a uuid, so rows without uuids or light sources are empty.
     return not rows.uuids and not rows.light_sources
 
 
 # A group's rows: none is the default and is left out of a dump.
-SensoryRowsField = Annotated[SensoryRows, Field(exclude_if=no_sensory_rows)]
+SensoryRowsField = Annotated[SensoryRows, Field(exclude_if=_no_sensory_rows)]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -823,7 +824,8 @@ class SensoryFact:
     `entity_contacts_changed` / `object_contacts_changed` index contact rows,
     `spatial_effect_sightings` sighting rows, `light_sources_changed` light
     sources, `light_sources_removed` light removal rows; the three other removed
-    lists index `uuids`. A list never names two rows of one identity.
+    lists index `uuids`. A list never names two rows of one identity. (While
+    projection builds a group, the indices name its `SensoryTable` rows.)
     """
 
     kind: Literal["sensory"] = "sensory"
@@ -832,7 +834,7 @@ class SensoryFact:
     observer_position: tuple[int, int]
     observer_position_changed: SensoryFlag = False
     effective_light_levels_changed: CellValuesField = EMPTY_VALUES
-    cause_occurrence: SensoryCount = None
+    cause_occurrence: SensoryNumber = None
     visible_cells_added: CellMaskField = EMPTY_CELLS
     visible_cells_removed: CellMaskField = EMPTY_CELLS
     seen_cells_added: CellMaskField = EMPTY_CELLS
@@ -843,9 +845,9 @@ class SensoryFact:
     sense_modes_changed: SensoryFlag = False
     sense_modes: Annotated[tuple[SenseMode, ...] | None, Field(exclude_if=_unset)] = None
     passive_perception_changed: SensoryFlag = False
-    passive_perception: SensoryCount = None
+    passive_perception: SensoryNumber = None
     visual_access_changed: SensoryFlag = False
-    visual_access: SensoryCount = None
+    visual_access: SensoryNumber = None
     paths_dirty: SensoryFlag = False
     hazardous_cells_changed: CellValuesField = EMPTY_VALUES
     spatial_effect_sightings: RowIndices = ()

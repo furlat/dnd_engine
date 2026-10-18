@@ -4516,7 +4516,8 @@ export interface FontConversion {
  * `entity_contacts_changed` / `object_contacts_changed` index contact rows,
  * `spatial_effect_sightings` sighting rows, `light_sources_changed` light
  * sources, `light_sources_removed` light removal rows; the three other removed
- * lists index `uuids`. A list never names two rows of one identity.
+ * lists index `uuids`. A list never names two rows of one identity. (While
+ * projection builds a group, the indices name its `SensoryTable` rows.)
  */
 export interface SensoryFact {
   kind?: Kind27;

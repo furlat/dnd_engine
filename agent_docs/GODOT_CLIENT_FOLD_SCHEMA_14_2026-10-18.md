@@ -15,7 +15,7 @@ Absent means empty; each column is also absent when empty.
 | `contact_uuid_index` | `[int]` | contact row i is the entity/object `uuids[contact_uuid_index[i]]` … |
 | `contacts` | `[PerceivedContact]` | … perceived as `contacts[i]` (`{position, visual, special_senses}`) |
 | `sighting_uuid_index` | `[int]` | sighting row i is the spatial effect `uuids[sighting_uuid_index[i]]` … |
-| `sightings` | `[SpatialEffectSighting]` | … seen as `sightings[i]` (same object as schema 13's sighting values) |
+| `sightings` | `[SpatialEffectSighting]` | … seen as `sightings[i]` (the same type as schema 13's sighting values) |
 | `light_sources` | `[PerceivedLightSource]` | light row i; the record carries its own `source_uuid` |
 | `light_removal_uuid_index` | `[int]` | light removal row i is the source `uuids[light_removal_uuid_index[i]]` … |
 | `light_removal_revisions` | `[int]` | … removed at revision `light_removal_revisions[i]` |

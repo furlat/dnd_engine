@@ -6,6 +6,7 @@ it never asks the live engine what an observer can see.
 """
 
 from collections.abc import Callable, Collection, Iterator, Mapping
+from typing import TypeVar
 from dataclasses import dataclass, field, replace
 from math import floor
 from uuid import UUID
@@ -56,7 +57,7 @@ from dnd.player.facts import (
 from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
 from dnd.player.reduction import (apply_record_fact, apply_hud, apply_sensed_fact, apply_world_update, change_membership,
-    commit_current, fold_senses, observe_body, observed_actor, occurrence_order, sensory_changes)
+    commit_current, fold_senses, folded_fact, observe_body, observed_actor, occurrence_order)
 from dnd.player.compatibility import legacy_damage_reference
 from dnd.world_facts import world_event_objects, world_event_footprints, world_objects_at
 
@@ -264,8 +265,10 @@ class SensoryTable:
     """One group's sensory values as its projection walks them: one row per fact entry, in walk order.
 
     A local of one group's projection (`_project_nodes` through `_shared_rows`).
-    Each row is named by the one fact that appended it; `_shared_rows` keeps
-    the named rows, each distinct value once.
+    Until `_shared_rows`, a sensory fact's indices name these rows (its removed
+    contacts and effects `removed_uuids`); each row is named by the one fact
+    that appended it. `_shared_rows` keeps the named rows, each distinct value
+    once, and renumbers the facts to the group's `SensoryRows`.
     """
 
     contact_uuids: list[UUID] = field(default_factory=list)
@@ -275,15 +278,18 @@ class SensoryTable:
     light_sources: list[PerceivedLightSource] = field(default_factory=list)
     light_removal_uuids: list[UUID] = field(default_factory=list)
     light_removal_revisions: list[int] = field(default_factory=list)
-    uuids: list[UUID] = field(default_factory=list)
+    removed_uuids: list[UUID] = field(default_factory=list)
 
 
-def _appended(column: list, value) -> int:
+Row = TypeVar("Row")
+
+
+def _appended(column: list[Row], value: Row) -> int:
     column.append(value)
     return len(column) - 1
 
 
-def _keyed(keys: list[UUID], column: list, identity: UUID, value) -> int:
+def _keyed(keys: list[UUID], column: list[Row], identity: UUID, value: Row) -> int:
     keys.append(identity)
     return _appended(column, value)
 
@@ -304,16 +310,16 @@ def _sensory_fact(event: SensoryUpdateEvent, keys: "NativeKeys", table: SensoryT
         spatial_effect_sightings=tuple(_keyed(table.sighting_uuids, table.sightings, identity, _sighting(effect))
             for identity, effect in event.spatial_effects_changed.items()),
         spatial_effect_content={identity: _effect_content(effect) for identity, effect in event.spatial_effects_changed.items()},
-        spatial_effects_removed=tuple(_appended(table.uuids, identity) for identity in event.spatial_effects_removed),
+        spatial_effects_removed=tuple(_appended(table.removed_uuids, identity) for identity in event.spatial_effects_removed),
         cause_occurrence=_version_key(keys, event.cause_event_uuid),
         visible_cells_added=event.visible_cells_added, visible_cells_removed=event.visible_cells_removed,
         seen_cells_added=event.seen_cells_added,
         entity_contacts_changed=tuple(_keyed(table.contact_uuids, table.contacts, identity, contact)
             for identity, contact in event.entity_contacts_changed.items()),
-        entity_contacts_removed=tuple(_appended(table.uuids, identity) for identity in event.entity_contacts_removed),
+        entity_contacts_removed=tuple(_appended(table.removed_uuids, identity) for identity in event.entity_contacts_removed),
         object_contacts_changed=tuple(_keyed(table.contact_uuids, table.contacts, identity, contact)
             for identity, contact in event.object_contacts_changed.items()),
-        object_contacts_removed=tuple(_appended(table.uuids, identity) for identity in event.object_contacts_removed),
+        object_contacts_removed=tuple(_appended(table.removed_uuids, identity) for identity in event.object_contacts_removed),
         sense_modes_changed=event.sense_modes_changed,
         sense_modes=tuple(event.sense_modes) if event.sense_modes is not None else None,
         passive_perception_changed=event.passive_perception_changed,
@@ -433,7 +439,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: dict[UUID, Act
                 operation=event.operation, previous_pressed=event.previous_pressed,
                 pressed=event.pressed, interaction_operation=interaction_operation) if positions else None
         case SensoryUpdateEvent():
-            return None  # The walk projects an observed one (`_sensory_fact`), interning its rows.
+            raise ValueError("A sensory event is projected by the walk (_sensory_fact)")
         case StepMovementEvent():
             if not _step_allowed(event, observer):
                 return None
@@ -1335,8 +1341,6 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...]
             known.add(observed.uuid)
             members[observed.uuid] = {row.condition_uuid: row for row in observed.conditions}
             admission = next(pending, None)
-        sensory = (_sensory_fact(event, keys, table)
-            if isinstance(event, SensoryUpdateEvent) and observer.observes(event.observer_uuid) else None)
         if not event.canceled:
             if isinstance(event, EntityCreatedEvent):
                 private_actors[event.entity_uuid] = actor_from_birth(event)
@@ -1420,9 +1424,10 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...]
             cause = by_lineage.get(cause_lineage) if cause_lineage is not None else None
             if isinstance(cause, DeathEvent) and not cause.canceled and cause.entity_uuid == event.entity_uuid:
                 declaration_senses = delivery_declarations.get(cause.lineage_uuid)
-        fact = sensory if sensory is not None else _project_fact(event, observer, private_actors,
-            facts.get(event.uuid), events, admissions, known, observed_objects, private_world.senses, keys,
-            declaration_senses)
+        fact = ((_sensory_fact(event, keys, table) if observer.observes(event.observer_uuid) else None)
+            if isinstance(event, SensoryUpdateEvent) else _project_fact(event, observer, private_actors,
+                facts.get(event.uuid), events, admissions, known, observed_objects, private_world.senses, keys,
+                declaration_senses))
         condition_target = event.target_entity_uuid
         if (fact is None and event.event_type is EventType.CONDITION_REMOVAL
                 and observer.controls(event.source_entity_uuid) and condition_target is not None
@@ -1642,7 +1647,7 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
     touched_spatial = {(node.fact.observer_uuid, identity) for node in nodes
         if isinstance(node.fact, SensoryFact)
         for identity in (*(identity for _, identity, _ in _sightings(table, node.fact)),
-                         *(table.uuids[index] for index in node.fact.spatial_effects_removed))}
+                         *(table.removed_uuids[index] for index in node.fact.spatial_effects_removed))}
     previous_spatial = {key: state.spatial_values[key] for key in touched_spatial if key in state.spatial_values}
     previous_revisions = {identity: state.spatial_revisions[identity] for _, identity in touched_spatial
         if identity in state.spatial_revisions}
@@ -1665,7 +1670,7 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
                     if not node.canceled:
                         content_held[identity] = content
                 previous_spatial[key] = value
-            for identity in (table.uuids[index] for index in fact.spatial_effects_removed):
+            for identity in (table.removed_uuids[index] for index in fact.spatial_effects_removed):
                 previous_spatial.pop((fact.observer_uuid, identity), None)
                 state.spatial_values.pop((fact.observer_uuid, identity), None)
             fact = replace(fact, spatial_effect_sightings=tuple(changed))
@@ -1715,6 +1720,7 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
             state.disclosed_turns.add(node.turn_execution_id)
     result = []
     # A sighting's revision becomes the seat's count of its admitted changes.
+    # Once per row (each row has one naming fact): the mapped revision is the seat's, not a native one.
     _map_sightings(table, admitted_nodes, lambda identity, effect: effect.model_copy(
         update={"owner_revision": state.spatial_versions[(identity, effect.owner_revision)]}))
     stages: dict[int | None, list[int]] = {}
@@ -1825,13 +1831,16 @@ def _shared_rows(nodes: tuple[PlayerNode, ...], table: SensoryTable) -> tuple[tu
     removal_keys: list[int] = []
     revisions: list[int] = []
     lights: list[PerceivedLightSource] = []
-    rows_of: dict[tuple[int, int], list[int]] = {}
+    # Each identity's rows per column: by uuid index, lights by source uuid.
+    contact_rows: dict[int, list[int]] = {}
+    sighting_rows: dict[int, list[int]] = {}
+    removal_rows: dict[int, list[int]] = {}
     light_rows: dict[UUID, list[int]] = {}
 
     def uuid(identity: UUID) -> int:
         return uuids.setdefault(identity, len(uuids))
 
-    def interned(numbers: list[int], column: list, value) -> int:
+    def interned(numbers: list[int], column: list[Row], value: Row) -> int:
         for number in numbers:
             if column[number] is value or column[number] == value:
                 return number
@@ -1839,31 +1848,31 @@ def _shared_rows(nodes: tuple[PlayerNode, ...], table: SensoryTable) -> tuple[tu
         column.append(value)
         return numbers[-1]
 
-    def keyed(kind: int, keys: list[int], column: list, identity: UUID, value) -> int:
+    def keyed(rows: dict[int, list[int]], keys: list[int], column: list[Row], identity: UUID, value: Row) -> int:
         key = uuid(identity)
         count = len(column)
-        number = interned(rows_of.setdefault((kind, key), []), column, value)
+        number = interned(rows.setdefault(key, []), column, value)
         if number == count:
             keys.append(key)
         return number
 
     def contact(index: int) -> int:
-        return keyed(0, contact_keys, contacts, table.contact_uuids[index], table.contacts[index])
+        return keyed(contact_rows, contact_keys, contacts, table.contact_uuids[index], table.contacts[index])
     result = []
     for node in nodes:
         fact = node.fact
         if isinstance(fact, SensoryFact):
             node = replace(node, fact=replace(fact,
                 entity_contacts_changed=tuple(contact(index) for index in fact.entity_contacts_changed),
-                entity_contacts_removed=tuple(uuid(table.uuids[index]) for index in fact.entity_contacts_removed),
+                entity_contacts_removed=tuple(uuid(table.removed_uuids[index]) for index in fact.entity_contacts_removed),
                 object_contacts_changed=tuple(contact(index) for index in fact.object_contacts_changed),
-                object_contacts_removed=tuple(uuid(table.uuids[index]) for index in fact.object_contacts_removed),
-                spatial_effect_sightings=tuple(keyed(1, sighting_keys, sightings, table.sighting_uuids[index],
+                object_contacts_removed=tuple(uuid(table.removed_uuids[index]) for index in fact.object_contacts_removed),
+                spatial_effect_sightings=tuple(keyed(sighting_rows, sighting_keys, sightings, table.sighting_uuids[index],
                     table.sightings[index]) for index in fact.spatial_effect_sightings),
-                spatial_effects_removed=tuple(uuid(table.uuids[index]) for index in fact.spatial_effects_removed),
+                spatial_effects_removed=tuple(uuid(table.removed_uuids[index]) for index in fact.spatial_effects_removed),
                 light_sources_changed=tuple(interned(light_rows.setdefault(table.light_sources[index].source_uuid, []),
                     lights, table.light_sources[index]) for index in fact.light_sources_changed),
-                light_sources_removed=tuple(keyed(2, removal_keys, revisions, table.light_removal_uuids[index],
+                light_sources_removed=tuple(keyed(removal_rows, removal_keys, revisions, table.light_removal_uuids[index],
                     table.light_removal_revisions[index]) for index in fact.light_sources_removed)))
         result.append(node)
     return tuple(result), SensoryRows(uuids=tuple(uuids), contact_uuid_index=tuple(contact_keys),
@@ -1920,8 +1929,7 @@ def _emit_bodies(remembered: PlayerState, nodes: tuple[PlayerNode, ...], observa
                         resulting_max_hp=None, resulting_ac=None, resulting_tile=None, resulting_item=None))
                     row = replace(row, fact=fact)
                 if not row.canceled and fact is not None and row.occurrence not in superseded:
-                    apply_record_fact(remembered, sensory_changes(fact, rows, remembered.spatial_content)
-                        if isinstance(fact, SensoryFact) else fact)
+                    apply_record_fact(remembered, folded_fact(fact, rows, remembered.spatial_content))
                 result.append(row)
     return tuple(result), tuple(emitted)
 
