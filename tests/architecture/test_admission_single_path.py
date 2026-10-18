@@ -11,8 +11,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-SHARED_ADMISSION = {"_admission_error", "_physical_access_contact", "requirements_error", "discovery_admission",
-                    "discovery_error"}
+SHARED_ADMISSION = {"_admission_error", "_physical_access_contact", "_requirements_contact", "requirements_error",
+                    "discovery_admission", "discovery_error"}
 
 
 def test_no_action_overrides_the_shared_admission_checks() -> None:
