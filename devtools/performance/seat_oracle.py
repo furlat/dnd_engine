@@ -472,8 +472,8 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
     senses = composed_view(AudiencePerception(members=members), client.observer_uuid)
     if senses is None:
         return {category: {} for category in CATEGORIES}
-    # An effect's duration is disclosed to its owner's controllers only (the rule of `_public_occurrences`,
-    # applied to the live owner: the effect's condition's source).
+    # An effect's duration is disclosed to its owner's controllers only (the rule of the projector's `_sighting` and
+    # `_sighting_changes`, applied to the live owner: the effect's condition's source).
     senses = replace(senses, spatial_effects={identity: effect if audience.controls(_effect_owner(identity))
         else effect.model_copy(update={'duration': None}) for identity, effect in senses.spatial_effects.items()})
     visible = _visible(senses)

@@ -510,7 +510,7 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
                 operation=event.operation, previous_pressed=event.previous_pressed,
                 pressed=event.pressed, interaction_operation=interaction_operation) if positions else None
         case SensoryUpdateEvent():
-            raise ValueError("A sensory event is projected by the walk (_sensory_fact)")
+            raise ValueError("A sensory event is projected by the walk (_settlement_fact)")
         case StepMovementEvent():
             if not _step_allowed(event, observer):
                 return None

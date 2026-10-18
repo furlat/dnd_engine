@@ -19,12 +19,22 @@ from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import PlayerState, PlayerUpdate, SensoryFact
 from dnd.player.reduction import reduce_initialization, reduce_operation
 from dnd.player.session import publish_sheets
+from dnd.types.cells import cell_in
+from dnd.types.senses import SensesSnapshot
 from tests.player.test_emitted_update_replica import INITIALIZATION, SCENARIO, operation_since
 from tests.player.test_emitted_update_replica import session as session  # the fixture
 
 
 def bits(members: set[UUID], audience: PlayerAudience) -> int:
     return sum(1 << index for index, member in enumerate(audience.observers) if member in members)
+
+
+def perceiving(members: dict[UUID, SensesSnapshot], identity: UUID) -> set[UUID]:
+    """The members perceiving part of an effect now: a cell of their own row they see, a seen volume cell, or an
+    upper volume surface (plan §3.2)."""
+    return {member for member, senses in members.items() if (row := senses.spatial_effects.get(identity)) is not None
+            and (row.upper_volume_surfaces or any(cell_in(senses.visible, position)
+                 or position in row.visible_volume_positions for position in row.positions))}
 
 
 def test_one_composed_fact_per_settlement_with_the_members_perceiving_each_row(session):
@@ -93,7 +103,8 @@ def test_one_composed_fact_per_settlement_with_the_members_perceiving_each_row(s
                                              for identity in after.entities}, (step.name, seat)
             assert client.object_contact_members == {identity: bits(composition.object_members[identity], audience)
                                                      for identity in after.objects}, (step.name, seat)
-            assert set(client.effect_members) == set(after.spatial_effects), (step.name, seat)
+            assert client.effect_members == {identity: bits(perceiving(composition.perception.members, identity),
+                audience) for identity in after.spatial_effects}, (step.name, seat)
     # An effect's content is sent to a seat once.
     for seat, sent in contents.items():
         assert len(sent) == len(set(sent)), seat
