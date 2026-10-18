@@ -42,7 +42,7 @@ from dnd.core.content.registration import get_content_declaration
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
-from dnd.encounter import Encounter
+from dnd.encounter import Encounter, setup_identity_grants
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.items.torches import Torch
@@ -511,12 +511,14 @@ def assemble_encounter_recipe(
                 entity,
                 positions[roster_slot_id][member_id],
             )
-    for target, effect in deferred:
-        _apply_deferred_setup_effect(
-            target,
-            effect,
-            entities_by_role=by_role,
-        )
+    # Observers already hold their contacts: the setup facts are identified as any later fact is.
+    with setup_identity_grants():
+        for target, effect in deferred:
+            _apply_deferred_setup_effect(
+                target,
+                effect,
+                entities_by_role=by_role,
+            )
 
     encounter, controllers = _build_runtime_encounter(
         recipe,
