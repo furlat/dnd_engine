@@ -69,7 +69,7 @@ from dnd.player.facts import PlayerLogEntry
 from dnd.player.actor_facts import ActorState, ConditionFact, PresentationTarget
 from dnd.actor_projection import actor_fact_change, actor_fact_owner, actor_from_birth
 from dnd.actor_projection import condition_fact as committed_condition_fact
-from dnd.player.actor_projection import apply_presented_change
+from dnd.player.actor_projection import apply_presented_change, ended_lifetime, fold_birth, fold_completed_actors
 from dnd.types.actor_facts import ActorFactChange
 
 
@@ -118,6 +118,8 @@ class WorldInterval:
 
     events: tuple[tuple[int, RecordedEvent], ...] = ()
     conditions: tuple[ConditionFact, ...] = ()
+    # The shared fold's actor change of each of these versions that has one, by event uuid (the session's actors).
+    actor_fact_changes: Mapping[UUID, ActorFactChange] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,8 +169,8 @@ class AdmissionEvidence:
     completed version's fold; after an arrival's or departure's fold at its
     effect), the tracked observers holding it as a contact, and its own last
     sensory position. `actor_fact_change` is the record of a completed
-    version's actor change (plan §4), the one every seat's fold applies; the
-    shared fold applies it without its item replacement (E3-bodies).
+    version's actor change (plan §4), the one the shared fold and the
+    session projection's actor fold apply.
     """
 
     observer: UUID | None
@@ -422,7 +424,8 @@ def capture_interval(
         actor_fact_changes=_actor_fact_changes(evidence, (event for _, event in admitted_original)),
         world_interval=WorldInterval(events=tuple((index, _cached_body(event, None, True, bodies))
                 for index, event in completed),
-            conditions=tuple(fact for _, event in completed if (fact := _condition_fact(event)) is not None)),
+            conditions=tuple(fact for _, event in completed if (fact := _condition_fact(event)) is not None),
+            actor_fact_changes=_actor_fact_changes(evidence, (event for _, event in completed))),
     )
 
 
@@ -852,8 +855,9 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
         if index >= end:
             break
         completed = event.phase is EventPhase.COMPLETION and not event.canceled
+        if completed:
+            fold_birth(actors, event)
         if completed and isinstance(event, EntityCreatedEvent):
-            actors[event.entity_uuid] = actor_from_birth(event)
             checkpoint.names[event.entity_uuid] = actors[event.entity_uuid].name
         if (not event.canceled and event.phase is EventPhase.EFFECT
                 and isinstance(event, SpatialChangeEvent)
@@ -903,19 +907,13 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
             match event:
                 case EncounterStartEvent() | InitiativeOrderChangedEvent():
                     checkpoint.initiative = tuple(event.initiative_order)
-            if change is not None:
-                # TODO(E3-bodies): E2 keeps today's shared fold, where a condition's item after-value does not
-                # reach the actors holding the item; every seat's fold applies it.
-                apply_presented_change(actors, change if change.replaced_item is None
-                                       else replace(change, replaced_item=None))
-            if (isinstance(event, SpatialChangeEvent) and event.terminal_release is not None
-                    and event.entity_uuid is not None):
-                actors.pop(event.entity_uuid, None)
-                positions.pop(event.entity_uuid, None)
+            fold_completed_actors(actors, event, change)
+            if (ended := ended_lifetime(event)) is not None:
+                positions.pop(ended, None)
                 for member in contacts.values():
-                    member.pop(event.entity_uuid, None)
-                if event.entity_uuid in contacts:
-                    contacts[event.entity_uuid].clear()
+                    member.pop(ended, None)
+                if ended in contacts:
+                    contacts[ended].clear()
         if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL):
             # The root completes: its whole tree is captured now, never again.
             for member in trees.pop(lineage, ()):

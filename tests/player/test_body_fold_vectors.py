@@ -60,7 +60,7 @@ def _seen(state: PlayerState, step: dict) -> None:
                 for identity, row in step["contacts"].items()}
     visible = mask_from_positions(tuple(tuple(position) for position in step["visible"]))
     state.senses = SensesSnapshot(position=(0, 0), visible=visible, seen=visible, entities=contacts, objects={},
-        effective_light_levels=EMPTY_VALUES, paths_dirty=False, passive_perception=10, sense_modes_hash=0,
+        effective_light_levels=EMPTY_VALUES, paths_dirty=False, passive_perception=10, sense_modes_key=(),
         sense_modes=(), visual_access=1)
     clear_unseen_positions(state)
     for identity, contact in contacts.items():

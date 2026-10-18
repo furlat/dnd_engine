@@ -7,37 +7,61 @@ from dnd.content.items.authored_item_builders import DIRECT_ITEM_BUILDERS
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.player.content import UIContentManifest
 from dnd.core.content.descriptors import ContentDescriptor, ContentVisibility
+from dnd.core.item_types import ItemEffectPresentationState
 from dnd.player.facts import (
-    ActionFact, ActorChanges, AttackFact, SpellFact, ConditionChangeFact, ConditionFact, EquipmentFact, ItemLook,
-    ItemPatch, MechanismActivationFact, ObjectDestroyedFact, PlayerActor, PlayerInitialization, PlayerLineage,
-    PlayerNode, PlayerObservation, PlayerState, SensoryFact, VisualLoadout, WorldUpdate,
+    ActionFact, ActorChangeFact, AttackFact, BodyRecord, SpellFact, ItemLook, ItemRecord, MechanismActivationFact,
+    ObjectDestroyedFact, PlayerActor, PlayerInitialization, PlayerLineage, PlayerNode, PlayerState, SensoryFact,
+    VisualLoadout, WorldUpdate,
 )
+from dnd.types.actor_facts import ConditionMember, ConditionRow, ItemEffectsRow, LayerRow
 
 
-def _body_content(creature_content_ref: str | None, visual_loadout: VisualLoadout | None,
-                  conditions: tuple[ConditionFact, ...]) -> set[str]:
+def _body_content(creature_content_ref: str | None, visual_loadout: VisualLoadout,
+                  conditions: tuple[ConditionMember, ...]) -> set[str]:
     known = {creature_content_ref} if creature_content_ref is not None else set()
-    known.update(row.item_id for row in (visual_loadout.layers if visual_loadout is not None else ()))
+    known.update(row.item_id for row in visual_loadout.layers)
     known.update(row.behavior_id for row in conditions if row.behavior_id is not None)
     return known
 
 
-def _item_content(look: ItemLook | None) -> set[str]:
-    if look is None:
-        return set()
-    return {look.item_id, *(effect.behavior_id for effect in look.item_effects)}
+def _item_content(look: ItemLook | None, effects: tuple[ItemEffectPresentationState, ...]) -> set[str]:
+    known = {effect.behavior_id for effect in effects}
+    if look is not None:
+        known.add(look.item_id)
+    return known
 
 
 def _actor_content(actor: PlayerActor) -> set[str]:
     return _body_content(actor.creature_content_ref, actor.visual_loadout, actor.conditions)
 
 
-def _patch_content(changes: ActorChanges, items: tuple[ItemPatch, ...]) -> set[str]:
-    """Identities a body or equipment patch discloses; omitted fields were disclosed when first sent."""
-    known = _body_content(changes.get("creature_content_ref"), changes.get("visual_loadout"),
-        changes.get("conditions", ()))
-    for row in items:
-        known.update(_item_content(row.look))
+def _record_content(record: ItemRecord) -> set[str]:
+    return _item_content(record.look, record.effects)
+
+
+def _body_record_content(record: BodyRecord) -> set[str]:
+    """Identities a body entering view discloses; its birth's only the first time it is sent."""
+    known = _body_content(record.birth.creature_content_ref if record.birth is not None else None,
+        record.body.visual_loadout, record.body.conditions)
+    for row in record.items:
+        known.update(_record_content(row))
+    return known
+
+
+def _change_content(fact: ActorChangeFact) -> set[str]:
+    """Identities an actor change discloses: memberships set, layers worn, items' looks and effects."""
+    known: set[str] = set()
+    for record in fact.items:
+        known.update(_record_content(record))
+    for change in fact.actors:
+        for row in change.rows:
+            match row:
+                case ConditionRow(member=ConditionMember(behavior_id=str() as behavior)):
+                    known.add(behavior)
+                case LayerRow(layer=layer) if layer is not None:
+                    known.add(layer.item_id)
+                case ItemEffectsRow():
+                    known.update(effect.behavior_id for effect in row.effects)
     return known
 
 
@@ -60,16 +84,16 @@ def _lineage_content(lineages: tuple[PlayerLineage, ...]) -> set[str]:
     """All content witnessed during these roots, including transient grants."""
     known: set[str] = set()
     for lineage in lineages:
-        known.update(_witnessed_content(lineage.observations, lineage.world_updates, lineage.events))
+        known.update(_witnessed_content(lineage.bodies, lineage.world_updates, lineage.events))
     return known
 
 
-def _witnessed_content(observations: tuple[PlayerObservation, ...], world_updates: tuple[WorldUpdate, ...],
+def _witnessed_content(bodies: tuple[BodyRecord, ...], world_updates: tuple[WorldUpdate, ...],
                        nodes: tuple[PlayerNode, ...]) -> set[str]:
     """The content one group of a seat's packet discloses: its bodies, items, world objects and facts."""
     known: set[str] = set()
-    for observation in observations:
-        known.update(_patch_content(observation.changes, observation.items))
+    for record in bodies:
+        known.update(_body_record_content(record))
     for update in world_updates:
         # An object's item id travels with its look (once per seat), its effects with each state sent.
         known.update(row.item_id for row in update.object_looks)
@@ -86,14 +110,8 @@ def _witnessed_content(observations: tuple[PlayerObservation, ...], world_update
             if fact.source_item_id is not None:
                 known.add(fact.source_item_id)
             known.update(effect.behavior_id for effect in fact.item_effects)
-        elif isinstance(fact, ConditionChangeFact):
-            if fact.condition.behavior_id is not None:
-                known.add(fact.condition.behavior_id)
-            if fact.condition.resulting_item is not None:
-                known.add(fact.condition.resulting_item.item_id)
-                known.update(effect.behavior_id for effect in fact.condition.resulting_item.item_effects)
-        elif isinstance(fact, EquipmentFact):
-            known.update(_patch_content(fact.changes, fact.items))
+        elif isinstance(fact, ActorChangeFact):
+            known.update(_change_content(fact))
         elif isinstance(fact, SensoryFact):
             known.update(row.content_ref.content_id for row in fact.spatial_effect_content.values())
         elif isinstance(fact, ObjectDestroyedFact):
@@ -113,7 +131,7 @@ def admitted_content(catalog: UIContentManifest, state: PlayerState,
     for actor in state.actors.values():
         known.update(_actor_content(actor))
     for record in state.items.values():
-        known.update(_item_content(record.look))
+        known.update(_item_content(record.look, record.effects))
     known.update(row.item.item_id for row in state.objects.values())
     known.update(effect.behavior_id for row in state.objects.values() for effect in row.item.item_effects)
     known.update(item.item_id for row in state.objects.values() for item in row.contained_items or ())
@@ -190,7 +208,7 @@ def observed_content_additions(catalog: ContentCatalog, retained: frozenset[str]
 def startup_content(catalog: ContentCatalog, initialization: PlayerInitialization) -> tuple[ContentDescriptor, ...]:
     """A seat's first content: every public descriptor and the observed ones its initialization witnesses."""
     additions = _observed_additions(catalog, frozenset(), _witnessed_content(
-        initialization.observations, initialization.world_updates, initialization.nodes))
+        initialization.bodies, initialization.world_updates, initialization.nodes))
     additions.update((key, row) for key, row in catalog.descriptors.items()
         if row.visibility is ContentVisibility.PUBLIC)
     return tuple(additions[key] for key in sorted(additions))

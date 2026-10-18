@@ -12,7 +12,7 @@ from uuid import UUID
 from pydantic import ConfigDict, Field, with_config
 
 from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot,
-    ItemEffectPresentationState, ItemIntegrity, ItemPresentationKind, ItemRarity, ItemRemnantState)
+    ItemIntegrity, ItemPresentationKind, ItemRarity, ItemRemnantState)
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.physical_access import ContactPassage
 from dnd.types.residues import ObjectResidueState
@@ -22,14 +22,14 @@ from dnd.types.world_placement import BoundaryStructure
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ItemLook:
-    """What any viewer of an equipped item sees of it; `is_lit` travels in its layer."""
+    """What any viewer of an equipped item sees of it, the same for the item's life: sent once per seat. Its
+    effects are dynamic (`ItemRecord.effects`); `is_lit` travels in its layer."""
 
     item_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")]
     item_kind: ItemPresentationKind
     visual_item_name: str
     visual_variant_id: str | None
     equipped_visual_policy: EquippedVisualPolicy
-    item_effects: tuple[ItemEffectPresentationState, ...]
     very_bright_radius_feet: Annotated[int, Field(ge=0)] | None
     bright_radius_feet: Annotated[int, Field(ge=0)] | None
     dim_radius_feet: Annotated[int, Field(ge=0)] | None

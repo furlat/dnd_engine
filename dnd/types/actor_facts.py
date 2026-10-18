@@ -131,7 +131,11 @@ class ActorFactChange:
 
 
 class ChangeField(StrEnum):
-    """One changed field of an actor, or of an item it holds: the tag of a change row and the key of its disclosure."""
+    """One changed field of an actor, or of an item it holds: the tag of a change row and the key of its disclosure.
+
+    The engine-only fields (healing blocked, damage affinities) have no row. The fields an event's own
+    presentation fact carries (faction, life state, remains, occupancy) are not change fields.
+    """
 
     NORMAL_HP = "normal_hp"
     MAXIMUM_HP = "maximum_hp"
@@ -141,14 +145,9 @@ class ChangeField(StrEnum):
     RESOLVED_SIZE = "resolved_size"
     SPATIAL_DISPOSITION = "spatial_disposition"
     WEAPON_SET = "active_weapon_set"
-    LIFE_STATE = "life_state"
-    REMAINS = "remains_disposition"
-    FACTION = "faction"
-    OCCUPANCY = "occupancy_layer"
     HEALING_BLOCKED = "healing_blocked"
     DAMAGE_AFFINITIES = "damage_affinities"
     CONDITION = "condition"
-    INTERNAL_CONDITION = "internal_condition"
     CONDITION_DURATION = "condition_duration"
     LAYER = "layer"
     INVENTORY = "inventory"

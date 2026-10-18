@@ -88,7 +88,6 @@
        "visual_item_name": "dagger",
        "visual_variant_id": null,
        "equipped_visual_policy": "visible",
-       "item_effects": [],
        "very_bright_radius_feet": null,
        "bright_radius_feet": null,
        "dim_radius_feet": null

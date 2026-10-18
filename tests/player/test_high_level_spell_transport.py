@@ -225,9 +225,9 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
         )
         detached = PlayerOperation.model_validate_json(record.model_dump_json())
         assert any(
-            row.actor.uuid == dragon.uuid
+            row.actor_uuid == dragon.uuid
             for lineage in detached.lineages
-            for row in lineage.observations
+            for row in lineage.bodies
         )
         assert (
             set(runtime.session.game.entities) == actor_ids

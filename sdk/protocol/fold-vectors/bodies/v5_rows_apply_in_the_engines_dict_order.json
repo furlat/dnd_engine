@@ -127,7 +127,6 @@
        "visual_item_name": "helm",
        "visual_variant_id": null,
        "equipped_visual_policy": "visible",
-       "item_effects": [],
        "very_bright_radius_feet": null,
        "bright_radius_feet": null,
        "dim_radius_feet": null
@@ -195,7 +194,6 @@
        "visual_item_name": "robe",
        "visual_variant_id": null,
        "equipped_visual_policy": "visible",
-       "item_effects": [],
        "very_bright_radius_feet": null,
        "bright_radius_feet": null,
        "dim_radius_feet": null
@@ -420,7 +418,6 @@
        "visual_item_name": "torch",
        "visual_variant_id": null,
        "equipped_visual_policy": "visible",
-       "item_effects": [],
        "very_bright_radius_feet": null,
        "bright_radius_feet": null,
        "dim_radius_feet": null

@@ -94,7 +94,7 @@ def body(hp: int, *, conditions: tuple[ConditionMember, ...] = (), layers: tuple
 
 def look(item_id: str) -> ItemLook:
     return ItemLook(item_id=item_id, item_kind=ItemPresentationKind.ITEM, visual_item_name=item_id.split(".")[-1],
-        visual_variant_id=None, equipped_visual_policy=EquippedVisualPolicy.VISIBLE, item_effects=(),
+        visual_variant_id=None, equipped_visual_policy=EquippedVisualPolicy.VISIBLE,
         very_bright_radius_feet=None, bright_radius_feet=None, dim_radius_feet=None)
 
 
