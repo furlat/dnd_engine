@@ -339,6 +339,12 @@ class SpellcastingBlock(BaseBlock):
         description="Damage type for each extra spell damage"
     )
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (
+            self.spell_attack_bonus, self.spell_damage_bonus, self.spell_dc_bonus, self.spell_crit_threshold,
+            self.spell_crit_extra_dice)
+
     @model_validator(mode="after")
     def check_extra_damage_consistency(self) -> Self:
         """Ensure all extra spell damage payload lists have matching length."""

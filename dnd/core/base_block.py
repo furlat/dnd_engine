@@ -147,15 +147,6 @@ class BaseBlock(BaseModel):
     """
 
     __getattr__ = read_private_attribute
-    _value_field_names: ClassVar[tuple[str, ...]] = ()
-
-    @classmethod
-    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
-        """Record once per class which declared fields hold this block's values."""
-        super().__pydantic_init_subclass__(**kwargs)
-        cls._value_field_names = tuple(name for name, field in cls.model_fields.items()
-                                       if field.annotation in (ModifiableValue, Optional[ModifiableValue]))
-
     name: str = Field(
         default="A Block",
         description="The name of the block. Defaults to 'A Block' if not specified."
@@ -409,9 +400,8 @@ class BaseBlock(BaseModel):
                 self.blocks[attr_value.uuid] = attr_value
 
     def value_fields(self) -> tuple[ModifiableValue, ...]:
-        """This block's own values: its declared value fields, as they are now."""
-        return tuple(value for value in (getattr(self, name) for name in self._value_field_names)
-                     if value is not None)
+        """This block's own values. A block that holds values names its value fields by overriding this."""
+        return ()
 
     @model_validator(mode='after')
     def set_values_and_blocks_source(self) -> 'Self':

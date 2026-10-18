@@ -582,6 +582,12 @@ class Entity(BaseBlock):
     non_blocking: bool = Field(default=False, description="When True, entity does not block movement through its cell")
     intrinsic_ignore_difficult_terrain: bool = Field(default=False, alias="ignore_difficult_terrain")
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (
+            self.proficiency_bonus, self.initiative, self.jump_distance_additive,
+            self.jump_distance_multiplier, self.max_concentration_slots)
+
     @property
     def ignore_difficult_terrain(self) -> bool:
         return self.intrinsic_ignore_difficult_terrain or any(condition.ignores_difficult_terrain

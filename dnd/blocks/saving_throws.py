@@ -86,6 +86,10 @@ class SavingThrow(BaseBlock):
         description="Exact source-owned proficiency contributions.",
     )
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (self.bonus,)
+
     @computed_field
     @property
     def proficiency(self) -> bool:

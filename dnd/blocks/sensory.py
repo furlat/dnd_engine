@@ -137,6 +137,10 @@ class Senses(BaseBlock):
     _path_revision: int = PrivateAttr(default=0)
     _path_max_distance: Optional[int] = PrivateAttr(default=None)
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (self.visual_access,)
+
     @property
     def path_revision(self) -> int:
         """Return the revision of the observer's materialized path facts."""

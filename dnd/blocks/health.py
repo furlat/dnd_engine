@@ -95,6 +95,10 @@ class HitDice(BaseBlock):
     )
     spent_hit_dice: int = Field(default=0, ge=0, description="Number of dice from this block spent on short-rest healing.")
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (self.hit_dice_value, self.hit_dice_count)
+
     @computed_field
     @cached_property
     def hit_points(self) -> int:
@@ -344,6 +348,12 @@ class Health(BaseBlock):
     damage_taken: int = Field(default=0,ge=0, description="The amount of damage taken")
     damage_reduction: ModifiableValue = Field(default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(),base=0, name="Damage Reduction"), description="Damage Reduction, e.g. Damage Resistance")
     healing_blocked: bool = Field(default=False, description="If True, entity cannot regain HP (e.g., Chill Touch)")
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (
+            self.max_hit_points_bonus, self.temporary_hit_points, self.death_save_bonus,
+            self.damage_reduction)
 
     def get_resistance(self,damage_type: DamageType, *, attack_magical: bool | None = None) -> ResistanceStatus:
         record_action_count("health.resistance_evaluation", 1)

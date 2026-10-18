@@ -397,6 +397,14 @@ class ActionEconomy(BaseBlock):
         default_factory=dict,
     )
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (
+            self.actions, self.bonus_actions, self.reactions, self.walking_speed, self.flying_speed,
+            self.action_permission, self.provokes_opportunity_attacks, self.spell_slot_1, self.spell_slot_2,
+            self.spell_slot_3, self.spell_slot_4, self.spell_slot_5, self.spell_slot_6, self.spell_slot_7,
+            self.spell_slot_8, self.spell_slot_9)
+
     def add_restricted_action_grant(
         self,
         grant: RestrictedActionGrant,

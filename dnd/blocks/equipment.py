@@ -176,6 +176,10 @@ class Armor(EquippableItem):
         description="Whether the armor imposes disadvantage on Stealth checks"
     )
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (self.ac, self.max_dex_bonus)
+
     def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
         """Armor and accessories occupy their declared body slot."""
         return (self.body_part,)
@@ -294,6 +298,10 @@ class Shield(EquippableItem):
         description="Armor Class bonus provided by the shield"
     )
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (self.ac_bonus,)
+
     def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
         """Shields occupy the melee off hand."""
         return (WeaponSlot.MELEE_OFF,)
@@ -325,6 +333,10 @@ class Shield(EquippableItem):
 
 class Weapon(EquippableItem):
     usage: WeaponUsage = WeaponUsage.HELD
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return tuple(value for value in (self.damage_bonus, self.attack_bonus) if value is not None)
 
     @property
     def is_body_attack(self) -> bool:
@@ -819,6 +831,16 @@ class Equipment(BaseBlock):
         default_factory=list,
         description="Extra damage type for the weapon",
     )
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (
+            self.unarmored_ac, self.ac_bonus, self.damage_bonus, self.attack_bonus, self.melee_attack_bonus,
+            self.ranged_attack_bonus, self.melee_damage_bonus, self.ranged_damage_bonus,
+            self.unarmed_attack_bonus, self.unarmed_damage_bonus, self.off_hand_melee_ability_bonus,
+            self.off_hand_ranged_ability_bonus, self.crit_threshold, self.crit_threshold_melee,
+            self.crit_threshold_ranged, self.crit_extra_dice, self.crit_extra_dice_melee,
+            self.crit_extra_dice_ranged)
 
     def owned_values(self) -> tuple[ModifiableValue, ...]:
         return (*super().owned_values(), *self.extra_attack_damage_bonus)

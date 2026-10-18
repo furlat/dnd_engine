@@ -87,6 +87,10 @@ class Ability(BaseBlock):
         ),
     )
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (self.ability_score, self.modifier_bonus, self.check_bonus)
+
     def add_check_proficiency_source(
         self,
         source_id: UUID,
