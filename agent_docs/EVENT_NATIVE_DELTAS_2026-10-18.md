@@ -1,5 +1,134 @@
 # Event-native deltas on the player wire (study, 2026-10-18)
 
+## Revision 2: stateless publication (the human's rule; supersedes C1/C2 and D1/D2 below)
+
+Status: **exploration, nothing decided.** The human: "not sure this is the correct thing to do … let's explore this direction before going full stateful; if this works it should be much cheaper". The rescans under this rule are in [event_native_deltas_2026-10-18/stateless/](event_native_deltas_2026-10-18/stateless/):
+
+- [world.md](event_native_deltas_2026-10-18/stateless/world.md)
+- [actors_items_hud.md](event_native_deltas_2026-10-18/stateless/actors_items_hud.md)
+- [sensory_effects_lineage.md](event_native_deltas_2026-10-18/stateless/sensory_effects_lineage.md)
+- [remembered.md](event_native_deltas_2026-10-18/stateless/remembered.md)
+
+### The rule
+
+Publication keeps no remembered state. An update for an agent is the change in what it perceives now against just before, plus the event's own change:
+
+- **Perceived before and after the event:** the event's keyed change, disclosed per field (a change touching only hidden fields sends nothing).
+- **Entering perception:** the current state, in full. Examples: a door opens, a room is entered (even one seen an hour ago: "the full room is delta, there is no remembered room"), a light turns on, a creature steps out of cover.
+- **Leaving perception:** nothing. What the client shows for things out of sight is client policy.
+
+Per-seat server knowledge is what is perceived now (perception already computes what enters and leaves) plus which static content ids were sent. There are no client-value copies and no last-seen stamps.
+
+### What each family becomes
+
+- **World.**
+  - Tiles in view get keyed changes from the events: field partials, conditions by name, residues by (cell, material, contribution), light from `light_level_map`.
+  - Entering cells get a mask, packed columns of current values, their conditions and residues, and a static row only for a tile uuid never sent.
+  - Objects: after-values by uuid. Entering sends look (once per uuid), placement and state. A non-sensory removal is key-only.
+  - Contents: full set when granted, keyed while granted.
+  - Connectors: full on entry, keyed while visible.
+  - Deleted:
+    - `remembered.tiles/.objects/.connectors`, `apply_world_update(remembered)`;
+    - `_tile_changes` and the tile diff loop;
+    - `remembered_positions/order`, `observed_values`, `_observed_plain_or_object`;
+    - the remembered merges in `_observed_object`;
+    - the removal, contents-clearing and connector-gate rules judged against memory.
+- **Bodies and items.**
+  - Per seat only: composed perception, control, and the ids whose birth fields or static item look were sent.
+  - Scalars carry the event's value. `layers`, `conditions` and `controlled_items` become keyed changes. Entering view sends all changeable fields.
+  - Deleted: the body diff, `item_patch`, `_holdings/_gear_observation`, the whole-holdings `EquipmentFact`, the known-removal machinery, the permanent `known` set, and per-observer re-acquisition.
+  - One change record per event case, built inside `advance_capture` and shared by every seat.
+- **Sensory, effects, lineage.**
+  - The perception record is already native before/after.
+  - Light rows and sightings become *added (full) / patched (changed fields only)* from the before/after the native code already holds. A walking torch-bearer's patch is its position.
+  - Deleted: `spatial_values`, the sighting filter, the per-seat spatial revisions, content value checks, equality scans.
+  - Restatements fixed:
+    - the envelope (`audience`, generation, observer) once, with the audience at initialization (4.8 / 9.4 / 33.2 / 9.4 KB);
+    - the spell declaration root-only, and `SpellFact.application` deleted (restated by the resolution row);
+    - `cause_occurrence` deleted (always equals `parent_event`);
+    - in-group `parent_lineage` and `PlayerNode.lineage` dropped;
+    - REMOVED state sends `removed_positions` only;
+    - admission contacts not duplicated (5.7 KB each in Sleet and Darkness).
+
+### Where memory lives (the separate "remembered" question)
+
+- **Engine rules** need only *which*, never *what*:
+  - the explored bitmask `Senses.seen` (routes may cross visible or once-seen cells);
+  - discovered trap/effect ids (a real D&D rule: known traps feed hazard flags and safe paths);
+  - turn-scoped collision cells.
+  
+  No rule uses remembered values or last-known creature positions.
+- **Found leak:** inside remembered cells, pathfinding reads the *current objective terrain* (`test_restored_paths_use_current_terrain_in_remembered_cells` asserts it). The options:
+  - keep the leak;
+  - visible-only planning;
+  - engine-side remembered terrain values: the one place the engine would hold "what" memory.
+- **Server AI:** builds its own memory by folding the native stream (`knowledge_system.py:37-39`). It never reads publication, so moving publication memory to the client costs it nothing today.
+  - It keeps a full objective copy per assignment and never forgets (memory work: next refactor).
+  - Only `basic.py:858-897` (advance toward last-known hostiles) and the tactical focus read its memory.
+  - A future AI connected as a client would need a few fields `PlayerActor` lacks: creature type, damage affinities, healing blocked.
+- **Client:** it already remembers by never deleting. To own memory fully it adds:
+  1. `seen |= visible` (so `seen_cells_added` can leave the wire);
+  2. forget an object when its cell is seen without it;
+  3. the wall-face merge;
+  4. effect footprint memory, retired when seen empty.
+
+### Reconnect
+
+- **Short drop, client memory intact:** the client sends its last applied sequence number; the server replays the seat's spool after it. Exact, and it exists.
+- **Fresh client:**
+  - (a) a snapshot of current perception only (exact for now; the explored map is lost);
+  - (b) journal replay from 0 (exact memory; the spool exists today);
+  - (c) the client persists its own memory, plus (a) or the short-drop replay.
+- **An AI running as a client** follows the same cases.
+
+### Native changes
+
+- Residues get a keyed-change field (≈30–50 lines).
+- Terrain writers record `walking_cost` changes (≈10–20 lines). `default_light` needs nothing: live edits already go through world_authoring.
+- Per-event actor change records: which fields of a condition or its stats changed, an item's previous slot and holder, and the fields changed inside whole-item snapshots.
+- A settlement marker on `SensoryUpdateEvent`, for a composed seat view.
+- The composed view's entered and left masks, exposed from `_fold_view_cells` (today the member mask is used, which is wrong for multi-observer seats).
+
+### Bugs that become visible without the diff (fix regardless)
+
+- The client and engine folds disagree on temporary HP in a condition's `resulting_stats` and on INTERNAL conditions. Without the diff, an actor kept in view drifts permanently. The fix is to build the change record from the engine fold's own case.
+- Non-controllers keep a ghost layer for a destroyed equipped item; only the controller gets the charge fact (projection.py:808-811).
+- Connectors are read from init only (projection.py:1224).
+- The startup fold lacks LIGHT_CHANGED/TILES_CHANGED, so initial light can be stale.
+
+### Bytes (estimates, not measured)
+
+- World part: Fireball ≈119 → ≈30 KB; Sleet ≈25 → ≈8 KB; SG walk ≈38.5 → ≈15–30 KB; Darkness/Daylight ≈2 → ≈2–4 KB.
+- The new worst case is re-opening a room already seen (≈0 today → ≈12–23 KB), mostly wall placements.
+- Bodies entering view: ≈250 B for a viewer, ≈1.2 KB for the controller; a condition ≈400–900 B.
+- A room re-entry gallery case is needed to measure.
+
+### Decisions for the human (revision 2)
+
+1. **Multi-observer seats: what "the agent" in the rule means.** In every option the server already holds the composed view, because all disclosure reads it.
+   - (A) per member, the client composes: two compositions, revisions on the wire leak unseen counts, divergence stays;
+   - (B) the seat's composed view, one fact per settlement: the fact part shrinks by up to 1 − 1/N (N = 4 amber, 26 blue); the client loses per-character views;
+   - (C) composed plus one member's own view: a few KB per focus switch.
+2. **Remembered-cell pathfinding:** keep the current-terrain leak, visible-only, or engine-side remembered terrain.
+3. **HUD:** eleven sheet field groups change with no event (action and movement counters, spell slots, resources, handler toggles, initiative, …; `reset_all_costs` runs every op out of combat). Whole sheets are too big (91 KB for blue). The options:
+   - H1: an event per economy change;
+   - H2: one engine writer publishing only what changed since the actor's own last publication (≈6 call sites plus toggle and join/leave events);
+   - a declared exception.
+4. **Smaller ones:**
+   - tell a caster when its condition on an unseen target ends, or keep "leaving: nothing";
+   - send body birth fields and an instance's fixed parts (tile static row, object look) once per seat, or with every entry;
+   - packed columns for entering tiles (≈15 B per cell) or whole rows (≈400 B);
+   - keep the objective resolved light on the wire;
+   - connector names in the log;
+   - initiative.
+5. **Reconnect** for a fresh client: (a), (b) or (c).
+6. **Numbering:** keep the per-seat occurrence numbering (remembered knowledge) rather than native ids, which would leak how many undisclosed events happened. Integrator's recommendation: keep it.
+7. **Composition cursors:** the composition's contact and effect cursors are last-seen stamps used to merge hidden effect cells. Under (B)/(C) they stay server knowledge.
+
+---
+
+## Revision 1 (first study; C1/C2 and D1/D2 superseded by revision 2)
+
 Status: **study only; nothing implemented.** The decisions D1–D5 below wait on the human. Base: branch `single-pass-propagation` (integration `a6ee21389`), wire schema 15. The combat log and memory retention are out of scope (human). This note sums up four read-only code studies and one byte census, kept in [event_native_deltas_2026-10-18/](event_native_deltas_2026-10-18/):
 
 - [world.md](event_native_deltas_2026-10-18/world.md): tiles, residues, objects, connectors, light
