@@ -5884,8 +5884,7 @@ class Entity(BaseBlock):
         result.update({identity: contact.position
             for identity, contact in self.senses.objects.items()
             if isinstance(item := BaseBlock.get(identity), BaseItem)
-            and item.is_active and (template.object_target_policy == "active"
-                or item.is_targetable and item.is_breakable())})
+            and (item.is_active if template.object_target_policy == "active" else item.is_breakable())})
         return result
 
     def _aoe_footprint(

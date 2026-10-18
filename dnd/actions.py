@@ -4768,8 +4768,8 @@ class SpellAction(BaseAction):
 
     def _object_recipient_contact(self, source: Entity, target: BaseItem) -> Tuple[Optional[str], Optional[Tuple[int, int]]]:
         """(error, contact position) of one object this spell would target."""
-        if (self.effective_target_type is not TargetType.CREATURE_OR_OBJECT or not target.is_active
-                or self.object_target_policy == "damageable" and (not target.is_targetable or not target.is_breakable())):
+        if (self.effective_target_type is not TargetType.CREATURE_OR_OBJECT or not (
+                target.is_breakable() if self.object_target_policy == "damageable" else target.is_active)):
             return "This spell cannot target this object", None
         contact = get_map().attack_object_contact(source.uuid, target.uuid,
             range_feet=self.effective_range, access=self.get_physical_access() or PhysicalAccess.PROJECTILE,
