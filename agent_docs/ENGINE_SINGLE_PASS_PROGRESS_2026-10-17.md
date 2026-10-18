@@ -632,3 +632,19 @@ Hard rules:
   - **HUD bytes per op** (G1): Fireball 5.2 → 2.7 KB, SG walk 1.5 → 0.4 KB, init 109 → 105 KB.
   - **ms:** within load noise; E5's own CPU is lower or equal.
   - **For the human:** H2c (a kept sheet per actor) instead of H2a (the whole sheet on each event), accepted by the integrator.
+- 2026-10-18: **Cleanup lane merged into codex/event-native-deltas (fefaae23c).**
+  - **Removed:** `publish_tile_state_changed`, `PlayerCausalIndex`, the per-query Forcecage cell set, the `_contextual_status` isinstance filter, and timestamp order in `is_first_at_phase`.
+  - **`D20Event.bonus`** is an optional reading (the int duplicated `dice_roll.bonus`).
+  - **Navigation:** `Entity._navigation_traversal` became `NavigationRead`, owned by `SpatialSensesSystem`.
+  - **`_target_ids`** is kept: no exact, not-slower alternative.
+  - **Player-visible rules fix:** Reckless Attack with a Strength melee weapon now grants advantage.
+  - **Gates:**
+    - published updates byte-identical on 7 cases;
+    - the only native difference is `bonus` 0 → null on unread D20 requests;
+    - sweep = r29;
+    - pyright 0 new.
+- 2026-10-18: **E3-bodies prep (codex/enp-e3-bodies)** on top of E2's tip:
+  - **Startup-damage grant fix (5e937d6a1):** roster setup runs under the encounter's identity and location rule. 250 startup versions change only in their grants. Amber starts with crowd 1–6 at 6 HP instead of 44. This is player-visible.
+  - **Static-look census:** no held item's look or profile changes over 29 gallery cases and 4,139 tests.
+  - **Ruling (a):** one per-event conversion turns E2's named after-values into keyed rows, shared by every seat.
+- 2026-10-18: **E3-sensory prep (codex/enp-e3-sensory, 314105098):** the native settlement marker, with native events identical apart from it and the wire byte-identical; schema-16 sensory types in a staging module; the client fold; vectors V1–V8.
