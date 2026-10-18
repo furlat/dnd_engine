@@ -319,3 +319,19 @@ Hard rules:
     - the mover's wall FOV: ~6 ms (PV1a-4);
     - navigation after the move: ~6 ms;
     - HUD sheets: ~7 ms.
+- 2026-10-18: **PH-2 merged (f908ec95e)** (branch ph2b: 0e0b590da step 1, 380e7c484 step 2, 914cc6847 step 3 with the review fixes, 7b04aa5c2 replay check).
+  - Single values are read live again (EB-02-010 is back to its live contract).
+  - `with_rows` keeps each extra row's own normalizer and dedupes it; a cleared value reads 0; the test-only second mechanisms are deleted.
+  - Gates (agent):
+    - full sweep, 0 new failures vs r21;
+    - transcripts identical and published updates byte-identical vs ff37e2a29 on 7 cases;
+    - value-read differential, 0 mismatches over 31 cases.
+  - Tracked objects after Start: 828K → 688K (block values 155K → 19K). Fireball's ~5.4K kept value objects → 0.
+  - Time (native, ff37e2a29 → PH-2):
+    - Fireball 99 → 93;
+    - CoD 90 → 85;
+    - Sleet cast 82 → 74;
+    - SG moves −5 to −9;
+    - Command 187 → 178 total.
+  - **For the human (AGENTS.md "no getattr to cheat"):** `BaseBlock.value_fields()` reads value fields by `getattr` over names recorded per class from `model_fields`. That is narrower than the per-instance getattr + isinstance scan it replaces, which also remains for child blocks (base_block.py:405). The explicit alternative is a per-class `value_fields()` in ~14 classes. Merged as is, pending your ruling.
+  - Left as is: transient records ("Object AC", dice bonuses) still register by default, as before.
