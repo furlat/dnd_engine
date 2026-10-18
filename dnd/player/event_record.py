@@ -72,16 +72,18 @@ GRANTS = TypeAdapter(dict[str, frozenset[str]])
 
 
 def _encode_recorded_log(entry: CombatLogEntry | None) -> dict[str, Any] | None:
+    return None if entry is None else encode_recorded_log(entry)
+
+
+def encode_recorded_log(entry: CombatLogEntry) -> dict[str, Any]:
     """Private native archives retain grants; public log serialization excludes them."""
-    if entry is None:
-        return None
     return {**entry.model_dump(mode="json"),
         "perceiver_uuids": sorted(entry.perceiver_uuids),
         "revealed_entity_uuids": sorted(entry.revealed_entity_uuids),
         "identified_entity_observer_uuids": GRANTS.dump_python(entry.identified_entity_observer_uuids, mode="json"),
         "located_entity_observer_uuids": GRANTS.dump_python(entry.located_entity_observer_uuids, mode="json"),
         "located_position_observer_uuids": GRANTS.dump_python(entry.located_position_observer_uuids, mode="json"),
-        "sub_entries": [_encode_recorded_log(child) for child in entry.sub_entries]}
+        "sub_entries": [encode_recorded_log(child) for child in entry.sub_entries]}
 
 # These facts were added after native-v2 recordings were already in use.
 # Their defaults keep those presentation archives readable; old archives do
@@ -282,3 +284,16 @@ def upgrade_recorded_spatial_commits(events: tuple[Event, ...],
 
 
 RecordedEvent = Annotated[Event, BeforeValidator(decode_event), PlainSerializer(encode_event)]
+
+
+NATIVE_LOG = TypeAdapter(CombatLogEntry)
+
+
+def decode_recorded_log(value: Any) -> CombatLogEntry:
+    """A recorded native combat log with its grants (`encode_recorded_log`), archived values upgraded once."""
+    if isinstance(value, CombatLogEntry):
+        return value
+    return NATIVE_LOG.validate_python(recorded_combat_log(value), context=PASSIVE_EVENT_REPLAY)
+
+
+RecordedCombatLog = Annotated[CombatLogEntry, BeforeValidator(decode_recorded_log), PlainSerializer(encode_recorded_log)]

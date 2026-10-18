@@ -22,7 +22,7 @@ from dnd.types.senses import (SensesSnapshot, PerceivedContact, PerceivedLightSo
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.base_actions import ActionEvent
-from dnd.core.combat_log import CombatLogEntryType
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.presentation_geometry import ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.effect_types import ResolutionRef
@@ -59,7 +59,8 @@ from dnd.player.facts import (
     VersionRows, WorldUpdate, ItemRecord, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
     Column, ContainedItem, ObjectState,
 )
-from dnd.player.capture import CompletedLineage, IntervalEnvelope, ObjectiveRow, recorded_actor_change
+from dnd.player.capture import (CompletedLineage, IntervalEnvelope, ObjectiveRow, recorded_actor_change,
+    seat_log_entry)
 from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import PlayerResourceValue
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
@@ -1102,7 +1103,13 @@ class SeatWalk:
     facts: dict[UUID | None, ConditionFact]
     # The shared fold's actor change of each event that has one (E2's record), by event uuid.
     actor_fact_changes: Mapping[UUID, ActorFactChange]
+    # The seat's combat-log entries: an initialization's as its capture projected them (`logs`); a lineage's
+    # projected at each event from its native log (`native_logs`), with the names of the bodies the seat holds at
+    # that event (`names`, its births sent and this walk's, inclusive) and its `log_inputs` as of the operation.
     logs: Mapping[UUID, PlayerLogEntry]
+    native_logs: Mapping[UUID, CombatLogEntry]
+    names: dict[str, str]
+    log_inputs: "SeatLogInputs"
     by_lineage: dict[UUID, Event]
     # Before each walk event (by uuid): the deliveries whose entry sight is kept, and the objects whose removal starts.
     deliveries_at: dict[UUID, tuple[UUID, ...]]
@@ -1133,11 +1140,37 @@ class SeatWalk:
     # change several members saw happen).
     published_sources: set[UUID] = field(default_factory=set)
     content_at_event: dict[UUID, frozenset[str]] = field(default_factory=dict)
+    # The walk's projected log entries by native entry (`seat_log_entry`'s memo), one per group and seat.
+    retained_logs: dict[int, CombatLogEntry | None] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class SeatLogInputs:
+    """What a seat's combat log reads besides the bodies it holds, as of the operation's start: the connectors it
+    sees and the content ids it holds."""
+
+    connectors: frozenset[str] = frozenset()
+    content_ids: frozenset[str] = frozenset()
+
+
+NO_LOG_INPUTS = SeatLogInputs()
+
+
+def _seat_log(walk: SeatWalk, event: Event, observer: PlayerAudience) -> PlayerLogEntry | None:
+    """The seat's entry of an event's combat log: a lineage event's projected now, with the names of the bodies the
+    seat holds at this event; an initialization event's as captured."""
+    native = walk.native_logs.get(event.uuid)
+    if native is None:
+        return walk.logs.get(event.uuid)
+    return seat_log_entry(native, observer, known_entity_names=walk.names,
+        known_connector_uuids=walk.log_inputs.connectors, known_content_ids=walk.log_inputs.content_ids,
+        retained_entries=walk.retained_logs)
 
 
 def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event, ...],
                 conditions: tuple[ConditionFact, ...], actor_fact_changes: Mapping[UUID, ActorFactChange],
-                logs: Mapping[UUID, PlayerLogEntry]) -> SeatWalk:
+                logs: Mapping[UUID, PlayerLogEntry], native_logs: Mapping[UUID, CombatLogEntry],
+                names: Mapping[UUID, str], log_inputs: SeatLogInputs) -> SeatWalk:
     """A seat's walk over a group: its events (old recordings upgraded) and their schedules."""
     events = upgrade_recorded_spatial_commits(events, tuple(
         (row.lineage_uuid, row.event_uuid) for row in sorted(group.versions, key=lambda row: row.source_index)))
@@ -1179,7 +1212,9 @@ def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event,
         if isinstance(event, SensoryUpdateEvent) and state.audience.observes(event.observer_uuid):
             settlements.setdefault(event.settlement if event.settlement is not None else event.uuid, []).append(event)
     return SeatWalk(events=events, facts={row.event_uuid: row for row in conditions},
-        actor_fact_changes=actor_fact_changes, logs=logs, by_lineage=by_lineage,
+        actor_fact_changes=actor_fact_changes, logs=logs, native_logs=native_logs,
+        names={str(identity): names[identity] for identity in sent.actor_births}, log_inputs=log_inputs,
+        by_lineage=by_lineage,
         deliveries_at=_due(events, indexes, list(delivery_starts.items())),
         removals_at=_due(events, indexes, list(removal_starts.items())),
         explicit_destructions=frozenset(event.item_uuid for event in events if isinstance(event, ItemDestructionEvent)),
@@ -1217,7 +1252,8 @@ def _fold_version(session: "SessionProjection", folded: dict[UUID, AppliedWorldF
     return applied
 
 
-def _fold_actors(actors: dict[UUID, ActorState], folded: Mapping[UUID, AppliedWorldFact | None], event: Event,
+def _fold_actors(actors: dict[UUID, ActorState], names: dict[UUID, str],
+                 folded: Mapping[UUID, AppliedWorldFact | None], event: Event,
                  changes: Mapping[UUID, ActorFactChange], condition: ConditionFact | None) -> BodiesStep:
     """The session actors' one writer: a completed version's birth, recorded actor change (E2's record, the
     shared fold's own function) and lifetime end, once per version and session (before the version's world fold,
@@ -1227,7 +1263,8 @@ def _fold_actors(actors: dict[UUID, ActorState], folded: Mapping[UUID, AppliedWo
         raise ValueError("A session folds each version once")
     if event.canceled or event.phase is not EventPhase.COMPLETION:
         return NO_BODIES_STEP
-    fold_birth(actors, event)
+    if (born := fold_birth(actors, event)) is not None:
+        names[born] = actors[born].name
     change = recorded_actor_change(changes, event)
     if change is None:
         fold_completed_actors(actors, event, None)
@@ -1249,6 +1286,7 @@ def _enter_body(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", acto
         birth=identity not in walk.known, sent=state.static_sent, pending=walk.pending)
     walk.bodies.append(record)
     walk.known.add(identity)
+    walk.names[str(identity)] = actor.name
     walk.entered.add(identity)
     walk.pending.item_looks.update(row.item_uuid for row in record.items if row.look is not None)
     walk.pending.item_profiles.update(row.item_uuid for row in record.items if row.profile is not None)
@@ -1424,7 +1462,7 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
         parent_event=_version_key(keys, event.parent_event), parent_lineage=_lineage_key(keys, event.parent_lineage),
         children_lineages=tuple(key for identity in event.children_lineages
             if (key := _lineage_key(keys, identity)) is not None), phase=event.phase,
-        canceled=event.canceled, fact=fact, combat_log=_action_log(walk.logs.get(event.uuid), fact, observer),
+        canceled=event.canceled, fact=fact, combat_log=_action_log(_seat_log(walk, event, observer), fact, observer),
         turn_execution_id=event.turn_execution_id,
         cancellation=ActionCancellation(phase=event.canceled_from_phase,
             action_economy_spent=event.action_economy_spent, outcome_code=event.outcome_code)
@@ -1703,6 +1741,8 @@ class SessionProjection:
     # The digest of each tile's current value, filled by the publications, forgotten by `_fold_version`'s writes.
     tile_digests: TileDigests = field(default_factory=TileDigests)
     actors: dict[UUID, ActorState] = field(default_factory=dict)
+    # Every born actor's name, never popped: the names a seat's combat log may show (its bodies').
+    names: dict[UUID, str] = field(default_factory=dict)
     walked: set[UUID] = field(default_factory=set)
 
 
@@ -1888,7 +1928,7 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
         states.append(state)
         worlds.append(world)
         walks.append(_begin_walk(group, state, tuple(event for _, event in initialization.admitted),
-            initialization.conditions, changes, initialization.logs))
+            initialization.conditions, changes, initialization.logs, {}, session.names, NO_LOG_INPUTS))
     steps: dict[int, list[tuple[int, Event]]] = {}
     for seat, walk in enumerate(walks):
         for event in walk.events:
@@ -1900,7 +1940,7 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
         due = steps.get(index, ())
         for seat, row in due:
             _enter_event(walks[seat], group, states[seat], session.world, row)
-        step = _fold_actors(session.actors, folded, event, changes, condition)
+        step = _fold_actors(session.actors, session.names, folded, event, changes, condition)
         applied = _fold_version(session, folded, event, condition)
         for seat, row in due:
             _leave_event(walks[seat], group, states[seat], session.world, session.tile_digests,
@@ -1929,10 +1969,12 @@ def begin_projection(session: SessionProjection, initialization: IntervalEnvelop
 
 
 def project_lineages(session: SessionProjection, states: tuple[ProjectionState, ...],
-                     lineages: tuple[CompletedLineage, ...]) -> tuple[PlayerLineage | None, ...]:
+                     lineages: tuple[CompletedLineage, ...], log_inputs: tuple[SeatLogInputs, ...] | None = None
+                     ) -> tuple[PlayerLineage | None, ...]:
     """Advance the seats' private projection memory over one closed root, captured for each seat.
 
-    The root's events are walked once, each event stepping every seat with its own retained body.
+    The root's events are walked once, each event stepping every seat with its own retained body. `log_inputs`
+    are each seat's, as of the operation's start (none for a recorded sequence).
     """
     for state, lineage in zip(states, lineages, strict=True):
         if (state.generation != lineage.generation or state.observer_uuid != lineage.observer_uuid
@@ -1948,9 +1990,10 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
         state.owned_spatial_effects.update(event.spatial_effect_uuid for event in lineage.events
             if isinstance(event, SpatialEffectChangeEvent) and state.audience.controls(event.source_entity_uuid))
     group = _walk_group(session, versions)
+    inputs = log_inputs if log_inputs is not None else tuple(NO_LOG_INPUTS for _ in states)
     walks = tuple(_begin_walk(group, state, upgrade_recorded_resolutions(lineage.events),
-        lineage.conditions, lineage.actor_fact_changes, lineage.logs)
-        for state, lineage in zip(states, lineages))
+        lineage.conditions, lineage.actor_fact_changes, {}, lineage.native_logs, session.names, seat_inputs)
+        for state, lineage, seat_inputs in zip(states, lineages, inputs, strict=True))
     order = tuple(event.uuid for event in walks[0].events)
     if any(tuple(event.uuid for event in walk.events) != order for walk in walks[1:]):
         raise ValueError("The seats of one root walk its events in one order")
@@ -1968,7 +2011,7 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
         condition = walks[0].facts.get(event.uuid)
         for walk, state in zip(walks, states):
             _enter_event(walk, group, state, session.world, walk.events[position])
-        step = _fold_actors(session.actors, folded, event, walks[0].actor_fact_changes, condition)
+        step = _fold_actors(session.actors, session.names, folded, event, walks[0].actor_fact_changes, condition)
         applied = _fold_version(session, folded, event, condition)
         for walk, state in zip(walks, states):
             _leave_event(walk, group, state, session.world, session.tile_digests, session.actors,

@@ -70,8 +70,7 @@ def advance(seat: Seat, act: Callable[[], object]) -> None:
     act()
     roots = tuple(event for _, event in EventQueue.iter_events_since(begin)
         if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
-    for native in capture_lineages(roots, observer_uuid=seat.audience.observers[0], audience=seat.audience,
-            known_actor_uuids=frozenset(seat.client.actors)):
+    for native in capture_lineages(roots, observer_uuid=seat.audience.observers[0], audience=seat.audience):
         packet = project_lineage(seat.session, seat.projection, native)
         if packet is not None:
             seat.client = reduce_lineage(seat.client, LINEAGE.validate_json(LINEAGE.dump_json(packet)))

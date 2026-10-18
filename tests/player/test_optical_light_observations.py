@@ -63,8 +63,7 @@ def start(built, witness, max_distance=8):
 def advance(seat, state, roots, witness):
     session, projection = seat
     natives, packets = [], []
-    for native in capture_lineages(roots, observer_uuid=witness.uuid,
-            known_actor_uuids=frozenset(state.actors)):
+    for native in capture_lineages(roots, observer_uuid=witness.uuid):
         packet = project_lineage(session, projection, native)
         natives.append(native)
         if packet is not None:

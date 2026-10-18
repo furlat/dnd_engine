@@ -84,8 +84,7 @@ def test_fixed_source_overrides_and_native_activation_survive_reduction(world):
             if row.source_item_uuid == torch.uuid)
         root = execute_use_action(owner, torch.uuid, action.template_name)
         assert root is not None and not root.canceled
-        for native in capture_lineages((root,), observer_uuid=owner.uuid,
-                known_actor_uuids=frozenset(state.actors)):
+        for native in capture_lineages((root,), observer_uuid=owner.uuid):
             assert not native.dispositions
             packet = project_lineage(session, projection, native)
             if packet is not None:
@@ -112,8 +111,7 @@ def test_carried_source_keeps_inventory_private_to_controller(world):
         assert root is not None and not root.canceled
         for observer in (owner, witness):
             session, projection, state = views[observer.uuid]
-            for native in capture_lineages((root,), observer_uuid=observer.uuid,
-                    known_actor_uuids=frozenset(state.actors)):
+            for native in capture_lineages((root,), observer_uuid=observer.uuid):
                 assert not native.dispositions
                 codec = TypeAdapter(tuple[RecordedEvent, ...])
                 restored = codec.validate_json(codec.dump_json(native.events))
@@ -236,8 +234,7 @@ def test_shared_light_tile_after_values_precede_parent_completion_and_survive_co
         assert get_map().set_tile_base_light(position, light)
         roots = tuple(event for _, event in EventQueue.iter_events_since(cursor)
             if event.parent_lineage is None and event.phase is EventPhase.COMPLETION)
-        captured = capture_lineages(roots, observer_uuid=first.uuid, audience=audience,
-            known_actor_uuids=frozenset(state.actors))
+        captured = capture_lineages(roots, observer_uuid=first.uuid, audience=audience)
         children = [event for row in captured for event in row.events
             if isinstance(event, SensoryUpdateEvent)]
         assert {event.observer_uuid for event in children} == {first.uuid, second.uuid}

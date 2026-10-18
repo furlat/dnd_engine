@@ -1,7 +1,6 @@
 """One capture/projection path for local play, the network owner and headless probes."""
 
 from dataclasses import dataclass, replace
-from uuid import UUID
 
 from dnd.core.events import EventQueue
 from dnd.player.capture import (CaptureCheckpoint, Disposition, capture_context, capture_interval, capture_lineages,
@@ -12,8 +11,8 @@ from dnd.player.content_composition import (ContentCatalog, index_content_catalo
     startup_content)
 from dnd.player.audience import perceived_entities
 from dnd.player.facts import CombatLogAppend, PlayerInitialization, PlayerLineage, PlayerUpdate
-from dnd.player.projection import (ProjectionState, SessionProjection, begin_projections, known_connector_uuids,
-    project_hud, project_lineages, project_log_appends)
+from dnd.player.projection import (ProjectionState, SeatLogInputs, SessionProjection, begin_projections,
+    known_connector_uuids, project_hud, project_lineages, project_log_appends)
 from dnd.player.session import Operation, Session
 
 
@@ -64,10 +63,10 @@ def initialize_audiences(session: Session, catalog: UIContentManifest
 
 @dataclass(frozen=True, slots=True)
 class SeatCaptureInputs:
-    """What a seat knows as an operation starts, as its capture reads it: the actors it knows (by birth) with
-    their names, the connectors it sees and the content ids it holds."""
+    """What a seat's combat log reads as an operation starts: the names of the bodies it holds (its births sent,
+    from the session's names table), the connectors it sees and the content ids it holds. Standalone appends read
+    the names as of then; the walk's node entries start from them (`SeatLogInputs`)."""
 
-    actors: frozenset[UUID]
     names: dict[str, str]
     connectors: frozenset[str]
     content_ids: frozenset[str]
@@ -75,8 +74,7 @@ class SeatCaptureInputs:
 
 def seat_capture_inputs(runtime: AudienceRuntime) -> SeatCaptureInputs:
     sent = runtime.projection.static_sent
-    return SeatCaptureInputs(actors=frozenset(sent.actor_births),
-        names={str(identity): runtime.capture.names[identity] for identity in sent.actor_births},
+    return SeatCaptureInputs(names={str(identity): runtime.session.names[identity] for identity in sent.actor_births},
         connectors=known_connector_uuids(runtime.session, runtime.projection),
         content_ids=frozenset(runtime.content_catalog.identity_content_ids[key] for key in sent.content))
 
@@ -97,19 +95,18 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
     perceived_before = {seat: perceived_entities(runtime.projection.audience, runtime.projection.audience_composition.view)
         for seat, runtime in runtimes.items()}
     natives = {seat: capture_lineages(operation.roots, observer_uuid=runtime.projection.observer_uuid,
-            audience=runtime.projection.audience, known_actor_uuids=known.actors, context=context,
-            known_entity_names=known.names, known_connector_uuids=known.connectors,
-            known_content_ids=known.content_ids, omit_foreign_sensory_payloads=True)
-        for (seat, runtime), known in zip(runtimes.items(), known_before.values(), strict=True)}
+            audience=runtime.projection.audience, context=context, omit_foreign_sensory_payloads=True)
+        for seat, runtime in runtimes.items()}
     for captured in natives.values():
         for native in captured:
             if any(disposition is not Disposition.NOT_DISCLOSED for _, disposition in native.dispositions):
                 raise ValueError(f"Unprojected committed state: {native.dispositions}")
     # Each walk group projected once for every seat, event by event.
     lineages: dict[str, list[PlayerLineage]] = {seat: [] for seat in runtimes}
+    log_inputs = tuple(SeatLogInputs(known.connectors, known.content_ids) for known in known_before.values())
     for group in range(len(context.groups)):
         projected = project_lineages(shared, tuple(runtime.projection for runtime in runtimes.values()),
-            tuple(captured[group] for captured in natives.values()))
+            tuple(captured[group] for captured in natives.values()), log_inputs)
         for seat, lineage in zip(runtimes, projected, strict=True):
             if lineage is not None:
                 lineages[seat].append(lineage)

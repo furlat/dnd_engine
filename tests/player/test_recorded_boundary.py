@@ -93,7 +93,7 @@ def test_condition_remaining_duration_is_recorded_under_turn_and_private_to_owne
         projection, initial = projections[actor.uuid]
         state = reduce_initialization(initial)
         delivered = []
-        for native in capture_lineages(roots, observer_uuid=actor.uuid, known_actor_uuids=frozenset(state.actors)):
+        for native in capture_lineages(roots, observer_uuid=actor.uuid):
             public = project_lineage(sessions[actor.uuid], projection, native)
             if public is None:
                 assert actor is witness

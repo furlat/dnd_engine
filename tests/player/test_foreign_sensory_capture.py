@@ -18,7 +18,7 @@ from dnd.player.capture import reduce_interval, reduce_lineage as reduce_native_
 from dnd.player.event_record import decode_event, encode_event
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import ActionFact, SensoryFact
-from dnd.player.projection import SessionProjection, begin_projection, project_lineage, project_lineages
+from dnd.player.projection import SeatLogInputs, SessionProjection, begin_projection, project_lineage, project_lineages
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.player.session import Operation
@@ -56,17 +56,14 @@ def test_each_audience_gets_identical_light_facts_and_cold_replay(world, members
         assert get_map().set_tile_base_light((5, 6), light)
         roots = tuple(event for _, event in EventQueue.iter_events_since(cursor)
             if event.parent_lineage is None and event.phase is EventPhase.COMPLETION)
-        arguments = dict(observer_uuid=observer, audience=audience,
-            known_actor_uuids=state.actors)
-        full = capture_lineages(roots, **arguments)
-        admitted = capture_lineages(roots, **arguments, omit_foreign_sensory_payloads=True)
+        full = capture_lineages(roots, observer_uuid=observer, audience=audience)
+        admitted = capture_lineages(roots, observer_uuid=observer, audience=audience, omit_foreign_sensory_payloads=True)
         assert len(full) == len(admitted)
         for reference, candidate in zip(full, admitted):
             full_native = reduce_native_lineage(full_native, reference)
             admitted_native = reduce_native_lineage(admitted_native, candidate)
             assert admitted_native == full_native
             assert candidate.objective_rows == reference.objective_rows
-            assert candidate.admissions == reference.admissions
             assert candidate.observed_sources == reference.observed_sources
             originals = {event.uuid: event for event in reference.events}
             for identity, disposition in candidate.dispositions:
@@ -198,7 +195,7 @@ def test_invisible_torch_user_keeps_witness_light_children_without_disclosing_ac
     for action in ('Ignite Torch', 'Extinguish Torch'):
         root = execute_use_action(owner, torch.uuid, action)
         assert root is not None and not root.canceled
-        arguments = dict(observer_uuid=witness.uuid, known_actor_uuids=state.actors)
+        arguments = dict(observer_uuid=witness.uuid)
         full = capture_lineages((root,), **arguments)
         admitted = capture_lineages((root,), **arguments, omit_foreign_sensory_payloads=True)
         assert any(row.dispositions for row in admitted)
@@ -232,18 +229,18 @@ def test_split_seat_application_lineages_equal_independent_full_capture(session)
     actual = capture_application_operation(runtimes, operation, catalog)
     context = capture_context(next(iter(references.values())).capture, operation.roots)
     # The reference captures every seat's full payloads, then projects each walk group for all seats of its session.
-    captured = {}
+    captured, inputs = {}, []
     for seat, reference in references.items():
         known = seat_capture_inputs(reference)
+        inputs.append(SeatLogInputs(known.connectors, known.content_ids))
         captured[seat] = capture_lineages(operation.roots, observer_uuid=reference.projection.observer_uuid,
-            audience=session.seats[seat], known_actor_uuids=known.actors, known_entity_names=known.names,
-            known_connector_uuids=known.connectors, known_content_ids=known.content_ids, context=context)
+            audience=session.seats[seat], context=context)
     shared = next(iter(references.values())).session
     expected = {seat: [] for seat in references}
     for group in range(len(context.groups)):
         for seat, packet in zip(references, project_lineages(shared,
                 tuple(reference.projection for reference in references.values()),
-                tuple(rows[group] for rows in captured.values())), strict=True):
+                tuple(rows[group] for rows in captured.values()), tuple(inputs)), strict=True):
             if packet is not None:
                 expected[seat].append(packet)
     for seat in references:
