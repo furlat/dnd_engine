@@ -54,6 +54,8 @@ Of the 75 added `isinstance` calls, 55 repeat a call the base already made (move
   - the contact target table (PV1a-2);
   - the FOV caches (P5, scoped).
   
+  A second one, found by the contact fan-out lane: `SpatialSensesSystem._target_ids` (dnd/blocks/sensory.py, added in da41b695b) is a mutable, append-only intern map holding one id per uuid ever listed, cleared only on `reset`. It is system-owned but neither frozen nor revision-keyed (§6a). Contact-row matching relies on its "a key is never rebound" invariant, stated in the plan. Not changed yet.
+
   One exception, found later by the navigation lane: `Entity._navigation_traversal` (entity.py:632, added in P5, 6d9528cc4) is a private memo on the entity. It holds the read box and traversal stamp of its last navigation materialization, so a later discovery can tell whether its paths are still current. §6a bans exactly this kind of entity-held memo; it should be a system-owned frozen value, keyed by the grid's traversal stamp. Not changed yet. PV1a-4 settles edge answers on first read instead of at the writer, because eager writes cost +12 ms of unread predicates per Wall of Stone cast. That is a lazy answer inside GridMap: a decision for the human.
 - **Second paths still present:** `shadowcast.compute_fov` serves maps without optical boundaries and ignores local crossing owners (PV1a-4 left it untouched). A gallery_crowd-only `long_game` case exists for measurement.
 - **Plan text versus code:**
