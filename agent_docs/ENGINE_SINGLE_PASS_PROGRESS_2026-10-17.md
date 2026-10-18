@@ -1,0 +1,75 @@
+# Single-pass propagation: progress log
+
+Plan: `agent_docs/plans/ENGINE_SINGLE_PASS_CHANGE_PROPAGATION_PLAN_2026-10-16.md`
+(v3.6; approved 2026-10-17, §14 reviews folded in v3.6).
+
+Worktree: `/home/tommaso/.codex/worktrees/single-pass-propagation/dnd_engine`
+(branch `codex/single-pass-propagation` from `d13e6ad`). Agents don't commit.
+
+Hard rules:
+
+- One correct path.
+- No old paths kept, no fallbacks.
+- Breakage means the plan missed a case: fix it in the one path and record the
+  plan correction here.
+
+## Phase status
+
+| Phase | Status | Notes |
+| --- | --- | --- |
+| P0a | ✅ done | worktree/env/docs done; 11 sensory/cache counters + 5 discovery counters (rows, emitted targets, aims, footprints, validations); GC harness `devtools/performance/gallery_crowd.py` loads (Fireball counts run passed); test cleanup running |
+| PB1 | ✅ done (A, B, K fixed with failing-first tests) | stale tests: 69/69 known failures fixed (tests only, see STALE_TEST_REPAIR_2026-10-17.md); test_application_review.py pending human decision; crash fixes A/B/K pending |
+| P0b | ✅ done (P0b-1 + P0b-2, all §1 rows) |
+| P1 | ✅ done (commit 9944b4adb; gate below) |
+| P2 | ✅ done (commit ebff512eb) |
+| PD1a | — | one footprint |
+| P3 (+PB2) | — | |
+| PB3 | — | |
+| Re-measure | — | |
+| PD1b | — | rows, legality, selection |
+| PD1c | — | after D14 approval |
+| P4a | — | |
+| P5 | — | |
+| PD2 | — | session cache conditional |
+| P4b | — | conditional |
+| P6 | — | |
+| P7 | — | |
+| P8 | — | |
+| PC | — | other repo; human |
+
+## Log
+
+- 2026-10-17: plan approved; worktree created on `d13e6ad`; environment synced;
+  docs copied.
+- 2026-10-17: human paused cast-plan implementation to bring available-actions discovery into scope. Decided: env use actions kept (reach-bounded) + move+use suggestions; no object attack targets; no global wall/object/position enumeration; AoE = one aim point per perceived creature with hit sets + legal region, free aim validated on demand; spells listed once with allowed levels; idea: single shared space scan per actor solving all spells by lookup. Three discovery studies running.
+- 2026-10-17: stale-test repair done (69 pass in 6 s, verified).
+- 2026-10-17: human decision: KEEP the movement destination list (reachability needs paths anyway, important for AI; its cost is package size). Fix only its compute overhead: cache key sorting all path costs on every call, per-destination path copies, per-destination OA exposure recomputation. Discovery studies: consumers/evidence done (LOS/wall enumeration = 77 s of 90 s instrumented), wall placement done; engine-core cost map pending.
+- 2026-10-17: §14 antislop (13) + antiOOP (14) reviews and the whole-world redesign folded into plan v3.6 (PD1a/b/c split; legality one path via non-eventful hooks; one footprint; selection identity; PD2 = costs of kept things). Open human questions in §14.10. v3.6 re-reviews running.
+- 2026-10-17: WSL crash killed all agents; test-cleanup agent and tracker resumed from transcripts.
+- 2026-10-17: GC harness written and loading on the real worker path. First counts run (Fireball, cast by an ally by mistake, since fixed to the sorcerer): 926 full recomputes, 3,078 hazard-only, 1,578 event versions, 6 deaths as designed, 7.1 s native (counts mode, not timing-qualified).
+- 2026-10-17: human answers: D14 approved; Q-W1 destinations = sight ∩ empty ∩ range; Q-W2 perceived preview; Q-W3 delete; Q-W4 objects from perception; Q-W5 yes; Q-W6 required ("any is bad in general"); order left to the plan → sensory first, PD1a before P3, PD1b after P3. Plan v3.7 (re-reviews folded; rules keep world access after the human's objection).
+- 2026-10-17: P0a counts runs: Sleet cast 5,931 FR / 264 s, drop 5,901 FR / 31.7 s; Fireball (sorcerer) 8.7 s, 926 FR; godmode Choices miss 392.7 s (LOS 378.7 s, 148,567 validations, 209,734 emitted targets, 577 rows), hit 0.2 ms, Preview 3.6 ms, Command 6.9 s.
+- 2026-10-17: test cleanup done: collect-only 5,915 collected / 0 errors (15 files adapted, 91 deleted, 4 orphaned support modules deleted; table in STALE_TEST_REPAIR). 57 kept tests fail on pre-existing issues (53: authored catalog references uninstalled `creature.player.sorcerer@1`/`fighter@1`; 1 AI trap-lever semantics by old class path; 1 conditions without name/description; 2 missing content declarations) — reported to the human, not fixed. P0a closed.
+- 2026-10-17: PB1 done. A+B: `_resolve_activation_admission` latest wins for different content (same content keeps the potency rule); footprint moves (`SpatialCondition` and the full `AreaCondition` override) share `_begin_footprint_change`. K: `clear()` bumps every revision monotonically and clears the path cache; `create_rectangle` reseeds light contributions like `set_tile`. Lanes: spatial 25, surface/cloud/zone 500, grid/light/sensory 706 — all pass.
+- 2026-10-17: P0b split (P0b-1 now for the P1/P2 gate rows; P0b-2 before P3) so P1 starts; P0b-1 ordinary runs started.
+- 2026-10-17: **P0b-1 baselines** (ordinary = timing-qualified, pre-P1 snapshot; reports in `.runtime/single-pass/gallery_crowd/baseline_pre_p1/`):
+
+  | Row | Ordinary total | Counts | Model (§6) |
+  | --- | --- | --- | --- |
+  | Sleet cast | 228.5 s | 5,931 FR | ~270 s (−15 %, edge) |
+  | Sleet drop | 30.1 s | 5,901 FR | ~30 s |
+  | Ice Storm | 9.6 s | 1,506 FR | 1,654 FR (−9 %), ~13 s (−26 %: per-FR constant fitted at V=6 is high) |
+  | Fireball | 6.8 s | 926 FR + 3,078 hazard-only | ~816 + ~750 barrel FR (−41 %: barrel term overestimated → model correction) |
+  | Caster Choices (47 spells) | miss 373.7 s, hit 0.2 ms, Preview 4 ms, Command 8.8 s | 148,567 validations | — |
+  | Fighter Choices | miss 224 ms, hit 0.1 ms | — | — |
+
+  P0b-2 smoke rows (counts, same snapshot): Spike Growth cast 11.6 s / 1,470 FR, drop 9.7 s / 1,440; Web 4.8 s / 540, drop 4.0 s / 512; Daylight over Darkness 5.7 s / 150; Darkness 3.7 s / 90; Cloudkill 2.4 s / 60; Grease 1.5 s / 180; Circle of Death 1.0 s / 7 FR + 4,013 hazard-only (7 deaths); Chain Lightning, Magic Missile, Holy Aura, Mass Heal, Delayed Blast < 0.7 s.
+- 2026-10-17: **P0b-2 baselines** (ordinary ms / counts FR / hazard-only, pre-P1 snapshot, `baseline_pre_p1/p0b2_*`): Spike Growth 8,075 / 1,470 / 1, drop 7,105 / 1,440; Thunderwave→Spike Growth: install 5,699 / 1,062, Thunderwave 781 / 30 / 693; Web 3,732 / 540 / 5, drop 2,995 / 512; Darkness 2,805 / 90, Daylight 4,787 / 150; Cloudkill 2,245 / 60, drop 1,033 / 30; Circle of Death (7 deaths) 1,374 / 7 / 4,013; Grease 1,112 / 180; Chain Lightning 593 / 60 / 1,039; Holy Aura 525; Delayed Blast 207 / 30; Magic Missile 149 / 0 / 813; Mass Heal 38; caster step ~175 ms / 1 FR; turn handoff ~10 ms. Remaining §1 rows needing new actors/objects (Turn Undead, plate/vent, portal, Wall of Stone, summon retirement, Gust walk, Spirit Guardians walk) are added before P3.
+- 2026-10-17: **P1 gate** (ordinary, timing-qualified, archive of 9944b4adb vs `baseline_pre_p1`): Sleet cast 228.5 s → 5.7 s (FR 5,931 → 90), drop 30.1 → 1.87 s (FR 5,901 → 60); Ice Storm 9.6 → 1.95 s (FR 1,506 → 4); Fireball 6.8 → 2.76 s; Spike Growth 8.1 → 0.37 s, drop 7.1 → 0.22 s (FR 1,470 → 0); Grease 1.1 → 0.18 s (FR 180 → 0); Web 3.7 → 0.53 s, drop 3.0 → 0.73 s (FR 540 → 0). Residue = per-cell hazard-only (e.g. Spike Growth 1,471), removed by P2's single tile fact / P3's single settle.
+- 2026-10-17: P2 in progress: single reducer entry (both manual calls removed; D8 resolved: no APPEAR effect needs the field observed first, 1,227 zone/sensory/player tests pass); duration ticks take the hazard-only path (1 reducer pass, 0 FR); terrain install/release = one `TILES_CHANGED` fact (`GridMap.commit_tile_mechanics`, rows of `WorldTileState`, folded by `world_facts`, residue fear reads `get_affected_positions`); light = one fact per cause; `invalidate_spatial_caches` deleted → owner entry points (`commit_tile_mechanics`, `commit_entity_presence`, `spatial_condition_changed`, `commit_object_blocking`); private GridMap owner API made public (`commit_entity_membership`, `publish_entity_membership`, `publish_committed_spatial_event`, `publish_spatial_event`, `shift_observer_boundaries`, `validate_entity_position`); AST ban `tests/architecture/test_gridmap_private_access.py`. Sleet dousing's per-torch light facts collapse in P3 (group close settles pending lights). Found by P1: the first spatial condition on a map flips the propagation solver (PD1a's one primitive fixes it).
+- 2026-10-17: **P2 gate** (ordinary, archive of ebff512eb; reports `gallery_crowd/p2_gate/`): Sleet cast 5.7 → 3.06 s (FR 30, hazard-only 31, versions 1,058 → 274), drop 1.87 → 1.56 s; Ice Storm 1.95 → 0.41 s; Spike Growth 0.37 → 0.15 s, drop 0.22 → 0.06 s; Grease 0.18 → 0.10 s; Web 0.53 → 0.18 s, drop 0.73 → 0.11 s; Darkness 2.8 → 1.43 s, Daylight 4.8 → 1.85 s; Fireball 2.73 s and Circle of Death 1.56 s unchanged (P3 rows). Full engine/player/architecture lane: 4,024 pass; 20 architecture failures all pre-existing at d13e6ad (frozen in `.runtime/single-pass/known_failures_architecture_base.txt`); 1 expected: protocol schema (regenerate with `devtools/export_player_protocol.py` at the PD1a/P3 commit).
+- 2026-10-17: **P0b-2 complete** (rows built by sub-agent, pre-P3 snapshot ebff512eb, `gallery_crowd/baseline_pre_p3/`): Turn Undead 6 skeletons 387 ms / 31 FR; plate→gas vent 750 ms / 32 FR / 633 hazard; plate→3 portals 1,006 ms; Wall of Stone 3,217 ms / 337 FR; summon cast/drop 266/201 ms; Gust cast 575 ms then ~480–770 ms and 30 FR per caster step; Spirit Guardians cast 141 ms then ~1.1–1.5 s and 90 FR per 3-cell step (§1 assumed membership-only; anchored zone moves cost a full pass per observer per step → investigate in re-measure); round step 89 ms / 0 FR / 60 hazard (predicted 180 FR); Mass Healing Word 69 ms; first AI decision 1.86 s with 0 FR (non-sensory). Harness rows: `crowd_recipe` options (`undead`, `wall`, `damaged_party`, `blue_ai`), actor-named steps, setup steps, fixed dice, END_ROUND.
+- 2026-10-17: **P3 in progress** (with PD1a delegated in parallel): group mechanism (`EventQueue.group`, `OpenGroup`, `GroupEntryKind`; the reducer records and settles once per observer at the outermost close, attaching settled deltas and the one pending light fact to the still-open root; GridMap holds light publication during groups), cold-oracle tests `tests/engine/test_simultaneous_groups.py`, entries at the convolution branch, zone install/move/removal, round step, Moonbeam cast exposure. Counts with groups: Fireball 30 FR / 0 hazard-only (was 194 / 3,263), 421 ms native; Circle of Death 7 FR / 23 hazard-only (was 4,013), 627 ms. Phase B: `HandlerGroupDispatch.AFTER_GROUP` handlers deferred and replayed in arrival order (concentration check split: no damage-event rewrite), architecture test `tests/architecture/test_after_group_handlers.py`; summon departures deferred to the group close. PB2 bugs: E Counterspell root-only, F Greater Invisibility root-only + root creation lineage, J no silent re-concentration mid-batch, N admit-before-slow, Q 10 geometry readers on objective positions, D Sleep/Color Spray pool spent only on admitted applications (per-target `_apply_target_application`), C fence keyed by (target, arrival/TURN_START/TURN_END), L8 Moonbeam exposure through `_admit_trigger(APPEAR)`, S `resolution_order_key` (no getattr). Deferred to PD1b: per-target state off `self.target_entity_uuid` (every `_apply` reads it; PD1b's selection carries targets). `requires_paths` / `_paths_dirty` deletion owned by P5 (path freshness by revisions).
+- 2026-10-17: **PD1a done** (sub-agent; reviewed by an antislop/anti-OOP reviewer, findings applied: aim-major priming deleted, Gust zone takes the action's shape, direction validation restored, explicit shape parameter, footprint identity includes the source for source-centered shapes, one `cube_axis`). Gate (a) `tests/engine/test_aoe_footprint_parity.py` (26 spells, U1/U2 failing-first) and `tests/engine/test_propagation_line_of_effect.py` (150 rooms) pass. Footprints 7,938 → 6,364: the ≤580 gate is carried to PD1b (per-cell aims). Solver: native ray everywhere (outcome changes listed by the agent: corner grazing, holes/condition crossings now block, full-envelope reach, on-map cells only, caster counted). Wire: cylinders report `"ignore_barriers"`.
+- 2026-10-17: **PB3** (`tests/engine/test_rules_deviation_fixes.py`, each case failing on the P2 snapshot first): L1 Hypnotic Pattern needs sight; L2 Silence thunder immunity; L4/L11 Slow and Mass Cure Wounds 6 targets lowest HP first (`lowest_hp_first`); L9 Daylight dispels only ≤3rd-level Darkness; I difficult terrain is a floor of 2; L6 Web lowers light one level (tile `dimmers`, non-stacking); M every zone turn trigger at EXECUTION (20 sites + `tests/architecture/test_zone_turn_trigger_phase.py`). M consequence: Nauseated ends at the turn end. L12 blocked on a protocol decision (half-cell centre). P recorded only.
+- 2026-10-17: **P3 remainder**: shared staged loop `dnd/spatial/area_reach.py` (Fireball + `payload_blast`, barrier integrity + destruction lineage, no revision counter); entries for wall formation, Ice Knife burst, Glyph payload, `payload_blast`, nested batches, plate pulses, trap fire, portal transfer, material interactions (`resolve_interaction`, 8 emitters); phase B takes callables (`EventQueue.after_group`); scoped roll sharing for nested entries; group settlers (GridMap flushes its light fact without a reducer: fixed a lost light publication in observer-less worlds). Regressions found and fixed: Moonbeam activation spent the fence before the cast loop (L8); P4a obscurement index stale after removal on removed support.

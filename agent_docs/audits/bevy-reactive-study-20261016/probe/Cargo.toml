@@ -1,0 +1,7 @@
+[package]
+name = "dnd-bevy-reactivity-probe"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy_ecs = { version = "=0.20.0", default-features = false, features = ["std"] }

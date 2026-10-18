@@ -1,0 +1,1 @@
+queued native cascade passed in 4 bounded pumps: health=[8,5,0], applications=[70,71,72], Scene { light_revision: 1, light_level: 9, sight_revision: 1, visible_through_wall: true }; settled rerun unchanged

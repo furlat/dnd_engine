@@ -1,0 +1,64 @@
+DND / headless Bevy architecture study, 2026-10-16
+
+Scope
+Architecture documents and standalone mechanism diagnostics only.
+No dnd production code or existing tests changed by this study.
+Source checkout: /mnt/c/Users/tommaso/Documents/Dev/dnd_engine
+Python environment: /home/tommaso/.cache/dnd-engine/venv
+The /mnt/c filesystem and environment startup costs are not engine benchmarks.
+
+Existing-source behavior, batch 1
+UV_PROJECT_ENVIRONMENT=/home/tommaso/.cache/dnd-engine/venv uv run --no-sync python -m pytest -q tests/engine/test_manual_05_events_before_handlers.py tests/engine/test_pressure_plates.py tests/engine/test_portals.py tests/engine/test_shared_sensory_conditions.py tests/engine/test_live_encounter_membership.py tests/ai/test_event_knowledge.py
+Result: 79 passed, 2 failed in 12.60s.
+Failures:
+- test_brief_doorway_observation_is_remembered_between_decisions_and_replays
+- test_hidden_mutations_and_prebirth_conditions_reacquire_current_cold_values
+Both fail at the replay source_bytes helper: it calls _retained_event(event,
+observer_uuid), while dnd/player/capture.py expects PlayerAudience and reads
+audience.controlled. AttributeError: UUID object has no attribute controlled.
+Live assertions preceding the replay call pass. Replay is not qualified.
+No unrelated helper or production fix was made.
+
+Existing-source behavior, batch 2
+UV_PROJECT_ENVIRONMENT=/home/tommaso/.cache/dnd-engine/venv uv run --no-sync python -m pytest -q tests/engine/test_prepared_condition_lifecycle.py tests/engine/test_modifiable_value_semantics.py tests/engine/test_fireball_object_breach.py tests/engine/test_fireball_area_record.py tests/engine/test_liquid_barrels.py tests/engine/test_material_deposit_source.py tests/engine/test_concentration_presentation.py tests/engine/test_spellcasting.py
+Result: 159 passed in 14.34s.
+
+Combined targeted scope: 238 passed, 2 failed. This is not the full test suite.
+These checks investigate the source architecture; they are not port parity tests.
+
+Native Bevy diagnostics
+Manifest: probe/Cargo.toml, bevy_ecs exactly 0.20.0, default features disabled,
+std enabled, no renderer/App, no multi_threaded feature.
+Commands from repository root:
+cargo run --release --locked --manifest-path agent_docs/audits/bevy-reactive-study-20261016/probe/Cargo.toml
+cargo run --release --locked --example queued_cascades --manifest-path agent_docs/audits/bevy-reactive-study-20261016/probe/Cargo.toml
+Both exit successfully; stdout saved alongside this file.
+Mechanism timing printed by the first diagnostic is NOT a gameplay benchmark.
+
+This local study used an isolated temporary Rust toolchain/dependency cache:
+RUSTUP_HOME=/tmp/dnd-bevy-study-runtime/rustup
+CARGO_HOME=/tmp/dnd-bevy-study-runtime/cargo
+CARGO_TARGET_DIR=/tmp/dnd-bevy-reactivity-probe/target
+PATH prepended /tmp/dnd-bevy-study-runtime/cargo/bin
+Runs also used --offline after dependencies had been fetched.
+The ordinary commands above work with an installed compatible Rust toolchain.
+
+Evidence limits
+The main diagnostic proves native mutable/replacement handler input, cancellation,
+structural visibility, same-rule synchronous recursion, native instance reuse,
+canonical parent/child event visibility and specific observer limitations.
+Its unsafe custom trigger is an intentionally negative upstream-issue reproduction.
+
+The queued example proves producer return before child processing, stable request
+identity, bounded Pending/Complete pumping, structural breakage visibility,
+compatible one-region light coalescing, sight settlement and an idle stable rerun.
+It does not implement full Fireball, Shield, dynamic dependency scheduling,
+historical observer snapshots, parallel damage, fairness, stale-result retry,
+cycle detection or all failure paths. Those are documented design obligations.
+
+Document validation and review
+119 local document/source links and source-line bounds checked successfully.
+Markdown code fences, unfinished markers and trailing whitespace checked.
+Antislop/native-API, antiOOP/ownership and architecture/plan-adherence reviewers
+reported no remaining blocking contradiction after the queue-design revisions.
+No source or test changes appear under dnd/ or tests/ for this study.

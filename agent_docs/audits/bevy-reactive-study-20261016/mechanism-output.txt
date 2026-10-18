@@ -1,0 +1,9 @@
+same-rule synchronous reentry: ["press committed", "first output", "release committed", "release completed", "first output resumed", "second output", "press completed"]
+cached native systems: initialized=2, reused=2, inactive=2 after two recursive outer calls
+native Query + In mutation, structural buff and cancellation: Attack { target: 6v0, hit: false, canceled: true, handlers: ["shield", "cancel"] }
+native tuple InMut + In preserves in-place change with no replacement: Attack { target: 6v0, hit: false, canceled: false, handlers: ["mutate in place, return None"] }
+canonical live event history: nested child saw edited parent=42; parent sees linked child=43 before resuming
+same active registered SystemId: SystemMissing, as expected
+ordinary observer child timing: ["parent before child enqueue", "parent after child enqueue", "child resolved"]
+custom Trigger/default runner gap: first=1, second=0
+all mechanism assertions passed in 2.118085ms (not a gameplay benchmark)
