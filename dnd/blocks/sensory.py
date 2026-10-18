@@ -1993,7 +1993,7 @@ class SpatialSensesSystem:
         exists = frame_of(world.exists, origin)
         candidates = np.zeros(OFF + 1, dtype=bool)
         candidates[view.field.routes.rows] = True
-        cells, lengths = supercover_route_table()
+        steps, lengths = supercover_route_table()
         frame = frame_box(origin)
         owner_frames = {owner_uuid: frame_of(layer, origin) for owner_uuid, layer in world.obscurement_owners
                         if boxes_intersect(layer.box, frame)}
@@ -2068,7 +2068,7 @@ class SpatialSensesSystem:
             if tested.any() and established:
                 picked = rows[tested]
                 picked_x, picked_y = xs[tested], ys[tested]
-                routes = cells[picked, :int(lengths[picked].max())]
+                routes = steps[picked, :int(lengths[picked].max())] >> 2
                 codes = own[routes]
                 inside = codes != 0
                 enters = inside.any(axis=1)

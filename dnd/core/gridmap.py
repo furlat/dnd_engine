@@ -3,8 +3,7 @@
 import math
 from contextlib import nullcontext
 import time
-from bisect import bisect_left, bisect_right
-from heapq import heappop, heappush
+from bisect import bisect_left
 from dnd.core.condition_types import ConditionDurationSummary
 
 from typing import Literal, AbstractSet, Collection, Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Set, DefaultDict, Protocol, Union, cast
@@ -16,9 +15,9 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from dnd.types.event_facts import GroupEntryKind, LandingKind
-from dnd.core.geometry import (circle_positions, grid_distance_feet, supercover_line,
-    supercover_slope_order, supercover_incoming_ranges, supercover_incoming_rank_ranges)
-from dnd.core.view import Box, CellLayer, boxes_intersect, cell_visible, cells_layer, embed, layer_value, union_box
+from dnd.core.geometry import circle_positions, grid_distance_feet, supercover_line
+from dnd.core.view import (CARDINAL_STEPS, Box, CellLayer, boxes_intersect, cell_visible, cells_layer, embed,
+    layer_value, union_box, wall_visibility)
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.shadowcast import compute_fov
@@ -96,6 +95,23 @@ CellBox = Tuple[int, int, int, int]
 # A transition between adjacent cells reads cells within this distance of its first cell:
 # its diagonal bridges and every crossing candidate next to the legs (`spatial_crossing_allows`).
 TRANSITION_READ_REACH = 2
+# One channel's transit grid (`GridMap._transit`), per cell, for each outgoing cardinal edge d
+# (CARDINAL_STEPS order): bit d "its predicate's answer is settled", bit 4 + d "it blocks" (the
+# answer), bit 8 + d "it is structured" (its sides hold boundary objects, or an end holds a local
+# crossing owner of the channel: only then can it block between two Tiles); then bit 12 "the
+# center blocks" (a Tile's answer; a cell without a Tile always blocks).
+EDGES_SETTLED = 0x000F
+EDGE_BLOCKED_SHIFT = 4
+EDGE_STRUCTURED_SHIFT = 8
+STRUCTURED_EDGES = 0x0F00
+CENTER_BLOCKS = 1 << 12
+UNSETTLE_EDGES = np.uint16(0xFFFF ^ EDGES_SETTLED)
+TRANSIT_CHANNELS = (WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION)
+CARDINAL_INDEX = {CardinalDirection.EAST: 0, CardinalDirection.WEST: 1,
+                  CardinalDirection.NORTH: 2, CardinalDirection.SOUTH: 3}
+OPPOSITE_CARDINAL = (1, 0, 3, 2)
+_READ_OFFSETS = np.array([(dx, dy) for dx in range(-TRANSITION_READ_REACH, TRANSITION_READ_REACH + 1)
+                          for dy in range(-TRANSITION_READ_REACH, TRANSITION_READ_REACH + 1)], dtype=np.int64)
 
 
 def sight_read_box(origin: Tuple[int, int], radius: Optional[float]) -> Optional[CellBox]:
@@ -187,22 +203,6 @@ def drop_reading_entries(cache: Union[Dict[Any, SightEntry], Dict[Any, Propagati
     if stale:
         record_action_count(counter, len(stale))
 
-
-def drop_transitions_reading(cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool],
-                             positions: Collection[Tuple[int, int]]) -> None:
-    """Drop every cached adjacent transition whose first cell is within reach of a changed cell."""
-    reach = TRANSITION_READ_REACH
-    firsts = {(x + dx, y + dy) for x, y in positions
-              for dx in range(-reach, reach + 1) for dy in range(-reach, reach + 1)}
-    if len(cache) < 8 * len(firsts):
-        for edge in [edge for edge in cache if edge[0] in firsts]:
-            del cache[edge]
-        return
-    for x, y in firsts:
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                if dx or dy:
-                    cache.pop(((x, y), (x + dx, y + dy)), None)
 
 DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
 # A crossing query asks one structural channel or one physical contact access.
@@ -343,7 +343,6 @@ class GridMap:
         self._residue_fields: Dict[str, ResidueFieldState] = {}  # one per material (plan §5.9)
         self._global_crossing_owners: Set[UUID] = set()
         self._local_crossing_owners: DefaultDict[CrossingChannel, Set[UUID]] = defaultdict(set)
-        self._missing_support_frontier: DefaultDict[Tuple[int, int], Set[Tuple[int, int]]] = defaultdict(set)
         self._spatial_condition_positions: Dict[
             UUID,
             Set[Tuple[int, int]],
@@ -385,6 +384,15 @@ class GridMap:
         self._obscurement_layers: Dict[UUID, CellLayer] = {}
         self._obscurement_active: Dict[UUID, bool] = {}
         self._cell_obscurement = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
+        # The objective transit facts the wall FOV reads (plan §6b, PV1a-4), over the cell box,
+        # per channel (layout at EDGES_SETTLED). A write of the channel over some cells rewrites
+        # their center bits and unsettles every edge answer reading them (`_write_transits`); the
+        # boundary and crossing-owner writers rewrite the structured bits (`_write_structured_edges`).
+        # Edge answers are settled when a solve or a scalar reader first reads them
+        # (`_settled_edge`): the predicates price wall geometry, and most written edges are
+        # never read on the channel that wrote them.
+        self._transit: Dict[WorldEdgeChannel, CellLayer] = {
+            channel: CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint16)) for channel in TRANSIT_CHANNELS}
         # Advanced by every write that changes the Tile/obscurement or light grid; a settlement keyed
         # on them reads this map (perception forgets its fields when the map is replaced).
         self._sight_grid_revision = 0
@@ -408,21 +416,13 @@ class GridMap:
         # Query caches (plan P5). Every entry keeps the box of cells its solve
         # can read; a write drops exactly the entries whose box holds a changed
         # cell (`_bump_spatial_revisions`, `invalidate_occupancy_paths`).
-        # Per-cell and per-edge caches drop the changed cells' own entries.
-        self._optics_blocking: Dict[Tuple[int, int], bool] = {}
-        self._fov_cache: OrderedDict[Tuple[Tuple[int, int], Tuple[bool, bool]], SightEntry] = OrderedDict()
+        self._fov_cache: OrderedDict[Tuple[Tuple[int, int], bool], SightEntry] = OrderedDict()
         self._propagation_fov_cache: OrderedDict[
-            Tuple[Tuple[int, int], Optional[float], bool], PropagationEntry,
+            Tuple[Tuple[int, int], Optional[float]], PropagationEntry,
         ] = OrderedDict()
         # Placed boundaries blocking each structural channel, kept at every placement write.
         self._directional_blocking_owners: Dict[WorldEdgeChannel, Set[UUID]] = {
             channel: set() for channel in WorldEdgeChannel}
-        self._directional_transition_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool] = {}
-        self._propagation_transition_cache: Dict[
-            Tuple[Tuple[int, int], Tuple[int, int]],
-            bool,
-        ] = {}
-        self._propagation_blocking_cache: Dict[Tuple[int, int], bool] = {}
         # Monotonic traversal (movement topology and occupancy) counters per spatial chunk,
         # never reset (`traversal_stamp`).
         self._traversal_chunk_revisions: DefaultDict[Tuple[int, int], int] = defaultdict(int)
@@ -566,6 +566,9 @@ class GridMap:
         self._cell_light = CellLayer(target[0], target[1], embed(self._cell_light, target, np.dtype(np.uint8)))
         self._cell_obscurement = CellLayer(target[0], target[1],
                                            embed(self._cell_obscurement, target, np.dtype(np.uint8)))
+        for channel in TRANSIT_CHANNELS:
+            self._transit[channel] = CellLayer(target[0], target[1],
+                                               embed(self._transit[channel], target, np.dtype(np.uint16)))
         self._bump_sight_grids()
         self._bump_light_grid()
         slots = self._cell_light_slots
@@ -840,9 +843,7 @@ class GridMap:
             return
         if SpatialChannel.OPTICAL in channels:
             self._optical_revision += 1
-            for position in positions:
-                self._optics_blocking.pop(position, None)
-            drop_transitions_reading(self._directional_transition_cache, positions)
+            self._write_transits(WorldEdgeChannel.OPTICAL, positions)
             drop_reading_entries(self._fov_cache, positions, "cache.drop.fov")
         if SpatialChannel.MOVEMENT in channels:
             self._movement_revision += 1
@@ -854,15 +855,97 @@ class GridMap:
             self._write_cells(self._tiles if positions is None else positions)
         if SpatialChannel.PROPAGATION in channels:
             self._propagation_revision += 1
-            for position in positions:
-                self._propagation_blocking_cache.pop(position, None)
-            drop_transitions_reading(self._propagation_transition_cache, positions)
+            self._write_transits(WorldEdgeChannel.PROPAGATION, positions)
             drop_reading_entries(self._propagation_fov_cache, positions, "cache.drop.propagation")
         directional_channels = revision_edge_channels(channels)
         if directional_channels:
             owners = {identity for position in positions
                       for identity in self._boundary_placements_by_position.get(position, ())}
             self._refresh_directional_blocker_owners(directional_channels, owners)
+
+    def _write_transits(self, channel: WorldEdgeChannel, positions: Collection[Tuple[int, int]]) -> None:
+        """Rewrite the channel's center bits at changed cells, and unsettle every outgoing edge
+        answer of a cell within TRANSITION_READ_REACH of one (the answers that read them)."""
+        layer = self._transit[channel]
+        width, height = layer.values.shape
+        cells = np.array(list(positions), dtype=np.int64).reshape(-1, 2) - (layer.x0, layer.y0)
+        for i, j in cells[(cells[:, 0] >= 0) & (cells[:, 0] < width) & (cells[:, 1] >= 0) & (cells[:, 1] < height)]:
+            blocks = self._center_blocks(channel, (layer.x0 + int(i), layer.y0 + int(j)))
+            layer.values[i, j] = (int(layer.values[i, j]) & ~CENTER_BLOCKS) | (CENTER_BLOCKS if blocks else 0)
+        near = (cells[:, None, :] + _READ_OFFSETS[None, :, :]).reshape(-1, 2)
+        inside = (near[:, 0] >= 0) & (near[:, 0] < width) & (near[:, 1] >= 0) & (near[:, 1] < height)
+        layer.values[near[inside, 0], near[inside, 1]] &= UNSETTLE_EDGES
+
+    def _write_structured_edges(self, cells: Collection[Tuple[int, int]]) -> None:
+        """Rewrite the structured bits of these cells' outgoing edges, in both channels, from the
+        boundary sides and the local crossing owners now on the map. A change of a cell's sides
+        or owners changes its own edges and its neighbors' edges toward it
+        (`_cells_and_neighbors`); a new Tile has neither, so only its own edges change."""
+        sides: Dict[Tuple[int, int], int] = {}
+        owners: Dict[Tuple[Tuple[int, int], WorldEdgeChannel], bool] = {}
+
+        def side_bits(cell: Tuple[int, int]) -> int:
+            if cell not in sides:
+                row = self._boundary_candidate_cells.get(self._spatial_chunk(cell), {}).get(cell, {})
+                sides[cell] = sum(1 << CARDINAL_INDEX[direction] for direction, identities in row.items() if identities)
+            return sides[cell]
+
+        def holds_owner(cell: Tuple[int, int], channel: WorldEdgeChannel) -> bool:
+            local = self._local_crossing_owners.get(channel)
+            if not local:
+                return False
+            if (cell, channel) not in owners:
+                tile = self._tiles.get(cell)
+                owners[cell, channel] = tile is not None and bool(tile.get_spatial_condition_uuids() & local)
+            return owners[cell, channel]
+
+        for channel in TRANSIT_CHANNELS:
+            layer = self._transit[channel]
+            width, height = layer.values.shape
+            for cell in cells:
+                i, j = cell[0] - layer.x0, cell[1] - layer.y0
+                if not (0 <= i < width and 0 <= j < height):
+                    continue
+                structured = 0
+                for direction, (dx, dy) in enumerate(CARDINAL_STEPS):
+                    neighbor = (cell[0] + dx, cell[1] + dy)
+                    if (side_bits(cell) & (1 << direction) or side_bits(neighbor) & (1 << OPPOSITE_CARDINAL[direction])
+                            or holds_owner(cell, channel) or holds_owner(neighbor, channel)):
+                        structured |= 1 << (EDGE_STRUCTURED_SHIFT + direction)
+                layer.values[i, j] = (int(layer.values[i, j]) & ~STRUCTURED_EDGES) | structured
+
+    @staticmethod
+    def _cells_and_neighbors(positions: Collection[Tuple[int, int]]) -> Set[Tuple[int, int]]:
+        return {(x + dx, y + dy) for x, y in positions for dx, dy in ((0, 0), *CARDINAL_STEPS)}
+
+    def _write_crossing_owner(self, condition_uuid: UUID,
+                              crossing_channels: Optional[frozenset[CrossingChannel]]) -> bool:
+        """Record which channels a condition's crossing predicate can block: None for any segment
+        anywhere (a global owner), else only segments touching its footprint; frozenset() for none.
+
+        A global owner reads no footprint, so its arrival or departure unsettles every edge answer
+        and every kept FOV. Returns whether the condition is or was a local owner of a transit
+        channel: then the caller rewrites the structured edges of its footprint, after its Tile
+        references are written.
+        """
+        was_global = condition_uuid in self._global_crossing_owners
+        was_local = any(condition_uuid in self._local_crossing_owners.get(channel, set())
+                        for channel in TRANSIT_CHANNELS)
+        self._global_crossing_owners.discard(condition_uuid)
+        for owners in self._local_crossing_owners.values():
+            owners.discard(condition_uuid)
+        if crossing_channels is None:
+            self._global_crossing_owners.add(condition_uuid)
+        else:
+            for channel in crossing_channels:
+                self._local_crossing_owners[channel].add(condition_uuid)
+        if was_global or crossing_channels is None:
+            for channel in TRANSIT_CHANNELS:
+                self._transit[channel].values[...] &= UNSETTLE_EDGES
+            self._fov_cache.clear()
+            self._propagation_fov_cache.clear()
+        return was_local or (crossing_channels is not None and any(channel in crossing_channels
+                                                                   for channel in TRANSIT_CHANNELS))
 
     def _bump_all_spatial_revisions(self, positions: Collection[Tuple[int, int]]) -> None:
         """Advance every spatial channel revision over these cells and drop the queries reading them."""
@@ -1078,11 +1161,10 @@ class GridMap:
         self._cover_cells((x, y, x, y))
         self._write_cells((position,))
         self._index_support_position(position)
-        if old_tile is None:
-            self._refresh_missing_support_frontier(position)
         self._refresh_optical_candidate_cells({position})
         self._refresh_boundary_candidate_cell(position)
         self._refresh_contact_candidate_cell(position)
+        self._write_structured_edges((position,) if old_tile is None else self._cells_and_neighbors((position,)))
         self._bounds_dirty = True
 
         revision_channels: Set[SpatialChannel] = set()
@@ -1232,10 +1314,10 @@ class GridMap:
         support.remove(position)
         if not support:
             del self._support_columns[support_key]
-        self._refresh_missing_support_frontier(position)
         self._refresh_optical_candidate_cells({position})
         self._refresh_boundary_candidate_cell(position)
         self._refresh_contact_candidate_cell(position)
+        self._write_structured_edges(self._cells_and_neighbors((position,)))
         self._bounds_dirty = True
         self._bump_all_spatial_revisions({position})
         if effect is not None:
@@ -1803,14 +1885,7 @@ class GridMap:
                         previous_layer,
                     )
         self._spatial_conditions[condition.uuid] = condition
-        self._global_crossing_owners.discard(condition.uuid)
-        for owners in self._local_crossing_owners.values():
-            owners.discard(condition.uuid)
-        if crossing_channels is None:
-            self._global_crossing_owners.add(condition.uuid)
-        else:
-            for channel in crossing_channels:
-                self._local_crossing_owners[channel].add(condition.uuid)
+        crossing_owner = self._write_crossing_owner(condition.uuid, crossing_channels)
         self._spatial_condition_layers[condition.uuid] = layer
         self._spatial_condition_positions[condition.uuid] = normalized
         for position in normalized:
@@ -1819,6 +1894,8 @@ class GridMap:
                 layer,
             )
         self._refresh_optical_candidate_cells(previous_positions | normalized)
+        if crossing_owner:
+            self._write_structured_edges(self._cells_and_neighbors(previous_positions | normalized))
         footprint = self._condition_footprints[condition.uuid] = cells_layer(normalized, True)
         cell_xs, cell_ys = np.nonzero(footprint.values)
         self._condition_footprint_cells[condition.uuid] = (cell_xs + footprint.x0, cell_ys + footprint.y0)
@@ -1946,10 +2023,10 @@ class GridMap:
             self._derive_obscurement(obscurement.box)
         self._condition_footprints.pop(condition_uuid, None)
         self._condition_footprint_cells.pop(condition_uuid, None)
-        self._global_crossing_owners.discard(condition_uuid)
-        for owners in self._local_crossing_owners.values():
-            owners.discard(condition_uuid)
+        crossing_owner = self._write_crossing_owner(condition_uuid, frozenset())
         self._refresh_optical_candidate_cells(positions)
+        if crossing_owner:
+            self._write_structured_edges(self._cells_and_neighbors(positions))
         if condition is None:
             return None
         channels = condition.spatial_channels()
@@ -2118,12 +2195,47 @@ class GridMap:
         """Return whether a Tile center blocks ordinary light and sight.
 
         Every input (tile, center objects, conditions at this cell) changes only
-        with an optical bump over this cell, which drops the kept answer.
+        with an optical bump over this cell, which rewrites the kept answer.
         """
-        blocked = self._optics_blocking.get((x, y))
-        if blocked is None:
-            blocked = self._optics_blocking[(x, y)] = self._center_blocks_optics(x, y)
+        return self._center_blocks_at(WorldEdgeChannel.OPTICAL, (x, y))
+
+    def _center_blocks_at(self, channel: WorldEdgeChannel, position: Tuple[int, int]) -> bool:
+        """The channel's written center bit; a cell without a Tile blocks (the transit grids
+        share the cell box of `_cell_exists`)."""
+        exists, layer = self._cell_exists, self._transit[channel]
+        i, j = position[0] - layer.x0, position[1] - layer.y0
+        width, height = layer.values.shape
+        if not (0 <= i < width and 0 <= j < height) or not exists.values[i, j]:
+            return True
+        return bool(layer.values[i, j] & CENTER_BLOCKS)
+
+    def _center_blocks(self, channel: WorldEdgeChannel, position: Tuple[int, int]) -> bool:
+        if channel is WorldEdgeChannel.OPTICAL:
+            return self._center_blocks_optics(*position)
+        return self.is_blocking_propagation(*position)
+
+    def _settled_edge(self, channel: WorldEdgeChannel, start: Tuple[int, int], direction: int) -> bool:
+        """Whether the channel's transition from ``start`` across its edge CARDINAL_STEPS[direction]
+        blocks: the settled answer, else its predicate's, settled in the transit grid."""
+        step = CARDINAL_STEPS[direction]
+        end = (start[0] + step[0], start[1] + step[1])
+        layer = self._transit[channel]
+        i, j = start[0] - layer.x0, start[1] - layer.y0
+        width, height = layer.values.shape
+        if not (0 <= i < width and 0 <= j < height):
+            return not self._transition_allows(channel, start, end)
+        bits = int(layer.values[i, j])
+        blocked_bit = 1 << (EDGE_BLOCKED_SHIFT + direction)
+        if bits & (1 << direction):
+            return bool(bits & blocked_bit)
+        blocked = not self._transition_allows(channel, start, end)
+        layer.values[i, j] = (bits & ~blocked_bit) | (1 << direction) | (blocked_bit if blocked else 0)
         return blocked
+
+    def _transition_allows(self, channel: WorldEdgeChannel, start: Tuple[int, int], end: Tuple[int, int]) -> bool:
+        if channel is WorldEdgeChannel.OPTICAL:
+            return self.can_optical_transition(start, end)
+        return self.can_propagate_transition(start, end)
 
     def _center_blocks_optics(self, x: int, y: int) -> bool:
         tile = self._tiles.get((x, y))
@@ -2738,8 +2850,6 @@ class GridMap:
                     self._tiles_by_uuid[tile.uuid] = (tx, ty)
                     self._write_cells(((tx, ty),))
                     self._index_support_position((tx, ty))
-                    if old_tile is None:
-                        self._refresh_missing_support_frontier((tx, ty))
             self._bounds_dirty = True
         finally:
             self._bump_all_spatial_revisions(positions)
@@ -4404,35 +4514,21 @@ class GridMap:
             ),
         )
 
-    def _refresh_missing_support_frontier(self, position: Tuple[int, int]) -> None:
-        """Maintain absent cells touching support after a support commit."""
-        px, py = position
-        for x in range(px - 1, px + 2):
-            for y in range(py - 1, py + 2):
-                cell = (x, y)
-                chunk = self._spatial_chunk(cell)
-                if cell not in self._tiles and any(
-                    (x + dx, y + dy) in self._tiles
-                    for dx in (-1, 0, 1) for dy in (-1, 0, 1)
-                    if dx or dy
-                ):
-                    self._missing_support_frontier[chunk].add(cell)
-                elif chunk in self._missing_support_frontier:
-                    self._missing_support_frontier[chunk].discard(cell)
-                    if not self._missing_support_frontier[chunk]:
-                        del self._missing_support_frontier[chunk]
-
     def _refresh_boundary_candidate_cell(self, position: Tuple[int, int]) -> None:
         """Index native side membership after its owning Tile bands settle."""
         tile = self._tiles.get(position)
         chunk = self._spatial_chunk(position)
         sides = tile.snapshot_boundary_object_uuids() if tile is not None else {}
+        previous = self._boundary_candidate_cells.get(chunk, {}).get(position, {})
         if any(sides.values()):
             self._boundary_candidate_cells[chunk][position] = sides
         elif chunk in self._boundary_candidate_cells:
             self._boundary_candidate_cells[chunk].pop(position, None)
             if not self._boundary_candidate_cells[chunk]:
                 del self._boundary_candidate_cells[chunk]
+        if ({direction for direction, identities in previous.items() if identities}
+                != {direction for direction, identities in sides.items() if identities}):
+            self._write_structured_edges(self._cells_and_neighbors((position,)))
 
     def get_boundary_route_layers(
         self,
@@ -4538,207 +4634,21 @@ class GridMap:
         """Public transition-aware line check for physical topology."""
         return self._transition_clear(start, end, channel)
 
-    def _sparse_directional_visibility(
-        self, origin: Tuple[int, int], channel: WorldEdgeChannel,
-        targets: List[Tuple[int, int]],
-        opaque: Set[Tuple[int, int]],
-        bounds: Tuple[int, int, int, int], radius_squared: Optional[float],
-        transition_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool],
-        blocking_cache: Dict[Tuple[int, int], bool],
-    ) -> List[Tuple[int, int]]:
-        """Resolve exact rays from sparse native obstruction inputs."""
-        timing = action_timing_enabled()
-        started = time.perf_counter() if timing else 0.0
-        origin_x, origin_y = origin
-        min_x, min_y, max_x, max_y = bounds
-        supported = set(targets)
-        chunks = [(x, y)
-            for x in range(min_x // SPATIAL_CHUNK_SIZE, max_x // SPATIAL_CHUNK_SIZE + 1)
-            for y in range(min_y // SPATIAL_CHUNK_SIZE, max_y // SPATIAL_CHUNK_SIZE + 1)]
-        candidates: Set[Tuple[int, int]] = set()
-        missing: Set[Tuple[int, int]] = set()
-        cardinal_edges: Set[Tuple[Tuple[int, int], Tuple[int, int]]] = set()
-        local_crossings = self._local_crossing_owners.get(channel, set())
-        deltas = {CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
-                  CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0)}
-        for chunk in chunks:
-            candidates.update(self._contact_candidate_cells.get(chunk, ()))
-            if channel is WorldEdgeChannel.OPTICAL:
-                candidates.update(self._optical_candidate_cells.get(chunk, ()))
-            for position in self._missing_support_frontier.get(chunk, ()):
-                x, y = position
-                if (min_x <= x <= max_x and min_y <= y <= max_y
-                        and (radius_squared is None or (x-origin_x)**2 + (y-origin_y)**2 <= radius_squared)):
-                    missing.add(position)
-            for position, sides in self._boundary_candidate_cells.get(chunk, {}).items():
-                for direction, identities in sides.items():
-                    if identities:
-                        dx, dy = deltas[direction]
-                        neighbor = position[0] + dx, position[1] + dy
-                        cardinal_edges.add((position, neighbor))
-                        cardinal_edges.add((neighbor, position))
-            if local_crossings:
-                for position in self._optical_candidate_cells.get(chunk, ()):
-                    tile = self._tiles.get(position)
-                    if tile is not None and tile.get_spatial_condition_uuids() & local_crossings:
-                        for dx, dy in deltas.values():
-                            neighbor = position[0] + dx, position[1] + dy
-                            cardinal_edges.add((position, neighbor))
-                            cardinal_edges.add((neighbor, position))
-        for position in (candidates & supported) - opaque:
-            blocked = blocking_cache.get(position)
-            if blocked is None:
-                blocked = (self.is_blocking_optics(*position) if channel is WorldEdgeChannel.OPTICAL
-                    else self.is_blocking_propagation(*position))
-                blocking_cache[position] = blocked
-            if blocked:
-                opaque.add(position)
-        opaque.discard(origin)
-        centers = opaque | missing
-        blocked_edges = []
-        diagonals: Set[Tuple[Tuple[int, int], Tuple[int, int]]] = set()
-        for first, second in cardinal_edges:
-            if first not in supported or second not in supported:
-                continue
-            if (abs(second[0]-origin_x) + abs(second[1]-origin_y)
-                    != abs(first[0]-origin_x) + abs(first[1]-origin_y) + 1):
-                continue
-            edge = first, second
-            allowed = transition_cache.get(edge)
-            if allowed is None:
-                allowed = (self.can_optical_transition(*edge) if channel is WorldEdgeChannel.OPTICAL
-                    else self.can_propagate_transition(*edge))
-                transition_cache[edge] = allowed
-            if allowed:
-                continue
-            blocked_edges.append(edge)
-            dx, dy = second[0]-first[0], second[1]-first[1]
-            for vx, vy in ((-dy, dx), (dy, -dx)):
-                diagonals.add((first, (second[0]+vx, second[1]+vy)))
-                diagonals.add(((first[0]-vx, first[1]-vy), second))
-        # Any failed diagonal bridge route contains a failed cardinal leg or
-        # an opaque/missing bridge. Probe precisely those candidate diagonals.
-        for x, y in centers:
-            signs_x = (-1, 1) if x == origin_x else (1,) if x > origin_x else (-1,)
-            signs_y = (-1, 1) if y == origin_y else (1,) if y > origin_y else (-1,)
-            for sx in signs_x:
-                for sy in signs_y:
-                    # Rays advance away from the origin on both axes. Select
-                    # those two bridge diagonals before allocating candidates.
-                    if x != origin_x:
-                        diagonals.add(((x-sx, y), (x, y+sy)))
-                    if y != origin_y:
-                        diagonals.add(((x, y-sy), (x+sx, y)))
-        failed_cardinals = set(blocked_edges)
-        for first, second in diagonals:
-            if first not in supported or second not in supported:
-                continue
-            if (abs(second[0]-origin_x) + abs(second[1]-origin_y)
-                    != abs(first[0]-origin_x) + abs(first[1]-origin_y) + 2):
-                continue
-            # Native optical/propagation diagonals allow either two-leg bridge.
-            # Every outward leg and bridge is inside this acquired domain, so
-            # reuse its native center/side result instead of resolving it again.
-            for bridge in ((second[0], first[1]), (first[0], second[1])):
-                if (bridge in supported and bridge not in opaque
-                        and (first, bridge) not in failed_cardinals
-                        and (bridge, second) not in failed_cardinals):
-                    break
-            else:
-                blocked_edges.append((first, second))
-        if timing:
-            record_action_timing("grid.directional_fov.sparse_inputs_ms", started)
-            record_action_count("grid.directional_fov.sparse_center_candidates", len(candidates & supported))
-            record_action_count("grid.directional_fov.sparse_blocked_centers", len(centers))
-            record_action_count("grid.directional_fov.sparse_cardinal_candidates", len(cardinal_edges))
-            record_action_count("grid.directional_fov.sparse_diagonal_candidates", len(diagonals))
-            record_action_count("grid.directional_fov.sparse_blocked_edges", len(blocked_edges))
-        if not centers and not blocked_edges:
-            return targets
-        envelopes = {}
-        preparation_seconds = cutoff_seconds = output_seconds = 0.0
-        for sign_x, sign_y in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
-            started = time.perf_counter() if timing else 0.0
-            extent_x = max_x-origin_x if sign_x > 0 else origin_x-min_x
-            extent_y = max_y-origin_y if sign_y > 0 else origin_y-min_y
-            extent = max(extent_x, extent_y)
-            scale = extent * (2 * extent + 1) + 1
-            vertical = scale * (2 * extent + 2)
-            final_shell = extent_x + extent_y
-            events = []
-            for position in centers:
-                x = (position[0]-origin_x)*sign_x
-                y = (position[1]-origin_y)*sign_y
-                if not (0 <= x <= extent_x and 0 <= y <= extent_y and 0 < x+y <= final_shell):
-                    continue
-                lower, _, _, upper = supercover_incoming_rank_ranges(scale, vertical, x, y)
-                if lower < upper:
-                    events.append((lower, upper, x+y))
-            for first, second in blocked_edges:
-                px, py = (first[0]-origin_x)*sign_x, (first[1]-origin_y)*sign_y
-                x, y = (second[0]-origin_x)*sign_x, (second[1]-origin_y)*sign_y
-                if not (0 <= px <= x <= extent_x and 0 <= py <= y <= extent_y and x+y <= final_shell):
-                    continue
-                lower, ds, de, upper = supercover_incoming_rank_ranges(scale, vertical, x, y)
-                if x == px:
-                    start, end = lower, ds
-                elif y == py:
-                    start, end = de, upper
-                else:
-                    start, end = ds, de
-                if start < end:
-                    events.append((start, end, x+y-1))
-            events.sort()
-            if timing:
-                preparation_seconds += time.perf_counter()-started
-                started = time.perf_counter()
-            # Each obstruction contributes one interval of allowed ray depth.
-            # Build their minimum envelope, independently of the target cells.
-            # Expired nonminimum heap entries can wait until they reach the top.
-            endpoints = sorted({endpoint for lower, upper, _ in events for endpoint in (lower, upper)})
-            active: List[Tuple[int, int]] = []
-            boundaries = [0]
-            cutoffs = [final_shell]
-            event_index = 0
-            for rank in endpoints:
-                while event_index < len(events) and events[event_index][0] <= rank:
-                    _, upper, depth = events[event_index]
-                    heappush(active, (depth, upper))
-                    event_index += 1
-                while active and active[0][1] <= rank:
-                    heappop(active)
-                depth = active[0][0] if active else final_shell
-                if depth != cutoffs[-1]:
-                    boundaries.append(rank)
-                    cutoffs.append(depth)
-            if timing:
-                cutoff_seconds += time.perf_counter()-started
-            envelopes[sign_x, sign_y] = scale, vertical, boundaries, cutoffs
-        started = time.perf_counter() if timing else 0.0
-        result = []
-        for position in targets:
-            dx, dy = position[0]-origin_x, position[1]-origin_y
-            if dx == 0 and dy == 0:
-                result.append(position)
-                continue
-            scale, vertical, boundaries, cutoffs = envelopes[1 if dx >= 0 else -1, 1 if dy >= 0 else -1]
-            x, y = abs(dx), abs(dy)
-            rank = scale*y//x if x else vertical
-            if x+y <= cutoffs[bisect_right(boundaries, rank)-1]:
-                result.append(position)
-        if timing:
-            output_seconds = time.perf_counter()-started
-            record_action_elapsed("grid.directional_fov.sparse_events_ms", preparation_seconds)
-            record_action_elapsed("grid.directional_fov.sparse_cutoffs_ms", cutoff_seconds)
-            record_action_elapsed("grid.directional_fov.sparse_output_ms", output_seconds)
-        return result
-
     def _compute_directional_fov(
         self,
         origin: Tuple[int, int],
         max_distance: Optional[float],
         channel: WorldEdgeChannel,
     ) -> List[Tuple[int, int]]:
+        """The Tiles the channel's native ray reaches from ``origin`` (``raycast_clear``), x-major.
+
+        Targets are the Tiles in the map bounds within ``max_distance`` (the whole bounds when
+        None); the reach must stay within ROUTE_TABLE_RADIUS of the origin. One array solve
+        (`wall_visibility`) over the channel's transit grid: the written center bits, and the
+        answers of the structured edges -- every edge while a global crossing owner exists --
+        with the unsettled ones a route from here crosses settled first. Any other edge between
+        two Tiles is open.
+        """
         timing = action_timing_enabled()
         total_started = time.perf_counter() if timing else 0.0
         if origin not in self._tiles:
@@ -4746,191 +4656,48 @@ class GridMap:
         if self._bounds_dirty:
             self._update_bounds()
         radius = max_distance if max_distance is not None else max(self.width, self.height)
-        radius_squared = radius * radius if max_distance is not None else None
         min_x = max(self._min_x, math.floor(origin[0] - radius))
         max_x = min(self._max_x, math.ceil(origin[0] + radius))
         min_y = max(self._min_y, math.floor(origin[1] - radius))
         max_y = min(self._max_y, math.ceil(origin[1] + radius))
-        if channel is WorldEdgeChannel.PROPAGATION:
-            transition_cache = self._propagation_transition_cache
-            blocking_cache = self._propagation_blocking_cache
-        elif channel is WorldEdgeChannel.OPTICAL:
-            transition_cache = self._directional_transition_cache
-            blocking_cache = self._optics_blocking
+        if min_x > max_x or min_y > max_y:
+            return []
+        window = (min_x, min_y, max_x, max_y)
+        dx = np.arange(min_x - origin[0], max_x - origin[0] + 1)
+        dy = np.arange(min_y - origin[1], max_y - origin[1] + 1)
+        exists = self._window_values(self._cell_exists, window)
+        if max_distance is None or max_distance == math.inf:
+            targets = exists.copy()
         else:
-            transition_cache = {}
-            blocking_cache = {}
-
-        enumeration_started = time.perf_counter() if timing else 0.0
-        targets = []
-        sparse = not self._global_crossing_owners
-        opaque: Set[Tuple[int, int]] = set()
-        quadrants: Dict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
-        origin_x, origin_y = origin
-        # Integer cell distances admit an exact column interval. Keep fresh
-        # native Tile reads and x/y order, without visiting the circle's corners.
-        distance_limit = (math.floor(radius_squared)
-            if radius_squared is not None and radius_squared != math.inf else None)
-        enumerated_positions = 0
-        for x in range(min_x, max_x + 1):
-            column_min_y, column_max_y = min_y, max_y
-            if distance_limit is not None:
-                remaining = distance_limit - (x - origin_x) ** 2
-                if remaining < 0:
-                    continue
-                height = math.isqrt(remaining)
-                column_min_y = max(min_y, origin_y - height)
-                column_max_y = min(max_y, origin_y + height)
-            for chunk_y in range(column_min_y // SPATIAL_CHUNK_SIZE,
-                                 column_max_y // SPATIAL_CHUNK_SIZE + 1):
-                support = self._support_columns.get((x, chunk_y), ())
-                if not support:
-                    continue
-                selected = support[bisect_left(support, (x, column_min_y)):
-                    bisect_right(support, (x, column_max_y))]
-                if timing:
-                    enumerated_positions += len(selected)
-                for position in selected:
-                    tile = self._tiles[position]
-                    targets.append(position)
-                    if sparse and (tile.blocks_optics_at_center() if channel is WorldEdgeChannel.OPTICAL
-                                   else tile.blocks_propagation()):
-                        opaque.add(position)
-                    if not sparse:
-                        dx, dy = x - origin_x, position[1] - origin_y
-                        if dx or dy:
-                            quadrants[(1 if dx >= 0 else -1, 1 if dy >= 0 else -1)].append((abs(dx), abs(dy)))
+            targets = exists & ((dx * dx)[:, None] + (dy * dy)[None, :] <= math.floor(max_distance * max_distance))
+        transit = self._window_values(self._transit[channel], window)
+        # A global crossing owner may block any edge; otherwise only structured edges can.
+        structured = (np.full(transit.shape, EDGES_SETTLED, dtype=np.uint16) if self._global_crossing_owners
+                      else (transit >> EDGE_STRUCTURED_SHIFT) & EDGES_SETTLED)
+        settled = 0
+        # A route from this origin steps away from it: settle the structured edges that leave a
+        # target in such a direction (east from its column on, west up to it, ...).
+        oi, oj = origin[0] - min_x, origin[1] - min_y
+        outward = ((oi, 0, slice(oi, None), slice(None)), (0, 0, slice(0, oi + 1), slice(None)),
+                   (0, oj, slice(None), slice(oj, None)), (0, 0, slice(None), slice(0, oj + 1)))
+        for direction, (i0, j0, xs, ys) in enumerate(outward):
+            unsettled = targets[xs, ys] & ((structured[xs, ys] & ~transit[xs, ys] & (1 << direction)) != 0)
+            for i, j in zip(*np.nonzero(unsettled)):
+                self._settled_edge(channel, (min_x + i0 + int(i), min_y + j0 + int(j)), direction)
+                settled += 1
+        blocked = (transit >> EDGE_BLOCKED_SHIFT) & structured
+        rows_x, rows_y = wall_visibility(origin, window, exists, (transit & CENTER_BLOCKS) != 0, blocked, targets)
         if timing:
-            record_action_timing("grid.directional_fov.enumeration_ms", enumeration_started)
-            record_action_count("grid.directional_fov.enumerated_positions", enumerated_positions)
-            record_action_count("grid.directional_fov.admitted_targets", len(targets))
-        if sparse:
-            result = self._sparse_directional_visibility(origin, channel, targets, opaque,
-                (min_x, min_y, max_x, max_y), radius_squared, transition_cache, blocking_cache)
-            if timing:
-                record_action_count("grid.directional_fov.visible_targets", len(result))
-                record_action_timing("grid.directional_fov.total_ms", total_started)
-            return result
-        if timing:
-            record_action_count("grid.directional_fov.unknown_crossing_fallbacks", 1)
-        prepare_started = time.perf_counter() if timing else 0.0
-        lanes = []
-        for (sign_x, sign_y), offsets in quadrants.items():
-            slopes, slope_ranks, rank_scale = supercover_slope_order(offsets)
-            terminals = {position: index for index, position in enumerate(slopes)}
-            lanes.append((sign_x, sign_y, slope_ranks, rank_scale, terminals,
-                max(x for x, _ in slopes), max(y for _, y in slopes),
-                max(x + y for x, y in slopes)))
-        if timing:
-            record_action_timing("grid.directional_fov.target_sort_ms", prepare_started)
-
-        visible = {origin}
-        counts = defaultdict(int) if timing else None
-        transition_seconds = blocking_seconds = 0.0
-        transition_total = blocking_total = interval_total = output_total = 0.0
-        sweep_started = time.perf_counter() if timing else 0.0
-        for sign_x, sign_y, slope_ranks, rank_scale, terminals, extent_x, extent_y, final_shell in lanes:
-            # Each bit belongs to one endpoint, including collinear near/far ones.
-            # Finishing a ray removes it before more distant blockers are visited.
-            active = (1 << len(slope_ranks)) - 1
-            for shell in range(1, final_shell + 1):
-                if not active:
-                    break
-                for x in range(max(0, shell - extent_y), min(extent_x, shell) + 1):
-                    y = shell - x
-                    interval_started = time.perf_counter() if timing else 0.0
-                    lower, diagonal_start, diagonal_end, upper = supercover_incoming_ranges(slope_ranks, rank_scale, x, y)
-                    cell_mask = ((1 << (upper - lower)) - 1) << lower
-                    if timing:
-                        interval_total += time.perf_counter() - interval_started
-                        counts["sweep_cells"] += 1
-                    if not active & cell_mask:
-                        continue
-                    position = (origin_x + sign_x * x, origin_y + sign_y * y)
-                    if timing:
-                        counts["active_cells"] += 1
-                    # These open intervals and the exact corner tie partition all
-                    # native ways into this cell. Missing cells remain in the sweep.
-                    for start, end, previous in (
-                        (lower, diagonal_start, (position[0], position[1] - sign_y)),
-                        (diagonal_start, diagonal_end, (position[0] - sign_x, position[1] - sign_y)),
-                        (diagonal_end, upper, (position[0] - sign_x, position[1])),
-                    ):
-                        if start == end:
-                            continue
-                        interval_started = time.perf_counter() if timing else 0.0
-                        incoming = ((1 << (end - start)) - 1) << start
-                        admitted = active & incoming
-                        if timing:
-                            interval_total += time.perf_counter() - interval_started
-                            counts["incoming_masks"] += 1
-                        if not admitted:
-                            continue
-                        lookup_started = time.perf_counter() if timing else 0.0
-                        edge = (previous, position)
-                        allowed = transition_cache.get(edge)
-                        if allowed is None:
-                            native_started = time.perf_counter() if timing else 0.0
-                            allowed = (self.can_optical_transition(*edge) if channel is WorldEdgeChannel.OPTICAL
-                                else self.can_propagate_transition(*edge))
-                            transition_cache[edge] = allowed
-                            if timing:
-                                transition_seconds += time.perf_counter() - native_started
-                                counts["transition_cache_misses"] += 1
-                        elif timing:
-                            counts["transition_cache_hits"] += 1
-                        if not allowed:
-                            active &= ~incoming
-                        if timing:
-                            transition_total += time.perf_counter() - lookup_started
-                            counts["native_edge_inputs"] += 1
-                    output_started = time.perf_counter() if timing else 0.0
-                    terminal_index = terminals.get((x, y))
-                    terminal = 0 if terminal_index is None else 1 << terminal_index
-                    if active & terminal:
-                        visible.add(position)
-                    active &= ~terminal
-                    if timing:
-                        output_total += time.perf_counter() - output_started
-                    # The reached terminal is visible even when its center is
-                    # opaque. Only unfinished rays can be stopped by that center.
-                    if active & cell_mask:
-                        lookup_started = time.perf_counter() if timing else 0.0
-                        blocked = blocking_cache.get(position)
-                        if blocked is None:
-                            native_started = time.perf_counter() if timing else 0.0
-                            blocked = (self.is_blocking_optics(*position) if channel is WorldEdgeChannel.OPTICAL
-                                else self.is_blocking_propagation(*position))
-                            blocking_cache[position] = blocked
-                            if timing:
-                                blocking_seconds += time.perf_counter() - native_started
-                                counts["blocking_cache_misses"] += 1
-                        elif timing:
-                            counts["blocking_cache_hits"] += 1
-                        if blocked:
-                            active &= ~cell_mask
-                        if timing:
-                            blocking_total += time.perf_counter() - lookup_started
-        if timing:
-            sweep_seconds = time.perf_counter() - sweep_started
-            record_action_elapsed("grid.directional_fov.sweep_total_ms", sweep_seconds)
-            record_action_elapsed("grid.directional_fov.interval_masks_ms", interval_total)
-            record_action_elapsed("grid.directional_fov.transition_total_ms", transition_total)
-            record_action_elapsed("grid.directional_fov.blocking_total_ms", blocking_total)
-            record_action_elapsed("grid.directional_fov.terminal_output_ms", output_total)
-            record_action_elapsed("grid.directional_fov.transition_checks_ms", transition_seconds)
-            record_action_elapsed("grid.directional_fov.blocking_checks_ms", blocking_seconds)
-            record_action_elapsed("grid.directional_fov.sweep_remainder_ms",
-                sweep_seconds - interval_total - transition_total - blocking_total - output_total)
-        output_started = time.perf_counter() if timing else 0.0
-        result = [position for position in targets if position in visible]
-        if timing:
-            counts["visible_targets"] = len(result)
-            for name, value in counts.items():
-                record_action_count("grid.directional_fov." + name, value)
-            record_action_timing("grid.directional_fov.output_ms", output_started)
+            record_action_count("grid.directional_fov.targets", int(np.count_nonzero(targets)))
+            record_action_count("grid.directional_fov.settled_predicates", settled)
+            record_action_count("grid.directional_fov.visible_targets", len(rows_x))
             record_action_timing("grid.directional_fov.total_ms", total_started)
-        return result
+        return list(zip((rows_x + min_x).tolist(), (rows_y + min_y).tolist()))
+
+    @staticmethod
+    def _window_values(layer: CellLayer, window: Box) -> np.ndarray:
+        """A view of a cell grid over a window inside its box."""
+        return layer.values[window[0] - layer.x0:window[2] - layer.x0 + 1, window[1] - layer.y0:window[3] - layer.y0 + 1]
 
     def upper_volume_sight_planes(
         self, origin: Tuple[int, int], destination: Tuple[int, int],
@@ -5001,7 +4768,7 @@ class GridMap:
         cache_started = time.perf_counter() if timing else 0.0
         # The solver is a global choice; a result is reused only under the one that made it.
         directional = self._has_directional_blockers(WorldEdgeChannel.OPTICAL)
-        cache_key = (origin, (directional, not self._global_crossing_owners))
+        cache_key = (origin, directional)
         cached = self._fov_cache.get(cache_key)
         if cached is not None:
             cached_distance, positions = cached.distance, cached.positions
@@ -6162,8 +5929,7 @@ class GridMap:
         and missing cells, directional boundaries and spatial-condition
         crossings give total cover. Magical darkness does not block it."""
         cache_started = time.perf_counter()
-        # The sparse solver applies only without global crossing owners.
-        cache_key = (origin, max_distance, not self._global_crossing_owners)
+        cache_key = (origin, max_distance)
         cached = self._propagation_fov_cache.get(cache_key)
         if cached is not None:
             self._propagation_fov_cache.move_to_end(cache_key)
@@ -6171,10 +5937,6 @@ class GridMap:
             return list(cached.positions)
         record_action_timing("grid.compute_propagation_fov.cache_miss_ms", cache_started)
         visible_positions = self._compute_directional_fov(origin, max_distance, WorldEdgeChannel.PROPAGATION)
-        visible_positions = [
-            position for position in visible_positions
-            if position in self._tiles
-        ]
 
         self._propagation_fov_cache[cache_key] = PropagationEntry(sight_read_box(origin, max_distance),
                                                                   tuple(visible_positions))
@@ -6200,23 +5962,13 @@ class GridMap:
         pending = [origin]
         while pending:
             current = pending.pop()
-            if current != origin:
-                blocked = self._propagation_blocking_cache.get(current)
-                if blocked is None:
-                    blocked = self.is_blocking_propagation(*current)
-                    self._propagation_blocking_cache[current] = blocked
-                if blocked:
-                    continue
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            if current != origin and self._center_blocks_at(WorldEdgeChannel.PROPAGATION, current):
+                continue
+            for direction, (dx, dy) in enumerate(CARDINAL_STEPS):
                 neighbor = (current[0] + dx, current[1] + dy)
                 if neighbor not in remaining:
                     continue
-                edge = (current, neighbor)
-                allowed = self._propagation_transition_cache.get(edge)
-                if allowed is None:
-                    allowed = self.can_propagate_transition(current, neighbor)
-                    self._propagation_transition_cache[edge] = allowed
-                if allowed:
+                if not self._settled_edge(WorldEdgeChannel.PROPAGATION, current, direction):
                     remaining.remove(neighbor)
                     reached.add(neighbor)
                     pending.append(neighbor)
@@ -6252,7 +6004,6 @@ class GridMap:
         self._residue_fields.clear()
         self._global_crossing_owners.clear()
         self._local_crossing_owners.clear()
-        self._missing_support_frontier.clear()
         self._spatial_condition_positions.clear()
         self._spatial_condition_layers.clear()
         self._connectors_by_uuid.clear()
@@ -6271,6 +6022,8 @@ class GridMap:
         self._obscurement_layers.clear()
         self._obscurement_active.clear()
         self._cell_obscurement = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
+        for channel in TRANSIT_CHANNELS:
+            self._transit[channel] = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint16))
         self._bump_sight_grids()
         self._bump_light_grid()
         self._condition_footprints.clear()
@@ -6292,13 +6045,9 @@ class GridMap:
         # The world itself is gone: every cached query goes with it.
         self._path_cache.clear()
         self._fov_cache.clear()
-        self._optics_blocking.clear()
         self._propagation_fov_cache.clear()
         for owners in self._directional_blocking_owners.values():
             owners.clear()
-        self._directional_transition_cache.clear()
-        self._propagation_transition_cache.clear()
-        self._propagation_blocking_cache.clear()
 
     def get_all_tiles(self) -> Dict[Tuple[int, int], Tile]:
         """Get all tiles (for serialization/debugging)."""
