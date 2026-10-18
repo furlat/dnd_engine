@@ -16,11 +16,12 @@ import pytest
 from devtools.performance import gallery_crowd, seat_oracle
 from dnd.core.events import WorldConnectorState
 from dnd.core.traversal_connectors import ConnectorProvocationPolicy, TraversalConnectorKind
+from dnd.core.cells import mask_positions
 from dnd.player.application import initialize_audiences
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import PlayerState
 from dnd.player.reduction import reduce_initialization
-from dnd.player.session import Session, close_session, create_session
+from dnd.player.session import close_session, create_session
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.senses import PerceivedSpatialEffect
 
@@ -33,11 +34,15 @@ from dnd.types.senses import PerceivedSpatialEffect
 ])
 def test_gallery_seat_layouts_give_every_member_one_seat(layout, expected):
     request, slots = gallery_crowd.start_request(False, {}, layout)
-    assert request.assignments is not None
+    assert request.assignments is not None and request.recipe is not None
     seats = {row.seat_id: len(row.controlled) for row in request.assignments}
     assert seats == expected
     assert set(request.audience_ids) == set(slots) == set(expected)
-    assert {slots[row.seat_id] for row in request.assignments if row.seat_id.startswith('blue')} <= {'blue'}
+    controlled = sorted(address for row in request.assignments for address in row.controlled)
+    roster = sorted((slot.roster_slot_id, member.member_id) for slot in request.recipe.roster_slots
+                    for member in slot.roster.members)
+    assert controlled == roster
+    assert all(slots[row.seat_id] == slot for row in request.assignments for slot, _ in row.controlled)
 
 
 @pytest.fixture
@@ -59,50 +64,50 @@ def senses(client: PlayerState):
     return client.senses
 
 
-def enemy(session: Session, client: PlayerState):
+def enemy(client: PlayerState):
     """A body the seat sees that it does not control."""
     return next(actor for identity, actor in client.actors.items()
         if identity in senses(client).entities and not client.viewing_audience.controls(identity))
 
 
-def ghost(session: Session, client: PlayerState) -> tuple[str, str, str | None]:
-    body = enemy(session, client)
+def ghost(client: PlayerState) -> tuple[str, str, str | None]:
+    body = enemy(client)
     identity = uuid4()
     client.actors[identity] = replace(body, uuid=identity)
     return 'actors', str(identity), None
 
 
-def drifted_hit_points(session: Session, client: PlayerState) -> tuple[str, str, str | None]:
-    body = enemy(session, client)
+def drifted_hit_points(client: PlayerState) -> tuple[str, str, str | None]:
+    body = enemy(client)
     client.actors[body.uuid] = replace(body, normal_hp=body.normal_hp - 1)
     return 'actors', str(body.uuid), 'body.normal_hp'
 
 
-def lost_body(session: Session, client: PlayerState) -> tuple[str, str, str | None]:
-    body = enemy(session, client)
+def lost_body(client: PlayerState) -> tuple[str, str, str | None]:
+    body = enemy(client)
     del client.actors[body.uuid]
     return 'actors', str(body.uuid), ''
 
 
-def lost_tile(session: Session, client: PlayerState) -> tuple[str, str, str | None]:
-    position = next(iter(seat_oracle.mask_positions(senses(client).visible)))
+def lost_tile(client: PlayerState) -> tuple[str, str, str | None]:
+    position = next(iter(mask_positions(senses(client).visible)))
     del client.tiles[position]
     return 'tiles', seat_oracle.key(position), ''
 
 
-def ghost_object(session: Session, client: PlayerState) -> tuple[str, str, str | None]:
+def ghost_object(client: PlayerState) -> tuple[str, str, str | None]:
     """A copy of a held object in view, under an identity nothing in the world has."""
-    held = next(obj for identity, obj in client.objects.items() if seat_oracle.support_cells(obj.placement)
-                & set(seat_oracle.mask_positions(senses(client).visible)))
+    held = next(obj for obj in client.objects.values() if seat_oracle.support_cells(obj.placement)
+                & set(mask_positions(senses(client).visible)))
     identity = uuid4()
     client.objects[identity] = replace(held, item=replace(held.item, item_uuid=identity),
                                        placement=held.placement.model_copy(update={'object_uuid': identity}))
     return 'objects', str(identity), None
 
 
-def stale_effect(session: Session, client: PlayerState) -> tuple[str, str, str | None]:
+def stale_effect(client: PlayerState) -> tuple[str, str, str | None]:
     """An effect the client still shows on a visible cell after it ended."""
-    position = next(iter(seat_oracle.mask_positions(senses(client).visible)))
+    position = next(iter(mask_positions(senses(client).visible)))
     identity = uuid4()
     effect = PerceivedSpatialEffect(content_ref=client.content[0].ref, name='Ended zone', description='',
                                     positions=(position,))
@@ -110,9 +115,9 @@ def stale_effect(session: Session, client: PlayerState) -> tuple[str, str, str |
     return 'effects', str(identity), None
 
 
-def stale_connector(session: Session, client: PlayerState) -> tuple[str, str, str | None]:
+def stale_connector(client: PlayerState) -> tuple[str, str, str | None]:
     """A connector the client holds between two visible cells, which the world does not have."""
-    first, second = sorted(seat_oracle.mask_positions(senses(client).visible))[:2]
+    first, second = sorted(mask_positions(senses(client).visible))[:2]
     identity = uuid4()
     client.connectors = (*client.connectors, WorldConnectorState(connector_uuid=identity, authored_id='ladder.gone',
         kind=TraversalConnectorKind.LADDER, presentation_key='ladder', endpoints=(first, second),
@@ -125,7 +130,7 @@ def stale_connector(session: Session, client: PlayerState) -> tuple[str, str, st
 @dataclass(frozen=True)
 class Fault:
     name: str
-    plant: Callable[[Session, PlayerState], tuple[str, str, str | None]]
+    plant: Callable[[PlayerState], tuple[str, str, str | None]]
 
 
 FAULTS = (Fault('ghost body', ghost), Fault('drifted hit points', drifted_hit_points),
@@ -139,13 +144,14 @@ def test_o1_names_a_fault_planted_in_the_client_fold(session, fault):
     seat, initial = next(iter(initializations.items()))
     audience = session.seats[seat]
 
-    def o1(client: PlayerState) -> set[tuple[str, str, str | None]]:
-        rows = seat_oracle.differences(seat_oracle.live_view(seat_oracle.live_world(session), audience, client),
+    def o1(client: PlayerState) -> list[dict]:
+        return seat_oracle.differences(seat_oracle.live_view(seat_oracle.live_world(session), audience, client),
                                        seat_oracle.client_view(client))
-        return {(row['category'], row['key'], row.get('field')) for row in rows}
 
+    # The start record, as worker.start sends it with the seat's admitted content.
     client = reduce_initialization(initial, content_additions=runtimes[seat].projection.remembered.content)
     before = o1(client)
-    planted = fault.plant(session, client)
-    assert planted not in before, fault.name
-    assert planted in o1(client), fault.name
+    # On the untouched fold O1 reports at most E1's stale initial light (the startup fold lacks LIGHT_CHANGED).
+    assert {seat_oracle.signature(row) for row in before} <= {'tiles:field:resolved_light'}, fault.name
+    planted = fault.plant(client)
+    assert planted in {(row['category'], row['key'], row.get('field')) for row in o1(client)}, fault.name

@@ -49,10 +49,12 @@ from dnd.actions import DropConcentration, Move
 from dnd.actions_functional import preview_available_selection, selection_admission_error
 from dnd.ai.policies.basic import BASIC_POLICY_ID
 from dnd.content.characters.premades import CLERIC_PREMADE_ID
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.environment_item_builders import build_oil_barrel
 from dnd.controller import HumanController
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import build_creatable_models
+from dnd.core.cells import mask_positions
 from dnd.core.content.encounters import (AuthoredCreatureRosterSource, EncounterDeploymentSpec,
     EncounterDeploymentZone, EncounterRecipe, EncounterRosterMember, EncounterRosterRecipe,
     PremadeCharacterRosterSource, RosterControllerDefaults, RosterControllerKind, RosterSpellGrant,
@@ -140,6 +142,7 @@ REENTRY_PARTY = ((22, 6), (14, 2), (14, 10), (17, 2))
 DOOR_KEEPER = (23, 6)  # a door is worked from a cell touching its face (reach 0)
 DOOR_KEEPER_NAME = f'Gallery crowd {len(CROWD) + 1}'
 REENTRY_OUT = ((21, 6), (20, 6), (19, 6), (18, 5), (18, 4))  # the caster's steps out of sight of the hall
+HALL_X = 24  # the hall's cells are those with x >= 24 (the passage is x 21-23, the burial hall x 12-20)
 
 
 def _member(member_id, display_name, role, *, effects=(), source=None):
@@ -313,8 +316,11 @@ def deliver(clients, records):
         payload = record.model_dump_json().encode()
         started = perf_counter()
         clients.states[seat] = reduce_operation(clients.states[seat], PlayerOperation.model_validate_json(payload))
-        rows[seat] = {'bytes': len(payload), 'log_bytes': log_bytes(record, payload),
-                      'fold_ms': (perf_counter() - started) * 1000}
+        fold_ms = (perf_counter() - started) * 1000
+        row = rows.setdefault(seat, {'bytes': 0, 'log_bytes': 0, 'fold_ms': 0.0})
+        row['bytes'] += len(payload)
+        row['log_bytes'] += log_bytes(record, payload)
+        row['fold_ms'] += fold_ms
         if clients.oracle is not None:
             seat_oracle.receive(clients.oracle, seat, record.cursor.sequence, payload, clients.states[seat])
     return rows
@@ -367,13 +373,15 @@ class Driver:
         self.runtime = runtime
         self.clients = clients
         self.pending = []
+        self.setup_rows = []  # the byte reports of the harness's unmeasured setup publications
         self.command_number = 0
 
     def dispatch(self, request):
         reply, records, response = worker.dispatch(self.runtime, request)
         if reply.rejection is not None or reply.query_error is not None:
             raise AssertionError(f'{type(request).__name__} rejected: {reply.rejection or reply.query_error}')
-        self.pending.extend((publication.seat_id, record) for publication, record in zip(reply.publications, records))
+        self.pending.extend((publication.seat_id, record)
+                            for publication, record in zip(reply.publications, records, strict=True))
         return response
 
     def settle(self):
@@ -677,6 +685,17 @@ def use(behavior_id, *, actor):
     return ('use', behavior_id, None, (), actor, {}, ())
 
 
+def check(description, holds):
+    """An unmeasured check of the world between measured steps: `holds(runtime)` must be true."""
+    return ('check', description, holds, (), None, {}, ())
+
+
+def caster_hall_cells(runtime):
+    """How many hall cells the caster sees now (its published senses)."""
+    caster = runtime.session.game.entities[_uuid_named(runtime, CASTER_NAME)]
+    return sum(1 for x, _ in mask_positions(capture_senses_snapshot(caster.senses).visible) if x >= HALL_X)
+
+
 def door(name, *, actor):
     """One measured use of the door named `name` by `actor`: Close Door if it is open, else Open Door."""
     return ('door', name, None, (), actor, {}, ())
@@ -697,7 +716,7 @@ def sequence_case(*steps, setup=None, published=True):
             cursor = EventQueue.event_cursor()
             setup(runtime)
             if published:
-                publish_setup(driver, cursor, 'case_setup')
+                driver.setup_rows.append(publish_setup(driver, cursor, 'case_setup'))
         # The harness constructs these spells itself, outside any creature's content: build each as the
         # template a caster holds is built at character creation (its class and what it can create).
         incomplete = incomplete_models()
@@ -726,6 +745,10 @@ def sequence_case(*steps, setup=None, published=True):
                 actor = runtime.session.game.entities[actor_uuid]
                 template = next(action for action in actor.registered_actions if action.semantic_key == content_id)
                 operations.append(measured_operation(driver, mode, content_id, template.instantiate))
+                continue
+            if kind == 'check':
+                if not aim(runtime):
+                    raise AssertionError(f'Check failed before step {index}: {content_id}')
                 continue
             if kind == 'door':
                 if actor_uuid is None:
@@ -958,6 +981,7 @@ def agreement_case(accepts, godmode, recipe_options=None):
             session.close_session(driver.runtime.session)
             fresh, _ = begin_world(godmode, recipe_options or {}, driver.clients.layout)
             driver.runtime, driver.clients, driver.pending = fresh.runtime, fresh.clients, []
+            driver.setup_rows.clear()
             prepare_published(driver)
             driver.turn_of(accepts)
 
@@ -1000,12 +1024,15 @@ def agreement_case(accepts, godmode, recipe_options=None):
 
 
 
-def memory_census(kind, started_round, found, cycles, elapsed):
+def memory_census(kind, started_round, found, cycles, elapsed, seat_clients):
+    """The worker's round check. Since E0 the heap also holds the harness's `seat_clients` client folds (and
+    their garbage reaches the scans), so these counts are not the worker's alone."""
     with open('/proc/self/statm') as statm:
         rss_pages = int(statm.read().split()[1])
     return {'kind': kind, 'round': started_round, 'ms': elapsed, 'cycles_found': found,
         'cycle_types': dict(cycles.most_common(8)), 'frozen_objects': gc.get_freeze_count(),
-        'tracked_unfrozen': len(gc.get_objects()), 'rss_mb': rss_pages * 4096 / 2**20}
+        'tracked_unfrozen': len(gc.get_objects()), 'rss_mb': rss_pages * 4096 / 2**20,
+        'includes_seat_clients': seat_clients}
 
 
 def long_game_case(turns):
@@ -1031,7 +1058,7 @@ def long_game_case(turns):
                 started = perf_counter()
                 found, cycles = worker.collect_frozen_cycles()
                 operations.append(memory_census('round_check', round_before, found, cycles,
-                    (perf_counter() - started) * 1000))
+                    (perf_counter() - started) * 1000, len(driver.clients.states)))
             return True, response
 
         for _ in range(turns):
@@ -1069,7 +1096,7 @@ def long_game_case(turns):
         started = perf_counter()
         found, cycles = worker.collect_frozen_cycles()
         operations.append(memory_census('final_check', encounter.round_number, found, cycles,
-            (perf_counter() - started) * 1000))
+            (perf_counter() - started) * 1000, len(driver.clients.states)))
         return operations
     return case
 
@@ -1123,10 +1150,15 @@ CASES = {
     'mass_healing_word': (False, sequence_case(cast('spell.mass_healing_word', targets=ALLY_NAMES)),
         {'roster': 'damaged_party'}),
     # Plan E0: the caster sees the lit hall through the open door, steps out of sight, the door keeper closes and
-    # reopens the door, the caster steps back in (each step and each door use measured).
-    'room_reentry': (False, sequence_case(*(move(step) for step in REENTRY_OUT),
+    # reopens the door, the caster steps back to where it saw the hall (in the passage, at the door) and sees it
+    # again. Each step and each door use is measured; the checks are not.
+    'room_reentry': (False, sequence_case(
+        check('the caster sees the hall', lambda runtime: caster_hall_cells(runtime) >= 100),
+        *(move(step) for step in REENTRY_OUT),
+        check('the caster sees none of the hall', lambda runtime: caster_hall_cells(runtime) == 0),
         door(GALLERY_DOOR, actor=DOOR_KEEPER_NAME), door(GALLERY_DOOR, actor=DOOR_KEEPER_NAME),
         *(move(step) for step in reversed((REENTRY_PARTY[0], *REENTRY_OUT[:-1]))),
+        check('the caster sees the hall again', lambda runtime: caster_hall_cells(runtime) >= 100),
         setup=open_doors(GALLERY_DOOR, PASSAGE_DOOR)), {'roster': 'reentry'}),
     'ai_decision': (False, ai_turn_case, {'blue_ai': True}),
     'long_game': (True, long_game_case(50), {'blue_ai': True}),
@@ -1143,10 +1175,9 @@ def begin_world(godmode, recipe_options, layout, oracle=None):
     started = perf_counter()
     runtime, reply, records = worker.start(request)
     elapsed = (perf_counter() - started) * 1000
-    driver = Driver(runtime, SeatClients(layout, slots))
     try:
-        if oracle is not None:
-            driver.clients.oracle = seat_oracle.open_oracle(oracle, slots)
+        driver = Driver(runtime, SeatClients(layout, slots,
+            oracle=seat_oracle.open_oracle(oracle, slots) if oracle is not None else None))
         initialize_clients(driver.clients, reply.publications, records)
     except BaseException:
         session.close_session(runtime.session)
@@ -1161,15 +1192,18 @@ def prepare_published(driver):
     started = perf_counter()
     setup = prepare_world(driver.runtime, caster_uuid)
     elapsed = (perf_counter() - started) * 1000
-    publish_setup(driver, cursor)
+    driver.setup_rows.append(publish_setup(driver, cursor))
     return caster_uuid, setup, elapsed
 
 
-def close_oracle(driver, game_epoch):
-    """The O2 manifest: the game's identities and each seat's final publication (its retained head)."""
+def finish_oracle(driver, game_epoch):
+    """The O2 manifest: the game's identities and each seat's final publication (its retained head). Its
+    `identities` is 'seeded' when gallery_transcript.py records the run with its seeded generators (it sets
+    GALLERY_IDENTITIES); only then do the O3 views compare across runs (`seat_oracle.compare_views`)."""
     runtime = driver.runtime
     seat_oracle.close_oracle(driver.clients.oracle, {'game_id': 'gallery-crowd', 'game_epoch': str(game_epoch),
-        'hash_seed': os.environ.get('PYTHONHASHSEED'), 'layout': driver.clients.layout, 'slots': driver.clients.slots,
+        'hash_seed': os.environ.get('PYTHONHASHSEED'), 'identities': os.environ.get('GALLERY_IDENTITIES', 'random'), 'layout': driver.clients.layout,
+        'slots': driver.clients.slots,
         'publications': {seat: publication.model_dump(mode='json') for seat, publication in runtime.publications.items()}},
         driver.clients.states)
 
@@ -1187,6 +1221,7 @@ def run(args):
         caster_uuid, report['setup'], report['setup_ms'] = prepare_published(driver)
         report['operations'] = case(driver.runtime, driver, args.mode, caster_uuid)
         receive_pending(driver)
+        report['setup_publications'] = driver.setup_rows
         report['status'] = 'passed'
     except BaseException as error:
         report['status'] = 'failed'
@@ -1196,7 +1231,7 @@ def run(args):
     finally:
         if driver is not None:
             if driver.clients.oracle is not None:
-                close_oracle(driver, next(iter(driver.runtime.publications.values())).cursor.game_epoch)
+                finish_oracle(driver, next(iter(driver.runtime.publications.values())).cursor.game_epoch)
             session.close_session(driver.runtime.session)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2, default=str))

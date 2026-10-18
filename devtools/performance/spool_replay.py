@@ -4,7 +4,8 @@ A fresh process, with a hash seed other than the live run's, serves the run's re
 server's own routes (`server.app` over `server.recording`, the host's seats at their final publications) and
 follows every seat with the SDK transport (`dnd_player.transport.follow`: initialization, event stream, ACK).
 The first event stream of each seat is cut half-way through its bytes, as a dropped connection, so the follower
-resumes after its last consumed operation. Each record is folded by the client reference fold. After every
+resumes after its last consumed operation (a seat with two operations or more that did not resume fails). The
+host serves a copy of the spool, so nothing the host does to its recording can touch the run's. Each record is folded by the client reference fold. After every
 record the client state (memory included) must equal the live run's (the manifest's digests), the final states
 must match, and the O3 views stored at each operation end must be reproduced.
 
@@ -21,6 +22,7 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import shutil
 import struct
 import sys
 import tempfile
@@ -42,7 +44,8 @@ from server.worker_protocol import Publication
 
 def retained_recording(directory: Path, seats: tuple[str, ...]) -> Recording:
     """A finished run's committed spool as its host holds it: every complete length-prefixed frame of each seat's
-    file (`server.recording.open_recording` names the files, `commit_records` appends the offsets)."""
+    file. The server has no reopening path, so this reads its format: `open_recording`'s file names and
+    `stage_record`'s frames (a 4-byte big-endian length, then the payload)."""
     audiences = {}
     for seat in seats:
         path = directory / (sha256(seat.encode()).hexdigest() + '.frames')
@@ -122,6 +125,9 @@ async def follow_seat(app, seat: str, token: str, digests: list[str], views: dic
         counts['streams_after'] = transport.resumed_after
     if counts['records'] != len(digests):
         mismatches.append({'seat': seat, 'kind': 'records', 'replayed': counts['records'], 'live': len(digests)})
+    # A seat with two operations or more must have resumed after a consumed operation, not from the start.
+    if len(digests) >= 3 and (len(transport.resumed_after) < 2 or transport.resumed_after[1] < 1):
+        mismatches.append({'seat': seat, 'kind': 'no_resume', 'streams_after': transport.resumed_after})
     return (state[0] if state else None), mismatches, counts
 
 
@@ -136,8 +142,9 @@ async def replay(directory: Path) -> dict[str, Any]:
         app = create_app(ServerConfig(game_id=manifest['game_id'], encounter_id=None, spool_directory=Path(scratch),
             credentials=tuple(SeatCredential(seat_id=seat, token=tokens[seat]) for seat in seats)))
         host = app.state.player_host
-        close_recording(host.recording)  # the empty spool a new host opens; the run's spool replaces it
-        host.recording = retained_recording(directory / 'spool', seats)
+        close_recording(host.recording)  # the empty spool a new host opens; a copy of the run's replaces it
+        shutil.copytree(directory / 'spool', Path(scratch) / 'retained')
+        host.recording = retained_recording(Path(scratch) / 'retained', seats)
         host.epoch = UUID(manifest['game_epoch'])
         for seat in seats:
             publication = Publication.model_validate(manifest['publications'][seat])

@@ -12,7 +12,8 @@ entities, items and conditions by identity, so a change in how many identities v
         --case fireball --mode ordinary --name <stem> [--seats faction|character|batch:N]
 
 Every argument after the output path goes to the tree's own `gallery_crowd.py`, including its seat layout
-(`--seats`, default `faction`): record both trees of a comparison with the same layout. A tree whose harness
+(`--seats`, default `faction`): record both trees of a comparison with the same layout. With `--oracle DIR` the
+recording is also the oracle run whose O3 views later runs compare against: its identities repeat across runs. A tree whose harness
 predates the layouts (before E0 of the event-native publication plan) records `faction` and accepts no `--seats`.
 Its harness also published none of its own world edits, so its first operation's published updates differ from a
 later harness's even where the engine is identical; compare such trees on events and logs only.
@@ -40,6 +41,7 @@ lose their `values` dict: a block's values are its value fields (still dumped, a
 import argparse
 import importlib.util
 import json
+import os
 import random
 import re
 import sys
@@ -50,13 +52,22 @@ from pathlib import Path
 # a dedicated one (`dnd.core.dice` draws faces through `random.randint`), other draws from the seeded module RNG.
 _IDENTITIES = random.Random(20261017)
 _VALUE_IDENTITIES = random.Random(20261018)
+_ORACLE_IDENTITIES = random.Random(20261019)
+_ORACLE = 'devtools/performance/seat_oracle.py'
 
 
 def _identity() -> uuid.UUID:
     """A seeded identity; those the value layer mints (in dnd/core/values.py, directly or through a pydantic
     default factory) come from their own generator, so a change in how many identities values mint does not
-    shift entity, item or event identities, which the engine orders by."""
+    shift entity, item or event identities, which the engine orders by. Identities minted while the seat oracle
+    reads the live engine (`--oracle`: an unpublished birth fact per perceived body) come from a third one, so
+    an oracle run keeps the engine identities of a run without it."""
     frame = sys._getframe(1)
+    caller = frame
+    while caller is not None:
+        if caller.f_code.co_filename.endswith(_ORACLE):
+            return uuid.UUID(int=_ORACLE_IDENTITIES.getrandbits(128), version=4)
+        caller = caller.f_back
     while frame is not None and '/pydantic' in frame.f_code.co_filename:
         frame = frame.f_back
     minted_by_values = frame is not None and frame.f_code.co_filename.endswith('dnd/core/values.py')
@@ -138,6 +149,7 @@ def record(tree: Path, out: Path) -> None:
             })
 
     gallery.Measurement.run = measured
+    os.environ['GALLERY_IDENTITIES'] = 'seeded'  # an oracle run's manifest: its identities repeat across recordings
     try:
         gallery.entry()
     finally:

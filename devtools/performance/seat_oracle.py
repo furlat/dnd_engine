@@ -8,11 +8,13 @@ O1, perceived equality. At an operation's end each seat's perceived view is buil
   (`project_world_object`) through the projector's object rule (`_object_observed`, `_observed_object`, with no
   seat memory); the live connectors (`project_world_connector`); each perceived body read from its live aggregate
   (`Entity._entity_created_event`, `actor_from_birth`) and disclosed by `_public_actor`, `_public_condition`,
-  `_item_records` and `_public_items`, which also withhold durations from non-owners;
+  `_item_records` and `_public_items`, which also withhold durations from non-owners (an effect's duration is
+  withheld by the same rule applied to its live owner, the effect's condition's source);
 - the client's, from the reference fold of the records the seat received (`dnd.player.reduction`), as held.
 
 Both sides are what the seat perceives now: the composed visible cells with their light and hazard, each
-member's visible cells (Q1 attribution), the tiles of visible cells, the objects touching a visible cell or held
+member's visible cells (today's wire carries them; under Q1 (a) they leave it in E3, so O3 differs there by
+design), the tiles of visible cells, the objects touching a visible cell or held
 as a contact (each on its faces seen now, with the attachments in view and the protections of providers perceived
 now: `_perceived_object`, the rest being seat memory), the connectors with both endpoints visible, the visible
 cells of effects, the light sources with a visible footprint cell, the bodies of contacts and of the seat's own
@@ -25,7 +27,8 @@ Fields left out of both sides, none of them a current perceived value:
 - a non-visual contact's `last_visual_position`: the last sighting.
 
 O3: the client side of O1, written per operation and seat, is the perceived-state baseline (`views.jsonl.gz`);
-`python seat_oracle.py compare <base> <new>` compares two runs' views. O2's live side: `state_digest` of each seat's
+`python seat_oracle.py compare <base> <new>` compares two runs' views, both recorded through gallery_transcript.py
+so that their identities repeat (the views are keyed by them). O2's live side: `state_digest` of each seat's
 whole client state (memory included) after each record, and the spool of its records written through
 `server.recording`; `spool_replay.py` replays it in a fresh process.
 """
@@ -49,11 +52,11 @@ from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.cells import mask_positions, values_items
-from dnd.core.events import WorldConnectorState, WorldObjectState, WorldTileState
+from dnd.core.events import WorldConnectorState, WorldTileState
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.player.actor_facts import ActorState, PresentationTarget
-from dnd.player.audience import AudiencePerception, PlayerAudience, audience_view, light_sources
+from dnd.player.audience import AudiencePerception, PlayerAudience, audience_view
 from dnd.player.facts import PlayerActor, PlayerItem, PlayerObject, PlayerState
 from dnd.player.projection import (_item_records, _object_observed, _observed_object, _public_actor,
     _public_condition, _public_items)
@@ -64,12 +67,13 @@ from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSp
 from dnd.types.world import CardinalDirection
 from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementKind
 from dnd.world_authoring import project_world_connector, project_world_object
-from dnd.world_facts import CARDINAL_DELTAS, WorldFacts
+from dnd.world_facts import CARDINAL_DELTAS, WorldFacts, _put_object, world_objects_at
+from server.config import ServerConfig
 from server.recording import Recording, close_recording, commit_records, open_recording, stage_record
 
 Position = tuple[int, int]
 View = dict[str, dict[str, Any]]
-SPOOL_QUOTA = 1024 ** 3  # the server's default per-seat spool limit (server/config.py)
+SPOOL_QUOTA: int = ServerConfig.model_fields['spool_limit_bytes'].default  # the server's per-seat spool limit
 EXAMPLES = 3  # differences kept per class, seat and operation in the report
 
 STATE = TypeAdapter(PlayerState)
@@ -110,8 +114,9 @@ def state_data(state: PlayerState) -> Any:
 
 
 def support_cells(placement: WorldObjectPlacement) -> set[Position]:
-    """The cells a placed object touches: its supports and, for a boundary, the opposite incident cell
-    (the recorded world's object index, `dnd.world_facts._index_object`)."""
+    """The cells a client-held object touches: its supports and, for a boundary, the opposite incident cell.
+    The reference side uses the recorded world's own index (`world_objects_at`); this is its rule
+    (`dnd.world_facts._index_object`) for the client's objects, which are not recorded world values."""
     cells = set(placement.positions)
     if placement.kind is WorldPlacementKind.BOUNDARY and placement.boundary_direction is not None:
         dx, dy = CARDINAL_DELTAS[placement.boundary_direction]
@@ -222,9 +227,9 @@ def _seen_faces(placement: WorldObjectPlacement, visible: set[Position]) -> set[
 
 def _perceived_object(obj: PlayerObject, visible: set[Position], in_view: Collection[UUID],
                       effects: Mapping[UUID, PerceivedSpatialEffect]) -> PlayerObject:
-    """An object as perceived now, on either side: residues on the faces seen now, the attachments in view, and
-    the protections of providers perceived now, on cells seen now. The projector's `_observed_object` adds what
-    a seat remembers of the rest; O1 compares current perception only."""
+    """A client-held object as perceived now: residues on the faces seen now, the attachments in view, and the
+    protections of providers perceived now, on cells seen now. The reference is the projector's own
+    `_observed_object` with no seat memory, so a slip in this restriction shows instead of hiding."""
     faces = _seen_faces(obj.placement, visible)
     residues = tuple(row.model_copy(update={'faces': tuple(face for face in row.faces if face in faces)})
                      for row in obj.item.surface_residues if any(face in faces for face in row.faces))
@@ -298,16 +303,17 @@ class LiveWorld:
     session: Session
     actors: dict[UUID, ActorState | None] = field(default_factory=dict)
     tiles: dict[Position, WorldTileState | None] = field(default_factory=dict)
-    placements: tuple[WorldObjectPlacement, ...] = ()
-    objects: dict[UUID, WorldObjectState] = field(default_factory=dict)
+    # Every placed object's live value, indexed by the recorded world's own writer.
+    objects: WorldFacts = field(default_factory=WorldFacts)
 
 
 def live_world(session: Session) -> LiveWorld:
-    world = LiveWorld(session, placements=get_map().iter_object_placements())
-    for placement in world.placements:
+    world = LiveWorld(session)
+    for placement in get_map().iter_object_placements():
         item = BaseBlock.get(placement.object_uuid)
-        if isinstance(item, BaseItem):
-            world.objects[placement.object_uuid] = project_world_object(item, placement)
+        if not isinstance(item, BaseItem):
+            raise TypeError(f'Placed object {placement.object_uuid} is not a BaseItem')
+        _put_object(world.objects, placement.object_uuid, project_world_object(item, placement))
     return world
 
 
@@ -345,15 +351,15 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
     senses = audience_view(AudiencePerception(members=members), client.observer_uuid)
     if senses is None:
         return {category: {} for category in CATEGORIES}
-    # An effect's duration is disclosed to its owner's controllers only (`_public_occurrences`).
+    # An effect's duration is disclosed to its owner's controllers only (the rule of `_public_occurrences`,
+    # applied to the live owner: the effect's condition's source).
     senses = replace(senses, spatial_effects={identity: effect if audience.controls(_effect_owner(identity))
         else effect.model_copy(update={'duration': None}) for identity, effect in senses.spatial_effects.items()})
     visible = _visible(senses)
-    lights, _ = light_sources(AudiencePerception(members=members))
     target = PresentationTarget(generation=client.generation, observer_uuid=client.observer_uuid,
-        recorded_world=WorldFacts(objects={identity: value for identity, value in world.objects.items()
-            if support_cells(value.placement) & visible or identity in senses.objects}), senses=senses)
-    observed = {identity for identity in target.objects if _object_observed(target, identity)}
+        recorded_world=world.objects, senses=senses)
+    candidates = world_objects_at(world.objects, visible) | (senses.objects.keys() & world.objects.objects.keys())
+    observed = {identity for identity in candidates if _object_observed(target, identity)}
     unremembered = PlayerState(generation=client.generation, observer_uuid=client.observer_uuid, world=client.world)
     actors = {}
     for identity, visual in _perceived_bodies(senses.entities, audience):
@@ -380,11 +386,11 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
         'entities': _contacts(senses.entities, members, objects=False),
         'object_contacts': _contacts(senses.objects, members, objects=True),
         'effects': _effects(senses.spatial_effects, members, visible),
-        'lights': _lights(lights, members, visible),
+        'lights': _lights(senses.light_sources, members, visible),
         'tiles': {key(position): TILE.dump_python(tile, mode='json') if (tile := _live_tile(world, position)) else None
                   for position in sorted(visible)},
-        'objects': {str(identity): OBJECT.dump_python(_perceived_object(_observed_object(target, unremembered, identity,
-            observed), visible, observed, senses.spatial_effects), mode='json') for identity in sorted(observed, key=str)},
+        'objects': {str(identity): OBJECT.dump_python(_observed_object(target, unremembered, identity, observed),
+                                                      mode='json') for identity in sorted(observed, key=str)},
         'connectors': {str(row.connector_uuid): CONNECTOR.dump_python(row, mode='json')
                        for row in map(project_world_connector, get_map().get_all_connectors())
                        if all(tuple(point) in visible for point in row.endpoints)},
@@ -508,7 +514,11 @@ def _view_rows(directory: Path) -> dict[tuple[int, str, str], View]:
 
 def compare_views(base: Path, new: Path) -> dict[str, Any]:
     """O3: two oracle runs' perceived client states, operation by operation and seat by seat (the base's view
-    in the reference role of `differences`)."""
+    in the reference role of `differences`). Views are keyed by identities, so both runs must have been recorded
+    with seeded identities (`gallery_transcript.py record ... --oracle DIR`)."""
+    for directory in (base, new):
+        if json.loads((directory / 'manifest.json').read_text()).get('identities') != 'seeded':
+            raise ValueError(f'{directory}: not recorded with seeded identities; its views are not comparable')
     before, after = _view_rows(base), _view_rows(new)
     rows = {}
     for name in sorted(before.keys() | after.keys()):
