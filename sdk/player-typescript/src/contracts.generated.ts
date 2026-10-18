@@ -2380,11 +2380,31 @@ export type ConstructionGeometry3 =
   | null;
 export type KnownToCreator3 = boolean;
 export type ObjectLooks = ObjectLook[];
+export type ItemUuids = string[];
+export type Values1 = number[];
+export type Values2 = CardinalDirection[][];
+export type Name14 = string[];
+export type Values3 = string[];
+export type MapChar3 = string[];
+export type Values4 = boolean[];
+export type Values5 = ItemEffectPresentationState[][];
+export type Values6 = ObjectResidueState[][];
+export type Values7 = ItemConcentrationSlot[][];
+export type Values8 = ItemRemnantState[];
+export type Values9 = ItemIntegrity1[];
+export type Values10 = SpellSuppression[][];
+export type Position14 = [number, number][];
+export type TopHeightSteps1 = number[];
+export type Values11 = CardinalDirection[];
+export type Values12 = string[];
+export type Values13 = WorldObjectSupport[][];
+export type Values14 = [number, number, number][][];
+export type ObjectsRemoved = string[];
+export type ContainerUuid = string;
 export type ItemUuid7 = string;
-export type Members = number | null;
-export type Name14 = string;
+export type Name15 = string;
 export type VisualItemName3 = string | null;
-export type MapChar3 = string;
+export type MapChar4 = string;
 export type BoundaryStructure1 = string | null;
 export type IsOpen3 = boolean | null;
 export type IsLit4 = boolean | null;
@@ -2405,22 +2425,6 @@ export type ConcentrationSlots4 = ItemConcentrationSlot[];
 export type ItemIntegrity3 = "intact" | "destroyed";
 export type DestructionOutcome4 = string | null;
 export type ConstructionSuppressions3 = SpellSuppression[];
-/**
- * @minItems 2
- * @maxItems 2
- */
-export type Position14 = [number, number];
-export type TopHeightSteps1 = number;
-export type TileUuid4 = string | null;
-export type CoveredSupports1 = WorldObjectSupport[];
-export type OccupiesBands1 = boolean;
-export type BaseHeightSteps6 = number;
-export type RemovedBands1 = [number, number, number][];
-export type ObservedFaces = CardinalDirection[];
-export type Objects = ObjectRow[];
-export type ObjectsRemoved = string[];
-export type ContainerUuid = string;
-export type ItemUuid8 = string;
 export type Items2 = ContainedItem[];
 export type Contents = ContainerContents[];
 export type ContainerUuid1 = string;
@@ -2483,7 +2487,7 @@ export type FlexibleAbilityBonuses = [
   number
 ][];
 export type ChoiceId = string;
-export type Values1 = string[];
+export type Values15 = string[];
 export type Choices = OriginChoiceSelection[];
 export type StepId = string;
 export type CharacterLevel = number;
@@ -2498,7 +2502,7 @@ export type CharacterSubclass =
   | "subclass.paladin.oath_of_devotion"
   | "subclass.wizard.school_of_evocation";
 export type ChoiceId1 = string;
-export type Values2 = string[];
+export type Values16 = string[];
 export type Choices1 = ClassChoiceSelection[];
 export type ClassLevels = AppliedClassLevel[];
 export type Abilities = ["strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma", number][];
@@ -2515,7 +2519,7 @@ export type CompatibleItemSlots = [string, string[]][];
 /**
  * Handler display name.
  */
-export type Name15 = string;
+export type Name16 = string;
 /**
  * Primitive handler-rule identity.
  */
@@ -2599,7 +2603,7 @@ export type Revision1 = number;
  * @maxItems 2
  */
 export type Position16 = [number, number];
-export type BaseHeightSteps7 = number;
+export type BaseHeightSteps6 = number;
 export type VeryBrightRadiusFeet4 = number;
 export type BrightRadiusFeet4 = number;
 export type DimRadiusFeet4 = number;
@@ -2629,7 +2633,7 @@ export type CorrelationId1 = string;
 export type ForceAttack1 = boolean;
 export type Uuid2 = string;
 export type Kind65 = "creature" | "object";
-export type Name16 = string | null;
+export type Name17 = string | null;
 export type Subjects = ChoiceSubject[];
 export type Positions3 = [number, number][];
 export type Index2 = number;
@@ -2780,7 +2784,7 @@ export type RestrictedActionBudget = string | null;
 /**
  * Human-readable cost label.
  */
-export type Name17 = string;
+export type Name18 = string;
 /**
  * Action economy bucket consumed by this cost.
  */
@@ -3170,7 +3174,7 @@ export type ItemChargeCost = number;
 /**
  * Human-readable cost label.
  */
-export type Name18 = string;
+export type Name19 = string;
 /**
  * Action economy bucket consumed by this cost.
  */
@@ -3364,7 +3368,7 @@ export type Kind73 = "execute_selection";
 export type DiscoveryGeneration3 = number;
 export type Kind74 = "end_turn";
 export type Kind75 = "equip";
-export type ItemUuid9 = string;
+export type ItemUuid8 = string;
 export type Slot1 = WeaponSlot | BodyPart | RingSlot;
 /**
  * Body positions that may hold armor or accessories.
@@ -5529,7 +5533,7 @@ export interface WorldUpdate {
   residues?: Residues1;
   residues_removed?: ResiduesRemoved;
   object_looks?: ObjectLooks;
-  objects?: Objects;
+  objects?: ObjectColumns | null;
   objects_removed?: ObjectsRemoved;
   contents?: Contents;
   contents_changed?: ContentsChanged;
@@ -5688,19 +5692,310 @@ export interface ObjectLook {
   known_to_creator?: KnownToCreator3;
 }
 /**
- * A world object the seat observes, at an occurrence.
- *
- * An entering row carries its state, placement and the faces its residues are authoritative for (those whose
- * viewing cell some member sees); a perceived object's change carries its state, and its placement when the
- * occurrence wrote one. `members`: bit i is the audience's `observers[i]`, exact as of this row; a seat with one
- * observer leaves it out.
+ * An update's `ObjectRow`s as columns, one entry per row in row order (field names once per update): the
+ * rows' uuids, members, observed faces, every `ObjectState` field and their placements. A sparse column holds
+ * the rows whose value is not the field's default.
  */
-export interface ObjectRow {
+export interface ObjectColumns {
+  item_uuids: ItemUuids;
+  members?: Column | null;
+  observed_faces?: Column1 | null;
+  name: Name14;
+  visual_item_name?: Column2 | null;
+  map_char: MapChar3;
+  boundary_structure?: Column2 | null;
+  is_open?: Column3 | null;
+  is_lit?: Column3 | null;
+  very_bright_radius_feet?: Column | null;
+  bright_radius_feet?: Column | null;
+  dim_radius_feet?: Column | null;
+  stack_count?: Column | null;
+  is_pickable?: Column3 | null;
+  item_effects?: Column4 | null;
+  blocks_propagation?: Column3 | null;
+  is_engaged?: Column3 | null;
+  surface_residues?: Column5 | null;
+  current_hit_points?: Column | null;
+  concentration_slots?: Column6 | null;
+  remnant_state?: Column7 | null;
+  integrity?: Column8 | null;
+  destruction_outcome?: Column2 | null;
+  construction_suppressions?: Column9 | null;
+  placements?: PlacementColumns | null;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column {
+  rows?: RowBits5;
+  values: Values1;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits5 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column1 {
+  rows?: RowBits6;
+  values: Values2;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits6 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column2 {
+  rows?: RowBits7;
+  values: Values3;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits7 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column3 {
+  rows?: RowBits8;
+  values: Values4;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits8 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column4 {
+  rows?: RowBits9;
+  values: Values5;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits9 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column5 {
+  rows?: RowBits10;
+  values: Values6;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits10 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column6 {
+  rows?: RowBits11;
+  values: Values7;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits11 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column7 {
+  rows?: RowBits12;
+  values: Values8;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits12 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column8 {
+  rows?: RowBits13;
+  values: Values9;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits13 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column9 {
+  rows?: RowBits14;
+  values: Values10;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits14 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * The `ObjectPlacement`s of an update's object rows, as columns over the rows `rows` selects (left out:
+ * every row).
+ */
+export interface PlacementColumns {
+  rows?: RowBits15;
+  position: Position14;
+  top_height_steps: TopHeightSteps1;
+  boundary_direction?: Column10 | null;
+  tile_uuid?: Column11 | null;
+  covered_supports?: Column12 | null;
+  occupies_bands?: Column3 | null;
+  base_height_steps?: Column | null;
+  orientation?: Column10 | null;
+  removed_bands?: Column13 | null;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits15 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column10 {
+  rows?: RowBits16;
+  values: Values11;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits16 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column11 {
+  rows?: RowBits17;
+  values: Values12;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits17 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column12 {
+  rows?: RowBits18;
+  values: Values13;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits18 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column13 {
+  rows?: RowBits19;
+  values: Values14;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits19 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * A container's whole contents, on gaining sight of them (looks once, through `object_looks`).
+ */
+export interface ContainerContents {
+  container_uuid: ContainerUuid;
+  items?: Items2;
+}
+export interface ContainedItem {
   item_uuid: ItemUuid7;
-  members?: Members;
   state: ObjectState;
-  placement?: ObjectPlacement | null;
-  observed_faces?: ObservedFaces;
 }
 /**
  * A floor item's changeable part, its value at the occurrence; a field holding its default is left out.
@@ -5708,9 +6003,9 @@ export interface ObjectRow {
  * id.
  */
 export interface ObjectState {
-  name: Name14;
+  name: Name15;
   visual_item_name?: VisualItemName3;
-  map_char: MapChar3;
+  map_char: MapChar4;
   boundary_structure?: BoundaryStructure1;
   is_open?: IsOpen3;
   is_lit?: IsLit4;
@@ -5729,34 +6024,6 @@ export interface ObjectState {
   integrity?: ItemIntegrity3;
   destruction_outcome?: DestructionOutcome4;
   construction_suppressions?: ConstructionSuppressions3;
-}
-/**
- * An object's placement on the wire: every field its `WorldObjectPlacement` holds that is neither derivable
- * nor its default. The object is the row's `item_uuid`; its kind is a boundary exactly when it has a boundary
- * direction; `tile_uuid`, left out, is the client's static tile row at `position`; `covered_supports`, left
- * out, is that anchor support alone.
- */
-export interface ObjectPlacement {
-  position: Position14;
-  top_height_steps: TopHeightSteps1;
-  boundary_direction?: CardinalDirection | null;
-  tile_uuid?: TileUuid4;
-  covered_supports?: CoveredSupports1;
-  occupies_bands?: OccupiesBands1;
-  base_height_steps?: BaseHeightSteps6;
-  orientation?: CardinalDirection | null;
-  removed_bands?: RemovedBands1;
-}
-/**
- * A container's whole contents, on gaining sight of them (looks once, through `object_looks`).
- */
-export interface ContainerContents {
-  container_uuid: ContainerUuid;
-  items?: Items2;
-}
-export interface ContainedItem {
-  item_uuid: ItemUuid8;
-  state: ObjectState;
 }
 /**
  * A seen container's contents changing while the seat sees them.
@@ -5841,7 +6108,7 @@ export interface AppliedOriginState {
  */
 export interface OriginChoiceSelection {
   choice_id: ChoiceId;
-  values: Values1;
+  values: Values15;
 }
 /**
  * One ordered class-level step installed on an Entity.
@@ -5859,7 +6126,7 @@ export interface AppliedClassLevel {
  */
 export interface ClassChoiceSelection {
   choice_id: ChoiceId1;
-  values: Values2;
+  values: Values16;
 }
 /**
  * One spendable channel or resource row of a sheet; its label is fixed by its key.
@@ -5874,7 +6141,7 @@ export interface PlayerResource {
  * Player-toggleable event handler exposed with available actions.
  */
 export interface AvailableHandlerInfo {
-  name: Name15;
+  name: Name16;
   behavior_id: BehaviorId8;
   provided_by_id: ProvidedById1;
   origin_root_id?: OriginRootId1;
@@ -5920,7 +6187,7 @@ export interface SensoryRows {
   uuids?: Uuids;
   contact_uuid_index?: ContactUuidIndex;
   contact_positions?: ContactPositions;
-  contact_visual?: RowBits5;
+  contact_visual?: RowBits20;
   contact_special_senses?: ContactSpecialSenses;
   sighting_uuid_index?: SightingUuidIndex;
   sightings?: Sightings;
@@ -5936,7 +6203,7 @@ export interface SensoryRows {
  * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
  * nonzero byte, and the empty subset is start 0, no bits.
  */
-export interface RowBits5 {
+export interface RowBits20 {
   start?: Start1;
   bits?: Bits;
 }
@@ -6004,7 +6271,7 @@ export interface LightRow {
   source: Source1;
   revision: Revision1;
   position: Position16;
-  base_height_steps?: BaseHeightSteps7;
+  base_height_steps?: BaseHeightSteps6;
   very_bright_radius_feet: VeryBrightRadiusFeet4;
   bright_radius_feet: BrightRadiusFeet4;
   dim_radius_feet: DimRadiusFeet4;
@@ -6087,7 +6354,7 @@ export interface PlayerChoices {
 export interface ChoiceSubject {
   uuid: Uuid2;
   kind: Kind65;
-  name?: Name16;
+  name?: Name17;
 }
 export interface SubjectBinding {
   index: Index2;
@@ -6259,7 +6526,7 @@ export interface PositionRegion {
  * Serializable action cost without executable callbacks.
  */
 export interface BaseCost {
-  name?: Name17;
+  name?: Name18;
   cost_type: CostType1;
   cost: Cost;
   resource_name?: ResourceName;
@@ -6402,7 +6669,7 @@ export interface TopologyEffectProfile {
  * A published cost paid only when the declared trigger occurs.
  */
 export interface ConditionalCost {
-  name?: Name18;
+  name?: Name19;
   cost_type: CostType2;
   cost: Cost1;
   resource_name?: ResourceName1;
@@ -6555,7 +6822,7 @@ export interface EquipIntent {
   item: EquipItem;
 }
 export interface EquipItem {
-  item_uuid: ItemUuid9;
+  item_uuid: ItemUuid8;
   slot: Slot1;
 }
 export interface UnequipIntent {
@@ -6703,7 +6970,7 @@ export interface SensoryRows1 {
   uuids?: Uuids;
   contact_uuid_index?: ContactUuidIndex;
   contact_positions?: ContactPositions;
-  contact_visual?: RowBits5;
+  contact_visual?: RowBits20;
   contact_special_senses?: ContactSpecialSenses;
   sighting_uuid_index?: SightingUuidIndex;
   sightings?: Sightings;

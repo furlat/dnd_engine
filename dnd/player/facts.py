@@ -7,7 +7,7 @@ engine constructors, executable state, audience grant maps, or diagnostic rows.
 from dnd.core.content.descriptors import ContentDescriptor
 
 from dataclasses import dataclass, field
-from typing import Annotated, Literal, TypedDict, TypeVar
+from typing import Annotated, Generic, Literal, TypedDict, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -1286,6 +1286,72 @@ class ObjectRow:
     observed_faces: Annotated[tuple[CardinalDirection, ...], Field(exclude_if=_no_rows)] = ()
 
 
+Value = TypeVar("Value")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Column(Generic[Value]):
+    """One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+    every row; a column with no value is left out of its group, and each row it skips holds the field's default."""
+
+    rows: RowBitsField = NO_ROWS
+    values: tuple[Value, ...]
+
+
+# A column of non-default values, left out when no row holds one.
+Sparse = Annotated[Column[Value] | None, Field(exclude_if=_unset)]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlacementColumns:
+    """The `ObjectPlacement`s of an update's object rows, as columns over the rows `rows` selects (left out:
+    every row)."""
+
+    rows: RowBitsField = NO_ROWS
+    position: tuple[tuple[int, int], ...]
+    top_height_steps: tuple[int, ...]
+    boundary_direction: Sparse[CardinalDirection] = None
+    tile_uuid: Sparse[UUID] = None
+    covered_supports: Sparse[tuple[WorldObjectSupport, ...]] = None
+    occupies_bands: Sparse[bool] = None
+    base_height_steps: Sparse[int] = None
+    orientation: Sparse[CardinalDirection] = None
+    removed_bands: Sparse[tuple[tuple[int, int, int], ...]] = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObjectColumns:
+    """An update's `ObjectRow`s as columns, one entry per row in row order (field names once per update): the
+    rows' uuids, members, observed faces, every `ObjectState` field and their placements. A sparse column holds
+    the rows whose value is not the field's default."""
+
+    item_uuids: tuple[UUID, ...]
+    members: Sparse[int] = None
+    observed_faces: Sparse[tuple[CardinalDirection, ...]] = None
+    name: tuple[str, ...]
+    visual_item_name: Sparse[str] = None
+    map_char: tuple[str, ...]
+    boundary_structure: Sparse[str] = None
+    is_open: Sparse[bool] = None
+    is_lit: Sparse[bool] = None
+    very_bright_radius_feet: Sparse[int] = None
+    bright_radius_feet: Sparse[int] = None
+    dim_radius_feet: Sparse[int] = None
+    stack_count: Sparse[int] = None
+    is_pickable: Sparse[bool] = None
+    item_effects: Sparse[tuple[ItemEffectPresentationState, ...]] = None
+    blocks_propagation: Sparse[bool] = None
+    is_engaged: Sparse[bool] = None
+    surface_residues: Sparse[tuple[ObjectResidueState, ...]] = None
+    current_hit_points: Sparse[int] = None
+    concentration_slots: Sparse[tuple[ItemConcentrationSlot, ...]] = None
+    remnant_state: Sparse[ItemRemnantState] = None
+    integrity: Sparse[ItemIntegrity] = None
+    destruction_outcome: Sparse[str] = None
+    construction_suppressions: Sparse[tuple[SpellSuppression, ...]] = None
+    placements: Annotated[PlacementColumns | None, Field(exclude_if=_unset)] = None
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ContainedItem:
     item_uuid: UUID
@@ -1332,7 +1398,7 @@ class WorldUpdate:
     residues: Rows[ResidueRow] = ()
     residues_removed: Rows[ResidueKey] = ()
     object_looks: Rows[ObjectLook] = ()
-    objects: Rows[ObjectRow] = ()
+    objects: Annotated[ObjectColumns | None, Field(exclude_if=_unset)] = None
     objects_removed: Rows[UUID] = ()
     contents: Rows[ContainerContents] = ()
     contents_changed: Rows[ContentsChange] = ()

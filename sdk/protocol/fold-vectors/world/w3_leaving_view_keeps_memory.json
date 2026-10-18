@@ -88,24 +88,38 @@
       "contact_passage": "structural"
      }
     ],
-    "objects": [
-     {
-      "item_uuid": "00000000-0000-4000-8000-000000002004",
-      "state": {
-       "name": "Chest",
-       "visual_item_name": "chest",
-       "map_char": "C",
-       "is_open": true
-      },
-      "placement": {
-       "position": [
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002004"
+     ],
+     "name": [
+      "Chest"
+     ],
+     "visual_item_name": {
+      "values": [
+       "chest"
+      ]
+     },
+     "map_char": [
+      "C"
+     ],
+     "is_open": {
+      "values": [
+       true
+      ]
+     },
+     "placements": {
+      "position": [
+       [
         3,
         0
-       ],
-       "top_height_steps": 2
-      }
+       ]
+      ],
+      "top_height_steps": [
+       2
+      ]
      }
-    ],
+    },
     "contents": [
      {
       "container_uuid": "00000000-0000-4000-8000-000000002004",

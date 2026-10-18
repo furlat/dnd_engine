@@ -23,7 +23,7 @@ from dnd.player.facts import (
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
     VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact, PlayerObject, StaticStore,
 )
-from dnd.player.world_columns import join_floor_item, unpack_placement, unpack_tile_columns
+from dnd.player.world_columns import join_floor_item, unpack_object_rows, unpack_placement, unpack_tile_columns
 from dnd.player.world_reduction import fold_static_rows, fold_world_update
 
 
@@ -161,7 +161,7 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
             for position, tile in unpack_tile_columns(update.tile_columns, result.static.tiles,
                     result.static.tile_looks).items():
                 result.tiles.setdefault(position, tile)
-        for row in update.objects:
+        for row in unpack_object_rows(update.objects):
             if row.placement is not None and row.item_uuid not in result.objects:
                 result.objects[row.item_uuid] = PlayerObject(
                     placement=unpack_placement(row.item_uuid, row.placement, result.static.tiles),

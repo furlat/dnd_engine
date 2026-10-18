@@ -5,14 +5,15 @@ from uuid import uuid4
 
 from dnd.core.item_types import DoorMechanism, DoorSwing, ItemIntegrity, ItemRemnantState
 from dnd.player.facts import FloorItem
-from dnd.player.world_columns import join_floor_item, split_floor_item, structure_id
-from dnd.player.facts import ObjectLook, ObjectState
+from dnd.player.world_columns import (join_floor_item, pack_object_rows, split_floor_item, structure_id,
+    unpack_object_rows)
+from dnd.player.facts import ObjectLook, ObjectPlacement, ObjectRow, ObjectState
 from dnd.types.physical_access import ContactPassage
 from dnd.types.residues import ObjectResidueState
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.materials import Material
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
-from dnd.types.world_placement import BoundaryStructure, BoundaryStructureKind
+from dnd.types.world_placement import BoundaryStructure, BoundaryStructureKind, WorldObjectSupport
 
 
 def check(item: FloorItem) -> None:
@@ -58,3 +59,30 @@ def test_look_and_state_cover_every_floor_item_field_once():
     state = {row.name for row in fields(ObjectState)}
     assert not look & state
     assert look | state == {row.name for row in fields(FloorItem)}
+
+
+def test_object_rows_round_trip_through_their_columns():
+    """An update's object rows travel as columns: unpacking the packed rows gives them back, for rows at their
+    defaults, rows setting every field, and a mix with and without placements."""
+    door = BoundaryStructure(structure=BoundaryStructureKind.DOOR, material=Material.WOOD,
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,))
+    plain = ObjectState(name="Box", map_char="b")
+    full = ObjectState(name="Door", visual_item_name="oak door", map_char="+", boundary_structure=structure_id(door),
+        is_open=False, is_lit=True, very_bright_radius_feet=5, bright_radius_feet=10, dim_radius_feet=20,
+        stack_count=3, is_pickable=False, blocks_propagation=True, is_engaged=False,
+        surface_residues=(ObjectResidueState(condition_uuid=uuid4(), residue_id="residue.blood", description="Blood",
+            faces=(CardinalDirection.NORTH,)),),
+        current_hit_points=0, remnant_state=ItemRemnantState(door_open=True), integrity=ItemIntegrity.DESTROYED,
+        destruction_outcome="splintered",
+        construction_suppressions=(SpellSuppression(provider_uuid=uuid4(), positions=((1, 2),)),))
+    support = WorldObjectSupport(position=(3, 4), tile_uuid=uuid4())
+    placed = ObjectPlacement(position=(1, 2), top_height_steps=3, boundary_direction=CardinalDirection.EAST,
+        tile_uuid=uuid4(), covered_supports=(support,), occupies_bands=False, base_height_steps=1,
+        orientation=CardinalDirection.SOUTH, removed_bands=((1, 2, 1),))
+    rows = (ObjectRow(item_uuid=uuid4(), state=plain),
+            ObjectRow(item_uuid=uuid4(), members=3, state=full, placement=placed,
+                observed_faces=(CardinalDirection.WEST,)),
+            ObjectRow(item_uuid=uuid4(), state=plain, placement=ObjectPlacement(position=(0, 0), top_height_steps=2)))
+    for group in (rows, rows[:1], rows[1:2], (rows[2], rows[2])):
+        assert unpack_object_rows(pack_object_rows(group)) == group
+    assert pack_object_rows(()) is None and unpack_object_rows(None) == ()

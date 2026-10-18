@@ -20,7 +20,7 @@ from uuid import UUID
 
 from pydantic import TypeAdapter
 
-from devtools.fold_vectors_world import A, BOX, entering, item, look_and_row, placement, tile
+from devtools.fold_vectors_world import A, BOX, entering, item, look_and_row, placement, rows, tile
 from dnd.player.facts import PlayerLineage, PlayerNode, VersionRows, WorldUpdate
 from dnd.types.event_facts import EventPhase
 
@@ -47,7 +47,7 @@ def vectors() -> dict[str, dict]:
                 node(3, 3, EventPhase.COMPLETION),
                 node(4, 1, EventPhase.COMPLETION, children=(2,))),
         version_rows=VersionRows(occurrences=(1, 2, 3, 4), lineages=(1, 2, 3, 1)), start_cursor=1, end_cursor=5,
-        world_updates=(WorldUpdate(occurrence=2, object_looks=(box_look,), objects=(box_row,)),
+        world_updates=(WorldUpdate(occurrence=2, object_looks=(box_look,), objects=rows(box_row,)),
                        WorldUpdate(occurrence=3, objects_removed=(BOX,))))
     return {
         "g1_a_nested_root_folds_inside_its_group_in_native_order": {

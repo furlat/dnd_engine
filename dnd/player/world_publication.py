@@ -30,7 +30,8 @@ from dnd.player.facts import (BoundaryStructureStatic, ContainedItem, ContainerC
     ContributionRow, FloorItem, ObjectLook, ObjectRow, ObjectState, PlayerObject, ResidueKey, ResidueMaterial,
     ResidueRow, TileConditions, TileFieldUpdate, TileLook, TileStatic, WorldUpdate)
 from dnd.player.static_sent import StaticSent
-from dnd.player.world_columns import pack_placement, pack_tile_columns, split_floor_item, tile_look_id
+from dnd.player.world_columns import (pack_object_rows, pack_placement, pack_tile_columns, split_floor_item,
+    tile_look_id)
 from dnd.types.cells import EMPTY_CELLS, CellMask, cell_in
 from dnd.types.event_facts import (AppliedWorldFact, WorldConnectorState, WorldTileChanges, WorldTileState,
     tile_own_condition_names, tile_residue_names)
@@ -429,7 +430,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         boundary_structures=tuple(rows.boundary_structures),
         residues=tuple(residues[key] for key in sorted(residues)),
         residues_removed=tuple(residues_removed[key] for key in sorted(residues_removed)),
-        object_looks=tuple(rows.object_looks), objects=tuple(object_rows), objects_removed=tuple(removed),
+        object_looks=tuple(rows.object_looks), objects=pack_object_rows(object_rows), objects_removed=tuple(removed),
         contents=tuple(contents), contents_changed=tuple(contents_changed),
         connectors=tuple(connectors[identity] for identity in sorted(connectors, key=str)),
         connectors_removed=tuple(connectors_removed))

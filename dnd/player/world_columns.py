@@ -3,23 +3,29 @@ and an object's placement.
 
 The seat's entering cells send their tiles' changeable scalars as packed columns, one byte per cell per column
 (`TileColumns`); a floor item travels as its look (once per uuid) and its state, its boundary structure as static
-content under a digest of its value; a placement travels without what the client derives (`ObjectPlacement`).
+content under a digest of its value; a placement travels without what the client derives (`ObjectPlacement`); an
+update's object rows travel as columns (`ObjectColumns`, field names once per update).
 These are pure functions: the server packs and splits, the client unpacks and joins, and `join(split(x)) == x`.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from hashlib import sha256
+from typing import TypeVar
 from uuid import UUID
 
-from dnd.core.cells import mask_from_positions, mask_positions
+from dnd.core.cells import bit_rows, flag_bits, mask_from_positions, mask_positions
+from dnd.core.item_types import ItemIntegrity
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
-from dnd.player.facts import FloorItem, ObjectLook, ObjectPlacement, ObjectState, TileColumns, TileLook, TileStatic
+from dnd.player.facts import (Column, FloorItem, ObjectColumns, ObjectLook, ObjectPlacement, ObjectRow, ObjectState,
+    PlacementColumns, TileColumns, TileLook, TileStatic)
+from dnd.types.cells import NO_ROWS, no_rows
 from dnd.types.materials import TileSurface
 from dnd.types.event_facts import WorldTileState
 from dnd.types.world import LightLevel
 from dnd.types.world_placement import (BoundaryStructure, WorldObjectPlacement, WorldObjectSupport,
     WorldPlacementKind)
 
+Value = TypeVar("Value")
 SURFACE_KINDS = (ElevationSurfaceKind.ORDINARY, ElevationSurfaceKind.STAIRS, ElevationSurfaceKind.RAMP)
 SLOPE_AXES = (None, SlopeAxis.NORTH_SOUTH, SlopeAxis.EAST_WEST)
 
@@ -160,3 +166,144 @@ def unpack_placement(identity: UUID, row: ObjectPlacement, statics: Mapping[tupl
         base_height_steps=row.base_height_steps, top_height_steps=row.top_height_steps, orientation=row.orientation,
         covered_supports=row.covered_supports or (WorldObjectSupport(position=row.position, tile_uuid=tile_uuid),),
         removed_bands=row.removed_bands)
+
+
+def _column(cells: Sequence[tuple[int, Value]], count: int) -> Column[Value] | None:
+    """The column of a group of `count` rows holding these (row, value) pairs; None when it holds none."""
+    if not cells:
+        return None
+    if len(cells) == count:
+        return Column(values=tuple(value for _, value in cells))
+    flags = [False] * count
+    for row, _ in cells:
+        flags[row] = True
+    return Column(rows=flag_bits(flags), values=tuple(value for _, value in cells))
+
+
+def _held(column: Column[Value] | None, count: int) -> dict[int, Value]:
+    """A column's values by row (a row it skips holds the field's default)."""
+    if column is None:
+        return {}
+    rows = list(range(count)) if no_rows(column.rows) else [int(row) for row in bit_rows(column.rows, count)]
+    if len(rows) != len(column.values) or not column.values:
+        raise ValueError("A column holds one value per row it selects, and at least one")
+    return dict(zip(rows, column.values))
+
+
+def pack_object_rows(rows: Sequence[ObjectRow]) -> ObjectColumns | None:
+    """An update's object rows as columns; None for no row."""
+    count = len(rows)
+    if not count:
+        return None
+    states = [row.state for row in rows]
+    placed = [(index, row.placement) for index, row in enumerate(rows) if row.placement is not None]
+    placements = None
+    if placed:
+        flags = [row.placement is not None for row in rows]
+        at = [placement for _, placement in placed]
+        size = len(at)
+        placements = PlacementColumns(rows=NO_ROWS if size == count else flag_bits(flags),
+            position=tuple(row.position for row in at), top_height_steps=tuple(row.top_height_steps for row in at),
+            boundary_direction=_column([(i, row.boundary_direction) for i, row in enumerate(at)
+                if row.boundary_direction is not None], size),
+            tile_uuid=_column([(i, row.tile_uuid) for i, row in enumerate(at) if row.tile_uuid is not None], size),
+            covered_supports=_column([(i, row.covered_supports) for i, row in enumerate(at) if row.covered_supports],
+                size),
+            occupies_bands=_column([(i, False) for i, row in enumerate(at) if not row.occupies_bands], size),
+            base_height_steps=_column([(i, row.base_height_steps) for i, row in enumerate(at)
+                if row.base_height_steps != 0], size),
+            orientation=_column([(i, row.orientation) for i, row in enumerate(at) if row.orientation is not None],
+                size),
+            removed_bands=_column([(i, row.removed_bands) for i, row in enumerate(at) if row.removed_bands], size))
+    return ObjectColumns(item_uuids=tuple(row.item_uuid for row in rows),
+        members=_column([(i, row.members) for i, row in enumerate(rows) if row.members is not None], count),
+        observed_faces=_column([(i, row.observed_faces) for i, row in enumerate(rows) if row.observed_faces], count),
+        name=tuple(state.name for state in states),
+        visual_item_name=_column([(i, state.visual_item_name) for i, state in enumerate(states)
+            if state.visual_item_name is not None], count),
+        map_char=tuple(state.map_char for state in states),
+        boundary_structure=_column([(i, state.boundary_structure) for i, state in enumerate(states)
+            if state.boundary_structure is not None], count),
+        is_open=_column([(i, state.is_open) for i, state in enumerate(states) if state.is_open is not None], count),
+        is_lit=_column([(i, state.is_lit) for i, state in enumerate(states) if state.is_lit is not None], count),
+        very_bright_radius_feet=_column([(i, state.very_bright_radius_feet) for i, state in enumerate(states)
+            if state.very_bright_radius_feet is not None], count),
+        bright_radius_feet=_column([(i, state.bright_radius_feet) for i, state in enumerate(states)
+            if state.bright_radius_feet is not None], count),
+        dim_radius_feet=_column([(i, state.dim_radius_feet) for i, state in enumerate(states)
+            if state.dim_radius_feet is not None], count),
+        stack_count=_column([(i, state.stack_count) for i, state in enumerate(states) if state.stack_count != 1],
+            count),
+        is_pickable=_column([(i, False) for i, state in enumerate(states) if not state.is_pickable], count),
+        item_effects=_column([(i, state.item_effects) for i, state in enumerate(states) if state.item_effects],
+            count),
+        blocks_propagation=_column([(i, True) for i, state in enumerate(states) if state.blocks_propagation],
+            count),
+        is_engaged=_column([(i, state.is_engaged) for i, state in enumerate(states) if state.is_engaged is not None],
+            count),
+        surface_residues=_column([(i, state.surface_residues) for i, state in enumerate(states)
+            if state.surface_residues], count),
+        current_hit_points=_column([(i, state.current_hit_points) for i, state in enumerate(states)
+            if state.current_hit_points is not None], count),
+        concentration_slots=_column([(i, state.concentration_slots) for i, state in enumerate(states)
+            if state.concentration_slots], count),
+        remnant_state=_column([(i, state.remnant_state) for i, state in enumerate(states)
+            if state.remnant_state is not None], count),
+        integrity=_column([(i, state.integrity) for i, state in enumerate(states)
+            if state.integrity is not ItemIntegrity.INTACT], count),
+        destruction_outcome=_column([(i, state.destruction_outcome) for i, state in enumerate(states)
+            if state.destruction_outcome is not None], count),
+        construction_suppressions=_column([(i, state.construction_suppressions) for i, state in enumerate(states)
+            if state.construction_suppressions], count),
+        placements=placements)
+
+
+def unpack_object_rows(columns: ObjectColumns | None) -> tuple[ObjectRow, ...]:
+    """An update's object rows from their columns, in row order."""
+    if columns is None:
+        return ()
+    count = len(columns.item_uuids)
+    if len(columns.name) != count or len(columns.map_char) != count:
+        raise ValueError("A dense object column holds one value per row")
+    placed: dict[int, ObjectPlacement] = {}
+    if columns.placements is not None:
+        at = columns.placements
+        rows = list(range(count)) if no_rows(at.rows) else [int(row) for row in bit_rows(at.rows, count)]
+        size = len(rows)
+        if len(at.position) != size or len(at.top_height_steps) != size:
+            raise ValueError("A dense placement column holds one value per placed row")
+        direction, tile, supports = (_held(at.boundary_direction, size), _held(at.tile_uuid, size),
+                                     _held(at.covered_supports, size))
+        bands, base, orientation, removed = (_held(at.occupies_bands, size), _held(at.base_height_steps, size),
+                                             _held(at.orientation, size), _held(at.removed_bands, size))
+        for index, row in enumerate(rows):
+            placed[row] = ObjectPlacement(position=at.position[index], top_height_steps=at.top_height_steps[index],
+                boundary_direction=direction.get(index), tile_uuid=tile.get(index),
+                covered_supports=supports.get(index, ()), occupies_bands=bands.get(index, True),
+                base_height_steps=base.get(index, 0), orientation=orientation.get(index),
+                removed_bands=removed.get(index, ()))
+    members, faces = _held(columns.members, count), _held(columns.observed_faces, count)
+    visual, structure = _held(columns.visual_item_name, count), _held(columns.boundary_structure, count)
+    is_open, is_lit = _held(columns.is_open, count), _held(columns.is_lit, count)
+    very_bright, bright, dim = (_held(columns.very_bright_radius_feet, count), _held(columns.bright_radius_feet, count),
+                                _held(columns.dim_radius_feet, count))
+    stack, pickable, effects = (_held(columns.stack_count, count), _held(columns.is_pickable, count),
+                                _held(columns.item_effects, count))
+    propagation, engaged, residues = (_held(columns.blocks_propagation, count), _held(columns.is_engaged, count),
+                                      _held(columns.surface_residues, count))
+    hit_points, slots, remnant = (_held(columns.current_hit_points, count), _held(columns.concentration_slots, count),
+                                  _held(columns.remnant_state, count))
+    integrity, outcome, suppressions = (_held(columns.integrity, count), _held(columns.destruction_outcome, count),
+                                        _held(columns.construction_suppressions, count))
+    return tuple(ObjectRow(item_uuid=identity, members=members.get(index), observed_faces=faces.get(index, ()),
+        placement=placed.get(index), state=ObjectState(name=columns.name[index], visual_item_name=visual.get(index),
+            map_char=columns.map_char[index], boundary_structure=structure.get(index), is_open=is_open.get(index),
+            is_lit=is_lit.get(index), very_bright_radius_feet=very_bright.get(index),
+            bright_radius_feet=bright.get(index), dim_radius_feet=dim.get(index), stack_count=stack.get(index, 1),
+            is_pickable=pickable.get(index, True), item_effects=effects.get(index, ()),
+            blocks_propagation=propagation.get(index, False), is_engaged=engaged.get(index),
+            surface_residues=residues.get(index, ()), current_hit_points=hit_points.get(index),
+            concentration_slots=slots.get(index, ()), remnant_state=remnant.get(index),
+            integrity=integrity.get(index, ItemIntegrity.INTACT), destruction_outcome=outcome.get(index),
+            construction_suppressions=suppressions.get(index, ())))
+        for index, identity in enumerate(columns.item_uuids))

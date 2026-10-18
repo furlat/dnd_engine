@@ -83,14 +83,24 @@
       "contact_passage": "structural"
      }
     ],
-    "objects": [
-     {
-      "item_uuid": "00000000-0000-4000-8000-000000003003",
-      "state": {
-       "name": "Stone wall",
-       "visual_item_name": "stone wall",
-       "map_char": "S",
-       "construction_suppressions": [
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000003003"
+     ],
+     "name": [
+      "Stone wall"
+     ],
+     "visual_item_name": {
+      "values": [
+       "stone wall"
+      ]
+     },
+     "map_char": [
+      "S"
+     ],
+     "construction_suppressions": {
+      "values": [
+       [
         {
          "provider_uuid": "00000000-0000-4000-8000-000000006001",
          "positions": [
@@ -108,16 +118,20 @@
          "anchor_elevation_steps": null
         }
        ]
-      },
-      "placement": {
-       "position": [
+      ]
+     },
+     "placements": {
+      "position": [
+       [
         0,
         0
-       ],
-       "top_height_steps": 2
-      }
+       ]
+      ],
+      "top_height_steps": [
+       2
+      ]
      }
-    ]
+    }
    },
    "expected": {
     "tiles": {
@@ -491,14 +505,24 @@
   {
    "update": {
     "occurrence": 2,
-    "objects": [
-     {
-      "item_uuid": "00000000-0000-4000-8000-000000003003",
-      "state": {
-       "name": "Stone wall",
-       "visual_item_name": "stone wall",
-       "map_char": "S",
-       "construction_suppressions": [
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000003003"
+     ],
+     "name": [
+      "Stone wall"
+     ],
+     "visual_item_name": {
+      "values": [
+       "stone wall"
+      ]
+     },
+     "map_char": [
+      "S"
+     ],
+     "construction_suppressions": {
+      "values": [
+       [
         {
          "provider_uuid": "00000000-0000-4000-8000-000000006001",
          "positions": [
@@ -512,9 +536,9 @@
          "anchor_elevation_steps": null
         }
        ]
-      }
+      ]
      }
-    ]
+    }
    },
    "expected": {
     "tiles": {

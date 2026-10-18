@@ -94,7 +94,7 @@ def test_keyed_rows_require_what_they_change():
             TileFieldUpdate(position=(9, 9), changes={"walking_cost": 2}),)))
     with pytest.raises(ValueError, match="names an object the client holds"):
         fold_world_update(seat(ONE), WorldUpdate(occurrence=0, objects_removed=(
-            UPDATE.validate_json(json.dumps(first["update"])).objects[0].item_uuid,)))
+            first["update"]["objects"]["item_uuids"][0],)))
     without_look = {**first["update"], "object_looks": []}
     with pytest.raises(ValueError, match="first row requires its look"):
         _fold(seat(ONE), {"update": without_look})

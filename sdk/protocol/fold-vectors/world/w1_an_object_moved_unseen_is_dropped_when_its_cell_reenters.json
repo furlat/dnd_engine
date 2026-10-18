@@ -83,23 +83,33 @@
       "contact_passage": "structural"
      }
     ],
-    "objects": [
-     {
-      "item_uuid": "00000000-0000-4000-8000-000000002001",
-      "state": {
-       "name": "Box",
-       "visual_item_name": "box",
-       "map_char": "B"
-      },
-      "placement": {
-       "position": [
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002001"
+     ],
+     "name": [
+      "Box"
+     ],
+     "visual_item_name": {
+      "values": [
+       "box"
+      ]
+     },
+     "map_char": [
+      "B"
+     ],
+     "placements": {
+      "position": [
+       [
         1,
         0
-       ],
-       "top_height_steps": 2
-      }
+       ]
+      ],
+      "top_height_steps": [
+       2
+      ]
      }
-    ]
+    }
    },
    "expected": {
     "tiles": {

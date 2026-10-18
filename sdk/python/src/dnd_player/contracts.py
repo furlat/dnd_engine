@@ -301,6 +301,9 @@ class ClassChoiceSelection(TypedDict):
     values: list[str]
 
 
+type Value = int
+
+
 type CombatLogEntryType = Literal[
     'attack',
     'movement',
@@ -1214,9 +1217,6 @@ class ObjectDamageFact(TypedDict):
     damage_type: DamageType | None
 
 
-type RemovedBand = int
-
-
 class ObjectResidueState(TypedDict):
     condition_uuid: str
     residue_id: str
@@ -2048,6 +2048,9 @@ class WorldConnectorState(TypedDict):
 type WorldEdgeChannel = Literal['movement', 'optical', 'propagation']
 
 
+type RemovedBand = int
+
+
 class WorldObjectSupport(TypedDict):
     position: list[PositionItem]
     tile_uuid: str
@@ -2246,6 +2249,61 @@ class BoundaryStructure(TypedDict):
 class BoundaryStructureStatic(TypedDict):
     structure_id: str
     structure: BoundaryStructure
+
+
+class ColumnCardinalDirection(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[CardinalDirection]
+
+
+class ColumnItemIntegrity(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[ItemIntegrity]
+
+
+class ColumnUUID(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[str]
+
+
+class ColumnBool(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[bool]
+
+
+class ColumnInt(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[int]
+
+
+class ColumnStr(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[str]
+
+
+class ColumnTupleCardinalDirection(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[list[CardinalDirection]]
+
+
+class ColumnTupleItemConcentrationSlot(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[list[ItemConcentrationSlot]]
+
+
+class ColumnTupleObjectResidueState(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[list[ObjectResidueState]]
+
+
+class ColumnTupleWorldObjectSupport(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[list[WorldObjectSupport]]
+
+
+class ColumnTupleTupleIntIntInt(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[list[list[Value]]]
 
 
 class CommittedReceipt(TypedDict):
@@ -2543,22 +2601,23 @@ class MovementFact(TypedDict):
     connector_presentation_key: NotRequired[str | None]
 
 
-class ObjectPlacement(TypedDict):
-    position: list[PositionItem]
-    top_height_steps: int
-    boundary_direction: NotRequired[CardinalDirection | None]
-    tile_uuid: NotRequired[str | None]
-    covered_supports: NotRequired[list[WorldObjectSupport]]
-    occupies_bands: NotRequired[bool]
-    base_height_steps: NotRequired[int]
-    orientation: NotRequired[CardinalDirection | None]
-    removed_bands: NotRequired[list[list[RemovedBand]]]
-
-
 class PerceivedContact(TypedDict):
     position: list[PositionItem]
     visual: bool
     special_senses: NotRequired[list[SensesType]]
+
+
+class PlacementColumns(TypedDict):
+    rows: NotRequired[RowBits]
+    position: list[list[PositionItem]]
+    top_height_steps: list[int]
+    boundary_direction: NotRequired[ColumnCardinalDirection | None]
+    tile_uuid: NotRequired[ColumnUUID | None]
+    covered_supports: NotRequired[ColumnTupleWorldObjectSupport | None]
+    occupies_bands: NotRequired[ColumnBool | None]
+    base_height_steps: NotRequired[ColumnInt | None]
+    orientation: NotRequired[ColumnCardinalDirection | None]
+    removed_bands: NotRequired[ColumnTupleTupleIntIntInt | None]
 
 
 class PrepareSpellsIntent(TypedDict):
@@ -2895,6 +2954,16 @@ class AttackLogData(TypedDict):
     is_threatened: NotRequired[bool]
 
 
+class ColumnItemRemnantState(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[ItemRemnantState]
+
+
+class ColumnTupleItemEffectPresentationState(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[list[ItemEffectPresentationState]]
+
+
 class ContentPresentation(TypedDict):
     icon_key: NotRequired[str | None]
     portrait_key: NotRequired[str | None]
@@ -3164,6 +3233,11 @@ class ChoicesResponse(TypedDict):
     choices: PlayerChoices
 
 
+class ColumnTupleSpellSuppression(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[list[SpellSuppression]]
+
+
 class CombatLogAppend(TypedDict):
     generation: str
     observer_uuid: str
@@ -3354,6 +3428,34 @@ class ItemState(TypedDict):
     is_lit: bool | None
 
 
+class ObjectColumns(TypedDict):
+    item_uuids: list[str]
+    members: NotRequired[ColumnInt | None]
+    observed_faces: NotRequired[ColumnTupleCardinalDirection | None]
+    name: list[str]
+    visual_item_name: NotRequired[ColumnStr | None]
+    map_char: list[str]
+    boundary_structure: NotRequired[ColumnStr | None]
+    is_open: NotRequired[ColumnBool | None]
+    is_lit: NotRequired[ColumnBool | None]
+    very_bright_radius_feet: NotRequired[ColumnInt | None]
+    bright_radius_feet: NotRequired[ColumnInt | None]
+    dim_radius_feet: NotRequired[ColumnInt | None]
+    stack_count: NotRequired[ColumnInt | None]
+    is_pickable: NotRequired[ColumnBool | None]
+    item_effects: NotRequired[ColumnTupleItemEffectPresentationState | None]
+    blocks_propagation: NotRequired[ColumnBool | None]
+    is_engaged: NotRequired[ColumnBool | None]
+    surface_residues: NotRequired[ColumnTupleObjectResidueState | None]
+    current_hit_points: NotRequired[ColumnInt | None]
+    concentration_slots: NotRequired[ColumnTupleItemConcentrationSlot | None]
+    remnant_state: NotRequired[ColumnItemRemnantState | None]
+    integrity: NotRequired[ColumnItemIntegrity | None]
+    destruction_outcome: NotRequired[ColumnStr | None]
+    construction_suppressions: NotRequired[ColumnTupleSpellSuppression | None]
+    placements: NotRequired[PlacementColumns | None]
+
+
 class ObjectDestroyedFact(TypedDict):
     kind: NotRequired[Literal['object_destroyed']]
     object_uuid: str
@@ -3501,14 +3603,6 @@ class ItemPatch(TypedDict):
     state: NotRequired[ItemState | None]
 
 
-class ObjectRow(TypedDict):
-    item_uuid: str
-    members: NotRequired[int | None]
-    state: ObjectState
-    placement: NotRequired[ObjectPlacement | None]
-    observed_faces: NotRequired[list[CardinalDirection]]
-
-
 class SensoryRows(TypedDict):
     uuids: NotRequired[list[str]]
     contact_uuid_index: NotRequired[list[int]]
@@ -3539,7 +3633,7 @@ class WorldUpdate(TypedDict):
     residues: NotRequired[list[ResidueRow]]
     residues_removed: NotRequired[list[ResidueKey]]
     object_looks: NotRequired[list[ObjectLook]]
-    objects: NotRequired[list[ObjectRow]]
+    objects: NotRequired[ObjectColumns | None]
     objects_removed: NotRequired[list[str]]
     contents: NotRequired[list[ContainerContents]]
     contents_changed: NotRequired[list[ContentsChange]]

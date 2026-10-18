@@ -5140,6 +5140,413 @@
     }
   },
   {
+    "field": "Column_CardinalDirection_.rows",
+    "schema_pointer": "/$defs/Column_CardinalDirection_/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_CardinalDirection_.values",
+    "schema_pointer": "/$defs/Column_CardinalDirection_/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "$ref": "#/$defs/CardinalDirection"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_ItemIntegrity_.rows",
+    "schema_pointer": "/$defs/Column_ItemIntegrity_/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_ItemIntegrity_.values",
+    "schema_pointer": "/$defs/Column_ItemIntegrity_/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "$ref": "#/$defs/ItemIntegrity"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_ItemRemnantState_.rows",
+    "schema_pointer": "/$defs/Column_ItemRemnantState_/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_ItemRemnantState_.values",
+    "schema_pointer": "/$defs/Column_ItemRemnantState_/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "$ref": "#/$defs/ItemRemnantState"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_UUID_.rows",
+    "schema_pointer": "/$defs/Column_UUID_/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_UUID_.values",
+    "schema_pointer": "/$defs/Column_UUID_/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_bool_.rows",
+    "schema_pointer": "/$defs/Column_bool_/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_bool_.values",
+    "schema_pointer": "/$defs/Column_bool_/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "type": "boolean"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_int_.rows",
+    "schema_pointer": "/$defs/Column_int_/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_int_.values",
+    "schema_pointer": "/$defs/Column_int_/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_str_.rows",
+    "schema_pointer": "/$defs/Column_str_/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_str_.values",
+    "schema_pointer": "/$defs/Column_str_/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_tuple_CardinalDirection__________.rows",
+    "schema_pointer": "/$defs/Column_tuple_CardinalDirection__________/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_tuple_CardinalDirection__________.values",
+    "schema_pointer": "/$defs/Column_tuple_CardinalDirection__________/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/CardinalDirection"
+        },
+        "type": "array"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_tuple_ItemConcentrationSlot__________.rows",
+    "schema_pointer": "/$defs/Column_tuple_ItemConcentrationSlot__________/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_tuple_ItemConcentrationSlot__________.values",
+    "schema_pointer": "/$defs/Column_tuple_ItemConcentrationSlot__________/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/ItemConcentrationSlot"
+        },
+        "type": "array"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_tuple_ItemEffectPresentationState__________.rows",
+    "schema_pointer": "/$defs/Column_tuple_ItemEffectPresentationState__________/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_tuple_ItemEffectPresentationState__________.values",
+    "schema_pointer": "/$defs/Column_tuple_ItemEffectPresentationState__________/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/ItemEffectPresentationState"
+        },
+        "type": "array"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_tuple_ObjectResidueState__________.rows",
+    "schema_pointer": "/$defs/Column_tuple_ObjectResidueState__________/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_tuple_ObjectResidueState__________.values",
+    "schema_pointer": "/$defs/Column_tuple_ObjectResidueState__________/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/ObjectResidueState"
+        },
+        "type": "array"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_tuple_SpellSuppression__________.rows",
+    "schema_pointer": "/$defs/Column_tuple_SpellSuppression__________/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_tuple_SpellSuppression__________.values",
+    "schema_pointer": "/$defs/Column_tuple_SpellSuppression__________/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/SpellSuppression"
+        },
+        "type": "array"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_tuple_WorldObjectSupport__________.rows",
+    "schema_pointer": "/$defs/Column_tuple_WorldObjectSupport__________/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_tuple_WorldObjectSupport__________.values",
+    "schema_pointer": "/$defs/Column_tuple_WorldObjectSupport__________/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/WorldObjectSupport"
+        },
+        "type": "array"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
+    "field": "Column_tuple_tuple_int__int__int___________.rows",
+    "schema_pointer": "/$defs/Column_tuple_tuple_int__int__int___________/properties/rows",
+    "owners": [],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "Column_tuple_tuple_int__int__int___________.values",
+    "schema_pointer": "/$defs/Column_tuple_tuple_int__int__int___________/properties/values",
+    "owners": [],
+    "required": true,
+    "schema": {
+      "items": {
+        "items": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          ],
+          "type": "array"
+        },
+        "type": "array"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  {
     "field": "CombatLogAppend.generation",
     "schema_pointer": "/$defs/CombatLogAppend/properties/generation",
     "owners": [
@@ -7075,7 +7482,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1291
+        "line": 1357
       }
     ],
     "required": true,
@@ -7091,7 +7498,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1292
+        "line": 1358
       }
     ],
     "required": true,
@@ -7105,7 +7512,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1299
+        "line": 1365
       }
     ],
     "required": true,
@@ -7121,7 +7528,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1300
+        "line": 1366
       }
     ],
     "required": false,
@@ -7883,7 +8290,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1307
+        "line": 1373
       }
     ],
     "required": true,
@@ -7899,7 +8306,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1308
+        "line": 1374
       }
     ],
     "required": false,
@@ -7918,7 +8325,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1309
+        "line": 1375
       }
     ],
     "required": false,
@@ -20062,6 +20469,545 @@
     }
   },
   {
+    "field": "ObjectColumns.item_uuids",
+    "schema_pointer": "/$defs/ObjectColumns/properties/item_uuids",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1328
+      }
+    ],
+    "required": true,
+    "schema": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Item Uuids",
+      "type": "array"
+    }
+  },
+  {
+    "field": "ObjectColumns.members",
+    "schema_pointer": "/$defs/ObjectColumns/properties/members",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1329
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_int_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.observed_faces",
+    "schema_pointer": "/$defs/ObjectColumns/properties/observed_faces",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1330
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_tuple_CardinalDirection__________"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.name",
+    "schema_pointer": "/$defs/ObjectColumns/properties/name",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1331
+      }
+    ],
+    "required": true,
+    "schema": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Name",
+      "type": "array"
+    }
+  },
+  {
+    "field": "ObjectColumns.visual_item_name",
+    "schema_pointer": "/$defs/ObjectColumns/properties/visual_item_name",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1332
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_str_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.map_char",
+    "schema_pointer": "/$defs/ObjectColumns/properties/map_char",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1333
+      }
+    ],
+    "required": true,
+    "schema": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Map Char",
+      "type": "array"
+    }
+  },
+  {
+    "field": "ObjectColumns.boundary_structure",
+    "schema_pointer": "/$defs/ObjectColumns/properties/boundary_structure",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1334
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_str_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.is_open",
+    "schema_pointer": "/$defs/ObjectColumns/properties/is_open",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1335
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_bool_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.is_lit",
+    "schema_pointer": "/$defs/ObjectColumns/properties/is_lit",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1336
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_bool_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.very_bright_radius_feet",
+    "schema_pointer": "/$defs/ObjectColumns/properties/very_bright_radius_feet",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1337
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_int_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.bright_radius_feet",
+    "schema_pointer": "/$defs/ObjectColumns/properties/bright_radius_feet",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1338
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_int_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.dim_radius_feet",
+    "schema_pointer": "/$defs/ObjectColumns/properties/dim_radius_feet",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1339
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_int_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.stack_count",
+    "schema_pointer": "/$defs/ObjectColumns/properties/stack_count",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1340
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_int_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.is_pickable",
+    "schema_pointer": "/$defs/ObjectColumns/properties/is_pickable",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1341
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_bool_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.item_effects",
+    "schema_pointer": "/$defs/ObjectColumns/properties/item_effects",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1342
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_tuple_ItemEffectPresentationState__________"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.blocks_propagation",
+    "schema_pointer": "/$defs/ObjectColumns/properties/blocks_propagation",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1343
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_bool_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.is_engaged",
+    "schema_pointer": "/$defs/ObjectColumns/properties/is_engaged",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1344
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_bool_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.surface_residues",
+    "schema_pointer": "/$defs/ObjectColumns/properties/surface_residues",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1345
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_tuple_ObjectResidueState__________"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.current_hit_points",
+    "schema_pointer": "/$defs/ObjectColumns/properties/current_hit_points",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1346
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_int_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.concentration_slots",
+    "schema_pointer": "/$defs/ObjectColumns/properties/concentration_slots",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1347
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_tuple_ItemConcentrationSlot__________"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.remnant_state",
+    "schema_pointer": "/$defs/ObjectColumns/properties/remnant_state",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1348
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_ItemRemnantState_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.integrity",
+    "schema_pointer": "/$defs/ObjectColumns/properties/integrity",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1349
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_ItemIntegrity_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.destruction_outcome",
+    "schema_pointer": "/$defs/ObjectColumns/properties/destruction_outcome",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1350
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_str_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.construction_suppressions",
+    "schema_pointer": "/$defs/ObjectColumns/properties/construction_suppressions",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1351
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_tuple_SpellSuppression__________"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "ObjectColumns.placements",
+    "schema_pointer": "/$defs/ObjectColumns/properties/placements",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1352
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PlacementColumns"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
     "field": "ObjectDamageFact.kind",
     "schema_pointer": "/$defs/ObjectDamageFact/properties/kind",
     "owners": [
@@ -20639,211 +21585,6 @@
     }
   },
   {
-    "field": "ObjectPlacement.position",
-    "schema_pointer": "/$defs/ObjectPlacement/properties/position",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1261
-      }
-    ],
-    "required": true,
-    "schema": {
-      "maxItems": 2,
-      "minItems": 2,
-      "prefixItems": [
-        {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        }
-      ],
-      "title": "Position",
-      "type": "array"
-    }
-  },
-  {
-    "field": "ObjectPlacement.top_height_steps",
-    "schema_pointer": "/$defs/ObjectPlacement/properties/top_height_steps",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1262
-      }
-    ],
-    "required": true,
-    "schema": {
-      "title": "Top Height Steps",
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991
-    }
-  },
-  {
-    "field": "ObjectPlacement.boundary_direction",
-    "schema_pointer": "/$defs/ObjectPlacement/properties/boundary_direction",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1263
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/CardinalDirection"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    }
-  },
-  {
-    "field": "ObjectPlacement.tile_uuid",
-    "schema_pointer": "/$defs/ObjectPlacement/properties/tile_uuid",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1264
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "format": "uuid",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Tile Uuid"
-    }
-  },
-  {
-    "field": "ObjectPlacement.covered_supports",
-    "schema_pointer": "/$defs/ObjectPlacement/properties/covered_supports",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1265
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/WorldObjectSupport"
-      },
-      "title": "Covered Supports",
-      "type": "array"
-    }
-  },
-  {
-    "field": "ObjectPlacement.occupies_bands",
-    "schema_pointer": "/$defs/ObjectPlacement/properties/occupies_bands",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1266
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": true,
-      "title": "Occupies Bands",
-      "type": "boolean"
-    }
-  },
-  {
-    "field": "ObjectPlacement.base_height_steps",
-    "schema_pointer": "/$defs/ObjectPlacement/properties/base_height_steps",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1267
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": 0,
-      "title": "Base Height Steps",
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991
-    }
-  },
-  {
-    "field": "ObjectPlacement.orientation",
-    "schema_pointer": "/$defs/ObjectPlacement/properties/orientation",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1268
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/CardinalDirection"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    }
-  },
-  {
-    "field": "ObjectPlacement.removed_bands",
-    "schema_pointer": "/$defs/ObjectPlacement/properties/removed_bands",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1269
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": [],
-      "items": {
-        "maxItems": 3,
-        "minItems": 3,
-        "prefixItems": [
-          {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          }
-        ],
-        "type": "array"
-      },
-      "title": "Removed Bands",
-      "type": "array"
-    }
-  },
-  {
     "field": "ObjectResidueState.condition_uuid",
     "schema_pointer": "/$defs/ObjectResidueState/properties/condition_uuid",
     "owners": [
@@ -20904,102 +21645,6 @@
         "$ref": "#/$defs/CardinalDirection"
       },
       "title": "Faces",
-      "type": "array"
-    }
-  },
-  {
-    "field": "ObjectRow.item_uuid",
-    "schema_pointer": "/$defs/ObjectRow/properties/item_uuid",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1282
-      }
-    ],
-    "required": true,
-    "schema": {
-      "format": "uuid",
-      "title": "Item Uuid",
-      "type": "string"
-    }
-  },
-  {
-    "field": "ObjectRow.members",
-    "schema_pointer": "/$defs/ObjectRow/properties/members",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1283
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "minimum": 1,
-          "type": "integer",
-          "maximum": 9007199254740991
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Members"
-    }
-  },
-  {
-    "field": "ObjectRow.state",
-    "schema_pointer": "/$defs/ObjectRow/properties/state",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1284
-      }
-    ],
-    "required": true,
-    "schema": {
-      "$ref": "#/$defs/ObjectState"
-    }
-  },
-  {
-    "field": "ObjectRow.placement",
-    "schema_pointer": "/$defs/ObjectRow/properties/placement",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1285
-      }
-    ],
-    "required": false,
-    "schema": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ObjectPlacement"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    }
-  },
-  {
-    "field": "ObjectRow.observed_faces",
-    "schema_pointer": "/$defs/ObjectRow/properties/observed_faces",
-    "owners": [
-      {
-        "file": "dnd/player/facts.py",
-        "line": 1286
-      }
-    ],
-    "required": false,
-    "schema": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/CardinalDirection"
-      },
-      "title": "Observed Faces",
       "type": "array"
     }
   },
@@ -22107,6 +22752,230 @@
       },
       "title": "Special Senses",
       "type": "array"
+    }
+  },
+  {
+    "field": "PlacementColumns.rows",
+    "schema_pointer": "/$defs/PlacementColumns/properties/rows",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1310
+      }
+    ],
+    "required": false,
+    "schema": {
+      "$ref": "#/$defs/RowBits",
+      "default": {
+        "start": 0,
+        "bits": ""
+      }
+    }
+  },
+  {
+    "field": "PlacementColumns.position",
+    "schema_pointer": "/$defs/PlacementColumns/properties/position",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1311
+      }
+    ],
+    "required": true,
+    "schema": {
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Position",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlacementColumns.top_height_steps",
+    "schema_pointer": "/$defs/PlacementColumns/properties/top_height_steps",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1312
+      }
+    ],
+    "required": true,
+    "schema": {
+      "items": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      },
+      "title": "Top Height Steps",
+      "type": "array"
+    }
+  },
+  {
+    "field": "PlacementColumns.boundary_direction",
+    "schema_pointer": "/$defs/PlacementColumns/properties/boundary_direction",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1313
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_CardinalDirection_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "PlacementColumns.tile_uuid",
+    "schema_pointer": "/$defs/PlacementColumns/properties/tile_uuid",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1314
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_UUID_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "PlacementColumns.covered_supports",
+    "schema_pointer": "/$defs/PlacementColumns/properties/covered_supports",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1315
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_tuple_WorldObjectSupport__________"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "PlacementColumns.occupies_bands",
+    "schema_pointer": "/$defs/PlacementColumns/properties/occupies_bands",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1316
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_bool_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "PlacementColumns.base_height_steps",
+    "schema_pointer": "/$defs/PlacementColumns/properties/base_height_steps",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1317
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_int_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "PlacementColumns.orientation",
+    "schema_pointer": "/$defs/PlacementColumns/properties/orientation",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1318
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_CardinalDirection_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
+    "field": "PlacementColumns.removed_bands",
+    "schema_pointer": "/$defs/PlacementColumns/properties/removed_bands",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 1319
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Column_tuple_tuple_int__int__int___________"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   {
@@ -23819,7 +24688,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1387
+        "line": 1453
       }
     ],
     "required": true,
@@ -23835,7 +24704,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1388
+        "line": 1454
       }
     ],
     "required": true,
@@ -23851,7 +24720,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1389
+        "line": 1455
       }
     ],
     "required": true,
@@ -23865,7 +24734,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1390
+        "line": 1456
       }
     ],
     "required": true,
@@ -23883,7 +24752,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1391
+        "line": 1457
       }
     ],
     "required": true,
@@ -23897,7 +24766,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1392
+        "line": 1458
       }
     ],
     "required": true,
@@ -23914,7 +24783,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1393
+        "line": 1459
       }
     ],
     "required": true,
@@ -23932,7 +24801,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1394
+        "line": 1460
       }
     ],
     "required": true,
@@ -23950,7 +24819,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1395
+        "line": 1461
       }
     ],
     "required": false,
@@ -23972,7 +24841,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1396
+        "line": 1462
       }
     ],
     "required": false,
@@ -23994,7 +24863,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1398
+        "line": 1464
       }
     ],
     "required": false,
@@ -24032,7 +24901,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1400
+        "line": 1466
       }
     ],
     "required": false,
@@ -24051,7 +24920,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1366
+        "line": 1432
       }
     ],
     "required": true,
@@ -24067,7 +24936,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1367
+        "line": 1433
       }
     ],
     "required": true,
@@ -24083,7 +24952,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1369
+        "line": 1435
       }
     ],
     "required": true,
@@ -24100,7 +24969,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1371
+        "line": 1437
       }
     ],
     "required": true,
@@ -24124,7 +24993,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1372
+        "line": 1438
       }
     ],
     "required": true,
@@ -24142,7 +25011,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1373
+        "line": 1439
       }
     ],
     "required": true,
@@ -24156,7 +25025,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1374
+        "line": 1440
       }
     ],
     "required": true,
@@ -24173,7 +25042,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1375
+        "line": 1441
       }
     ],
     "required": true,
@@ -24190,7 +25059,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1376
+        "line": 1442
       }
     ],
     "required": false,
@@ -24209,7 +25078,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1377
+        "line": 1443
       }
     ],
     "required": false,
@@ -24228,7 +25097,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1378
+        "line": 1444
       }
     ],
     "required": false,
@@ -24250,7 +25119,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1380
+        "line": 1446
       }
     ],
     "required": false,
@@ -24288,7 +25157,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1382
+        "line": 1448
       }
     ],
     "required": false,
@@ -25792,7 +26661,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1357
+        "line": 1423
       }
     ],
     "required": true,
@@ -25807,7 +26676,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1358
+        "line": 1424
       }
     ],
     "required": true,
@@ -25822,7 +26691,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1359
+        "line": 1425
       }
     ],
     "required": true,
@@ -25861,7 +26730,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1360
+        "line": 1426
       }
     ],
     "required": true,
@@ -25878,7 +26747,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1361
+        "line": 1427
       }
     ],
     "required": true,
@@ -37247,7 +38116,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1322
+        "line": 1388
       }
     ],
     "required": true,
@@ -37264,7 +38133,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1323
+        "line": 1389
       }
     ],
     "required": false,
@@ -37285,7 +38154,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1324
+        "line": 1390
       }
     ],
     "required": false,
@@ -37304,7 +38173,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1325
+        "line": 1391
       }
     ],
     "required": false,
@@ -37323,7 +38192,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1326
+        "line": 1392
       }
     ],
     "required": false,
@@ -37345,7 +38214,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1327
+        "line": 1393
       }
     ],
     "required": false,
@@ -37364,7 +38233,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1328
+        "line": 1394
       }
     ],
     "required": false,
@@ -37383,7 +38252,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1329
+        "line": 1395
       }
     ],
     "required": false,
@@ -37407,7 +38276,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1330
+        "line": 1396
       }
     ],
     "required": false,
@@ -37426,7 +38295,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1331
+        "line": 1397
       }
     ],
     "required": false,
@@ -37445,7 +38314,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1332
+        "line": 1398
       }
     ],
     "required": false,
@@ -37464,7 +38333,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1333
+        "line": 1399
       }
     ],
     "required": false,
@@ -37483,7 +38352,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1334
+        "line": 1400
       }
     ],
     "required": false,
@@ -37502,17 +38371,20 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1335
+        "line": 1401
       }
     ],
     "required": false,
     "schema": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/ObjectRow"
-      },
-      "title": "Objects",
-      "type": "array"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ObjectColumns"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   {
@@ -37521,7 +38393,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1336
+        "line": 1402
       }
     ],
     "required": false,
@@ -37541,7 +38413,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1337
+        "line": 1403
       }
     ],
     "required": false,
@@ -37560,7 +38432,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1338
+        "line": 1404
       }
     ],
     "required": false,
@@ -37579,7 +38451,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1339
+        "line": 1405
       }
     ],
     "required": false,
@@ -37598,7 +38470,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1340
+        "line": 1406
       }
     ],
     "required": false,

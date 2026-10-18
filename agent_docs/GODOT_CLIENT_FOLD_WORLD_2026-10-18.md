@@ -24,7 +24,7 @@ occurrence, so the client's memory follows from the rules below and nothing else
 | `residues_removed` | (cell, material) keys removed |
 | `boundary_structures` | a boundary structure's value under its content id (a digest of the value), once per id per seat |
 | `object_looks` | an object's fixed part (`ObjectLook`), once per item uuid per seat, floor objects and contained items alike |
-| `objects` (`ObjectRow`) | `item_uuid`, `members`, `state` (`ObjectState`), `placement`, `observed_faces` (§3) |
+| `objects` (`ObjectColumns`) | the update's object rows as columns (below); each row is `item_uuid`, `members`, `state` (`ObjectState`), `placement` (`ObjectPlacement`), `observed_faces` (§3) |
 | `objects_removed` | objects the seat saw go |
 | `contents` | a container's whole contents (`ContainedItem`: uuid and state; looks through `object_looks`) |
 | `contents_changed` | keyed contents of a container the seat sees into: `upserted`, `removed` |
@@ -32,6 +32,17 @@ occurrence, so the client's memory follows from the rules below and nothing else
 | `connectors_removed` | connector uuids the seat saw removed |
 
 A field holding its default is left out.
+
+### `ObjectColumns` (an update's object rows)
+
+Row *i* is the *i*-th entry of `item_uuids`; field names travel once per update.
+- `name` and `map_char` are dense: one value per row.
+- Every other field of a row is a `Column` (`rows`, `values`), left out when no row holds a non-default value.
+  - `rows` is a `RowBits` subset of the update's rows (left out: every row), and `values` holds one value per selected row, in row order.
+  - A row the column skips holds the field's default: `None` / `[]`, `stack_count` 1, `is_pickable` true, `blocks_propagation` false, `integrity` intact, and no `members` (one observer) or `observed_faces`.
+- `placements` (left out: no row carries a placement) has its own `rows` subset of the update's rows.
+  - `position` and `top_height_steps` are dense over those rows.
+  - Every other `ObjectPlacement` field is a `Column` over the placed rows, with that field's default when skipped.
 
 ### `ObjectState`
 
