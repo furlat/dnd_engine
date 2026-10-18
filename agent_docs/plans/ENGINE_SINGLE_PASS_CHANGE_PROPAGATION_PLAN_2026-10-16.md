@@ -654,6 +654,21 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
   zone install (Wall of Stone: `recompute_lights_at_positions`, light work, not sensory). The emit still scales
   with the changed contacts (observed-change references and contact order), which the event payload lists.
 
+**PV1a-2 contacts (codex/single-pass-contacts, 2026-10-18).**
+
+- A settlement's contact maps are built in one batch over all its views (`_contact_maps`):
+  `_changed_contacts`, `_listed` and `_target_order` (about ten numpy calls per view) are deleted. Python runs
+  per touched row and per view.
+- Rows are matched on two packed int64 per (observer, row) (`_row_identity`): by target key, not by uuid.
+  Contact target keys: `SpatialSensesSystem._target_ids` (uuid -> id; a key is the id times two plus the class)
+  is a mutable, append-only intern map owned by the system, one id per uuid ever listed. It is not a frozen
+  revision-keyed value (§6a); it came with the contact target table (da41b695b) and is not in the rule census.
+  Only `reset` clears it, together with every field; a replaced map drops the fields and tables and keeps it.
+  Invalidation: no key is ever rebound, so while any field holds a key it names one uuid and class, and
+  published contact rows, like the target table's rows, compare by key.
+- Measured and not done: the contact rule as arrays (exact, and the same speed as its Python loop over the
+  touched rows); the evidence order on a packed key (about 0.2 ms per 30-view settlement).
+
 **PV1 is split so that it doesn't collide with P7.**
 
 - **PV1a** touches only sensory, GridMap, the new `dnd/core` view module and the rules / discovery readers. It can start now; the Sleet demonstration comes from PV1a.
