@@ -27,7 +27,7 @@ from dnd.player.session import close_session, create_session
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spell_suppression import SpellSuppression
-from dnd.types.world_placement import placement_support_cells
+from dnd.types.world_placement import WorldObjectPlacement, WorldObjectSupport, placement_support_cells
 
 
 @pytest.mark.parametrize('layout,expected', [
@@ -99,19 +99,18 @@ def lost_tile(client: PlayerState) -> tuple[str, str, str | None]:
     return 'tiles', seat_oracle.key(position), ''
 
 
+def held_in_view(client: PlayerState) -> PlayerObject:
+    return next(obj for obj in client.objects.values() if placement_support_cells(obj.placement)
+                & set(mask_positions(senses(client).visible)))
+
+
 def ghost_object(client: PlayerState) -> tuple[str, str, str | None]:
     """A copy of a held object in view, under an identity nothing in the world has."""
-    held = next(obj for obj in client.objects.values() if placement_support_cells(obj.placement)
-                & set(mask_positions(senses(client).visible)))
+    held = held_in_view(client)
     identity = uuid4()
     client.objects[identity] = replace(held, item=replace(held.item, item_uuid=identity),
                                        placement=held.placement.model_copy(update={'object_uuid': identity}))
     return 'objects', str(identity), None
-
-
-def held_in_view(client: PlayerState) -> PlayerObject:
-    return next(obj for obj in client.objects.values() if placement_support_cells(obj.placement)
-                & set(mask_positions(senses(client).visible)))
 
 
 def kept_object(client: PlayerState) -> tuple[str, str, str | None]:
@@ -119,7 +118,10 @@ def kept_object(client: PlayerState) -> tuple[str, str, str | None]:
     held = held_in_view(client)
     position = next(cell for cell in sorted(mask_positions(senses(client).visible))
                     if cell not in placement_support_cells(held.placement))
-    client.objects[held.item.item_uuid] = replace(held, placement=held.placement.model_copy(update={'position': position}))
+    support = WorldObjectSupport(position=position, tile_uuid=client.tiles[position].tile_uuid)
+    placement = WorldObjectPlacement.model_validate({**held.placement.model_dump(), 'position': position,
+        'tile_uuid': support.tile_uuid, 'covered_supports': (support,), 'removed_bands': ()})
+    client.objects[held.item.item_uuid] = replace(held, placement=placement)
     return 'objects', str(held.item.item_uuid), 'placement.position'
 
 

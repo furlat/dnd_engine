@@ -60,16 +60,17 @@ def live_world() -> WorldFacts:
 
 
 @contextmanager
-def looks_stay_constant(written: Counter[UUID]) -> Iterator[None]:
-    """Run a scenario, then fold what it committed: every object's look stays the one it first had.
-    `written` counts the folded writes per uuid, so a scenario can show its subjects were written."""
+def looks_stay_constant() -> Iterator[Counter[UUID]]:
+    """Run a scenario, then fold what it committed: every object's look stays the one it first had. Yields the
+    folded writes per uuid (counted on exit), so a scenario can show its subjects were written."""
+    written: Counter[UUID] = Counter()
     world = live_world()
     start = EventQueue.event_cursor()
     looks: dict[UUID, ObjectLook] = {}
     for obj in world.objects.values():
         for item in (obj.item, *(obj.contained_items or ())):
             looks[item.item_uuid] = split_floor_item(floor_item(item, ()))[0]
-    yield
+    yield written
     for _, event in EventQueue.iter_events_since(start):
         if event.phase is not EventPhase.COMPLETION:
             continue
@@ -121,8 +122,7 @@ def test_a_door_keeps_its_look_through_open_close_damage_and_destruction(arena, 
     attacker = armed_actor(arena, (4, 3))
     door = build_authored_door("environment.door.fantasy_a1", destruction_outcome=outcome, hit_points=12)
     door.place_on_grid((3, 3), boundary_direction=CardinalDirection.EAST, orientation=CardinalDirection.SOUTH)
-    written: Counter[UUID] = Counter()
-    with looks_stay_constant(written):
+    with looks_stay_constant() as written:
         use(attacker, door, "Open Door")
         use(attacker, door, "Close Door")
         attack(attacker, door, 4)
@@ -143,8 +143,7 @@ def test_a_chest_and_its_contents_keep_their_looks_through_loot():
         chest = BaseBlock.get(built.object_uuids["field_cache"])
         assert isinstance(chest, StorageChest)
         contents = set(chest.chest_inventory.items)
-        written: Counter[UUID] = Counter()
-        with looks_stay_constant(written):
+        with looks_stay_constant() as written:
             use(actor, chest, "Open Chest")
             row = next(row for row in actor.get_available_actions().all_actions
                        if row.source_item_uuid == chest.uuid and row.loot_item_uuid is not None)
@@ -167,8 +166,7 @@ def test_a_wall_of_stone_section_keeps_its_look_through_a_disintegrate_cut():
         for tile in get_map().get_all_tiles().values():
             tile.surface = tile.surface.model_copy(update={"base_material": Material.STONE})
         Entity.update_all_entities_senses(max_distance=100)
-        written: Counter[UUID] = Counter()
-        with looks_stay_constant(written):
+        with looks_stay_constant() as written:
             raised = WallOfStone(source_entity_uuid=caster.uuid, end_position=(5, 6),
                 extra_target_positions=[(9, 6)], stone_panel_width_feet=20).apply()
             assert raised is not None and not raised.canceled

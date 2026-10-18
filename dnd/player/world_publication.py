@@ -19,7 +19,7 @@ rules
 """
 
 from collections.abc import Collection, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from dnd.core.cells import mask_difference, mask_from_positions, mask_intersection, mask_positions, mask_union, \
@@ -163,11 +163,11 @@ def _whole_residue(position: Position, residue: TileResidueState) -> ResidueRow:
 class _Rows:
     """One update's rows as they are built."""
 
-    tile_looks: list[TileLook]
-    tile_statics: list[TileStatic]
-    residue_materials: list[ResidueMaterial]
-    object_looks: list[ObjectLook]
-    boundary_structures: list[BoundaryStructureStatic]
+    tile_looks: list[TileLook] = field(default_factory=list)
+    tile_statics: list[TileStatic] = field(default_factory=list)
+    residue_materials: list[ResidueMaterial] = field(default_factory=list)
+    object_looks: list[ObjectLook] = field(default_factory=list)
+    boundary_structures: list[BoundaryStructureStatic] = field(default_factory=list)
 
 
 def _material(rows: _Rows, tile: WorldTileState, residue_id: str, sent: StaticSent, pending: StaticSent) -> None:
@@ -261,7 +261,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         entered_cells = mask_union(entered_cells, mask_difference(visible, before))
         left.update(mask_positions(mask_difference(before, visible)))
     entered = set(mask_positions(entered_cells))
-    rows = _Rows([], [], [], [], [])
+    rows = _Rows()
 
     # Tiles: the entered cells whole (their static rows first: a placement's anchor tile is derived from them).
     tiles = {position: world.tiles[position] for position in sorted(entered) if position in world.tiles}

@@ -1158,6 +1158,9 @@ class MechanismActivationFact(TypedDict):
     committed: bool
 
 
+type MemberBits = int
+
+
 class ModifierBreakdown(TypedDict):
     name: str
     value: int
@@ -2266,57 +2269,62 @@ class BoundaryStructureStatic(TypedDict):
 
 
 class ColumnCardinalDirection(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[CardinalDirection]
 
 
 class ColumnItemIntegrity(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[ItemIntegrity]
 
 
+class ColumnMemberBits(TypedDict):
+    rows: NotRequired[RowBits | None]
+    values: list[MemberBits]
+
+
 class ColumnUUID(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[str]
 
 
 class ColumnBool(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[bool]
 
 
 class ColumnInt(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[int]
 
 
 class ColumnStr(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[str]
 
 
 class ColumnTupleCardinalDirection(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[list[CardinalDirection]]
 
 
 class ColumnTupleItemConcentrationSlot(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[list[ItemConcentrationSlot]]
 
 
 class ColumnTupleObjectResidueState(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[list[ObjectResidueState]]
 
 
 class ColumnTupleWorldObjectSupport(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[list[WorldObjectSupport]]
 
 
 class ColumnTupleTupleIntIntInt(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[list[list[Value]]]
 
 
@@ -2622,7 +2630,7 @@ class PerceivedContact(TypedDict):
 
 
 class PlacementColumns(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     position: list[list[PositionItem]]
     top_height_steps: list[int]
     boundary_direction: NotRequired[ColumnCardinalDirection | None]
@@ -2969,12 +2977,12 @@ class AttackLogData(TypedDict):
 
 
 class ColumnItemRemnantState(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[ItemRemnantState]
 
 
 class ColumnTupleItemEffectPresentationState(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[list[ItemEffectPresentationState]]
 
 
@@ -3227,12 +3235,12 @@ class ChoicesResponse(TypedDict):
 
 
 class ColumnConstructionGeometry(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[ConstructionGeometry]
 
 
 class ColumnTupleSpellSuppression(TypedDict):
-    rows: NotRequired[RowBits]
+    rows: NotRequired[RowBits | None]
     values: list[list[SpellSuppression]]
 
 
@@ -3428,7 +3436,7 @@ class ItemState(TypedDict):
 
 class ObjectColumns(TypedDict):
     item_uuids: list[str]
-    members: NotRequired[ColumnInt | None]
+    members: NotRequired[ColumnMemberBits | None]
     observed_faces: NotRequired[ColumnTupleCardinalDirection | None]
     name: list[str]
     visual_item_name: NotRequired[ColumnStr | None]

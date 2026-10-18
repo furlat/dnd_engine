@@ -49,7 +49,7 @@ Row *i* is the *i*-th entry of `item_uuids`; field names travel once per update.
 `visual_item_name` is left out when it equals `name`. `boundary_structure` is the content id of a
 `boundary_structures` row. `construction_geometry` is state, not look: a cut construction's geometry changes.
 
-### `ObjectPlacement` (an object row's placement)
+### `ObjectPlacement` (an object row's placement, as `placements` decodes it)
 
 It carries what the full `WorldObjectPlacement` holds that is neither derivable nor a default. To decode it:
 

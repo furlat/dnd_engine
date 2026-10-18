@@ -2370,17 +2370,19 @@ export type ConstructionOwnerUuid3 = string | null;
 export type KnownToCreator3 = boolean;
 export type ObjectLooks = ObjectLook[];
 export type ItemUuids = string[];
-export type Values1 = number[];
+export type MemberBits = number;
+export type Values1 = MemberBits[];
 export type Values2 = CardinalDirection[][];
 export type Name14 = string[];
 export type Values3 = string[];
 export type MapChar3 = string[];
 export type Values4 = boolean[];
-export type Values5 = ItemEffectPresentationState[][];
-export type Values6 = ObjectResidueState[][];
-export type Values7 = ItemConcentrationSlot[][];
-export type Values8 = ItemRemnantState[];
-export type Values9 = ItemIntegrity1[];
+export type Values5 = number[];
+export type Values6 = ItemEffectPresentationState[][];
+export type Values7 = ObjectResidueState[][];
+export type Values8 = ItemConcentrationSlot[][];
+export type Values9 = ItemRemnantState[];
+export type Values10 = ItemIntegrity1[];
 export type ConstructionGeometry3 =
   | SpherePresentationGeometry
   | ConePresentationGeometry
@@ -2389,14 +2391,14 @@ export type ConstructionGeometry3 =
   | CylinderPresentationGeometry
   | WallPresentationGeometry
   | WallAssemblyPresentationGeometry;
-export type Values10 = ConstructionGeometry3[];
-export type Values11 = SpellSuppression[][];
+export type Values11 = ConstructionGeometry3[];
+export type Values12 = SpellSuppression[][];
 export type Position14 = [number, number][];
 export type TopHeightSteps1 = number[];
-export type Values12 = CardinalDirection[];
-export type Values13 = string[];
-export type Values14 = WorldObjectSupport[][];
-export type Values15 = [number, number, number][][];
+export type Values13 = CardinalDirection[];
+export type Values14 = string[];
+export type Values15 = WorldObjectSupport[][];
+export type Values16 = [number, number, number][][];
 export type ObjectsRemoved = string[];
 export type ContainerUuid = string;
 export type ItemUuid7 = string;
@@ -2496,7 +2498,7 @@ export type FlexibleAbilityBonuses = [
   number
 ][];
 export type ChoiceId = string;
-export type Values16 = string[];
+export type Values17 = string[];
 export type Choices = OriginChoiceSelection[];
 export type StepId = string;
 export type CharacterLevel = number;
@@ -2511,7 +2513,7 @@ export type CharacterSubclass =
   | "subclass.paladin.oath_of_devotion"
   | "subclass.wizard.school_of_evocation";
 export type ChoiceId1 = string;
-export type Values17 = string[];
+export type Values18 = string[];
 export type Choices1 = ClassChoiceSelection[];
 export type ClassLevels = AppliedClassLevel[];
 export type Abilities = ["strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma", number][];
@@ -5707,38 +5709,38 @@ export interface ObjectLook {
  */
 export interface ObjectColumns {
   item_uuids: ItemUuids;
-  members?: Column | null;
-  observed_faces?: Column1 | null;
+  members?: Column_MemberBits_ | null;
+  observed_faces?: ColumnTuple_CardinalDirection__________ | null;
   name: Name14;
-  visual_item_name?: Column2 | null;
+  visual_item_name?: ColumnStr_ | null;
   map_char: MapChar3;
-  boundary_structure?: Column2 | null;
-  is_open?: Column3 | null;
-  is_lit?: Column3 | null;
-  very_bright_radius_feet?: Column | null;
-  bright_radius_feet?: Column | null;
-  dim_radius_feet?: Column | null;
-  stack_count?: Column | null;
-  is_pickable?: Column3 | null;
-  item_effects?: Column4 | null;
-  blocks_propagation?: Column3 | null;
-  is_engaged?: Column3 | null;
-  surface_residues?: Column5 | null;
-  current_hit_points?: Column | null;
-  concentration_slots?: Column6 | null;
-  remnant_state?: Column7 | null;
-  integrity?: Column8 | null;
-  destruction_outcome?: Column2 | null;
-  construction_geometry?: Column9 | null;
-  construction_suppressions?: Column10 | null;
+  boundary_structure?: ColumnStr_ | null;
+  is_open?: ColumnBool_ | null;
+  is_lit?: ColumnBool_ | null;
+  very_bright_radius_feet?: ColumnInt_ | null;
+  bright_radius_feet?: ColumnInt_ | null;
+  dim_radius_feet?: ColumnInt_ | null;
+  stack_count?: ColumnInt_ | null;
+  is_pickable?: ColumnBool_ | null;
+  item_effects?: ColumnTuple_ItemEffectPresentationState__________ | null;
+  blocks_propagation?: ColumnBool_ | null;
+  is_engaged?: ColumnBool_ | null;
+  surface_residues?: ColumnTuple_ObjectResidueState__________ | null;
+  current_hit_points?: ColumnInt_ | null;
+  concentration_slots?: ColumnTuple_ItemConcentrationSlot__________ | null;
+  remnant_state?: Column_ItemRemnantState_ | null;
+  integrity?: Column_ItemIntegrity_ | null;
+  destruction_outcome?: ColumnStr_ | null;
+  construction_geometry?: Column_ConstructionGeometry_ | null;
+  construction_suppressions?: ColumnTuple_SpellSuppression__________ | null;
   placements?: PlacementColumns | null;
 }
 /**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column {
-  rows?: RowBits5;
+export interface Column_MemberBits_ {
+  rows?: RowBits5 | null;
   values: Values1;
 }
 /**
@@ -5754,264 +5756,137 @@ export interface RowBits5 {
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column1 {
-  rows?: RowBits6;
+export interface ColumnTuple_CardinalDirection__________ {
+  rows?: RowBits5 | null;
   values: Values2;
 }
 /**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits6 {
-  start?: Start1;
-  bits?: Bits;
-}
-/**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column2 {
-  rows?: RowBits7;
+export interface ColumnStr_ {
+  rows?: RowBits5 | null;
   values: Values3;
 }
 /**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits7 {
-  start?: Start1;
-  bits?: Bits;
-}
-/**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column3 {
-  rows?: RowBits8;
+export interface ColumnBool_ {
+  rows?: RowBits5 | null;
   values: Values4;
 }
 /**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits8 {
-  start?: Start1;
-  bits?: Bits;
-}
-/**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column4 {
-  rows?: RowBits9;
+export interface ColumnInt_ {
+  rows?: RowBits5 | null;
   values: Values5;
 }
 /**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits9 {
-  start?: Start1;
-  bits?: Bits;
-}
-/**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column5 {
-  rows?: RowBits10;
+export interface ColumnTuple_ItemEffectPresentationState__________ {
+  rows?: RowBits5 | null;
   values: Values6;
 }
 /**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits10 {
-  start?: Start1;
-  bits?: Bits;
-}
-/**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column6 {
-  rows?: RowBits11;
+export interface ColumnTuple_ObjectResidueState__________ {
+  rows?: RowBits5 | null;
   values: Values7;
 }
 /**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits11 {
-  start?: Start1;
-  bits?: Bits;
-}
-/**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column7 {
-  rows?: RowBits12;
+export interface ColumnTuple_ItemConcentrationSlot__________ {
+  rows?: RowBits5 | null;
   values: Values8;
 }
 /**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits12 {
-  start?: Start1;
-  bits?: Bits;
-}
-/**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column8 {
-  rows?: RowBits13;
+export interface Column_ItemRemnantState_ {
+  rows?: RowBits5 | null;
   values: Values9;
 }
 /**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits13 {
-  start?: Start1;
-  bits?: Bits;
-}
-/**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column9 {
-  rows?: RowBits14;
+export interface Column_ItemIntegrity_ {
+  rows?: RowBits5 | null;
   values: Values10;
 }
 /**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface RowBits14 {
-  start?: Start1;
-  bits?: Bits;
+export interface Column_ConstructionGeometry_ {
+  rows?: RowBits5 | null;
+  values: Values11;
 }
 /**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column10 {
-  rows?: RowBits15;
-  values: Values11;
-}
-/**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits15 {
-  start?: Start1;
-  bits?: Bits;
+export interface ColumnTuple_SpellSuppression__________ {
+  rows?: RowBits5 | null;
+  values: Values12;
 }
 /**
  * The `ObjectPlacement`s of an update's object rows, as columns over the rows `rows` selects (left out:
  * every row).
  */
 export interface PlacementColumns {
-  rows?: RowBits16;
+  rows?: RowBits5 | null;
   position: Position14;
   top_height_steps: TopHeightSteps1;
-  boundary_direction?: Column11 | null;
-  tile_uuid?: Column12 | null;
-  covered_supports?: Column13 | null;
-  occupies_bands?: Column3 | null;
-  base_height_steps?: Column | null;
-  orientation?: Column11 | null;
-  removed_bands?: Column14 | null;
-}
-/**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits16 {
-  start?: Start1;
-  bits?: Bits;
+  boundary_direction?: Column_CardinalDirection_ | null;
+  tile_uuid?: Column_UUID_ | null;
+  covered_supports?: ColumnTuple_WorldObjectSupport__________ | null;
+  occupies_bands?: ColumnBool_ | null;
+  base_height_steps?: ColumnInt_ | null;
+  orientation?: Column_CardinalDirection_ | null;
+  removed_bands?: ColumnTupleTupleInt_Int_Int___________ | null;
 }
 /**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column11 {
-  rows?: RowBits17;
-  values: Values12;
-}
-/**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits17 {
-  start?: Start1;
-  bits?: Bits;
-}
-/**
- * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
- * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
- */
-export interface Column12 {
-  rows?: RowBits18;
+export interface Column_CardinalDirection_ {
+  rows?: RowBits5 | null;
   values: Values13;
 }
 /**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits18 {
-  start?: Start1;
-  bits?: Bits;
-}
-/**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column13 {
-  rows?: RowBits19;
+export interface Column_UUID_ {
+  rows?: RowBits5 | null;
   values: Values14;
 }
 /**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface RowBits19 {
-  start?: Start1;
-  bits?: Bits;
+export interface ColumnTuple_WorldObjectSupport__________ {
+  rows?: RowBits5 | null;
+  values: Values15;
 }
 /**
  * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
  * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface Column14 {
-  rows?: RowBits20;
-  values: Values15;
-}
-/**
- * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
- * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
- * nonzero byte, and the empty subset is start 0, no bits.
- */
-export interface RowBits20 {
-  start?: Start1;
-  bits?: Bits;
+export interface ColumnTupleTupleInt_Int_Int___________ {
+  rows?: RowBits5 | null;
+  values: Values16;
 }
 /**
  * A container's whole contents, on gaining sight of them (looks once, through `object_looks`).
@@ -6136,7 +6011,7 @@ export interface AppliedOriginState {
  */
 export interface OriginChoiceSelection {
   choice_id: ChoiceId;
-  values: Values16;
+  values: Values17;
 }
 /**
  * One ordered class-level step installed on an Entity.
@@ -6154,7 +6029,7 @@ export interface AppliedClassLevel {
  */
 export interface ClassChoiceSelection {
   choice_id: ChoiceId1;
-  values: Values17;
+  values: Values18;
 }
 /**
  * One spendable channel or resource row of a sheet; its label is fixed by its key.
@@ -6215,7 +6090,7 @@ export interface SensoryRows {
   uuids?: Uuids;
   contact_uuid_index?: ContactUuidIndex;
   contact_positions?: ContactPositions;
-  contact_visual?: RowBits21;
+  contact_visual?: RowBits6;
   contact_special_senses?: ContactSpecialSenses;
   sighting_uuid_index?: SightingUuidIndex;
   sightings?: Sightings;
@@ -6231,7 +6106,7 @@ export interface SensoryRows {
  * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
  * nonzero byte, and the empty subset is start 0, no bits.
  */
-export interface RowBits21 {
+export interface RowBits6 {
   start?: Start1;
   bits?: Bits;
 }
@@ -6998,7 +6873,7 @@ export interface SensoryRows1 {
   uuids?: Uuids;
   contact_uuid_index?: ContactUuidIndex;
   contact_positions?: ContactPositions;
-  contact_visual?: RowBits21;
+  contact_visual?: RowBits6;
   contact_special_senses?: ContactSpecialSenses;
   sighting_uuid_index?: SightingUuidIndex;
   sightings?: Sightings;

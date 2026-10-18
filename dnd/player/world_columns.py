@@ -18,7 +18,7 @@ from dnd.core.item_types import ItemIntegrity
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.player.facts import (Column, FloorItem, ObjectColumns, ObjectLook, ObjectPlacement, ObjectRow, ObjectState,
     PlacementColumns, TileColumns, TileLook, TileStatic)
-from dnd.types.cells import NO_ROWS, no_rows
+from dnd.types.cells import RowBits
 from dnd.types.materials import TileSurface
 from dnd.types.event_facts import WorldTileState
 from dnd.types.world import LightLevel
@@ -55,9 +55,14 @@ def pack_tile_columns(tiles: Mapping[tuple[int, int], WorldTileState]) -> TileCo
         elevation_steps=elevations if any(elevations) else ())
 
 
+def _content_id(text: str) -> str:
+    """A static row's content id: a digest of its value's text."""
+    return sha256(text.encode()).hexdigest()[:16]
+
+
 def tile_look_id(surface: TileSurface, name: str) -> str:
     """A tile look's content id: a digest of its surface and name."""
-    return sha256(f"{surface.model_dump_json()}\n{name}".encode()).hexdigest()[:16]
+    return _content_id(f"{surface.model_dump_json()}\n{name}")
 
 
 def unpack_tile_columns(columns: TileColumns, statics: Mapping[tuple[int, int], TileStatic],
@@ -92,7 +97,7 @@ def unpack_tile_columns(columns: TileColumns, statics: Mapping[tuple[int, int], 
 
 def structure_id(structure: BoundaryStructure) -> str:
     """A boundary structure's content id: a digest of its value."""
-    return sha256(structure.model_dump_json().encode()).hexdigest()[:16]
+    return _content_id(structure.model_dump_json())
 
 
 def split_floor_item(item: FloorItem) -> tuple[ObjectLook, ObjectState]:
@@ -167,23 +172,33 @@ def unpack_placement(identity: UUID, row: ObjectPlacement, statics: Mapping[tupl
         removed_bands=row.removed_bands)
 
 
-def _column(cells: Sequence[tuple[int, Value]], count: int) -> Column[Value] | None:
-    """The column of a group of `count` rows holding these (row, value) pairs; None when it holds none."""
-    if not cells:
+def _selection(held: Sequence[int], count: int) -> RowBits | None:
+    """The rows of a group of `count` rows that a column holds (None: every row)."""
+    if len(held) == count:
         return None
-    if len(cells) == count:
-        return Column(values=tuple(value for _, value in cells))
     flags = [False] * count
-    for row, _ in cells:
+    for row in held:
         flags[row] = True
-    return Column(rows=flag_bits(flags), values=tuple(value for _, value in cells))
+    return flag_bits(flags)
+
+
+def _selected(rows: RowBits | None, count: int) -> list[int]:
+    """The rows a column selects of a group of `count` rows (None: every row)."""
+    return list(range(count)) if rows is None else [int(row) for row in bit_rows(rows, count)]
+
+
+def _column(pairs: Sequence[tuple[int, Value]], count: int) -> Column[Value] | None:
+    """The column of a group of `count` rows holding these (row, value) pairs; None when it holds none."""
+    if not pairs:
+        return None
+    return Column(rows=_selection([row for row, _ in pairs], count), values=tuple(value for _, value in pairs))
 
 
 def _held(column: Column[Value] | None, count: int) -> dict[int, Value]:
     """A column's values by row (a row it skips holds the field's default)."""
     if column is None:
         return {}
-    rows = list(range(count)) if no_rows(column.rows) else [int(row) for row in bit_rows(column.rows, count)]
+    rows = _selected(column.rows, count)
     if len(rows) != len(column.values) or not column.values:
         raise ValueError("A column holds one value per row it selects, and at least one")
     return dict(zip(rows, column.values))
@@ -198,10 +213,9 @@ def pack_object_rows(rows: Sequence[ObjectRow]) -> ObjectColumns | None:
     placed = [(index, row.placement) for index, row in enumerate(rows) if row.placement is not None]
     placements = None
     if placed:
-        flags = [row.placement is not None for row in rows]
         at = [placement for _, placement in placed]
         size = len(at)
-        placements = PlacementColumns(rows=NO_ROWS if size == count else flag_bits(flags),
+        placements = PlacementColumns(rows=_selection([index for index, _ in placed], count),
             position=tuple(row.position for row in at), top_height_steps=tuple(row.top_height_steps for row in at),
             boundary_direction=_column([(i, row.boundary_direction) for i, row in enumerate(at)
                 if row.boundary_direction is not None], size),
@@ -269,7 +283,7 @@ def unpack_object_rows(columns: ObjectColumns | None) -> tuple[ObjectRow, ...]:
     placed: dict[int, ObjectPlacement] = {}
     if columns.placements is not None:
         at = columns.placements
-        rows = list(range(count)) if no_rows(at.rows) else [int(row) for row in bit_rows(at.rows, count)]
+        rows = _selected(at.rows, count)
         size = len(rows)
         if len(at.position) != size or len(at.top_height_steps) != size:
             raise ValueError("A dense placement column holds one value per placed row")

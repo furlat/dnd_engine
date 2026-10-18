@@ -12,6 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.dataclasses import dataclass as packed_dataclass
+from pydantic.config import JsonDict
 from dnd.player.compatibility import upgrade_spell_fact
 from dnd.player.audience import AudiencePerception, PlayerAudience, resolve_audience
 
@@ -31,7 +32,7 @@ from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposi
 from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState, ResidueContribution
 from dnd.types.materials import TileSurface
-from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, NO_ROWS, PACKED, CellMask, CellMaskField, CellValues, CellValuesField, RowBitsField
+from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, NO_ROWS, PACKED, CellMask, CellMaskField, CellValues, CellValuesField, RowBits, RowBitsField
 from dnd.types.senses import PerceivedContact, SenseMode, SensesSnapshot, SensesType, VolumeSurfaceSight
 from dnd.core.condition_types import ConditionDurationSummary
 from dnd.types.class_features import DraconicPresenceMode
@@ -1290,19 +1291,32 @@ class ObjectRow:
 Value = TypeVar("Value")
 
 
+def _named_by_its_definition(schema: JsonDict) -> None:
+    """A column's schema is named by its definition (`Column_<value type>_`), not by a title every column
+    shares (an SDK generator would number the columns by order)."""
+    del schema["title"]
+
+
+# The rows a group's column selects; left out, every row.
+SelectedRows = Annotated[RowBits | None, Field(exclude_if=_unset)]
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Column(Generic[Value]):
     """One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
     every row; a column with no value is left out of its group, and each row it skips holds the field's default."""
 
-    rows: RowBitsField = NO_ROWS
+    __pydantic_config__ = ConfigDict(json_schema_extra=_named_by_its_definition)
+
+    rows: SelectedRows = None
     values: tuple[Value, ...]
 
 
 # A column of non-default values, left out when no row holds one.
 Sparse = Annotated[Column[Value] | None, Field(exclude_if=_unset)]
-# The geometry union under one name, so the schema names its column.
+# Value types named so the schema names their columns.
 type ConstructionGeometry = AoEPresentationGeometry
+type MemberBits = Annotated[int, Field(ge=1)]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -1310,7 +1324,7 @@ class PlacementColumns:
     """The `ObjectPlacement`s of an update's object rows, as columns over the rows `rows` selects (left out:
     every row)."""
 
-    rows: RowBitsField = NO_ROWS
+    rows: SelectedRows = None
     position: tuple[tuple[int, int], ...]
     top_height_steps: tuple[int, ...]
     boundary_direction: Sparse[CardinalDirection] = None
@@ -1329,7 +1343,7 @@ class ObjectColumns:
     the rows whose value is not the field's default."""
 
     item_uuids: tuple[UUID, ...]
-    members: Sparse[int] = None
+    members: Sparse[MemberBits] = None
     observed_faces: Sparse[tuple[CardinalDirection, ...]] = None
     name: tuple[str, ...]
     visual_item_name: Sparse[str] = None
@@ -1412,8 +1426,8 @@ class WorldUpdate:
 
 @dataclass(slots=True, kw_only=True)
 class StaticStore:
-    """The static rows the client was sent, never pruned: tiles by cell (the latest uuid there), residue
-    materials by id, object looks by item uuid, boundary structures by content id."""
+    """The static rows the client was sent, never pruned: tiles by cell (the latest uuid there), tile looks and
+    boundary structures by content id, residue materials by id, object looks by item uuid."""
 
     tiles: dict[tuple[int, int], TileStatic] = field(default_factory=dict)
     tile_looks: dict[str, TileLook] = field(default_factory=dict)

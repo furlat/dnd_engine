@@ -4660,11 +4660,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4677,7 +4681,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -4685,11 +4688,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4702,7 +4709,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -4710,11 +4716,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4727,7 +4737,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -4735,11 +4744,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4752,7 +4765,34 @@
         "required": [
           "values"
         ],
-        "title": "Column",
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Column_MemberBits_": {
+        "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/MemberBits"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
         "type": "object",
         "additionalProperties": false
       },
@@ -4760,11 +4800,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4778,7 +4822,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -4786,11 +4829,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4803,7 +4850,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -4811,11 +4857,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4830,7 +4880,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -4838,11 +4887,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4855,7 +4908,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -4863,11 +4915,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4883,7 +4939,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -4891,11 +4946,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4911,7 +4970,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -4919,11 +4977,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4939,7 +5001,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -4947,11 +5008,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4967,7 +5032,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -4975,11 +5039,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -4995,7 +5063,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -5003,11 +5070,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -5023,7 +5094,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -5031,11 +5101,15 @@
         "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "values": {
             "items": {
@@ -5070,7 +5144,6 @@
         "required": [
           "values"
         ],
-        "title": "Column",
         "type": "object",
         "additionalProperties": false
       },
@@ -12870,6 +12943,11 @@
         "type": "object",
         "additionalProperties": false
       },
+      "MemberBits": {
+        "minimum": 1,
+        "type": "integer",
+        "maximum": 9007199254740991
+      },
       "ModifierBreakdown": {
         "additionalProperties": false,
         "description": "A single modifier contributing to a roll or value.\n\nAttributes:\n    name: Human-readable modifier name.\n    value: Numerical modifier value.\n    source: Description of where the modifier originated.",
@@ -13429,7 +13507,7 @@
           "members": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Column_int_"
+                "$ref": "#/components/schemas/Column_MemberBits_"
               },
               {
                 "type": "null"
@@ -14697,11 +14775,15 @@
         "description": "The `ObjectPlacement`s of an update's object rows, as columns over the rows `rows` selects (left out:\nevery row).",
         "properties": {
           "rows": {
-            "$ref": "#/components/schemas/RowBits",
-            "default": {
-              "start": 0,
-              "bits": ""
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowBits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "position": {
             "items": {

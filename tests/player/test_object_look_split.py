@@ -1,13 +1,15 @@
 """A floor item travels as its look (once per uuid) and its state: joining them gives the item back (world codec)."""
 
-from dataclasses import fields
+from dataclasses import asdict, fields
 from uuid import uuid4
 
-from dnd.core.item_types import DoorMechanism, DoorSwing, ItemIntegrity, ItemRemnantState
+from dnd.core.item_types import (DoorMechanism, DoorSwing, ItemConcentrationSlot, ItemEffectPresentationState,
+    ItemIntegrity, ItemRemnantState)
+from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.player.facts import FloorItem
 from dnd.player.world_columns import (join_floor_item, pack_object_rows, split_floor_item, structure_id,
     unpack_object_rows)
-from dnd.player.facts import ObjectLook, ObjectPlacement, ObjectRow, ObjectState
+from dnd.player.facts import ObjectColumns, ObjectLook, ObjectPlacement, ObjectRow, ObjectState, PlacementColumns
 from dnd.types.physical_access import ContactPassage
 from dnd.types.residues import ObjectResidueState
 from dnd.types.spell_suppression import SpellSuppression
@@ -69,16 +71,22 @@ def test_object_rows_round_trip_through_their_columns():
     plain = ObjectState(name="Box", map_char="b")
     full = ObjectState(name="Door", visual_item_name="oak door", map_char="+", boundary_structure=structure_id(door),
         is_open=False, is_lit=True, very_bright_radius_feet=5, bright_radius_feet=10, dim_radius_feet=20,
-        stack_count=3, is_pickable=False, blocks_propagation=True, is_engaged=False,
+        stack_count=3, is_pickable=False,
+        item_effects=(ItemEffectPresentationState(effect_uuid=uuid4(), behavior_id="effect.glow"),),
+        blocks_propagation=True, is_engaged=False,
         surface_residues=(ObjectResidueState(condition_uuid=uuid4(), residue_id="residue.blood", description="Blood",
             faces=(CardinalDirection.NORTH,)),),
-        current_hit_points=0, remnant_state=ItemRemnantState(door_open=True), integrity=ItemIntegrity.DESTROYED,
-        destruction_outcome="splintered",
+        current_hit_points=0,
+        concentration_slots=(ItemConcentrationSlot(slot_uuid=uuid4(), spell_name="Light"),),
+        remnant_state=ItemRemnantState(door_open=True), integrity=ItemIntegrity.DESTROYED,
+        destruction_outcome="splintered", construction_geometry=SpherePresentationGeometry(center=(1, 2), radius_feet=5),
         construction_suppressions=(SpellSuppression(provider_uuid=uuid4(), positions=((1, 2),)),))
     support = WorldObjectSupport(position=(3, 4), tile_uuid=uuid4())
     placed = ObjectPlacement(position=(1, 2), top_height_steps=3, boundary_direction=CardinalDirection.EAST,
         tile_uuid=uuid4(), covered_supports=(support,), occupies_bands=False, base_height_steps=1,
         orientation=CardinalDirection.SOUTH, removed_bands=((1, 2, 1),))
+    defaults = asdict(plain)
+    assert all(value != defaults[name] for name, value in asdict(full).items() if name not in {"name", "map_char"})
     rows = (ObjectRow(item_uuid=uuid4(), state=plain),
             ObjectRow(item_uuid=uuid4(), members=3, state=full, placement=placed,
                 observed_faces=(CardinalDirection.WEST,)),
@@ -86,3 +94,10 @@ def test_object_rows_round_trip_through_their_columns():
     for group in (rows, rows[:1], rows[1:2], (rows[2], rows[2])):
         assert unpack_object_rows(pack_object_rows(group)) == group
     assert pack_object_rows(()) is None and unpack_object_rows(None) == ()
+
+
+def test_the_columns_carry_every_object_row_field():
+    """A column per `ObjectState` and `ObjectPlacement` field, plus the row's uuid, members and faces."""
+    names = {row.name for row in fields(ObjectColumns)}
+    assert names == {row.name for row in fields(ObjectState)} | {"item_uuids", "members", "observed_faces", "placements"}
+    assert {row.name for row in fields(PlacementColumns)} == {row.name for row in fields(ObjectPlacement)} | {"rows"}

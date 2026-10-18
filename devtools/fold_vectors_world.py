@@ -223,6 +223,8 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
               look_and_row(item(SIGN, "Sign", visual_item_name="Sign"), sign_at),
               look_and_row(item(BANNER, "Banner"), banner_at),
               look_and_row(walled, wall_at), look_and_row(replace(walled, item_uuid=EAST_WALL), east_wall_at))
+    # w13: a closed chest opens in view while a torch is placed: one update's rows, the chest's without a placement.
+    _, closed_row = look_and_row(replace(chest, is_open=False), chest_at)
     return {
         "w1_an_object_moved_unseen_is_dropped_when_its_cell_reenters": (
             "Entered cells are authoritative: an object the client holds on a cell entering view without it is gone.",
@@ -370,6 +372,19 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
             (A,), [
             Step(entering(0, varied), view({f"{x},{y}": tile_view(row) for (x, y), row in
                                             ((row.position, row) for row in varied)})),
+        ]),
+        "w13_one_update_mixes_placed_and_unplaced_rows": (
+            "An update's placements are columns over the rows carrying one, and a sparse column holds only the rows "
+            "whose value is not the default: a row without a placement keeps the held one.",
+            (A,), [
+            Step(entering(0, tuple(floor.values()), object_looks=(box_look, chest_look), objects=rows(box_at_1, closed_row)),
+                 view(t, {str(BOX): object_view(box_at, name="Box"),
+                          str(CHEST): object_view(chest_at, name="Chest", is_open=False)})),
+            Step(WorldUpdate(occurrence=1, object_looks=(torch_look,),
+                             objects=rows(replace(chest_row, placement=None), torch_row)),
+                 view(t, {str(BOX): object_view(box_at, name="Box"),
+                          str(CHEST): object_view(chest_at, name="Chest", is_open=True),
+                          str(TORCH): object_view(torch_at, name="Torch")})),
         ]),
         "w11_placements_and_structures_decode_exactly": (
             "A placement leaves out its object, its anchor tile when the client holds that cell's static row, its "

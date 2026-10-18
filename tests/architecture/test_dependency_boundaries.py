@@ -1558,17 +1558,33 @@ def test_weapon_attack_events_have_one_metadata_snapshot_boundary() -> None:
 # The modules that publish, fold or check a seat's world; the AI's movement edges and the fold's changed-cell
 # neighbours iterate the direction tables for adjacency, which is not a boundary's incident cells.
 BOUNDARY_READERS = ("dnd/player", "dnd/world_facts.py", "devtools/performance/seat_oracle.py")
+DIRECTION_TABLES = frozenset({"CARDINAL_DELTAS", "OPPOSITE_DIRECTION"})
+
+
+def _direction_table(node: ast.expr) -> bool:
+    return (isinstance(node, ast.Name) and node.id in DIRECTION_TABLES
+            or isinstance(node, ast.Attribute) and node.attr in DIRECTION_TABLES)
+
+
+# world_facts iterates CARDINAL_DELTAS for a changed cell's neighbours (adjacency, not a boundary's sides).
+DIRECTION_TABLE_IMPORTS = frozenset({("dnd/world_facts.py", "CARDINAL_DELTAS")})
 
 
 def test_a_boundarys_incident_cells_have_one_definition() -> None:
-    """No module that publishes, folds or checks a seat's world indexes the direction tables: a boundary's faces
-    and the cells it touches are `world_placement.boundary_sides` (and `placement_support_cells`)."""
+    """No module that publishes, folds or checks a seat's world imports the direction tables (but world_facts'
+    neighbour iteration) or looks a direction up in them: a boundary's faces and the cells it touches are
+    `world_placement.boundary_sides` (and `placement_support_cells`)."""
     violations = []
     for root in BOUNDARY_READERS:
         path = REPOSITORY_ROOT / root
         for source in ([path] if path.is_file() else sorted(path.rglob("*.py"))):
+            name = str(source.relative_to(REPOSITORY_ROOT))
             tree = ast.parse(source.read_text(encoding="utf-8"))
-            violations += [f"{source.relative_to(REPOSITORY_ROOT)}:{node.lineno}" for node in ast.walk(tree)
-                if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name)
-                and node.value.id in {"CARDINAL_DELTAS", "OPPOSITE_DIRECTION"}]
+            violations += [f"{name}:{node.lineno} imports {alias.name}" for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom) for alias in node.names
+                if alias.name in DIRECTION_TABLES and (name, alias.name) not in DIRECTION_TABLE_IMPORTS]
+            violations += [f"{name}:{node.lineno} looks a direction up" for node in ast.walk(tree)
+                if isinstance(node, ast.Subscript) and _direction_table(node.value)
+                or isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get"
+                and _direction_table(node.func.value)]
     assert not violations, violations
