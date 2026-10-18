@@ -16,8 +16,9 @@ anchored at a map coordinate. Functions here take primitives (origin, sense rang
 layers) and never import a block, an entity or the map.
 """
 
+import functools
 from dataclasses import dataclass
-from typing import AbstractSet, Collection, Dict, FrozenSet, List, Mapping, Optional, Set, Tuple
+from typing import AbstractSet, Collection, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
 import numpy as np
 
@@ -374,63 +375,126 @@ def lit_view(sight: RouteSight, exists: np.ndarray, light: np.ndarray) -> Optica
 CARDINAL_DIRECTIONS = (CardinalDirection.EAST, CardinalDirection.WEST, CardinalDirection.NORTH, CardinalDirection.SOUTH)
 CARDINAL_STEPS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 OPPOSITE_CARDINAL = tuple(CARDINAL_STEPS.index((-dx, -dy)) for dx, dy in CARDINAL_STEPS)
-_STOP, _EDGE = 0, 1   # input layers; edge d is layer _EDGE + d
+# The steps a route can enter a cell by, one entry layer each (`entry_layers`): the cardinal ones in
+# CARDINAL_STEPS order, then the diagonal ones; and the route table's kind of each.
+ENTRY_STEPS = CARDINAL_STEPS + ((1, 1), (1, -1), (-1, 1), (-1, -1))
+ENTRY_KINDS = tuple(STEP_DIAGONAL if dx and dy else STEP_ALONG_X if dx else STEP_ALONG_Y for dx, dy in ENTRY_STEPS)
 
 
 # Routes gathered per batch of targets: bounds the step array a long reach builds.
 _ROUTE_BATCH = 16384
 
 
-def wall_visibility(origin: Position, window: Box, exists: np.ndarray, opaque: np.ndarray,
-                    blocked: np.ndarray, targets: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """The targets whose supercover route from the origin is clear, as window indices, x-major.
+# Shifts that spread a cell's four cardinal edge bits over four layers (CARDINAL_STEPS order).
+EDGE_SHIFTS = np.arange(len(CARDINAL_STEPS), dtype=np.uint16)[:, None, None]
+EDGE_SHIFTS.setflags(write=False)
 
-    Every array covers the window box, which holds the origin: `exists` the Tiles, `opaque` the
-    cells whose center blocks, `blocked` per cell bit d set when its edge toward its neighbor
-    in CARDINAL_STEPS[d] blocks, `targets` the cells asked about. A route is clear when every step
-    crosses an open edge and no cell strictly between the origin and the target is opaque or
-    missing; a diagonal step is open through a bridge (a cell beside both of its ends) that
-    exists, is not opaque and has both legs open. A route and its bridges stay in the box
-    between the origin and its target, so only the inputs there are read.
 
-    Each cell gets one bit per way a route can enter it (along x, along y, diagonally, seen
-    from the origin's quadrant of the cell): the step blocks, or the cell it leaves stops the
-    route. The route table's steps then read one bit per step of every target's route. Every
-    read steps back toward the origin from a cell off its row or column, so it stays in the
-    window, and a bridge is never the origin, so a bridge is open exactly where it does not stop.
+def entered_by(step: int, size: int) -> Tuple[slice, slice]:
+    """Along an axis of `size` cells, the cells a step of `step` enters and, aligned, the cells it leaves."""
+    return slice(max(step, 0), size + min(step, 0)), slice(max(-step, 0), size - max(step, 0))
+
+
+def covering_box(boxes: Sequence[Box]) -> Box:
+    """The smallest box holding every box (at least one)."""
+    return functools.reduce(union_box, boxes)
+
+
+def compact_window_groups(windows: Sequence[Box]) -> List[List[int]]:
+    """The windows of one batch of wall-FOV solves, as index groups whose covering box holds no more
+    cells than their windows together: a group that does not is split at its median window along the
+    box's longer side, so far-apart origins (another room, another island) never share one large box."""
+    def area(box: Box) -> int:
+        return (box[2] - box[0] + 1) * (box[3] - box[1] + 1)
+    done: List[List[int]] = []
+    pending = [list(range(len(windows)))] if windows else []
+    while pending:
+        group = pending.pop()
+        box = covering_box([windows[index] for index in group])
+        if len(group) == 1 or area(box) <= sum(area(windows[index]) for index in group):
+            done.append(group)
+            continue
+        axis = 0 if box[2] - box[0] >= box[3] - box[1] else 1
+        ranked = sorted(group, key=lambda index: windows[index][axis] + windows[index][axis + 2])
+        pending += [ranked[:len(ranked) // 2], ranked[len(ranked) // 2:]]
+    return done
+
+
+def entry_layers(stop: np.ndarray, blocked: np.ndarray) -> np.ndarray:
+    """Per ENTRY_STEPS step and cell, whether a route entering the cell by that step stops there: the step blocks,
+    or the cell it leaves stops (`stop`: no Tile, or a center that blocks). A cardinal step blocks when its edge
+    does (`blocked`: bit d set when the cell's edge toward its neighbor in CARDINAL_STEPS[d] blocks); a diagonal
+    one when no bridge (a cell beside both of its ends) is open, that is, neither stops nor has a blocked leg.
+    A cell entered from outside the arrays stays False."""
+    width, height = stop.shape
+    edges = ((blocked[None] >> EDGE_SHIFTS) & 1) != 0
+    # A cardinal step out of a cell stops at its edge or at the cell itself.
+    leaving = edges | stop[None]
+    along_x = {step: entered_by(step, width) for step in (-1, 0, 1)}
+    along_y = {step: entered_by(step, height) for step in (-1, 0, 1)}
+    layers = np.zeros((len(ENTRY_STEPS), width, height), dtype=bool)
+    for layer, (dx, dy) in enumerate(ENTRY_STEPS):
+        (xs, from_xs), (ys, from_ys) = along_x[dx], along_y[dy]
+        if not (dx and dy):
+            layers[layer, xs, ys] = leaving[layer, from_xs, from_ys]
+            continue
+        edge_x, edge_y = CARDINAL_STEPS.index((dx, 0)), CARDINAL_STEPS.index((0, dy))
+        # From p = c - (dx, dy) through (c.x, p.y) or through (p.x, c.y).
+        through_x = edges[edge_x, from_xs, from_ys] | leaving[edge_y, xs, from_ys]
+        through_y = edges[edge_y, from_xs, from_ys] | leaving[edge_x, from_xs, ys]
+        layers[layer, xs, ys] = (through_x & through_y) | stop[from_xs, from_ys]
+    return layers
+
+
+def wall_visibility(stop: CellLayer, blocked: CellLayer,
+                    solves: Sequence[Tuple[Position, Box, np.ndarray]]) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """For each (origin, window, targets), the targets whose supercover route from the origin is clear, as
+    window indices, x-major.
+
+    `stop` and `blocked` (as in `entry_layers`) cover one box holding every window; a window holds its origin,
+    and `targets` marks the cells of the window asked about. A route is clear when every step crosses an open
+    edge and no cell strictly between the origin and the target stops it; a diagonal step is open through a
+    bridge that does not stop and has both legs open. A route and its bridges stay in the box between the origin
+    and its target, so only the inputs there are read.
+
+    A cell's entry bits depend on the origin only through the quadrant it is entered from: they are built once
+    for every origin, and each origin's frame takes the layers of its quadrants. The exception is the first
+    step: a route leaves its origin whatever the origin's center, so the neighbors of an origin that stops are
+    rebuilt with its stop cleared (a bridge is never the origin). The route table's steps then read one bit per
+    step of every target's route; every read steps back toward the origin from a cell off its row or column,
+    so it stays in the window.
     """
-    width, height = exists.shape
+    layers = entry_layers(stop.values, blocked.values)
+    return [_clear_targets(origin, window, targets, stop, blocked, layers) for origin, window, targets in solves]
+
+
+def _clear_targets(origin: Position, window: Box, targets: np.ndarray, stop: CellLayer, blocked: CellLayer,
+                   layers: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """One origin's clear targets (`wall_visibility`), from the entry layers of the solve's box."""
+    width, height = targets.shape
     oi, oj = origin[0] - window[0], origin[1] - window[1]
     # The frame holds the window: the kept route table's within R, a larger one beyond it.
     radius = max(R, oi, oj, width - 1 - oi, height - 1 - oj)
     side = 2 * radius + 1
     fx, fy = radius - oi, radius - oj
-    inputs = np.empty((5, width, height), dtype=bool)
-    inputs[_STOP] = ~exists | opaque
-    inputs[_STOP, oi, oj] = False   # a route leaves its origin whatever the origin's center
-    for direction in range(4):
-        inputs[_EDGE + direction] = (blocked & (1 << direction)) != 0
-
-    def at(layer: int, dx: int, dy: int, xs: slice, ys: slice) -> np.ndarray:
-        """The layer at the cells (xs, ys) shifted by (dx, dy)."""
-        return inputs[layer, xs.start + dx:xs.stop + dx, ys.start + dy:ys.stop + dy]
-
-    entry = np.zeros((width, height, 1 << ROUTE_STEP_SHIFT), dtype=bool)   # STEP_NONE stays zero
-    columns, rows_y = slice(0, width), slice(0, height)
-    halves_x = ((1, slice(oi + 1, width), _EDGE), (-1, slice(0, oi), _EDGE + 1))
-    halves_y = ((1, slice(oj + 1, height), _EDGE + 2), (-1, slice(0, oj), _EDGE + 3))
-    for sx, xs, edge_x in halves_x:
-        entry[xs, :, STEP_ALONG_X] = at(edge_x, -sx, 0, xs, rows_y) | at(_STOP, -sx, 0, xs, rows_y)
-    for sy, ys, edge_y in halves_y:
-        entry[:, ys, STEP_ALONG_Y] = at(edge_y, 0, -sy, columns, ys) | at(_STOP, 0, -sy, columns, ys)
-    for sx, xs, edge_x in halves_x:
-        for sy, ys, edge_y in halves_y:
-            # From p = c - (sx, sy) through (c.x, p.y) or through (p.x, c.y).
-            blocked_x = at(_STOP, 0, -sy, xs, ys) | at(edge_x, -sx, -sy, xs, ys) | at(edge_y, 0, -sy, xs, ys)
-            blocked_y = at(_STOP, -sx, 0, xs, ys) | at(edge_y, -sx, -sy, xs, ys) | at(edge_x, -sx, 0, xs, ys)
-            entry[xs, ys, STEP_DIAGONAL] = (blocked_x & blocked_y) | at(_STOP, -sx, -sy, xs, ys)
-    frame = np.zeros((side * side + 1) << ROUTE_STEP_SHIFT, dtype=bool)
-    frame[:(side * side) << ROUTE_STEP_SHIFT].reshape(side, side, 1 << ROUTE_STEP_SHIFT)[fx:fx + width, fy:fy + height] = entry
+    frame = np.zeros((side * side + 1) << ROUTE_STEP_SHIFT, dtype=bool)   # STEP_NONE and the padding stay zero
+    entry = frame[:(side * side) << ROUTE_STEP_SHIFT].reshape(side, side, 1 << ROUTE_STEP_SHIFT)[
+        fx:fx + width, fy:fy + height]
+    ax, ay = window[0] - stop.x0, window[1] - stop.y0
+    for layer, ((dx, dy), kind) in enumerate(zip(ENTRY_STEPS, ENTRY_KINDS)):
+        # The cells a route from the origin enters by this step: past the origin along each axis the step moves.
+        xs = slice(oi + 1, width) if dx > 0 else slice(0, oi) if dx < 0 else slice(0, width)
+        ys = slice(oj + 1, height) if dy > 0 else slice(0, oj) if dy < 0 else slice(0, height)
+        entry[xs, ys, kind] = layers[layer, ax + xs.start:ax + xs.stop, ay + ys.start:ay + ys.stop]
+    gx, gy = origin[0] - stop.x0, origin[1] - stop.y0
+    if stop.values[gx, gy]:
+        x0, y0 = max(gx - 1, 0), max(gy - 1, 0)
+        near_stop = stop.values[x0:gx + 2, y0:gy + 2].copy()
+        near_stop[gx - x0, gy - y0] = False
+        near = entry_layers(near_stop, blocked.values[x0:gx + 2, y0:gy + 2])
+        for layer, ((dx, dy), kind) in enumerate(zip(ENTRY_STEPS, ENTRY_KINDS)):
+            if 0 <= oi + dx < width and 0 <= oj + dy < height:
+                entry[oi + dx, oj + dy, kind] = near[layer, gx + dx - x0, gy + dy - y0]
     ti, tj = np.nonzero(targets)
     clear = np.zeros(ti.size, dtype=bool)
     for start in range(0, ti.size, _ROUTE_BATCH):
