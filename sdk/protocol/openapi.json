@@ -2725,9 +2725,8 @@
         "title": "ActionWorldEffectShape",
         "type": "string"
       },
-      "ActorChanges": {
-        "additionalProperties": false,
-        "description": "Present fields replace the seat's known body values; omitted fields are unchanged.\n\nAgainst an absent body (first acquisition) every field is present.",
+      "ActorBirth": {
+        "description": "A body's birth fields: no event changes them, so a seat receives them once.",
         "properties": {
           "name": {
             "title": "Name",
@@ -2758,113 +2757,6 @@
           "appearance": {
             "$ref": "#/components/schemas/AppearanceConfig"
           },
-          "visual_loadout": {
-            "$ref": "#/components/schemas/VisualLoadout"
-          },
-          "normal_hp": {
-            "title": "Normal Hp",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "maximum_hp": {
-            "title": "Maximum Hp",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "temporary_hp": {
-            "title": "Temporary Hp",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "life_state": {
-            "$ref": "#/components/schemas/LifeState"
-          },
-          "armor_class": {
-            "title": "Armor Class",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "conditions": {
-            "items": {
-              "$ref": "#/components/schemas/ConditionFact"
-            },
-            "title": "Conditions",
-            "type": "array"
-          },
-          "last_visual_position": {
-            "anyOf": [
-              {
-                "maxItems": 2,
-                "minItems": 2,
-                "prefixItems": [
-                  {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  }
-                ],
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Visual Position"
-          },
-          "controlled_items": {
-            "anyOf": [
-              {
-                "items": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Controlled Items"
-          },
-          "occupancy_layer": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OccupancyLayer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "temporary_hp_grant": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TemporaryHitPointsGrant"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "resolved_size": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Size"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "structural_base_size": {
             "anyOf": [
               {
@@ -2873,7 +2765,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "default": null
           },
           "manifestation": {
             "anyOf": [
@@ -2883,32 +2776,129 @@
               {
                 "type": "null"
               }
-            ]
-          },
-          "faction": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
             ],
-            "title": "Faction"
-          },
-          "present": {
-            "title": "Present",
-            "type": "boolean"
-          },
-          "remains_disposition": {
-            "$ref": "#/components/schemas/RemainsDisposition"
-          },
-          "spatial_disposition": {
-            "$ref": "#/components/schemas/SpatialDisposition"
+            "default": null
           }
         },
-        "title": "ActorChanges",
-        "type": "object"
+        "required": [
+          "name",
+          "character_body_id",
+          "creature_content_ref",
+          "appearance"
+        ],
+        "title": "ActorBirth",
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ActorChangeFact": {
+        "description": "An event's change to the bodies a seat perceives: each actor's rows, after the items entering its view.",
+        "properties": {
+          "kind": {
+            "const": "actor_change",
+            "default": "actor_change",
+            "title": "Kind",
+            "type": "string"
+          },
+          "actors": {
+            "items": {
+              "$ref": "#/components/schemas/ActorRows"
+            },
+            "title": "Actors",
+            "type": "array"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ItemRecord"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "actors"
+        ],
+        "title": "ActorChangeFact",
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ActorRows": {
+        "description": "One actor's disclosed change rows, in the engine's order.",
+        "properties": {
+          "actor_uuid": {
+            "format": "uuid",
+            "title": "Actor Uuid",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "active_weapon_set": "#/components/schemas/WeaponSetRow",
+                  "armor_class": "#/components/schemas/NumberRow",
+                  "condition": "#/components/schemas/ConditionRow",
+                  "condition_duration": "#/components/schemas/DurationRow",
+                  "inventory": "#/components/schemas/InventoryRow",
+                  "item_effect_duration": "#/components/schemas/DurationRow",
+                  "item_effects": "#/components/schemas/ItemEffectsRow",
+                  "item_state": "#/components/schemas/ItemStateRow",
+                  "layer": "#/components/schemas/LayerRow",
+                  "maximum_hp": "#/components/schemas/NumberRow",
+                  "normal_hp": "#/components/schemas/NumberRow",
+                  "resolved_size": "#/components/schemas/SizeRow",
+                  "spatial_disposition": "#/components/schemas/DispositionRow",
+                  "temporary_hp": "#/components/schemas/NumberRow",
+                  "temporary_hp_grant": "#/components/schemas/GrantRow"
+                },
+                "propertyName": "field"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/NumberRow"
+                },
+                {
+                  "$ref": "#/components/schemas/GrantRow"
+                },
+                {
+                  "$ref": "#/components/schemas/SizeRow"
+                },
+                {
+                  "$ref": "#/components/schemas/DispositionRow"
+                },
+                {
+                  "$ref": "#/components/schemas/WeaponSetRow"
+                },
+                {
+                  "$ref": "#/components/schemas/ConditionRow"
+                },
+                {
+                  "$ref": "#/components/schemas/DurationRow"
+                },
+                {
+                  "$ref": "#/components/schemas/LayerRow"
+                },
+                {
+                  "$ref": "#/components/schemas/InventoryRow"
+                },
+                {
+                  "$ref": "#/components/schemas/ItemEffectsRow"
+                },
+                {
+                  "$ref": "#/components/schemas/ItemStateRow"
+                }
+              ]
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "actor_uuid",
+          "rows"
+        ],
+        "title": "ActorRows",
+        "type": "object",
+        "additionalProperties": false
       },
       "AdvantageStatus": {
         "enum": [
@@ -4014,6 +4004,52 @@
         "title": "BodyPart",
         "type": "string"
       },
+      "BodyRecord": {
+        "description": "A body entering a seat's view at an occurrence: all its changeable fields, its birth the first time,\nand the records of the items it shows.",
+        "properties": {
+          "occurrence": {
+            "title": "Occurrence",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "actor_uuid": {
+            "format": "uuid",
+            "title": "Actor Uuid",
+            "type": "string"
+          },
+          "birth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActorBirth"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "body": {
+            "$ref": "#/components/schemas/BodyState"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ItemRecord"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "occurrence",
+          "actor_uuid",
+          "body"
+        ],
+        "title": "BodyRecord",
+        "type": "object",
+        "additionalProperties": false
+      },
       "BodyReleaseRegion": {
         "additionalProperties": false,
         "description": "One common world ellipse and its actual receiving floor pieces.",
@@ -4172,6 +4208,129 @@
         ],
         "title": "BodyReleaseResult",
         "type": "object"
+      },
+      "BodyState": {
+        "description": "Every changeable field of a body, current at its record's occurrence.",
+        "properties": {
+          "visual_loadout": {
+            "$ref": "#/components/schemas/VisualLoadout"
+          },
+          "normal_hp": {
+            "title": "Normal Hp",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maximum_hp": {
+            "title": "Maximum Hp",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "temporary_hp": {
+            "title": "Temporary Hp",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "life_state": {
+            "$ref": "#/components/schemas/LifeState"
+          },
+          "armor_class": {
+            "title": "Armor Class",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "temporary_hp_grant": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemporaryHitPointsGrant"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "conditions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ConditionMember"
+            },
+            "title": "Conditions",
+            "type": "array"
+          },
+          "controlled_items": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Controlled Items"
+          },
+          "occupancy_layer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OccupancyLayer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "resolved_size": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Size"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "faction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Faction"
+          },
+          "remains_disposition": {
+            "$ref": "#/components/schemas/RemainsDisposition",
+            "default": "intact"
+          },
+          "spatial_disposition": {
+            "$ref": "#/components/schemas/SpatialDisposition",
+            "default": "present"
+          }
+        },
+        "required": [
+          "visual_loadout",
+          "normal_hp",
+          "maximum_hp",
+          "temporary_hp",
+          "life_state",
+          "armor_class"
+        ],
+        "title": "BodyState",
+        "type": "object",
+        "additionalProperties": false
       },
       "BootstrapResponse": {
         "additionalProperties": false,
@@ -4854,40 +5013,6 @@
         "title": "ConditionCategory",
         "type": "string"
       },
-      "ConditionChangeFact": {
-        "properties": {
-          "kind": {
-            "const": "condition",
-            "default": "condition",
-            "title": "Kind",
-            "type": "string"
-          },
-          "target_entity_uuid": {
-            "format": "uuid",
-            "title": "Target Entity Uuid",
-            "type": "string"
-          },
-          "event_type": {
-            "$ref": "#/components/schemas/EventType"
-          },
-          "condition": {
-            "$ref": "#/components/schemas/ConditionFact"
-          },
-          "consumed": {
-            "default": false,
-            "title": "Consumed",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "target_entity_uuid",
-          "event_type",
-          "condition"
-        ],
-        "title": "ConditionChangeFact",
-        "type": "object",
-        "additionalProperties": false
-      },
       "ConditionDurationSummary": {
         "description": "Recorded native duration; clients never advance a separate clock.",
         "properties": {
@@ -4916,21 +5041,9 @@
         "type": "object",
         "additionalProperties": false
       },
-      "ConditionFact": {
-        "description": "A condition's presentation facts, without its live rules/ownership graph.",
+      "ConditionMember": {
+        "description": "A condition an actor holds: its identity and committed state, without any event's change payload.",
         "properties": {
-          "event_uuid": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Event Uuid"
-          },
           "condition_uuid": {
             "format": "uuid",
             "title": "Condition Uuid",
@@ -4954,32 +5067,6 @@
             ],
             "title": "Behavior Id"
           },
-          "resulting_max_hp": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Resulting Max Hp"
-          },
-          "resulting_ac": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Resulting Ac"
-          },
           "state": {
             "anyOf": [
               {
@@ -4990,56 +5077,15 @@
               }
             ],
             "default": null
-          },
-          "resulting_stats": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EntityStatsState"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "resulting_tile": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/WorldTileState"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "resulting_item": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ItemPresentationState"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "consumed": {
-            "default": false,
-            "title": "Consumed",
-            "type": "boolean"
           }
         },
         "required": [
-          "event_uuid",
           "condition_uuid",
           "name",
           "category",
-          "behavior_id",
-          "resulting_max_hp",
-          "resulting_ac"
+          "behavior_id"
         ],
-        "title": "ConditionFact",
+        "title": "ConditionMember",
         "type": "object",
         "additionalProperties": false
       },
@@ -5078,6 +5124,44 @@
         ],
         "title": "ConditionRemovedLogData",
         "type": "object"
+      },
+      "ConditionRow": {
+        "description": "A membership set (applied or changed) or, without a member, ended; `consumed` tells how it ended.",
+        "properties": {
+          "field": {
+            "const": "condition",
+            "default": "condition",
+            "title": "Field",
+            "type": "string"
+          },
+          "condition_uuid": {
+            "format": "uuid",
+            "title": "Condition Uuid",
+            "type": "string"
+          },
+          "member": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConditionMember"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "consumed": {
+            "default": false,
+            "title": "Consumed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "condition_uuid"
+        ],
+        "title": "ConditionRow",
+        "type": "object",
+        "additionalProperties": false
       },
       "ConditionState": {
         "description": "Committed condition semantics without its executable runtime owner.",
@@ -7093,6 +7177,25 @@
         "title": "DiceRollDisplay",
         "type": "object"
       },
+      "DispositionRow": {
+        "properties": {
+          "field": {
+            "const": "spatial_disposition",
+            "default": "spatial_disposition",
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/SpatialDisposition"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "DispositionRow",
+        "type": "object",
+        "additionalProperties": false
+      },
       "DoorMechanism": {
         "enum": [
           "single_hinged",
@@ -7109,6 +7212,55 @@
         ],
         "title": "DoorSwing",
         "type": "string"
+      },
+      "DurationRow": {
+        "description": "The new duration of a held condition (`key` its uuid) or of an item's effect (`key` the effect, of `item_uuid`).",
+        "properties": {
+          "field": {
+            "enum": [
+              "condition_duration",
+              "item_effect_duration"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "key": {
+            "format": "uuid",
+            "title": "Key",
+            "type": "string"
+          },
+          "item_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Item Uuid"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConditionDurationSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "field",
+          "key",
+          "duration"
+        ],
+        "title": "DurationRow",
+        "type": "object",
+        "additionalProperties": false
       },
       "DurationType": {
         "description": "Supported duration progression modes for conditions.",
@@ -7328,103 +7480,6 @@
         "title": "EntitySpottedLogData",
         "type": "object"
       },
-      "EntityStatsState": {
-        "description": "Native evaluated actor after-values; consumers do not reevaluate modifiers.",
-        "properties": {
-          "normal_hp": {
-            "title": "Normal Hp",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "maximum_hp": {
-            "title": "Maximum Hp",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "temporary_hp": {
-            "title": "Temporary Hp",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "temporary_hp_grant": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TemporaryHitPointsGrant"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "armor_class": {
-            "title": "Armor Class",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "healing_blocked": {
-            "title": "Healing Blocked",
-            "type": "boolean"
-          },
-          "damage_affinities": {
-            "items": {
-              "maxItems": 2,
-              "minItems": 2,
-              "prefixItems": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                }
-              ],
-              "type": "array"
-            },
-            "title": "Damage Affinities",
-            "type": "array"
-          },
-          "resolved_size": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Size"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "native_plane_id": {
-            "default": "material",
-            "title": "Native Plane Id",
-            "type": "string"
-          },
-          "current_plane_id": {
-            "default": "material",
-            "title": "Current Plane Id",
-            "type": "string"
-          },
-          "spatial_disposition": {
-            "$ref": "#/components/schemas/SpatialDisposition",
-            "default": "present"
-          }
-        },
-        "required": [
-          "normal_hp",
-          "maximum_hp",
-          "temporary_hp",
-          "armor_class",
-          "healing_blocked",
-          "damage_affinities"
-        ],
-        "title": "EntityStatsState",
-        "type": "object",
-        "additionalProperties": false
-      },
       "EquipIntent": {
         "additionalProperties": false,
         "properties": {
@@ -7473,40 +7528,6 @@
         ],
         "title": "EquipItem",
         "type": "object"
-      },
-      "EquipmentFact": {
-        "description": "A holder's equipment change: its body patch (loadout, armor class, inventory) and its items' patches.",
-        "properties": {
-          "kind": {
-            "const": "equipment",
-            "default": "equipment",
-            "title": "Kind",
-            "type": "string"
-          },
-          "source_entity_uuid": {
-            "format": "uuid",
-            "title": "Source Entity Uuid",
-            "type": "string"
-          },
-          "changes": {
-            "$ref": "#/components/schemas/ActorChanges"
-          },
-          "items": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ItemPatch"
-            },
-            "title": "Items",
-            "type": "array"
-          }
-        },
-        "required": [
-          "source_entity_uuid",
-          "changes"
-        ],
-        "title": "EquipmentFact",
-        "type": "object",
-        "additionalProperties": false
       },
       "EquipmentRenderLayer": {
         "description": "Dependency-neutral renderer layers contributed by equipped items.",
@@ -9745,6 +9766,32 @@
         "title": "ForcedMovementLogData",
         "type": "object"
       },
+      "GrantRow": {
+        "properties": {
+          "field": {
+            "const": "temporary_hp_grant",
+            "default": "temporary_hp_grant",
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemporaryHitPointsGrant"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "GrantRow",
+        "type": "object",
+        "additionalProperties": false
+      },
       "HandlerDispatchOutcome": {
         "description": "Observable result of one handler invocation by the event queue.",
         "enum": [
@@ -10167,6 +10214,33 @@
         "title": "InitializationResponse",
         "type": "object"
       },
+      "InventoryRow": {
+        "description": "An item entering (`held`) or leaving the actor's inventory.",
+        "properties": {
+          "field": {
+            "const": "inventory",
+            "default": "inventory",
+            "title": "Field",
+            "type": "string"
+          },
+          "item_uuid": {
+            "format": "uuid",
+            "title": "Item Uuid",
+            "type": "string"
+          },
+          "held": {
+            "title": "Held",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "item_uuid",
+          "held"
+        ],
+        "title": "InventoryRow",
+        "type": "object",
+        "additionalProperties": false
+      },
       "ItemChargeFact": {
         "properties": {
           "kind": {
@@ -10270,38 +10344,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "ItemEffectChangeFact": {
-        "description": "Witnessed native item membership edge, without a creature condition.",
-        "properties": {
-          "kind": {
-            "const": "item_effect",
-            "default": "item_effect",
-            "title": "Kind",
-            "type": "string"
-          },
-          "item_uuid": {
-            "format": "uuid",
-            "title": "Item Uuid",
-            "type": "string"
-          },
-          "effect_uuid": {
-            "format": "uuid",
-            "title": "Effect Uuid",
-            "type": "string"
-          },
-          "event_type": {
-            "$ref": "#/components/schemas/EventType"
-          }
-        },
-        "required": [
-          "item_uuid",
-          "effect_uuid",
-          "event_type"
-        ],
-        "title": "ItemEffectChangeFact",
-        "type": "object",
-        "additionalProperties": false
-      },
       "ItemEffectPresentationState": {
         "additionalProperties": false,
         "description": "Native item-owned membership; media remains independently authored.",
@@ -10382,6 +10424,36 @@
         "title": "ItemEffectPresentationState",
         "type": "object"
       },
+      "ItemEffectsRow": {
+        "description": "An item's effects, whole: the item's own snapshot order.",
+        "properties": {
+          "field": {
+            "const": "item_effects",
+            "default": "item_effects",
+            "title": "Field",
+            "type": "string"
+          },
+          "item_uuid": {
+            "format": "uuid",
+            "title": "Item Uuid",
+            "type": "string"
+          },
+          "effects": {
+            "items": {
+              "$ref": "#/components/schemas/ItemEffectPresentationState"
+            },
+            "title": "Effects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_uuid",
+          "effects"
+        ],
+        "title": "ItemEffectsRow",
+        "type": "object",
+        "additionalProperties": false
+      },
       "ItemIntegrity": {
         "description": "Physical state, independent of inventory or world placement.",
         "enum": [
@@ -10392,7 +10464,7 @@
         "type": "string"
       },
       "ItemLook": {
-        "description": "What any viewer of an equipped item sees of it; `is_lit` travels in its layer.",
+        "description": "What any viewer of an equipped item sees of it, the same for the item's life: sent once per seat. Its\neffects are dynamic (`ItemRecord.effects`); `is_lit` travels in its layer.",
         "properties": {
           "item_id": {
             "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$",
@@ -10419,13 +10491,6 @@
           },
           "equipped_visual_policy": {
             "$ref": "#/components/schemas/EquippedVisualPolicy"
-          },
-          "item_effects": {
-            "items": {
-              "$ref": "#/components/schemas/ItemEffectPresentationState"
-            },
-            "title": "Item Effects",
-            "type": "array"
           },
           "very_bright_radius_feet": {
             "anyOf": [
@@ -10473,61 +10538,11 @@
           "visual_item_name",
           "visual_variant_id",
           "equipped_visual_policy",
-          "item_effects",
           "very_bright_radius_feet",
           "bright_radius_feet",
           "dim_radius_feet"
         ],
         "title": "ItemLook",
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ItemPatch": {
-        "description": "One item's components new to the seat: all it may know the first time, then the components that changed.",
-        "properties": {
-          "item_uuid": {
-            "format": "uuid",
-            "title": "Item Uuid",
-            "type": "string"
-          },
-          "look": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ItemLook"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "profile": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ItemProfile"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "state": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ItemState"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          }
-        },
-        "required": [
-          "item_uuid"
-        ],
-        "title": "ItemPatch",
         "type": "object",
         "additionalProperties": false
       },
@@ -10542,603 +10557,6 @@
         ],
         "title": "ItemPresentationKind",
         "type": "string"
-      },
-      "ItemPresentationState": {
-        "description": "Immutable item data needed to materialize an equipment/inventory row.\n\nThe model deliberately contains only primitive values and dependency-leaf\nenums. It can therefore be carried by cold event/replay contracts without\nimporting concrete items, Entity, runtime registries, or server DTOs.\nLocation and equipped-slot membership live on the surrounding event.",
-        "properties": {
-          "item_uuid": {
-            "description": "Stable item instance identity.",
-            "format": "uuid",
-            "title": "Item Uuid",
-            "type": "string"
-          },
-          "item_id": {
-            "description": "Direct authored item species identity.",
-            "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$",
-            "title": "Item Id",
-            "type": "string"
-          },
-          "name": {
-            "description": "Human-readable item name.",
-            "title": "Name",
-            "type": "string"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Optional rules/UI description.",
-            "title": "Description"
-          },
-          "item_kind": {
-            "$ref": "#/components/schemas/ItemPresentationKind",
-            "description": "Renderer/UI item family."
-          },
-          "rarity": {
-            "$ref": "#/components/schemas/ItemRarity",
-            "description": "Item rarity."
-          },
-          "weight": {
-            "description": "Weight of one represented item in pounds.",
-            "title": "Weight",
-            "type": "number"
-          },
-          "value": {
-            "default": 0,
-            "description": "Value in gold pieces.",
-            "title": "Value",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "tags": {
-            "default": [],
-            "description": "Stable item query tags.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Tags",
-            "type": "array"
-          },
-          "is_pickable": {
-            "default": true,
-            "title": "Is Pickable",
-            "type": "boolean"
-          },
-          "is_equippable": {
-            "default": false,
-            "title": "Is Equippable",
-            "type": "boolean"
-          },
-          "is_usable": {
-            "default": false,
-            "title": "Is Usable",
-            "type": "boolean"
-          },
-          "is_targetable": {
-            "default": false,
-            "title": "Is Targetable",
-            "type": "boolean"
-          },
-          "door_mechanism": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DoorMechanism"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "door_swing": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DoorSwing"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "remnant_state": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ItemRemnantState"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "integrity": {
-            "$ref": "#/components/schemas/ItemIntegrity",
-            "default": "intact"
-          },
-          "destruction_outcome": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Destruction Outcome"
-          },
-          "stack_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Stack Id"
-          },
-          "visual_item_name": {
-            "description": "Renderer item-catalog key.",
-            "title": "Visual Item Name",
-            "type": "string"
-          },
-          "visual_variant_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Renderer variant key.",
-            "title": "Visual Variant Id"
-          },
-          "item_effects": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ItemEffectPresentationState"
-            },
-            "title": "Item Effects",
-            "type": "array"
-          },
-          "equipped_visual_policy": {
-            "$ref": "#/components/schemas/EquippedVisualPolicy",
-            "description": "Whether the equipped item contributes its own actor layer."
-          },
-          "damage_dice": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Weapon damage dice label.",
-            "title": "Damage Dice"
-          },
-          "damage_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Weapon damage type label.",
-            "title": "Damage Type"
-          },
-          "weapon_properties": {
-            "default": [],
-            "description": "Weapon properties in definition order.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Weapon Properties",
-            "type": "array"
-          },
-          "armor_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Armor weight category.",
-            "title": "Armor Type"
-          },
-          "armor_ac": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Armor base AC.",
-            "title": "Armor Ac"
-          },
-          "shield_ac_bonus": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Shield AC bonus.",
-            "title": "Shield Ac Bonus"
-          },
-          "charges": {
-            "anyOf": [
-              {
-                "minimum": -1,
-                "type": "integer",
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Current charges; -1 is unlimited.",
-            "title": "Charges"
-          },
-          "max_charges": {
-            "anyOf": [
-              {
-                "minimum": -1,
-                "type": "integer",
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Maximum charges; -1 is unlimited.",
-            "title": "Max Charges"
-          },
-          "stack_count": {
-            "description": "Copies represented after the fact.",
-            "minimum": 0,
-            "title": "Stack Count",
-            "type": "integer",
-            "maximum": 9007199254740991
-          },
-          "max_stack": {
-            "description": "Maximum mergeable copies.",
-            "minimum": 1,
-            "title": "Max Stack",
-            "type": "integer",
-            "maximum": 9007199254740991
-          },
-          "is_consumable": {
-            "description": "Whether successful use consumes a charge/item.",
-            "title": "Is Consumable",
-            "type": "boolean"
-          },
-          "map_char": {
-            "default": "\u03c6",
-            "description": "Text-map presentation glyph.",
-            "title": "Map Char",
-            "type": "string"
-          },
-          "include_in_senses_objects": {
-            "default": true,
-            "title": "Include In Senses Objects",
-            "type": "boolean"
-          },
-          "include_in_adjacent_senses_objects": {
-            "default": false,
-            "title": "Include In Adjacent Senses Objects",
-            "type": "boolean"
-          },
-          "include_in_available_object_actions": {
-            "default": true,
-            "title": "Include In Available Object Actions",
-            "type": "boolean"
-          },
-          "current_hit_points": {
-            "anyOf": [
-              {
-                "minimum": 0,
-                "type": "integer",
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Current Hit Points"
-          },
-          "maximum_hit_points": {
-            "anyOf": [
-              {
-                "minimum": 0,
-                "type": "integer",
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Maximum Hit Points"
-          },
-          "concentration_capacity": {
-            "default": 0,
-            "minimum": 0,
-            "title": "Concentration Capacity",
-            "type": "integer",
-            "maximum": 9007199254740991
-          },
-          "concentration_slots": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ItemConcentrationSlot"
-            },
-            "title": "Concentration Slots",
-            "type": "array"
-          },
-          "boundary_structure": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BoundaryStructure"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "construction_owner_uuid": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Construction Owner Uuid"
-          },
-          "construction_geometry": {
-            "anyOf": [
-              {
-                "discriminator": {
-                  "mapping": {
-                    "cone": "#/components/schemas/ConePresentationGeometry",
-                    "cube": "#/components/schemas/CubePresentationGeometry",
-                    "cylinder": "#/components/schemas/CylinderPresentationGeometry",
-                    "line": "#/components/schemas/LinePresentationGeometry",
-                    "sphere": "#/components/schemas/SpherePresentationGeometry",
-                    "wall": "#/components/schemas/WallPresentationGeometry",
-                    "wall_assembly": "#/components/schemas/WallAssemblyPresentationGeometry"
-                  },
-                  "propertyName": "shape"
-                },
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/SpherePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/LinePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CubePresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CylinderPresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/WallPresentationGeometry"
-                  },
-                  {
-                    "$ref": "#/components/schemas/WallAssemblyPresentationGeometry"
-                  }
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Construction Geometry"
-          },
-          "construction_suppressions": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/SpellSuppression"
-            },
-            "title": "Construction Suppressions",
-            "type": "array"
-          },
-          "known_to_creator": {
-            "default": false,
-            "title": "Known To Creator",
-            "type": "boolean"
-          },
-          "supported_by_uuid": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Supported By Uuid"
-          },
-          "contact_passage": {
-            "$ref": "#/components/schemas/ContactPassage",
-            "default": "structural"
-          },
-          "surface_residues": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ObjectResidueState"
-            },
-            "title": "Surface Residues",
-            "type": "array"
-          },
-          "linked_spatial_condition_uuid": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Linked Spatial Condition Uuid"
-          },
-          "is_open": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Is Open"
-          },
-          "is_engaged": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Is Engaged"
-          },
-          "blocks_movement": {
-            "default": false,
-            "title": "Blocks Movement",
-            "type": "boolean"
-          },
-          "blocks_optics": {
-            "default": false,
-            "title": "Blocks Optics",
-            "type": "boolean"
-          },
-          "blocks_propagation": {
-            "default": false,
-            "title": "Blocks Propagation",
-            "type": "boolean"
-          },
-          "is_lit": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Is Lit"
-          },
-          "very_bright_radius_feet": {
-            "anyOf": [
-              {
-                "minimum": 0,
-                "type": "integer",
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Very Bright Radius Feet"
-          },
-          "bright_radius_feet": {
-            "anyOf": [
-              {
-                "minimum": 0,
-                "type": "integer",
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Bright Radius Feet"
-          },
-          "dim_radius_feet": {
-            "anyOf": [
-              {
-                "minimum": 0,
-                "type": "integer",
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Dim Radius Feet"
-          }
-        },
-        "required": [
-          "item_uuid",
-          "item_id",
-          "name",
-          "item_kind",
-          "rarity",
-          "weight",
-          "visual_item_name",
-          "equipped_visual_policy",
-          "stack_count",
-          "max_stack",
-          "is_consumable"
-        ],
-        "title": "ItemPresentationState",
-        "type": "object",
-        "additionalProperties": false
       },
       "ItemProfile": {
         "description": "What a controlled item is: the fields its use does not change.",
@@ -11406,6 +10824,63 @@
         ],
         "title": "ItemRarity",
         "type": "string"
+      },
+      "ItemRecord": {
+        "description": "An item entering a seat's view: its static parts if the seat lacks them, its dynamic parts current and whole.",
+        "properties": {
+          "item_uuid": {
+            "format": "uuid",
+            "title": "Item Uuid",
+            "type": "string"
+          },
+          "look": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemLook"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "effects": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ItemEffectPresentationState"
+            },
+            "title": "Effects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_uuid"
+        ],
+        "title": "ItemRecord",
+        "type": "object",
+        "additionalProperties": false
       },
       "ItemRemnantState": {
         "description": "Physical configuration at destruction, retained by inert remains.",
@@ -11708,6 +11183,249 @@
         "type": "object",
         "additionalProperties": false
       },
+      "ItemStateChanges": {
+        "additionalProperties": false,
+        "description": "The `ItemState` fields one change replaces; omitted fields are unchanged.",
+        "properties": {
+          "stack_count": {
+            "minimum": 0,
+            "title": "Stack Count",
+            "type": "integer",
+            "maximum": 9007199254740991
+          },
+          "charges": {
+            "anyOf": [
+              {
+                "minimum": -1,
+                "type": "integer",
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Charges"
+          },
+          "integrity": {
+            "$ref": "#/components/schemas/ItemIntegrity"
+          },
+          "destruction_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destruction Outcome"
+          },
+          "remnant_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemRemnantState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_hit_points": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer",
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Hit Points"
+          },
+          "concentration_slots": {
+            "items": {
+              "$ref": "#/components/schemas/ItemConcentrationSlot"
+            },
+            "title": "Concentration Slots",
+            "type": "array"
+          },
+          "construction_owner_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Construction Owner Uuid"
+          },
+          "construction_geometry": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "cone": "#/components/schemas/ConePresentationGeometry",
+                    "cube": "#/components/schemas/CubePresentationGeometry",
+                    "cylinder": "#/components/schemas/CylinderPresentationGeometry",
+                    "line": "#/components/schemas/LinePresentationGeometry",
+                    "sphere": "#/components/schemas/SpherePresentationGeometry",
+                    "wall": "#/components/schemas/WallPresentationGeometry",
+                    "wall_assembly": "#/components/schemas/WallAssemblyPresentationGeometry"
+                  },
+                  "propertyName": "shape"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SpherePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ConePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LinePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CubePresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CylinderPresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WallPresentationGeometry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WallAssemblyPresentationGeometry"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Construction Geometry"
+          },
+          "construction_suppressions": {
+            "items": {
+              "$ref": "#/components/schemas/SpellSuppression"
+            },
+            "title": "Construction Suppressions",
+            "type": "array"
+          },
+          "known_to_creator": {
+            "title": "Known To Creator",
+            "type": "boolean"
+          },
+          "supported_by_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supported By Uuid"
+          },
+          "contact_passage": {
+            "$ref": "#/components/schemas/ContactPassage"
+          },
+          "surface_residues": {
+            "items": {
+              "$ref": "#/components/schemas/ObjectResidueState"
+            },
+            "title": "Surface Residues",
+            "type": "array"
+          },
+          "linked_spatial_condition_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked Spatial Condition Uuid"
+          },
+          "is_open": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Open"
+          },
+          "is_engaged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Engaged"
+          },
+          "blocks_movement": {
+            "title": "Blocks Movement",
+            "type": "boolean"
+          },
+          "blocks_optics": {
+            "title": "Blocks Optics",
+            "type": "boolean"
+          },
+          "blocks_propagation": {
+            "title": "Blocks Propagation",
+            "type": "boolean"
+          },
+          "is_lit": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Lit"
+          }
+        },
+        "title": "ItemStateChanges",
+        "type": "object"
+      },
+      "ItemStateRow": {
+        "properties": {
+          "field": {
+            "const": "item_state",
+            "default": "item_state",
+            "title": "Field",
+            "type": "string"
+          },
+          "item_uuid": {
+            "format": "uuid",
+            "title": "Item Uuid",
+            "type": "string"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/ItemStateChanges"
+          }
+        },
+        "required": [
+          "item_uuid",
+          "changes"
+        ],
+        "title": "ItemStateRow",
+        "type": "object",
+        "additionalProperties": false
+      },
       "JumpMovementLogData": {
         "additionalProperties": false,
         "properties": {
@@ -11921,6 +11639,38 @@
         ],
         "title": "LandingKind",
         "type": "string"
+      },
+      "LayerRow": {
+        "description": "The equipped layer of `slot`, or without a layer the slot emptied.",
+        "properties": {
+          "field": {
+            "const": "layer",
+            "default": "layer",
+            "title": "Field",
+            "type": "string"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          },
+          "layer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisualItem"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "slot"
+        ],
+        "title": "LayerRow",
+        "type": "object",
+        "additionalProperties": false
       },
       "LifeFact": {
         "properties": {
@@ -12959,6 +12709,33 @@
         ],
         "title": "MultiEntityLogData",
         "type": "object"
+      },
+      "NumberRow": {
+        "properties": {
+          "field": {
+            "enum": [
+              "normal_hp",
+              "maximum_hp",
+              "temporary_hp",
+              "armor_class"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "field",
+          "value"
+        ],
+        "title": "NumberRow",
+        "type": "object",
+        "additionalProperties": false
       },
       "ObjectDamageFact": {
         "description": "The completed damage result for an observed item, not an actor.",
@@ -14076,51 +13853,6 @@
         "title": "PendingReceipt",
         "type": "object"
       },
-      "PerceivedContact": {
-        "description": "One identified entity or object perceived by an observer.",
-        "properties": {
-          "position": {
-            "description": "Observed grid position.",
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "title": "Position",
-            "type": "array"
-          },
-          "visual": {
-            "description": "Whether a visual route establishes this contact.",
-            "title": "Visual",
-            "type": "boolean"
-          },
-          "special_senses": {
-            "default": [],
-            "description": "Special senses which independently establish this contact.",
-            "items": {
-              "$ref": "#/components/schemas/SensesType"
-            },
-            "title": "Special Senses",
-            "type": "array"
-          }
-        },
-        "required": [
-          "position",
-          "visual"
-        ],
-        "title": "PerceivedContact",
-        "type": "object",
-        "additionalProperties": false
-      },
       "PlayerAction": {
         "additionalProperties": false,
         "properties": {
@@ -15037,11 +14769,12 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
-          "observations": {
+          "bodies": {
+            "default": [],
             "items": {
-              "$ref": "#/components/schemas/PlayerObservation"
+              "$ref": "#/components/schemas/BodyRecord"
             },
-            "title": "Observations",
+            "title": "Bodies",
             "type": "array"
           },
           "world_updates": {
@@ -15116,7 +14849,6 @@
           "nodes",
           "version_rows",
           "end_cursor",
-          "observations",
           "world_updates"
         ],
         "title": "PlayerInitialization",
@@ -15176,12 +14908,12 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
-          "observations": {
+          "bodies": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/PlayerObservation"
+              "$ref": "#/components/schemas/BodyRecord"
             },
-            "title": "Observations",
+            "title": "Bodies",
             "type": "array"
           },
           "world_updates": {
@@ -15522,9 +15254,9 @@
                 "discriminator": {
                   "mapping": {
                     "action": "#/components/schemas/ActionFact",
+                    "actor_change": "#/components/schemas/ActorChangeFact",
                     "area_reach": "#/components/schemas/AreaReachFact",
                     "attack": "#/components/schemas/AttackFact",
-                    "condition": "#/components/schemas/ConditionChangeFact",
                     "damage": {
                       "discriminator": {
                         "mapping": {
@@ -15543,12 +15275,10 @@
                       ]
                     },
                     "death_save": "#/components/schemas/DeathSaveFact",
-                    "equipment": "#/components/schemas/EquipmentFact",
                     "faction": "#/components/schemas/FactionFact",
                     "forced_movement": "#/components/schemas/ForcedMovementFact",
                     "heal": "#/components/schemas/HealFact",
                     "item_charge": "#/components/schemas/ItemChargeFact",
-                    "item_effect": "#/components/schemas/ItemEffectChangeFact",
                     "life": "#/components/schemas/LifeFact",
                     "mechanism_activation": "#/components/schemas/MechanismActivationFact",
                     "movement": "#/components/schemas/MovementFact",
@@ -15622,13 +15352,7 @@
                     "$ref": "#/components/schemas/DeathSaveFact"
                   },
                   {
-                    "$ref": "#/components/schemas/EquipmentFact"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConditionChangeFact"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ItemEffectChangeFact"
+                    "$ref": "#/components/schemas/ActorChangeFact"
                   },
                   {
                     "$ref": "#/components/schemas/SpatialFact"
@@ -15736,51 +15460,6 @@
           "phase"
         ],
         "title": "PlayerNode",
-        "type": "object",
-        "additionalProperties": false
-      },
-      "PlayerObservation": {
-        "description": "One actor's observed body at an event, as a patch against what the seat holds,\nwith the patches of the items that body discloses.",
-        "properties": {
-          "occurrence": {
-            "title": "Occurrence",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "actor_uuid": {
-            "format": "uuid",
-            "title": "Actor Uuid",
-            "type": "string"
-          },
-          "changes": {
-            "$ref": "#/components/schemas/ActorChanges"
-          },
-          "contact": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PerceivedContact"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "items": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ItemPatch"
-            },
-            "title": "Items",
-            "type": "array"
-          }
-        },
-        "required": [
-          "occurrence",
-          "actor_uuid"
-        ],
-        "title": "PlayerObservation",
         "type": "object",
         "additionalProperties": false
       },
@@ -18464,6 +18143,32 @@
         ],
         "title": "Size",
         "type": "string"
+      },
+      "SizeRow": {
+        "properties": {
+          "field": {
+            "const": "resolved_size",
+            "default": "resolved_size",
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Size"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "SizeRow",
+        "type": "object",
+        "additionalProperties": false
       },
       "SkillCheckLogData": {
         "additionalProperties": false,
@@ -21160,54 +20865,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "TileResidueState": {
-        "additionalProperties": false,
-        "description": "Observable membership of one persistent residue on its owning tile.",
-        "properties": {
-          "condition_uuid": {
-            "format": "uuid",
-            "title": "Condition Uuid",
-            "type": "string"
-          },
-          "residue_id": {
-            "title": "Residue Id",
-            "type": "string"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "amount": {
-            "default": 1,
-            "minimum": 1,
-            "title": "Amount",
-            "type": "integer",
-            "maximum": 9007199254740991
-          },
-          "max_amount": {
-            "default": 1,
-            "minimum": 1,
-            "title": "Max Amount",
-            "type": "integer",
-            "maximum": 9007199254740991
-          },
-          "contributions": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ResidueContribution"
-            },
-            "title": "Contributions",
-            "type": "array"
-          }
-        },
-        "required": [
-          "condition_uuid",
-          "residue_id",
-          "description"
-        ],
-        "title": "TileResidueState",
-        "type": "object"
-      },
       "TileStatic": {
         "description": "A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new\nuuid).",
         "properties": {
@@ -22189,6 +21846,25 @@
         "title": "WeaponSet",
         "type": "string"
       },
+      "WeaponSetRow": {
+        "properties": {
+          "field": {
+            "const": "active_weapon_set",
+            "default": "active_weapon_set",
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/WeaponSet"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "WeaponSetRow",
+        "type": "object",
+        "additionalProperties": false
+      },
       "WeaponSlot": {
         "description": "Weapon positions exposed by an entity's equipment block.",
         "enum": [
@@ -22583,134 +22259,6 @@
           }
         },
         "title": "WorldTileChanges",
-        "type": "object"
-      },
-      "WorldTileState": {
-        "additionalProperties": false,
-        "description": "Complete renderer-neutral state of one admitted support Tile.",
-        "properties": {
-          "tile_uuid": {
-            "format": "uuid",
-            "title": "Tile Uuid",
-            "type": "string"
-          },
-          "position": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "title": "Position",
-            "type": "array"
-          },
-          "surface": {
-            "$ref": "#/components/schemas/TileSurface"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "blocks_optics": {
-            "title": "Blocks Optics",
-            "type": "boolean"
-          },
-          "blocks_propagation": {
-            "title": "Blocks Propagation",
-            "type": "boolean"
-          },
-          "walking_cost": {
-            "minimum": 0,
-            "title": "Walking Cost",
-            "type": "integer",
-            "maximum": 9007199254740991
-          },
-          "flying_cost": {
-            "minimum": 0,
-            "title": "Flying Cost",
-            "type": "integer",
-            "maximum": 9007199254740991
-          },
-          "swimming_cost": {
-            "minimum": 0,
-            "title": "Swimming Cost",
-            "type": "integer",
-            "maximum": 9007199254740991
-          },
-          "burrowing_cost": {
-            "minimum": 0,
-            "title": "Burrowing Cost",
-            "type": "integer",
-            "maximum": 9007199254740991
-          },
-          "elevation_steps": {
-            "title": "Elevation Steps",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "surface_kind": {
-            "$ref": "#/components/schemas/ElevationSurfaceKind"
-          },
-          "slope_axis": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SlopeAxis"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "default_light": {
-            "$ref": "#/components/schemas/LightLevel"
-          },
-          "resolved_light": {
-            "$ref": "#/components/schemas/LightLevel"
-          },
-          "condition_names": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Condition Names",
-            "type": "array"
-          },
-          "residues": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/TileResidueState"
-            },
-            "title": "Residues",
-            "type": "array"
-          }
-        },
-        "required": [
-          "tile_uuid",
-          "position",
-          "surface",
-          "name",
-          "blocks_optics",
-          "blocks_propagation",
-          "walking_cost",
-          "flying_cost",
-          "swimming_cost",
-          "burrowing_cost",
-          "elevation_steps",
-          "surface_kind",
-          "default_light",
-          "resolved_light"
-        ],
-        "title": "WorldTileState",
         "type": "object"
       },
       "WorldUpdate": {
