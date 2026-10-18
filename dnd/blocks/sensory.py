@@ -730,6 +730,8 @@ class ObserverField:
     light_inputs: Optional[Tuple]    # what the published emitters were derived from (reused while equal)
     volumes: Dict[UUID, FrozenSet[Position]]          # the seen volumes the published fixtures were observed with
     upper: Dict[UUID, Tuple[VolumeSurfaceSight, ...]]  # and their upper surfaces
+    volume_grants: FrozenSet[Position]                 # the cells those volumes' routes tested
+    grants: Optional[CellLayer]                        # and the view's row in the grant table (None while unsettled)
 
 
 NO_CONTACT_ROWS = np.zeros((0, 8), dtype=np.int64)
@@ -1735,16 +1737,24 @@ class SpatialSensesSystem:
         for view, (_, _, contact_rows, contact_uuids, contact_changes), (volumes, upper, volume_grants), effect_before, \
                 (light_inputs, light_values), (_, cells_within) in zip(views, contacts, sights, effects, lights, published):
             observer_uuid, field = view.owner.uuid, view.field
-            grants[observer_uuid] = _granted_cells(view, volume_grants)
+            previous = self.fields.get(observer_uuid)
+            granted = frozenset(volume_grants)
+            if view.frame_changes is not None and previous is not None and previous.volume_grants == granted:
+                # The sight held (its routes, felt cells, origin and window are the field's) and so did the
+                # cells its volumes tested: its row in the grant table stands.
+                grant_row = previous.grants
+            else:
+                grant_row = grants[observer_uuid] = _granted_cells(view, volume_grants)
             self.fields[observer_uuid] = ObserverField(
                 field.origin, field.window, field.selection, field.optical_key, field.routes, field.felt_keys,
                 field.felt_rows, field.sight_inputs, field.sight, field.light, field.optical,
                 field.exists_frame, field.felt_frame, field.seen_frame, field.senses_frame,
                 contact_rows, contact_uuids, contact_changes, self._table_version, passives[observer_uuid],
-                light_values, light_inputs, volumes, upper)
+                light_values, light_inputs, volumes, upper, granted, grant_row)
             touched[observer_uuid] = (effect_before, cells_within)
         # The grants are written once the settlement is published.
-        self._grants = _replace_grants(self._grants, grants)
+        if grants:
+            self._grants = _replace_grants(self._grants, grants)
         self._drop_identity_grants()
         return touched
 
@@ -1945,7 +1955,9 @@ class SpatialSensesSystem:
                               previous.light_values if previous is not None else {},
                               previous.light_inputs if previous is not None else None,
                               previous.volumes if previous is not None else {},
-                              previous.upper if previous is not None else {})
+                              previous.upper if previous is not None else {},
+                              previous.volume_grants if previous is not None else frozenset(),
+                              previous.grants if previous is not None else None)
         return ObserverView(owner, senses, origin, modes, ordinary_sight, optical_reach,
                             field, previous is not None, lit_kept, relit, frame_changes, optical, exists,
                             seen_frame,
@@ -2660,8 +2672,9 @@ class SpatialSensesSystem:
         cells and the targets of its visual contacts: while they hold, its published emitters stand;
         otherwise only the emitters whose row, lighting or anchor disclosure changed are described
         again. The lighting and disclosure of every view are one array pass (the stacked visible
-        cells' lit-slot words, OR-ed per view). Returns, per view, those
-        inputs with the per-emitter lighting and disclosure, and each published emitter's
+        cells' lit-slot words, OR-ed per view); a view whose sight and visible cells held keeps the
+        lighting of every emitter whose row held, and reads only the changed rows' words. Returns, per
+        view, those inputs with the per-emitter lighting and disclosure, and each published emitter's
         descriptor inputs."""
         grid = get_map()
         lights = world.light_sources
@@ -2680,6 +2693,20 @@ class SpatialSensesSystem:
         if not pending:
             return [results[index] for index in range(len(views))]
         count, emitters = len(pending), lights.slots.size
+        # The previous emitter tables the pending views published from, each compared with this one once.
+        tables: Dict[int, List[Tuple[int, Tuple]]] = {}
+        for order, index in enumerate(pending):
+            known = views[index].field.light_inputs
+            if known is not None:
+                tables.setdefault(id(known[0]), []).append((order, known))
+        diffs = {table: _light_table_diff(published[0][1][0], lights) for table, published in tables.items()}
+        # A view whose sight held (no world rebuild since: the optical revision held) and whose visible cells
+        # held keeps the lighting of the emitters whose row held: a source's lit cells change only with its
+        # revision, which its row holds (`GridMap._revise_light_source` follows every footprint write).
+        held = {table: [order for order, known in published if views[pending[order]].frame_changes is not None
+                        and known[1] is views[pending[order]].senses.cells.visible]
+                for table, published in tables.items()}
+        fresh = sorted(set(range(count)) - {order for orders in held.values() for order in orders})
         lit = np.zeros((count, emitters), dtype=bool)
         # The current windows lie in the current cell box (a published one may predate a replaced map).
         box = _layers_box(views[index].senses.cells.visible for index in pending)
@@ -2687,12 +2714,34 @@ class SpatialSensesSystem:
             words = grid.light_slot_words(box)
             slotted = (lights.slots >= 0) & (lights.slots // 64 < words.shape[2])
             if slotted.any():
-                # Each view's words OR-ed over its visible cells (one masked reduce over the stacked views).
-                visible = stack.after[np.array(pending, dtype=np.int64), box[0] - stack.box[0]:box[2] - stack.box[0] + 1,
-                                      box[1] - stack.box[1]:box[3] - stack.box[1] + 1]
-                lit_words = np.bitwise_or.reduce(np.where(visible[..., None], words[None], np.uint64(0)), axis=(1, 2))
-                slots = lights.slots[slotted]
-                lit[:, slotted] = ((lit_words[:, slots // 64] >> (slots % 64).astype(np.uint64)) & np.uint64(1)) != 0
+                inside = (slice(box[0] - stack.box[0], box[2] - stack.box[0] + 1),
+                          slice(box[1] - stack.box[1], box[3] - stack.box[1] + 1))
+                if fresh:
+                    # Each view's words OR-ed over its visible cells (one masked reduce over the stacked views).
+                    visible = stack.after[np.array([pending[order] for order in fresh], dtype=np.int64),
+                                          inside[0], inside[1]]
+                    lit_words = np.bitwise_or.reduce(np.where(visible[..., None], words[None], np.uint64(0)),
+                                                     axis=(1, 2))
+                    slots = lights.slots[slotted]
+                    lit[np.ix_(fresh, np.flatnonzero(slotted))] = (
+                        (lit_words[:, slots // 64] >> (slots % 64).astype(np.uint64)) & np.uint64(1)) != 0
+                for table, orders in held.items():
+                    if not orders:
+                        continue
+                    previous_index, row_changed, _ = diffs[table]
+                    kept = np.flatnonzero((previous_index >= 0) & ~row_changed)
+                    lit[np.ix_(orders, kept)] = np.stack([known[3] for order, known in tables[table]
+                                                          if order in orders])[:, previous_index[kept]]
+                    visible = stack.after[np.array([pending[order] for order in orders], dtype=np.int64),
+                                          inside[0], inside[1]]
+                    for emitter in np.flatnonzero(slotted & row_changed).tolist():
+                        # The changed emitter's lit cells now, and each view's visible cells among them.
+                        slot = int(lights.slots[emitter])
+                        lights_cells = ((words[:, :, slot // 64] >> np.uint64(slot % 64)) & np.uint64(1)) != 0
+                        xs, ys = np.flatnonzero(lights_cells.any(axis=1)), np.flatnonzero(lights_cells.any(axis=0))
+                        if xs.size:
+                            part = (slice(int(xs[0]), int(xs[-1]) + 1), slice(int(ys[0]), int(ys[-1]) + 1))
+                            lit[orders, emitter] = (visible[:, part[0], part[1]] & lights_cells[part]).any(axis=(1, 2))
         # Each view's own key, in view order (as each view's stage assigned it).
         own = np.array([self._target_key(views[index].owner.uuid, True) for index in pending], dtype=np.int64)
         key_space = int(max(lights.anchor_entity_key.max(initial=0), lights.anchor_item_key.max(initial=0),
@@ -2708,14 +2757,9 @@ class SpatialSensesSystem:
         # read, for the views that published from one previous table at once.
         check = np.ones((count, emitters), dtype=bool)
         gone_of: List[Tuple[UUID, ...]] = [()] * count
-        tables: Dict[int, List[Tuple[int, Tuple]]] = {}
-        for order, index in enumerate(pending):
-            known = views[index].field.light_inputs
-            if known is not None:
-                tables.setdefault(id(known[0]), []).append((order, known))
-        for published in tables.values():
+        for table, published in tables.items():
             members = [order for order, _ in published]
-            previous_index, row_changed, gone = _light_table_diff(published[0][1][0], lights)
+            previous_index, row_changed, gone = diffs[table]
             present = previous_index >= 0
 
             def before(flags: List[np.ndarray]) -> np.ndarray:
