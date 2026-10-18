@@ -154,6 +154,11 @@ def supercover_cells_relative(dx: int, dy: int) -> frozenset[Tuple[int, int]]:
     return frozenset(_supercover_line_relative_cached(dx, dy))
 
 
+# The route table's step code: an entry is ``cell << ROUTE_STEP_SHIFT | kind``, the kind of the
+# step into that cell (none for the origin and the padding).
+ROUTE_STEP_SHIFT = 2
+STEP_NONE, STEP_ALONG_X, STEP_ALONG_Y, STEP_DIAGONAL = 0, 1, 2, 3
+
 # Square radius in cells of the vectorized route table (161 x 161 endpoints, about 17 MB):
 # the engine's perception reach (`update_all_entities_senses(max_distance=80)`).
 ROUTE_TABLE_RADIUS = 80
@@ -164,10 +169,9 @@ def supercover_route_table() -> Tuple[np.ndarray, np.ndarray]:
     """Every `supercover_line_relative` from the origin within the table square, as its steps.
 
     Row ``(dx + r) * (2r + 1) + (dy + r)`` holds the line to (dx, dy) in order, one entry per
-    cell: ``4 * cell + kind``, the cell flattened the same way and the kind of the step into it
-    (1 along x, 2 along y, 3 diagonal; 0 for the origin, the first cell). Rows are padded with
-    ``4 * (2r + 1) ** 2`` (one past the grid, kind 0); ``>> 2`` gives the cells. The second
-    array holds each line's length. The same stepping rule as the scalar line, applied to
+    cell: ``cell << ROUTE_STEP_SHIFT | kind``, the cell flattened the same way and the kind of the
+    step into it (STEP_NONE for the origin, the first cell). Rows are padded with the cell
+    ``(2r + 1) ** 2`` (one past the grid) and STEP_NONE. The second array holds each line's length. The same stepping rule as the scalar line, applied to
     every endpoint at once.
     """
     radius = ROUTE_TABLE_RADIUS
@@ -176,8 +180,8 @@ def supercover_route_table() -> Tuple[np.ndarray, np.ndarray]:
         np.arange(-radius, radius + 1), np.arange(-radius, radius + 1), indexing="ij"))
     nx, ny, sx, sy = np.abs(dx), np.abs(dy), np.sign(dx), np.sign(dy)
     x, y, ix, iy = (np.zeros_like(dx) for _ in range(4))
-    steps = np.full((dx.size, 2 * radius + 1), 4 * side * side, dtype=np.int32)
-    steps[:, 0] = 4 * (radius * side + radius)
+    steps = np.full((dx.size, 2 * radius + 1), (side * side) << ROUTE_STEP_SHIFT | STEP_NONE, dtype=np.int32)
+    steps[:, 0] = (radius * side + radius) << ROUTE_STEP_SHIFT | STEP_NONE
     lengths = np.ones(dx.size, dtype=np.int32)
     for step in range(1, 2 * radius + 1):
         active = (ix < nx) | (iy < ny)
@@ -191,8 +195,8 @@ def supercover_route_table() -> Tuple[np.ndarray, np.ndarray]:
         y += sy * step_y
         ix += step_x
         iy += step_y
-        kind = step_x * 1 + step_y * 2
-        steps[active, step] = (4 * ((x + radius) * side + (y + radius)) + kind)[active]
+        kind = np.where(step_x & step_y, STEP_DIAGONAL, np.where(step_x, STEP_ALONG_X, STEP_ALONG_Y))
+        steps[active, step] = ((((x + radius) * side + (y + radius)) << ROUTE_STEP_SHIFT) | kind)[active]
         lengths += active
     return steps, lengths
 

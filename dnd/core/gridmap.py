@@ -16,8 +16,8 @@ from pydantic import BaseModel, Field
 
 from dnd.types.event_facts import GroupEntryKind, LandingKind
 from dnd.core.geometry import circle_positions, grid_distance_feet, supercover_line
-from dnd.core.view import (CARDINAL_STEPS, Box, CellLayer, boxes_intersect, cell_visible, cells_layer, embed,
-    layer_value, union_box, wall_visibility)
+from dnd.core.view import (CARDINAL_DIRECTIONS, CARDINAL_STEPS, OPPOSITE_CARDINAL, Box, CellLayer, boxes_intersect,
+    cell_visible, cells_layer, embed, layer_value, layer_window, union_box, wall_visibility)
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.shadowcast import compute_fov
@@ -99,19 +99,23 @@ TRANSITION_READ_REACH = 2
 # (CARDINAL_STEPS order): bit d "its predicate's answer is settled", bit 4 + d "it blocks" (the
 # answer), bit 8 + d "it is structured" (its sides hold boundary objects, or an end holds a local
 # crossing owner of the channel: only then can it block between two Tiles); then bit 12 "the
-# center blocks" (a Tile's answer; a cell without a Tile always blocks).
-EDGES_SETTLED = 0x000F
+# center blocks", meaningful where a Tile exists (readers treat a cell without a Tile as blocking).
+ALL_EDGES = 0xF
+EDGES_SETTLED = ALL_EDGES
 EDGE_BLOCKED_SHIFT = 4
 EDGE_STRUCTURED_SHIFT = 8
-STRUCTURED_EDGES = 0x0F00
+STRUCTURED_EDGES = ALL_EDGES << EDGE_STRUCTURED_SHIFT
 CENTER_BLOCKS = 1 << 12
 UNSETTLE_EDGES = np.uint16(0xFFFF ^ EDGES_SETTLED)
 TRANSIT_CHANNELS = (WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION)
-CARDINAL_INDEX = {CardinalDirection.EAST: 0, CardinalDirection.WEST: 1,
-                  CardinalDirection.NORTH: 2, CardinalDirection.SOUTH: 3}
-OPPOSITE_CARDINAL = (1, 0, 3, 2)
+CARDINAL_INDEX = {direction: index for index, direction in enumerate(CARDINAL_DIRECTIONS)}
 _READ_OFFSETS = np.array([(dx, dy) for dx in range(-TRANSITION_READ_REACH, TRANSITION_READ_REACH + 1)
                           for dy in range(-TRANSITION_READ_REACH, TRANSITION_READ_REACH + 1)], dtype=np.int64)
+
+
+def cells_and_neighbors(positions: Collection[Tuple[int, int]]) -> Set[Tuple[int, int]]:
+    """The cells and their cardinal neighbors."""
+    return {(x + dx, y + dy) for x, y in positions for dx, dy in ((0, 0), *CARDINAL_STEPS)}
 
 
 def sight_read_box(origin: Tuple[int, int], radius: Optional[float]) -> Optional[CellBox]:
@@ -384,7 +388,7 @@ class GridMap:
         self._obscurement_layers: Dict[UUID, CellLayer] = {}
         self._obscurement_active: Dict[UUID, bool] = {}
         self._cell_obscurement = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
-        # The objective transit facts the wall FOV reads (plan §6b, PV1a-4), over the cell box,
+        # The objective transit facts the wall FOV reads (plan §6b), over the cell box,
         # per channel (layout at EDGES_SETTLED). A write of the channel over some cells rewrites
         # their center bits and unsettles every edge answer reading them (`_write_transits`); the
         # boundary and crossing-owner writers rewrite the structured bits (`_write_structured_edges`).
@@ -870,7 +874,7 @@ class GridMap:
         width, height = layer.values.shape
         cells = np.array(list(positions), dtype=np.int64).reshape(-1, 2) - (layer.x0, layer.y0)
         for i, j in cells[(cells[:, 0] >= 0) & (cells[:, 0] < width) & (cells[:, 1] >= 0) & (cells[:, 1] < height)]:
-            blocks = self._center_blocks(channel, (layer.x0 + int(i), layer.y0 + int(j)))
+            blocks = self._center_predicate(channel, (layer.x0 + int(i), layer.y0 + int(j)))
             layer.values[i, j] = (int(layer.values[i, j]) & ~CENTER_BLOCKS) | (CENTER_BLOCKS if blocks else 0)
         near = (cells[:, None, :] + _READ_OFFSETS[None, :, :]).reshape(-1, 2)
         inside = (near[:, 0] >= 0) & (near[:, 0] < width) & (near[:, 1] >= 0) & (near[:, 1] < height)
@@ -880,26 +884,14 @@ class GridMap:
         """Rewrite the structured bits of these cells' outgoing edges, in both channels, from the
         boundary sides and the local crossing owners now on the map. A change of a cell's sides
         or owners changes its own edges and its neighbors' edges toward it
-        (`_cells_and_neighbors`); a new Tile has neither, so only its own edges change."""
-        sides: Dict[Tuple[int, int], int] = {}
-        owners: Dict[Tuple[Tuple[int, int], WorldEdgeChannel], bool] = {}
-
-        def side_bits(cell: Tuple[int, int]) -> int:
-            if cell not in sides:
-                row = self._boundary_candidate_cells.get(self._spatial_chunk(cell), {}).get(cell, {})
-                sides[cell] = sum(1 << CARDINAL_INDEX[direction] for direction, identities in row.items() if identities)
-            return sides[cell]
-
-        def holds_owner(cell: Tuple[int, int], channel: WorldEdgeChannel) -> bool:
-            local = self._local_crossing_owners.get(channel)
-            if not local:
-                return False
-            if (cell, channel) not in owners:
-                tile = self._tiles.get(cell)
-                owners[cell, channel] = tile is not None and bool(tile.get_spatial_condition_uuids() & local)
-            return owners[cell, channel]
-
+        (`cells_and_neighbors`)."""
+        read = cells_and_neighbors(cells)
+        sides = {cell: sum(1 << CARDINAL_INDEX[direction] for direction, identities in self._boundary_candidate_cells.get(
+                     self._spatial_chunk(cell), {}).get(cell, {}).items() if identities) for cell in read}
         for channel in TRANSIT_CHANNELS:
+            local = self._local_crossing_owners.get(channel, set())
+            owners = {cell for cell in read if local and (tile := self._tiles.get(cell)) is not None
+                      and tile.get_spatial_condition_uuids() & local}
             layer = self._transit[channel]
             width, height = layer.values.shape
             for cell in cells:
@@ -909,24 +901,21 @@ class GridMap:
                 structured = 0
                 for direction, (dx, dy) in enumerate(CARDINAL_STEPS):
                     neighbor = (cell[0] + dx, cell[1] + dy)
-                    if (side_bits(cell) & (1 << direction) or side_bits(neighbor) & (1 << OPPOSITE_CARDINAL[direction])
-                            or holds_owner(cell, channel) or holds_owner(neighbor, channel)):
+                    if (sides[cell] & (1 << direction) or sides[neighbor] & (1 << OPPOSITE_CARDINAL[direction])
+                            or cell in owners or neighbor in owners):
                         structured |= 1 << (EDGE_STRUCTURED_SHIFT + direction)
                 layer.values[i, j] = (int(layer.values[i, j]) & ~STRUCTURED_EDGES) | structured
 
-    @staticmethod
-    def _cells_and_neighbors(positions: Collection[Tuple[int, int]]) -> Set[Tuple[int, int]]:
-        return {(x + dx, y + dy) for x, y in positions for dx, dy in ((0, 0), *CARDINAL_STEPS)}
-
-    def _write_crossing_owner(self, condition_uuid: UUID,
-                              crossing_channels: Optional[frozenset[CrossingChannel]]) -> bool:
+    def _write_crossing_owner(self, condition_uuid: UUID, crossing_channels: Optional[frozenset[CrossingChannel]],
+                              footprint: Collection[Tuple[int, int]]) -> None:
         """Record which channels a condition's crossing predicate can block: None for any segment
-        anywhere (a global owner), else only segments touching its footprint; frozenset() for none.
+        anywhere (a global owner), else only segments touching its footprint; frozenset() for none
+        (removal). Runs after the condition's Tile references over ``footprint`` (its previous and
+        new cells) are written.
 
         A global owner reads no footprint, so its arrival or departure unsettles every edge answer
-        and every kept FOV. Returns whether the condition is or was a local owner of a transit
-        channel: then the caller rewrites the structured edges of its footprint, after its Tile
-        references are written.
+        and every kept FOV; a local owner of a transit channel, before or after, rewrites the
+        structured edges touching its footprint.
         """
         was_global = condition_uuid in self._global_crossing_owners
         was_local = any(condition_uuid in self._local_crossing_owners.get(channel, set())
@@ -944,8 +933,9 @@ class GridMap:
                 self._transit[channel].values[...] &= UNSETTLE_EDGES
             self._fov_cache.clear()
             self._propagation_fov_cache.clear()
-        return was_local or (crossing_channels is not None and any(channel in crossing_channels
-                                                                   for channel in TRANSIT_CHANNELS))
+        if was_local or (crossing_channels is not None and any(channel in crossing_channels
+                                                               for channel in TRANSIT_CHANNELS)):
+            self._write_structured_edges(cells_and_neighbors(footprint))
 
     def _bump_all_spatial_revisions(self, positions: Collection[Tuple[int, int]]) -> None:
         """Advance every spatial channel revision over these cells and drop the queries reading them."""
@@ -1164,7 +1154,9 @@ class GridMap:
         self._refresh_optical_candidate_cells({position})
         self._refresh_boundary_candidate_cell(position)
         self._refresh_contact_candidate_cell(position)
-        self._write_structured_edges((position,) if old_tile is None else self._cells_and_neighbors((position,)))
+        if tile.get_spatial_condition_uuids():
+            # A detached Tile holds no references; one supplied with references brings its owners.
+            self._write_structured_edges(cells_and_neighbors((position,)))
         self._bounds_dirty = True
 
         revision_channels: Set[SpatialChannel] = set()
@@ -1317,7 +1309,6 @@ class GridMap:
         self._refresh_optical_candidate_cells({position})
         self._refresh_boundary_candidate_cell(position)
         self._refresh_contact_candidate_cell(position)
-        self._write_structured_edges(self._cells_and_neighbors((position,)))
         self._bounds_dirty = True
         self._bump_all_spatial_revisions({position})
         if effect is not None:
@@ -1885,7 +1876,6 @@ class GridMap:
                         previous_layer,
                     )
         self._spatial_conditions[condition.uuid] = condition
-        crossing_owner = self._write_crossing_owner(condition.uuid, crossing_channels)
         self._spatial_condition_layers[condition.uuid] = layer
         self._spatial_condition_positions[condition.uuid] = normalized
         for position in normalized:
@@ -1894,8 +1884,7 @@ class GridMap:
                 layer,
             )
         self._refresh_optical_candidate_cells(previous_positions | normalized)
-        if crossing_owner:
-            self._write_structured_edges(self._cells_and_neighbors(previous_positions | normalized))
+        self._write_crossing_owner(condition.uuid, crossing_channels, previous_positions | normalized)
         footprint = self._condition_footprints[condition.uuid] = cells_layer(normalized, True)
         cell_xs, cell_ys = np.nonzero(footprint.values)
         self._condition_footprint_cells[condition.uuid] = (cell_xs + footprint.x0, cell_ys + footprint.y0)
@@ -2023,10 +2012,8 @@ class GridMap:
             self._derive_obscurement(obscurement.box)
         self._condition_footprints.pop(condition_uuid, None)
         self._condition_footprint_cells.pop(condition_uuid, None)
-        crossing_owner = self._write_crossing_owner(condition_uuid, frozenset())
         self._refresh_optical_candidate_cells(positions)
-        if crossing_owner:
-            self._write_structured_edges(self._cells_and_neighbors(positions))
+        self._write_crossing_owner(condition_uuid, frozenset(), positions)
         if condition is None:
             return None
         channels = condition.spatial_channels()
@@ -2209,7 +2196,7 @@ class GridMap:
             return True
         return bool(layer.values[i, j] & CENTER_BLOCKS)
 
-    def _center_blocks(self, channel: WorldEdgeChannel, position: Tuple[int, int]) -> bool:
+    def _center_predicate(self, channel: WorldEdgeChannel, position: Tuple[int, int]) -> bool:
         if channel is WorldEdgeChannel.OPTICAL:
             return self._center_blocks_optics(*position)
         return self.is_blocking_propagation(*position)
@@ -2223,7 +2210,7 @@ class GridMap:
         i, j = start[0] - layer.x0, start[1] - layer.y0
         width, height = layer.values.shape
         if not (0 <= i < width and 0 <= j < height):
-            return not self._transition_allows(channel, start, end)
+            raise ValueError(f"transit edge start {start} lies outside the cell box")
         bits = int(layer.values[i, j])
         blocked_bit = 1 << (EDGE_BLOCKED_SHIFT + direction)
         if bits & (1 << direction):
@@ -4528,7 +4515,7 @@ class GridMap:
                 del self._boundary_candidate_cells[chunk]
         if ({direction for direction, identities in previous.items() if identities}
                 != {direction for direction, identities in sides.items() if identities}):
-            self._write_structured_edges(self._cells_and_neighbors((position,)))
+            self._write_structured_edges(cells_and_neighbors((position,)))
 
     def get_boundary_route_layers(
         self,
@@ -4665,16 +4652,13 @@ class GridMap:
         window = (min_x, min_y, max_x, max_y)
         dx = np.arange(min_x - origin[0], max_x - origin[0] + 1)
         dy = np.arange(min_y - origin[1], max_y - origin[1] + 1)
-        exists = self._window_values(self._cell_exists, window)
+        exists = layer_window(self._cell_exists, window)
         radius_squared = max_distance * max_distance if max_distance is not None else math.inf
-        if radius_squared == math.inf:
-            targets = exists.copy()
-        else:
-            targets = exists & ((dx * dx)[:, None] + (dy * dy)[None, :] <= math.floor(radius_squared))
-        transit = self._window_values(self._transit[channel], window)
+        targets = exists & ((dx * dx)[:, None] + (dy * dy)[None, :] <= radius_squared)
+        transit = layer_window(self._transit[channel], window)
         # A global crossing owner may block any edge; otherwise only structured edges can.
-        structured = (np.full(transit.shape, EDGES_SETTLED, dtype=np.uint16) if self._global_crossing_owners
-                      else (transit >> EDGE_STRUCTURED_SHIFT) & EDGES_SETTLED)
+        structured = (np.full(transit.shape, ALL_EDGES, dtype=np.uint16) if self._global_crossing_owners
+                      else (transit >> EDGE_STRUCTURED_SHIFT) & ALL_EDGES)
         opaque = (transit & CENTER_BLOCKS) != 0
         # A route from this origin steps away from it (east from its column on, west up to it,
         # ...), between targets, and stops at an opaque cell it leaves: only such structured
@@ -4683,17 +4667,19 @@ class GridMap:
         oi, oj = origin[0] - min_x, origin[1] - min_y
         leaving[oi, oj] = True
         settled = 0
-        outward = ((oi, 0, slice(oi, None), slice(None)), (0, 0, slice(0, oi + 1), slice(None)),
-                   (0, oj, slice(None), slice(oj, None)), (0, 0, slice(None), slice(0, oj + 1)))
-        for direction, (i0, j0, xs, ys) in enumerate(outward):
+        for direction, (step_x, step_y) in enumerate(CARDINAL_STEPS):
+            i0 = oi if step_x > 0 else 0
+            j0 = oj if step_y > 0 else 0
+            xs = slice(i0, oi + 1 if step_x < 0 else None)
+            ys = slice(j0, oj + 1 if step_y < 0 else None)
             unsettled = leaving[xs, ys] & ((structured[xs, ys] & ~transit[xs, ys] & (1 << direction)) != 0)
-            step_x, step_y = CARDINAL_STEPS[direction]
             for i, j in zip(*np.nonzero(unsettled)):
                 i, j = i0 + int(i), j0 + int(j)
                 if 0 <= i + step_x < targets.shape[0] and 0 <= j + step_y < targets.shape[1] \
                         and targets[i + step_x, j + step_y]:
                     self._settled_edge(channel, (min_x + i, min_y + j), direction)
                     settled += 1
+        transit = layer_window(self._transit[channel], window)   # with the answers just settled
         blocked = (transit >> EDGE_BLOCKED_SHIFT) & structured & (transit & EDGES_SETTLED)
         rows_x, rows_y = wall_visibility(origin, window, exists, opaque, blocked, targets)
         if timing:
@@ -4702,11 +4688,6 @@ class GridMap:
             record_action_count("grid.directional_fov.visible_targets", len(rows_x))
             record_action_timing("grid.directional_fov.total_ms", total_started)
         return list(zip((rows_x + min_x).tolist(), (rows_y + min_y).tolist()))
-
-    @staticmethod
-    def _window_values(layer: CellLayer, window: Box) -> np.ndarray:
-        """A view of a cell grid over a window inside its box."""
-        return layer.values[window[0] - layer.x0:window[2] - layer.x0 + 1, window[1] - layer.y0:window[3] - layer.y0 + 1]
 
     def upper_volume_sight_planes(
         self, origin: Tuple[int, int], destination: Tuple[int, int],
@@ -4771,7 +4752,9 @@ class GridMap:
         Args:
             origin: Position to compute FOV from
             max_distance: Maximum view distance
-        Returns list of visible positions.
+        Returns list of visible positions. With an optical boundary on the map the solve is the
+        wall FOV, whose reach (the map bounds within ``max_distance``) must stay within
+        ROUTE_TABLE_RADIUS (80) cells of the origin, else it raises ValueError.
         """
         timing = action_timing_enabled()
         cache_started = time.perf_counter() if timing else 0.0
@@ -5936,7 +5919,9 @@ class GridMap:
         One semantics, whatever else is on the map: a cell is reached when the
         native propagation ray to it is clear (``raycast_clear``), so blocking
         and missing cells, directional boundaries and spatial-condition
-        crossings give total cover. Magical darkness does not block it."""
+        crossings give total cover. Magical darkness does not block it. The reach
+        (the map bounds within ``max_distance``) must stay within ROUTE_TABLE_RADIUS
+        (80) cells of the origin, else it raises ValueError."""
         cache_started = time.perf_counter()
         cache_key = (origin, max_distance)
         cached = self._propagation_fov_cache.get(cache_key)
