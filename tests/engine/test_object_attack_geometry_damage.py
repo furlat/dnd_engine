@@ -16,7 +16,7 @@ from dnd.core.events import Damage, EventPhase, EventQueue, ItemDestructionEvent
 from dnd.core.geometry import circle_positions
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemDestructionProfile
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
@@ -59,7 +59,7 @@ def test_real_mixed_damage_retains_rolls_and_resolves_each_affinity_once(arena, 
     item.place_on_grid((2, 2))
     specs = [Damage(source_entity_uuid=item.uuid, target_entity_uuid=item.uuid,
         damage_type=damage_type, dice_numbers=1, damage_dice=6,
-        damage_bonus=ModifiableValue.create(source_entity_uuid=item.uuid, base_value=0))
+        damage_bonus=parts(ModifiableValue(source_entity_uuid=item.uuid, base=0)))
         for damage_type in (DamageType.SLASHING, DamageType.FIRE)]
     with fixed_dice_faces(6, 6):
         rolls = [damage.get_dice(AttackOutcome.HIT).roll for damage in specs]

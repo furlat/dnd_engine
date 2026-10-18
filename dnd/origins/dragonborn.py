@@ -26,7 +26,7 @@ from dnd.core.action_types import ActionSelection
 from dnd.core.dice import AttackOutcome, DiceRoll
 from dnd.core.events import Damage, Event, EventPhase
 from dnd.core.creature_types import DamageType
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.types.abilities import AbilityName
 from dnd.types.discovery import ActorScan
@@ -201,11 +201,11 @@ class DragonbornBreathWeapon(BaseAction):
             target_entity_uuid=target.uuid,
             damage_dice=6,
             dice_numbers=self.damage_dice_count,
-            damage_bonus=ModifiableValue.create(
+            damage_bonus=parts(ModifiableValue(
                 source_entity_uuid=source.uuid,
-                base_value=0,
-                value_name="Dragonborn Breath Weapon damage bonus",
-            ),
+                base=0,
+                name="Dragonborn Breath Weapon damage bonus",
+            )),
             damage_type=self.damage_type,
         )
         damage_roll = damage.get_dice(

@@ -12,7 +12,7 @@ from dnd.core.base_block import BaseBlock, PreparedConditionRemovals
 from dnd.blocks.skills import all_skills, SKILL_TO_ABILITY
 from dnd.creature_transforms import apply_incapacitated_transform
 from dnd.core.modifiers import NumericalModifier, ContextualAdvantageModifier
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier, parts
 from dnd.conditions import prepare_control_removals
 from dnd.spells.hit_effects import QuarrySustain, ReapplyQuarry, install_hit_rider
 from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
@@ -212,7 +212,7 @@ class CharmPerson(SpellAction):
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid
             )
-            advantage_mod_uuid = target.saving_throws.get_saving_throw("wisdom").bonus.self_static.add_advantage_modifier(adv_mod)
+            advantage_mod_uuid = add_modifier(target.saving_throws.get_saving_throw("wisdom").bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, adv_mod)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -223,7 +223,7 @@ class CharmPerson(SpellAction):
         _, save_roll, success = target.saving_throw(save_request)
 
         if advantage_mod_uuid:
-            target.saving_throws.get_saving_throw("wisdom").bonus.self_static.remove_modifier(advantage_mod_uuid)
+            remove_modifier(target.saving_throws.get_saving_throw("wisdom").bonus, advantage_mod_uuid, Channel.SELF_STATIC)
 
         save_bonus = save_roll.bonus  # the bonus the save applied
 
@@ -1978,7 +1978,7 @@ class MockedEffect(BaseCondition):
         if target is None:
             return [],[],[],[],event.cancel(status_message="Recipient no longer exists")
         value = target.equipment.attack_bonus
-        modifier = value.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+        modifier = add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
             value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
         def consume(rolled: Event, _: UUID) -> Optional[Event]:
             target.remove_condition_by_uuid(self.uuid,parent_event=rolled)
@@ -2133,11 +2133,11 @@ class DissonantFearEffect(BaseCondition):
         for value in (target.equipment.attack_bonus,
                       *(target.ability_scores.get_ability(ability).check_bonus for ability in ("strength","dexterity","constitution","intelligence","wisdom","charisma")),
                       *(target.skill_set.get_skill(skill).skill_bonus for skill in all_skills)):
-            ident=value.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+            ident=add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
                 value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
             modifiers.append((value.uuid,ident))
         for value in target.action_economy.speed_values:
-            ident=value.self_static.add_max_constraint(NumericalModifier(name=self.name,value=0,
+            ident=add_modifier(value, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(name=self.name,value=0,
                 source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
             modifiers.append((value.uuid,ident))
         handlers=[]
@@ -2216,13 +2216,13 @@ class HideousLaughterEffect(BaseCondition):
             return AdvantageModifier(name=self.name,value=AdvantageStatus.ADVANTAGE,
                 source_entity_uuid=source_uuid,target_entity_uuid=attacker_uuid)
         value=target.equipment.ac_bonus
-        ident=value.to_target_contextual.add_advantage_modifier(ContextualAdvantageModifier(
+        ident=add_modifier(value, Channel.TO_TARGET_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
             name=self.name,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid,
             callable=incoming_advantage))
         modifiers.append((value.uuid,ident))
         for ability in ("strength","dexterity"):
             value=target.saving_throws.get_saving_throw(ability).bonus
-            ident=value.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+            ident=add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
                 value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
             modifiers.append((value.uuid,ident))
         def repeat(boundary: Event,_: UUID) -> Optional[Event]:
@@ -2233,7 +2233,7 @@ class HideousLaughterEffect(BaseCondition):
             bonus=target.saving_throws.get_saving_throw("wisdom").bonus
             ident=None
             if boundary.event_type is EventType.DAMAGE_APPLIED:
-                ident=bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Laughter damage save",
+                ident=add_modifier(bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Laughter damage save",
                     value=AdvantageStatus.ADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=caster.uuid))
             try:
                 request=caster.create_saving_throw_request(target_entity_uuid=target.uuid,ability_name="wisdom",
@@ -2241,7 +2241,7 @@ class HideousLaughterEffect(BaseCondition):
                     saving_throw_context=self.saving_throw_context(effect_id="spell.hideous_laughter.repeat"))
                 _outcome,_roll,saved=target.saving_throw(request)
             finally:
-                if ident is not None: bonus.self_static.remove_modifier(ident)
+                if ident is not None: remove_modifier(bonus, ident, Channel.SELF_STATIC)
             if saved: target.remove_condition_by_uuid(self.uuid,parent_event=boundary)
             return None
         handler=EventHandler(name="Laughter recovery",source_entity_uuid=target.uuid,
@@ -2458,7 +2458,7 @@ class HexQuarry(BaseCondition):
                 values.append(skill.skill_bonus)
         modifiers=[]
         for value in values:
-            identity=value.self_static.add_advantage_modifier(AdvantageModifier(name="Hex",value=AdvantageStatus.DISADVANTAGE,
+            identity=add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Hex",value=AdvantageStatus.DISADVANTAGE,
                 source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
             modifiers.append((value.uuid,identity))
         return modifiers,[],[],[],event.phase_to(EventPhase.EFFECT)
@@ -2572,14 +2572,14 @@ class CharmMonster(SpellAction):
         if encounter is not None and any(
                 target.is_enemy(ally) and (ally.uuid == caster.uuid or caster.is_ally(ally))
                 for ally in (combatant.entity for combatant in encounter.get_alive_combatants())):
-            advantage = bonus.self_static.add_advantage_modifier(AdvantageModifier(
+            advantage = add_modifier(bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name="Combat charm save", value=AdvantageStatus.ADVANTAGE,
                 source_entity_uuid=target.uuid, target_entity_uuid=caster.uuid))
         try:
             effect, _, saved = self.resolve_saving_throw(event, caster=caster, target=target,
                 ability_name="wisdom", dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
         finally:
-            if advantage is not None: bonus.self_static.remove_modifier(advantage)
+            if advantage is not None: remove_modifier(bonus, advantage, Channel.SELF_STATIC)
         if saved or effect.canceled: return effect
         return self.apply_owned_condition(effect, CharmMonsterEffect(source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid, caster_faction=caster.faction))
@@ -2606,15 +2606,15 @@ class IrresistibleDanceEffect(BaseCondition):
         if target is None: return [], [], [], [], event.cancel(status_message="Dancer absent")
         modifiers = []
         for value in target.action_economy.speed_values:
-            ident = value.self_static.add_max_constraint(NumericalModifier(name=self.name, value=0,
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(name=self.name, value=0,
                 source_entity_uuid=target.uuid, target_entity_uuid=self.source_entity_uuid))
             modifiers.append((value.uuid, ident))
         for value in (target.equipment.attack_bonus, target.saving_throws.get_saving_throw("dexterity").bonus):
-            ident = value.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
                 value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=target.uuid))
             modifiers.append((value.uuid, ident))
         value = target.equipment.ac_bonus
-        ident = value.to_target_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+        ident = add_modifier(value, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
             value=AdvantageStatus.ADVANTAGE, source_entity_uuid=target.uuid))
         modifiers.append((value.uuid, ident))
         def recover(boundary: Event, _: UUID):
@@ -2675,7 +2675,7 @@ class FeeblemindEffect(BaseCondition):
             value = target.ability_scores.get_ability(ability).ability_score
             modifier = NumericalModifier(name=self.name, value=1, source_entity_uuid=target.uuid,
                 contribution_owner_uuid=self.uuid)
-            value.add_fixed_score(modifier)
+            add_modifier(value, Channel.FIXED, Kind.VALUE, modifier)
             modifiers.append((value.uuid, modifier.uuid))
         def cure(incoming: Event, _: UUID):
             if (isinstance(incoming, ActionApplicationCommittedEvent) and not incoming.canceled
@@ -2731,7 +2731,7 @@ class Feeblemind(SpellAction):
         if effect.canceled: return effect
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, dice_numbers=4,
             damage_dice=6, damage_type=DamageType.PSYCHIC,
-            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0))
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid, base=0)))
         effect = deliver_spell_damage(effect, target, damage, roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0))
         if effect.canceled or saved or not target.is_active: return effect
         return self.apply_owned_condition(effect, FeeblemindEffect(source_entity_uuid=caster.uuid,

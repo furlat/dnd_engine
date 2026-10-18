@@ -11,6 +11,7 @@ from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier
 
 
 class ScenarioHumanController(HumanController):
@@ -154,7 +155,7 @@ def add_melee_auto_hit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
     )
-    return entity.equipment.melee_attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    return add_modifier(entity.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
 
 
 def remove_melee_auto_hit(entity: Entity, modifier_uuid: UUID) -> None:
@@ -164,4 +165,4 @@ def remove_melee_auto_hit(entity: Entity, modifier_uuid: UUID) -> None:
         entity: Entity whose attack modifier should be removed.
         modifier_uuid: Modifier UUID returned by `add_melee_auto_hit`.
     """
-    entity.equipment.melee_attack_bonus.self_static.remove_modifier(modifier_uuid)
+    remove_modifier(entity.equipment.melee_attack_bonus, modifier_uuid, Channel.SELF_STATIC)

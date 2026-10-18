@@ -12,7 +12,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import CreatureType, Size
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, ValueRead, value_score
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import create_test_entity, reset_combat_state
 
@@ -21,7 +21,7 @@ def reset_entity_state() -> None:
     """Clear global state touched by entity composition examples."""
     reset_combat_state()
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
     get_map().create_rectangle(0, 0, 10, 10)
@@ -154,7 +154,7 @@ def test_entity_methods_compose_health_actions_and_spellcasting() -> None:
     assert hero.is_spellcaster is True
     assert hero.spell_save_dc() == 16
     assert hero.spell_attack_bonus().normalized_score == 9
-    assert hero.get_spell_damage_bonus().normalized_score == 4
+    assert value_score(hero.get_spell_damage_bonus(), ValueRead(hero.uuid), normalized=True) == 4
 
 
 def test_entity_position_updates_stay_in_sync() -> None:

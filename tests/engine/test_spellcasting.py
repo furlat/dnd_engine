@@ -32,7 +32,7 @@ from dnd.core.events import Damage, DeathEvent, EventPhase, EventQueue, Range, R
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, ValueRead, value_score
 from dnd.entity import Entity, EntityConfig
 from tests.spell_test_exports import (
     ALL_SPELLS,
@@ -59,7 +59,7 @@ def reset_spell_state(width: int = 8, height: int = 4) -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, width, height)
 
 
@@ -309,7 +309,7 @@ def test_eb_14_002_spellcasting_block_is_modifier_only() -> None:
     assert extra_damage[0].damage_dice == 6
     assert extra_damage[0].dice_numbers == 1
     assert extra_damage[0].damage_bonus is not None
-    assert extra_damage[0].damage_bonus.normalized_score == 2
+    assert value_score(extra_damage[0].damage_bonus, ValueRead(extra_damage[0].source_entity_uuid), normalized=True) == 2
     assert extra_damage[0].damage_type == DamageType.RADIANT
 
 
@@ -328,40 +328,32 @@ def test_eb_14_003_entity_spell_numbers_compose_from_multiple_blocks() -> None:
         ),
         proficiency_bonus=3,
     )
-    caster.equipment.attack_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(caster.equipment.attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=caster.uuid,
             name="Blessed Implement",
             value=1,
-        )
-    )
-    caster.equipment.damage_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+        ))
+    add_modifier(caster.equipment.damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=caster.uuid,
             name="General Damage",
             value=2,
-        )
-    )
-    caster.equipment.crit_threshold.self_static.add_value_modifier(
-        NumericalModifier.create(
+        ))
+    add_modifier(caster.equipment.crit_threshold, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=caster.uuid,
             name="General Critical",
             value=1,
-        )
-    )
-    caster.equipment.crit_extra_dice.self_static.add_value_modifier(
-        NumericalModifier.create(
+        ))
+    add_modifier(caster.equipment.crit_extra_dice, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=caster.uuid,
             name="General Crit Dice",
             value=1,
-        )
-    )
+        ))
 
     assert caster.spell_attack_bonus().normalized_score == 10
     assert caster.spell_save_dc() == 16
     assert caster.get_spell_crit_threshold() == 18
     assert caster.get_spell_crit_extra_dice() == 3
-    assert caster.get_spell_damage_bonus().normalized_score == 6
+    assert value_score(caster.get_spell_damage_bonus(), ValueRead(caster.uuid), normalized=True) == 6
 
 
 def test_eb_14_004_spell_actions_create_spell_events_and_slot_costs() -> None:
@@ -760,14 +752,12 @@ def test_eb_14_014_drop_concentration_can_target_one_multi_slot_spell() -> None:
     """EB-14-014: DropConcentration can remove one multi-slot concentration spell."""
     reset_spell_state()
     caster = create_spellcaster()
-    caster.max_concentration_slots.self_static.add_value_modifier(
-        NumericalModifier(
+    add_modifier(caster.max_concentration_slots, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name="Book Multi Concentration",
             value=1,
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
-        )
-    )
+        ))
 
     first = BookNamedConcentrationSpell(
         source_entity_uuid=caster.uuid,

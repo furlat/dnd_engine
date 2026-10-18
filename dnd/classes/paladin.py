@@ -23,7 +23,7 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.dice import AttackOutcome
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts
 from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.effect_types import EffectOrigin, EffectOriginKind
 from dnd.blocks.spellcasting import DivineSmiteEntitlement
@@ -204,7 +204,7 @@ def create_divine_smite_processor(slot_level: int):
             ),
             damage_dice=8,
             dice_numbers=dice_count,
-            damage_bonus=smite_damage_bonus,
+            damage_bonus=parts(smite_damage_bonus),
             damage_type=DamageType.RADIANT,
         )
 
@@ -492,13 +492,11 @@ class DivineSenseEffect(BaseCondition):
             actor.equipment.attack_bonus,
             actor.spellcasting.spell_attack_bonus,
         ):
-            identity = value.self_contextual.add_advantage_modifier(
-                ContextualAdvantageModifier(
+            identity = add_modifier(value, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
                     source_entity_uuid=actor.uuid,
                     callable=advantage,
                     name="Divine Sense",
-                )
-            )
+                ))
             modifiers.append((value.uuid, identity))
         return modifiers, [], [], [], event.phase_to(EventPhase.EFFECT)
 
@@ -708,9 +706,9 @@ def improved_divine_smite(event, source_uuid):
             magical=True,
             source_id="class_feature.paladin.improved_divine_smite",
         ),
-        damage_bonus=ModifiableValue.create(
-            source_entity_uuid=source_uuid, base_value=0
-        ),
+        damage_bonus=parts(ModifiableValue(
+            source_entity_uuid=source_uuid, base=0
+        )),
     )
     return event.append_damage_roll(
         damage,
@@ -806,24 +804,20 @@ class PaladinAuraBenefit(BaseCondition):
             modifiers = []
             for save in target.saving_throws.get_blocks():
                 value = save.bonus
-                identity = value.self_contextual.add_value_modifier(
-                    ContextualNumericalModifier(
+                identity = add_modifier(value, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
                         source_entity_uuid=target.uuid,
                         target_entity_uuid=self.source_entity_uuid,
                         name="Aura of Protection",
                         callable=bonus,
-                    )
-                )
+                    ))
                 modifiers.append((value.uuid, identity))
             value = target.health.death_save_bonus
-            identity = value.self_contextual.add_value_modifier(
-                ContextualNumericalModifier(
+            identity = add_modifier(value, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
                     source_entity_uuid=target.uuid,
                     target_entity_uuid=self.source_entity_uuid,
                     name="Aura of Protection",
                     callable=bonus,
-                )
-            )
+                ))
             modifiers.append((value.uuid, identity))
             return modifiers, [], [], [], event.phase_to(EventPhase.EFFECT)
         identity = "Charmed" if self.aura_kind == "devotion" else "Frightened"
@@ -1166,11 +1160,9 @@ class SacredWeaponEffect(BaseCondition):
                     use_register=False,
                 )
 
-        identity = weapon.attack_bonus.self_contextual.add_value_modifier(
-            ContextualNumericalModifier(
+        identity = add_modifier(weapon.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
                 name="Sacred Weapon", source_entity_uuid=weapon.uuid, callable=bonus
-            )
-        )
+            ))
         return (
             [(weapon.attack_bonus.uuid, identity)],
             [],
@@ -1350,13 +1342,11 @@ class PurityOfSpirit(BaseCondition):
                 name, self.uuid, immunity_check=prevents
             )
         value = target.equipment.ac_bonus
-        identity = value.to_target_contextual.add_advantage_modifier(
-            ContextualAdvantageModifier(
+        identity = add_modifier(value, Channel.TO_TARGET_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
                 source_entity_uuid=target.uuid,
                 name="Purity of Spirit",
                 callable=penalty,
-            )
-        )
+            ))
         return [(value.uuid, identity)], [], [], [], event.phase_to(EventPhase.EFFECT)
 
     def _release_owned_runtime_state(self, *, parent_event=None):
@@ -1547,13 +1537,11 @@ class HolyNimbusEffect(BaseCondition):
         actor.add_event_handler(handler)
         modifiers = []
         for save in actor.saving_throws.get_blocks():
-            identity = save.bonus.self_contextual.add_advantage_modifier(
-                ContextualAdvantageModifier(
+            identity = add_modifier(save.bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
                     source_entity_uuid=actor.uuid,
                     name="Holy Nimbus",
                     callable=advantage,
-                )
-            )
+                ))
             modifiers.append((save.bonus.uuid, identity))
         return modifiers, [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
 

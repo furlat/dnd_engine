@@ -53,6 +53,7 @@ from tests.manual.authored_encounter_support import (
     assemble_authored_encounter,
     reset_authored_encounter_state,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 from dnd.types.cells import no_cells
 from dnd.core.cells import mask_positions
 
@@ -1197,13 +1198,11 @@ def test_weighted_paths_keep_dijkstra_selection(
     )
     difficult_tile = grid.get_tile(*difficult_position)
     assert difficult_tile is not None
-    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(difficult_tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Performance Test Difficult Terrain",
             value=1,
-        )
-    )
+        ))
     dijkstra_calls = 0
     bfs_calls = 0
     original_dijkstra = gridmap_module.dijkstra
@@ -1276,13 +1275,11 @@ def test_weighted_move_discovery_uses_cached_senses_path_costs(
     )
     difficult_tile = grid.get_tile(*difficult_position)
     assert difficult_tile is not None
-    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(difficult_tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Cached Cost Difficult Terrain",
             value=1,
-        )
-    )
+        ))
     grid._path_cache.clear()
     actor.update_entity_senses(max_distance=20)
 

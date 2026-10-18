@@ -27,7 +27,7 @@ from dnd.core.events import (
     RestCompletedEvent,
     RestResourcesRecoveredEvent,
 )
-from dnd.core.values import ModifiableValue, ValueRead, read_value
+from dnd.core.values import ModifiableValue, ValueRead, read_value, parts
 from dnd.entity import Entity
 from dnd.types.discovery import ActorScan, ScanRecord
 
@@ -132,9 +132,9 @@ class WizardRecoveryState(BaseCondition):
                 value=12,
                 roll_type=RollType.DAMAGE,
                 attack_outcome=AttackOutcome.HIT,
-                bonus=read_value(ModifiableValue.create(
-                    source_entity_uuid=actor.uuid, base_value=0
-                ), ValueRead(actor.uuid)),
+                bonus=read_value(parts(ModifiableValue(
+                    source_entity_uuid=actor.uuid, base=0
+                )), ValueRead(actor.uuid)),
             )
             actor.receive_damage(
                 dice.roll.total,
@@ -279,9 +279,7 @@ def empowered_evocation(event, source_uuid):
     actor = Entity.get(source_uuid)
     if actor is None:
         return None
-    bonus = actor.ability_scores.intelligence.get_combined_values(
-        use_register=False
-    ).normalized_score
+    bonus = actor.ability_scores.intelligence.modifier_reading().normalized_score
     roll = event.final_roll
     return event.replace_roll(
         roll.model_copy(

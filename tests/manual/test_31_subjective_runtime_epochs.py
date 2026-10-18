@@ -31,7 +31,7 @@ from dnd.classes.rage import FrenziedStrike
 from dnd.blocks.base_item import BaseItem
 from dnd.core.aoe import Cone, Cube, Line, Sphere
 from dnd.core.gridmap import get_map
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.items.environment_interactables import TrapLever
 from tests.manual.authored_encounter_support import (
@@ -220,13 +220,13 @@ def test_spell_outcome_profiles_reach_epoch_without_registry_growth() -> None:
     fire_template = next(action for action in mage.registered_actions if action.name == "Fire Bolt")
     missile_template = next(action for action in mage.registered_actions if action.name == "Magic Missile")
     root_registry_before = set(BaseObject._registry)
-    value_registry_before = set(BaseValue._registry)
+    value_registry_before = set(ModifiableValue._registry)
 
     fire_profile = fire_template.get_outcome_profile()
     missile_profile = missile_template.get_outcome_profile()
 
     assert set(BaseObject._registry) == root_registry_before
-    assert set(BaseValue._registry) == value_registry_before
+    assert set(ModifiableValue._registry) == value_registry_before
     assert fire_profile is not None
     assert fire_profile.resolution is OutcomeResolution.ATTACK_ROLL
     assert fire_profile.attack_bonus == mage.spell_attack_outcome_baseline().attack_bonus
@@ -753,14 +753,14 @@ def test_weapon_attack_wrappers_share_one_stochastic_profile() -> None:
         template=True,
     )
     root_registry_before = set(BaseObject._registry)
-    value_registry_before = set(BaseValue._registry)
+    value_registry_before = set(ModifiableValue._registry)
 
     normal_profile = normal.get_outcome_profile()
     extra_profile = extra.get_outcome_profile()
     frenzy_profile = frenzy.get_outcome_profile()
 
     assert set(BaseObject._registry) == root_registry_before
-    assert set(BaseValue._registry) == value_registry_before
+    assert set(ModifiableValue._registry) == value_registry_before
     assert normal_profile is not None
     assert extra_profile == normal_profile
     assert frenzy_profile == normal_profile

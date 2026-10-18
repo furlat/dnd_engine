@@ -42,6 +42,7 @@ from tests.manual.spell_regression_support import (
     force_save_result,
     reset_spell_regression_arena,
 )
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier
 
 
 def _force_attack_outcome(entity: Entity, outcome: AutoHitStatus) -> UUID:
@@ -51,12 +52,12 @@ def _force_attack_outcome(entity: Entity, outcome: AutoHitStatus) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
     )
-    entity.equipment.attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    add_modifier(entity.equipment.attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
     return modifier.uuid
 
 
 def _remove_attack_outcome(entity: Entity, modifier_uuid: UUID) -> None:
-    entity.equipment.attack_bonus.self_static.remove_modifier(modifier_uuid)
+    remove_modifier(entity.equipment.attack_bonus, modifier_uuid, Channel.SELF_STATIC)
 
 
 def _action_row(entity: Entity, template_name: str):

@@ -13,7 +13,8 @@ from dnd.blocks.action_economy import (
     Resource,
 )
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import StaticValue
+import dnd.blocks.action_economy as action_economy_module
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, modifier_of, modifiers_of
 from tests.engine.test_combat_actions import reset_core_action_state, strong_entity
 
 
@@ -42,7 +43,7 @@ def test_aggregate_affordability_fails_before_any_channel_is_debited() -> None:
     """The complete aggregate is admitted before its first mutation."""
     reset_core_action_state()
     economy = strong_entity("Poor", (1, 1), "heroes").action_economy
-    before = tuple(economy.actions.self_static.value_modifiers)
+    before = tuple(modifier.uuid for modifier in modifiers_of(economy.actions, Channel.SELF_STATIC, Kind.VALUE))
 
     with pytest.raises(ValueError, match="Not enough actions"):
         economy.consume_aggregate_with_receipt((
@@ -50,7 +51,7 @@ def test_aggregate_affordability_fails_before_any_channel_is_debited() -> None:
             ActionEconomyChannelCost(cost_type="actions", amount=1),
         ))
 
-    assert tuple(economy.actions.self_static.value_modifiers) == before
+    assert tuple(modifier.uuid for modifier in modifiers_of(economy.actions, Channel.SELF_STATIC, Kind.VALUE)) == before
 
 
 @pytest.mark.parametrize("raise_after_insert", (False, True))
@@ -62,20 +63,19 @@ def test_aggregate_install_failure_removes_all_owned_modifier_state(
     reset_core_action_state()
     economy = strong_entity("Atomic Debtor", (1, 1), "heroes").action_economy
     before_registry = set(NumericalModifier._registry)
-    original_add = StaticValue.add_value_modifier
     calls = 0
 
-    def fail_second(value: StaticValue, modifier: NumericalModifier) -> UUID:
+    def fail_second(value: ModifiableValue, channel: Channel, kind: Kind, modifier: NumericalModifier) -> UUID:
         nonlocal calls
         calls += 1
         if calls == 2 and not raise_after_insert:
             raise RuntimeError("injected add failure")
-        result = original_add(value, modifier)
+        result = add_modifier(value, channel, kind, modifier)
         if calls == 2:
             raise RuntimeError("injected post-insert failure")
         return result
 
-    monkeypatch.setattr(StaticValue, "add_value_modifier", fail_second)
+    monkeypatch.setattr(action_economy_module, "add_modifier", fail_second)
     with pytest.raises(RuntimeError, match="injected"):
         economy.consume_aggregate_with_receipt((
             ActionEconomyChannelCost(cost_type="actions", amount=1),
@@ -137,7 +137,7 @@ def test_debit_undo_rejects_forged_handle_before_removing_any_modifier() -> None
         name="Unrelated",
         value=5,
     )
-    economy.walking_speed.self_static.add_value_modifier(unrelated)
+    add_modifier(economy.walking_speed, Channel.SELF_STATIC, Kind.VALUE, unrelated)
     forged_handle = receipt.handles[0].model_copy(update={
         "cost_type": "movement",
         "modifier_uuid": unrelated.uuid,
@@ -153,4 +153,4 @@ def test_debit_undo_rejects_forged_handle_before_removing_any_modifier() -> None
         economy.undo_prevalidated_debit(forged_receipt)
 
     assert economy.bonus_actions.normalized_score == 0
-    assert unrelated.uuid in economy.walking_speed.self_static.value_modifiers
+    assert modifier_of(economy.walking_speed, Channel.SELF_STATIC, Kind.VALUE, unrelated.uuid) is not None

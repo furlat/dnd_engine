@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 
 from dnd.blocks.action_economy import ActionEconomy, ActionEconomyConfig
+from dnd.core.values import Channel, Kind, modifier_of
 
 
 def test_normal_slot_capacity_sets_all_ranks_without_touching_turn_resources() -> None:
@@ -43,8 +44,8 @@ def test_replacing_capacity_preserves_spend_across_raise_and_lower() -> None:
     assert economy.spell_slot_2.normalized_score == 0
     for rank, modifier_uuid in first.capacity_modifier_uuids:
         assert (
-            modifier_uuid
-            not in economy.spell_slot_value(rank).self_static.value_modifiers
+            modifier_of(economy.spell_slot_value(rank), Channel.SELF_STATIC, Kind.VALUE, modifier_uuid)
+            is None
         )
 
     economy.set_normal_spell_slot_capacity(uuid4(), {1: 5, 2: 3})

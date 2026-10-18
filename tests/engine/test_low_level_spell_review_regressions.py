@@ -9,7 +9,7 @@ from dnd.core.events import Damage, EventHandler, EventPhase, EventType, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts
 from dnd.spells.abjuration import ProtectionFromEvilAndGood
 from dnd.spells.conjuration import EnsnaringStrike
 from dnd.spells.divination import HuntersMark, ReapplyHuntersMark
@@ -228,14 +228,12 @@ def test_phantasmal_force_selects_largest_component_after_flat_defense(game):
     target = combatant(game, "Enemy", (5, 2), "foes")
     force_save_result(target, "intelligence", succeeds=False)
     cast(PhantasmalForce, caster, target)
-    target.health.damage_reduction.self_static.add_value_modifier(
-        NumericalModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name="Native flat defense",
             value=10,
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
-        )
-    )
+        ))
     damages = [
         Damage(
             source_entity_uuid=caster.uuid,
@@ -243,9 +241,9 @@ def test_phantasmal_force_selects_largest_component_after_flat_defense(game):
             damage_dice=4,
             dice_numbers=0,
             damage_type=kind,
-            damage_bonus=ModifiableValue.create(
-                source_entity_uuid=caster.uuid, base_value=amount
-            ),
+            damage_bonus=parts(ModifiableValue(
+                source_entity_uuid=caster.uuid, base=amount
+            )),
         )
         for kind, amount in ((DamageType.BLUDGEONING, 10), (DamageType.FIRE, 6))
     ]

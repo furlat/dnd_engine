@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 
-from dnd.core.values import ValueRead, read_value
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier, parts
 from dnd.actions import Attack
 from dnd.blocks.health import HealthConfig
 from dnd.classes.fighter import GreatWeaponFighting
@@ -31,7 +31,7 @@ from tests.manual.spell_regression_support import force_save_result
 
 def reading(value, target_uuid=None):
     """The value read by its owner against an optional target."""
-    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 @pytest.fixture(autouse=True, params=[0, 1], ids=["seed0", "seed1"])
@@ -43,8 +43,8 @@ def seeded_rng(request):
 
 
 def bonus(owner):
-    return ModifiableValue.create(
-        source_entity_uuid=owner.uuid, value_name="Dice coverage", base_value=0,
+    return ModifiableValue(
+        source_entity_uuid=owner.uuid, name="Dice coverage", base=0,
     )
 
 
@@ -278,7 +278,7 @@ def test_great_weapon_fighting_leaves_extra_damage_packet_faces_unchanged(game):
 def test_ordinary_dice_advantage_stays_on_the_same_face_queue(game, advantage, expected):
     owner = actor(game)
     modifier = bonus(owner)
-    modifier.self_static.add_advantage_modifier(AdvantageModifier(source_entity_uuid=owner.uuid, value=advantage))
+    add_modifier(modifier, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(source_entity_uuid=owner.uuid, value=advantage))
     with fixed_dice_faces(2, 18):
         result = Dice(count=1, value=20, bonus=reading(modifier), roll_type=RollType.SAVE).roll
     assert result.results == [2, 18] and result.total == expected

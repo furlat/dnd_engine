@@ -11,6 +11,7 @@ from dnd.entity import Entity
 from tests.engine.test_bg3_rank_one_two_spells import combatant
 from tests.engine.test_roster_support_spells import game as game  # noqa: PLC0414 - pytest fixture export
 from tests.progression.test_paladin_features import paladin
+from dnd.core.values import Channel, Kind, add_modifier
 
 ALL_AURAS = ("courage", "devotion", "protection")
 
@@ -54,9 +55,7 @@ def test_owner_faction_change_preserves_another_paladins_contributions(game):
     owner = paladin(game, 10)
     other = paladin(game, 10)
     Entity.update_entity_position(other, (3, 3))
-    other.ability_scores.charisma.ability_score.self_static.add_value_modifier(
-        NumericalModifier(source_entity_uuid=other.uuid, value=4)
-    )
+    add_modifier(other.ability_scores.charisma.ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(source_entity_uuid=other.uuid, value=4))
     ally = combatant(game, "Ally", (3, 2))
     foe = combatant(game, "Foe", (4, 2), "foes")
     check_auras(ally, owner)

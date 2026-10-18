@@ -402,7 +402,7 @@ def change_prepared_spells(
         entity.scribed_spell_ids,
         selection.spell_ids,
         entity.ability_scores.get_ability(definition.spellcasting_ability)
-        .get_combined_values(use_register=False)
+        .modifier_reading()
         .normalized_score,
         max(shared_slot_capacities(entity.applied_class_levels), default=0),
     )

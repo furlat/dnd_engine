@@ -269,7 +269,7 @@ def entity_health_details(
         entity.health.get_max_hit_dices_points(
             entity.ability_scores.get_ability(
                 "constitution"
-            ).get_combined_values().normalized_score
+            ).modifier_reading().normalized_score
         )
         + entity.health.max_hit_points_bonus.normalized_score
     )

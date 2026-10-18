@@ -32,6 +32,7 @@ from dnd.core.events import Event, EventPhase
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity
 from dnd.types.discovery import ActorScan
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class FieldFocus(BaseCondition):
@@ -73,7 +74,7 @@ class FieldFocus(BaseCondition):
             value=self.movement_bonus,
         )
         for speed in target.action_economy.speed_values:
-            movement_uuid = speed.self_static.add_value_modifier(movement_modifier)
+            movement_uuid = add_modifier(speed, Channel.SELF_STATIC, Kind.VALUE, movement_modifier)
             owned_modifiers.append((speed.uuid, movement_uuid))
 
         armor_modifier = NumericalModifier.create(
@@ -82,7 +83,7 @@ class FieldFocus(BaseCondition):
             name="Field Focus Armor",
             value=self.armor_bonus,
         )
-        armor_uuid = target.equipment.ac_bonus.self_static.add_value_modifier(armor_modifier)
+        armor_uuid = add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, armor_modifier)
         owned_modifiers.append((target.equipment.ac_bonus.uuid, armor_uuid))
 
         effect_event = declaration_event.phase_to(

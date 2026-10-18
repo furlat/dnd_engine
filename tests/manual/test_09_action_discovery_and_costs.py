@@ -35,7 +35,7 @@ from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, modifiers_of
 from dnd.entity import Entity, EntityConfig
 from dnd.items.spell_items import build_fireball_scroll, build_fire_bolt_scroll
 from tests.manual.reactive_fixture_support import PrepareIntercept
@@ -140,14 +140,12 @@ def entity_target_name(target) -> str:
 
 def deny_nonreaction_actions(actor: Entity) -> None:
     """Set the neutral action-permission gate to zero for discovery tests."""
-    actor.action_economy.action_permission.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(actor.action_economy.action_permission, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=actor.uuid,
             target_entity_uuid=actor.uuid,
             name="Discovery permission denied",
             value=-1,
-        )
-    )
+        ))
     assert actor.can_take_actions() is False
 
 
@@ -679,14 +677,12 @@ def test_generic_position_row_reports_requirements_not_target_cost(
     """A rules-invalid position is not mislabeled target-cost unaffordable."""
     reset_action_state()
     actor = create_tutorial_actor(position=(2, 2))
-    actor.action_economy.spell_slot_2.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(actor.action_economy.spell_slot_2, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=actor.uuid,
             target_entity_uuid=actor.uuid,
             name="Misty Step regression slot",
             value=1,
-        )
-    )
+        ))
     actor.register_action(
         MistyStep(
             source_entity_uuid=actor.uuid,
@@ -902,13 +898,13 @@ def test_dash_adds_current_speed_after_speed_bonuses_and_movement_spending() -> 
     reset_action_state()
     actor = create_tutorial_actor()
     movement = actor.action_economy.walking_speed
-    movement.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(movement, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name="Fast Movement",
         value=10,
         source_entity_uuid=actor.uuid,
         target_entity_uuid=actor.uuid,
     ))
-    movement.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(movement, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name="movement cost",
         value=-15,
         source_entity_uuid=actor.uuid,
@@ -925,7 +921,7 @@ def test_dash_adds_current_speed_after_speed_bonuses_and_movement_spending() -> 
     assert movement.normalized_score == 65
     dashing_modifiers = [
         modifier
-        for modifier in movement.self_static.value_modifiers.values()
+        for modifier in modifiers_of(movement, Channel.SELF_STATIC, Kind.VALUE)
         if modifier.name == "Dashing"
     ]
     assert [modifier.value for modifier in dashing_modifiers] == [40]

@@ -31,7 +31,7 @@ from dnd.core.events import (
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import AdvantageStatus
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import ModifiableValue
 from dnd.types.world import CardinalDirection
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import (
@@ -99,10 +99,10 @@ def create_tutorial_hand_crossbow(source_id: UUID) -> Weapon:
         damage_type=DamageType.PIERCING,
         properties=[WeaponProperty.RANGED, WeaponProperty.LIGHT],
         range=Range(type=RangeType.RANGE, normal=30, long=120),
-        attack_bonus=ModifiableValue.create(
+        attack_bonus=ModifiableValue(
             source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Attack Bonus",
+            base=0,
+            name="Attack Bonus",
         ),
     )
 

@@ -14,7 +14,7 @@ from dnd.core.events import (
     StepMovementEvent,
 )
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 
 
 def reset_world_state() -> None:
@@ -22,7 +22,7 @@ def reset_world_state() -> None:
     EventQueue.reset()
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     GridMap.reset()
     EventQueue.set_combat_log_callback(None)
 

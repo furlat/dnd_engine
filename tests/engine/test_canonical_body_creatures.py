@@ -29,6 +29,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.transmutation import EnlargeReduceEffect, HasteEffect, SlowedEffect
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.world import MovementMode
+from dnd.core.values import ValueRead, value_score
 
 
 RECIPES = {**BEAST_RECIPES_BY_ID, **FIEND_RECIPES_BY_ID,
@@ -143,7 +144,7 @@ def test_configured_body_multiattack_is_one_action_with_full_child_damage(game,k
         if event.phase is EventPhase.COMPLETION and event.source_entity_uuid == owner.uuid]
     assert len(attacks) == count
     assert all(event.behavior_id == "action.attack" for event in attacks)
-    assert all(event.damages[0].damage_bonus.normalized_score == owner.ability_scores.strength.modifier for event in attacks)
+    assert all(value_score(event.damages[0].damage_bonus, ValueRead(event.damages[0].source_entity_uuid), normalized=True) == owner.ability_scores.strength.modifier for event in attacks)
     assert owner.action_economy.actions.normalized_score == 0
     assert owner.action_economy.bonus_actions.normalized_score == 1
 

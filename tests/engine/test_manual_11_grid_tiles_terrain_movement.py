@@ -22,7 +22,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from dnd.items.environment import DirectionalWall
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
@@ -34,7 +34,7 @@ def reset_world_state(width: int = 8, height: int = 8) -> None:
     reset_combat_state()
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     BaseBlock._registry.clear()
     get_map().create_rectangle(0, 0, width, height)
 
@@ -97,13 +97,11 @@ def test_paths_price_destination_tiles_and_directional_borders() -> None:
     grid = get_map()
     difficult_tile = grid.get_tile(2, 0)
     assert difficult_tile is not None
-    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(difficult_tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Mud",
             value=1,
-        )
-    )
+        ))
 
     distances, paths = grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING)
 

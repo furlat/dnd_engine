@@ -16,7 +16,7 @@ from dnd.core.modifiers import (
     AdvantageStatus,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, modifiers_of
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.monsters.bestiary import (
@@ -49,7 +49,7 @@ def reset_monster_state(width: int = 30, height: int = 15) -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, width, height)
     _monster_game = Game()
 
@@ -495,7 +495,7 @@ def test_eb_17_003_mark_target_creates_concentration_link_and_cleans_target_stat
     concentrating = archer.active_conditions["Concentrating"]
     assert (target.uuid, marked.uuid) in concentrating.linked_conditions
 
-    advantage_modifiers = target.equipment.ac_bonus.to_target_static.advantage_modifiers.values()
+    advantage_modifiers = modifiers_of(target.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE)
     assert any(
         modifier.name == "Marked" and modifier.value == AdvantageStatus.ADVANTAGE
         for modifier in advantage_modifiers
@@ -511,7 +511,7 @@ def test_eb_17_003_mark_target_creates_concentration_link_and_cleans_target_stat
     assert not target.check_condition_immunity("Hidden")
     assert not any(
         modifier.name == "Marked"
-        for modifier in target.equipment.ac_bonus.to_target_static.advantage_modifiers.values()
+        for modifier in modifiers_of(target.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE)
     )
 
 

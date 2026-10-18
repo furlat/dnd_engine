@@ -50,7 +50,7 @@ from dnd.core.events import (
     RangeType,
 )
 from dnd.core.creature_types import DamageType
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.types.discovery import ActorScan
 from dnd.spells.abjuration import MageArmor
@@ -359,17 +359,17 @@ class _AcidFlaskSpell(SpellAction):
             ),
         )
 
-        no_bonus = ModifiableValue.create(
+        no_bonus = ModifiableValue(
             source_entity_uuid=caster.uuid,
-            base_value=0,
-            value_name="Acid Flask Damage",
+            base=0,
+            name="Acid Flask Damage",
         )
         acid_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             damage_dice=4,
             dice_numbers=2,
-            damage_bonus=no_bonus,
+            damage_bonus=parts(no_bonus),
             damage_type=DamageType.ACID,
         )
         damage_dice = acid_damage.get_dice(

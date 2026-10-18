@@ -49,6 +49,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.spells.transmutation import HasteEffect
 from dnd.spells.transmutation import SlowedEffect
 from tests.engine.support import create_test_entity, reset_combat_state
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 HASTE_GRANT_SUFFIX = "__grant_haste"
@@ -361,14 +362,12 @@ def test_haste_extra_attack_miss_keeps_weapon_presentation_metadata() -> None:
             target_uuid=target.uuid,
         )
 
-    target.equipment.ac_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
             name="Forced Extra Attack miss",
             value=100,
-        )
-    )
+        ))
     with fixed_dice_faces(10):
         event = _execute(
             fighter,
@@ -1094,9 +1093,7 @@ def test_rage_maintenance_requires_a_hostile_creature_attack(recipient: str) -> 
 
 def test_divine_smite_keeps_slot_when_attacking_an_object() -> None:
     actor, _, prop_uuid = _create_grid_actor(1, None, slow=False, surge=False)
-    base = actor.action_economy.spell_slot_1.get_base_modifier()
-    assert base is not None
-    base.value = 1
+    actor.action_economy.spell_slot_1.base = 1
     actor.add_event_handler(create_divine_smite_handler(actor.uuid, 1))
     with fixed_dice_faces(18, 4, 4):
         result = _execute(actor, "Attack_MELEE_MAIN", target_uuid=prop_uuid)

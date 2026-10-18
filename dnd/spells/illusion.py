@@ -42,7 +42,7 @@ from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModi
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.dice import AttackOutcome, roll_die_face
 from dnd.core.aoe import AoEShape, Cone, Cube, Sphere
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, modifier_of, parts
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
 from dnd.types.senses import PerceivedSpatialEffect
@@ -96,7 +96,7 @@ class BlurEffect(BaseCondition):
             source_entity_uuid=self.target_entity_uuid,
             target_entity_uuid=self.source_entity_uuid or self.target_entity_uuid
         )
-        mod_uuid = target.equipment.ac_bonus.to_target_static.add_advantage_modifier(disadv_mod)
+        mod_uuid = add_modifier(target.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, disadv_mod)
         outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -1041,7 +1041,7 @@ class MirrorImageEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid
         )
-        mod_uuid = target.equipment.ac_bonus.self_static.add_value_modifier(ac_mod)
+        mod_uuid = add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, ac_mod)
         outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
         self._ac_modifier_uuid = ac_mod.uuid
         self._ac_mv_uuid = target.equipment.ac_bonus.uuid
@@ -1091,7 +1091,7 @@ class MirrorImageEffect(BaseCondition):
             if condition._ac_modifier_uuid and condition._ac_mv_uuid:
                 mv = ModifiableValue.get(condition._ac_mv_uuid)
                 if mv:
-                    mod = mv.self_static.value_modifiers.get(condition._ac_modifier_uuid)
+                    mod = modifier_of(mv, Channel.SELF_STATIC, Kind.VALUE, condition._ac_modifier_uuid)
                     if mod:
                         mod.value = remaining * 3
 
@@ -1332,7 +1332,7 @@ class _SilenceDeafened(SpatialConditionMembershipSource):
         immunity = ResistanceModifier(name="Silence thunder immunity", value=ResistanceStatus.IMMUNITY,
             damage_type=DamageType.THUNDER, source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid)
-        immunity_uuid = target.health.damage_reduction.self_static.add_resistance_modifier(immunity)
+        immunity_uuid = add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, immunity)
         return [(target.health.damage_reduction.uuid, immunity_uuid)], [], list(self.sub_conditions), [], execution_event.phase_to(
             EventPhase.EFFECT, update={"condition": self},
         )
@@ -1468,7 +1468,7 @@ class PhantasmalForceEffect(BaseCondition):
             else:
                 damage=Damage(name=self.name,source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,
                     damage_dice=6,dice_numbers=1,damage_type=self.damage_type,
-                    damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid,base_value=0),effect_origin=self.effect_origin)
+                    damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)),effect_origin=self.effect_origin)
                 roll=roll_spell_damage(damage, parent_event=boundary, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
                 target.receive_damage(roll.total,self.damage_type,caster.uuid,parent_event=boundary.uuid,
                     damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,

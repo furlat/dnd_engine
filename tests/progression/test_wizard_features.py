@@ -22,6 +22,7 @@ from tests.engine.test_bg3_rank_one_two_spells import combatant
 from tests.engine.test_roster_support_spells import game as game
 from tests.manual.spell_regression_support import force_save_result
 from tests.progression.prepared_class_support import prepared_build
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def wizard(game, level, *, scribed=(), prepared=()):
@@ -173,13 +174,11 @@ def test_overchannel_counts_once_per_cast_and_recoil_ignores_immunity_then_real_
         if handler.semantic_key == "class_feature.wizard.overchannel"
     )
     assert actor.set_handler_enabled_by_uuid(handler.uuid, True)
-    actor.health.damage_reduction.self_static.add_resistance_modifier(
-        ResistanceModifier(
+    add_modifier(actor.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=actor.uuid,
             damage_type=DamageType.NECROTIC,
             value=ResistanceStatus.IMMUNITY,
-        )
-    )
+        ))
     before_enemy, before_self = enemy.get_hp(), actor.get_hp()
     bonus = actor.ability_scores.intelligence.modifier
     with fixed_dice_faces(1, 1, 1):

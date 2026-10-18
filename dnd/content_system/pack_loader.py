@@ -44,7 +44,7 @@ from dnd.core.content.registry import (
 from dnd.core.dice import Dice, DiceRoll
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 
 
@@ -869,7 +869,7 @@ def _engine_runtime_attribute_specs(
     return (
         (BaseObject, "_registry"),
         (BaseBlock, "_registry"),
-        (BaseValue, "_registry"),
+        (ModifiableValue, "_registry"),
         (DiceRoll, "_registry"),
         (Dice, "_registry"),
         (Entity, "_entity_registry"),

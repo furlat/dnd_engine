@@ -55,6 +55,7 @@ from dnd.types.spatial_effects import (
     SpatialEffectOccupancyPolicy,
     SpatialEffectTriggerKind,
 )
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, normalized_base
 
 
 def _child_binding(parent_binding, behavior_id: str, runtime_owner_uuid: UUID):
@@ -123,10 +124,10 @@ class DraconicResilience(BaseCondition):
             name="Draconic Resilience HP",
             value=self.hp_bonus,
         )
-        mod_uuid = target.health.max_hit_points_bonus.self_static.add_value_modifier(hp_mod)
+        mod_uuid = add_modifier(target.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, hp_mod)
         outs.append((target.health.max_hit_points_bonus.uuid, mod_uuid))
 
-        con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+        con_mod = target.ability_scores.get_ability("constitution").modifier_reading().normalized_score
         max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -139,7 +140,7 @@ class DraconicResilience(BaseCondition):
     def _post_removal_stats(self) -> Dict[str, Any]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target and isinstance(target, Entity):
-            con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+            con_mod = target.ability_scores.get_ability("constitution").modifier_reading().normalized_score
             max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
             return {"resulting_max_hp": max_hp}
         return {}
@@ -208,8 +209,7 @@ class ElementalAffinityResistance(BaseCondition):
             damage_type=self.damage_type,
         )
         modifier_uuid = (
-            target.health.damage_reduction.self_static
-            .add_resistance_modifier(modifier)
+            add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, modifier)
         )
         return [
             (target.health.damage_reduction.uuid, modifier_uuid),
@@ -1482,7 +1482,7 @@ class ConvertSPToSlot(BaseAction):
 
         cost_modifiers = entity.action_economy.get_cost_modifiers(slot_cost_type_name)
         if cost_modifiers:
-            slot_value.self_static.remove_value_modifier(cost_modifiers[-1].uuid)
+            remove_modifier(slot_value, cost_modifiers[-1].uuid, Channel.SELF_STATIC, Kind.VALUE)
 
         return execution_event.phase_to(
             EventPhase.EFFECT,
@@ -1544,8 +1544,7 @@ class SorceryPointsFeature(BaseCondition):
 
         for slot_level in range(1, 6):
             slot_value = target.action_economy.spell_slot_value(slot_level)
-            base_mod = slot_value.get_base_modifier()
-            if base_mod and base_mod.normalized_value > 0:
+            if normalized_base(slot_value) > 0:
                 target.register_action(ConvertSlotToSP(
                     source_entity_uuid=target.uuid, slot_level=slot_level, template=True
                 ))

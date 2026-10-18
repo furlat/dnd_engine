@@ -19,6 +19,7 @@ from dnd.core.creature_types import DamageType
 from tests.engine.support import set_hp
 from tests.engine.test_roster_support_spells import game, actor, cast
 from tests.manual.spell_regression_support import force_save_result
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def zones(kind):
@@ -150,7 +151,7 @@ def test_guardian_rejects_occupied_nonanchor_cell_before_payment(game):
 def test_guardian_counts_resolved_temp_hp_absorption(game, resistance, expected):
     caster, enemy = actor(game), actor(game, 'Enemy', (8, 2), 'foes')
     force_save_result(enemy, 'dexterity', succeeds=False)
-    enemy.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(name='Defense',
+    add_modifier(enemy.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(name='Defense',
         value=resistance, damage_type=DamageType.RADIANT, source_entity_uuid=enemy.uuid, target_entity_uuid=enemy.uuid))
     enemy.health.add_temporary_hit_points(30, source_entity_uuid=enemy.uuid)
     before = enemy.get_normal_hp()
@@ -331,11 +332,10 @@ def test_feast_source_cleanup_preserves_other_immunity_and_advantage_owners(game
     caster, target = actor(game), actor(game, 'Guest', (3, 3))
     other = uuid4()
     target.add_condition_immunity_source('Poisoned', other)
-    target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
         name='Other poison immunity', source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
         value=ResistanceStatus.IMMUNITY, damage_type=DamageType.POISON))
-    target.saving_throws.get_saving_throw('wisdom').bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(name='Other Wisdom advantage', source_entity_uuid=target.uuid,
+    add_modifier(target.saving_throws.get_saving_throw('wisdom').bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name='Other Wisdom advantage', source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid, value=AdvantageStatus.ADVANTAGE))
     feast = feast_for(caster)
     eat(feast, target)

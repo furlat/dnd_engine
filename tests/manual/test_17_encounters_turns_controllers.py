@@ -20,7 +20,7 @@ from dnd.core.modifiers import (
     AutoHitModifier,
     AutoHitStatus,
 )
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
@@ -76,7 +76,7 @@ def reset_encounter_tutorial_state(width: int = 16, height: int = 10) -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseCondition._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
     Controller.clear_registry()
@@ -122,12 +122,12 @@ def make_melee_attack_auto_hit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
     )
-    return entity.equipment.melee_attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    return add_modifier(entity.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
 
 
 def clear_melee_attack_modifier(entity: Entity, modifier_uuid: UUID) -> None:
     """Remove an explicit melee attack modifier from an entity."""
-    entity.equipment.melee_attack_bonus.self_static.remove_modifier(modifier_uuid)
+    remove_modifier(entity.equipment.melee_attack_bonus, modifier_uuid, Channel.SELF_STATIC)
 
 
 def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:

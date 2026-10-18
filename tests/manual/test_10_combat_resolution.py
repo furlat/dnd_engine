@@ -25,6 +25,7 @@ from dnd.monsters.bestiary import create_goblin as _create_goblin, create_skelet
 from dnd.game import Game
 from tests.engine.support import reset_combat_state
 from dnd.reactions import add_opportunity_attack_handler
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier
 
 
 def reset_combat_tutorial_state() -> None:
@@ -55,7 +56,7 @@ def make_melee_attack_auto_hit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
     )
-    return entity.equipment.melee_attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    return add_modifier(entity.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
 
 
 def make_melee_attack_auto_crit(entity: Entity) -> UUID:
@@ -66,12 +67,12 @@ def make_melee_attack_auto_crit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
     )
-    return entity.equipment.melee_attack_bonus.self_static.add_critical_modifier(modifier)
+    return add_modifier(entity.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.CRITICAL, modifier)
 
 
 def clear_melee_attack_modifier(entity: Entity, modifier_uuid: UUID) -> None:
     """Remove a tutorial modifier from the entity's melee attack bonus."""
-    entity.equipment.melee_attack_bonus.self_static.remove_modifier(modifier_uuid)
+    remove_modifier(entity.equipment.melee_attack_bonus, modifier_uuid, Channel.SELF_STATIC)
 
 
 def create_strong_actor(

@@ -26,6 +26,7 @@ from tests.engine.support import (
     remove_attack_modifier,
     reset_combat_state,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def _reset_state(
@@ -242,14 +243,12 @@ def test_jump_range_is_capped_by_remaining_movement_budget() -> None:
     _reset_state(width=30, height=30)
     jumper = _create_jumper(strength=20)
     Entity.update_all_entities_senses()
-    jumper.action_economy.walking_speed.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(jumper.action_economy.walking_speed, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=jumper.uuid,
             target_entity_uuid=jumper.uuid,
             name="Spend all but five feet",
             value=-25,
-        )
-    )
+        ))
 
     too_far = Jump(
         source_entity_uuid=jumper.uuid,

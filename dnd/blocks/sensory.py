@@ -79,10 +79,10 @@ class Senses(BaseBlock):
     """One observer's published perception (cells as arrays, contacts) and its navigation facts."""
 
     visual_access: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=UUID(int=0),
-            base_value=1,
-            value_name="Visual Access",
+            base=1,
+            name="Visual Access",
         ),
         description="Neutral 1/0 gate for whether visual perception is available.",
     )

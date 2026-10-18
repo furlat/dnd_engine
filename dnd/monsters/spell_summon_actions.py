@@ -100,7 +100,7 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.core.saving_throw_types import SavingThrowContext
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts
 from dnd.entity import Entity
 from dnd.monsters.traits import NaturalAttack
 from dnd.spatial.area_conditions import AreaCondition
@@ -201,9 +201,7 @@ class Shocked(BaseCondition):
             return [], [], [], [], event.cancel(status_message="Recipient absent")
         outputs = []
         value = target.action_economy.reactions
-        ident = value.self_static.add_max_constraint(
-            NumericalModifier(name=self.name, value=0, source_entity_uuid=target.uuid)
-        )
+        ident = add_modifier(value, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(name=self.name, value=0, source_entity_uuid=target.uuid))
         outputs.append((value.uuid, ident))
         values = [
             target.ability_scores.dexterity.check_bonus,
@@ -215,13 +213,11 @@ class Shocked(BaseCondition):
             if ability == "dexterity"
         )
         for value in values:
-            ident = value.self_static.add_advantage_modifier(
-                AdvantageModifier(
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                     name=self.name,
                     value=AdvantageStatus.DISADVANTAGE,
                     source_entity_uuid=target.uuid,
-                )
-            )
+                ))
             outputs.append((value.uuid, ident))
         expiry = target_turn_expiry_handler(self, turn_ends=2)
         target.add_event_handler(expiry)
@@ -246,11 +242,9 @@ class TremblingLegs(BaseCondition):
             (target.ability_scores.dexterity.ability_score, -1),
             *((speed, -8) for speed in target.action_economy.speed_values),
         ]:
-            ident = value.self_static.add_value_modifier(
-                NumericalModifier(
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name=self.name, value=amount, source_entity_uuid=target.uuid
-                )
-            )
+                ))
             outputs.append((value.uuid, ident))
         expiry = target_turn_expiry_handler(self, turn_ends=3)
         target.add_event_handler(expiry)
@@ -328,14 +322,12 @@ class Chilled(BaseCondition):
             (DamageType.COLD, ResistanceStatus.VULNERABILITY),
             (DamageType.FIRE, ResistanceStatus.RESISTANCE),
         ):
-            ident = value.self_static.add_resistance_modifier(
-                ResistanceModifier(
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
                     name=self.name,
                     value=status,
                     damage_type=damage_type,
                     source_entity_uuid=target.uuid,
-                )
-            )
+                ))
             outputs.append((value.uuid, ident))
         expiry = target_turn_expiry_handler(self, turn_ends=2)
         target.add_event_handler(expiry)
@@ -360,14 +352,12 @@ class Brittle(BaseCondition):
         value = target.health.damage_reduction
         outputs = []
         for kind in (DamageType.BLUDGEONING, DamageType.THUNDER):
-            ident = value.self_static.add_resistance_modifier(
-                ResistanceModifier(
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
                     name=self.name,
                     value=ResistanceStatus.VULNERABILITY,
                     damage_type=kind,
                     source_entity_uuid=target.uuid,
-                )
-            )
+                ))
             outputs.append((value.uuid, ident))
 
         def tick(boundary, _):
@@ -416,18 +406,14 @@ class Dazed(BaseCondition):
             return [], [], [], [], event.cancel(status_message="Recipient absent")
         outputs = []
         value = target.action_economy.reactions
-        ident = value.self_static.add_max_constraint(
-            NumericalModifier(name=self.name, value=0, source_entity_uuid=target.uuid)
-        )
+        ident = add_modifier(value, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(name=self.name, value=0, source_entity_uuid=target.uuid))
         outputs.append((value.uuid, ident))
         value = target.saving_throws.get_saving_throw("wisdom").bonus
-        ident = value.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        ident = add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 name=self.name,
                 value=AdvantageStatus.DISADVANTAGE,
                 source_entity_uuid=target.uuid,
-            )
-        )
+            ))
         outputs.append((value.uuid, ident))
         expiry = target_turn_expiry_handler(self, turn_ends=2)
         target.add_event_handler(expiry)
@@ -452,11 +438,9 @@ class TransmutedToSteel(BaseCondition):
             (target.equipment.ac_bonus, 2),
             *((speed, -20) for speed in target.action_economy.speed_values),
         ]:
-            ident = value.self_static.add_value_modifier(
-                NumericalModifier(
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name=self.name, value=amount, source_entity_uuid=target.uuid
-                )
-            )
+                ))
             outputs.append((value.uuid, ident))
         expiry = target_turn_expiry_handler(self, turn_ends=4)
         target.add_event_handler(expiry)
@@ -645,10 +629,10 @@ class NativeSaveBurst(BaseAction):
                     dice_numbers=packet.dice_count,
                     damage_type=DamageType(packet.damage_type),
                     effect_origin=origin,
-                    damage_bonus=ModifiableValue.create(
+                    damage_bonus=parts(ModifiableValue(
                         source_entity_uuid=self.source_entity_uuid,
-                        base_value=packet.flat_bonus,
-                    ),
+                        base=packet.flat_bonus,
+                    )),
                 )
                 damages.append(damage)
                 if packet.dice_count:
@@ -1102,9 +1086,9 @@ class ElementalContactBurst(BaseAction):
                         damage_dice=8,
                         dice_numbers=3,
                         damage_type=DamageType.COLD,
-                        damage_bonus=ModifiableValue.create(
-                            source_entity_uuid=actor.uuid, base_value=0
-                        ),
+                        damage_bonus=parts(ModifiableValue(
+                            source_entity_uuid=actor.uuid, base=0
+                        )),
                         effect_origin=technique_origin(effect),
                     )
                     roll = damage.get_dice(resolution.outcome).roll
@@ -1166,9 +1150,9 @@ class ElementalContactBurst(BaseAction):
                     damage_dice=4,
                     dice_numbers=0,
                     damage_type=DamageType.BLUDGEONING,
-                    damage_bonus=ModifiableValue.create(
-                        source_entity_uuid=actor.uuid, base_value=5
-                    ),
+                    damage_bonus=parts(ModifiableValue(
+                        source_entity_uuid=actor.uuid, base=5
+                    )),
                     attack_magical=True,
                 )
                 return boundary.append_damage_roll(
@@ -1515,9 +1499,9 @@ class HealingVapours(NativeSaveBurst):
                 target_entity_uuid=target.uuid,
                 healing_dice=8,
                 dice_numbers=2,
-                healing_bonus=ModifiableValue.create(
-                    source_entity_uuid=actor.uuid, base_value=0
-                ),
+                healing_bonus=parts(ModifiableValue(
+                    source_entity_uuid=actor.uuid, base=0
+                )),
             )
             roll = fire_heal_roll_result(
                 actor.uuid, target.uuid, healing, effect, self.name
@@ -1984,9 +1968,9 @@ class DrainingKiss(BaseAction):
                         damage_dice=10,
                         dice_numbers=5,
                         damage_type=DamageType.PSYCHIC,
-                        damage_bonus=ModifiableValue.create(
-                            source_entity_uuid=self.source_entity_uuid, base_value=5
-                        ),
+                        damage_bonus=parts(ModifiableValue(
+                            source_entity_uuid=self.source_entity_uuid, base=5
+                        )),
                     )
                     roll = damage.get_dice(AttackOutcome.HIT).roll
                     target.receive_damage(
@@ -2063,9 +2047,9 @@ class ElementalMultiattackBonus(BaseCondition):
                     dice_numbers=original.dice_numbers,
                     damage_type=original.damage_type,
                     attack_magical=original.attack_magical,
-                    damage_bonus=ModifiableValue.create(
-                        source_entity_uuid=actor.uuid, base_value=0
-                    ),
+                    damage_bonus=parts(ModifiableValue(
+                        source_entity_uuid=actor.uuid, base=0
+                    )),
                 )
                 changed = changed.append_damage_roll(
                     damage,
@@ -2297,7 +2281,7 @@ class DragonSharedResistance(BaseCondition):
             damage_type=self.damage_type,
             source_entity_uuid=self.source_entity_uuid,
         )
-        identity = value.self_static.add_resistance_modifier(modifier)
+        identity = add_modifier(value, Channel.SELF_STATIC, Kind.RESISTANCE, modifier)
         return [(value.uuid, identity)], [], [], [], event.phase_to(EventPhase.EFFECT)
 
 
@@ -2498,9 +2482,9 @@ class MyrmidonStrikeDice(BaseCondition):
                 damage_dice=10,
                 dice_numbers=1,
                 damage_type=self.damage_type,
-                damage_bonus=ModifiableValue.create(
-                    source_entity_uuid=actor.uuid, base_value=0
-                ),
+                damage_bonus=parts(ModifiableValue(
+                    source_entity_uuid=actor.uuid, base=0
+                )),
                 attack_magical=True,
             )
             return boundary.append_damage_roll(

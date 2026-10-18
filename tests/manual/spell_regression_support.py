@@ -12,6 +12,7 @@ from dnd.core.creature_types import CreatureType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import create_test_entity, reset_combat_state
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def reset_spell_regression_arena(width: int, height: int) -> None:
@@ -94,4 +95,4 @@ def force_save_result(
         value=100 if succeeds else -100,
     )
     saving_throw = entity.saving_throws.get_saving_throw(ability_name)
-    saving_throw.bonus.self_static.add_value_modifier(modifier)
+    add_modifier(saving_throw.bonus, Channel.SELF_STATIC, Kind.VALUE, modifier)

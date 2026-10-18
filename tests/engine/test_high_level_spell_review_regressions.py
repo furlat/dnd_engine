@@ -41,6 +41,7 @@ from tests.engine.test_high_level_spell_controls import cast, high_actor
 from tests.engine.test_high_level_spell_summons import summon
 from tests.engine.test_summoning_lifecycle import battle as battle
 from tests.manual.spell_regression_support import force_save_result
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.mark.parametrize("kind", [Shove, AllyHelp, ShakeAwake])
@@ -339,11 +340,9 @@ def test_tenacity_uses_current_strength_modifier_with_minimum_one(
     _, _, _, _, target = battle
     Entity.update_entity_position(target, (5, 2))
     actor = summon(battle, "air_myrmidon").entity
-    actor.ability_scores.strength.ability_score.self_static.add_value_modifier(
-        NumericalModifier(
+    add_modifier(actor.ability_scores.strength.ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name="Changed Strength", value=strength - 18, source_entity_uuid=actor.uuid
-        )
-    )
+        ))
     Entity.update_all_entities_senses()
     hp = target.get_hp()
     with fixed_dice_faces(*([1] * 12)):
