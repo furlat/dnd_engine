@@ -11,7 +11,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.types.cells import EMPTY_VALUES, CellMask, CellValues
-from dnd.types.world import LightLevel
 from dnd.core.content.identities import ContentRef
 from dnd.core.creature_types import DamageType
 from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
@@ -137,7 +136,6 @@ class PerceivedLightSource(BaseModel):
     actor_anchored: bool = False
     anchor_entity_uuid: UUID | None = None
     anchor_item_uuid: UUID | None = None
-    affected_tiles: dict[str, LightLevel] = Field(default_factory=dict)
 
 
 class SensesView(Protocol):
@@ -155,11 +153,8 @@ class SensesView(Protocol):
 
 
 class SensoryDelta(Protocol):
-    """Recorded observer after-values consumed by the shared sensory reducer.
-
-    Native events and the client's resolved player facts (`SensoryChanges`)
-    expose the same values. Reduction needs neither native event construction
-    nor its source/handler metadata.
+    """Recorded observer after-values consumed by the shared sensory reducer (native sensory events expose
+    them). Reduction needs neither native event construction nor its source/handler metadata.
     """
 
     @property

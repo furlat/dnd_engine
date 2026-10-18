@@ -1,6 +1,7 @@
 """A walk group's golden vectors fold to their expected client values (`devtools/fold_vectors_groups.py`)."""
 
 import json
+from uuid import UUID
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,7 @@ def test_the_vector_files_are_their_written_source():
 def test_a_group_folds_its_roots_in_native_order(path: Path):
     vector = json.loads(path.read_text())
     group = TypeAdapter(PlayerLineage).validate_json(json.dumps(vector["group"]))
-    client = PlayerState(generation=GENERATION, observer_uuid=group.observer_uuid, world=WORLD)
+    client = PlayerState(generation=GENERATION, observer_uuid=UUID(vector["observers"][0]), world=WORLD)
     fold_world_update(client, TypeAdapter(WorldUpdate).validate_json(json.dumps(vector["initial"])))
     after = reduce_lineage(client, group)
     assert sorted(str(identity) for identity in after.objects) == vector["expected"]["objects"]

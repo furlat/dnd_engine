@@ -1,7 +1,6 @@
 """Operation-local descriptor admission preserves transient grants and publication."""
 
 from copy import deepcopy
-from dataclasses import replace
 import random
 
 import pytest
@@ -11,7 +10,7 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import EventPhase, EventQueue
 from dnd.player.application import capture_application_operation, initialize_audiences, seat_content
 from dnd.player.content_composition import admitted_content, ui_content_manifest
-from dnd.player.facts import PlayerUpdate
+from dnd.player.facts import PlayerState, PlayerUpdate
 from dnd.player.reduction import reduce_initialization, reduce_operation
 from dnd.player.session import Operation, close_session, create_session
 from dnd.runtime_reset import reset_engine_runtime
@@ -70,8 +69,10 @@ def test_transient_world_content_matches_reference_and_cold_replay(session):
     assert any(look.item_id == private.ref.content_id for lineage in update.lineages
         for world in lineage.world_updates for look in world.object_looks)
     assert private.ref in {row.ref for row in update.content_additions}
-    assert seat_content(runtime) == admitted_content(catalog,
-        replace(runtime.projection.remembered, content=before.content), update.lineages)
+    # What the seat holds after the operation that its updates do not carry: its perception now.
+    assert seat_content(runtime) == admitted_content(catalog, PlayerState(generation=before.generation,
+        observer_uuid=before.observer_uuid, world=before.world, content=before.content,
+        senses=runtime.projection.audience_composition.view), update.lineages)
     detached = PlayerUpdate.model_validate_json(update.model_dump_json())
     close_session(session)
     reset_engine_runtime()

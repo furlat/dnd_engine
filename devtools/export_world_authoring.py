@@ -47,28 +47,27 @@ def main() -> None:
         seen=mask_from_positions(positions), entities={},
         objects={o.item.item_uuid: PerceivedContact(position=o.placement.position, visual=True) for o in objects},
         effective_light_levels=values_from_items({position: 3 for position in positions}), paths_dirty=False,
-        passive_perception=0, sense_modes_hash=0, sense_modes=(), visual_access=1)
+        passive_perception=0, sense_modes_key=(), sense_modes=(), visual_access=1)
     update = seat_world_update(authored, 0, (), EMPTY_CELLS, view, AudiencePerception(members={observer: view}),
         audience, None, observed=set(), granted=set(), sent=StaticSent(), pending=StaticSent(),
         digests=TileDigests(), stamps=SeatStamps(WorldStamps()))
-    cells, (visible, seen) = shared_cells((mask_from_positions(positions), mask_from_positions(positions)))
+    cells, (visible,) = shared_cells((mask_from_positions(positions),))
     light_levels, (light,) = shared_values((values_from_items({position: 3 for position in positions}),))
-    rows = SensoryRows(uuids=(observer, *(o.item.item_uuid for o in objects)),
-        contact_uuid_index=tuple(range(1, len(objects) + 1)),
+    rows = SensoryRows(uuids=tuple(o.item.item_uuid for o in objects),
+        contact_uuid_index=tuple(range(len(objects))),
         contact_positions=tuple(o.placement.position for o in objects), contact_visual=flag_bits([True] * len(objects)),
         cells=cells, light_levels=light_levels)
-    sensory = SensoryFact(observer=0, initial=True, observer_position=positions[0],
-        observer_position_changed=True, effective_light_levels_changed=light,
-        cause_occurrence=None, visible_cells_added=visible, seen_cells_added=seen,
+    sensory = SensoryFact(initial=True, observer_position=positions[0], effective_light_levels_changed=light,
+        visible_cells_added=visible,
         object_contacts_changed=tuple(range(len(objects))), sense_modes_changed=True, sense_modes=(),
         passive_perception_changed=True, passive_perception=0, visual_access_changed=True, visual_access=1, paths_dirty=False)
     sequence = PlayerSequence(initialization=PlayerInitialization(generation=generation, observer_uuid=observer,
         world=PlayerWorld(battlefield_id=world.battlefield_id, battlefield_name=world.battlefield_name,
                           bounds=world.bounds, width=world.width, height=world.height),
-        nodes=(PlayerNode(occurrence=0, lineage=0, parent_event=None, parent_lineage=None,
+        nodes=(PlayerNode(occurrence=0, parent_event=None, parent_lineage=None,
                           children_lineages=(), phase=EventPhase.COMPLETION, canceled=False, fact=sensory),),
         version_rows=VersionRows(occurrences=(0,), lineages=(0,)), end_cursor=0,
-        observations=(), world_updates=(update,) if update is not None else (),
+        world_updates=(update,) if update is not None else (),
         audience=audience, sensory_rows=rows), lineages=())
     args.output.mkdir(parents=True, exist_ok=True)
     name = args.battlefield.removeprefix("battlefield.").replace("_", "-") + "-authoring"

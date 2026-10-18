@@ -1,0 +1,303 @@
+{
+ "name": "v1_seen_cells_are_every_cell_seen_visible",
+ "rule": "The seen cells are not sent: every cell the seat has seen visible is seen; the composed view's cells, light and position change as the facts say.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "sensory_rows": {
+    "cells": {
+     "x0": 1,
+     "y0": 2,
+     "width": 3,
+     "height": 1,
+     "bits": "Bw=="
+    },
+    "light_levels": [
+     {
+      "cells": {
+       "x0": 1,
+       "y0": 2,
+       "width": 3,
+       "height": 1,
+       "bits": "Bw=="
+      },
+      "values": "AwMD"
+     }
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "initial": true,
+    "observer_position": [
+     2,
+     2
+    ],
+    "visible_cells_added": {
+     "start": 0,
+     "bits": "Bw=="
+    },
+    "effective_light_levels_changed": {
+     "start": 0,
+     "bits": "Bw=="
+    },
+    "sense_modes_changed": true,
+    "sense_modes": [
+     {
+      "sense_type": "Darkvision",
+      "range_feet": 60
+     }
+    ],
+    "passive_perception_changed": true,
+    "passive_perception": 12,
+    "visual_access_changed": true,
+    "visual_access": 1
+   },
+   "expected": {
+    "visible": [
+     [
+      1,
+      2
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      3,
+      2
+     ]
+    ],
+    "seen": [
+     [
+      1,
+      2
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      3,
+      2
+     ]
+    ],
+    "light": {
+     "1,2": 3,
+     "2,2": 3,
+     "3,2": 3
+    },
+    "hazard": {},
+    "position": [
+     2,
+     2
+    ],
+    "passive_perception": 12,
+    "visual_access": 1,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {},
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {}
+   }
+  },
+  {
+   "sensory_rows": {
+    "cells": {
+     "x0": 1,
+     "y0": 2,
+     "width": 4,
+     "height": 1,
+     "bits": "CQ=="
+    },
+    "light_levels": [
+     {
+      "cells": {
+       "x0": 4,
+       "y0": 2,
+       "width": 1,
+       "height": 1,
+       "bits": "AQ=="
+      },
+      "values": "Ag=="
+     }
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "visible_cells_added": {
+     "start": 0,
+     "bits": "Ag=="
+    },
+    "visible_cells_removed": {
+     "start": 0,
+     "bits": "AQ=="
+    },
+    "effective_light_levels_changed": {
+     "start": 0,
+     "bits": "AQ=="
+    }
+   },
+   "expected": {
+    "visible": [
+     [
+      2,
+      2
+     ],
+     [
+      3,
+      2
+     ],
+     [
+      4,
+      2
+     ]
+    ],
+    "seen": [
+     [
+      1,
+      2
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      3,
+      2
+     ],
+     [
+      4,
+      2
+     ]
+    ],
+    "light": {
+     "2,2": 3,
+     "3,2": 3,
+     "4,2": 2
+    },
+    "hazard": {},
+    "position": [
+     2,
+     2
+    ],
+    "passive_perception": 12,
+    "visual_access": 1,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {},
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {}
+   }
+  },
+  {
+   "sensory_rows": {
+    "cells": {
+     "x0": 2,
+     "y0": 2,
+     "width": 8,
+     "height": 8,
+     "bits": "AQEBAAAAAIA="
+    },
+    "light_levels": [
+     {
+      "cells": {
+       "x0": 9,
+       "y0": 9,
+       "width": 1,
+       "height": 1,
+       "bits": "AQ=="
+      },
+      "values": "Aw=="
+     }
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "observer_position": [
+     9,
+     9
+    ],
+    "visible_cells_added": {
+     "start": 0,
+     "bits": "CA=="
+    },
+    "visible_cells_removed": {
+     "start": 0,
+     "bits": "Bw=="
+    },
+    "effective_light_levels_changed": {
+     "start": 0,
+     "bits": "AQ=="
+    }
+   },
+   "expected": {
+    "visible": [
+     [
+      9,
+      9
+     ]
+    ],
+    "seen": [
+     [
+      1,
+      2
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      3,
+      2
+     ],
+     [
+      4,
+      2
+     ],
+     [
+      9,
+      9
+     ]
+    ],
+    "light": {
+     "9,9": 3
+    },
+    "hazard": {},
+    "position": [
+     9,
+     9
+    ],
+    "passive_perception": 12,
+    "visual_access": 1,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {},
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {}
+   }
+  }
+ ]
+}

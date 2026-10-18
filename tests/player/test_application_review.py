@@ -151,7 +151,7 @@ def test_content_reuse_preserves_private_links_and_prior_player_states(started):
     assert {row.ref for row in admitted} == {public.ref, linked.ref}
     assert next(row for row in admitted if row.ref == linked.ref).related_content_refs == (public.ref,)
 
-    update = PlayerUpdate(audience=before.viewing_audience, lineages=(), hud=None,
+    update = PlayerUpdate(generation=before.generation, observer_uuid=before.observer_uuid, lineages=(), hud=None,
         combat_log_appends=(), content_additions=admitted)
     state = reduce_operation(before, PlayerUpdate.model_validate_json(update.model_dump_json()))
     assert before.content == ()

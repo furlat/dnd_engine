@@ -34,7 +34,8 @@ def published(tmp_path):
                 width=1, height=1), nodes=(), version_rows=VersionRows(), end_cursor=0, world_updates=()))
     boundary = wire.BoundaryState(lifecycle='terminal', input_actor_uuid=None, state_revision=None)
     operation = wire.PlayerOperation(protocol=wire.protocol_identity(), cursor=owner.cursor(host, seat, 1),
-        state_revision='final', boundary=boundary, command_number=None, audience=audience,
+        state_revision='final', boundary=boundary, command_number=None,
+        generation=initial.initialization.generation, observer_uuid=actor,
         lineages=(), hud=None, combat_log_appends=(), content_additions=())
     for sequence, record in enumerate((initial, operation)):
         commit_records(host.recording, {'party': stage_record(host.recording, 'party', sequence,

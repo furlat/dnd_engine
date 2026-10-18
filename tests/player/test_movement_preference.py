@@ -11,6 +11,7 @@ from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.player.facts import StepFact
+from dnd.player.reduction import node_lineages
 from dnd.player.session import close_session
 from server.protocol import ChoicesRequest, CommandRequest, PreviewRequest
 from server.worker import dispatch, needs_advance, start
@@ -62,8 +63,9 @@ def test_previewed_route_is_the_committed_route(preference):
                 "selection": selection}}
         _, records, _ = dispatch(runtime, Command(seat_id="party",
             request=CommandRequest.model_validate_json(json.dumps(command))))
-        steps = {node.lineage: node.fact for record in records for lineage in record.lineages
-            for node in lineage.events if isinstance(node.fact, StepFact) and node.fact.committed
+        steps = {owner: node.fact for record in records for lineage in record.lineages
+            for node, owner in zip(lineage.events, node_lineages(lineage.events, lineage.version_rows))
+            if isinstance(node.fact, StepFact) and node.fact.committed
             and node.fact.source_entity_uuid == actor.uuid}
         assert tuple((step.from_position, step.to_position) for step in steps.values()) == tuple(
             zip(route.path, route.path[1:]))

@@ -31,21 +31,20 @@ UPDATE = TypeAdapter(WorldUpdate)
 LINEAGE = TypeAdapter(PlayerLineage)
 
 
-def node(occurrence: int, lineage: int, phase: EventPhase, *, parent: int | None = None,
-         children: tuple[int, ...] = ()) -> PlayerNode:
-    return PlayerNode(occurrence=occurrence, lineage=lineage, parent_lineage=parent, children_lineages=children,
-        phase=phase)
+def node(occurrence: int, phase: EventPhase, *, children: tuple[int, ...] = ()) -> PlayerNode:
+    """A node; its lineage is its version row's, its parent the node listing it (plan §3.6)."""
+    return PlayerNode(occurrence=occurrence, children_lineages=children, phase=phase)
 
 
 def vectors() -> dict[str, dict]:
     floor = tuple(tile(position) for position in ((0, 0), (1, 0), (2, 0)))
     box_look, box_row = look_and_row(item(BOX, "Box"), placement(BOX, (1, 0)))
     # Root lineage 1 runs over occurrences 1-4; lineage 3, a root of its own, starts and completes inside it.
-    group = PlayerLineage(generation=GENERATION, observer_uuid=A, lineage=1, root=3,
-        events=(node(1, 1, EventPhase.EXECUTION, children=(2,)),
-                node(2, 2, EventPhase.COMPLETION, parent=1),
-                node(3, 3, EventPhase.COMPLETION),
-                node(4, 1, EventPhase.COMPLETION, children=(2,))),
+    group = PlayerLineage(lineage=1, root=3,
+        events=(node(1, EventPhase.EXECUTION, children=(2,)),
+                node(2, EventPhase.COMPLETION),
+                node(3, EventPhase.COMPLETION),
+                node(4, EventPhase.COMPLETION, children=(2,))),
         version_rows=VersionRows(occurrences=(1, 2, 3, 4), lineages=(1, 2, 3, 1)), start_cursor=1, end_cursor=5,
         world_updates=(WorldUpdate(occurrence=2, object_looks=(box_look,), objects=rows(box_row,)),
                        WorldUpdate(occurrence=3, objects_removed=(BOX,))))

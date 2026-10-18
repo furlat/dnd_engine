@@ -144,7 +144,8 @@ def test_stream_drains_terminal_publication_that_arrives_during_send(tmp_path):
                 content_revision="public")
             record = wire.PlayerOperation(protocol=protocol, cursor=publication.cursor,
                 state_revision=publication.state_revision, boundary=boundary, command_number=None,
-                audience=audience, lineages=(), hud=None, combat_log_appends=(), content_additions=())
+                generation=initial.initialization.generation, observer_uuid=actor, lineages=(), hud=None,
+                combat_log_appends=(), content_additions=())
             commit_records(host.recording, {"party": stage_record(host.recording, "party", sequence,
                 record.model_dump_json().encode())})
             seat.publication = publication
