@@ -489,13 +489,6 @@ def cell_seen(seen: CellLayer, position: Position) -> bool:
     return bool(layer_value(seen, position))
 
 
-def known_positions(cells: PerceivedCells, seen: CellLayer) -> Set[Position]:
-    """The cells an observer sees or has seen, as a set (one conversion for a batch of lookups)."""
-    known = set(layer_positions(seen))
-    known.update(visible_positions(cells))
-    return known
-
-
 def visible_box(cells: PerceivedCells) -> Optional[Box]:
     """The bounding box of the visible cells, None when none is visible."""
     xs, ys = np.nonzero(cells.visible.values)

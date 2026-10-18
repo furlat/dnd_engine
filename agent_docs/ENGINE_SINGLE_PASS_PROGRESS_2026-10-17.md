@@ -481,3 +481,20 @@ Hard rules:
     - new 200-cell corridor contract cases, which raised on the previous head.
   - Integrator note: I logged this limit as "a decision for the human" at merge. It should have blocked the merge as a crash path.
   - Perception reach itself stays 80 cells (400 ft), as in the base engine (`update_all_entities_senses(max_distance=80)`; `sense_radius_cells` clamps to it).
+- 2026-10-18: **PT navigation merged (f45916449; e7a5200d2 … 4a521a12b).**
+  - One path search over cell arrays: `GridMap.path_search` / `compute_paths` return `Routes`, and paths are rebuilt from predecessors (new pure `dnd/core/navigation.py`).
+  - Senses' `walkable` and collision fields are read-only CellLayers with named writers. `dijkstra.py`, `_prefer_direct_navigation_paths`, `path_costs` / `safe_path_costs` and `GridMap.get_distance` are deleted.
+  - Gates (agent, vs ee9216784):
+    - navigation oracle: 0 mismatches over 11 gallery cases and 400 random worlds (8,039 materializations, 4,800 searches, 1,579 moves);
+    - array edges equal `can_transition` on ~1.66M edges;
+    - transcripts byte-identical on 11 cases;
+    - sweep 0 new; pyright −2.
+  - Per gallery run: `can_transition` ~79K → ~290 calls, `is_walkable_for` ~85K → ~5K.
+  - Turn-start materialization 31.8 → 4.6 ms. AI decision 1 126 → ~95 ms (loaded).
+  - Heap after setup: 249K → 207K tracked objects. The caster's post-reply collection 59–66 → 11–13 ms.
+  - Plan wording: "one path search" holds in representation, but BFS and weighted Dijkstra both remain, because their tie-breaking differs.
+  - Logged:
+    - `AreaCondition.crossing_channels` defaults to None, which makes undeclared zones (Gust's among them) global crossing owners that force Python step checks;
+    - a kept movement-cost grid was not adopted (writer completeness unproven);
+    - `EventQueue.is_first_at_phase` compares wall-clock timestamps (latent; no effect seen).
+  - Census gap closed: `Entity._navigation_traversal` (P5) is an entity-held memo against §6a, now listed in RULE_VIOLATIONS.

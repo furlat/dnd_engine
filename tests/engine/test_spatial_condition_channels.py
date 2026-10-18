@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.events import Event, EventPhase, EventType
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import route_cost
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalWall
 from dnd.spatial.area_conditions import AreaCondition
@@ -61,7 +62,7 @@ def _observe(observer: Entity) -> Observation:
     return Observation(
         visible=snapshot.visible,
         hazards={cell: value_at(snapshot.hazardous_cells, cell) for cell in ZONE_CELLS},
-        path_cost_beyond=observer.senses.path_costs.get(BEYOND),
+        path_cost_beyond=route_cost(observer.senses.paths, BEYOND),
         perceived_effects=frozenset(snapshot.spatial_effects),
     )
 

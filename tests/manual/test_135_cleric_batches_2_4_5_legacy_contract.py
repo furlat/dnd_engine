@@ -82,6 +82,7 @@ from dnd.core.values import (
     add_modifier,
     parts,
 )
+from tests.engine.support import search_tables
 
 
 def situated(value, target_uuid):
@@ -170,12 +171,12 @@ def test_freedom_of_movement_changes_path_and_committed_step_costs() -> None:
             _make_difficult((x, y))
     Entity.update_all_entities_senses(max_distance=40)
 
-    distances_before, _ = get_map().compute_paths(
+    distances_before, _ = search_tables(get_map().compute_paths(
         target.position,
         max_distance=20,
         requesting_entity_uuid=target.uuid,
         subjective=True,
-    )
+    ))
     result = FreedomOfMovement(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,
@@ -185,13 +186,13 @@ def test_freedom_of_movement_changes_path_and_committed_step_costs() -> None:
     assert not result.canceled
     assert target.ignore_difficult_terrain
 
-    distances_after, _ = get_map().compute_paths(
+    distances_after, _ = search_tables(get_map().compute_paths(
         target.position,
         max_distance=20,
         requesting_entity_uuid=target.uuid,
         subjective=True,
         ignore_difficult_terrain=target.ignore_difficult_terrain,
-    )
+    ))
     assert distances_before[(6, 3)] == 7
     assert distances_after[(6, 3)] == 4
 

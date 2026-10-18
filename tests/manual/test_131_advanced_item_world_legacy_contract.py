@@ -23,6 +23,7 @@ from dnd.core.item_types import ItemRarity
 from dnd.core.creature_types import DamageType
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import create_test_entity, reset_combat_state
+from dnd.core.navigation import has_route
 
 
 THIS_FILE = "tests/manual/test_131_advanced_item_world_legacy_contract.py"
@@ -303,13 +304,13 @@ def test_movement_blocker_destroy_reopens_cached_paths() -> None:
     )
     mover = create_actor((2, 5), name="Mover")
     Entity.update_all_entities_senses()
-    assert (3, 5) not in mover.senses.paths
+    assert not has_route(mover.senses.paths, (3, 5))
 
     blocker.receive_damage(100, DamageType.BLUDGEONING, mover.uuid)
     Entity.update_all_entities_senses()
 
     assert BaseBlock.get(blocker.uuid) is None
-    assert (3, 5) in mover.senses.paths
+    assert has_route(mover.senses.paths, (3, 5))
 
 
 def test_inventory_removes_floor_item_from_grid_senses_and_object_targets() -> None:

@@ -22,6 +22,9 @@ from tests.engine.test_sensory_initial_replay import sensory_since
 from dnd.types.cells import cell_in
 from dnd.core.cells import mask_positions
 from dnd.core.sensory_fold import reduce_senses_snapshot
+from dnd.core.navigation import has_route, route
+from dnd.core.view import layer_positions
+from tests.engine.support import route_paths, search_tables
 
 
 class ReachableVariant(BaseAction):
@@ -84,8 +87,8 @@ def test_exhausted_move_keeps_walkable_discovery_and_serialized_perception(actor
     move_to(actor, (6, 0))
     assert actor.action_economy.movement_remaining() == 0
     assert targets(actor, "Move") == set()
-    assert actor.senses.paths == {(6, 0): [(6, 0)]}
-    assert actor.senses.walkable == {position: True for position in mask_positions(capture_senses_snapshot(actor.senses).visible)}
+    assert route_paths(actor.senses.paths) == {(6, 0): [(6, 0)]}
+    assert layer_positions(actor.senses.walkable) == sorted(mask_positions(capture_senses_snapshot(actor.senses).visible))
     replayed = None
     for event in sensory_since(actor.uuid):
         replayed = reduce_senses_snapshot(actor.uuid, replayed, decode_event(encode_event(event)))
@@ -114,7 +117,7 @@ def test_custom_path_consumers_keep_the_legacy_domain(actor, kind, register_afte
     if register_after_move:
         actor.register_action(path_consumer(actor, kind))
     assert (15, 0) in targets(actor, "Path consumer")
-    assert actor.senses.paths[(15, 0)][0] == (6, 0)
+    assert (route(actor.senses.paths, (15, 0)) or [])[0] == (6, 0)
 
 
 def test_positive_budget_and_explicit_navigation_domains_remain_unchanged(actor):
@@ -123,11 +126,11 @@ def test_positive_budget_and_explicit_navigation_domains_remain_unchanged(actor)
     assert actor.action_economy.movement_remaining() == 5
     assert targets(actor, "Path consumer") == {(4, 0), (6, 0)}
     actor.materialize_navigation(max_distance=4, path_max_distance=0)
-    assert (9, 0) in actor.senses.paths
-    assert (10, 0) not in actor.senses.paths
+    assert has_route(actor.senses.paths, (9, 0))
+    assert not has_route(actor.senses.paths, (10, 0))
     actor.materialize_navigation(max_distance=20, path_max_distance=2)
-    assert (7, 0) in actor.senses.paths
-    assert (8, 0) not in actor.senses.paths
+    assert has_route(actor.senses.paths, (7, 0))
+    assert not has_route(actor.senses.paths, (8, 0))
 
 
 def test_exhausted_flight_keeps_walking_navigation(actor):
@@ -138,7 +141,7 @@ def test_exhausted_flight_keeps_walking_navigation(actor):
     move_to(actor, (2, 0), name="Flying Movement", movement_mode=MovementMode.FLYING)
     assert actor.action_economy.movement_remaining(MovementMode.FLYING) == 0
     assert actor.action_economy.movement_remaining(MovementMode.WALKING) == 20
-    assert (15, 0) in actor.senses.paths
+    assert has_route(actor.senses.paths, (15, 0))
     assert (6, 0) in targets(actor, "Move")
 
 
@@ -186,4 +189,4 @@ def test_hidden_mutation_sensory_prefix_matches_full_navigation_reference():
 def test_zero_distance_path_query_retains_origin_for_supported_and_absent_start(actor, start):
     grid = get_map()
     grid.set_tile(1, 0, tile=wall_factory((1, 0)))
-    assert grid.compute_paths(start, 0) == ({start: 0}, {start: [start]})
+    assert search_tables(grid.compute_paths(start, 0)) == ({start: 0}, {start: [start]})

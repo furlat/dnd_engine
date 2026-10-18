@@ -14,6 +14,7 @@ from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import PortalTransferEvent, EventPhase, EventQueue, SpatialChangeEvent, SpatialChangeType, StepMovementEvent
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import has_route
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.reactions import add_opportunity_attack_handler
@@ -107,7 +108,7 @@ def test_misty_step_discovers_a_visible_landing_across_unwalkable_water(
     destination = (5, 2)
     caster.materialize_navigation()
     assert (cell_in(capture_senses_snapshot(caster.senses).visible, destination))
-    assert destination not in caster.senses.paths
+    assert not has_route(caster.senses.paths, destination)
     assert MistyStep(source_entity_uuid=caster.uuid, end_position=destination).pre_validate()
     available = get_available_actions(caster)
     row = next(row for row in available.all_actions if row.behavior_id == "spell.misty_step")
