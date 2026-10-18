@@ -131,16 +131,14 @@ def copy_target(target: PlayerState) -> PlayerState:
 
 def apply_world_update(target: PlayerState, update: WorldUpdate) -> None:
     target.tiles.update((row.position, row) for row in update.tiles)
-    for row in update.tile_changes:
-        previous = target.tiles.get(row.position)
-        if previous is None:
-            raise ValueError("Tile field update requires an already known tile")
-        target.tiles[row.position] = previous.model_copy(update=row.changes)
+    changes: dict[tuple[int, int], dict[str, object]] = {row.position: dict(row.changes) for row in update.tile_changes}
     for position, level in values_items(update.resolved_light):
+        changes.setdefault(position, {})["resolved_light"] = LightLevel(level)
+    for position, fields in changes.items():
         previous = target.tiles.get(position)
         if previous is None:
             raise ValueError("Tile field update requires an already known tile")
-        target.tiles[position] = previous.model_copy(update={"resolved_light": LightLevel(level)})
+        target.tiles[position] = previous.model_copy(update=fields)
     for identity in update.objects_removed:
         target.objects.pop(identity, None)
     target.objects.update((row.item.item_uuid, row) for row in update.objects)
@@ -224,10 +222,11 @@ def _unique(values: dict, indices: tuple[int, ...]) -> dict:
     return values
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class SensoryValues:
     """A group's rows as the fold reads them, resolved once per group: contact and light source values, cell tables."""
 
+    rows: SensoryRows
     contacts: tuple[PerceivedContact, ...]
     light_sources: tuple[PerceivedLightSource, ...]
     cells: CellRows
@@ -245,7 +244,7 @@ def contact_values(rows: SensoryRows) -> tuple[PerceivedContact, ...]:
 
 def sensory_values(rows: SensoryRows) -> SensoryValues:
     uuids = rows.uuids
-    return SensoryValues(contact_values(rows), tuple(PerceivedLightSource.model_construct(source_uuid=uuids[row.source],
+    return SensoryValues(rows, contact_values(rows), tuple(PerceivedLightSource.model_construct(source_uuid=uuids[row.source],
         revision=row.revision, position=row.position, base_height_steps=row.base_height_steps,
         very_bright_radius_feet=row.very_bright_radius_feet, bright_radius_feet=row.bright_radius_feet,
         dim_radius_feet=row.dim_radius_feet, appearance=row.appearance, actor_anchored=row.actor_anchored,
@@ -271,14 +270,15 @@ def joined_effect(sighting: SpatialEffectSighting, content: SpatialEffectContent
         upper_volume_surfaces=sighting.upper_volume_surfaces, suppressions=sighting.suppressions)
 
 
-def sensory_changes(fact: SensoryFact, rows: SensoryRows, values: SensoryValues,
+def sensory_changes(fact: SensoryFact, values: SensoryValues,
                     held: Mapping[UUID, SpatialEffectContent]) -> SensoryChanges:
     """A received sensory fact with its group's rows resolved; a sighting's content is the fact's, else the seat's (`held`).
 
-    `values` are `rows` resolved (`sensory_values`). An index outside its column raises
+    `values` are the group's rows resolved (`sensory_values`). An index outside its column raises
     IndexError, a list naming one identity twice, a row outside its table or
     a value list naming one cell twice ValueError.
     """
+    rows = values.rows
     uuids = rows.uuids
 
     def contacts(indices: tuple[int, ...]) -> dict[UUID, PerceivedContact]:
@@ -313,18 +313,17 @@ def sensory_changes(fact: SensoryFact, rows: SensoryRows, values: SensoryValues,
         visual_access_changed=fact.visual_access_changed, visual_access=fact.visual_access, paths_dirty=fact.paths_dirty)
 
 
-def folded_fact(fact: PlayerFact, rows: SensoryRows, values: SensoryValues,
-                held: Mapping[UUID, SpatialEffectContent]) -> FoldedFact:
-    """What the senses fold applies for a received fact of a group with `rows`: a sensory fact resolved, any other as it is."""
-    return sensory_changes(fact, rows, values, held) if isinstance(fact, SensoryFact) else fact
+def folded_fact(fact: PlayerFact, values: SensoryValues, held: Mapping[UUID, SpatialEffectContent]) -> FoldedFact:
+    """What the senses fold applies for a received fact of a group (`values`): a sensory fact resolved, any other as it is."""
+    return sensory_changes(fact, values, held) if isinstance(fact, SensoryFact) else fact
 
 
-def apply_player_fact(target: PlayerState, fact: PlayerFact, rows: SensoryRows, values: SensoryValues, *,
+def apply_player_fact(target: PlayerState, fact: PlayerFact, values: SensoryValues, *,
                       source_cursor: int | None = None, audience_composition: AudienceComposition | None = None) -> None:
     """Fold an already-disclosed committed fact into player memory: its senses and turn part, then its bodies' part."""
-    apply_sensed_fact(target, folded_fact(fact, rows, values, target.spatial_content), target.actors,
+    apply_sensed_fact(target, folded_fact(fact, values, target.spatial_content), target.actors,
         source_cursor=source_cursor, audience_composition=audience_composition)
-    apply_record_fact(target, fact, rows, values.contacts)
+    apply_record_fact(target, fact, values.rows, values.contacts)
 
 
 def apply_sensed_fact(target: PlayerState, fact: FoldedFact, known: Collection[UUID], *,
@@ -488,13 +487,12 @@ def change_membership(members: dict[UUID, ConditionFact], fact: ConditionChangeF
         members[fact.condition.condition_uuid] = fact.condition
 
 
-def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, rows: SensoryRows, values: SensoryValues, *,
+def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, values: SensoryValues, *,
                                source_cursor: int, occurrences: Collection[int],
                                audience_composition: AudienceComposition | None = None) -> None:
     """Fold a committed fact without letting an outer move undo nested arrival."""
     if commit_current(target, fact, source_cursor=source_cursor, occurrences=occurrences):
-        apply_player_fact(target, fact, rows, values, source_cursor=source_cursor,
-            audience_composition=audience_composition)
+        apply_player_fact(target, fact, values, source_cursor=source_cursor, audience_composition=audience_composition)
 
 
 def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: VersionRows,
@@ -534,7 +532,7 @@ def _apply_nodes(result: PlayerState, nodes: tuple[PlayerNode, ...], versions: V
                 if row.occurrence in world_updates:
                     apply_world_update(result, world_updates[row.occurrence])
                 if not row.canceled and row.fact is not None:
-                    apply_committed_player_fact(result, row.fact, rows, values, source_cursor=row.occurrence,
+                    apply_committed_player_fact(result, row.fact, values, source_cursor=row.occurrence,
                         occurrences=occurrences, audience_composition=audience_composition)
 
 

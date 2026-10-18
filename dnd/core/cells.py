@@ -142,19 +142,6 @@ def mask_positions(mask: CellMask) -> list[Position]:
     return list(zip((xs + mask.x0).tolist(), (ys + mask.y0).tolist()))
 
 
-def cells_within(mask: CellMask, positions: Iterable[Position]) -> set[Position]:
-    """The positions that belong to the set."""
-    listed = list(positions)
-    if mask.width == 0 or not listed:
-        return set()
-    cells = np.array(listed, dtype=np.int64)
-    i, j = cells[:, 0] - mask.x0, cells[:, 1] - mask.y0
-    inside = (i >= 0) & (j >= 0) & (i < mask.width) & (j < mask.height)
-    hit = np.zeros(len(listed), dtype=bool)
-    hit[inside] = _grid(mask)[i[inside], j[inside]]
-    return {listed[index] for index in np.flatnonzero(hit).tolist()}
-
-
 def mask_count(mask: CellMask) -> int:
     return int(np.unpackbits(np.frombuffer(mask.bits, dtype=np.uint8)).sum()) if mask.width else 0
 
@@ -254,7 +241,7 @@ def update_cells(visible: CellMask, light: CellValues, hazard: CellValues, remov
     return cells, light_after, hazard_after
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class CellRows:
     """A row table of map cells: row i is cell (xs[i], ys[i]) holding values[i] (zero in a table of plain cells).
 
@@ -319,14 +306,15 @@ def bit_rows(bits: RowBits, count: int) -> np.ndarray:
     return rows
 
 
-def _points(xs: np.ndarray, ys: np.ndarray) -> tuple[int, int, np.ndarray]:
-    """The bounding box anchor of cells and their (not yet trimmed) grid; a cell named twice is a ValueError."""
+def _points(xs: np.ndarray, ys: np.ndarray) -> CellMask:
+    """The set of cells (xs[i], ys[i]); a cell named twice is a ValueError."""
     x0, y0 = int(xs.min()), int(ys.min())
     grid = np.zeros((int(xs.max()) - x0 + 1, int(ys.max()) - y0 + 1), dtype=bool)
     grid[xs - x0, ys - y0] = True
     if np.count_nonzero(grid) != xs.size:
         raise ValueError("A row subset names one cell twice")
-    return x0, y0, grid
+    # The box spans the cells' extremes, so it is their bounding box.
+    return CellMask(x0, y0, grid.shape[0], grid.shape[1], np.packbits(grid.ravel(), bitorder="little").tobytes())
 
 
 def selected_mask(rows: CellRows, bits: RowBits) -> CellMask:
@@ -334,27 +322,24 @@ def selected_mask(rows: CellRows, bits: RowBits) -> CellMask:
     index = bit_rows(bits, rows.xs.size)
     if not index.size:
         return EMPTY_CELLS
-    x0, y0, grid = _points(rows.xs[index], rows.ys[index])
-    return pack_mask(x0, y0, grid)
+    return _points(rows.xs[index], rows.ys[index])
 
 
 def selected_values(rows: CellRows, bits: RowBits) -> CellValues:
-    """The cells of a row subset with the values of their rows."""
+    """The cells of a row subset with the values of their rows (rows are in cell order: so are the values)."""
     index = bit_rows(bits, rows.xs.size)
     if not index.size:
         return EMPTY_VALUES
-    xs, ys = rows.xs[index], rows.ys[index]
-    x0, y0, grid = _points(xs, ys)
-    values = np.zeros(grid.shape, dtype=np.uint8)
-    values[xs - x0, ys - y0] = rows.values[index]
-    return pack_values(x0, y0, grid, values)
+    return CellValues(_points(rows.xs[index], rows.ys[index]), rows.values[index].tobytes())
 
 
 def zeros_left_out(values: CellValues, cells: CellMask) -> CellValues:
     """The values without a zero at a cell of `cells`.
 
-    An observer's fold reads zero at a cell coming into its view without a
-    value (`update_cells`), so a zero there is left out of the values it is sent.
+    For an observer's delta whose `cells` it adds to its view (cells it did not
+    see before: the native difference), its fold reads zero at an added cell
+    without a value (`update_cells` keeps values only at visible cells), so a
+    zero there is left out of the values it is sent.
     """
     own = mask_box(values.cells)
     if own is None or cells.width == 0:
@@ -412,5 +397,5 @@ def shared_values(values: Sequence[CellValues]) -> tuple[tuple[CellValues, ...],
 
 __all__ = ["CellRows", "mask_rows", "layer_rows", "row_bits", "flag_bits", "bit_rows", "selected_mask", "selected_values",
            "zeros_left_out", "shared_cells", "shared_values", "Box", "mask_box", "union_box", "mask_array", "cell_layers", "pack_mask", "pack_layers", "pack_values", "values_array",
-           "mask_positions", "cells_within", "mask_count", "mask_from_positions", "values_items", "values_from_items",
+           "mask_positions", "mask_count", "mask_from_positions", "values_items", "values_from_items",
            "mask_union", "mask_difference", "mask_intersection", "update_cells"]

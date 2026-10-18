@@ -5,7 +5,7 @@ explicitly exposes the whole authored map; it is never served to a player seat.
 """
 import argparse
 import json
-from dnd.core.cells import mask_from_positions, shared_cells, shared_values, values_from_items
+from dnd.core.cells import flag_bits, mask_from_positions, shared_cells, shared_values, values_from_items
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,7 +19,6 @@ from dnd.player.facts import (
 from dnd.player.projection import _floor_item
 from dnd.player.reduction import encode_player_sequence
 from dnd.types.event_facts import EventPhase
-from dnd.types.senses import PerceivedContact
 
 
 def main() -> None:
@@ -38,7 +37,7 @@ def main() -> None:
     light_levels, (light,) = shared_values((values_from_items({position: 3 for position in positions}),))
     rows = SensoryRows(uuids=(observer, *(o.item.item_uuid for o in objects)),
         contact_uuid_index=tuple(range(1, len(objects) + 1)),
-        contacts=tuple(PerceivedContact(position=o.placement.position, visual=True) for o in objects),
+        contact_positions=tuple(o.placement.position for o in objects), contact_visual=flag_bits([True] * len(objects)),
         cells=cells, light_levels=light_levels)
     sensory = SensoryFact(observer=0, initial=True, observer_position=positions[0],
         observer_position_changed=True, effective_light_levels_changed=light,

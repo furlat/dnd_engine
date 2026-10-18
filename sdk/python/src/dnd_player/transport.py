@@ -1,7 +1,5 @@
 """Independent HTTP/SSE transport; the consumer owns game state and recording."""
 import asyncio
-import base64
-import binascii
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from email.utils import parsedate_to_datetime
@@ -9,6 +7,7 @@ from importlib.resources import files
 import json
 import math
 import random
+import re
 import time
 from typing import Any, cast
 from urllib.parse import quote
@@ -27,11 +26,7 @@ _VALIDATORS: dict[str, Draft202012Validator] = {}
 
 def _base64url(value: str) -> bool:
     """Packed bytes (cells, row subsets) travel as padded URL-safe base64."""
-    try:
-        base64.b64decode(value.encode('ascii'), altchars=b'-_', validate=True)
-    except (UnicodeEncodeError, binascii.Error):
-        return False
-    return True
+    return len(value) % 4 == 0 and re.fullmatch(r'[A-Za-z0-9_-]*={0,2}', value) is not None
 
 
 class ApiError(Exception):

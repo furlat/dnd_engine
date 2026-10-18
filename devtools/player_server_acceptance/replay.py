@@ -50,10 +50,10 @@ def record_log(entry: dict, digest: Any, counts: Counter) -> None:
 def check_group(group: dict, controlled: set[str], events: set[int], lineages: set[int], counts: Counter, logs: Any) -> None:
     nodes = group.get('events', group.get('nodes', []))
     # Schema 15: the version columns, and a node's default-valued fields left out.
-    occurrences = group['version_rows'].get('occurrences', [])
+    occurrences = group['version_rows']['occurrences']
     start = group.get('start_cursor', 0)
     require(occurrences == list(range(start, group['end_cursor'])), 'Occurrence coordinates are not dense')
-    for occurrence, lineage in zip(occurrences, group['version_rows'].get('lineages', []), strict=True):
+    for occurrence, lineage in zip(occurrences, group['version_rows']['lineages'], strict=True):
         require(occurrence not in events, 'Occurrence admitted twice')
         events.add(occurrence)
         lineages.add(lineage)

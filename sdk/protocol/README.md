@@ -2,13 +2,32 @@
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
 owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
-334 shared definitions and 1,791 object-field rows. `protocol-identity.json` binds
-protocol 1 and player schema 14 to the exact canonical schema digest.
+334 shared definitions and 1,797 object-field rows. `protocol-identity.json` binds
+protocol 1 and player schema 15 to the exact canonical schema digest.
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
 - `field-ledger.json`: each reachable field, required/default shape and source owner.
 - The Python and TypeScript packages carry the same schema and digest.
+
+## Shared cells, rows and references (schema 15)
+
+Each group's cells travel once. `SensoryRows` holds three row tables: `cells`
+(the rows of the visible and seen lists, in cell order), `light_levels` and
+`hazards` (the distinct (cell, value) pairs, by cell, then value, as layers).
+A sensory fact's five cell lists are `RowBits` `{start, bits}` subsets of those
+rows (row `8 * start + i` is bit `i` of the base64url `bits`); a value list
+leaves out 0 at a cell the same fact adds to view (the fold reads 0 there).
+A fact names its `observer` as an index into `uuids`. Contact rows are
+columns (`contact_positions`, `contact_visual` bits, `contact_special_senses`);
+light sources are `LightRow`s naming `uuids`. Sighting cell lists are
+`CellMask`s, unpacked in cell order. A node names its resolution as an index
+into its group's `resolutions` (`{lineage, application_id?}`, the seat's
+lineage index); a spell application names the seat's lineage index;
+`version_rows` is two columns. A world update's changed resolved light is one
+`CellValues`. Default-valued fields of nodes, observations, sightings and facts
+are left out. `agent_docs/GODOT_CLIENT_FOLD_SCHEMA_15_2026-10-18.md` lists the
+delta; `dnd/player/reduction.py` is the reference fold.
 
 ## Shared sensory rows (schema 14)
 
@@ -73,7 +92,7 @@ A seat receives what it does not hold yet, as patches against its own fold
   `event_uuid`, concentration slots, application and resolution references)
   remain opaque attributes.
 
-Saved `PlayerSequence` packets are schema 7 (schema 14's sensory rows).
+Saved `PlayerSequence` packets are schema 8 (schema 15's rows).
 
 ## Antimagic removal (schema 11)
 
