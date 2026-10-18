@@ -7,7 +7,7 @@ masks. Python runs per observer, per target on hit cells, per hazard owner and p
 spatial condition; never per visible cell.
 """
 
-from typing import AbstractSet, Any, Dict, FrozenSet, Iterable, List, Mapping, Optional, Self, Sequence, Set, Tuple
+from typing import AbstractSet, Any, Callable, Dict, FrozenSet, Iterable, List, Mapping, Optional, Self, Sequence, Set, Tuple
 from uuid import UUID
 from pydantic import Field, InstanceOf, PrivateAttr
 
@@ -1404,8 +1404,7 @@ class SpatialSensesSystem:
             change.hazard_differs,
             before.spatial_effects != after.spatial_effects,
         ))
-        visible_topology_changed = any(self._changes_visible_topology(event, senses) for event in events)
-        if projection_changed or visible_topology_changed:
+        if projection_changed or any(self._changes_visible_topology(event, senses, shared) for event in events):
             senses._paths_dirty = True
             after = _replace_paths_dirty(after)
         # A group's settlement attaches to its still-open root: a completed
@@ -2583,15 +2582,17 @@ class SpatialSensesSystem:
             return {event.resulting_tile.position}
         return None
 
-    def _changes_visible_topology(self, event: Event, senses: Senses) -> bool:
+    def _changes_visible_topology(self, event: Event, senses: Senses, shared: SharedValues) -> bool:
+        """Whether the fact changes movement topology at a cell the observer sees or at an object it holds.
+        A fact's cells are read once per settlement (`shared`); each observer gathers its visible cells there."""
         if isinstance(event, SpatialChangeEvent):
             hint = event.senses_hint
             if hint is None or not hint.requires_paths:
                 return False
-            return (_any_visible(senses.cells, self._candidate_positions(event))
+            return (_any_visible(senses.cells, shared, event, lambda: self._candidate_positions(event))
                 or (event.object_uuid is not None and event.object_uuid in senses.objects))
         if isinstance(event, SpatialEffectChangeEvent):
-            return _any_visible(senses.cells, event.get_affected_positions())
+            return _any_visible(senses.cells, shared, event, event.get_affected_positions)
         return False
 
     @staticmethod
@@ -2639,10 +2640,15 @@ class SpatialSensesSystem:
         return positions
 
 
-def _any_visible(cells: PerceivedCells, positions: Iterable[Position]) -> bool:
-    """Whether any of these cells is visible (one gather)."""
-    positions = list(positions)
-    return bool(positions) and bool(_gather(cells.visible.values, cells.visible.box, positions).any())
+def _any_visible(cells: PerceivedCells, shared: SharedValues, fact: Event,
+                 positions: Callable[[], Iterable[Position]]) -> bool:
+    """Whether any of a fact's cells is visible (one gather). The fact's cells are one array per
+    settlement, built from `positions` by their first reader."""
+    key = ("fact cells", fact.uuid)
+    fact_cells = shared.get(key)
+    if fact_cells is None:
+        fact_cells = shared[key] = np.array(list(positions()), dtype=np.int64).reshape(-1, 2)
+    return bool(fact_cells.size) and bool(_gather(cells.visible.values, cells.visible.box, fact_cells).any())
 
 
 def _changed_targets(previous: ContactTable, current: ContactTable) -> np.ndarray:
