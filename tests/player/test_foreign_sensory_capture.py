@@ -81,10 +81,9 @@ def test_each_audience_gets_identical_light_facts_and_cold_replay(world, members
             packets.append(actual)
             captured.append(candidate)
             complete.append(reference)
-        # A single observer loses the grant before learning the now-hidden
-        # Tile value. A shared audience can still grant it at the first child.
-        expected_light = (LightLevel.DIM_LIGHT
-            if light is LightLevel.DARKNESS and len(members) == 1 else light)
+        # The seat loses the grant before learning the now-hidden Tile value: its members' settlement is
+        # composed once (plan §3.1), so no member's partial view grants it.
+        expected_light = LightLevel.DIM_LIGHT if light is LightLevel.DARKNESS else light
         assert state.tiles[(5, 6)].resolved_light is expected_light
         assert cell_in(state.senses.visible, (5, 6)) is (light is not LightLevel.DARKNESS)
     assert (omitted > 0) is (len(members) == 1)

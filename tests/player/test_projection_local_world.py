@@ -227,11 +227,14 @@ def test_remote_section_visibility_and_provider_after_values_refresh_constructio
         sensory(observer, spatial_effects_changed={provider: changed}),
         sensory(observer, visible_cells_removed=[(4, 0)]),
     ))
+    # A provider is perceived by what its members see of it now (plan §3.2): a row of hidden cells only grants
+    # nothing, so the protection is disclosed once the provider's cell is seen.
     assert states[0].objects[identity].item.construction_suppressions == ()
-    outcomes = [state.objects[identity].item.construction_suppressions[0] for state in states[1:]]
+    assert states[1].objects[identity].item.construction_suppressions == ()
+    outcomes = [state.objects[identity].item.construction_suppressions[0] for state in states[2:]]
     # Leaving view sends nothing: the client keeps the suppressed cell it last saw.
-    assert [row.positions for row in outcomes] == [(), ((4, 0),), ((4, 0),), ((4, 0),)]
-    assert [row.area_geometry.radius_feet for row in outcomes] == [5, 5, 10, 10]
+    assert [row.positions for row in outcomes] == [((4, 0),), ((4, 0),), ((4, 0),)]
+    assert [row.area_geometry.radius_feet for row in outcomes] == [5, 10, 10]
 
 
 def seen_by(observer, source, index):

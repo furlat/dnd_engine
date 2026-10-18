@@ -658,8 +658,11 @@ def apply_settlement(current: AudienceComposition, audience: PlayerAudience, obs
 
 
 def depart_contact(current: AudienceComposition, identity: UUID) -> None:
-    """A witnessed terminal departure ends the view's contact (a member's later observation of it composes it
-    again)."""
+    """A witnessed terminal departure ends the entity's contact for every member and in the view: the departed
+    entity is no member's contact (as the capture fold's terminal release), so no composition shows it again."""
+    for senses in current.perception.members.values():
+        senses.entities.pop(identity, None)
+    current.entity_members.pop(identity, None)
     if current.view is not None:
         current.view.entities.pop(identity, None)
 

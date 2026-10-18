@@ -409,11 +409,10 @@ def apply_sensed_fact(target: PlayerState, fact: FoldedFact, known: Collection[U
     match fact:
         case SpatialFact():
             if fact.terminal_departure and fact.entity_uuid is not None and fact.entity_uuid in known:
-                if audience_composition is not None:
-                    depart_contact(audience_composition, fact.entity_uuid)
-                    target.senses = audience_composition.view
-                elif target.senses is not None:
-                    target.senses.entities.pop(fact.entity_uuid, None)
+                composition = (audience_composition if audience_composition is not None
+                               else begin_audience_composition(target.perception, target.observer_uuid))
+                depart_contact(composition, fact.entity_uuid)
+                target.perception, target.senses = composition.perception, composition.view
             elif (target.viewing_audience.controls(fact.entity_uuid)
                     and fact.change_type is SpatialChangeType.ENTITY_ENTERED
                     and target.senses is not None and fact.entity_uuid == target.observer_uuid):
