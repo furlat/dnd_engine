@@ -1002,6 +1002,87 @@ Hard rules:
     - **Shield Bash 1-of-3.** Shield Bash replaces at most one of the Gladiator's three attacks; the SRD allows three melee attacks. This is the author's choice. Owner: human (product).
     - **NPC test slop.** Recipe-data re-assertions, the coverage test driven by agent_docs CSVs, private-state asserts (`spell_damage_resistance_sources`, handler dispatch counts), and fake provider wiring in `test_innate_reaction_spell_costs`. Owner: NPC lane.
     - **test_183 icon ledger.** `tests/manual/test_183_content_icon_bindings.py` has no rows for content newly public from the merged lanes (e.g. `creature.oath_captain_devil`, `spell.charm_monster`) and needs regenerating. Owner: content/icon ledger.
+- 2026-10-18: **NPC authoring merged (a4eb223b1; npc-merge 507c6ab6c).**
+  - 123 new native NPCs (148 identities) and their shared mechanics, after review and repositioning.
+  - Multiattack is one public parametrized action: 60 declarations with 6 patterns are retired.
+  - The contract is regenerated with `encounter_end`; schema stays 16.
+  - **Player-visible rules:**
+    - Assassinate applies on the assassin's first turn only;
+    - Brute adds a die of the held weapon (goblins included);
+    - Leadership is hear-only;
+    - Help Attack is a new standard action;
+    - Shield Bash replaces 1 of 3 Multiattack attacks;
+    - Multiattack labels are derived from the steps.
+  - **Gates:** published updates byte-identical; O3 equal; O4 only the public catalog; sweep nothing new; pyright 0 new.
+  - **Follow-ups with owners are in the lane's entry above.** Notable ones:
+    - one attack-source type;
+    - one save-for-half carrier;
+    - summon data-only subclasses (~12) could be parametrized like Multiattack;
+    - the `_POST_BASELINE_TEMPLATES` harness allowlist;
+    - NDClient references to retired multiattack ids.
+- 2026-10-18: **Revision stamps for re-entry, world part (codex/enp-revision-stamps: 5755b3a56, 7a628ad99; not merged).** Approved by the human.
+  - **Rule.** A tile entering perception (an entered cell), or an object entering perception (newly observed, or touching an entered cell), travels whole only when it was written since the seat last had it whole. Otherwise it is sent as `tiles_unchanged` (a cell mask) or `objects_unchanged` (uuids of objects on entered cells), or not sent at all (an object off them).
+    - An object is also sent whole when it shows a face the seat's last row of it did not, or when its observing members differ.
+    - Suppressions, remnants and cast-lineage concentration slots always travel whole. They are disclosed by view or by seat knowledge, not by the record.
+    - Connectors still travel whole.
+  - **Revisions.** The single session fold (`_fold_version`) records each record's last write, as a native index, from `AppliedWorldFact`. A tile's revision covers its cell: scalars, light, own conditions and residues. An object's covers its uuid. The fold refuses to go out of native order.
+  - **Seat stamps.** `ProjectionState.revision_stamps` holds the native index at which the seat last had the record whole, plus the faces and members of the object's last row.
+    - Each walk derives `StampChanges` from the updates it builds, and they join the seat's stamps at emission, next to the static rows.
+    - Only a whole send or an unchanged confirmation advances a stamp. A keyed change does not, because an unpublished write may precede it.
+    - The rule is `revision_stamps.unchanged_since`, for E3-bodies to apply to `BodyRecord`.
+  - **Restore.** `stamp_replay.replay_revision_stamps` rebuilds a seat's stamps from the world updates the seat received, folded by the client fold. It needs the seat's `public_cursors`, because the spool carries no native indexes. There is no production reopening path; without stamps, every re-entry is whole.
+  - **Gates** (9 oracle cases × G1/G2/G3, seeded):
+    - **Per record:** every seat's client state digest equals the 7feebee85 baseline's on all 27 runs and every record. Unchanged therefore leaves the client exactly as whole did.
+    - **O1–O4 against E0's base:** no world class. Only the lane's known differences remain (round_step_zones Prone, portal_plate's published setup, Fireball's renumbered nodes).
+    - **Against 7feebee85:** the O3 views are equal and O4 knowledge stays bounded on all 27 runs. Outside `world_updates`, the transcripts are byte-identical.
+    - **O2:** 27/27 pass, 4,294 records replayed. The restored stamps equal the live ones; the excuse for one-sided stamps written since was used 0 times.
+    - **Sweep:** 66 = r29's 64 plus the two `cr0_evidence` tests that need git.
+    - **pyright:** 0 new.
+  - **Largest seat update, KB** (E0 base 60adf05eb → 7feebee85 → stamps):
+
+    | Row | G1 | G2 | G3 |
+    |---|---|---|---|
+    | Sleet drop | 85.7 → 88.7 → 84.9 | 38.6 → 79.9 → 56.2 | 58.1 → 102.2 → 78.8 |
+    | Daylight | 83.7 → 92.2 → 90.9 | 45.0 → 102.7 → 75.4 | 65.5 → 84.3 → 77.2 |
+    | room_reentry door_open | 42.1 → 43.4 → 42.3 | 27.8 → 69.2 → 33.0 | 28.0 → 29.3 → 28.1 |
+    | mass_healing_word | 49.1 → 48.4 → 48.4 | 758.8 → 276.1 → 270.7 | 49.1 → 48.4 → 48.4 |
+    | Fireball | 202.0 → 161.7 → 161.7 | 178.7 → 138.1 → 138.1 | 187.7 → 147.4 → 147.4 |
+
+    - mass_healing_word is first sight: new records, which stamps cannot help.
+    - Fireball's largest update carries only records written now.
+  - **What still travels** (census summed over seats).
+    - Sleet drop G2 tiles: 14,619 unchanged, 2,366 written unseen, and 4,678 that were written while seen (delivered as keyed changes, so the stamp did not advance).
+    - Daylight G2 tiles: 7,524 unchanged, 870 written unseen, 3,543 written while seen.
+  - **Memory:** about 1,650 tile and 250 object stamps per seat, about 0.31 MB per seat as Python objects. The session's revisions are about 0.25 MB.
+  - **For the human:**
+    - (a) Whether a record arrives unchanged or whole tells the seat it was written while unperceived, even if the value ends the same (a door opened and closed unseen). Before stamps, re-entry was always whole, so no such signal existed. The alternative that closes the channel is a digest of the disclosed value.
+    - (b) A finer advance rule would save the "written while seen" re-sends: advance on a keyed change when the record's revision before that write is not after the stamp. This needs approval and a proof test.
+  - **Follow-ups:** the plan's vector w15 was folded into w14 (an entered cell's unsent torch is dropped). The wire names are `tiles_unchanged`/`objects_unchanged` (the plan said `*_kept`).
+- 2026-10-18: **Digest stamps for re-entry, world part (codex/enp-revision-stamps; supersedes the revision-stamps entry above).** The human chose digests.
+  - **Stamp.** Per seat, a stable digest (SHA-256 of the record's JSON) of each world record as the seat holds it: sent whole, or confirmed unchanged. Objects add their faces, members and held placement.
+    - A keyed change keeps the stamp only while the record still digests to it, and drops it otherwise. The review's hole was a write folded but published to the seat late, under an observed source. It is now a test.
+    - Suppressions, item effects and concentration slots always travel whole.
+  - **Rule.** `world_stamps.unchanged_since(stamps, key, digest)`, for E3-bodies.
+  - **Side channel closed:** a record written and written back unseen re-enters unchanged.
+  - **Cache.** Tile digests are cached per value by the session (`world_digests`), and `_fold_version` forgets them on each write.
+  - **Restore.** `stamp_replay` refolds and redigests the received updates. It needs no numbering, and O2 requires equality.
+  - **Close-out gates** (at 362895a17 plus this entry; sleet_storm, darkness_daylight and room_reentry × G1/G2):
+    - Per record, every seat's client state digest equals the a4eb223b1 baseline's.
+    - O1 classes are equal; O3 equal and O4 bounded against the baseline.
+    - O2 6/6 with restore.
+    - Transcripts outside `world_updates` are byte-identical.
+    - tests/player: r29's set.
+    - pyright: 0 new.
+  - **KB, largest seat update, a4eb223b1 → digests (G1 | G2):** Sleet drop 77.6 → 73.9 | 104.1 → 80.4; Daylight 83.1 → 81.9 | 137.6 → 110.1; door_open 43.4 → 42.3 | 95.3 → 59.0.
+  - **Not done:** a stamp advance on keyed changes that change the value, which needs per-seat unpublished-write tracking and the human's approval. The unsound version of it measured Sleet/Daylight G2 world 21.8/31.5 → 10.1/10.4 KB.
+- 2026-10-18 (session end): **Digest stamps merged (61b51584e).** G2 largest KB: Sleet drop 104 → 80, Daylight 138 → 110, door_open 95 → 59. A change seen in view keeps the stamp only if the value matches (sound against late publication).
+  - **Unfinished, committed as WIP on their branches:**
+    - E3-sensory (codex/enp-e3-sensory): S-3 wire switch;
+    - E3-bodies follow-ups (codex/enp-e3-bodies): admissions removal, the build-once combat log (Q8), visual-loadout encoding, body stamps.
+  - **Next session, in order:**
+    1. finish and merge E3-sensory and the E3-bodies follow-ups;
+    2. Q9, one side part per faction plus a per-player overlay (design on codex/shared-vision-proto);
+    3. E6 quiet re-time and the final table.
 - 2026-10-18: **E3-sensory lane (codex/enp-e3-sensory), walk-independent part, waiting for E3-world and E3-bodies.**
   - **Settlement marker (f08ef192c).** `SensoryUpdateEvent.settlement` is a counter on `SpatialSensesSystem`, drawn once per `_emit_settlement` pass and once per explicit refresh.
     - A refresh is its own settlement even when a group's settlement emits it: it has no cause, registers at once as its own root, and is captured apart from the group. A settlement composes only within one captured group. (Coordinator: accepted.)

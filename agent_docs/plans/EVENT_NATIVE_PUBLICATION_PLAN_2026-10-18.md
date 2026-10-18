@@ -234,6 +234,15 @@ The revision-2 plan gets one confirming pass from each reviewer, on whether the 
   - It runs after E3-bodies' admissions follow-up (names table at births).
 - **Leadership "understand" (human: "whatever"):** keep "hear only"; the language gate is logged as a gap until languages are authored.
 
+- **Q9: one side part per faction, plus a per-player overlay (human, 2026-10-18: "yeah").** This confirms Q5 for multiple human controllers on one side.
+  - Each update splits into a **side part** and a **per-player overlay**:
+    - side part: perception, world, bodies and facts, numbered per side, identical for every player of the side, built and encoded once;
+    - overlay: the player's HUD, Choices, and its own characters' controller-only details.
+  - The client folds both.
+  - Server time ≈ one side build plus N small overlays. Network stays N × side part.
+  - Gate: every player's folded state equals today's character-shared run; O1–O4.
+  - Runs after E3-sensory merges, building on the shared-vision prototype (codex/shared-vision-proto).
+
 ## 9. Review findings → resolution
 
 | Finding | Resolution |

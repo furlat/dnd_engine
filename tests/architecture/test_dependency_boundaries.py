@@ -1003,11 +1003,12 @@ def test_dependency_direction_is_respected() -> None:
     )
 
 
-# The client's reference fold of the player wire, and the server modules that publish to seats without it (plan
-# §4: the projector holds no client state; the spatial commit order both keep is the leaf `spatial_commits`).
-CLIENT_FOLD_MODULES = ("dnd.player.reduction", "dnd.player.world_reduction")
+# The client's reference fold of the player wire (with `stamp_replay`, the oracle's restore of digest stamps
+# through it), and the server modules that publish to seats without it (plan §4: the projector holds no client
+# state; the spatial commit order both keep is the leaf `spatial_commits`).
+CLIENT_FOLD_MODULES = ("dnd.player.reduction", "dnd.player.world_reduction", "dnd.player.stamp_replay")
 SEAT_PUBLISHING_MODULES = frozenset({"dnd.player.application", "dnd.player.capture", "server.worker",
-    "dnd.player.world_publication", "dnd.player.bodies", "dnd.player.projection"})
+    "dnd.player.world_publication", "dnd.player.bodies", "dnd.player.world_stamps", "dnd.player.projection"})
 
 
 def test_seat_publication_does_not_import_the_client_fold() -> None:
@@ -1021,13 +1022,20 @@ def test_seat_publication_does_not_import_the_client_fold() -> None:
 
 
 def test_the_session_world_has_one_writer() -> None:
-    """The session's one world fold is written in one place: the walk drivers' `_fold_version`, through E2's
-    `world_facts.apply_world_fact`."""
+    """The session's one world fold, and the forgetting of its written tiles' digests, are written in one place:
+    the walk drivers' `_fold_version`, through E2's `world_facts.apply_world_fact` and `world_stamps.forget_written`."""
     tree = ast.parse((REPOSITORY_ROOT / "dnd" / "player" / "projection.py").read_text(encoding="utf-8"))
     writers = [function.name for function in ast.walk(tree) if isinstance(function, ast.FunctionDef)
         for node in ast.walk(function) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
         and node.func.id == "apply_world_fact"]
     assert writers == ["_fold_version"]
+    digest_writers = [f"{source.relative_to(REPOSITORY_ROOT)}:{function.name}"
+        for source in sorted((REPOSITORY_ROOT / "dnd").rglob("*.py"))
+        for function in ast.walk(ast.parse(source.read_text(encoding="utf-8")))
+        if isinstance(function, ast.FunctionDef)
+        for node in ast.walk(function) if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name) and node.func.id == "forget_written"]
+    assert digest_writers == ["dnd/player/projection.py:_fold_version"]
 
 
 def _rooted_at(node: ast.expr, name: str) -> bool:
@@ -1037,9 +1045,27 @@ def _rooted_at(node: ast.expr, name: str) -> bool:
     return isinstance(node, ast.Name) and node.id == name
 
 
+def test_the_client_fold_never_loads_the_session_fold() -> None:
+    """The client's reference fold, and the restore of digest stamps through it, import nothing of the session's
+    world fold (`dnd.world_facts`), directly or not."""
+    edges: dict[str, set[str]] = {}
+    for reference in _import_references():
+        edges.setdefault(reference.importer, set()).add(reference.target)
+    reached: set[str] = set(CLIENT_FOLD_MODULES)
+    frontier: list[str] = list(CLIENT_FOLD_MODULES)
+    while frontier:
+        for target in edges.get(frontier.pop(), ()):
+            if target not in reached:
+                reached.add(target)
+                frontier.append(target)
+    assert "dnd.world_facts" not in reached
+
+
 def test_world_publication_reads_the_world_as_of_the_occurrence_and_never_compares_it() -> None:
     """The seats' world publication reads one world (the session's, as of the occurrence) and what the occurrence
-    wrote: it takes no second world, reads no client memory and compares no world value with another."""
+    wrote: it takes no second world, reads no client memory and compares no two world values. A re-entering record's
+    value digest meets the seat's stamp only through `world_stamps.unchanged_since`, or becomes the stamp itself
+    (`stamp_world_update`)."""
     path = REPOSITORY_ROOT / "dnd" / "player" / "world_publication.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     imported = {alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) for alias in node.names}
@@ -1053,6 +1079,14 @@ def test_world_publication_reads_the_world_as_of_the_occurrence_and_never_compar
                 continue
             assert not any(_rooted_at(side, world) for side in (compare.left, *compare.comparators)
                            for world in worlds), f"{function.name} compares a world value (line {compare.lineno})"
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    for call in (node for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                 and node.func.id in {"object_digest", "cached_tile_digest"}):
+        node: ast.AST = call
+        while node in parents and not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                                       and node.func.id in {"unchanged_since", "stamp_world_update"}):
+            node = parents[node]
+        assert isinstance(node, ast.Call), f"a digest used outside the stamp rule (line {call.lineno})"
 
 
 def test_game_import_does_not_load_ai_or_server_packages() -> None:

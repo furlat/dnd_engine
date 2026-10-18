@@ -23532,7 +23532,7 @@
         "type": "object"
       },
       "WorldUpdate": {
-        "description": "The world a seat perceives change at one occurrence.\n\n`entered` is the update's authoritative scope: for those cells the client drops everything it holds and keeps\nonly what this update carries, their tiles, every object touching them (`placement_support_cells`) and every\nconnector with an endpoint there; no object or connector there means none. Every other row is the keyed change\nof a record the seat perceived before and after the occurrence. Static rows come once per (kind, id) per seat.",
+        "description": "The world a seat perceives change at one occurrence.\n\n`entered` is the update's authoritative scope: for those cells the client drops everything it holds and keeps\nonly what this update carries, their tiles, every object touching them (`placement_support_cells`) and every\nconnector with an endpoint there; no object or connector there means none. A record whose value is the one the\nseat holds is kept as the client holds it instead: the entered cells in `tiles_unchanged` (their tile, its\ncondition names and residues) and the objects in `objects_unchanged`. Every other row is the keyed change of a\nrecord the seat perceived before and after the occurrence. Static rows come once per (kind, id) per seat.",
         "properties": {
           "occurrence": {
             "title": "Occurrence",
@@ -23541,6 +23541,16 @@
             "maximum": 9007199254740991
           },
           "entered": {
+            "$ref": "#/components/schemas/CellMask",
+            "default": {
+              "x0": 0,
+              "y0": 0,
+              "width": 0,
+              "height": 0,
+              "bits": ""
+            }
+          },
+          "tiles_unchanged": {
             "$ref": "#/components/schemas/CellMask",
             "default": {
               "x0": 0,
@@ -23656,6 +23666,15 @@
               }
             ],
             "default": null
+          },
+          "objects_unchanged": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Objects Unchanged",
+            "type": "array"
           },
           "objects_removed": {
             "default": [],

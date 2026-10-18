@@ -323,7 +323,7 @@ class AppliedWorldFact:
 
     Each case fills it only from its own event: which records it wrote (and, for a residue, whether the tile held
     that material before). A seat-independent record read by every seat's world publication, which reads the
-    values from the world as of the occurrence: never a compare of world states. Tiles kept (same identity):
+    values from the world as of the occurrence: never a compare of two world states. Tiles kept (same identity):
     `tiles` the event's own keyed changes (E2's records, written by the native writers), `tile_fields` the scalar
     fields a tile-field, elevation or condition fact wrote, `light` the cells whose objective light it wrote,
     `tile_conditions` the cells whose own condition names a condition fact wrote. `replaced` cells whose tile was
@@ -342,3 +342,9 @@ class AppliedWorldFact:
     moved: frozenset[UUID] = frozenset()
     contents: Tuple[Tuple[UUID, Tuple[UUID, ...], Tuple[UUID, ...]], ...] = ()
     connectors: Tuple[Tuple[UUID, Optional[WorldConnectorState]], ...] = ()
+
+
+def written_cells(applied: AppliedWorldFact) -> frozenset[Tuple[int, int]]:
+    """Every cell whose tile the fact wrote, in any of its fields (a new residue's cell is one of `tiles`')."""
+    return frozenset((*applied.replaced, *applied.light, *applied.tile_conditions,
+                      *(change.position for change in applied.tiles), *(position for position, _ in applied.tile_fields)))

@@ -1387,12 +1387,15 @@ class WorldUpdate:
 
     `entered` is the update's authoritative scope: for those cells the client drops everything it holds and keeps
     only what this update carries, their tiles, every object touching them (`placement_support_cells`) and every
-    connector with an endpoint there; no object or connector there means none. Every other row is the keyed change
-    of a record the seat perceived before and after the occurrence. Static rows come once per (kind, id) per seat.
+    connector with an endpoint there; no object or connector there means none. A record whose value is the one the
+    seat holds is kept as the client holds it instead: the entered cells in `tiles_unchanged` (their tile, its
+    condition names and residues) and the objects in `objects_unchanged`. Every other row is the keyed change of a
+    record the seat perceived before and after the occurrence. Static rows come once per (kind, id) per seat.
     """
 
     occurrence: int
     entered: CellMaskField = EMPTY_CELLS
+    tiles_unchanged: CellMaskField = EMPTY_CELLS
     tile_looks: Rows[TileLook] = ()
     tile_statics: Rows[TileStatic] = ()
     tile_columns: Annotated[TileColumns | None, Field(exclude_if=_unset)] = None
@@ -1405,6 +1408,7 @@ class WorldUpdate:
     residues_removed: Rows[ResidueKey] = ()
     object_looks: Rows[ObjectLook] = ()
     objects: Annotated[ObjectColumns | None, Field(exclude_if=_unset)] = None
+    objects_unchanged: Rows[UUID] = ()
     objects_removed: Rows[UUID] = ()
     contents: Rows[ContainerContents] = ()
     contents_changed: Rows[ContentsChange] = ()
