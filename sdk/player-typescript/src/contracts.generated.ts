@@ -2399,6 +2399,7 @@ export type Values13 = CardinalDirection[];
 export type Values14 = string[];
 export type Values15 = WorldObjectSupport[][];
 export type Values16 = [number, number, number][][];
+export type ObjectsUnchanged = string[];
 export type ObjectsRemoved = string[];
 export type ContainerUuid = string;
 export type ItemUuid7 = string;
@@ -5527,12 +5528,15 @@ export interface PerceivedContact {
  *
  * `entered` is the update's authoritative scope: for those cells the client drops everything it holds and keeps
  * only what this update carries, their tiles, every object touching them (`placement_support_cells`) and every
- * connector with an endpoint there; no object or connector there means none. Every other row is the keyed change
- * of a record the seat perceived before and after the occurrence. Static rows come once per (kind, id) per seat.
+ * connector with an endpoint there; no object or connector there means none. A record nothing wrote since the
+ * seat last had it is kept as the client holds it instead: the entered cells in `tiles_unchanged` (their tile, its
+ * condition names and residues) and the objects in `objects_unchanged`. Every other row is the keyed change of a
+ * record the seat perceived before and after the occurrence. Static rows come once per (kind, id) per seat.
  */
 export interface WorldUpdate {
   occurrence: Occurrence2;
   entered?: CellMask;
+  tiles_unchanged?: CellMask1;
   tile_looks?: TileLooks;
   tile_statics?: TileStatics;
   tile_columns?: TileColumns | null;
@@ -5545,6 +5549,7 @@ export interface WorldUpdate {
   residues_removed?: ResiduesRemoved;
   object_looks?: ObjectLooks;
   objects?: ObjectColumns | null;
+  objects_unchanged?: ObjectsUnchanged;
   objects_removed?: ObjectsRemoved;
   contents?: Contents;
   contents_changed?: ContentsChanged;
@@ -5556,6 +5561,17 @@ export interface WorldUpdate {
  * least significant bit first within each byte.
  */
 export interface CellMask {
+  x0: X0;
+  y0: Y0;
+  width: Width1;
+  height: Height1;
+  bits: Bits1;
+}
+/**
+ * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
+ * least significant bit first within each byte.
+ */
+export interface CellMask1 {
   x0: X0;
   y0: Y0;
   width: Width1;
@@ -5586,7 +5602,7 @@ export interface TileStatic {
  * `elevation_steps` is empty when every cell is at 0.
  */
 export interface TileColumns {
-  cells: CellMask1;
+  cells: CellMask2;
   walking_cost: WalkingCost1;
   flying_cost: FlyingCost1;
   swimming_cost: SwimmingCost1;
@@ -5600,7 +5616,7 @@ export interface TileColumns {
  * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
  * least significant bit first within each byte.
  */
-export interface CellMask1 {
+export interface CellMask2 {
   x0: X0;
   y0: Y0;
   width: Width1;
@@ -5642,7 +5658,7 @@ export interface WorldTileChanges {
  * One byte per cell of `cells`, in its cell order (x, then y).
  */
 export interface CellValues {
-  cells: CellMask1;
+  cells: CellMask2;
   values: Values;
 }
 /**
@@ -6097,7 +6113,7 @@ export interface SensoryRows {
   light_sources?: LightSources;
   light_removal_uuid_index?: LightRemovalUuidIndex;
   light_removal_revisions?: LightRemovalRevisions;
-  cells?: CellMask3;
+  cells?: CellMask4;
   light_levels?: LightLevels;
   hazards?: Hazards;
 }
@@ -6119,7 +6135,7 @@ export interface RowBits6 {
  */
 export interface SpatialEffectSighting {
   duration?: ConditionDurationSummary | null;
-  positions: CellMask1;
+  positions: CellMask2;
   owner_revision?: OwnerRevision;
   apparent_presence?: ApparentPresence;
   trap_state?: TrapState | null;
@@ -6137,7 +6153,7 @@ export interface SpatialEffectSighting {
   construction_sections?: ConstructionSections;
   area_propagation?: AreaPropagation1;
   deposit_source?: MaterialDepositSource | null;
-  visible_volume_positions?: CellMask2;
+  visible_volume_positions?: CellMask3;
   upper_volume_surfaces?: UpperVolumeSurfaces;
   suppressions?: Suppressions1;
 }
@@ -6145,7 +6161,7 @@ export interface SpatialEffectSighting {
  * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
  * least significant bit first within each byte.
  */
-export interface CellMask2 {
+export interface CellMask3 {
   x0: X0;
   y0: Y0;
   width: Width1;
@@ -6188,14 +6204,14 @@ export interface LightRow {
  * One byte per cell of `cells`, in its cell order (x, then y).
  */
 export interface CellValues1 {
-  cells: CellMask1;
+  cells: CellMask2;
   values: Values;
 }
 /**
  * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
  * least significant bit first within each byte.
  */
-export interface CellMask3 {
+export interface CellMask4 {
   x0: X0;
   y0: Y0;
   width: Width1;
@@ -6206,7 +6222,7 @@ export interface CellMask3 {
  * One byte per cell of `cells`, in its cell order (x, then y).
  */
 export interface CellValues2 {
-  cells: CellMask1;
+  cells: CellMask2;
   values: Values;
 }
 /**
@@ -6880,7 +6896,7 @@ export interface SensoryRows1 {
   light_sources?: LightSources;
   light_removal_uuid_index?: LightRemovalUuidIndex;
   light_removal_revisions?: LightRemovalRevisions;
-  cells?: CellMask3;
+  cells?: CellMask4;
   light_levels?: LightLevels;
   hazards?: Hazards;
 }

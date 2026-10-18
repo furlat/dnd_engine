@@ -223,6 +223,9 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
               look_and_row(item(SIGN, "Sign", visual_item_name="Sign"), sign_at),
               look_and_row(item(BANNER, "Banner"), banner_at),
               look_and_row(walled, wall_at), look_and_row(replace(walled, item_uuid=EAST_WALL), east_wall_at))
+    # w14: a cell holding conditions and a residue re-enters unchanged, with the box on it.
+    held_cell = {**t, "1,0": tile_view(floor[(1, 0)], conditions=("Difficult terrain", "Blood"),
+                                       residues={"residue.blood": {"amount": 1, "contributions": 1}})}
     # w13: a closed chest opens in view while a torch is placed: one update's rows, the chest's without a placement.
     _, closed_row = look_and_row(replace(chest, is_open=False), chest_at)
     return {
@@ -385,6 +388,22 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
                  view(t, {str(BOX): object_view(box_at, name="Box"),
                           str(CHEST): object_view(chest_at, name="Chest", is_open=True),
                           str(TORCH): object_view(torch_at, name="Torch")})),
+        ]),
+        "w14_a_reentered_cell_keeps_what_nothing_wrote": (
+            "An entered cell in `tiles_unchanged` keeps the tile the client holds (its scalars, condition names and "
+            "residues), and an object in `objects_unchanged` is spared the reset; the other entered cells are reset as "
+            "always.",
+            (A,), [
+            Step(entering(0, tuple(floor.values()), object_looks=(box_look,), objects=rows(box_at_1,),
+                          tile_conditions=(TileConditions(position=(1, 0), names=("Difficult terrain",)),),
+                          residue_materials=(BLOOD,), residues=(ResidueRow(position=(1, 0), residue_id="residue.blood",
+                              condition_uuid=BLOOD_AT_1_0, amount=1,
+                              contributions=(ContributionRow(index=0, contribution=SPLASH),)),)),
+                 view(held_cell, {str(BOX): object_view(box_at, name="Box")})),
+            Step(WorldUpdate(occurrence=1, entered=mask_from_positions(((1, 0), (2, 0))),
+                             tiles_unchanged=mask_from_positions(((1, 0),)),
+                             tile_columns=pack_tile_columns({(2, 0): floor[(2, 0)]}), objects_unchanged=(BOX,)),
+                 view(held_cell, {str(BOX): object_view(box_at, name="Box")})),
         ]),
         "w11_placements_and_structures_decode_exactly": (
             "A placement leaves out its object, its anchor tile when the client holds that cell's static row, its "

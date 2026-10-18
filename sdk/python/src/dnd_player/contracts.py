@@ -3639,6 +3639,7 @@ class SensoryRows(TypedDict):
 class WorldUpdate(TypedDict):
     occurrence: int
     entered: NotRequired[CellMask]
+    tiles_unchanged: NotRequired[CellMask]
     tile_looks: NotRequired[list[TileLook]]
     tile_statics: NotRequired[list[TileStatic]]
     tile_columns: NotRequired[TileColumns | None]
@@ -3651,6 +3652,7 @@ class WorldUpdate(TypedDict):
     residues_removed: NotRequired[list[ResidueKey]]
     object_looks: NotRequired[list[ObjectLook]]
     objects: NotRequired[ObjectColumns | None]
+    objects_unchanged: NotRequired[list[str]]
     objects_removed: NotRequired[list[str]]
     contents: NotRequired[list[ContainerContents]]
     contents_changed: NotRequired[list[ContentsChange]]

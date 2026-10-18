@@ -55,8 +55,15 @@ def fold_static_rows(static: StaticStore, update: WorldUpdate) -> None:
 
 
 def _reset_entered(memory: PlayerState, update: WorldUpdate, entered: frozenset[tuple[int, int]]) -> None:
-    """Drop what the client holds on the entered cells; their tiles are the update's columns."""
-    for position in entered:
+    """Drop what the client holds on the entered cells, but the kept tiles and objects; the other tiles are the
+    update's columns."""
+    kept_tiles = frozenset(mask_positions(update.tiles_unchanged))
+    if not kept_tiles <= entered or not kept_tiles <= memory.tiles.keys():
+        raise ValueError("A kept tile is an entered cell the client holds")
+    kept = frozenset(update.objects_unchanged)
+    if not kept <= memory.objects.keys():
+        raise ValueError("A kept object is one the client holds")
+    for position in entered - kept_tiles:
         memory.tiles.pop(position, None)
     if update.tile_columns is not None:
         tiles = unpack_tile_columns(update.tile_columns, memory.static.tiles, memory.static.tile_looks)
@@ -65,7 +72,7 @@ def _reset_entered(memory: PlayerState, update: WorldUpdate, entered: frozenset[
         memory.tiles.update(tiles)
     resent = set(update.objects.item_uuids) if update.objects is not None else set()
     for identity, held in tuple(memory.objects.items()):
-        if identity not in resent and placement_support_cells(held.placement) & entered:
+        if identity not in resent and identity not in kept and placement_support_cells(held.placement) & entered:
             del memory.objects[identity]
             memory.object_members.pop(identity, None)
             continue

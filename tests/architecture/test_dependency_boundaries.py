@@ -1006,9 +1006,9 @@ def test_dependency_direction_is_respected() -> None:
 # The client's reference fold of the player wire, and the server modules that publish to seats without it. A
 # module joins the publishers once the last held client value it reads is deleted; the sensory lane adds the
 # projection, which still runs the client's body fold until then.
-CLIENT_FOLD_MODULES = ("dnd.player.reduction", "dnd.player.world_reduction")
+CLIENT_FOLD_MODULES = ("dnd.player.reduction", "dnd.player.world_reduction", "dnd.player.stamp_replay")
 SEAT_PUBLISHING_MODULES = frozenset({"dnd.player.application", "dnd.player.capture", "server.worker",
-    "dnd.player.world_publication"})
+    "dnd.player.world_publication", "dnd.player.revision_stamps"})
 
 
 def test_seat_publication_does_not_import_the_client_fold() -> None:
@@ -1022,13 +1022,14 @@ def test_seat_publication_does_not_import_the_client_fold() -> None:
 
 
 def test_the_session_world_has_one_writer() -> None:
-    """The session's one world fold is written in one place: the walk drivers' `_fold_version`, through E2's
-    `world_facts.apply_world_fact`."""
+    """The session's one world fold and its records' revisions are written in one place: the walk drivers'
+    `_fold_version`, through E2's `world_facts.apply_world_fact` and `revision_stamps.record_world_revisions`."""
     tree = ast.parse((REPOSITORY_ROOT / "dnd" / "player" / "projection.py").read_text(encoding="utf-8"))
-    writers = [function.name for function in ast.walk(tree) if isinstance(function, ast.FunctionDef)
-        for node in ast.walk(function) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-        and node.func.id == "apply_world_fact"]
-    assert writers == ["_fold_version"]
+    for writer in ("apply_world_fact", "record_world_revisions"):
+        writers = [function.name for function in ast.walk(tree) if isinstance(function, ast.FunctionDef)
+            for node in ast.walk(function) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id == writer]
+        assert writers == ["_fold_version"], writer
 
 
 def _rooted_at(node: ast.expr, name: str) -> bool:

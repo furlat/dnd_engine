@@ -69,6 +69,7 @@ from dnd.player.audience import AudiencePerception, PlayerAudience, audience_vie
 from dnd.player.facts import (PlayerActor, PlayerCharacterSheet, PlayerItem, PlayerObject, PlayerState,
     SpatialEffectContent)
 from dnd.player.projection import _item_records, _public_actor, _public_condition, _public_items
+from dnd.player.revision_stamps import RevisionStamps, WorldRevisions
 from dnd.player.world_publication import disclosed_world_object, object_observed
 from dnd.player.session import Session
 from dnd.types.actor_facts import ConditionFact
@@ -111,6 +112,20 @@ EVENT_TIME_CONDITION_FIELDS = ('event_uuid', 'resulting_max_hp', 'resulting_ac',
 
 def key(position: Position) -> str:
     return f'{position[0]},{position[1]}'
+
+
+def stamp_data(stamps: RevisionStamps) -> dict[str, Any]:
+    """A seat's revision stamps as JSON: tiles by cell, objects by uuid as [occurrence, faces, members]."""
+    return {'tiles': {key(position): index for position, index in sorted(stamps.tiles.items()) if index is not None},
+            'objects': {str(identity): [stamp.occurrence, sorted(face.value for face in stamp.faces), stamp.members]
+                        for identity, stamp in sorted(stamps.objects.items(), key=lambda row: str(row[0]))
+                        if stamp is not None}}
+
+
+def revision_data(revisions: WorldRevisions) -> dict[str, Any]:
+    """The session's record revisions as JSON: tiles by cell, objects by uuid."""
+    return {'tiles': {key(position): index for position, index in sorted(revisions.tiles.items())},
+            'objects': {str(identity): index for identity, index in sorted(revisions.objects.items(), key=lambda row: str(row[0]))}}
 
 
 def canonical(value: Any) -> str:
