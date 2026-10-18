@@ -1,5 +1,6 @@
 """Shared passive event vocabulary and world after-values."""
 
+from dataclasses import dataclass
 from enum import Enum
 from typing import Annotated, Tuple, Optional, TypedDict
 from uuid import UUID
@@ -253,6 +254,15 @@ class KeyedTileFields(TypedDict, total=False):
     """The Tile fields a keyed change can carry: present fields replace the recorded values."""
 
     walking_cost: Annotated[StrictInt, Field(ge=0)]
+    flying_cost: Annotated[StrictInt, Field(ge=0)]
+    swimming_cost: Annotated[StrictInt, Field(ge=0)]
+    burrowing_cost: Annotated[StrictInt, Field(ge=0)]
+    blocks_optics: bool
+    blocks_propagation: bool
+    elevation_steps: StrictInt
+    surface_kind: ElevationSurfaceKind
+    slope_axis: Optional[SlopeAxis]
+    default_light: LightLevel
     condition_names: Tuple[str, ...]
 
 
@@ -277,6 +287,30 @@ class KeyedTileChange(BaseModel):
     position: Tuple[int, int]
     fields: KeyedTileFields = Field(default_factory=lambda: KeyedTileFields())
     residues: Tuple[KeyedResidueChange, ...] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AppliedWorldFact:
+    """What one recorded world fact changed in the world fold, as `world_facts.apply_world_fact` applied it.
+
+    Each case fills it only from its own event's after-values (and, for a residue, whether the tile held that
+    material before): a seat-independent record read by every seat's world publication, never a compare of world
+    states. `tiles` are tiles kept (same identity) with their keyed fields and materials; `tile_conditions` a
+    tile's own condition names after a condition fact (its residues' names follow them on the tile);
+    `replaced` cells whose tile was written whole, created or removed; `objects` the objects written (`moved`
+    those whose placement changed); `contents` each container's added and removed items; `connectors` the
+    connectors written.
+    """
+
+    tiles: Tuple[KeyedTileChange, ...] = ()
+    new_residues: frozenset[Tuple[Tuple[int, int], str]] = frozenset()
+    light: Tuple[Tuple[Tuple[int, int], LightLevel], ...] = ()
+    tile_conditions: Tuple[Tuple[Tuple[int, int], Tuple[str, ...]], ...] = ()
+    replaced: frozenset[Tuple[int, int]] = frozenset()
+    objects: frozenset[UUID] = frozenset()
+    moved: frozenset[UUID] = frozenset()
+    contents: Tuple[Tuple[UUID, Tuple[UUID, ...], Tuple[UUID, ...]], ...] = ()
+    connectors: frozenset[UUID] = frozenset()
 
 
 

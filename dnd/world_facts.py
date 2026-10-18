@@ -10,7 +10,7 @@ from dnd.core.events import (
     WorldConnectorState, WorldInitializedEvent, WorldModifiedEvent, WorldObjectState,
     WorldTileState, SensoryUpdateEvent,
 )
-from dnd.types.event_facts import KeyedTileChange
+from dnd.types.event_facts import AppliedWorldFact, KeyedTileChange, KeyedTileFields
 from dnd.core.item_types import ItemLocation
 from dnd.types.world import CardinalDirection, LightLevel
 from dnd.types.actor_facts import ConditionFact
@@ -78,16 +78,45 @@ def _index_object(world: WorldFacts, identity: UUID, value: WorldObjectState, *,
                 index.setdefault(key, set()).add(identity)
 
 
-def _put_object(world: WorldFacts, identity: UUID, value: WorldObjectState | None) -> None:
+@dataclass(slots=True)
+class _Written:
+    """One fold's writes as it makes them: the parts of its `AppliedWorldFact` a case fills."""
+
+    tiles: list[KeyedTileChange] = field(default_factory=list)
+    new_residues: set[tuple[tuple[int, int], str]] = field(default_factory=set)
+    light: dict[tuple[int, int], LightLevel] = field(default_factory=dict)
+    tile_conditions: dict[tuple[int, int], tuple[str, ...]] = field(default_factory=dict)
+    replaced: set[tuple[int, int]] = field(default_factory=set)
+    objects: set[UUID] = field(default_factory=set)
+    moved: set[UUID] = field(default_factory=set)
+    contents: dict[UUID, tuple[list[UUID], list[UUID]]] = field(default_factory=dict)
+    connectors: set[UUID] = field(default_factory=set)
+
+    def applied(self) -> AppliedWorldFact:
+        return AppliedWorldFact(tiles=tuple(self.tiles), new_residues=frozenset(self.new_residues),
+            light=tuple(self.light.items()), tile_conditions=tuple(self.tile_conditions.items()),
+            replaced=frozenset(self.replaced), objects=frozenset(self.objects), moved=frozenset(self.moved),
+            contents=tuple((owner, tuple(added), tuple(removed)) for owner, (added, removed) in self.contents.items()),
+            connectors=frozenset(self.connectors))
+
+
+def _put_object(world: WorldFacts, identity: UUID, value: WorldObjectState | None, written: _Written) -> None:
     previous = world.objects.pop(identity, None)
     if previous is not None:
         _index_object(world, identity, previous, remove=True)
     if value is not None:
         world.objects[identity] = value
         _index_object(world, identity, value, remove=False)
+    written.objects.add(identity)
+    if value is not None and (previous is None or previous.placement != value.placement):
+        written.moved.add(identity)
 
 
-def _remove_contained_item(world: WorldFacts, identity: UUID) -> bool:
+def _contents(written: _Written, owner: UUID) -> tuple[list[UUID], list[UUID]]:
+    return written.contents.setdefault(owner, ([], []))
+
+
+def _remove_contained_item(world: WorldFacts, identity: UUID, written: _Written) -> bool:
     """Recorded membership identifies the source, including older owner stamps."""
     changed = False
     for owner in tuple(world.containers_by_item.get(identity, ())):
@@ -95,7 +124,8 @@ def _remove_contained_item(world: WorldFacts, identity: UUID) -> bool:
         assert obj.contained_items is not None
         retained = tuple(item for item in obj.contained_items if item.item_uuid != identity)
         if retained != obj.contained_items:
-            _put_object(world, owner, obj.model_copy(update={"contained_items": retained}))
+            _put_object(world, owner, obj.model_copy(update={"contained_items": retained}), written)
+            _contents(written, owner)[1].append(identity)
             changed = True
     return changed
 
@@ -223,24 +253,27 @@ def apply_keyed_tile_change(previous: WorldTileState, change: KeyedTileChange) -
 
 def apply_world_fact(
     world: WorldFacts, event: Event, condition: ConditionFact | None = None,
-) -> bool:
-    """Apply only recorded after-values; callers own phase/source ordering."""
+) -> AppliedWorldFact | None:
+    """Apply only recorded after-values, returning what they changed (None: nothing applied); callers own
+    phase/source ordering."""
     if event.canceled:
-        return False
+        return None
+    written = _Written()
     if condition is not None and condition.resulting_tile is not None:
-        world.tiles[condition.resulting_tile.position] = condition.resulting_tile
-        return True
+        _resulting_tile(world, condition.resulting_tile, written)
+        return written.applied()
     if condition is not None and condition.resulting_item is not None:
         previous = world.objects.get(condition.resulting_item.item_uuid)
         if previous is None:
-            return False
+            return None
         _put_object(world, condition.resulting_item.item_uuid,
-                    previous.model_copy(update={"item": condition.resulting_item}))
-        return True
+                    previous.model_copy(update={"item": condition.resulting_item}), written)
+        return written.applied()
     match event:
         case WorldInitializedEvent():
             world.world = event
             world.tiles = {row.position: row for row in event.tiles}
+            written.replaced.update(world.tiles)
             world.objects.clear()
             world.boundaries.clear()
             world.objects_by_position.clear()
@@ -249,34 +282,40 @@ def apply_world_fact(
             world.constructions_by_provider.clear()
             world.constructions_by_position.clear()
             for obj in event.objects:
-                _put_object(world, obj.item.item_uuid, obj)
+                _put_object(world, obj.item.item_uuid, obj, written)
             world.connectors = {row.connector_uuid: row for row in event.connectors}
+            written.connectors.update(world.connectors)
         case WorldModifiedEvent():
             if event.tile_position is not None:
                 if isinstance(event.after, WorldTileState):
                     world.tiles[event.tile_position] = event.after
+                    written.replaced.add(event.tile_position)
                 elif event.after is None:
                     world.tiles.pop(event.tile_position, None)
+                    written.replaced.add(event.tile_position)
             elif event.object_uuid is not None:
                 if isinstance(event.after, WorldObjectState) or event.after is None:
-                    _put_object(world, event.object_uuid, event.after)
+                    _put_object(world, event.object_uuid, event.after, written)
             elif event.connector_uuid is not None:
                 if isinstance(event.after, WorldConnectorState):
                     world.connectors[event.connector_uuid] = event.after
+                    written.connectors.add(event.connector_uuid)
                 elif event.after is None:
                     world.connectors.pop(event.connector_uuid, None)
+                    written.connectors.add(event.connector_uuid)
         case ItemHoldingsReleasedEvent():
-            return _remove_contained_item(world, event.item_uuid)
+            return written.applied() if _remove_contained_item(world, event.item_uuid, written) else None
         case ItemLocationStateEvent():
             identity = event.item_state.item_uuid
-            _remove_contained_item(world, identity)
+            _remove_contained_item(world, identity, written)
             owner = world.objects.get(event.owner_uuid) if event.owner_uuid is not None else None
             if (owner is not None and owner.contained_items is not None
                     and event.location is ItemLocation.INVENTORY):
                 _put_object(world, owner.item.item_uuid, owner.model_copy(update={
                     "contained_items": tuple(sorted((*owner.contained_items, event.item_state),
                         key=lambda item: str(item.item_uuid))),
-                }))
+                }), written)
+                _contents(written, owner.item.item_uuid)[0].append(identity)
             if event.location is ItemLocation.FLOOR:
                 if event.world_placement is None:
                     raise ValueError("floor item fact requires its recorded placement")
@@ -284,66 +323,84 @@ def apply_world_fact(
                 _put_object(world, identity, WorldObjectState(
                     placement=event.world_placement, item=event.item_state,
                     contained_items=previous.contained_items if previous is not None else None,
-                ))
+                ), written)
             else:
-                _put_object(world, identity, None)
+                _put_object(world, identity, None, written)
         case ItemResourceChangeEvent():
             previous = world.objects.get(event.item_uuid)
             if previous is None:
-                return False
+                return None
             value = None if event.item_destroyed else previous.model_copy(update={
                 "item": previous.item.model_copy(update={
                     "charges": event.charges_after, "stack_count": event.stack_count_after,
                 }),
             })
-            _put_object(world, event.item_uuid, value)
+            _put_object(world, event.item_uuid, value, written)
         case ConditionApplicationEvent() | ConditionRemovalEvent():
             if event.resulting_tile is not None:
-                world.tiles[event.resulting_tile.position] = event.resulting_tile
+                _resulting_tile(world, event.resulting_tile, written)
             elif event.resulting_item is not None:
                 previous = world.objects.get(event.resulting_item.item_uuid)
                 if previous is None:
-                    return False
+                    return None
                 _put_object(world, event.resulting_item.item_uuid,
-                            previous.model_copy(update={"item": event.resulting_item}))
+                            previous.model_copy(update={"item": event.resulting_item}), written)
             else:
-                return False
+                return None
         case TileElevationChangeEvent():
             previous = world.tiles.get(event.position)
             if previous is None:
-                return False
-            world.tiles[event.position] = previous.model_copy(update={
-                "elevation_steps": event.new_height_steps,
-                "surface_kind": event.new_surface_kind, "slope_axis": event.new_slope_axis,
-            })
+                return None
+            fields = KeyedTileFields(elevation_steps=event.new_height_steps, surface_kind=event.new_surface_kind,
+                slope_axis=event.new_slope_axis)
+            world.tiles[event.position] = previous.model_copy(update=dict(fields))
+            written.tiles.append(KeyedTileChange(position=event.position, fields=fields))
         case SpatialChangeEvent():
             if event.change_type is SpatialChangeType.TILES_CHANGED:
                 if not event.keyed_tile_changes:
-                    return False
+                    return None
                 for change in event.keyed_tile_changes:
                     previous = world.tiles.get(change.position)
                     if previous is None:
                         raise ValueError(f"A keyed tile change requires its recorded tile {change.position}")
+                    held = {row.residue_id for row in previous.residues}
+                    written.new_residues.update((change.position, row.residue_id) for row in change.residues
+                        if row.state is not None and row.residue_id not in held)
                     world.tiles[change.position] = apply_keyed_tile_change(previous, change)
+                    written.tiles.append(change)
             elif event.change_type is SpatialChangeType.TILE_CHANGED:
                 if event.tile_present is False:
                     world.tiles.pop(event.position, None)
+                    written.replaced.add(event.position)
                 elif event.tile_state is not None:
                     world.tiles[event.position] = event.tile_state
+                    written.replaced.add(event.position)
                 elif (previous := world.tiles.get(event.position)) is not None:
-                    tile_updates: dict[str, object] = {key: value for key, value in (
-                        ("walking_cost", event.tile_walking_cost), ("flying_cost", event.tile_flying_cost),
-                        ("swimming_cost", event.tile_swimming_cost), ("burrowing_cost", event.tile_burrowing_cost),
-                        ("blocks_optics", event.tile_blocks_optics),
-                        ("blocks_propagation", event.tile_blocks_propagation),
-                    ) if value is not None}
+                    fields = KeyedTileFields()
+                    if event.tile_walking_cost is not None:
+                        fields["walking_cost"] = event.tile_walking_cost
+                    if event.tile_flying_cost is not None:
+                        fields["flying_cost"] = event.tile_flying_cost
+                    if event.tile_swimming_cost is not None:
+                        fields["swimming_cost"] = event.tile_swimming_cost
+                    if event.tile_burrowing_cost is not None:
+                        fields["burrowing_cost"] = event.tile_burrowing_cost
+                    if event.tile_blocks_optics is not None:
+                        fields["blocks_optics"] = event.tile_blocks_optics
+                    if event.tile_blocks_propagation is not None:
+                        fields["blocks_propagation"] = event.tile_blocks_propagation
+                    tile_updates: dict[str, object] = dict(fields)
                     if event.new_light_level is not None:
                         tile_updates["resolved_light"] = LightLevel(event.new_light_level)
+                        written.light[event.position] = LightLevel(event.new_light_level)
                     world.tiles[event.position] = previous.model_copy(update=tile_updates)
+                    if fields:
+                        written.tiles.append(KeyedTileChange(position=event.position, fields=fields))
                 else:
-                    return False
+                    return None
             elif event.change_type is SpatialChangeType.TILE_REMOVED:
                 world.tiles.pop(event.position, None)
+                written.replaced.add(event.position)
             elif event.change_type is SpatialChangeType.LIGHT_CHANGED:
                 levels = dict(event.light_level_map or {})
                 if event.new_light_level is not None:
@@ -355,16 +412,17 @@ def apply_world_fact(
                         resolved = LightLevel(level)
                         if previous.resolved_light is not resolved:
                             world.tiles[position] = previous.model_copy(update={"resolved_light": resolved})
+                            written.light[position] = resolved
             elif event.change_type is SpatialChangeType.OBJECT_REMOVED and event.object_uuid is not None:
-                _put_object(world, event.object_uuid, None)
+                _put_object(world, event.object_uuid, None, written)
             elif event.change_type in (SpatialChangeType.OBJECT_PLACED, SpatialChangeType.OBJECT_CHANGED):
                 if event.object_uuid is None:
-                    return False
+                    return None
                 previous = world.objects.get(event.object_uuid)
                 item = event.object_state or (previous.item if previous is not None else None)
                 placement = event.placement or (previous.placement if previous is not None else None)
                 if item is None or placement is None:
-                    return False
+                    return None
                 if event.object_state is None:
                     item_updates: dict[str, object] = {"boundary_structure": event.object_boundary_structure}
                     for key, value in (
@@ -379,9 +437,15 @@ def apply_world_fact(
                 _put_object(world, event.object_uuid, WorldObjectState(
                     item=item, placement=placement,
                     contained_items=previous.contained_items if previous is not None else None,
-                ))
+                ), written)
             else:
-                return False
+                return None
         case _:
-            return False
-    return True
+            return None
+    return written.applied()
+
+
+def _resulting_tile(world: WorldFacts, tile: WorldTileState, written: _Written) -> None:
+    """A condition fact's tile after-value: the tile's own condition names change (its residues' follow them)."""
+    world.tiles[tile.position] = tile
+    written.tile_conditions[tile.position] = tile.condition_names[:len(tile.condition_names) - len(tile.residues)]
