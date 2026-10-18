@@ -115,11 +115,11 @@ def key(position: Position) -> str:
 
 
 def stamp_data(stamps: RevisionStamps) -> dict[str, Any]:
-    """A seat's revision stamps as JSON: tiles by cell, objects by uuid as [occurrence, faces, members]."""
-    return {'tiles': {key(position): index for position, index in sorted(stamps.tiles.items()) if index is not None},
-            'objects': {str(identity): [stamp.occurrence, sorted(face.value for face in stamp.faces), stamp.members]
-                        for identity, stamp in sorted(stamps.objects.items(), key=lambda row: str(row[0]))
-                        if stamp is not None}}
+    """A seat's revision stamps as JSON, each a list led by its native index: tiles by cell as [index], objects by
+    uuid as [index, faces, members]."""
+    return {'tiles': {key(position): [index] for position, index in sorted(stamps.tiles.items())},
+            'objects': {str(identity): [stamp.index, sorted(face.value for face in stamp.faces), stamp.members]
+                        for identity, stamp in sorted(stamps.objects.items(), key=lambda row: str(row[0]))}}
 
 
 def revision_data(revisions: WorldRevisions) -> dict[str, Any]:

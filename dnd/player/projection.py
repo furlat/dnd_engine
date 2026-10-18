@@ -60,8 +60,8 @@ from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelop
 from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import PlayerResourceValue
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
-from dnd.player.revision_stamps import (RevisionStamps, SeatStamps, WorldRevisions, merge_revision_stamps,
-    record_world_revisions)
+from dnd.player.revision_stamps import (RevisionStamps, SeatStamps, StampChanges, WorldRevisions,
+    merge_revision_stamps, record_world_revisions)
 from dnd.player.static_sent import StaticSent, merge_static_sent
 from dnd.player.reduction import (apply_record_fact, change_membership,
     commit_current, fold_senses, observe_body, observed_actor, occurrence_order)
@@ -1110,7 +1110,7 @@ class SeatWalk:
     # The static rows this walk's updates carry, joining the seat's sent set once the group is emitted.
     pending: StaticSent = field(default_factory=StaticSent)
     # The revision stamps this walk's updates set or drop, joining the seat's once the group is emitted.
-    stamps: RevisionStamps = field(default_factory=RevisionStamps)
+    stamps: StampChanges = field(default_factory=StampChanges)
     # The versions whose records the seat's world updates carried: each once per seat (a walked event's own, or a
     # change several members saw happen).
     published_sources: set[UUID] = field(default_factory=set)

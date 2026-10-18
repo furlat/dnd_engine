@@ -16,10 +16,10 @@ occurrence, so the client's memory follows from the rules below and nothing else
 | `tiles_unchanged` (`CellMask`) | entered cells whose tile nothing wrote since the seat last had it whole (its revision stamp): the client keeps the tile it holds there, with its condition names and residues |
 | `tile_looks` | a tile surface and name under its content id (`look_id`, a digest of the value), once per id per seat |
 | `tile_statics` | a tile's fixed part (`position`, `tile_uuid`, `look`: a `tile_looks` id), once per tile uuid per seat |
-| `tile_columns` | the entered cells holding a tile: their changeable scalars as columns (§2) |
+| `tile_columns` | the entered cells holding a tile, but those in `tiles_unchanged`: their changeable scalars as columns (§2) |
 | `tile_conditions` | a tile's own condition names (never its residues' names), whole list per cell |
-| `tile_changes` | a kept tile's changed scalars (`WorldTileChanges`: costs, optics, propagation, elevation, surface kind, slope axis, default light) |
-| `resolved_light` (`CellValues`) | a kept tile's objective light |
+| `tile_changes` | a perceived tile's changed scalars (`WorldTileChanges`: costs, optics, propagation, elevation, surface kind, slope axis, default light) |
+| `resolved_light` (`CellValues`) | a perceived tile's objective light |
 | `residue_materials` | a residue material's fixed part (`residue_id`, `name`, `description`, `max_amount`), once per id per seat |
 | `residues` | one material on one cell: whole when it carries `condition_uuid` (replaces what is held), else keyed (`amount`, and `contributions` set by index; the index after the last appends) |
 | `residues_removed` | (cell, material) keys removed |
@@ -93,10 +93,10 @@ fill them.
 3. **Reset `entered`.** For every entered cell:
    - drop its tile and rebuild it from the columns, unless the cell is in `tiles_unchanged` (then keep the held tile as it is);
    - drop every held object that touches the cell (its supports and, for a boundary, the opposite incident cell) and is in neither `objects` nor `objects_unchanged`;
-   - remove the cell from every kept object's `construction_suppressions` positions;
+   - remove the cell from the `construction_suppressions` positions of every object still held;
    - drop every connector with an endpoint there.
 
-   A `tiles_unchanged` cell that is not entered or not held, or an `objects_unchanged` object the client does not hold, is an error.
+   A `tiles_unchanged` cell that is not entered, not held or also in `tile_columns`, or an `objects_unchanged` object the client does not hold, is an error. The client never evicts what it holds otherwise: a record unchanged since the seat had it is not sent at all when it re-enters perception off the entered cells (a contact regained), so the client must still hold it.
 4. **Object rows, in order.**
    - Otherwise the item is the look joined with the state. The placement is the row's, or the held one.
    - Residues: the row's residues lie on its `observed_faces`. Held faces outside `observed_faces` are kept, and residues are united by `condition_uuid`. Drop empty ones and sort by `condition_uuid` as a string.
@@ -104,7 +104,7 @@ fill them.
    - Contained items stay as held.
    - `members` is the row's bitset. A seat with one observer leaves it out, meaning 1.
 5. **Contents.** `contents` sets the contained items (sorted by uuid as a string). `contents_changed` removes and upserts by uuid; the container's contents must be held.
-6. **Kept tiles.**
+6. **Keyed tile rows** (cells perceived before and after, never an entered cell).
    - Apply `tile_changes`, then `resolved_light`.
    - `tile_conditions` replaces the cell's own names.
    - Apply `residues` (whole or keyed), then `residues_removed`.

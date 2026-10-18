@@ -1,6 +1,6 @@
 {
  "name": "w14_a_reentered_cell_keeps_what_nothing_wrote",
- "rule": "An entered cell in `tiles_unchanged` keeps the tile the client holds (its scalars, condition names and residues), and an object in `objects_unchanged` is spared the reset; the other entered cells are reset as always.",
+ "rule": "An entered cell in `tiles_unchanged` keeps the tile the client holds (its scalars, condition names and residues), and an object in `objects_unchanged` is spared the reset; the other entered cells are reset as always (the torch there, neither sent nor unchanged, is dropped).",
  "observers": [
   "00000000-0000-4000-8000-00000000000a"
  ],
@@ -131,31 +131,46 @@
       "item_uuid": "00000000-0000-4000-8000-000000002001",
       "item_id": "item.fold_vectors.box",
       "contact_passage": "structural"
+     },
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002002",
+      "item_id": "item.fold_vectors.torch",
+      "contact_passage": "structural",
+      "supported_by_uuid": "00000000-0000-4000-8000-000000002003"
      }
     ],
     "objects": {
      "item_uuids": [
-      "00000000-0000-4000-8000-000000002001"
+      "00000000-0000-4000-8000-000000002001",
+      "00000000-0000-4000-8000-000000002002"
      ],
      "name": [
-      "Box"
+      "Box",
+      "Torch"
      ],
      "visual_item_name": {
       "values": [
-       "box"
+       "box",
+       "torch"
       ]
      },
      "map_char": [
-      "B"
+      "B",
+      "T"
      ],
      "placements": {
       "position": [
        [
         1,
         0
+       ],
+       [
+        2,
+        0
        ]
       ],
       "top_height_steps": [
+       2,
        2
       ]
      }
@@ -321,6 +336,40 @@
       "members": 1,
       "name": "Box",
       "visual_item_name": "box",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null,
+      "structure": null
+     },
+     "00000000-0000-4000-8000-000000002002": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002002",
+       "tile_uuid": "00000000-0000-4000-8000-000100002000",
+       "position": [
+        2,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          2,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100002000"
+        }
+       ],
+       "removed_bands": []
+      },
+      "members": 1,
+      "name": "Torch",
+      "visual_item_name": "torch",
       "is_open": null,
       "faces": {},
       "suppressions": {},

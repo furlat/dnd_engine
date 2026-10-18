@@ -3,7 +3,9 @@
 The memory rules the client owns (plan §3.2, §3.4; world brief §3.3):
 
 - what the seat saw go is dropped first (`objects_removed`, `connectors_removed`);
-- entering cells are authoritative: everything held there is dropped and replaced by what the update carries;
+- entering cells are authoritative: everything held there is dropped and replaced by what the update carries,
+  but the tiles and objects it names unchanged (nothing wrote them since the seat had them), which stay as held;
+  nothing held is ever evicted otherwise, since an unchanged record off the entered cells is not sent at all;
 - an object is forgotten when the seat sees its support without it (an entered cell, or `objects_removed`);
 - a wall's residue faces not seen now keep their last sight (the face merge);
 - a construction's suppressed cells are retired where they enter view, and a perceived provider's row replaces it;
@@ -55,24 +57,24 @@ def fold_static_rows(static: StaticStore, update: WorldUpdate) -> None:
 
 
 def _reset_entered(memory: PlayerState, update: WorldUpdate, entered: frozenset[tuple[int, int]]) -> None:
-    """Drop what the client holds on the entered cells, but the kept tiles and objects; the other tiles are the
-    update's columns."""
-    kept_tiles = frozenset(mask_positions(update.tiles_unchanged))
-    if not kept_tiles <= entered or not kept_tiles <= memory.tiles.keys():
-        raise ValueError("A kept tile is an entered cell the client holds")
-    kept = frozenset(update.objects_unchanged)
-    if not kept <= memory.objects.keys():
-        raise ValueError("A kept object is one the client holds")
-    for position in entered - kept_tiles:
+    """Drop what the client holds on the entered cells, but the unchanged tiles and objects; the other tiles are
+    the update's columns."""
+    unchanged_tiles = frozenset(mask_positions(update.tiles_unchanged))
+    if not unchanged_tiles <= entered or not unchanged_tiles <= memory.tiles.keys():
+        raise ValueError("An unchanged tile is an entered cell the client holds")
+    unchanged = frozenset(update.objects_unchanged)
+    if not unchanged <= memory.objects.keys():
+        raise ValueError("An unchanged object is one the client holds")
+    for position in entered - unchanged_tiles:
         memory.tiles.pop(position, None)
     if update.tile_columns is not None:
         tiles = unpack_tile_columns(update.tile_columns, memory.static.tiles, memory.static.tile_looks)
-        if not tiles.keys() <= entered:
-            raise ValueError("Tile columns describe entered cells only")
+        if not tiles.keys() <= entered - unchanged_tiles:
+            raise ValueError("Tile columns describe entered cells only, none of them unchanged")
         memory.tiles.update(tiles)
     resent = set(update.objects.item_uuids) if update.objects is not None else set()
     for identity, held in tuple(memory.objects.items()):
-        if identity not in resent and identity not in kept and placement_support_cells(held.placement) & entered:
+        if identity not in resent and identity not in unchanged and placement_support_cells(held.placement) & entered:
             del memory.objects[identity]
             memory.object_members.pop(identity, None)
             continue

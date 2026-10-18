@@ -19,16 +19,12 @@ from dnd.player.world_reduction import fold_world_update
 def replay_revision_stamps(memory: PlayerState, updates: Iterable[WorldUpdate], native_of: Mapping[int, int]
                            ) -> RevisionStamps:
     """The stamps of a seat whose client world is `memory` (empty at the start) after these world updates, in the
-    order the seat received them. Every stamped record is one the client holds."""
+    order the seat received them."""
     stamps = SeatStamps(RevisionStamps())
     for update in updates:
         held = set(memory.objects)
         fold_world_update(memory, update)
         stamp_world_update(stamps, update, native_of[update.occurrence], held - memory.objects.keys())
-        if not ({identity for identity, stamp in stamps.walk.objects.items() if stamp is not None}
-                <= memory.objects.keys()
-                and {cell for cell, stamp in stamps.walk.tiles.items() if stamp is not None} <= memory.tiles.keys()):
-            raise ValueError("A stamped record is one the client holds")
     restored = RevisionStamps()
     merge_revision_stamps(restored, stamps.walk)
     return restored

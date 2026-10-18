@@ -125,7 +125,7 @@ def stamp_mismatches(seat: str, initialization: PlayerInitialization, updates: l
                 continue
             one_sided = held if rebuilt is None else rebuilt if held is None else None
             if one_sided is not None:
-                if revisions[kind].get(name, -1) > (one_sided if kind == 'tiles' else one_sided[0]):
+                if revisions[kind].get(name, -1) > one_sided[0]:
                     counts['stamps']['written_since'] += 1
                     continue
             mismatches.append({'seat': seat, 'kind': 'stamp', 'record': kind, 'key': name, 'live': held,

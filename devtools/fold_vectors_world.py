@@ -392,14 +392,15 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
         "w14_a_reentered_cell_keeps_what_nothing_wrote": (
             "An entered cell in `tiles_unchanged` keeps the tile the client holds (its scalars, condition names and "
             "residues), and an object in `objects_unchanged` is spared the reset; the other entered cells are reset as "
-            "always.",
+            "always (the torch there, neither sent nor unchanged, is dropped).",
             (A,), [
-            Step(entering(0, tuple(floor.values()), object_looks=(box_look,), objects=rows(box_at_1,),
+            Step(entering(0, tuple(floor.values()), object_looks=(box_look, torch_look), objects=rows(box_at_1, torch_row),
                           tile_conditions=(TileConditions(position=(1, 0), names=("Difficult terrain",)),),
                           residue_materials=(BLOOD,), residues=(ResidueRow(position=(1, 0), residue_id="residue.blood",
                               condition_uuid=BLOOD_AT_1_0, amount=1,
                               contributions=(ContributionRow(index=0, contribution=SPLASH),)),)),
-                 view(held_cell, {str(BOX): object_view(box_at, name="Box")})),
+                 view(held_cell, {str(BOX): object_view(box_at, name="Box"),
+                                  str(TORCH): object_view(torch_at, name="Torch")})),
             Step(WorldUpdate(occurrence=1, entered=mask_from_positions(((1, 0), (2, 0))),
                              tiles_unchanged=mask_from_positions(((1, 0),)),
                              tile_columns=pack_tile_columns({(2, 0): floor[(2, 0)]}), objects_unchanged=(BOX,)),

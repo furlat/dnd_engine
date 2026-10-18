@@ -21,7 +21,7 @@ from dnd.player.facts import (Column, FloorItem, ObjectColumns, ObjectLook, Obje
 from dnd.types.cells import RowBits
 from dnd.types.materials import TileSurface
 from dnd.types.event_facts import WorldTileState
-from dnd.types.world import LightLevel
+from dnd.types.world import CardinalDirection, LightLevel
 from dnd.types.world_placement import (BoundaryStructure, WorldObjectPlacement, WorldObjectSupport,
     WorldPlacementKind)
 
@@ -271,6 +271,17 @@ def pack_object_rows(rows: Sequence[ObjectRow]) -> ObjectColumns | None:
         construction_suppressions=_column([(i, state.construction_suppressions) for i, state in enumerate(states)
             if state.construction_suppressions], count),
         placements=placements)
+
+
+def placed_object_rows(columns: ObjectColumns | None
+                       ) -> tuple[tuple[UUID, tuple[CardinalDirection, ...], int | None], ...]:
+    """The uuid, observed faces and members of each row that carries a placement, without decoding the states."""
+    if columns is None or columns.placements is None:
+        return ()
+    count = len(columns.item_uuids)
+    faces, members = _held(columns.observed_faces, count), _held(columns.members, count)
+    return tuple((columns.item_uuids[row], faces.get(row, ()), members.get(row))
+                 for row in _selected(columns.placements.rows, count))
 
 
 def unpack_object_rows(columns: ObjectColumns | None) -> tuple[ObjectRow, ...]:

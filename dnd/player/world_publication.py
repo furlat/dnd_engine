@@ -12,7 +12,9 @@ rules
 - a record entering perception travels whole: a cell entering the composed view (or a visible tile replaced),
   every object touching it and every connector with an endpoint there; an object newly observed; a container
   whose contents become visible. A tile or an object nothing wrote since the seat last had it whole (its revision
-  stamp, `revision_stamps`) is kept instead: an entered cell in `tiles_unchanged`, an object on one in `objects_unchanged`;
+  stamp, `revision_stamps`), and whose disclosure the view does not change (no face newly seen, the same observing
+  members, no suppression, remnant or cast lineage), is unchanged instead: an entered cell in `tiles_unchanged`,
+  an object on one in `objects_unchanged`, nothing for one off them (the client still holds it);
 - the seat sees an object go when it observed it and the occurrence removed or moved it, or when it sees the
   object's support without it;
 - leaving perception sends nothing;
@@ -221,7 +223,7 @@ def _contained(rows: _Rows, items: Iterable[ItemPresentationState], sent: Static
 
 
 def _scalars(changes: WorldTileChanges, keys: Iterable[str], tile: WorldTileState) -> None:
-    """A kept tile's written scalars with their values as of the occurrence. Its condition names follow its own
+    """A perceived tile's written scalars with their values as of the occurrence. Its condition names follow its own
     conditions' and residues' rows (a residue writer's names are its materials', which the client derives)."""
     for key in keys:
         match key:
@@ -277,9 +279,10 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
 
     # Tiles: the entered cells whole (their static rows first: a placement's anchor tile is derived from them),
     # but those the seat still has as they are.
-    kept_tiles = {position for position in entered if position in world.tiles
-                  and unchanged_since(tile_stamp(stamps, position), revisions.tiles.get(position))}
-    tiles = {position: world.tiles[position] for position in sorted(entered - kept_tiles) if position in world.tiles}
+    unchanged_tiles = {position for position in entered if position in world.tiles
+                       and unchanged_since(tile_stamp(stamps, position), revisions.tiles.get(position))}
+    tiles = {position: world.tiles[position] for position in sorted(entered - unchanged_tiles)
+             if position in world.tiles}
     tile_conditions: dict[Position, tuple[str, ...]] = {}
     residues: dict[tuple[Position, str], ResidueRow] = {}
     residues_removed: dict[tuple[Position, str], ResidueKey] = {}
@@ -313,15 +316,15 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
              if identity in world.objects and object_observed(world, view, identity)}
     before_observed = observed & candidates
     whole = (after - observed) | (after & (touching | providers))
-    kept = set()
+    unchanged = set()
     for identity in whole:
         stamp = object_stamp(stamps, identity)
         obj = world.objects[identity]
-        if (stamp is not None and unchanged_since(stamp.occurrence, revisions.objects.get(identity))
+        if (stamp is not None and unchanged_since(stamp.index, revisions.objects.get(identity))
                 and _keepable(obj.item) and set(observed_faces(obj.placement, visible)) <= stamp.faces
                 and object_members(world, perception, audience, identity) == stamp.members):
-            kept.add(identity)
-    whole -= kept
+            unchanged.add(identity)
+    whole -= unchanged
     for identity in sorted(whole, key=str):
         _look(rows, split_floor_item(floor_item(world.objects[identity].item, ()))[0], sent, pending)
     known = sent.object_looks | pending.object_looks
@@ -341,8 +344,9 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
                 if anchor is not None and anchor.tile_uuid in held_tiles else None)
                 if identity in whole or identity in moved else None,
             observed_faces=observed_faces(placement, visible)))
-    # The objects the client drops on the entered cells (neither sent nor kept) lose their stamps.
-    dropped = world_objects_at(world, entered) - whole - changed - kept
+    # The stamped objects the client drops on the entered cells (neither sent nor unchanged) lose their stamps.
+    dropped = {identity for identity in world_objects_at(world, entered) - whole - changed - unchanged
+               if object_stamp(stamps, identity) is not None}
     removed = sorted((identity for identity in before_observed - after
         if identity in written or identity not in world.objects
         or any(cell_in(visible, cell) for cell in placement_support_cells(world.objects[identity].placement))),
@@ -438,7 +442,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
                     for index in sorted(indexes)))
     tile_changes = {position: changes for position, changes in tile_changes.items() if changes}
     update = WorldUpdate(occurrence=occurrence, entered=entered_cells,
-        tiles_unchanged=mask_from_positions(kept_tiles) if kept_tiles else EMPTY_CELLS,
+        tiles_unchanged=mask_from_positions(unchanged_tiles) if unchanged_tiles else EMPTY_CELLS,
         tile_looks=tuple(rows.tile_looks), tile_statics=tuple(rows.tile_statics), tile_columns=pack_tile_columns(tiles),
         tile_conditions=tuple(TileConditions(position=position, names=names)
             for position, names in sorted(tile_conditions.items())),
@@ -449,7 +453,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         residues=tuple(residues[key] for key in sorted(residues)),
         residues_removed=tuple(residues_removed[key] for key in sorted(residues_removed)),
         object_looks=tuple(rows.object_looks), objects=pack_object_rows(object_rows),
-        objects_unchanged=tuple(sorted(kept & touching, key=str)), objects_removed=tuple(removed),
+        objects_unchanged=tuple(sorted(unchanged & touching, key=str)), objects_removed=tuple(removed),
         contents=tuple(contents), contents_changed=tuple(contents_changed),
         connectors=tuple(connectors[identity] for identity in sorted(connectors, key=str)),
         connectors_removed=tuple(connectors_removed))
