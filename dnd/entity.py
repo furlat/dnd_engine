@@ -246,14 +246,14 @@ def get_natural_roll(roll: DiceRoll) -> int:
 
 def determine_attack_outcome(
     roll: DiceRoll,
-    ac: Union[int, ValueReading],
+    target_ac: int,
     crit_threshold: int = 20
 ) -> AttackOutcome:
         """Determine current engine d20 outcome from a roll and target number.
 
         Args:
             roll: D20 roll result.
-            ac: Target number or evaluated armor class.
+            target_ac: Target number: the read armor class's normalized score, or a DC.
             crit_threshold: Minimum natural attack roll that upgrades a hit to
                 a critical hit.
 
@@ -261,8 +261,6 @@ def determine_attack_outcome(
             Engine outcome for the roll. Attack rolls use natural 1/critical
             semantics; saving throws and checks compare total against DC.
         """
-        target_ac = ac if isinstance(ac, int) else ac.normalized_score
-
         if roll.roll_type != RollType.ATTACK:
             return AttackOutcome.HIT if roll.total >= target_ac else AttackOutcome.MISS
 

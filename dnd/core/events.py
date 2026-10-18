@@ -2990,9 +2990,9 @@ class D20Event(Event):
         default=None,
         description="Difficulty class for the roll.",
     )
-    bonus: Optional[Union[int, ValueReading]] = Field(
-        default=0,
-        description="Roll bonus: the evaluated bonus, or its total once detached for a seat.",
+    bonus: Optional[ValueReading] = Field(
+        default=None,
+        description="Evaluated roll bonus; None before the roll and in a seat's detached body (its value stays in dice_roll.bonus).",
     )
     dice: Optional[Dice] = Field(default=None, description="Dice object used to create the roll.")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="Resolved dice roll.")
@@ -3065,9 +3065,8 @@ class SavingThrowEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        bonus_breakdown = value_log_rows(self.bonus.breakdown) if isinstance(self.bonus, ValueReading) else []
-        advantage_breakdown = (advantage_log_rows(self.bonus.advantage_breakdown)
-                               if isinstance(self.bonus, ValueReading) else [])
+        bonus_breakdown = value_log_rows(self.bonus.breakdown) if self.bonus is not None else []
+        advantage_breakdown = advantage_log_rows(self.bonus.advantage_breakdown) if self.bonus is not None else []
 
         success = self.result if self.result is not None else (roll.total >= dc if dc > 0 else None)
 
@@ -3165,9 +3164,8 @@ class SkillCheckEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        bonus_breakdown = value_log_rows(self.bonus.breakdown) if isinstance(self.bonus, ValueReading) else []
-        advantage_breakdown = (advantage_log_rows(self.bonus.advantage_breakdown)
-                               if isinstance(self.bonus, ValueReading) else [])
+        bonus_breakdown = value_log_rows(self.bonus.breakdown) if self.bonus is not None else []
+        advantage_breakdown = advantage_log_rows(self.bonus.advantage_breakdown) if self.bonus is not None else []
 
         success = self.result if self.result is not None else (roll.total >= dc if dc is not None and dc > 0 else None)
 

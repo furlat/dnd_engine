@@ -2311,7 +2311,7 @@ class Attack(BaseAction):
             started = time.perf_counter()
             crit_threshold = (source_entity.get_spell_crit_threshold() if weapon is not None and weapon.spell_attack_profile is not None
                 else source_entity.get_crit_threshold(weapon_slot))
-            attack_outcome = determine_attack_outcome(dice_roll, ac_reading, crit_threshold)
+            attack_outcome = determine_attack_outcome(dice_roll, ac_reading.normalized_score, crit_threshold)
             weapon = source_entity.equipment.get_weapon(weapon_slot)
             missile_size = (execution_event.natural_weapon.missile_size if execution_event.natural_weapon is not None
                             else weapon.missile_size if weapon is not None else "ordinary")
@@ -4597,7 +4597,7 @@ def resolve_spell_attack_values(caster:Entity,target:Entity|BaseItem,parent_even
     )
     outcome = determine_attack_outcome(
         dice_roll,
-        target_ac,
+        target_ac.normalized_score,
         caster.get_spell_crit_threshold(),
     )
     return SpellAttackResolution(
