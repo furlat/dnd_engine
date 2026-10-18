@@ -50,7 +50,6 @@
      {
       "item_uuid": "00000000-0000-4000-8000-000000002003",
       "item_id": "item.fold_vectors.wall",
-      "visual_item_name": "wall",
       "contact_passage": "structural",
       "maximum_hit_points": 30
      }
@@ -60,6 +59,7 @@
       "item_uuid": "00000000-0000-4000-8000-000000002003",
       "state": {
        "name": "Wall",
+       "visual_item_name": "wall",
        "map_char": "W",
        "surface_residues": [
         {
@@ -181,6 +181,7 @@
       "item_uuid": "00000000-0000-4000-8000-000000002003",
       "state": {
        "name": "Wall",
+       "visual_item_name": "wall",
        "map_char": "W",
        "surface_residues": [
         {
@@ -251,6 +252,7 @@
       "item_uuid": "00000000-0000-4000-8000-000000002003",
       "state": {
        "name": "Wall",
+       "visual_item_name": "wall",
        "map_char": "W",
        "surface_residues": [
         {

@@ -136,11 +136,11 @@ class ResidueKey:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ObjectLook:
-    """A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid."""
+    """A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid (a census of
+    every gallery case's world fold; a broken object's visual name changes, so it is state)."""
 
     item_uuid: UUID
     item_id: str
-    visual_item_name: str
     visual_variant_id: Annotated[str | None, Field(exclude_if=_unset)] = None
     contact_passage: ContactPassage = ContactPassage.STRUCTURAL
     supported_by_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
@@ -170,6 +170,7 @@ class ObjectState:
     """A floor item's changeable part, its value at the occurrence; a field holding its default is left out."""
 
     name: str
+    visual_item_name: str
     map_char: str
     boundary_structure: Annotated[BoundaryStructure | None, Field(exclude_if=_unset)] = None
     is_open: Annotated[bool | None, Field(exclude_if=_unset)] = None

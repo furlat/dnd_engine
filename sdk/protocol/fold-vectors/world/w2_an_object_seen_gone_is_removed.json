@@ -89,13 +89,11 @@
      {
       "item_uuid": "00000000-0000-4000-8000-000000002001",
       "item_id": "item.fold_vectors.box",
-      "visual_item_name": "box",
       "contact_passage": "structural"
      },
      {
       "item_uuid": "00000000-0000-4000-8000-000000002002",
       "item_id": "item.fold_vectors.torch",
-      "visual_item_name": "torch",
       "contact_passage": "structural",
       "supported_by_uuid": "00000000-0000-4000-8000-000000002003"
      }
@@ -105,6 +103,7 @@
       "item_uuid": "00000000-0000-4000-8000-000000002001",
       "state": {
        "name": "Box",
+       "visual_item_name": "box",
        "map_char": "B"
       },
       "placement": {
@@ -136,6 +135,7 @@
       "item_uuid": "00000000-0000-4000-8000-000000002002",
       "state": {
        "name": "Torch",
+       "visual_item_name": "torch",
        "map_char": "T"
       },
       "placement": {

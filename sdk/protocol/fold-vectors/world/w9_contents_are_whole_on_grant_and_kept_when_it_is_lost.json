@@ -89,13 +89,11 @@
      {
       "item_uuid": "00000000-0000-4000-8000-000000002004",
       "item_id": "item.fold_vectors.chest",
-      "visual_item_name": "chest",
       "contact_passage": "structural"
      },
      {
       "item_uuid": "00000000-0000-4000-8000-000000003001",
       "item_id": "item.fold_vectors.potion",
-      "visual_item_name": "potion",
       "contact_passage": "structural"
      }
     ],
@@ -104,6 +102,7 @@
       "item_uuid": "00000000-0000-4000-8000-000000002004",
       "state": {
        "name": "Chest",
+       "visual_item_name": "chest",
        "map_char": "C",
        "is_open": true
       },
@@ -141,6 +140,7 @@
         "item_uuid": "00000000-0000-4000-8000-000000003001",
         "state": {
          "name": "Potion",
+         "visual_item_name": "potion",
          "map_char": "P"
         }
        }
@@ -209,7 +209,6 @@
      {
       "item_uuid": "00000000-0000-4000-8000-000000003002",
       "item_id": "item.fold_vectors.rope",
-      "visual_item_name": "rope",
       "contact_passage": "structural"
      }
     ],
@@ -221,6 +220,7 @@
         "item_uuid": "00000000-0000-4000-8000-000000003002",
         "state": {
          "name": "Rope",
+         "visual_item_name": "rope",
          "map_char": "R"
         }
        }
@@ -293,6 +293,7 @@
       "item_uuid": "00000000-0000-4000-8000-000000002004",
       "state": {
        "name": "Chest",
+       "visual_item_name": "chest",
        "map_char": "C",
        "is_open": false
       }
@@ -361,6 +362,7 @@
       "item_uuid": "00000000-0000-4000-8000-000000002004",
       "state": {
        "name": "Chest",
+       "visual_item_name": "chest",
        "map_char": "C",
        "is_open": true
       },
@@ -398,6 +400,7 @@
         "item_uuid": "00000000-0000-4000-8000-000000003001",
         "state": {
          "name": "Potion",
+         "visual_item_name": "potion",
          "map_char": "P"
         }
        }

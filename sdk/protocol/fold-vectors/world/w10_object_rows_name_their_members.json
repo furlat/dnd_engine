@@ -90,7 +90,6 @@
      {
       "item_uuid": "00000000-0000-4000-8000-000000002001",
       "item_id": "item.fold_vectors.box",
-      "visual_item_name": "box",
       "contact_passage": "structural"
      }
     ],
@@ -100,6 +99,7 @@
       "members": 1,
       "state": {
        "name": "Box",
+       "visual_item_name": "box",
        "map_char": "B"
       },
       "placement": {

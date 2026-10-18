@@ -71,13 +71,12 @@ def unpack_tile_columns(columns: TileColumns, statics: Mapping[tuple[int, int], 
 
 def split_floor_item(item: FloorItem) -> tuple[ObjectLook, ObjectState]:
     """A floor item's fixed look and changeable state."""
-    return (ObjectLook(item_uuid=item.item_uuid, item_id=item.item_id, visual_item_name=item.visual_item_name,
-            visual_variant_id=item.visual_variant_id, contact_passage=item.contact_passage,
+    return (ObjectLook(item_uuid=item.item_uuid, item_id=item.item_id, visual_variant_id=item.visual_variant_id, contact_passage=item.contact_passage,
             supported_by_uuid=item.supported_by_uuid, door_mechanism=item.door_mechanism, door_swing=item.door_swing,
             maximum_hit_points=item.maximum_hit_points, concentration_capacity=item.concentration_capacity,
             construction_owner_uuid=item.construction_owner_uuid, construction_geometry=item.construction_geometry,
             known_to_creator=item.known_to_creator),
-        ObjectState(name=item.name, map_char=item.map_char, boundary_structure=item.boundary_structure,
+        ObjectState(name=item.name, visual_item_name=item.visual_item_name, map_char=item.map_char, boundary_structure=item.boundary_structure,
             is_open=item.is_open, is_lit=item.is_lit, very_bright_radius_feet=item.very_bright_radius_feet,
             bright_radius_feet=item.bright_radius_feet, dim_radius_feet=item.dim_radius_feet,
             stack_count=item.stack_count, is_pickable=item.is_pickable, item_effects=item.item_effects,
@@ -91,7 +90,7 @@ def split_floor_item(item: FloorItem) -> tuple[ObjectLook, ObjectState]:
 def join_floor_item(look: ObjectLook, state: ObjectState) -> FloorItem:
     """The floor item of a look and a state."""
     return FloorItem(item_uuid=look.item_uuid, item_id=look.item_id, name=state.name,
-        visual_item_name=look.visual_item_name, visual_variant_id=look.visual_variant_id, map_char=state.map_char,
+        visual_item_name=state.visual_item_name, visual_variant_id=look.visual_variant_id, map_char=state.map_char,
         boundary_structure=state.boundary_structure, is_open=state.is_open, is_lit=state.is_lit,
         very_bright_radius_feet=state.very_bright_radius_feet, bright_radius_feet=state.bright_radius_feet,
         dim_radius_feet=state.dim_radius_feet, stack_count=state.stack_count, is_pickable=state.is_pickable,

@@ -89,7 +89,6 @@
      {
       "item_uuid": "00000000-0000-4000-8000-000000003003",
       "item_id": "item.fold_vectors.stone_wall",
-      "visual_item_name": "stone wall",
       "contact_passage": "structural"
      }
     ],
@@ -98,6 +97,7 @@
       "item_uuid": "00000000-0000-4000-8000-000000003003",
       "state": {
        "name": "Stone wall",
+       "visual_item_name": "stone wall",
        "map_char": "S",
        "construction_suppressions": [
         {
@@ -302,6 +302,7 @@
       "item_uuid": "00000000-0000-4000-8000-000000003003",
       "state": {
        "name": "Stone wall",
+       "visual_item_name": "stone wall",
        "map_char": "S",
        "construction_suppressions": [
         {
