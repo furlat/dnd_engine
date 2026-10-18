@@ -404,13 +404,13 @@ class AttackFact:
     attack_outcome: AttackOutcome | None
     damage_types: tuple[DamageType, ...]
     source_item_id: str | None
-    source_item_uuid: UUID | None = None
-    item_effects: tuple[ItemEffectPresentationState, ...] = ()
-    intercepted_by_condition_uuid: UUID | None = None
-    projectile_deflection_position: tuple[float, float] | None = None
+    source_item_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    item_effects: Annotated[tuple[ItemEffectPresentationState, ...], Field(exclude_if=_no_rows)] = ()
+    intercepted_by_condition_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    projectile_deflection_position: Annotated[tuple[float, float] | None, Field(exclude_if=_unset)] = None
     target_kind: Literal["creature", "object"] = "creature"
-    target_position: tuple[int, int] | None = None
-    target_base_height_steps: int | None = None
+    target_position: Annotated[tuple[int, int] | None, Field(exclude_if=_unset)] = None
+    target_base_height_steps: Annotated[int | None, Field(exclude_if=_unset)] = None
     attack_source_kind: Literal["equipped", "unarmed", "natural"] = "equipped"
 
     @property
@@ -440,21 +440,21 @@ class SpellFact:
     source_position: tuple[int, int] | None
     declared_target_entity_uuids: tuple[UUID, ...]
     application: SpellApplication | None
-    propagation: EffectPropagationLink | None = None
-    attack_outcome: AttackOutcome | None = None
+    propagation: Annotated[EffectPropagationLink | None, Field(exclude_if=_unset)] = None
+    attack_outcome: Annotated[AttackOutcome | None, Field(exclude_if=_unset)] = None
     cast_origin: Literal["actor", "source_item"] = "actor"
-    source_item_uuid: UUID | None = None
-    effect_id: str | None = None
-    aoe_position: tuple[int, int] | None = None
-    area_geometry: AoEPresentationGeometry | None = None
+    source_item_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    effect_id: Annotated[str | None, Field(exclude_if=_unset)] = None
+    aoe_position: Annotated[tuple[int, int] | None, Field(exclude_if=_unset)] = None
+    area_geometry: Annotated[AoEPresentationGeometry | None, Field(exclude_if=_unset)] = None
     # A disclosed subset of the native result, never a physical blast mask.
     # None means no recorded result; () is a resolved result with no granted cells.
-    resolved_area_positions: tuple[tuple[int, int], ...] | None = None
-    suppressions: tuple[SpellSuppression, ...] = ()
+    resolved_area_positions: Annotated[tuple[tuple[int, int], ...] | None, Field(exclude_if=_unset)] = None
+    suppressions: Annotated[tuple[SpellSuppression, ...], Field(exclude_if=_no_rows)] = ()
     area_propagation: AreaPropagation = "line_of_effect"
     target_kind: Literal["creature", "object"] = "creature"
-    target_position: tuple[int, int] | None = None
-    target_base_height_steps: int | None = None
+    target_position: Annotated[tuple[int, int] | None, Field(exclude_if=_unset)] = None
+    target_base_height_steps: Annotated[int | None, Field(exclude_if=_unset)] = None
 
     @property
     def application_id(self) -> UUID | None:
@@ -487,16 +487,16 @@ class MovementFact:
     source_entity_uuid: UUID
     trajectory: MovementTrajectory
     # Root geometry is present only for a fully permitted atomic trajectory.
-    start_position: tuple[int, int] | None = None
-    end_position: tuple[int, int] | None = None
-    requested_end_position: tuple[int, int] | None = None
-    path: tuple[tuple[int, int], ...] = ()
-    start_elevation_feet: int | None = None
-    end_elevation_feet: int | None = None
-    movement_mode: MovementMode | None = None
-    start_layer: OccupancyLayer | None = None
-    end_layer: OccupancyLayer | None = None
-    connector_presentation_key: str | None = None
+    start_position: Annotated[tuple[int, int] | None, Field(exclude_if=_unset)] = None
+    end_position: Annotated[tuple[int, int] | None, Field(exclude_if=_unset)] = None
+    requested_end_position: Annotated[tuple[int, int] | None, Field(exclude_if=_unset)] = None
+    path: Annotated[tuple[tuple[int, int], ...], Field(exclude_if=_no_rows)] = ()
+    start_elevation_feet: Annotated[int | None, Field(exclude_if=_unset)] = None
+    end_elevation_feet: Annotated[int | None, Field(exclude_if=_unset)] = None
+    movement_mode: Annotated[MovementMode | None, Field(exclude_if=_unset)] = None
+    start_layer: Annotated[OccupancyLayer | None, Field(exclude_if=_unset)] = None
+    end_layer: Annotated[OccupancyLayer | None, Field(exclude_if=_unset)] = None
+    connector_presentation_key: Annotated[str | None, Field(exclude_if=_unset)] = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -511,10 +511,10 @@ class StepFact:
     trajectory: MovementTrajectory
     provocation_policy: MovementProvocationPolicy
     committed: bool
-    resolved_speed_feet: int | None = None
-    movement_mode: MovementMode | None = None
-    from_layer: OccupancyLayer | None = None
-    to_layer: OccupancyLayer | None = None
+    resolved_speed_feet: Annotated[int | None, Field(exclude_if=_unset)] = None
+    movement_mode: Annotated[MovementMode | None, Field(exclude_if=_unset)] = None
+    from_layer: Annotated[OccupancyLayer | None, Field(exclude_if=_unset)] = None
+    to_layer: Annotated[OccupancyLayer | None, Field(exclude_if=_unset)] = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -525,9 +525,9 @@ class ForcedMovementFact:
     start_position: tuple[int, int]
     end_position: tuple[int, int]
     actual_distance: int
-    disclosed_path: tuple[tuple[int, int], ...] = ()
-    start_elevation_feet: int | None = None
-    end_elevation_feet: int | None = None
+    disclosed_path: Annotated[tuple[tuple[int, int], ...], Field(exclude_if=_no_rows)] = ()
+    start_elevation_feet: Annotated[int | None, Field(exclude_if=_unset)] = None
+    end_elevation_feet: Annotated[int | None, Field(exclude_if=_unset)] = None
     drop_feet: int = 0
     landing_kind: LandingKind = LandingKind.GROUND
 
@@ -540,7 +540,7 @@ class PortalTransferFact:
     start_position: tuple[int, int] | None
     end_position: tuple[int, int] | None
     committed: bool
-    portal_content_id: str | None = None
+    portal_content_id: Annotated[str | None, Field(exclude_if=_unset)] = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -560,9 +560,9 @@ class DamageRequestFact:
     stage: Literal["taken"] = "taken"
     source_entity_uuid: UUID | None
     target_entity_uuid: UUID
-    intercepted_by_condition_uuid: UUID | None = None
-    source_condition_uuid: UUID | None = None
-    relentless_rage: RelentlessRageIntervention | None = None
+    intercepted_by_condition_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    source_condition_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    relentless_rage: Annotated[RelentlessRageIntervention | None, Field(exclude_if=_unset)] = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -575,10 +575,10 @@ class DamageResultFact:
     resulting_normal_hp: int
     resulting_temporary_hp: int
     damage_type: DamageType
-    body_release: BodyReleaseResult | None = None
-    effect_id: str | None = None
-    spatial_source: SpatialDamageSource | None = None
-    source_condition_uuid: UUID | None = None
+    body_release: Annotated[BodyReleaseResult | None, Field(exclude_if=_unset)] = None
+    effect_id: Annotated[str | None, Field(exclude_if=_unset)] = None
+    spatial_source: Annotated[SpatialDamageSource | None, Field(exclude_if=_unset)] = None
+    source_condition_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
 
 
 DamageFact = DamageRequestFact | DamageResultFact
@@ -593,7 +593,7 @@ class SavingThrowFact:
     ability_name: AbilityName
     succeeded: bool
     effect_id: str | None
-    indomitable_reroll: IndomitableReroll | None = None
+    indomitable_reroll: Annotated[IndomitableReroll | None, Field(exclude_if=_unset)] = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -605,7 +605,7 @@ class HealFact:
     was_blocked: bool
     resulting_normal_hp: int | None
     resulting_temporary_hp: int | None
-    source_condition_uuid: UUID | None = None
+    source_condition_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -613,7 +613,7 @@ class TemporaryHitPointsFact:
     kind: Literal["temporary_hit_points"] = "temporary_hit_points"
     entity_uuid: UUID
     resulting_temporary_hp: int
-    grant: TemporaryHitPointsGrant | None = None
+    grant: Annotated[TemporaryHitPointsGrant | None, Field(exclude_if=_unset)] = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -625,7 +625,7 @@ class LifeFact:
     reason: LifeStateChangeReason
     normal_hit_points: int
     remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
-    preserved_equipped_item_uuids: tuple[UUID, ...] = ()
+    preserved_equipped_item_uuids: Annotated[tuple[UUID, ...], Field(exclude_if=_no_rows)] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -643,7 +643,7 @@ class EquipmentFact:
     kind: Literal["equipment"] = "equipment"
     source_entity_uuid: UUID
     changes: ActorChanges
-    items: tuple[ItemPatch, ...] = ()
+    items: Annotated[tuple[ItemPatch, ...], Field(exclude_if=_no_rows)] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -652,7 +652,7 @@ class ConditionChangeFact:
     target_entity_uuid: UUID
     event_type: EventType
     condition: ConditionFact
-    consumed: bool = False
+    consumed: Annotated[bool, Field(exclude_if=_unflagged)] = False
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -678,13 +678,13 @@ class SpatialFact:
     change_type: SpatialChangeType
     entity_uuid: UUID | None
     position: tuple[int, int]
-    object_uuid: UUID | None = None
-    commit_occurrence: int | None = None
-    previous_occupancy_layer: OccupancyLayer | None = None
-    occupancy_layer: OccupancyLayer | None = None
-    terminal_departure: bool = False
-    terminal_cause: SummonDepartureCause | None = None
-    creation: CreationWitness | None = None
+    object_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    commit_occurrence: Annotated[int | None, Field(exclude_if=_unset)] = None
+    previous_occupancy_layer: Annotated[OccupancyLayer | None, Field(exclude_if=_unset)] = None
+    occupancy_layer: Annotated[OccupancyLayer | None, Field(exclude_if=_unset)] = None
+    terminal_departure: Annotated[bool, Field(exclude_if=_unflagged)] = False
+    terminal_cause: Annotated[SummonDepartureCause | None, Field(exclude_if=_unset)] = None
+    creation: Annotated[CreationWitness | None, Field(exclude_if=_unset)] = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -692,7 +692,7 @@ class FactionFact:
     kind: Literal["faction"] = "faction"
     entity_uuid: UUID
     faction_after: str | None
-    control_lost: bool = False
+    control_lost: Annotated[bool, Field(exclude_if=_unflagged)] = False
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -712,7 +712,7 @@ class ItemChargeFact:
     stack_count_after: int
     item_destroyed: bool
     # Older public packets retain after-values but did not disclose this label.
-    resource_change: ItemResourceChange | None = None
+    resource_change: Annotated[ItemResourceChange | None, Field(exclude_if=_unset)] = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -731,9 +731,9 @@ class ActionFact:
     target_entity_uuid: UUID | None
     behavior_id: str | None
     name: str | None
-    source_item_uuid: UUID | None = None
-    reaction: ActionReaction | None = None
-    font_conversion: FontConversion | None = None
+    source_item_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    reaction: Annotated[ActionReaction | None, Field(exclude_if=_unset)] = None
+    font_conversion: Annotated[FontConversion | None, Field(exclude_if=_unset)] = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -916,11 +916,11 @@ class SpatialEffectStateFact:
     positions: tuple[tuple[int, int], ...]
     previous_state: TrapState | None
     state: TrapState | None
-    previous_pressed: bool | None = None
-    pressed: bool | None = None
+    previous_pressed: Annotated[bool | None, Field(exclude_if=_unset)] = None
+    pressed: Annotated[bool | None, Field(exclude_if=_unset)] = None
     operation: SpatialEffectChangeOperation = SpatialEffectChangeOperation.STATE_CHANGED
-    interaction_operation: SpatialEffectInteractionOperation | None = None
-    removed_positions: tuple[tuple[int, int], ...] = ()
+    interaction_operation: Annotated[SpatialEffectInteractionOperation | None, Field(exclude_if=_unset)] = None
+    removed_positions: Annotated[tuple[tuple[int, int], ...], Field(exclude_if=_no_rows)] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -955,15 +955,15 @@ class ObjectDestroyedFact:
 
     kind: Literal["object_destroyed"] = "object_destroyed"
     object_uuid: UUID
-    replacement_uuid: UUID | None = None
+    replacement_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
     placement: WorldObjectPlacement
     item_id: str
-    remnant_state: ItemRemnantState | None = None
-    destruction_outcome: str | None = None
+    remnant_state: Annotated[ItemRemnantState | None, Field(exclude_if=_unset)] = None
+    destruction_outcome: Annotated[str | None, Field(exclude_if=_unset)] = None
     remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
-    previous_item: "FloorItem | None" = None
-    affected_volume: ObjectSectionVolume | None = None
-    resulting_placement: WorldObjectPlacement | None = None
+    previous_item: Annotated["FloorItem | None", Field(exclude_if=_unset)] = None
+    affected_volume: Annotated[ObjectSectionVolume | None, Field(exclude_if=_unset)] = None
+    resulting_placement: Annotated[WorldObjectPlacement | None, Field(exclude_if=_unset)] = None
 
 
 PlayerFact = Annotated[
@@ -979,15 +979,15 @@ PlayerFact = Annotated[
 class ContentAttribution:
     role: Literal["behavior", "source_item", "effective_handler"]
     behavior_id: str
-    provided_by_id: str | None = None
-    origin_root_id: str | None = None
-    source_entity_uuid: UUID | None = None
-    triggering_occurrence: int | None = None
-    triggering_lineage: int | None = None
-    emitted_lineages: tuple[int, ...] = ()
-    handler_name: str | None = None
-    dispatch_index: int | None = None
-    outcome: HandlerDispatchOutcome | None = None
+    provided_by_id: Annotated[str | None, Field(exclude_if=_unset)] = None
+    origin_root_id: Annotated[str | None, Field(exclude_if=_unset)] = None
+    source_entity_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    triggering_occurrence: Annotated[int | None, Field(exclude_if=_unset)] = None
+    triggering_lineage: Annotated[int | None, Field(exclude_if=_unset)] = None
+    emitted_lineages: Annotated[tuple[int, ...], Field(exclude_if=_no_rows)] = ()
+    handler_name: Annotated[str | None, Field(exclude_if=_unset)] = None
+    dispatch_index: Annotated[int | None, Field(exclude_if=_unset)] = None
+    outcome: Annotated[HandlerDispatchOutcome | None, Field(exclude_if=_unset)] = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
