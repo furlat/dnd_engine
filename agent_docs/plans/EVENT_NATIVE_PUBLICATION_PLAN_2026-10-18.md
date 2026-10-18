@@ -174,12 +174,14 @@ The revision-2 plan gets one confirming pass from each reviewer, on whether the 
   - What is lost: the client can't tell which *cells* each character sees, only which creatures, objects and effects. The human: "a) seems good".
 - **Q2: the combat log is counted separately.** Every gate reports log bytes and the rest apart. The ≤100 KB gate applies to the non-log bytes, and the log is handled later (human).
 - **Q3: measurements run without asking** (human: "why do you even have to ask??").
-- **Q4: the integrator decides where keyed world changes are produced, after a study.** Candidates:
-  - the writer, recording on the event;
-  - capture, against the one objective fold;
-  - the sensory settlement, which already computes per-cell changes for perceived cells and might publish world changes directly and save the separate `_world_update` walk.
-  
-  The study measures CPU as well as bytes. The decision and its numbers are recorded here before E2 starts.
+- **Q4: decided (W)** ([study](../event_native_deltas_2026-10-18/stateless/q4_world_change_origin.md)).
+  - The residue and terrain writers record the keys they changed, and completion fills in only those keys' after-values. The whole `tile_states` rows leave TILES_CHANGED. Everything else is already keyed.
+  - One `match` in capture produces each event's change, and one `world_facts` function applies it to the session fold, the capture targets and the AI fold.
+  - The capture diff (C) is a test oracle only; (S) is rejected (see the study).
+  - Numbers: exact on 652/653 rows (the one mismatch is a light value the whole row carried 34 versions early); native −0.3 to −7 ms per op; native payload −71 to −93 %; wire unchanged.
+  - Correction: only `world_facts.apply_world_fact` reads whole tile rows; sensory_fold.py ~64-68 reads effect and light rows.
+- **`_world_update` today is 85–98 % sensory-driven** (re-observing objects at every member cell, per member event) and is deleted by the composed-entering rule. A mock of the replacement costs ≤0.9 ms per op.
+- **Side lane, started:** skip settling observers for inert tile facts (measured: Magic Missile settlement 9.6 → 4.5 ms, digest and wire identical), with full recorder gates.
 
 ## 9. Review findings → resolution
 
